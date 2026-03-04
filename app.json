@@ -1,0 +1,32 @@
+{
+    "expo": {
+        "name": "AcreLedger",
+        "slug": "acre-ledger",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon-512.png",
+        "userInterfaceStyle": "automatic",
+        "splash": {
+            "image": "./assets/icon-512.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#000000"
+        },
+        "assetBundlePatterns": [
+            "**/*"
+        ],
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.acreledger.app"
+        },
+        "android": {
+            "adaptiveIcon": {
+                "foregroundImage": "./assets/icon-512.png",
+                "backgroundColor": "#000000"
+            },
+            "package": "com.acreledger.app"
+        },
+        "web": {
+            "favicon": "./assets/favicon.ico"
+        }
+    }
+}
