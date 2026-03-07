@@ -226,7 +226,8 @@ function SeedManager() {
 }
 
 function RecipeManager() {
-  const { sprayRecipes, addSprayRecipe, deleteSprayRecipe, updateSprayRecipe } = useFarm();
+  const { sprayRecipes, addSprayRecipe, deleteSprayRecipe, updateSprayRecipe, session } = useFarm();
+  const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -247,8 +248,8 @@ function RecipeManager() {
         {adding && (
           <RecipeForm
             onSave={(r) => {
-              if (r.applicatorName) localStorage.setItem('al_applicator_name', r.applicatorName);
-              if (r.licenseNumber) localStorage.setItem('al_license_number', r.licenseNumber);
+              if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
+              if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
               addSprayRecipe(r);
               setAdding(false);
             }}
@@ -265,8 +266,8 @@ function RecipeManager() {
                 key={recipe.id}
                 initial={recipe}
                 onSave={(r) => {
-                  if (r.applicatorName) localStorage.setItem('al_applicator_name', r.applicatorName);
-                  if (r.licenseNumber) localStorage.setItem('al_license_number', r.licenseNumber);
+                  if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
+                  if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
                   updateSprayRecipe({ ...r, id: recipe.id });
                   setEditingId(null);
                 }}
@@ -314,14 +315,16 @@ function RecipeForm({
   onSave: (r: { name: string; products: SprayRecipeProduct[]; applicatorName?: string; licenseNumber?: string; epaRegNumber?: string; targetPest?: string }) => void;
   onCancel: () => void;
 }) {
+  const { session } = useFarm();
+  const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [name, setName] = useState(initial?.name ?? '');
   const [products, setProducts] = useState<SprayRecipeProduct[]>(
     initial?.products?.length
       ? initial.products.map(p => ({ ...p, id: p.id ?? crypto.randomUUID() }))
       : [{ id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac' }]
   );
-  const [applicatorName, setApplicatorName] = useState(initial?.applicatorName ?? localStorage.getItem('al_applicator_name') ?? '');
-  const [licenseNumber, setLicenseNumber] = useState(initial?.licenseNumber ?? localStorage.getItem('al_license_number') ?? '');
+  const [applicatorName, setApplicatorName] = useState(initial?.applicatorName ?? localStorage.getItem(`al_applicator_name_${userPrefix}`) ?? '');
+  const [licenseNumber, setLicenseNumber] = useState(initial?.licenseNumber ?? localStorage.getItem(`al_license_number_${userPrefix}`) ?? '');
   const [epaRegNumber, setEpaRegNumber] = useState(initial?.epaRegNumber ?? '');
   const [targetPest, setTargetPest] = useState(initial?.targetPest ?? '');
 

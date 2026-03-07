@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { Bin } from '@/types/farm';
 
 export default function Logistics() {
-  const { bins: allBins, getBinTotal, grainMovements, viewingSeason } = useFarm();
-  const bins = allBins.filter(b => !b.deleted_at);
+  const { bins, getBinTotal, grainMovements, viewingSeason } = useFarm();
   const [managing, setManaging] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
 

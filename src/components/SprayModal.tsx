@@ -21,13 +21,14 @@ interface SprayModalProps {
 }
 
 export default function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
-  const { addSprayRecord, updateSprayRecord, sprayRecipes } = useFarm();
+  const { addSprayRecord, updateSprayRecord, sprayRecipes, session } = useFarm();
+  const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<SprayRecipeProduct[]>(initialData?.products || [{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
-  const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem('al_applicator_name') || '');
-  const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem('al_license_number') || '');
+  const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
+  const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
   const [targetPest, setTargetPest] = useState(initialData?.targetPest || 'grass/broadleaves');
   const [sprayDate, setSprayDate] = useState(initialData?.sprayDate || new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState(() => initialData?.startTime || new Date().toTimeString().slice(0, 5));
@@ -37,7 +38,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied || '');
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
   const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
-  const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem('al_equipment_id') || 'Miller Nitro');
+  const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
   const [manualWindDirection, setManualWindDirection] = useState<string>(initialData?.windDirection || '');
   const [isPremixed, setIsPremixed] = useState(initialData?.isPremixed || false);
 
@@ -107,7 +108,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const isFormValid = products.length > 0 &&
     products.every(p => p.product.trim() && p.epaRegNumber?.trim()) &&
     startTime.trim() &&
-    !!weather &&
+    (!!weather && !weather.isError) &&
     applicatorName.trim() &&
     licenseNumber.trim() &&
     manualWindDirection.trim();
@@ -115,9 +116,9 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const handleSubmit = () => {
     if (!isFormValid) return;
 
-    if (applicatorName.trim()) localStorage.setItem('al_applicator_name', applicatorName.trim());
-    if (licenseNumber.trim()) localStorage.setItem('al_license_number', licenseNumber.trim());
-    if (equipmentId.trim()) localStorage.setItem('al_equipment_id', equipmentId.trim());
+    if (applicatorName.trim()) localStorage.setItem(`al_applicator_name_${userPrefix}`, applicatorName.trim());
+    if (licenseNumber.trim()) localStorage.setItem(`al_license_number_${userPrefix}`, licenseNumber.trim());
+    if (equipmentId.trim()) localStorage.setItem(`al_equipment_id_${userPrefix}`, equipmentId.trim());
 
     const data = {
       fieldId: field.id,

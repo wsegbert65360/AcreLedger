@@ -343,7 +343,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Record updated');
     }
 
-  }, [farm_id]);
+  }, [farm_id, plantRecords]);
 
   const addSprayRecord = useCallback(async (r: Omit<SprayRecord, 'id' | 'timestamp'>) => {
     const id = uid();
@@ -427,7 +427,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Spray record updated');
     }
 
-  }, [farm_id]);
+  }, [farm_id, sprayRecords]);
 
   const addHarvestRecord = useCallback(async (r: Omit<HarvestRecord, 'id' | 'timestamp'>) => {
     const id = uid();
@@ -493,7 +493,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Harvest updated');
     }
 
-  }, [farm_id]);
+  }, [farm_id, harvestRecords]);
 
   const addHayHarvestRecord = useCallback(async (r: Omit<HayHarvestRecord, 'id' | 'timestamp'>) => {
     const id = uid();
@@ -553,7 +553,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Hay record updated');
     }
 
-  }, [farm_id]);
+  }, [farm_id, hayHarvestRecords]);
 
   const addGrainMovement = useCallback(async (r: Omit<GrainMovement, 'id'> & { timestamp?: number }) => {
     const id = uid();
@@ -613,7 +613,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Grain movement updated');
     }
 
-  }, [farm_id]);
+  }, [farm_id, grainMovements]);
 
   const deleteGrainMovements = useCallback(async (ids: string[]) => {
     const previous = grainMovements.filter(r => ids.includes(r.id));
@@ -631,7 +631,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Records removed');
     }
 
-  }, [farm_id]);
+  }, [farm_id, grainMovements]);
 
   const deletePlantRecords = useCallback(async (ids: string[]) => {
     const previous = plantRecords.filter(r => ids.includes(r.id));
@@ -649,7 +649,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Records deleted');
     }
 
-  }, [farm_id]);
+  }, [farm_id, plantRecords]);
 
   const deleteSprayRecords = useCallback(async (ids: string[]) => {
     const previous = sprayRecords.filter(r => ids.includes(r.id));
@@ -667,7 +667,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Records deleted');
     }
 
-  }, [farm_id]);
+  }, [farm_id, sprayRecords]);
 
   const deleteHarvestRecords = useCallback(async (ids: string[]) => {
     const previous = harvestRecords.filter(r => ids.includes(r.id));
@@ -685,7 +685,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Records deleted');
     }
 
-  }, [farm_id]);
+  }, [farm_id, harvestRecords]);
 
   const deleteHayHarvestRecords = useCallback(async (ids: string[]) => {
     const previous = hayHarvestRecords.filter(r => ids.includes(r.id));
@@ -703,7 +703,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Records deleted');
     }
 
-  }, [farm_id]);
+  }, [farm_id, hayHarvestRecords]);
 
   const addFertilizerApplication = useCallback(async (r: Omit<FertilizerApplication, 'id' | 'created_at' | 'updated_at' | 'fieldName'>) => {
     const id = uid();
@@ -759,7 +759,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     } else {
       toast.success('Record updated');
     }
-  }, [farm_id]);
+  }, [farm_id, fertilizerApplications]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]) => {
     const previous = fertilizerApplications.filter(r => ids.includes(r.id));
@@ -776,7 +776,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     } else {
       toast.success('Records deleted');
     }
-  }, [farm_id]);
+  }, [farm_id, fertilizerApplications]);
 
   const getBinTotal = useCallback((binId: string, season?: number) => {
     return grainMovements
@@ -812,7 +812,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     } else {
       toast.success('Field updated');
     }
-  }, [farm_id]);
+  }, [farm_id, fields]);
 
   const deleteField = useCallback(async (id: string) => {
     const previous = fields.find(f => f.id === id);
@@ -828,7 +828,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Field deleted');
     }
 
-  }, [farm_id]);
+  }, [farm_id, fields]);
 
   const addBin = useCallback(async (b: Omit<Bin, 'id'>) => {
     const id = uid();
@@ -856,7 +856,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Bin updated');
     }
 
-  }, [farm_id]);
+  }, [farm_id, bins]);
 
   const deleteBin = useCallback(async (id: string) => {
     const previous = bins.find(b => b.id === id);
@@ -872,7 +872,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Bin deleted');
     }
 
-  }, [farm_id]);
+  }, [farm_id, bins]);
 
   const addSeed = useCallback(async (name: string) => {
     const id = uid();
@@ -904,7 +904,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Seed variety removed');
     }
 
-  }, [farm_id]);
+  }, [farm_id, savedSeeds]);
 
   const addSprayRecipe = useCallback(async (r: Omit<SprayRecipe, 'id'>) => {
     const id = uid();
@@ -951,7 +951,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Recipe updated');
     }
 
-  }, [farm_id]);
+  }, [farm_id, sprayRecipes]);
 
   const deleteSprayRecipe = useCallback(async (id: string) => {
     const previous = sprayRecipes.find(r => r.id === id);
@@ -969,7 +969,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.success('Recipe removed');
     }
 
-  }, [farm_id]);
+  }, [farm_id, sprayRecipes]);
 
   const rolloverToNewSeason = useCallback(async (year: number) => {
     // 1. Force Backup (JSON export)
@@ -996,7 +996,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         .eq('id', session.user.id);
       if (error) console.error('Error updating active season:', error);
     }
-  }, [fields, bins, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, grainMovements, savedSeeds, sprayRecipes, activeSeason, session]);
+  }, [session]);
 
   const restoreFromBackup = useCallback(async (backupData: any) => {
     if (!farm_id) {
@@ -1067,9 +1067,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         setViewingSeason(backupData.activeSeason);
       }
 
+      toast.success("Backup restored successfully!");
     } catch (err) {
       console.error('Restore failed:', err);
-      // alert('Restore failed. Please check console.');
+      toast.error("Restore failed — check console for details");
     } finally {
       setLoading(false);
     }
@@ -1094,6 +1095,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setSavedSeeds([]);
     setSprayRecipes([]);
     setFarmId(null);
+    setActiveSeason(new Date().getFullYear());
+    setViewingSeason(new Date().getFullYear());
     toast.success('Local cache cleared');
   }, []);
 
