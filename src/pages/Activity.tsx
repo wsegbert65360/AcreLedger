@@ -13,6 +13,7 @@ import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
+import GrainMovementModal from '@/components/GrainMovementModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication;
@@ -453,13 +454,11 @@ export default function Activity() {
       </AlertDialog>
 
       {tab === 'grain' && editingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-          <div className="bg-card border border-border p-6 rounded-xl shadow-2xl max-w-sm w-full space-y-4">
-            <h2 className="text-lg font-bold">Edit Grain Movement</h2>
-            <p className="text-sm text-muted-foreground">Grain movement editing is currently handled by updating the source activity (Harvest). Direct movement editing coming soon.</p>
-            <Button onClick={() => setEditingRecord(null)} className="w-full">Close</Button>
-          </div>
-        </div>
+        <GrainMovementModal
+          open={!!editingRecord}
+          onClose={() => setEditingRecord(null)}
+          initialData={editingRecord as any}
+        />
       )}
       <BottomNav />
 
