@@ -21,13 +21,15 @@ export function useFieldRainfall(fields: Field[]) {
     for (let i = 0; i < fields.length; i++) {
       const f = fields[i];
 
-      if (rainCache[f.id] && (now - rainCache[f.id].timestamp < CACHE_TTL)) {
-        results[f.id] = rainCache[f.id].value;
+      const cacheKey = `${f.id}-${f.lat}-${f.lng}`;
+
+      if (rainCache[cacheKey] && (now - rainCache[cacheKey].timestamp < CACHE_TTL)) {
+        results[f.id] = rainCache[cacheKey].value;
         continue;
       }
 
-      // Validate coords to avoid 400/NaN errors
-      if (!f.lat || !f.lng || isNaN(f.lat) || isNaN(f.lng)) {
+      // Validate coords (null check instead of falsy to allow 0,0)
+      if (f.lat == null || f.lng == null || isNaN(f.lat) || isNaN(f.lng)) {
         results[f.id] = 0;
         continue;
       }
@@ -35,7 +37,7 @@ export function useFieldRainfall(fields: Field[]) {
       try {
         const value = await WeatherService.fetchRain24h(f.lat, f.lng);
         results[f.id] = value;
-        rainCache[f.id] = { value, timestamp: now };
+        rainCache[cacheKey] = { value, timestamp: now };
       } catch (err) {
         console.warn(`Rain fetch failed for ${f.id}:`, err);
         results[f.id] = 0;
@@ -53,14 +55,15 @@ export function useFieldRainfall(fields: Field[]) {
   }, [fields]);
 
   useEffect(() => {
-    const needsUpdate = fields.some(
-      f => !rainCache[f.id] || (Date.now() - rainCache[f.id].timestamp > CACHE_TTL)
-    );
+    const needsUpdate = fields.some(f => {
+      const cacheKey = `${f.id}-${f.lat}-${f.lng}`;
+      return !rainCache[cacheKey] || (Date.now() - rainCache[cacheKey].timestamp > CACHE_TTL);
+    });
     if (needsUpdate) {
       const timeout = setTimeout(loadAll, 1000);
       return () => clearTimeout(timeout);
     }
-  }, [fields.length, loadAll]);
+  }, [fields, loadAll]);
 
   return { rain, loading };
 }

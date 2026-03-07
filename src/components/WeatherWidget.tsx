@@ -39,7 +39,7 @@ export default function WeatherBar() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const z = inputZip.trim();
-    if (z) { setZip(z); saveZip(z); load(z); }
+    if (z) { setZip(z); saveZip(z); }
   };
 
   return (
@@ -67,20 +67,24 @@ export default function WeatherBar() {
       {zip && (
         <div className="flex items-center justify-between">
           <span className="text-xs font-mono text-muted-foreground">{locationName || zip}</span>
-          <div className="flex items-center gap-4 text-foreground font-mono text-sm">
-            <span className="flex items-center gap-1">
-              <Wind size={14} className="text-spray" />
-              {weather.wind} mph {weather.windDirection}
-            </span>
-            <span className="flex items-center gap-1">
-              <Thermometer size={14} className="text-destructive" />
-              {weather.temp}°F
-            </span>
-            <span className="flex items-center gap-1">
-              <Droplets size={14} className="text-spray" />
-              {weather.humidity}%
-            </span>
-          </div>
+          {weather.isError ? (
+            <span className="text-xs font-mono text-destructive">Weather unavailable</span>
+          ) : (
+            <div className="flex items-center gap-4 text-foreground font-mono text-sm">
+              <span className="flex items-center gap-1">
+                <Wind size={14} className="text-spray" />
+                {weather.wind} mph {weather.windDirection}
+              </span>
+              <span className="flex items-center gap-1">
+                <Thermometer size={14} className="text-destructive" />
+                {weather.temp}°F
+              </span>
+              <span className="flex items-center gap-1">
+                <Droplets size={14} className="text-spray" />
+                {weather.humidity}%
+              </span>
+            </div>
+          )}
         </div>
       )}
 

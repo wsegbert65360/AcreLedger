@@ -10,21 +10,12 @@ import {
 } from '../lib/mappers';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { fieldService } from '@/services/fieldService';
+import { binService } from '@/services/binService';
 
-const DEFAULT_FIELDS: Field[] = [
-  { id: 'f1', name: 'Back Forty', acreage: 40, lat: 41.88, lng: -93.09 },
-  { id: 'f2', name: 'Creek Bottom', acreage: 65, lat: 41.87, lng: -93.10 },
-  { id: 'f3', name: 'Hilltop', acreage: 80, lat: 41.89, lng: -93.08 },
-  { id: 'f4', name: 'North 40', acreage: 40, lat: 41.90, lng: -93.09 },
-  { id: 'f5', name: 'River Bottom', acreage: 120, lat: 41.86, lng: -93.11 },
-  { id: 'f6', name: 'South Section', acreage: 160, lat: 41.85, lng: -93.09 },
-];
+const DEFAULT_FIELDS: Field[] = [];
 
-const DEFAULT_BINS: Bin[] = [
-  { id: 'b1', name: 'Bin #1', capacity: 10000 },
-  { id: 'b2', name: 'Bin #2', capacity: 15000 },
-  { id: 'b3', name: 'Bin #3', capacity: 8000 },
-];
+const DEFAULT_BINS: Bin[] = [];
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -80,7 +71,7 @@ interface FarmState {
   deleteHarvestRecords: (ids: string[]) => void;
   deleteHayHarvestRecords: (ids: string[]) => void;
   deleteFertilizerApplications: (ids: string[]) => void;
-  getBinTotal: (binId: string) => number;
+  getBinTotal: (binId: string, season?: number) => number;
   addField: (f: Omit<Field, 'id'>) => void;
   updateField: (f: Field) => void;
   deleteField: (id: string) => void;
@@ -322,6 +313,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [activeSeason, farm_id]);
 
   const updatePlantRecord = useCallback(async (r: PlantRecord) => {
+    const previous = plantRecords.find(item => item.id === r.id);
     setPlantRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('plant_records').upsert({
@@ -345,6 +337,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Error updating plant record:', error);
+      if (previous) setPlantRecords(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update record');
     } else {
       toast.success('Record updated');
@@ -396,6 +389,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [activeSeason, farm_id]);
 
   const updateSprayRecord = useCallback(async (r: SprayRecord) => {
+    const previous = sprayRecords.find(item => item.id === r.id);
     setSprayRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('spray_records').upsert({
@@ -427,6 +421,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Error updating spray record:', error);
+      if (previous) setSprayRecords(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update spray record');
     } else {
       toast.success('Spray record updated');
@@ -469,6 +464,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [activeSeason, farm_id]);
 
   const updateHarvestRecord = useCallback(async (r: HarvestRecord) => {
+    const previous = harvestRecords.find(item => item.id === r.id);
     setHarvestRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('harvest_records').upsert({
@@ -491,6 +487,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Error updating harvest record:', error);
+      if (previous) setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update harvest');
     } else {
       toast.success('Harvest updated');
@@ -530,6 +527,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [activeSeason, farm_id]);
 
   const updateHayHarvestRecord = useCallback(async (r: HayHarvestRecord) => {
+    const previous = hayHarvestRecords.find(item => item.id === r.id);
     setHayHarvestRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('hay_harvest_records').upsert({
@@ -549,6 +547,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Error updating hay harvest record:', error);
+      if (previous) setHayHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update hay record');
     } else {
       toast.success('Hay record updated');
@@ -588,6 +587,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [activeSeason, farm_id]);
 
   const updateGrainMovement = useCallback(async (r: GrainMovement) => {
+    const previous = grainMovements.find(item => item.id === r.id);
     setGrainMovements(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('grain_movements').upsert({
@@ -607,6 +607,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Error updating grain movement:', error);
+      if (previous) setGrainMovements(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update grain movement');
     } else {
       toast.success('Grain movement updated');
@@ -615,6 +616,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteGrainMovements = useCallback(async (ids: string[]) => {
+    const previous = grainMovements.filter(r => ids.includes(r.id));
     setGrainMovements(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase
       .from('grain_movements')
@@ -623,6 +625,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting grain movements:', error);
+      setGrainMovements(prev => [...prev, ...previous]);
       toast.error('Delete failed');
     } else {
       toast.success('Records removed');
@@ -631,6 +634,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deletePlantRecords = useCallback(async (ids: string[]) => {
+    const previous = plantRecords.filter(r => ids.includes(r.id));
     setPlantRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase
       .from('plant_records')
@@ -639,6 +643,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting plant records:', error);
+      setPlantRecords(prev => [...prev, ...previous]);
       toast.error('Failed to delete records');
     } else {
       toast.success('Records deleted');
@@ -647,6 +652,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteSprayRecords = useCallback(async (ids: string[]) => {
+    const previous = sprayRecords.filter(r => ids.includes(r.id));
     setSprayRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase
       .from('spray_records')
@@ -655,6 +661,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting spray records:', error);
+      setSprayRecords(prev => [...prev, ...previous]);
       toast.error('Failed to delete records');
     } else {
       toast.success('Records deleted');
@@ -663,6 +670,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteHarvestRecords = useCallback(async (ids: string[]) => {
+    const previous = harvestRecords.filter(r => ids.includes(r.id));
     setHarvestRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase
       .from('harvest_records')
@@ -671,6 +679,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting harvest records:', error);
+      setHarvestRecords(prev => [...prev, ...previous]);
       toast.error('Failed to delete records');
     } else {
       toast.success('Records deleted');
@@ -679,6 +688,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteHayHarvestRecords = useCallback(async (ids: string[]) => {
+    const previous = hayHarvestRecords.filter(r => ids.includes(r.id));
     setHayHarvestRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase
       .from('hay_harvest_records')
@@ -687,6 +697,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting hay harvest records:', error);
+      setHayHarvestRecords(prev => [...prev, ...previous]);
       toast.error('Failed to delete records');
     } else {
       toast.success('Records deleted');
@@ -727,6 +738,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [activeSeason, farm_id, fields]);
 
   const updateFertilizerApplication = useCallback(async (r: FertilizerApplication) => {
+    const previous = fertilizerApplications.find(item => item.id === r.id);
     setFertilizerApplications(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('fertilizer_applications').upsert({
@@ -742,6 +754,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Error updating fertilizer application:', error);
+      if (previous) setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update record');
     } else {
       toast.success('Record updated');
@@ -749,6 +762,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]) => {
+    const previous = fertilizerApplications.filter(r => ids.includes(r.id));
     setFertilizerApplications(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase
       .from('fertilizer_applications')
@@ -757,15 +771,16 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting fertilizer applications:', error);
+      setFertilizerApplications(prev => [...prev, ...previous]);
       toast.error('Failed to delete records');
     } else {
       toast.success('Records deleted');
     }
   }, [farm_id]);
 
-  const getBinTotal = useCallback((binId: string) => {
+  const getBinTotal = useCallback((binId: string, season?: number) => {
     return grainMovements
-      .filter(m => m.binId === binId)
+      .filter(m => m.binId === binId && (!season || m.seasonYear === season))
       .reduce((total, m) => total + (m.type === 'in' ? m.bushels : -m.bushels), 0);
   }, [grainMovements]);
 
@@ -773,23 +788,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     const id = uid();
     setFields(prev => [...prev, { ...f, id }]);
 
-    const fieldDataWithId = {
-      id,
-      farm_id,
-      name: f.name,
-      acreage: f.acreage,
-      lat: f.lat,
-      lng: f.lng,
-      fsa_farm_number: f.fsaFarmNumber,
-      fsa_tract_number: f.fsaTractNumber,
-      fsa_field_number: f.fsaFieldNumber,
-      producer_share: f.producerShare,
-      irrigation_practice: f.irrigationPractice,
-      intended_use: f.intendedUse,
-      boundary: f.boundary
-    };
-
-    const { data: insertData, error } = await supabase.from('fields').insert([fieldDataWithId]).select();
+    const { error } = await fieldService.createField(f, id, farm_id!);
 
     if (error) {
       console.error('Supabase error adding field:', error);
@@ -801,29 +800,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const updateField = useCallback(async (f: Field) => {
+    const previous = fields.find(item => item.id === f.id);
     setFields(prev => prev.map(existing => existing.id === f.id ? f : existing));
 
-    const updateData = {
-      id: f.id,
-      farm_id,
-      name: f.name,
-      acreage: f.acreage,
-      lat: f.lat,
-      lng: f.lng,
-      fsa_farm_number: f.fsaFarmNumber,
-      fsa_tract_number: f.fsaTractNumber,
-      fsa_field_number: f.fsaFieldNumber,
-      producer_share: f.producerShare,
-      irrigation_practice: f.irrigationPractice,
-      intended_use: f.intendedUse,
-      boundary: f.boundary,
-      deleted_at: f.deleted_at
-    };
-
-    const { data: upsertData, error } = await supabase.from('fields').upsert(updateData).select();
+    const { error } = await fieldService.updateField(f, farm_id!);
 
     if (error) {
       console.error('Supabase error updating field:', error);
+      if (previous) setFields(prev => prev.map(item => item.id === f.id ? previous : item));
       toast.error('Failed to update field');
     } else {
       toast.success('Field updated');
@@ -831,15 +815,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteField = useCallback(async (id: string) => {
+    const previous = fields.find(f => f.id === id);
     setFields(prev => prev.map(f =>
       f.id === id ? { ...f, deleted_at: new Date().toISOString() } : f
     ));
-    const { error } = await supabase.from('fields')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('farm_id', farm_id); // Redundant check for RLS safety
+    const { error } = await fieldService.softDeleteField(id, farm_id!);
     if (error) {
       console.error('Error deleting field:', error);
+      if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
       toast.error('Failed to delete field');
     } else {
       toast.success('Field deleted');
@@ -850,12 +833,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const addBin = useCallback(async (b: Omit<Bin, 'id'>) => {
     const id = uid();
     setBins(prev => [...prev, { ...b, id }]);
-    const { error } = await supabase.from('bins').insert([{
-      id,
-      farm_id,
-      name: b.name,
-      capacity: b.capacity
-    }]);
+    const { error } = await binService.createBin(b, id, farm_id!);
     if (error) {
       console.error('Error adding bin:', error);
       setBins(prev => prev.filter(bin => bin.id !== id));
@@ -867,16 +845,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const updateBin = useCallback(async (b: Bin) => {
+    const previous = bins.find(item => item.id === b.id);
     setBins(prev => prev.map(existing => existing.id === b.id ? b : existing));
-    const { error } = await supabase.from('bins').upsert({
-      id: b.id,
-      farm_id,
-      name: b.name,
-      capacity: b.capacity,
-      deleted_at: b.deleted_at
-    });
+    const { error } = await binService.updateBin(b, farm_id!);
     if (error) {
       console.error('Error updating bin:', error);
+      if (previous) setBins(prev => prev.map(item => item.id === b.id ? previous : item));
       toast.error('Failed to update bin');
     } else {
       toast.success('Bin updated');
@@ -885,16 +859,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteBin = useCallback(async (id: string) => {
+    const previous = bins.find(b => b.id === id);
     setBins(prev => prev.map(b =>
       b.id === id ? { ...b, deleted_at: new Date().toISOString() } : b
     ));
-    const { error } = await supabase
-      .from('bins')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('farm_id', farm_id);
+    const { error } = await binService.softDeleteBin(id, farm_id!);
     if (error) {
       console.error('Error deleting bin:', error);
+      if (previous) setBins(prev => prev.map(b => b.id === id ? previous : b));
       toast.error('Failed to delete bin');
     } else {
       toast.success('Bin deleted');
@@ -917,6 +889,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteSeed = useCallback(async (id: string) => {
+    const previous = savedSeeds.find(s => s.id === id);
     setSavedSeeds(prev => prev.filter(s => s.id !== id));
     const { error } = await supabase
       .from('saved_seeds')
@@ -925,6 +898,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting seed:', error);
+      if (previous) setSavedSeeds(prev => [...prev, previous]);
       toast.error('Failed to delete seed');
     } else {
       toast.success('Seed variety removed');
@@ -956,6 +930,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const updateSprayRecipe = useCallback(async (r: SprayRecipe) => {
+    const previous = sprayRecipes.find(item => item.id === r.id);
     setSprayRecipes(prev => prev.map(existing => existing.id === r.id ? r : existing));
     const { error } = await supabase.from('spray_recipes').upsert({
       id: r.id,
@@ -970,6 +945,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     });
     if (error) {
       console.error('Error updating spray recipe:', error);
+      if (previous) setSprayRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update recipe');
     } else {
       toast.success('Recipe updated');
@@ -978,6 +954,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id]);
 
   const deleteSprayRecipe = useCallback(async (id: string) => {
+    const previous = sprayRecipes.find(r => r.id === id);
     setSprayRecipes(prev => prev.filter(r => r.id !== id));
     const { error } = await supabase
       .from('spray_recipes')
@@ -986,6 +963,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting spray recipe:', error);
+      if (previous) setSprayRecipes(prev => [...prev, previous]);
       toast.error('Failed to delete recipe');
     } else {
       toast.success('Recipe removed');
@@ -1018,7 +996,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         .eq('id', session.user.id);
       if (error) console.error('Error updating active season:', error);
     }
-  }, [fields, bins, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, grainMovements, savedSeeds, sprayRecipes, activeSeason, session]);
+  }, [fields, bins, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, grainMovements, savedSeeds, sprayRecipes, activeSeason, session]);
 
   const restoreFromBackup = useCallback(async (backupData: any) => {
     if (!farm_id) {
@@ -1065,25 +1043,25 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
       // 3. Update local state — always map through schema normalization
       if (backupData.fields)
-        setFields((backupData.fields as any[]).map(mapFieldFromDb));
+        setFields(backupData.fields);
       if (backupData.bins)
-        setBins((backupData.bins as any[]).map(mapBinFromDb));
+        setBins(backupData.bins);
       if (backupData.plantRecords)
-        setPlantRecords((backupData.plantRecords as any[]).map(mapPlantFromDb));
+        setPlantRecords(backupData.plantRecords);
       if (backupData.sprayRecords)
-        setSprayRecords((backupData.sprayRecords as any[]).map(mapSprayFromDb));
+        setSprayRecords(backupData.sprayRecords);
       if (backupData.harvestRecords)
-        setHarvestRecords((backupData.harvestRecords as any[]).map(mapHarvestFromDb));
+        setHarvestRecords(backupData.harvestRecords);
       if (backupData.hayHarvestRecords)
-        setHayHarvestRecords((backupData.hayHarvestRecords as any[]).map(mapHayFromDb));
+        setHayHarvestRecords(backupData.hayHarvestRecords);
       if (backupData.fertilizerApplications)
-        setFertilizerApplications((backupData.fertilizerApplications as any[]).map(mapFertilizerFromDb));
+        setFertilizerApplications(backupData.fertilizerApplications);
       if (backupData.grainMovements)
-        setGrainMovements((backupData.grainMovements as any[]).map(mapGrainFromDb));
+        setGrainMovements(backupData.grainMovements);
       if (backupData.savedSeeds)
-        setSavedSeeds((backupData.savedSeeds as any[]).map(mapSeedFromDb));
+        setSavedSeeds(backupData.savedSeeds);
       if (backupData.sprayRecipes)
-        setSprayRecipes((backupData.sprayRecipes as any[]).map(mapRecipeFromDb));
+        setSprayRecipes(backupData.sprayRecipes);
       if (backupData.activeSeason) {
         setActiveSeason(backupData.activeSeason);
         setViewingSeason(backupData.activeSeason);
@@ -1125,15 +1103,23 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [clearLocalCache]);
 
   const sortedFields = useMemo(() =>
-    [...fields].sort((a, b) => a.name.localeCompare(b.name)),
+    [...fields]
+      .filter(f => !f.deleted_at)
+      .sort((a, b) => a.name.localeCompare(b.name)),
     [fields]
+  );
+
+  const filteredBins = useMemo(() =>
+    bins.filter(b => !b.deleted_at),
+    [bins]
   );
 
   return (
     <FarmContext.Provider value={{
       session, loading,
       fields: sortedFields,
-      bins, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords,
+      bins: filteredBins,
+      plantRecords, sprayRecords, harvestRecords, hayHarvestRecords,
       fertilizerApplications,
       grainMovements,
       savedSeeds, sprayRecipes,

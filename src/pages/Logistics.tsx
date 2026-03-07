@@ -8,23 +8,23 @@ import { Button } from '@/components/ui/button';
 import type { Bin } from '@/types/farm';
 
 export default function Logistics() {
-  const { bins: allBins, getBinTotal, grainMovements, activeSeason } = useFarm();
+  const { bins: allBins, getBinTotal, grainMovements, viewingSeason } = useFarm();
   const bins = allBins.filter(b => !b.deleted_at);
   const [managing, setManaging] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
 
   const binOverview = useMemo(() => {
     return bins.map(bin => {
-      const total = getBinTotal(bin.id);
+      const total = getBinTotal(bin.id, viewingSeason);
       const pct = Math.min((total / bin.capacity) * 100, 100);
       const movements = grainMovements
-        .filter(m => m.binId === bin.id)
+        .filter(m => m.binId === bin.id && m.seasonYear === viewingSeason)
         .slice(-5) // Show more movements
         .reverse();
 
       return { ...bin, total, pct, recentMovements: movements };
     });
-  }, [bins, getBinTotal, grainMovements, activeSeason]);
+  }, [bins, getBinTotal, grainMovements, viewingSeason]);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -52,45 +52,55 @@ export default function Logistics() {
         {managing ? (
           <BinManager />
         ) : (
-          binOverview.map(bin => (
-            <div key={bin.id} className="bg-card border border-border rounded-lg p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Warehouse size={18} className="text-harvest" />
-                  <span className="font-bold text-foreground">{bin.name}</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono text-sm font-bold text-foreground">
-                    {bin.total.toLocaleString()} bu
-                  </div>
-                  <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
-                    OF {bin.capacity.toLocaleString()} BU
-                  </div>
-                </div>
-              </div>
-
-              {/* Capacity bar */}
-              <div className="h-4 bg-muted rounded-full overflow-hidden border border-border/50">
-                <div
-                  className="h-full bg-harvest rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(212,175,55,0.3)]"
-                  style={{ width: `${bin.pct}%` }}
-                />
-              </div>
-
-              <div className="flex gap-2 pt-1 border-t border-border/50">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={bin.total <= 0}
-                  className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
-                  onClick={() => setSellingBin({ id: bin.id, name: bin.name, capacity: bin.capacity })}
-                >
-                  <Banknote size={16} className="mr-2" />
-                  Sell from Bin
-                </Button>
-              </div>
+          binOverview.length === 0 ? (
+            <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
+              <Warehouse size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+              <h3 className="text-lg font-mono font-bold text-foreground mb-1 italic">No Storage Bins</h3>
+              <p className="text-xs text-muted-foreground font-mono leading-relaxed max-w-[200px] mx-auto uppercase">
+                Add bins using the <Settings size={12} className="inline mx-0.5" /> icon to start tracking inventory.
+              </p>
             </div>
-          ))
+          ) : (
+            binOverview.map(bin => (
+              <div key={bin.id} className="bg-card border border-border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Warehouse size={18} className="text-harvest" />
+                    <span className="font-bold text-foreground">{bin.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-sm font-bold text-foreground">
+                      {bin.total.toLocaleString()} bu
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+                      OF {bin.capacity.toLocaleString()} BU
+                    </div>
+                  </div>
+                </div>
+
+                {/* Capacity bar */}
+                <div className="h-4 bg-muted rounded-full overflow-hidden border border-border/50">
+                  <div
+                    className="h-full bg-harvest rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(212,175,55,0.3)]"
+                    style={{ width: `${bin.pct}%` }}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1 border-t border-border/50">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={bin.total <= 0}
+                    className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
+                    onClick={() => setSellingBin({ id: bin.id, name: bin.name, capacity: bin.capacity })}
+                  >
+                    <Banknote size={16} className="mr-2" />
+                    Sell from Bin
+                  </Button>
+                </div>
+              </div>
+            ))
+          )
         )}
       </main>
 

@@ -3,4 +3,5 @@ export interface WeatherData {
     temp: number;
     humidity: number;
     windDirection: string;
+    isError?: boolean;
 }

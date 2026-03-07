@@ -11,6 +11,7 @@ import Logistics from "./pages/Logistics";
 import Activity from "./pages/Activity";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -39,6 +40,7 @@ const AppContent = () => {
         <Route path="/activity" element={<ErrorBoundary><Activity /></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
         <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+        <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <SeasonRolloverModal />
@@ -53,11 +55,13 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="al-ui-theme">
         <TooltipProvider>
-          <FarmProvider>
-            <Toaster />
-            <Sonner />
-            <AppContent />
-          </FarmProvider>
+          <ErrorBoundary>
+            <FarmProvider>
+              <Toaster />
+              <Sonner />
+              <AppContent />
+            </FarmProvider>
+          </ErrorBoundary>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

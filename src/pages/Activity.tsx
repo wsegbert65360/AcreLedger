@@ -35,7 +35,7 @@ const TABS: { key: Tab; icon: React.ElementType; label: string; color: string }[
   { key: 'fertilizer', icon: Sprout, label: 'Fertilizer', color: 'text-lime-600 dark:text-lime-400' },
   { key: 'harvest', icon: Wheat, label: 'Harvesting', color: 'text-harvest' },
   { key: 'hay', icon: Tractor, label: 'Hay/Forage', color: 'text-orange-700 dark:text-orange-400' },
-  { key: 'grain', icon: Warehouse, label: 'Harvest', color: 'text-harvest' },
+  { key: 'grain', icon: Warehouse, label: 'Grain', color: 'text-harvest' },
 ];
 
 export default function Activity() {
@@ -127,7 +127,7 @@ export default function Activity() {
 
   const filteredGrain = useMemo(() =>
     grainMovements
-      .filter(m => m.seasonYear === activeSeason && (m.binName.toLowerCase().includes(search.toLowerCase()) || (m.sourceFieldName || '').toLowerCase().includes(search.toLowerCase()) || (m.destination || '').toLowerCase().includes(search.toLowerCase())))
+      .filter(m => !m.deleted_at && m.seasonYear === activeSeason && (m.binName.toLowerCase().includes(search.toLowerCase()) || (m.sourceFieldName || '').toLowerCase().includes(search.toLowerCase()) || (m.destination || '').toLowerCase().includes(search.toLowerCase())))
       .sort((a, b) => b.timestamp - a.timestamp),
     [grainMovements, search, activeSeason]
   );
@@ -162,7 +162,7 @@ export default function Activity() {
 
           {tab === 'spray' && (
             <button
-              onClick={() => generateMissouriLog(sprayRecords, fields)}
+              onClick={() => generateMissouriLog(filteredSpray, fields)}
               className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
               title="Export Missouri Spray Log (MP693)"
             >
@@ -172,7 +172,7 @@ export default function Activity() {
           )}
           {(tab === 'plant' || tab === 'harvest') && (
             <button
-              onClick={() => tab === 'plant' ? exportFsa578Data(plantRecords, fields) : exportHarvestData(harvestRecords, fields)}
+              onClick={() => tab === 'plant' ? exportFsa578Data(filteredPlant, fields) : exportHarvestData(filteredHarvest, fields)}
               className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
               title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
             >
@@ -231,10 +231,18 @@ export default function Activity() {
         {/* Records */}
         <div className="space-y-2">
           {tab === 'plant' && filteredPlant.map(r => (
-            <button
+            <div
               key={r.id}
               onClick={() => toggle(r.id)}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggle(r.id);
+                }
+              }}
+              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
                 }`}
             >
               <div className="flex items-center justify-between">
@@ -248,14 +256,22 @@ export default function Activity() {
                   <Pencil size={14} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
 
           {tab === 'spray' && filteredSpray.map(r => (
-            <button
+            <div
               key={r.id}
               onClick={() => toggle(r.id)}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggle(r.id);
+                }
+              }}
+              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
                 }`}
             >
               <div className="flex items-center justify-between">
@@ -269,14 +285,22 @@ export default function Activity() {
                   <Pencil size={14} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
 
           {tab === 'harvest' && filteredHarvest.map(r => (
-            <button
+            <div
               key={r.id}
               onClick={() => toggle(r.id)}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggle(r.id);
+                }
+              }}
+              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
                 }`}
             >
               <div className="flex items-center justify-between">
@@ -290,14 +314,22 @@ export default function Activity() {
                   <Pencil size={14} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
 
           {tab === 'hay' && filteredHay.map(r => (
-            <button
+            <div
               key={r.id}
               onClick={() => toggle(r.id)}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggle(r.id);
+                }
+              }}
+              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
                 }`}
             >
               <div className="flex items-center justify-between">
@@ -311,14 +343,22 @@ export default function Activity() {
                   <Pencil size={14} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
 
           {tab === 'fertilizer' && filteredFertilizer.map(r => (
-            <button
+            <div
               key={r.id}
               onClick={() => toggle(r.id)}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggle(r.id);
+                }
+              }}
+              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
                 }`}
             >
               <div className="flex items-center justify-between">
@@ -332,14 +372,22 @@ export default function Activity() {
                   <Pencil size={14} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
 
           {tab === 'grain' && filteredGrain.map(m => (
-            <button
+            <div
               key={m.id}
               onClick={() => toggle(m.id)}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all ${selected.has(m.id) ? 'border-destructive bg-destructive/5' : 'border-border'
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggle(m.id);
+                }
+              }}
+              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(m.id) ? 'border-destructive bg-destructive/5' : 'border-border'
                 }`}
             >
               <div className="flex items-center justify-between">
@@ -353,7 +401,7 @@ export default function Activity() {
                   <Pencil size={14} />
                 </button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
 

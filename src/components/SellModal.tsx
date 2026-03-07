@@ -14,13 +14,13 @@ interface SellModalProps {
 }
 
 export default function SellModal({ bin, open, onClose }: SellModalProps) {
-    const { addGrainMovement, getBinTotal } = useFarm();
+    const { addGrainMovement, getBinTotal, viewingSeason } = useFarm();
     const [bushels, setBushels] = useState('');
     const [price, setPrice] = useState('');
     const [destination, setDestination] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-    const currentInventory = getBinTotal(bin.id);
+    const currentInventory = getBinTotal(bin.id, viewingSeason);
 
     const handleSubmit = () => {
         const amount = parseFloat(bushels);
