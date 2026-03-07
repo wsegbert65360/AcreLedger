@@ -538,6 +538,16 @@ function SecurityManager() {
           <Trash2 size={16} className="mr-2" />
           Clear Local Cache
         </Button>
+
+        <div className="pt-4 border-t border-border/10">
+          <Button
+            variant="link"
+            className="text-[10px] font-mono text-muted-foreground uppercase p-0 h-auto hover:text-primary tracking-widest"
+            onClick={() => window.location.href = '/privacy'}
+          >
+            Review Full Privacy Policy & Compliance
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

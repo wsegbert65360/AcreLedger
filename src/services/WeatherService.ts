@@ -62,11 +62,11 @@ export const WeatherService = {
                 ? '[WeatherService] API Key missing. Please add VITE_VISUALCROSSING_KEY to your Vercel Environment Variables.'
                 : '[WeatherService] API Key missing or invalid (VITE_VISUALCROSSING_KEY). Found: ' + API_KEY;
             console.error(msg);
-            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error' };
+            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true };
         }
         if (!location || location.includes('undefined') || location.includes('NaN')) {
             console.warn('[WeatherService] Invalid location for current weather fetch:', location);
-            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Invalid Location' };
+            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Invalid Location', isError: true };
         }
 
         try {
@@ -94,7 +94,8 @@ export const WeatherService = {
                 humidity: 0,
                 wind: 0,
                 windDirection: '—',
-                locationName: 'Unknown'
+                locationName: 'Unknown',
+                isError: true
             };
         }
     },

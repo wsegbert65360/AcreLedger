@@ -37,9 +37,9 @@ class ErrorBoundary extends Component<Props, State> {
                         <AlertTriangle size={32} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-foreground">Something went wrong</h2>
-                        <p className="text-sm text-muted-foreground mt-2 max-w-[250px]">
-                            The application encountered an unexpected error.
+                        <h2 className="text-xl font-bold text-foreground font-mono">Initialization Error</h2>
+                        <p className="text-sm text-muted-foreground mt-2 max-w-[250px] font-mono leading-relaxed">
+                            Could not connect to AcreLedger services. Please check your connection and retry.
                         </p>
                     </div>
                     <Button
