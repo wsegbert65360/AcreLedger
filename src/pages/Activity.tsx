@@ -13,6 +13,7 @@ import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication;
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,8 @@ export default function Activity() {
     deleteHayHarvestRecords,
     deleteFertilizerApplications,
     activeSeason,
+    viewingSeason,
+    setViewingSeason,
     deleteGrainMovements
   } = useFarm();
 
@@ -106,44 +109,44 @@ export default function Activity() {
 
   const filteredPlant = useMemo(() =>
     plantRecords
-      .filter(r => !r.deleted_at && r.seasonYear === activeSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.seedVariety.toLowerCase().includes(search.toLowerCase())))
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.seedVariety.toLowerCase().includes(search.toLowerCase())))
       .sort((a, b) => b.timestamp - a.timestamp),
-    [plantRecords, search, activeSeason]
+    [plantRecords, search, viewingSeason]
   );
 
   const filteredSpray = useMemo(() =>
     sprayRecords
-      .filter(r => !r.deleted_at && r.seasonYear === activeSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.product.toLowerCase().includes(search.toLowerCase())))
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.product.toLowerCase().includes(search.toLowerCase())))
       .sort((a, b) => b.timestamp - a.timestamp),
-    [sprayRecords, search, activeSeason]
+    [sprayRecords, search, viewingSeason]
   );
 
   const filteredHarvest = useMemo(() =>
     harvestRecords
-      .filter(r => !r.deleted_at && r.seasonYear === activeSeason && r.fieldName.toLowerCase().includes(search.toLowerCase()))
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && r.fieldName.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => b.timestamp - a.timestamp),
-    [harvestRecords, search, activeSeason]
+    [harvestRecords, search, viewingSeason]
   );
 
   const filteredGrain = useMemo(() =>
     grainMovements
-      .filter(m => !m.deleted_at && m.seasonYear === activeSeason && (m.binName.toLowerCase().includes(search.toLowerCase()) || (m.sourceFieldName || '').toLowerCase().includes(search.toLowerCase()) || (m.destination || '').toLowerCase().includes(search.toLowerCase())))
+      .filter(m => !m.deleted_at && m.seasonYear === viewingSeason && (m.binName.toLowerCase().includes(search.toLowerCase()) || (m.sourceFieldName || '').toLowerCase().includes(search.toLowerCase()) || (m.destination || '').toLowerCase().includes(search.toLowerCase())))
       .sort((a, b) => b.timestamp - a.timestamp),
-    [grainMovements, search, activeSeason]
+    [grainMovements, search, viewingSeason]
   );
 
   const filteredHay = useMemo(() =>
     hayHarvestRecords
-      .filter(m => !m.deleted_at && m.seasonYear === activeSeason && (m.fieldName.toLowerCase().includes(search.toLowerCase()) || m.baleType.toLowerCase().includes(search.toLowerCase())))
+      .filter(m => !m.deleted_at && m.seasonYear === viewingSeason && (m.fieldName.toLowerCase().includes(search.toLowerCase()) || m.baleType.toLowerCase().includes(search.toLowerCase())))
       .sort((a, b) => b.timestamp - a.timestamp),
-    [hayHarvestRecords, search, activeSeason]
+    [hayHarvestRecords, search, viewingSeason]
   );
 
   const filteredFertilizer = useMemo(() =>
     fertilizerApplications
-      .filter(r => !r.deleted_at && r.season_year === activeSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.fertilizer_formula.toLowerCase().includes(search.toLowerCase())))
+      .filter(r => !r.deleted_at && r.season_year === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.fertilizer_formula.toLowerCase().includes(search.toLowerCase())))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [fertilizerApplications, search, activeSeason]
+    [fertilizerApplications, search, viewingSeason]
   );
 
   return (
@@ -155,7 +158,24 @@ export default function Activity() {
               <ClipboardList size={20} className="text-primary" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">Activity</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold text-foreground tracking-tight">Activity</h1>
+                <Select
+                  value={viewingSeason.toString()}
+                  onValueChange={(v) => setViewingSeason(parseInt(v))}
+                >
+                  <SelectTrigger className="h-7 min-w-[80px] bg-muted border-none font-mono text-[10px] font-bold py-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[activeSeason, activeSeason - 1, activeSeason - 2].map(y => (
+                      <SelectItem key={y} value={y.toString()} className="font-mono text-[10px]">
+                        {y} SEASON
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <p className="text-xs font-mono text-muted-foreground">REVIEW & MANAGE</p>
             </div>
           </div>
