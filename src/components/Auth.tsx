@@ -41,11 +41,20 @@ export function Auth() {
 
     return (
         <div className="flex items-center justify-center min-h-[80vh]">
-            <Card className="w-full max-w-md">
-                <CardHeader>
-                    <CardTitle>{isSignUp ? 'Create Account' : 'Sign In'}</CardTitle>
-                    <CardDescription>
-                        {isSignUp ? 'Sign up to sync your farm data to the cloud' : 'Log in to access your cloud-synced farm data'}
+            <Card className="w-full max-w-md border-border/30 shadow-xl overflow-hidden">
+                <div className="bg-primary/5 p-8 flex justify-center border-b border-border/20">
+                    <img
+                        src="/icon-512.png"
+                        alt="AcreLedger Logo"
+                        className="w-24 h-24 rounded-2xl shadow-lg border-2 border-primary/20"
+                    />
+                </div>
+                <CardHeader className="pt-6">
+                    <CardTitle className="text-2xl font-bold font-mono tracking-tight text-center">
+                        {isSignUp ? 'Create Account' : 'Welcome Back'}
+                    </CardTitle>
+                    <CardDescription className="text-center font-mono text-xs uppercase tracking-wider">
+                        {isSignUp ? 'Join AcreLedger Precision Ag' : 'Sign in to your farm dashboard'}
                     </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleAuth}>
