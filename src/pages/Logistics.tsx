@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
-import { Warehouse, Wheat, Settings, Banknote } from 'lucide-react';
+import { Warehouse, Wheat, Settings, Banknote, Plus } from 'lucide-react';
 import { BinManager } from '@/components/BinManageModal';
 import SellModal from '@/components/SellModal';
+import AddGrainModal from '@/components/AddGrainModal';
 import { Button } from '@/components/ui/button';
 import type { Bin } from '@/types/farm';
 
@@ -11,6 +12,7 @@ export default function Logistics() {
   const { bins, getBinTotal, grainMovements, viewingSeason } = useFarm();
   const [managing, setManaging] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
+  const [addingBin, setAddingBin] = useState<Bin | null>(null);
 
   const binOverview = useMemo(() => {
     return bins.map(bin => {
@@ -89,6 +91,15 @@ export default function Logistics() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
+                    onClick={() => setAddingBin({ id: bin.id, name: bin.name, capacity: bin.capacity })}
+                  >
+                    <Plus size={16} className="mr-2" />
+                    Add Grain
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={bin.total <= 0}
                     className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
                     onClick={() => setSellingBin({ id: bin.id, name: bin.name, capacity: bin.capacity })}
@@ -110,6 +121,15 @@ export default function Logistics() {
           onClose={() => setSellingBin(null)}
         />
       )}
+
+      {addingBin && (
+        <AddGrainModal
+          bin={addingBin}
+          open={!!addingBin}
+          onClose={() => setAddingBin(null)}
+        />
+      )}
+
 
       <BottomNav />
     </div>

@@ -21,11 +21,24 @@ const AppContent = () => {
   const { session, loading } = useFarm();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-background p-6">
+      <div className="relative">
+        <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full animate-pulse" />
+        <img
+          src="/icon-512.png"
+          alt="AcreLedger Logo"
+          className="relative w-24 h-24 rounded-2xl shadow-2xl border-2 border-primary/20 animate-pulse"
+        />
       </div>
-    );
+      <div className="mt-8 flex flex-col items-center gap-1">
+        <h2 className="text-sm font-mono font-bold text-foreground uppercase tracking-[0.2em]">AcreLedger</h2>
+        <div className="flex gap-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
+        </div>
+      </div>
+    </div>
   }
 
   if (!session) {
