@@ -18,7 +18,7 @@ export default function FieldCard({ field, rain24h, rainLoading }: FieldCardProp
 
   return (
     <>
-      <div className="bg-card border border-border rounded-lg p-3 space-y-2">
+      <div className="bg-card/60 backdrop-blur-md border border-border rounded-lg p-3 space-y-2 ring-1 ring-white/5 shadow-xl">
         <div className="flex items-start justify-between">
           <div>
             <h3 className="font-bold text-lg text-foreground">{field.name}</h3>
@@ -84,11 +84,11 @@ export default function FieldCard({ field, rain24h, rainLoading }: FieldCardProp
         </div>
       </div>
 
-      <PlantModal field={field} open={modal === 'plant'} onClose={() => setModal(null)} />
-      <SprayModal field={field} open={modal === 'spray'} onClose={() => setModal(null)} />
-      <HarvestModal field={field} open={modal === 'harvest'} onClose={() => setModal(null)} />
-      <HayModal field={field} open={modal === 'hay'} onClose={() => setModal(null)} />
-      <FertilizerModal field={field} open={modal === 'fertilizer'} onClose={() => setModal(null)} />
+      {modal === 'plant' && <PlantModal field={field} open onClose={() => setModal(null)} />}
+      {modal === 'spray' && <SprayModal field={field} open onClose={() => setModal(null)} />}
+      {modal === 'harvest' && <HarvestModal field={field} open onClose={() => setModal(null)} />}
+      {modal === 'hay' && <HayModal field={field} open onClose={() => setModal(null)} />}
+      {modal === 'fertilizer' && <FertilizerModal field={field} open onClose={() => setModal(null)} />}
     </>
   );
 }

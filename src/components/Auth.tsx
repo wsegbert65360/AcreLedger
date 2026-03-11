@@ -5,18 +5,27 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { toast } from 'sonner';
 
+type AuthMode = 'signin' | 'signup' | 'forgot';
+
 export function Auth() {
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [isSignUp, setIsSignUp] = useState(false);
+    const [mode, setMode] = useState<AuthMode>('signin');
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            if (isSignUp) {
+            if (mode === 'forgot') {
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}/`,
+                });
+                if (error) throw error;
+                toast.success('Password reset email sent! Check your inbox.');
+                setMode('signin');
+            } else if (mode === 'signup') {
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,
@@ -39,6 +48,24 @@ export function Auth() {
         }
     };
 
+    const title = mode === 'forgot'
+        ? 'Reset Password'
+        : mode === 'signup'
+            ? 'Create Account'
+            : 'Welcome Back';
+
+    const subtitle = mode === 'forgot'
+        ? 'Enter your email to receive a reset link'
+        : mode === 'signup'
+            ? 'Join AcreLedger Precision Ag'
+            : 'Sign in to your farm dashboard';
+
+    const buttonLabel = mode === 'forgot'
+        ? 'Send Reset Link'
+        : mode === 'signup'
+            ? 'Sign Up'
+            : 'Sign In';
+
     return (
         <div className="flex items-center justify-center min-h-[80vh]">
             <Card className="w-full max-w-md border-border/30 shadow-xl overflow-hidden">
@@ -51,10 +78,10 @@ export function Auth() {
                 </div>
                 <CardHeader className="pt-6">
                     <CardTitle className="text-2xl font-bold font-mono tracking-tight text-center">
-                        {isSignUp ? 'Create Account' : 'Welcome Back'}
+                        {title}
                     </CardTitle>
                     <CardDescription className="text-center font-mono text-xs uppercase tracking-wider">
-                        {isSignUp ? 'Join AcreLedger Precision Ag' : 'Sign in to your farm dashboard'}
+                        {subtitle}
                     </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleAuth}>
@@ -71,30 +98,64 @@ export function Auth() {
                                 required
                             />
                         </div>
-                        <div className="space-y-2">
-                            <label htmlFor="authPassword" className="text-sm font-medium">Password</label>
-                            <Input
-                                id="authPassword"
-                                name="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                            />
-                        </div>
+                        {mode !== 'forgot' && (
+                            <div className="space-y-2">
+                                <label htmlFor="authPassword" className="text-sm font-medium">Password</label>
+                                <Input
+                                    id="authPassword"
+                                    name="password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        )}
                     </CardContent>
                     <CardFooter className="flex flex-col space-y-2">
                         <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+                            {loading ? 'Processing...' : buttonLabel}
                         </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            className="w-full"
-                            onClick={() => setIsSignUp(!isSignUp)}
-                        >
-                            {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
-                        </Button>
+                        {mode === 'signin' && (
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full"
+                                    onClick={() => setMode('signup')}
+                                >
+                                    Need an account? Sign Up
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="link"
+                                    className="text-xs text-muted-foreground hover:text-primary"
+                                    onClick={() => setMode('forgot')}
+                                >
+                                    Forgot your password?
+                                </Button>
+                            </>
+                        )}
+                        {mode === 'signup' && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="w-full"
+                                onClick={() => setMode('signin')}
+                            >
+                                Already have an account? Sign In
+                            </Button>
+                        )}
+                        {mode === 'forgot' && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                className="w-full"
+                                onClick={() => setMode('signin')}
+                            >
+                                Back to Sign In
+                            </Button>
+                        )}
                     </CardFooter>
                 </form>
             </Card>
