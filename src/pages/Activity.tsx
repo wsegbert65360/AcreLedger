@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Pencil, Tractor, Sprout } from 'lucide-react';
+import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Pencil, Tractor, Sprout, FileText, Settings, History } from 'lucide-react';
 import { formatDate } from '@/config/constants';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
@@ -14,6 +14,7 @@ import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import GrainMovementModal from '@/components/GrainMovementModal';
+import RecordListItem from '@/components/RecordListItem';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication;
@@ -152,8 +153,8 @@ export default function Activity() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <ClipboardList size={20} className="text-primary" />
@@ -211,21 +212,36 @@ export default function Activity() {
             </button>
           )}
         </div>
+        <div className="h-[2px] w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
         {/* Tabs */}
         <div className="flex gap-1 bg-card border border-border rounded-lg p-1 overflow-x-auto no-scrollbar">
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => { setTab(t.key); setSelected(new Set()); }}
-              className={`flex-1 min-w-[80px] touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-[10px] font-semibold transition-all ${tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
-                }`}
-            >
-              <t.icon size={14} />
-              {t.label.toUpperCase()}
-            </button>
-          ))}
+          {TABS.map(t => {
+            const count = t.key === 'plant' ? filteredPlant.length
+              : t.key === 'spray' ? filteredSpray.length
+              : t.key === 'harvest' ? filteredHarvest.length
+              : t.key === 'grain' ? filteredGrain.length
+              : t.key === 'hay' ? filteredHay.length
+              : filteredFertilizer.length;
+
+            return (
+              <button
+                key={t.key}
+                onClick={() => { setTab(t.key); setSelected(new Set()); }}
+                className={`flex-1 min-w-[80px] touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-[10px] font-semibold transition-all ${tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
+                  }`}
+              >
+                <t.icon size={14} />
+                <span className="flex items-center gap-1">
+                  {t.label.toUpperCase()}
+                  <span className={`px-1.5 py-0.5 rounded-full text-[8px] bg-background/50 border border-border/20 ${tab === t.key ? t.color : 'text-muted-foreground'}`}>
+                    {count}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Search */}
@@ -252,177 +268,93 @@ export default function Activity() {
         {/* Records */}
         <div className="space-y-2">
           {tab === 'plant' && filteredPlant.map(r => (
-            <div
+            <RecordListItem
               key={r.id}
-              onClick={() => toggle(r.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  toggle(r.id);
-                }
-              }}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  {renderTitle(r.fieldName, r.plantDate || r.timestamp)}
-                </div>
-                <button
-                  onClick={(e) => edit(e, r)}
-                  className="ml-3 p-2 rounded-md hover:bg-plant/10 text-muted-foreground hover:text-plant transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            </div>
+              id={r.id}
+              type="plant"
+              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
+              subtitle={`${r.crop || 'UNSPECIFIED'} · ${r.seedVariety}`}
+              details={`${r.acreage} AC · PLANTED`}
+              date={formatIsoDate(r.plantDate) || r.plantDate || formatDate(r.timestamp)}
+              isSelected={selected.has(r.id)}
+              onToggle={toggle}
+              onEdit={() => setEditingRecord(r)}
+            />
           ))}
 
           {tab === 'spray' && filteredSpray.map(r => (
-            <div
+            <RecordListItem
               key={r.id}
-              onClick={() => toggle(r.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  toggle(r.id);
-                }
-              }}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  {renderTitle(r.fieldName, r.sprayDate || r.timestamp)}
-                </div>
-                <button
-                  onClick={(e) => edit(e, r)}
-                  className="ml-3 p-2 rounded-md hover:bg-spray/10 text-muted-foreground hover:text-spray transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            </div>
+              id={r.id}
+              type="spray"
+              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
+              subtitle={r.product}
+              details={`${r.windSpeed} MPH ${r.windDirection} · ${r.temperature}°F`}
+              date={formatIsoDate(r.sprayDate) || r.sprayDate || formatDate(r.timestamp)}
+              isSelected={selected.has(r.id)}
+              onToggle={toggle}
+              onEdit={() => setEditingRecord(r)}
+            />
           ))}
 
           {tab === 'harvest' && filteredHarvest.map(r => (
-            <div
+            <RecordListItem
               key={r.id}
-              onClick={() => toggle(r.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  toggle(r.id);
-                }
-              }}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  {renderTitle(r.fieldName, r.harvestDate || r.timestamp)}
-                </div>
-                <button
-                  onClick={(e) => edit(e, r)}
-                  className="ml-3 p-2 rounded-md hover:bg-harvest/10 text-muted-foreground hover:text-harvest transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            </div>
+              id={r.id}
+              type="harvest"
+              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
+              subtitle={`${r.crop || 'UNSPECIFIED'} · ${r.bushels} BU`}
+              details={`${r.moisturePercent}% MST · BIN ${r.binId ? 'ID:' + r.binId : 'N/A'}`}
+              date={formatIsoDate(r.harvestDate) || r.harvestDate || formatDate(r.timestamp)}
+              isSelected={selected.has(r.id)}
+              onToggle={toggle}
+              onEdit={() => setEditingRecord(r)}
+            />
           ))}
 
           {tab === 'hay' && filteredHay.map(r => (
-            <div
+            <RecordListItem
               key={r.id}
-              onClick={() => toggle(r.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  toggle(r.id);
-                }
-              }}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  {renderTitle(r.fieldName, r.date || r.timestamp)}
-                </div>
-                <button
-                  onClick={(e) => edit(e, r)}
-                  className="ml-3 p-2 rounded-md hover:bg-harvest/10 text-muted-foreground hover:text-harvest transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            </div>
+              id={r.id}
+              type="hay"
+              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
+              subtitle={`${r.baleCount} BALES · ${r.baleType}`}
+              details={`CUTTING #${r.cuttingNumber}`}
+              date={formatIsoDate(r.date) || r.date || formatDate(r.timestamp)}
+              isSelected={selected.has(r.id)}
+              onToggle={toggle}
+              onEdit={() => setEditingRecord(r)}
+            />
           ))}
 
           {tab === 'fertilizer' && filteredFertilizer.map(r => (
-            <div
+            <RecordListItem
               key={r.id}
-              onClick={() => toggle(r.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  toggle(r.id);
-                }
-              }}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(r.id) ? 'border-destructive bg-destructive/5' : 'border-border'
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  {renderTitle(r.fieldName, r.date)}
-                </div>
-                <button
-                  onClick={(e) => edit(e, r)}
-                  className="ml-3 p-2 rounded-md hover:bg-spray/10 text-muted-foreground hover:text-spray transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            </div>
+              id={r.id}
+              type="fertilizer"
+              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
+              subtitle={`${r.fertilizer_formula}`}
+              details={`${r.acres} AC · APPLIED`}
+              date={formatIsoDate(r.date) || r.date || formatDate(new Date(r.created_at).getTime())}
+              isSelected={selected.has(r.id)}
+              onToggle={toggle}
+              onEdit={() => setEditingRecord(r)}
+            />
           ))}
 
           {tab === 'grain' && filteredGrain.map(m => (
-            <div
+            <RecordListItem
               key={m.id}
-              onClick={() => toggle(m.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  toggle(m.id);
-                }
-              }}
-              className={`w-full text-left bg-card border rounded-lg p-3 transition-all cursor-pointer ${selected.has(m.id) ? 'border-destructive bg-destructive/5' : 'border-border'
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  {renderTitle(m.binName, m.timestamp)}
-                </div>
-                <button
-                  onClick={(e) => edit(e, m)}
-                  className="ml-3 p-2 rounded-md hover:bg-muted/30 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            </div>
+              id={m.id}
+              type="grain"
+              title={m.binName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
+              subtitle={`${m.type === 'in' ? 'ADDITION' : 'SALE'} · ${m.bushels} BU`}
+              details={`${m.sourceFieldName || m.destination || 'N/A'} · ${m.moisturePercent}% MST`}
+              date={formatDate(m.timestamp)}
+              isSelected={selected.has(m.id)}
+              onToggle={toggle}
+              onEdit={() => setEditingRecord(m)}
+            />
           ))}
         </div>
 

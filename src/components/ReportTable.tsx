@@ -1,0 +1,59 @@
+import { ReactNode } from 'react';
+import { FileDown, Printer } from 'lucide-react';
+
+interface ReportTableProps {
+  title: string;
+  subtitle: string;
+  headers: string[];
+  children: ReactNode;
+  onExport?: () => void;
+  exportLabel?: string;
+  summary?: ReactNode;
+}
+
+export default function ReportTable({
+  title, subtitle, headers, children, onExport, exportLabel = "Export", summary
+}: ReportTableProps) {
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+      <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-bold text-foreground font-mono uppercase tracking-wider">{title}</h2>
+          <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{subtitle}</p>
+        </div>
+        {onExport && (
+          <button
+            onClick={onExport}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-[10px] font-mono font-bold hover:bg-muted transition-colors print:hidden"
+          >
+            <FileDown size={14} />
+            {exportLabel.toUpperCase()}
+          </button>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-muted/50 border-b border-border">
+              {headers.map((h, i) => (
+                <th key={i} className="px-4 py-3 text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-tighter">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            {children}
+          </tbody>
+        </table>
+      </div>
+
+      {summary && (
+        <div className="p-4 bg-muted/20 border-t border-border mt-auto">
+          {summary}
+        </div>
+      )}
+    </div>
+  );
+}

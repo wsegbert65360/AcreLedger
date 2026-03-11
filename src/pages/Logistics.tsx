@@ -29,8 +29,8 @@ export default function Logistics() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-4">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-harvest/10 flex items-center justify-center">
               <Wheat size={20} className="text-harvest" />
@@ -48,6 +48,7 @@ export default function Logistics() {
             <Settings size={20} />
           </button>
         </div>
+        <div className="h-[2px] w-full bg-gradient-to-r from-harvest/40 via-harvest to-harvest/40" />
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
         {managing ? (

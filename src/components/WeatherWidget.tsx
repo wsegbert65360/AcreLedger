@@ -2,24 +2,38 @@ import { Wind, Thermometer, Droplets, MapPin, Loader2 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
+import { useFarm } from '@/store/farmStore';
 
 function fallbackWeather(): WeatherData {
   return { wind: 0, temp: 0, humidity: 0, windDirection: '—' };
 }
 
-function loadZip(): string {
-  try { return localStorage.getItem('al_zip') || ''; } catch { return ''; }
+function loadZip(userId?: string): string {
+  try {
+    const key = userId ? `${userId}_al_zip` : 'al_zip';
+    return localStorage.getItem(key) || '';
+  } catch { return ''; }
 }
-function saveZip(zip: string) {
-  localStorage.setItem('al_zip', zip);
+function saveZip(zip: string, userId?: string) {
+  const key = userId ? `${userId}_al_zip` : 'al_zip';
+  localStorage.setItem(key, zip);
 }
 
 export default function WeatherBar() {
-  const [zip, setZip] = useState(loadZip);
+  const { session } = useFarm();
+  const userId = session?.user?.id;
+  const [zip, setZip] = useState(() => loadZip(userId));
   const [inputZip, setInputZip] = useState(zip);
   const [weather, setWeather] = useState<WeatherData>(fallbackWeather);
   const [locationName, setLocationName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Sync zip when user changes
+  useEffect(() => {
+    const userZip = loadZip(userId);
+    setZip(userZip);
+    setInputZip(userZip);
+  }, [userId]);
 
   const load = useCallback(async (z: string) => {
     if (!z.trim()) return;
@@ -39,7 +53,10 @@ export default function WeatherBar() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const z = inputZip.trim();
-    if (z) { setZip(z); saveZip(z); }
+    if (z) {
+      setZip(z);
+      saveZip(z, userId);
+    }
   };
 
   return (

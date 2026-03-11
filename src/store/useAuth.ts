@@ -1,0 +1,114 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Session } from '@supabase/supabase-js';
+import { toast } from 'sonner';
+import { loadFromStorage} from './storageUtils';
+
+export function useAuth() {
+  const pageTransition = {
+  duration: 0.2,
+  ease: [0.4, 0, 0.2, 1],
+};
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [farm_id, setFarmId] = useState<string | null>(() => loadFromStorage('al_farm_id', null));
+  const [activeSeason, setActiveSeason] = useState<number>(() => loadFromStorage('al_active_season', new Date().getFullYear()));
+  const [viewingSeason, setViewingSeason] = useState<number>(() => loadFromStorage('al_active_season', new Date().getFullYear()));
+
+  // Initialize Supabase session & handle Auth Changes
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        setSession(initialSession);
+
+        if (initialSession?.user) {
+          const jwtFarmId = initialSession.user.app_metadata?.farm_id || initialSession.user.user_metadata?.farm_id;
+          if (jwtFarmId) setFarmId(jwtFarmId);
+        }
+      } catch (err) {
+        console.error('Session initialization failed:', err);
+        toast.error('Could not connect to authentication service. Check your connection.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      if (newSession?.user) {
+        const jwtFarmId = newSession.user.app_metadata?.farm_id || newSession.user.user_metadata?.farm_id;
+        if (jwtFarmId) setFarmId(jwtFarmId);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Sync farm_id from Profile to JWT (One-way stabilization)
+  useEffect(() => {
+    if (!session || !session.user) return;
+
+    const syncAuth = async () => {
+      try {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('farm_id, active_season')
+          .single();
+
+        if (profileData) {
+          let currentFarmId = profileData.farm_id;
+
+          // Auto-create farm if missing
+          if (!currentFarmId) {
+            const { data: nf } = await supabase.from('farms').insert([{ name: 'My Farm' }]).select().single();
+            if (nf) {
+              currentFarmId = nf.id;
+              const { error: updateError } = await supabase.from('profiles').update({ farm_id: currentFarmId }).eq('id', session.user.id);
+              if (updateError) {
+                console.error('Error updating profile with farm_id:', updateError);
+                toast.error('Failed to link farm to profile');
+              }
+            }
+          }
+
+          if (currentFarmId) {
+            setFarmId(currentFarmId);
+            // ONLY refresh if the JWT is actually missing the ID
+            const jwtId = session.user.app_metadata?.farm_id || session.user.user_metadata?.farm_id;
+            if (currentFarmId !== jwtId) {
+              await supabase.auth.refreshSession();
+            }
+            if (profileData.active_season) {
+              setActiveSeason(profileData.active_season);
+              setViewingSeason(profileData.active_season);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Sync error:', err);
+      }
+    };
+
+    syncAuth();
+  }, [session?.user?.id]); // Only runs when user changes
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
+
+  return {
+    session,
+    loading,
+    setLoading,
+    farm_id,
+    setFarmId,
+    activeSeason,
+    setActiveSeason,
+    viewingSeason,
+    setViewingSeason,
+    signOut,
+  };
+}
