@@ -5,8 +5,8 @@ import FieldCard from '@/components/FieldCard';
 import BottomNav from '@/components/BottomNav';
 import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
-import { useFieldRainfall } from '@/hooks/useFieldRainfall';
-import { Map as MapIcon, Settings, History, Tractor } from 'lucide-react';
+import Logo from '@/components/Logo';
+import { Settings, History, Tractor } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -26,19 +26,16 @@ const Index = () => {
 
   const [managing, setManaging] = useState(false);
   const activeFieldsList = useMemo(() => [...rowCrops, ...pastureHay], [rowCrops, pastureHay]);
-  const { rain, loading: rainLoading } = useFieldRainfall(activeFieldsList);
 
   return (
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border print:hidden pb-0">
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <MapIcon size={20} className="text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">Farm Overview</h1>
-              <p className="text-xs font-mono text-muted-foreground uppercase">{allFields.length} Fields · Active</p>
+            <Logo />
+            <div className="flex flex-col">
+              <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
+              <p className="text-[10px] font-mono text-muted-foreground uppercase">{allFields.length} Fields · Active</p>
             </div>
           </div>
           <button
@@ -66,8 +63,6 @@ const Index = () => {
                   <FieldCard
                     key={field.id}
                     field={field}
-                    rain24h={rain[field.id] ?? null}
-                    rainLoading={rainLoading && rain[field.id] == null}
                   />
                 ))}
               </div>
@@ -80,8 +75,6 @@ const Index = () => {
                   <FieldCard
                     key={field.id}
                     field={field}
-                    rain24h={rain[field.id] ?? null}
-                    rainLoading={rainLoading && rain[field.id] == null}
                   />
                 ))}
               </div>

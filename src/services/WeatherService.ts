@@ -18,6 +18,31 @@ export const WeatherService = {
     },
 
     /**
+     * Fetches detailed weather (rain, wind) for a specific field location.
+     */
+    async fetchFieldWeather(lat: number, lng: number): Promise<{ rain24h: number; windspeed: number; winddir: number }> {
+        const location = `${lat},${lng}`;
+        if (!API_KEY || API_KEY === 'undefined') return { rain24h: 0, windspeed: 0, winddir: 0 };
+
+        try {
+            const url = `${BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=days,current&elements=precip,windspeed,winddir`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
+            const data = await response.json();
+            
+            // precip from day summary, wind from current conditions
+            return {
+                rain24h: data.days?.[0]?.precip ?? 0,
+                windspeed: data.currentConditions?.windspeed ?? 0,
+                winddir: data.currentConditions?.winddir ?? 0
+            };
+        } catch (error) {
+            console.error('[WeatherService] Error fetching field weather:', error);
+            return { rain24h: 0, windspeed: 0, winddir: 0 };
+        }
+    },
+
+    /**
      * Internal helper for rainfall fetch via location string.
      */
     async fetchRainByLocation(location: string): Promise<number> {
