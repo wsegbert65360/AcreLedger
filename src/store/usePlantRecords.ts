@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { PlantRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { mapPlantToDb } from '@/lib/mappers';
 
 interface UsePlantRecordsArgs {
   farm_id: string | null;
@@ -12,6 +13,10 @@ interface UsePlantRecordsArgs {
 
 export function usePlantRecords({ farm_id, activeSeason, plantRecords, setPlantRecords }: UsePlantRecordsArgs) {
   const addPlantRecord = useCallback(async (r: Omit<PlantRecord, 'id' | 'timestamp'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: activeSeason };
@@ -19,22 +24,8 @@ export function usePlantRecords({ farm_id, activeSeason, plantRecords, setPlantR
     setPlantRecords(prev => [...prev, newRecord]);
 
     const { error } = await supabase.from('plant_records').insert([{
-      id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      seed_variety: r.seedVariety,
-      acreage: r.acreage,
-      crop: r.crop,
-      plant_date: r.plantDate,
-      fsa_farm_number: r.fsaFarmNumber,
-      fsa_tract_number: r.fsaTractNumber,
-      fsa_field_number: r.fsaFieldNumber,
-      intended_use: r.intendedUse,
-      producer_share: r.producerShare,
-      irrigation_practice: r.irrigationPractice,
-      season_year: activeSeason,
-      timestamp: new Date(timestamp).toISOString()
+      ...mapPlantToDb(newRecord),
+      farm_id
     }]);
 
     if (error) {
@@ -47,26 +38,16 @@ export function usePlantRecords({ farm_id, activeSeason, plantRecords, setPlantR
   }, [activeSeason, farm_id, setPlantRecords]);
 
   const updatePlantRecord = useCallback(async (r: PlantRecord) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = plantRecords.find(item => item.id === r.id);
     setPlantRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('plant_records').upsert({
-      id: r.id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      seed_variety: r.seedVariety,
-      acreage: r.acreage,
-      crop: r.crop,
-      plant_date: r.plantDate,
-      fsa_farm_number: r.fsaFarmNumber,
-      fsa_tract_number: r.fsaTractNumber,
-      fsa_field_number: r.fsaFieldNumber,
-      intended_use: r.intendedUse,
-      producer_share: r.producerShare,
-      irrigation_practice: r.irrigationPractice,
-      season_year: r.seasonYear,
-      timestamp: new Date(r.timestamp).toISOString()
+      ...mapPlantToDb(r),
+      farm_id
     });
 
     if (error) {
@@ -79,6 +60,10 @@ export function usePlantRecords({ farm_id, activeSeason, plantRecords, setPlantR
   }, [farm_id, plantRecords, setPlantRecords]);
 
   const deletePlantRecords = useCallback(async (ids: string[]) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = plantRecords.filter(r => ids.includes(r.id));
     setPlantRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase

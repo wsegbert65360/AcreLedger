@@ -15,37 +15,40 @@ export function useFieldRainfall(fields: Field[]) {
     inFlight.current = true;
     setLoading(true);
 
-    const results: Record<string, number> = {};
     const now = Date.now();
-
-    for (let i = 0; i < fields.length; i++) {
-      const f = fields[i];
-
+    const results: Record<string, number> = {};
+    const toFetch = fields.filter(f => {
       const cacheKey = `${f.id}-${f.lat}-${f.lng}`;
-
       if (rainCache[cacheKey] && (now - rainCache[cacheKey].timestamp < CACHE_TTL)) {
         results[f.id] = rainCache[cacheKey].value;
-        continue;
+        return false;
       }
-
-      // Validate coords (null check instead of falsy to allow 0,0)
       if (f.lat == null || f.lng == null || isNaN(f.lat) || isNaN(f.lng)) {
         results[f.id] = 0;
-        continue;
+        return false;
       }
+      return true;
+    });
 
-      try {
-        const value = await WeatherService.fetchRain24h(f.lat, f.lng);
-        results[f.id] = value;
-        rainCache[cacheKey] = { value, timestamp: now };
-      } catch (err) {
-        console.warn(`Rain fetch failed for ${f.id}:`, err);
-        results[f.id] = 0;
-      }
-
-      // Wait between requests to honor rate limits, but don't setRain on every iteration
-      if (i < fields.length - 1) {
-        await new Promise(r => setTimeout(r, 1000));
+    if (toFetch.length > 0) {
+      // Concurrency limit: 3 simultaneous requests
+      const CONCURRENCY = 3;
+      for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
+        const batch = toFetch.slice(i, i + CONCURRENCY);
+        await Promise.allSettled(batch.map(async (f) => {
+          try {
+            const value = await WeatherService.fetchRain24h(f.lat, f.lng);
+            results[f.id] = value;
+            rainCache[`${f.id}-${f.lat}-${f.lng}`] = { value, timestamp: now };
+          } catch (err) {
+            console.warn(`Rain fetch failed for ${f.id}:`, err);
+            results[f.id] = 0;
+          }
+        }));
+        // Small delay between batches to be safe
+        if (i + CONCURRENCY < toFetch.length) {
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
     }
 

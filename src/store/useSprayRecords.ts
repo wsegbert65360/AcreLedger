@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { SprayRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { mapSprayToDb } from '@/lib/mappers';
 
 interface UseSprayRecordsArgs {
   farm_id: string | null;
@@ -12,6 +13,10 @@ interface UseSprayRecordsArgs {
 
 export function useSprayRecords({ farm_id, activeSeason, sprayRecords, setSprayRecords }: UseSprayRecordsArgs) {
   const addSprayRecord = useCallback(async (r: Omit<SprayRecord, 'id' | 'timestamp'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     const newRecord: SprayRecord = { ...r, id, timestamp, seasonYear: activeSeason };
@@ -19,30 +24,8 @@ export function useSprayRecords({ farm_id, activeSeason, sprayRecords, setSprayR
     setSprayRecords(prev => [...prev, newRecord]);
 
     const { error } = await supabase.from('spray_records').insert([{
-      id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      product: r.product,
-      products: r.products,
-      wind_speed: r.windSpeed,
-      temperature: r.temperature,
-      spray_date: r.sprayDate,
-      start_time: r.startTime,
-      equipment_id: r.equipmentId,
-      applicator_name: r.applicatorName,
-      license_number: r.licenseNumber,
-      epa_reg_number: r.epaRegNumber,
-      target_pest: r.targetPest,
-      wind_direction: r.windDirection,
-      relative_humidity: r.relativeHumidity,
-      treated_area_size: r.treatedAreaSize,
-      total_amount_applied: r.totalAmountApplied,
-      involved_technicians: r.involvedTechnicians,
-      mixture_rate: r.mixtureRate,
-      total_mixture_volume: r.totalMixtureVolume,
-      season_year: activeSeason,
-      timestamp: new Date(timestamp).toISOString()
+      ...mapSprayToDb(newRecord),
+      farm_id
     }]);
 
     if (error) {
@@ -55,34 +38,16 @@ export function useSprayRecords({ farm_id, activeSeason, sprayRecords, setSprayR
   }, [activeSeason, farm_id, setSprayRecords]);
 
   const updateSprayRecord = useCallback(async (r: SprayRecord) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = sprayRecords.find(item => item.id === r.id);
     setSprayRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('spray_records').upsert({
-      id: r.id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      product: r.product,
-      products: r.products,
-      wind_speed: r.windSpeed,
-      temperature: r.temperature,
-      spray_date: r.sprayDate,
-      start_time: r.startTime,
-      equipment_id: r.equipmentId,
-      applicator_name: r.applicatorName,
-      license_number: r.licenseNumber,
-      epa_reg_number: r.epaRegNumber,
-      target_pest: r.targetPest,
-      wind_direction: r.windDirection,
-      relative_humidity: r.relativeHumidity,
-      treated_area_size: r.treatedAreaSize,
-      total_amount_applied: r.totalAmountApplied,
-      involved_technicians: r.involvedTechnicians,
-      mixture_rate: r.mixtureRate,
-      total_mixture_volume: r.totalMixtureVolume,
-      season_year: r.seasonYear,
-      timestamp: new Date(r.timestamp).toISOString()
+      ...mapSprayToDb(r),
+      farm_id
     });
 
     if (error) {
@@ -95,6 +60,10 @@ export function useSprayRecords({ farm_id, activeSeason, sprayRecords, setSprayR
   }, [farm_id, sprayRecords, setSprayRecords]);
 
   const deleteSprayRecords = useCallback(async (ids: string[]) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = sprayRecords.filter(r => ids.includes(r.id));
     setSprayRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase

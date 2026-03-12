@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { fieldService } from '@/services/fieldService';
 import { binService } from '@/services/binService';
+import { mapSeedToDb, mapRecipeToDb } from '@/lib/mappers';
 
 interface UseFieldsAndBinsArgs {
   farm_id: string | null;
@@ -24,10 +25,14 @@ export function useFieldsAndBins({
 
   // --- Fields ---
   const addField = useCallback(async (f: Omit<Field, 'id'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     setFields(prev => [...prev, { ...f, id }]);
 
-    const { error } = await fieldService.createField(f, id, farm_id!);
+    const { error } = await fieldService.createField(f, id, farm_id);
 
     if (error) {
       console.error('Supabase error adding field:', error);
@@ -39,10 +44,14 @@ export function useFieldsAndBins({
   }, [farm_id, setFields]);
 
   const updateField = useCallback(async (f: Field) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = fields.find(item => item.id === f.id);
     setFields(prev => prev.map(existing => existing.id === f.id ? f : existing));
 
-    const { error } = await fieldService.updateField(f, farm_id!);
+    const { error } = await fieldService.updateField(f, farm_id);
 
     if (error) {
       console.error('Supabase error updating field:', error);
@@ -54,11 +63,15 @@ export function useFieldsAndBins({
   }, [farm_id, fields, setFields]);
 
   const deleteField = useCallback(async (id: string) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = fields.find(f => f.id === id);
     setFields(prev => prev.map(f =>
       f.id === id ? { ...f, deleted_at: new Date().toISOString() } : f
     ));
-    const { error } = await fieldService.softDeleteField(id, farm_id!);
+    const { error } = await fieldService.softDeleteField(id, farm_id);
     if (error) {
       console.error('Error deleting field:', error);
       if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
@@ -70,9 +83,13 @@ export function useFieldsAndBins({
 
   // --- Bins ---
   const addBin = useCallback(async (b: Omit<Bin, 'id'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     setBins(prev => [...prev, { ...b, id }]);
-    const { error } = await binService.createBin(b, id, farm_id!);
+    const { error } = await binService.createBin(b, id, farm_id);
     if (error) {
       console.error('Error adding bin:', error);
       setBins(prev => prev.filter(bin => bin.id !== id));
@@ -83,9 +100,13 @@ export function useFieldsAndBins({
   }, [farm_id, setBins]);
 
   const updateBin = useCallback(async (b: Bin) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = bins.find(item => item.id === b.id);
     setBins(prev => prev.map(existing => existing.id === b.id ? b : existing));
-    const { error } = await binService.updateBin(b, farm_id!);
+    const { error } = await binService.updateBin(b, farm_id);
     if (error) {
       console.error('Error updating bin:', error);
       if (previous) setBins(prev => prev.map(item => item.id === b.id ? previous : item));
@@ -96,11 +117,15 @@ export function useFieldsAndBins({
   }, [farm_id, bins, setBins]);
 
   const deleteBin = useCallback(async (id: string) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = bins.find(b => b.id === id);
     setBins(prev => prev.map(b =>
       b.id === id ? { ...b, deleted_at: new Date().toISOString() } : b
     ));
-    const { error } = await binService.softDeleteBin(id, farm_id!);
+    const { error } = await binService.softDeleteBin(id, farm_id);
     if (error) {
       console.error('Error deleting bin:', error);
       if (previous) setBins(prev => prev.map(b => b.id === id ? previous : b));
@@ -112,9 +137,15 @@ export function useFieldsAndBins({
 
   // --- Seeds ---
   const addSeed = useCallback(async (name: string) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     setSavedSeeds(prev => [...prev, { id, name }]);
-    const { error } = await supabase.from('saved_seeds').insert([{ id, farm_id, name }]);
+    const { error } = await supabase.from('saved_seeds').insert([
+      mapSeedToDb({ id, name, farm_id })
+    ]);
     if (error) {
       console.error('Error adding seed:', error);
       setSavedSeeds(prev => prev.filter(s => s.id !== id));
@@ -125,6 +156,10 @@ export function useFieldsAndBins({
   }, [farm_id, setSavedSeeds]);
 
   const deleteSeed = useCallback(async (id: string) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = savedSeeds.find(s => s.id === id);
     setSavedSeeds(prev => prev.filter(s => s.id !== id));
     const { error } = await supabase
@@ -143,18 +178,15 @@ export function useFieldsAndBins({
 
   // --- Spray Recipes ---
   const addSprayRecipe = useCallback(async (r: Omit<SprayRecipe, 'id'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     setSprayRecipes(prev => [...prev, { ...r, id }]);
-    const { error } = await supabase.from('spray_recipes').insert([{
-      id,
-      farm_id,
-      name: r.name,
-      products: r.products,
-      applicator_name: r.applicatorName,
-      license_number: r.licenseNumber,
-      target_pest: r.targetPest,
-      epa_reg_number: r.epaRegNumber
-    }]);
+    const { error } = await supabase.from('spray_recipes').insert([
+      mapRecipeToDb({ ...r, id, farm_id })
+    ]);
     if (error) {
       console.error('Error adding spray recipe:', error);
       setSprayRecipes(prev => prev.filter(rec => rec.id !== id));
@@ -165,19 +197,15 @@ export function useFieldsAndBins({
   }, [farm_id, setSprayRecipes]);
 
   const updateSprayRecipe = useCallback(async (r: SprayRecipe) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = sprayRecipes.find(item => item.id === r.id);
     setSprayRecipes(prev => prev.map(existing => existing.id === r.id ? r : existing));
-    const { error } = await supabase.from('spray_recipes').upsert({
-      id: r.id,
-      farm_id,
-      name: r.name,
-      products: r.products,
-      applicator_name: r.applicatorName,
-      license_number: r.licenseNumber,
-      target_pest: r.targetPest,
-      epa_reg_number: r.epaRegNumber,
-      deleted_at: r.deleted_at
-    });
+    const { error } = await supabase.from('spray_recipes').upsert(
+      mapRecipeToDb({ ...r, farm_id })
+    );
     if (error) {
       console.error('Error updating spray recipe:', error);
       if (previous) setSprayRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
@@ -188,6 +216,10 @@ export function useFieldsAndBins({
   }, [farm_id, sprayRecipes, setSprayRecipes]);
 
   const deleteSprayRecipe = useCallback(async (id: string) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = sprayRecipes.find(r => r.id === id);
     setSprayRecipes(prev => prev.filter(r => r.id !== id));
     const { error } = await supabase

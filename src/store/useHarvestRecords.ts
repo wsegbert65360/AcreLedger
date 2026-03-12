@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { HarvestRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { mapHarvestToDb } from '@/lib/mappers';
 
 interface UseHarvestRecordsArgs {
   farm_id: string | null;
@@ -12,6 +13,10 @@ interface UseHarvestRecordsArgs {
 
 export function useHarvestRecords({ farm_id, activeSeason, harvestRecords, setHarvestRecords }: UseHarvestRecordsArgs) {
   const addHarvestRecord = useCallback(async (r: Omit<HarvestRecord, 'id' | 'timestamp'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     const newRecord: HarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason };
@@ -19,21 +24,8 @@ export function useHarvestRecords({ farm_id, activeSeason, harvestRecords, setHa
     setHarvestRecords(prev => [...prev, newRecord]);
 
     const { error } = await supabase.from('harvest_records').insert([{
-      id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      crop: r.crop,
-      destination: r.destination,
-      bin_id: r.binId,
-      bushels: r.bushels,
-      moisture_percent: r.moisturePercent,
-      landlord_split_percent: r.landlordSplitPercent,
-      harvest_date: r.harvestDate,
-      fsa_farm_number: r.fsaFarmNumber,
-      fsa_tract_number: r.fsaTractNumber,
-      season_year: activeSeason,
-      timestamp: new Date(timestamp).toISOString()
+      ...mapHarvestToDb(newRecord),
+      farm_id
     }]);
 
     if (error) {
@@ -46,25 +38,16 @@ export function useHarvestRecords({ farm_id, activeSeason, harvestRecords, setHa
   }, [activeSeason, farm_id, setHarvestRecords]);
 
   const updateHarvestRecord = useCallback(async (r: HarvestRecord) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = harvestRecords.find(item => item.id === r.id);
     setHarvestRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('harvest_records').upsert({
-      id: r.id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      crop: r.crop,
-      destination: r.destination,
-      bin_id: r.binId,
-      bushels: r.bushels,
-      moisture_percent: r.moisturePercent,
-      landlord_split_percent: r.landlordSplitPercent,
-      harvest_date: r.harvestDate,
-      fsa_farm_number: r.fsaFarmNumber,
-      fsa_tract_number: r.fsaTractNumber,
-      season_year: r.seasonYear,
-      timestamp: new Date(r.timestamp).toISOString()
+      ...mapHarvestToDb(r),
+      farm_id
     });
 
     if (error) {
@@ -77,6 +60,10 @@ export function useHarvestRecords({ farm_id, activeSeason, harvestRecords, setHa
   }, [farm_id, harvestRecords, setHarvestRecords]);
 
   const deleteHarvestRecords = useCallback(async (ids: string[]) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = harvestRecords.filter(r => ids.includes(r.id));
     setHarvestRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase

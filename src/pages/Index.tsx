@@ -4,7 +4,7 @@ import { useFarm } from '@/store/farmStore';
 import FieldCard from '@/components/FieldCard';
 import BottomNav from '@/components/BottomNav';
 import WeatherBar from '@/components/WeatherWidget';
-import { FieldManager } from '@/components/FieldManageModal';
+import FieldManager from '@/components/FieldManager';
 import { useFieldRainfall } from '@/hooks/useFieldRainfall';
 import { Map as MapIcon, Settings, History, Tractor } from 'lucide-react';
 

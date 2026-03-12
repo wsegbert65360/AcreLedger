@@ -2,22 +2,18 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Pencil, Tractor, Sprout, FileText, Settings, History } from 'lucide-react';
-import { formatDate } from '@/config/constants';
-import { formatIsoDate } from '@/utils/dates';
-import { roundTo } from '@/utils/numbers';
+import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout } from 'lucide-react';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
-import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication } from '@/types/farm';
+import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, GrainMovement } from '@/types/farm';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import GrainMovementModal from '@/components/GrainMovementModal';
-import RecordListItem from '@/components/RecordListItem';
+import DeletedFieldFallback from '@/components/DeletedFieldFallback';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication;
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -30,6 +26,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+// Tab Components
+import PlantTab from '@/components/activity/PlantTab';
+import SprayTab from '@/components/activity/SprayTab';
+import HarvestTab from '@/components/activity/HarvestTab';
+import HayTab from '@/components/activity/HayTab';
+import FertilizerTab from '@/components/activity/FertilizerTab';
+import GrainTab from '@/components/activity/GrainTab';
+
 type Tab = 'plant' | 'spray' | 'fertilizer' | 'harvest' | 'hay' | 'grain';
 
 const TABS: { key: Tab; icon: React.ElementType; label: string; color: string }[] = [
@@ -40,6 +44,8 @@ const TABS: { key: Tab; icon: React.ElementType; label: string; color: string }[
   { key: 'hay', icon: Tractor, label: 'Hay/Forage', color: 'text-orange-700 dark:text-orange-400' },
   { key: 'grain', icon: Warehouse, label: 'Grain', color: 'text-harvest' },
 ];
+
+type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | GrainMovement;
 
 export default function Activity() {
   const navigate = useNavigate();
@@ -71,30 +77,13 @@ export default function Activity() {
   const getEditField = (fieldId: string) =>
     fields.find(f => f.id === fieldId && !f.deleted_at) ?? null;
 
-  const edit = (e: React.MouseEvent, record: any) => {
-    e.stopPropagation();
-    setEditingRecord(record);
-  };
-
-  const toggle = (id: string) => {
+  const toggle = (id: string, shift: boolean = false) => {
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
-
-  const renderTitle = (name: string, date: string | number) => {
-    const uuidRegex = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi;
-    const cleanName = name.replace(uuidRegex, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '');
-    const formattedDate = typeof date === 'string' ? (formatIsoDate(date) || date) : formatDate(date);
-    return (
-      <div className="flex items-center justify-between w-full">
-        <span className="font-bold text-foreground text-sm truncate mr-2">{cleanName}</span>
-        <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">{formattedDate}</span>
-      </div>
-    );
   };
 
   const handleDelete = () => {
@@ -146,7 +135,7 @@ export default function Activity() {
 
   const filteredFertilizer = useMemo(() =>
     fertilizerApplications
-      .filter(r => !r.deleted_at && r.season_year === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.fertilizer_formula.toLowerCase().includes(search.toLowerCase())))
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.fertilizer_formula.toLowerCase().includes(search.toLowerCase())))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [fertilizerApplications, search, viewingSeason]
   );
@@ -245,14 +234,18 @@ export default function Activity() {
         </div>
 
         {/* Search */}
-        <input
-          id="activitySearch"
-          name="activitySearch"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search records..."
-          className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        />
+        <div className="relative">
+          <Label htmlFor="activitySearch" className="sr-only">Search Records</Label>
+          <input
+            id="activitySearch"
+            name="activitySearch"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search records..."
+            aria-label="Search records"
+            className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
 
         {/* Bulk delete */}
         {selected.size > 0 && (
@@ -267,104 +260,13 @@ export default function Activity() {
 
         {/* Records */}
         <div className="space-y-2">
-          {tab === 'plant' && filteredPlant.map(r => (
-            <RecordListItem
-              key={r.id}
-              id={r.id}
-              type="plant"
-              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
-              subtitle={`${r.crop || 'UNSPECIFIED'} · ${r.seedVariety}`}
-              details={`${r.acreage} AC · PLANTED`}
-              date={formatIsoDate(r.plantDate) || r.plantDate || formatDate(r.timestamp)}
-              isSelected={selected.has(r.id)}
-              onToggle={toggle}
-              onEdit={() => setEditingRecord(r)}
-            />
-          ))}
-
-          {tab === 'spray' && filteredSpray.map(r => (
-            <RecordListItem
-              key={r.id}
-              id={r.id}
-              type="spray"
-              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
-              subtitle={r.product}
-              details={`${r.windSpeed} MPH ${r.windDirection} · ${r.temperature}°F`}
-              date={formatIsoDate(r.sprayDate) || r.sprayDate || formatDate(r.timestamp)}
-              isSelected={selected.has(r.id)}
-              onToggle={toggle}
-              onEdit={() => setEditingRecord(r)}
-            />
-          ))}
-
-          {tab === 'harvest' && filteredHarvest.map(r => (
-            <RecordListItem
-              key={r.id}
-              id={r.id}
-              type="harvest"
-              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
-              subtitle={`${r.crop || 'UNSPECIFIED'} · ${r.bushels} BU`}
-              details={`${r.moisturePercent}% MST · BIN ${r.binId ? 'ID:' + r.binId : 'N/A'}`}
-              date={formatIsoDate(r.harvestDate) || r.harvestDate || formatDate(r.timestamp)}
-              isSelected={selected.has(r.id)}
-              onToggle={toggle}
-              onEdit={() => setEditingRecord(r)}
-            />
-          ))}
-
-          {tab === 'hay' && filteredHay.map(r => (
-            <RecordListItem
-              key={r.id}
-              id={r.id}
-              type="hay"
-              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
-              subtitle={`${r.baleCount} BALES · ${r.baleType}`}
-              details={`CUTTING #${r.cuttingNumber}`}
-              date={formatIsoDate(r.date) || r.date || formatDate(r.timestamp)}
-              isSelected={selected.has(r.id)}
-              onToggle={toggle}
-              onEdit={() => setEditingRecord(r)}
-            />
-          ))}
-
-          {tab === 'fertilizer' && filteredFertilizer.map(r => (
-            <RecordListItem
-              key={r.id}
-              id={r.id}
-              type="fertilizer"
-              title={r.fieldName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
-              subtitle={`${r.fertilizer_formula}`}
-              details={`${r.acres} AC · APPLIED`}
-              date={formatIsoDate(r.date) || r.date || formatDate(new Date(r.created_at).getTime())}
-              isSelected={selected.has(r.id)}
-              onToggle={toggle}
-              onEdit={() => setEditingRecord(r)}
-            />
-          ))}
-
-          {tab === 'grain' && filteredGrain.map(m => (
-            <RecordListItem
-              key={m.id}
-              id={m.id}
-              type="grain"
-              title={m.binName.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '').trim().replace(/\s*—\s*$/, '').replace(/\s*-\s*$/, '')}
-              subtitle={`${m.type === 'in' ? 'ADDITION' : 'SALE'} · ${m.bushels} BU`}
-              details={`${m.sourceFieldName || m.destination || 'N/A'} · ${m.moisturePercent}% MST`}
-              date={formatDate(m.timestamp)}
-              isSelected={selected.has(m.id)}
-              onToggle={toggle}
-              onEdit={() => setEditingRecord(m)}
-            />
-          ))}
+          {tab === 'plant' && <PlantTab records={filteredPlant} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'spray' && <SprayTab records={filteredSpray} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'harvest' && <HarvestTab records={filteredHarvest} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'hay' && <HayTab records={filteredHay} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'grain' && <GrainTab records={filteredGrain} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
         </div>
-
-        {/* Empty state */}
-        {tab === 'plant' && filteredPlant.length === 0 && <p className="text-center text-muted-foreground font-mono text-sm py-8">No planting records</p>}
-        {tab === 'spray' && filteredSpray.length === 0 && <p className="text-center text-muted-foreground font-mono text-sm py-8">No spray records</p>}
-        {tab === 'harvest' && filteredHarvest.length === 0 && <p className="text-center text-muted-foreground font-mono text-sm py-8">No harvest records</p>}
-        {tab === 'hay' && filteredHay.length === 0 && <p className="text-center text-muted-foreground font-mono text-sm py-8">No hay records</p>}
-        {tab === 'fertilizer' && filteredFertilizer.length === 0 && <p className="text-center text-muted-foreground font-mono text-sm py-8">No fertilizer records</p>}
-        {tab === 'grain' && filteredGrain.length === 0 && <p className="text-center text-muted-foreground font-mono text-sm py-8">No grain movement records</p>}
       </main>
 
       {/* Confirm Delete Dialog */}
@@ -389,21 +291,14 @@ export default function Activity() {
         <GrainMovementModal
           open={!!editingRecord}
           onClose={() => setEditingRecord(null)}
-          initialData={editingRecord as any}
+          initialData={editingRecord as GrainMovement}
         />
       )}
       <BottomNav />
 
       {tab === 'plant' && editingRecord && (() => {
-        const editField = getEditField(editingRecord.fieldId);
-        if (!editField) return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-            <div className="bg-card border border-border p-6 rounded-xl max-w-sm w-full space-y-4 shadow-2xl">
-              <p className="text-sm text-muted-foreground">The original field for this record has been deleted.</p>
-              <Button onClick={() => setEditingRecord(null)} className="w-full">Close</Button>
-            </div>
-          </div>
-        );
+        const editField = getEditField((editingRecord as PlantRecord).fieldId);
+        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
         return (
           <PlantModal
             open={!!editingRecord}
@@ -414,15 +309,8 @@ export default function Activity() {
         );
       })()}
       {tab === 'spray' && editingRecord && (() => {
-        const editField = getEditField(editingRecord.fieldId);
-        if (!editField) return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-            <div className="bg-card border border-border p-6 rounded-xl max-w-sm w-full space-y-4 shadow-2xl">
-              <p className="text-sm text-muted-foreground">The original field for this record has been deleted.</p>
-              <Button onClick={() => setEditingRecord(null)} className="w-full">Close</Button>
-            </div>
-          </div>
-        );
+        const editField = getEditField((editingRecord as SprayRecord).fieldId);
+        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
         return (
           <SprayModal
             open={!!editingRecord}
@@ -433,15 +321,8 @@ export default function Activity() {
         );
       })()}
       {tab === 'harvest' && editingRecord && (() => {
-        const editField = getEditField(editingRecord.fieldId);
-        if (!editField) return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-            <div className="bg-card border border-border p-6 rounded-xl max-w-sm w-full space-y-4 shadow-2xl">
-              <p className="text-sm text-muted-foreground">The original field for this record has been deleted.</p>
-              <Button onClick={() => setEditingRecord(null)} className="w-full">Close</Button>
-            </div>
-          </div>
-        );
+        const editField = getEditField((editingRecord as HarvestRecord).fieldId);
+        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
         return (
           <HarvestModal
             open={!!editingRecord}
@@ -452,15 +333,8 @@ export default function Activity() {
         );
       })()}
       {tab === 'hay' && editingRecord && (() => {
-        const editField = getEditField(editingRecord.fieldId);
-        if (!editField) return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-            <div className="bg-card border border-border p-6 rounded-xl max-w-sm w-full space-y-4 shadow-2xl">
-              <p className="text-sm text-muted-foreground">The original field for this record has been deleted.</p>
-              <Button onClick={() => setEditingRecord(null)} className="w-full">Close</Button>
-            </div>
-          </div>
-        );
+        const editField = getEditField((editingRecord as HayHarvestRecord).fieldId);
+        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
         return (
           <HayModal
             open={!!editingRecord}
@@ -472,14 +346,7 @@ export default function Activity() {
       })()}
       {tab === 'fertilizer' && editingRecord && (() => {
         const editField = getEditField((editingRecord as FertilizerApplication).fieldId);
-        if (!editField) return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-            <div className="bg-card border border-border p-6 rounded-xl max-w-sm w-full space-y-4 shadow-2xl">
-              <p className="text-sm text-muted-foreground">The original field for this record has been deleted.</p>
-              <Button onClick={() => setEditingRecord(null)} className="w-full">Close</Button>
-            </div>
-          </div>
-        );
+        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
         return (
           <FertilizerModal
             open={!!editingRecord}
