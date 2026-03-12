@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png'],
       manifest: {
@@ -28,62 +31,62 @@ export default defineConfig(({ mode }) => ({
         display: 'standalone',
         icons: [
           {
-            src: 'icon-48.png',
+            src: 'icon-48.png?v=2.1.0',
             sizes: '48x48',
             type: 'image/png'
           },
           {
-            src: 'icon-72.png',
+            src: 'icon-72.png?v=2.1.0',
             sizes: '72x72',
             type: 'image/png'
           },
           {
-            src: 'icon-96.png',
+            src: 'icon-96.png?v=2.1.0',
             sizes: '96x96',
             type: 'image/png'
           },
           {
-            src: 'icon-128.png',
+            src: 'icon-128.png?v=2.1.0',
             sizes: '128x128',
             type: 'image/png'
           },
           {
-            src: 'icon-144.png',
+            src: 'icon-144.png?v=2.1.0',
             sizes: '144x144',
             type: 'image/png'
           },
           {
-            src: 'icon-152.png',
+            src: 'icon-152.png?v=2.1.0',
             sizes: '152x152',
             type: 'image/png'
           },
           {
-            src: 'icon-180.png',
+            src: 'icon-180.png?v=2.1.0',
             sizes: '180x180',
             type: 'image/png'
           },
           {
-            src: 'icon-192.png',
+            src: 'icon-192.png?v=2.1.0',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'icon-256.png',
+            src: 'icon-256.png?v=2.1.0',
             sizes: '256x256',
             type: 'image/png'
           },
           {
-            src: 'icon-384.png',
+            src: 'icon-384.png?v=2.1.0',
             sizes: '384x384',
             type: 'image/png'
           },
           {
-            src: 'icon-512.png',
+            src: 'icon-512.png?v=2.1.0',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'icon-512.png',
+            src: 'icon-512.png?v=2.1.0',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
