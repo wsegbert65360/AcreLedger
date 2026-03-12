@@ -26,6 +26,11 @@ export function Auth() {
                 toast.success('Password reset email sent! Check your inbox.');
                 setMode('signin');
             } else if (mode === 'signup') {
+                if (password.length < 8) {
+                    toast.error('Password must be at least 8 characters long');
+                    setLoading(false);
+                    return;
+                }
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,

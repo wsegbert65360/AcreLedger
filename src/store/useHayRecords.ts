@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { HayHarvestRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { mapHayToDb } from '@/lib/mappers';
 
 interface UseHayRecordsArgs {
   farm_id: string | null;
@@ -12,6 +13,10 @@ interface UseHayRecordsArgs {
 
 export function useHayRecords({ farm_id, activeSeason, hayHarvestRecords, setHayHarvestRecords }: UseHayRecordsArgs) {
   const addHayHarvestRecord = useCallback(async (r: Omit<HayHarvestRecord, 'id' | 'timestamp'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     const newRecord: HayHarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason };
@@ -19,18 +24,8 @@ export function useHayRecords({ farm_id, activeSeason, hayHarvestRecords, setHay
     setHayHarvestRecords(prev => [...prev, newRecord]);
 
     const { error } = await supabase.from('hay_harvest_records').insert([{
-      id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      date: r.date,
-      bale_count: r.baleCount,
-      cutting_number: r.cuttingNumber,
-      bale_type: r.baleType,
-      temperature: r.temperature,
-      conditions: r.conditions,
-      season_year: activeSeason,
-      timestamp: new Date(timestamp).toISOString()
+      ...mapHayToDb(newRecord),
+      farm_id
     }]);
 
     if (error) {
@@ -43,22 +38,16 @@ export function useHayRecords({ farm_id, activeSeason, hayHarvestRecords, setHay
   }, [activeSeason, farm_id, setHayHarvestRecords]);
 
   const updateHayHarvestRecord = useCallback(async (r: HayHarvestRecord) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = hayHarvestRecords.find(item => item.id === r.id);
     setHayHarvestRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     const { error } = await supabase.from('hay_harvest_records').upsert({
-      id: r.id,
-      farm_id,
-      field_id: r.fieldId,
-      field_name: r.fieldName,
-      date: r.date,
-      bale_count: r.baleCount,
-      cutting_number: r.cuttingNumber,
-      bale_type: r.baleType,
-      temperature: r.temperature,
-      conditions: r.conditions,
-      season_year: r.seasonYear,
-      timestamp: new Date(r.timestamp).toISOString()
+      ...mapHayToDb(r),
+      farm_id
     });
 
     if (error) {
@@ -71,6 +60,10 @@ export function useHayRecords({ farm_id, activeSeason, hayHarvestRecords, setHay
   }, [farm_id, hayHarvestRecords, setHayHarvestRecords]);
 
   const deleteHayHarvestRecords = useCallback(async (ids: string[]) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = hayHarvestRecords.filter(r => ids.includes(r.id));
     setHayHarvestRecords(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase

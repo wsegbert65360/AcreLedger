@@ -1,4 +1,12 @@
-import { SprayRecord, Field, PlantRecord, FertilizerApplication } from '../types/farm';
+import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../types/farm';
+
+function sanitizeCsvValue(val: string | number | null | undefined): string {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
+    // Prefix with ' if it starts with injection characters
+    if (/^[=+\-@\t\r]/.test(str)) return `'${str}`;
+    return str;
+}
 
 export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
     const header = [
@@ -38,48 +46,48 @@ export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
                 const productTotalDisplay = productTotal ? `${productTotal} ${p.rateUnit}` : '';
 
                 return [
-                    r.sprayDate || new Date(r.timestamp).toLocaleDateString(),
-                    r.startTime || '',
-                    `"${r.applicatorName || ''}"`,
-                    `"${r.licenseNumber || ''}"`,
-                    `"${p.product}"`,
-                    `"${p.epaRegNumber || 'N/A'}"`,
-                    `"${r.fieldName}"`,
-                    treatedArea,
-                    `"${p.rate} ${p.rateUnit}"`, // Per-herbicide rate
-                    `"${productTotalDisplay}"`, // Per-herbicide total product amount
-                    `"${r.totalMixtureVolume || ''}"`, // Shared mixture volume
-                    `"${r.equipmentId || ''}"`, // Machine ID
-                    r.windSpeed,
-                    r.windDirection || '',
-                    r.temperature,
-                    r.relativeHumidity || '',
-                    `"${r.targetPest || ''}"`,
-                    `"${r.involvedTechnicians || ''}"`
+                    sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
+                    sanitizeCsvValue(r.startTime),
+                    `"${sanitizeCsvValue(r.applicatorName)}"`,
+                    `"${sanitizeCsvValue(r.licenseNumber)}"`,
+                    `"${sanitizeCsvValue(p.product)}"`,
+                    `"${sanitizeCsvValue(p.epaRegNumber || 'N/A')}"`,
+                    `"${sanitizeCsvValue(r.fieldName)}"`,
+                    sanitizeCsvValue(treatedArea),
+                    `"${sanitizeCsvValue(`${p.rate} ${p.rateUnit}`)}"`,
+                    `"${sanitizeCsvValue(productTotalDisplay)}"`,
+                    `"${sanitizeCsvValue(r.totalMixtureVolume)}"`,
+                    `"${sanitizeCsvValue(r.equipmentId)}"`,
+                    sanitizeCsvValue(r.windSpeed),
+                    sanitizeCsvValue(r.windDirection),
+                    sanitizeCsvValue(r.temperature),
+                    sanitizeCsvValue(r.relativeHumidity),
+                    `"${sanitizeCsvValue(r.targetPest)}"`,
+                    `"${sanitizeCsvValue(r.involvedTechnicians)}"`
                 ].join(',');
             });
         }
 
         // Fallback for legacy records or records without granular product breakdown
         return [[
-            r.sprayDate || new Date(r.timestamp).toLocaleDateString(),
-            r.startTime || '',
-            `"${r.applicatorName || ''}"`,
-            `"${r.licenseNumber || ''}"`,
-            `"${r.product}"`,
-            `"${r.epaRegNumber || ''}"`,
-            `"${r.fieldName}"`,
-            treatedArea,
-            `"${r.mixtureRate || ''}"`,
-            '', // Legacy records don't have separate product total vs mixture total
-            `"${r.totalMixtureVolume || ''}"`,
-            `"${r.equipmentId || ''}"`,
-            r.windSpeed,
-            r.windDirection || '',
-            r.temperature,
-            r.relativeHumidity || '',
-            `"${r.targetPest || ''}"`,
-            `"${r.involvedTechnicians || ''}"`
+            sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
+            sanitizeCsvValue(r.startTime),
+            `"${sanitizeCsvValue(r.applicatorName)}"`,
+            `"${sanitizeCsvValue(r.licenseNumber)}"`,
+            `"${sanitizeCsvValue(r.product)}"`,
+            `"${sanitizeCsvValue(r.epaRegNumber)}"`,
+            `"${sanitizeCsvValue(r.fieldName)}"`,
+            sanitizeCsvValue(treatedArea),
+            `"${sanitizeCsvValue(r.mixtureRate)}"`,
+            '',
+            `"${sanitizeCsvValue(r.totalMixtureVolume)}"`,
+            `"${sanitizeCsvValue(r.equipmentId)}"`,
+            sanitizeCsvValue(r.windSpeed),
+            sanitizeCsvValue(r.windDirection),
+            sanitizeCsvValue(r.temperature),
+            sanitizeCsvValue(r.relativeHumidity),
+            `"${sanitizeCsvValue(r.targetPest)}"`,
+            `"${sanitizeCsvValue(r.involvedTechnicians)}"`
         ].join(',')];
     });
 
@@ -111,15 +119,15 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
         const shareDisplay = share.toFixed(0);
 
         return [
-            field?.fsaFarmNumber || '',
-            field?.fsaTractNumber || '',
-            field?.fsaFieldNumber || '',
-            r.acreage,
-            `"${r.crop || ''}"`,
-            `"${r.intendedUse || field?.intendedUse || ''}"`,
-            irrigationCode,
-            `${shareDisplay}%`,
-            r.plantDate || new Date(r.timestamp).toLocaleDateString()
+            sanitizeCsvValue(field?.fsaFarmNumber),
+            sanitizeCsvValue(field?.fsaTractNumber),
+            sanitizeCsvValue(field?.fsaFieldNumber),
+            sanitizeCsvValue(r.acreage),
+            `"${sanitizeCsvValue(r.crop)}"`,
+            `"${sanitizeCsvValue(r.intendedUse || field?.intendedUse)}"`,
+            sanitizeCsvValue(irrigationCode),
+            sanitizeCsvValue(`${shareDisplay}%`),
+            sanitizeCsvValue(r.plantDate || new Date(r.timestamp).toLocaleDateString())
         ].join(',');
     });
 
@@ -127,7 +135,7 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
     downloadFile(csvContent, `FSA_578_Summary_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
 }
 
-export function exportHarvestData(harvestRecords: any[], fields: Field[]) {
+export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]) {
     const header = [
         'Date',
         'Field',
@@ -143,15 +151,15 @@ export function exportHarvestData(harvestRecords: any[], fields: Field[]) {
     const rows = harvestRecords.map(r => {
         const field = fields.find(f => f.id === r.fieldId);
         return [
-            r.harvestDate || new Date(r.timestamp).toLocaleDateString(),
-            r.fieldName,
-            `"${r.crop || ''}"`,
-            r.bushels,
-            r.moisturePercent,
-            r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale',
-            r.landlordSplitPercent,
-            field?.fsaFarmNumber || '',
-            field?.fsaTractNumber || ''
+            sanitizeCsvValue(r.harvestDate || new Date(r.timestamp).toLocaleDateString()),
+            sanitizeCsvValue(r.fieldName),
+            `"${sanitizeCsvValue(r.crop)}"`,
+            sanitizeCsvValue(r.bushels),
+            sanitizeCsvValue(r.moisturePercent),
+            sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale'),
+            sanitizeCsvValue(r.landlordSplitPercent),
+            sanitizeCsvValue(field?.fsaFarmNumber),
+            sanitizeCsvValue(field?.fsaTractNumber)
         ].join(',');
     });
 
@@ -171,11 +179,11 @@ export function exportFertilizerData(records: FertilizerApplication[], fields: F
     const rows = records.map(r => {
         const field = fields.find(f => f.id === r.fieldId);
         return [
-            r.date,
-            `"${field?.name || r.fieldName || ''}"`,
-            r.acres,
-            `"${r.fertilizer_formula}"`,
-            r.season_year
+            sanitizeCsvValue(r.date),
+            `"${sanitizeCsvValue(field?.name || r.fieldName)}"`,
+            sanitizeCsvValue(r.acres),
+            `"${sanitizeCsvValue(r.fertilizer_formula)}"`,
+            sanitizeCsvValue(r.seasonYear)
         ].join(',');
     });
 

@@ -22,7 +22,7 @@ export const WeatherService = {
      */
     async fetchRainByLocation(location: string): Promise<number> {
         if (!API_KEY || API_KEY === 'undefined') {
-            console.error('[WeatherService] API Key missing or invalid (VITE_VISUALCROSSING_KEY). Found:', API_KEY);
+            console.error('[WeatherService] API Key missing or invalid (VITE_VISUALCROSSING_KEY).');
             return 0;
         }
         if (!location || location.includes('undefined') || location.includes('NaN')) {
@@ -60,7 +60,7 @@ export const WeatherService = {
             const isVercel = window.location.hostname.includes('vercel.app');
             const msg = isVercel
                 ? '[WeatherService] API Key missing. Please add VITE_VISUALCROSSING_KEY to your Vercel Environment Variables.'
-                : '[WeatherService] API Key missing or invalid (VITE_VISUALCROSSING_KEY). Found: ' + API_KEY;
+                : '[WeatherService] API Key missing or invalid (VITE_VISUALCROSSING_KEY).';
             console.error(msg);
             return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true };
         }

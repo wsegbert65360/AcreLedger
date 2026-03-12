@@ -5,10 +5,6 @@ import { toast } from 'sonner';
 import { loadFromStorage} from './storageUtils';
 
 export function useAuth() {
-  const pageTransition = {
-  duration: 0.2,
-  ease: [0.4, 0, 0.2, 1],
-};
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [farm_id, setFarmId] = useState<string | null>(() => loadFromStorage('al_farm_id', null));

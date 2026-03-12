@@ -12,6 +12,7 @@ import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus } from 'luci
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 
 interface SprayModalProps {
   field: Field;
@@ -105,16 +106,23 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setProducts(prev => prev.filter((_, idx) => idx !== i));
   };
 
+  const [showValidation, setShowValidation] = useState(false);
+
   const isFormValid = products.length > 0 &&
     products.every(p => p.product.trim() && p.epaRegNumber?.trim()) &&
     startTime.trim() &&
     (!!weather && !weather.isError) &&
     applicatorName.trim() &&
     licenseNumber.trim() &&
-    manualWindDirection.trim();
+    manualWindDirection.trim() &&
+    equipmentId.trim();
 
   const handleSubmit = () => {
-    if (!isFormValid) return;
+    if (!isFormValid) {
+      setShowValidation(true);
+      toast.error('Please complete all required compliance fields');
+      return;
+    }
 
     if (applicatorName.trim()) localStorage.setItem(`al_applicator_name_${userPrefix}`, applicatorName.trim());
     if (licenseNumber.trim()) localStorage.setItem(`al_license_number_${userPrefix}`, licenseNumber.trim());
@@ -212,7 +220,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                           value={p.product}
                           onChange={e => updateProduct(i, 'product', e.target.value)}
                           placeholder="Roundup"
-                          className="mt-0.5 bg-background border-border text-foreground text-xs h-8"
+                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.product.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
                         />
                       </div>
                       <div className="col-span-1">
@@ -223,7 +231,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                           value={p.epaRegNumber}
                           onChange={e => updateProduct(i, 'epaRegNumber', e.target.value)}
                           placeholder="524-549"
-                          className="mt-0.5 bg-background border-border text-foreground text-xs h-8"
+                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.epaRegNumber?.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
                         />
                       </div>
                     </div>
@@ -265,7 +273,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div>
                     <Label htmlFor="startTime" className="text-[10px] font-mono text-muted-foreground">START TIME *</Label>
-                    <Input id="startTime" name="startTime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                    <Input id="startTime" name="startTime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !startTime.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                   </div>
                 </div>
 
@@ -327,11 +335,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label htmlFor="applicator" className="text-[10px] font-mono text-muted-foreground">CERT. APPLICATOR *</Label>
-                      <Input id="applicator" name="applicator" value={applicatorName} onChange={e => setApplicatorName(e.target.value)} className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                      <Input id="applicator" name="applicator" value={applicatorName} onChange={e => setApplicatorName(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !applicatorName.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                     <div>
                       <Label htmlFor="license" className="text-[10px] font-mono text-muted-foreground">LICENSE # *</Label>
-                      <Input id="license" name="license" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                      <Input id="license" name="license" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !licenseNumber.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                   </div>
                   <div>
@@ -340,7 +348,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div>
                     <Label htmlFor="equipmentId" className="text-[10px] font-mono text-muted-foreground uppercase">Equipment ID (Machine) *</Label>
-                    <Input id="equipmentId" name="equipmentId" value={equipmentId} onChange={e => setEquipmentId(e.target.value)} placeholder="e.g. Miller Nitro" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                    <Input id="equipmentId" name="equipmentId" value={equipmentId} onChange={e => setEquipmentId(e.target.value)} placeholder="e.g. Miller Nitro" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !equipmentId.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                   </div>
                 </div>
               </AccordionContent>
@@ -360,7 +368,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               <div className="space-y-1">
                 <Label className="text-[9px] font-mono text-muted-foreground uppercase">8-Point Wind Direction *</Label>
                 <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
-                  <SelectTrigger className="h-8 bg-background border-border text-xs font-mono">
+                  <SelectTrigger className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindDirection.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>

@@ -11,7 +11,10 @@ export interface Field {
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated';
   intendedUse?: string; // e.g. Grain, Forage, Seed
   farm_id?: string;
-  boundary?: any;
+  boundary?: {
+    type: 'Polygon';
+    coordinates: number[][][];
+  } | null;
   deleted_at?: string;
 }
 
@@ -167,8 +170,8 @@ export interface FertilizerApplication {
   fertilizer_formula: string;
   created_at: string;
   updated_at: string;
-  deleted_at?: string | null;
-  season_year?: number;
+  deleted_at?: string;
+  seasonYear?: number;
 }
 
 export type ActivityRecord =

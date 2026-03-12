@@ -20,56 +20,90 @@ import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
 import { useSeasonManagement } from './useSeasonManagement';
 
+/**
+ * Represents the global state and operations for the AcreLedger application.
+ */
 interface FarmState {
+  /** Current user session from Supabase */
   session: Session | null;
+  /** Global loading state for data fetching */
   loading: boolean;
+  /** List of farm fields, filtered and sorted */
   fields: Field[];
+  /** List of storage bins, filtered and sorted */
   bins: Bin[];
+  /** Planting records for the selected season */
   plantRecords: PlantRecord[];
+  /** Spray application records for the selected season */
   sprayRecords: SprayRecord[];
+  /** Harvest production records for the selected season */
   harvestRecords: HarvestRecord[];
+  /** Hay and forage harvest records */
   hayHarvestRecords: HayHarvestRecord[];
+  /** Fertilizer application records */
   fertilizerApplications: FertilizerApplication[];
+  /** Grain inventory movements (in/out of bins) */
   grainMovements: GrainMovement[];
+  /** List of saved seed varieties available for planting */
   savedSeeds: SavedSeed[];
+  /** Pre-defined chemical recipes for spray applications */
   sprayRecipes: SprayRecipe[];
+  /** The current chronological season year */
   activeSeason: number;
+  /** The season year currently being viewed/edited */
   viewingSeason: number;
+  /** Method to change the currently viewed season */
   setViewingSeason: (year: number) => void;
+  /** Method to transition the entire farm state to a new season */
   rolloverToNewSeason: (year: number) => void;
+  /** Operations for managing planting records */
   addPlantRecord: (r: Omit<PlantRecord, 'id' | 'timestamp'>) => void;
   updatePlantRecord: (r: PlantRecord) => void;
+  deletePlantRecords: (ids: string[]) => void;
+  /** Operations for managing spray application records */
   addSprayRecord: (r: Omit<SprayRecord, 'id' | 'timestamp'>) => void;
   updateSprayRecord: (r: SprayRecord) => void;
+  deleteSprayRecords: (ids: string[]) => void;
+  /** Operations for managing harvest production records */
   addHarvestRecord: (r: Omit<HarvestRecord, 'id' | 'timestamp'>) => void;
   updateHarvestRecord: (r: HarvestRecord) => void;
+  deleteHarvestRecords: (ids: string[]) => void;
+  /** Operations for managing hay harvest records */
   addHayHarvestRecord: (r: Omit<HayHarvestRecord, 'id' | 'timestamp'>) => void;
   updateHayHarvestRecord: (r: HayHarvestRecord) => void;
+  deleteHayHarvestRecords: (ids: string[]) => void;
+  /** Operations for managing fertilizer applications */
   addFertilizerApplication: (r: Omit<FertilizerApplication, 'id' | 'created_at' | 'updated_at' | 'fieldName'>) => void;
   updateFertilizerApplication: (r: FertilizerApplication) => void;
+  deleteFertilizerApplications: (ids: string[]) => void;
+  /** Operations for managing grain inventory */
   addGrainMovement: (r: Omit<GrainMovement, 'id'> & { timestamp?: number }) => void;
   updateGrainMovement: (r: GrainMovement) => void;
   deleteGrainMovements: (ids: string[]) => void;
-  deletePlantRecords: (ids: string[]) => void;
-  deleteSprayRecords: (ids: string[]) => void;
-  deleteHarvestRecords: (ids: string[]) => void;
-  deleteHayHarvestRecords: (ids: string[]) => void;
-  deleteFertilizerApplications: (ids: string[]) => void;
+  /** Calculation utility for bin inventory levels */
   getBinTotal: (binId: string, season?: number) => number;
+  /** Operations for managing field definitions */
   addField: (f: Omit<Field, 'id'>) => void;
   updateField: (f: Field) => void;
   deleteField: (id: string) => void;
+  /** Operations for managing bin definitions */
   addBin: (b: Omit<Bin, 'id'>) => void;
   updateBin: (b: Bin) => void;
   deleteBin: (id: string) => void;
+  /** Operations for managing seed varieties */
   addSeed: (name: string) => void;
   deleteSeed: (id: string) => void;
+  /** Operations for managing spray recipes */
   addSprayRecipe: (r: Omit<SprayRecipe, 'id'>) => void;
   updateSprayRecipe: (r: SprayRecipe) => void;
   deleteSprayRecipe: (id: string) => void;
+  /** Global sign out and cache clearing */
   signOut: () => void;
+  /** Clears all local application storage */
   clearLocalCache: () => void;
+  /** Unique ID for the current farm */
   farm_id: string | null;
+  /** Restores the entire farm state from a JSON backup */
   restoreFromBackup: (data: any) => Promise<void>;
 }
 
@@ -86,16 +120,16 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   } = auth;
 
   // --- Data State ---
-  const [fields, setFields] = useState<Field[]>(() => loadFromStorage('al_fields', []));
-  const [bins, setBins] = useState<Bin[]>(() => loadFromStorage('al_bins', []));
-  const [plantRecords, setPlantRecords] = useState<PlantRecord[]>(() => loadFromStorage('al_plant', []));
-  const [sprayRecords, setSprayRecords] = useState<SprayRecord[]>(() => loadFromStorage('al_spray', []));
-  const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>(() => loadFromStorage('al_harvest', []));
-  const [hayHarvestRecords, setHayHarvestRecords] = useState<HayHarvestRecord[]>(() => loadFromStorage('al_hay', []));
-  const [fertilizerApplications, setFertilizerApplications] = useState<FertilizerApplication[]>(() => loadFromStorage('al_fertilizer', []));
-  const [grainMovements, setGrainMovements] = useState<GrainMovement[]>(() => loadFromStorage('al_grain', []));
-  const [savedSeeds, setSavedSeeds] = useState<SavedSeed[]>(() => loadFromStorage('al_seeds', []));
-  const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>(() => loadFromStorage('al_recipes', []));
+  const [fields, setFields] = useState<Field[]>(() => loadFromStorage('al_fields', [], auth.session?.user?.id));
+  const [bins, setBins] = useState<Bin[]>(() => loadFromStorage('al_bins', [], auth.session?.user?.id));
+  const [plantRecords, setPlantRecords] = useState<PlantRecord[]>(() => loadFromStorage('al_plant', [], auth.session?.user?.id));
+  const [sprayRecords, setSprayRecords] = useState<SprayRecord[]>(() => loadFromStorage('al_spray', [], auth.session?.user?.id));
+  const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>(() => loadFromStorage('al_harvest', [], auth.session?.user?.id));
+  const [hayHarvestRecords, setHayHarvestRecords] = useState<HayHarvestRecord[]>(() => loadFromStorage('al_hay', [], auth.session?.user?.id));
+  const [fertilizerApplications, setFertilizerApplications] = useState<FertilizerApplication[]>(() => loadFromStorage('al_fertilizer', [], auth.session?.user?.id));
+  const [grainMovements, setGrainMovements] = useState<GrainMovement[]>(() => loadFromStorage('al_grain', [], auth.session?.user?.id));
+  const [savedSeeds, setSavedSeeds] = useState<SavedSeed[]>(() => loadFromStorage('al_seeds', [], auth.session?.user?.id));
+  const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>(() => loadFromStorage('al_recipes', [], auth.session?.user?.id));
 
   // --- Fetch data when farm_id is stable ---
   useEffect(() => {
@@ -164,18 +198,18 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id, farm_id, setLoading]);
 
   // --- Local storage persistence ---
-  useEffect(() => { saveToStorage('al_fields', fields); }, [fields]);
-  useEffect(() => { saveToStorage('al_bins', bins); }, [bins]);
-  useEffect(() => { saveToStorage('al_plant', plantRecords); }, [plantRecords]);
-  useEffect(() => { saveToStorage('al_spray', sprayRecords); }, [sprayRecords]);
-  useEffect(() => { saveToStorage('al_harvest', harvestRecords); }, [harvestRecords]);
-  useEffect(() => { saveToStorage('al_hay', hayHarvestRecords); }, [hayHarvestRecords]);
-  useEffect(() => { saveToStorage('al_fertilizer', fertilizerApplications); }, [fertilizerApplications]);
-  useEffect(() => { saveToStorage('al_grain', grainMovements); }, [grainMovements]);
-  useEffect(() => { saveToStorage('al_seeds', savedSeeds); }, [savedSeeds]);
-  useEffect(() => { saveToStorage('al_recipes', sprayRecipes); }, [sprayRecipes]);
-  useEffect(() => { saveToStorage('al_active_season', activeSeason); }, [activeSeason]);
-  useEffect(() => { saveToStorage('al_farm_id', farm_id); }, [farm_id]);
+  useEffect(() => { saveToStorage('al_fields', fields, session?.user?.id); }, [fields, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_bins', bins, session?.user?.id); }, [bins, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_plant', plantRecords, session?.user?.id); }, [plantRecords, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_spray', sprayRecords, session?.user?.id); }, [sprayRecords, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_harvest', harvestRecords, session?.user?.id); }, [harvestRecords, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_hay', hayHarvestRecords, session?.user?.id); }, [hayHarvestRecords, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_fertilizer', fertilizerApplications, session?.user?.id); }, [fertilizerApplications, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_grain', grainMovements, session?.user?.id); }, [grainMovements, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_seeds', savedSeeds, session?.user?.id); }, [savedSeeds, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_recipes', sprayRecipes, session?.user?.id); }, [sprayRecipes, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
 
   // --- Compose CRUD hooks ---
   const plantOps = usePlantRecords({ farm_id, activeSeason, plantRecords, setPlantRecords });
@@ -249,6 +283,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 }
 
 
+/**
+ * Custom hook to access the global farm state and operations.
+ * Must be used within a FarmProvider.
+ */
 export function useFarm() {
   const ctx = useContext(FarmContext);
   if (!ctx) throw new Error('useFarm must be inside FarmProvider');

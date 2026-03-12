@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { FertilizerApplication, Field } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { mapFertilizerToDb } from '@/lib/mappers';
 
 interface UseFertilizerRecordsArgs {
   farm_id: string | null;
@@ -13,6 +14,10 @@ interface UseFertilizerRecordsArgs {
 
 export function useFertilizerRecords({ farm_id, activeSeason, fields, fertilizerApplications, setFertilizerApplications }: UseFertilizerRecordsArgs) {
   const addFertilizerApplication = useCallback(async (r: Omit<FertilizerApplication, 'id' | 'created_at' | 'updated_at' | 'fieldName'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const newRecord: FertilizerApplication = {
@@ -45,6 +50,10 @@ export function useFertilizerRecords({ farm_id, activeSeason, fields, fertilizer
   }, [activeSeason, farm_id, fields, setFertilizerApplications]);
 
   const updateFertilizerApplication = useCallback(async (r: FertilizerApplication) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = fertilizerApplications.find(item => item.id === r.id);
     setFertilizerApplications(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
@@ -69,6 +78,10 @@ export function useFertilizerRecords({ farm_id, activeSeason, fields, fertilizer
   }, [farm_id, fertilizerApplications, setFertilizerApplications]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
     const previous = fertilizerApplications.filter(r => ids.includes(r.id));
     setFertilizerApplications(prev => prev.filter(r => !ids.includes(r.id)));
     const { error } = await supabase

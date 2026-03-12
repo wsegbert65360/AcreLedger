@@ -42,6 +42,7 @@ export default function Logistics() {
           </div>
           <button
             onClick={() => setManaging(!managing)}
+            aria-label={managing ? "Exit management" : "Manage bins"}
             className={`p-2.5 rounded-lg border transition-colors ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
               }`}
           >

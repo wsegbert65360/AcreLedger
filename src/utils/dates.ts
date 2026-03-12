@@ -27,3 +27,14 @@ export function formatIsoDate(iso?: string | null): string {
     const datePart = iso.split('T')[0];
     return formatDisplayDate(parseLocalDate(datePart));
 }
+
+/**
+ * Format a timestamp into a short date/time string.
+ */
+export const formatDate = (ts: number) =>
+    new Date(ts).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });

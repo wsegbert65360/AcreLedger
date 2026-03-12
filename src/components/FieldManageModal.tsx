@@ -1,18 +1,14 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
-import { MapPin, Plus, Pencil, Trash2, Map as MapIcon, RotateCcw, Loader2 } from 'lucide-react';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
 
 // Leaflet & GIS
-import { MapContainer, TileLayer, Marker, Polygon, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polygon, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { calculateAcreage } from '@/lib/gisService';
 
@@ -37,7 +33,7 @@ function MapInteraction({ onPointAdd, isCapturing }: { onPointAdd: (latlng: [num
 
 // Helper to update map view when geolocation is found
 function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }) {
-  const map = useMapEvents({});
+  const map = useMap();
   useEffect(() => {
     map.setView(center, zoom);
   }, [center, zoom, map]);
@@ -76,7 +72,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         (pos) => {
           const newCenter: [number, number] = [pos.coords.latitude, pos.coords.longitude];
           setMapCenter(newCenter);
-          setMapZoom(15); // Zoomed in for ~300 acres
+          setMapZoom(15);
         },
         (err) => console.warn('Geolocation error:', err),
         { enableHighAccuracy: true }
@@ -96,7 +92,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     }
 
     if (newPoints.length >= 3) {
-      const geojson = {
+      const geojson: { type: 'Polygon'; coordinates: number[][][] } = {
         type: 'Polygon',
         coordinates: [[...newPoints, newPoints[0]].map(p => [p[1], p[0]])]
       };
@@ -117,7 +113,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     const ln = parseFloat(lng);
     if (!name.trim() || isNaN(ac) || isNaN(la) || isNaN(ln)) return;
 
-    let boundary = null;
+    let boundary: { type: 'Polygon'; coordinates: number[][][] } | null = null;
     if (points.length >= 3) {
       boundary = {
         type: 'Polygon',
@@ -204,6 +200,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
                 size="sm"
                 onClick={clearPoints}
                 className="px-3"
+                aria-label="Reset map drawing"
               >
                 <RotateCcw size={14} />
               </Button>
@@ -348,135 +345,5 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function FieldManager() {
-  const { fields: allFields, deleteField } = useFarm();
-  const { rowCrops, pastureHay } = useMemo(() => {
-    const activeFields = allFields.filter(f => !f.deleted_at);
-    const sorted = [...activeFields].sort((a, b) => a.name.localeCompare(b.name));
-
-    return {
-      rowCrops: sorted.filter(f => {
-        const use = (f.intendedUse || '').toLowerCase();
-        return !use.includes('pasture') && !use.includes('hay');
-      }),
-      pastureHay: sorted.filter(f => {
-        const use = (f.intendedUse || '').toLowerCase();
-        return use.includes('pasture') || use.includes('hay');
-      })
-    };
-  }, [allFields]);
-
-  const [editField, setEditField] = useState<Field | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
-  return (
-    <>
-      <div className="space-y-2">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="touch-target w-full flex items-center justify-center gap-2 bg-primary/10 border border-primary/30 text-primary rounded-lg py-3 font-mono text-sm font-bold active:scale-95 transition-transform"
-        >
-          <Plus size={18} />
-          Add New Field
-        </button>
-
-        {[...rowCrops, ...pastureHay].length > 0 && (
-          <div className="space-y-4">
-            {rowCrops.length > 0 && (
-              <div className="space-y-2">
-                {pastureHay.length > 0 && (
-                  <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h3>
-                )}
-                {rowCrops.map((field: Field) => (
-                  <div key={field.id} className="bg-card border border-border rounded-lg p-3 flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-foreground text-sm">{field.name}</span>
-                      <div className="text-xs font-mono text-muted-foreground mt-0.5">
-                        {field.acreage} ac · {field.lat.toFixed(3)}, {field.lng.toFixed(3)}
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setEditField(field)}
-                        className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm(field.id)}
-                        className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {pastureHay.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h3>
-                {pastureHay.map((field: Field) => (
-                  <div key={field.id} className="bg-card border border-border rounded-lg p-3 flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-foreground text-sm">{field.name}</span>
-                      <div className="text-xs font-mono text-muted-foreground mt-0.5">
-                        {field.acreage} ac · {field.lat.toFixed(3)}, {field.lng.toFixed(3)}
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setEditField(field)}
-                        className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm(field.id)}
-                        className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {addOpen && (
-        <FieldManageModal open onClose={() => setAddOpen(false)} />
-      )}
-      {editField && (
-        <FieldManageModal open editField={editField} onClose={() => setEditField(null)} />
-      )}
-
-      <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
-        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Delete Field</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              This will permanently remove this field. Existing records will be preserved.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => { if (deleteConfirm) deleteField(deleteConfirm); setDeleteConfirm(null); }}
-              className="touch-target bg-destructive text-destructive-foreground glow-destructive"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
   );
 }

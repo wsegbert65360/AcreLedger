@@ -1,4 +1,4 @@
-import * as turf from '@turf/turf';
+import area from '@turf/area';
 
 /**
  * Calculates the acreage of a polygon using Turf.js
@@ -7,7 +7,7 @@ import * as turf from '@turf/turf';
  */
 export function calculateAcreage(geojson: any): number {
     try {
-        const areaSqMeters = turf.area(geojson); // area in square meters
+        const areaSqMeters = area(geojson); // area in square meters
         const acreage = areaSqMeters * 0.000247105; // convert to acres
         return parseFloat(acreage.toFixed(2));
     } catch (error) {

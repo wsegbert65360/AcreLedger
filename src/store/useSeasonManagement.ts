@@ -8,6 +8,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { backupSchema } from '@/lib/backupSchema';
 
 interface UseSeasonManagementArgs {
   session: Session | null;
@@ -84,7 +85,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     hayHarvestRecords, fertilizerApplications, grainMovements, savedSeeds,
     sprayRecipes, activeSeason, setActiveSeason, setViewingSeason]);
 
-  const restoreFromBackup = useCallback(async (backupData: any) => {
+  const restoreFromBackup = useCallback(async (rawData: any) => {
     if (!farm_id) {
       console.error('Cannot restore: No farm_id found');
       return;
@@ -92,6 +93,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
     setLoading(true);
     try {
+      const backupData = backupSchema.parse(rawData);
       // 1. Map data back to DB format
       const fieldsToDb = (backupData.fields || []).map((f: any) => ({ ...mapFieldToDb(f), farm_id }));
       const binsToDb = (backupData.bins || []).map((b: any) => ({ ...mapBinToDb(b), farm_id }));
@@ -152,9 +154,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setGrainMovements, setSavedSeeds, setSprayRecipes, setActiveSeason, setViewingSeason]);
 
   const clearLocalCache = useCallback(() => {
-    // Clear all keys starting with al_
+    const userPrefix = session?.user?.id ? `${session.user.id}_al_` : null;
     Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('al_')) {
+      if (key.startsWith('al_') || (userPrefix && key.startsWith(userPrefix))) {
         localStorage.removeItem(key);
       }
     });
