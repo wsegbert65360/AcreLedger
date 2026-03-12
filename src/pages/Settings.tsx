@@ -7,6 +7,7 @@ import BackupManager from '@/components/settings/BackupManager';
 import SecurityManager from '@/components/settings/SecurityManager';
 import AccountManager from '@/components/settings/AccountManager';
 import DevTools from '@/components/settings/DevTools';
+import VersionFooter from '@/components/VersionFooter';
 
 export default function Settings() {
   return (
@@ -22,6 +23,8 @@ export default function Settings() {
         <SecurityManager />
         <AccountManager />
         {import.meta.env.DEV && <DevTools />}
+        
+        <VersionFooter />
       </div>
       <BottomNav />
     </div>
