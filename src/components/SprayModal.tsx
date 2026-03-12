@@ -159,11 +159,10 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     } else {
       addSprayRecord(data);
     }
-    setSelectedRecipeId('');
-    setApplicatorName('');
-    setLicenseNumber('');
-    setTargetPest('');
-    resetComplianceFields();
+    if (field.id) {
+      WeatherService.triggerBackfill(field.id);
+    }
+    
     onClose();
   };
 
