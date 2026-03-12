@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { WeatherService } from '@/services/WeatherService';
+import { RainfallStats, WeatherService } from '@/services/WeatherService';
 import { 
   CloudRain, Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
   Cloud, Loader2, Navigation, MapPin
@@ -19,15 +19,20 @@ export default function FieldDetailScreen() {
   const { fields } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
-  const [weather, setWeather] = useState<{ rain24h: number; windspeed: number; winddir: number } | null>(null);
+  const [rainfall, setRainfall] = useState<RainfallStats | null>(null);
+  const [conditions, setConditions] = useState<{ windspeed: number; winddir: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | null>(null);
 
   useEffect(() => {
-    if (field?.lat != null && field?.lng != null) {
-      WeatherService.fetchFieldWeather(field.lat, field.lng)
-        .then(setWeather)
-        .finally(() => setLoading(false));
+    if (field?.id && field?.lat != null && field?.lng != null) {
+      Promise.all([
+        WeatherService.fetchFieldRainfall(field.id),
+        WeatherService.fetchFieldConditions(field.lat, field.lng)
+      ]).then(([rainData, windData]) => {
+        setRainfall(rainData);
+        setConditions(windData);
+      }).finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
@@ -69,9 +74,9 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* Weather Widgets */}
+        {/* Primary Weather Indicators */}
         <section className="grid grid-cols-2 gap-4">
-          {/* Rain Widget */}
+          {/* Today's Rain Widget */}
           <div className="bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
             <CloudRain size={32} className="text-spray" />
             <div className="text-center">
@@ -80,15 +85,15 @@ export default function FieldDetailScreen() {
               ) : (
                 <>
                   <div className="text-4xl font-black text-foreground">
-                    {weather?.rain24h.toFixed(2)}<span className="text-lg ml-0.5 text-muted-foreground">"</span>
+                    {rainfall?.today_mm.toFixed(1)}<span className="text-lg ml-0.5 text-muted-foreground">mm</span>
                   </div>
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">24H Rainfall</div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">Today's Rainfall</div>
                 </>
               )}
             </div>
           </div>
 
-          {/* Wind Widget */}
+          {/* Current Wind Widget */}
           <div className="bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
             {loading ? (
               <Loader2 size={24} className="animate-spin text-muted-foreground mx-auto" />
@@ -98,21 +103,76 @@ export default function FieldDetailScreen() {
                   <Navigation 
                     size={32} 
                     className="text-primary transition-transform duration-500" 
-                    style={{ transform: `rotate(${weather?.winddir ?? 0}deg)` }}
+                    style={{ transform: `rotate(${conditions?.winddir ?? 0}deg)` }}
                   />
                 </div>
                 <div className="text-center">
-                  <div className={`text-2xl font-black ${getWindColor(weather?.windspeed ?? 0)}`}>
-                    {Math.round(weather?.windspeed ?? 0)} <span className="text-sm font-bold text-muted-foreground">MPH</span>
+                  <div className={`text-2xl font-black ${getWindColor(conditions?.windspeed ?? 0)}`}>
+                    {Math.round(conditions?.windspeed ?? 0)} <span className="text-sm font-bold text-muted-foreground">MPH</span>
                   </div>
                   <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">
-                    Wind: {degreesToCardinal(weather?.winddir ?? 0)}
+                    Wind: {degreesToCardinal(conditions?.winddir ?? 0)}
                   </div>
                 </div>
               </>
             )}
           </div>
         </section>
+
+        {/* Detailed Rainfall Breakdown */}
+        {!loading && rainfall && (
+          <section className="bg-card border border-border rounded-3xl p-6 shadow-xl space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">Precise Precipitation</h2>
+              <div className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase font-mono ${
+                rainfall.historical_backfill_status === 'complete' ? 'bg-green-500/10 text-green-500' :
+                rainfall.historical_backfill_status === 'processing' ? 'bg-blue-500/10 text-blue-500 animate-pulse' :
+                'bg-yellow-500/10 text-yellow-500'
+              }`}>
+                {rainfall.historical_backfill_status}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-y-6 gap-x-8">
+              <div className="space-y-1">
+                <div className="text-2xl font-black text-foreground">{rainfall.yesterday_mm.toFixed(1)} mm</div>
+                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Yesterday</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-black text-foreground">{rainfall.last_7_days_mm.toFixed(1)} mm</div>
+                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 7 Days</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-black text-foreground">{rainfall.since_planting_mm.toFixed(1)} mm</div>
+                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Since Planting</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-2xl font-black text-foreground">{rainfall.since_last_spray_mm.toFixed(1)} mm</div>
+                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Since Spray</div>
+              </div>
+            </div>
+            
+            <div className="pt-4 border-t border-border/50 flex items-center justify-between">
+              <button 
+                onClick={async () => {
+                  if (field.id) {
+                    await WeatherService.triggerBackfill(field.id);
+                    // Reload data after a short delay
+                    setTimeout(() => {
+                      WeatherService.fetchFieldRainfall(field.id!).then(setRainfall);
+                    }, 1000);
+                  }
+                }}
+                className="text-[10px] font-bold text-primary uppercase hover:underline"
+              >
+                Refresh History
+              </button>
+              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase font-mono">
+                Updated: {rainfall.last_updated ? new Date(rainfall.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
+              </span>
+            </div>
+          </section>
+        )}
 
         {/* Action Grid */}
         <section className="space-y-4">

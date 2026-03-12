@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
 import { Sprout } from 'lucide-react';
+import { WeatherService } from '@/services/WeatherService';
 
 interface PlantModalProps {
   field: Field;
@@ -56,6 +57,12 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setCrop('');
       setIntendedUse('');
     }
+    
+    // Trigger rainfall backfill for the newly set planting date
+    if (field.id) {
+      WeatherService.triggerBackfill(field.id);
+    }
+    
     onClose();
   };
 
