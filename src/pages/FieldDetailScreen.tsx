@@ -112,9 +112,9 @@ export default function FieldDetailScreen() {
               ) : (
                 <>
                   <div className="text-4xl font-black text-foreground">
-                    {rainfall?.today_in.toFixed(2)}<span className="text-lg ml-0.5 text-muted-foreground">in</span>
+                    {rainfall?.last_24h_in.toFixed(2)}<span className="text-lg ml-0.5 text-muted-foreground">in</span>
                   </div>
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">Today's Rainfall</div>
+                  <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">Last 24 Hours</div>
                 </>
               )}
             </div>
@@ -156,30 +156,26 @@ export default function FieldDetailScreen() {
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">Precise Precipitation</h2>
               <div className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase font-mono ${
-                rainfall.historical_backfill_status === 'complete' ? 'bg-green-500/10 text-green-500' :
-                rainfall.historical_backfill_status === 'processing' ? 'bg-blue-500/10 text-blue-500 animate-pulse' :
+                rainfall.backfill_status === 'complete' ? 'bg-green-500/10 text-green-500' :
+                rainfall.backfill_status === 'processing' ? 'bg-blue-500/10 text-blue-500 animate-pulse' :
                 'bg-yellow-500/10 text-yellow-500'
               }`}>
-                {rainfall.historical_backfill_status}
+                {rainfall.backfill_status.replace('_', ' ')}
               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-y-6 gap-x-8">
               <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.yesterday_in.toFixed(2)} in</div>
-                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Yesterday</div>
+                <div className="text-2xl font-black text-foreground">{rainfall.last_24h_in.toFixed(2)} in</div>
+                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 24 Hours</div>
               </div>
               <div className="space-y-1">
+                <div className="text-2xl font-black text-foreground">{rainfall.last_72h_in.toFixed(2)} in</div>
+                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 72 Hours</div>
+              </div>
+              <div className="space-y-1 col-span-2">
                 <div className="text-2xl font-black text-foreground">{rainfall.last_7_days_in.toFixed(2)} in</div>
                 <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 7 Days</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.since_planting_in.toFixed(2)} in</div>
-                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Since Planting</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.since_last_spray_in.toFixed(2)} in</div>
-                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Since Spray</div>
               </div>
             </div>
             
