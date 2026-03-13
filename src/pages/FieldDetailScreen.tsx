@@ -13,6 +13,16 @@ import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import Logo from '@/components/Logo';
 
+type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | null;
+
+const FIELD_ACTIONS = [
+  { id: 'plant', label: 'Plant', icon: Leaf, color: 'text-plant', bg: 'bg-plant/10', border: 'border-plant/20' },
+  { id: 'spray', label: 'Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
+  { id: 'fertilizer', label: 'Fertilizer', icon: Sprout, color: 'text-lime-500', bg: 'bg-lime-500/10', border: 'border-lime-500/20' },
+  { id: 'harvest', label: 'Harvest', icon: Wheat, color: 'text-harvest', bg: 'bg-harvest/10', border: 'border-harvest/20' },
+  { id: 'hay', label: 'Hay', icon: Tractor, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' }
+] as const;
+
 export default function FieldDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -21,21 +31,31 @@ export default function FieldDetailScreen() {
 
   const [rainfall, setRainfall] = useState<RainfallStats | null>(null);
   const [conditions, setConditions] = useState<{ windspeed: number; winddir: number } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | null>(null);
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [modal, setModal] = useState<ModalType>(null);
 
   useEffect(() => {
+    let isActive = true;
+    setStatus('loading');
+
     if (field?.id && field?.lat != null && field?.lng != null) {
       Promise.all([
         WeatherService.fetchFieldRainfall(field.id),
         WeatherService.fetchFieldConditions(field.lat, field.lng)
       ]).then(([rainData, windData]) => {
+        if (!isActive) return;
         setRainfall(rainData);
         setConditions(windData);
-      }).finally(() => setLoading(false));
+        setStatus('success');
+      }).catch((err) => {
+        console.error('[FieldDetail] Fetch error:', err);
+        if (isActive) setStatus('error');
+      });
     } else {
-      setLoading(false);
+      setStatus('success');
     }
+
+    return () => { isActive = false; };
   }, [field]);
 
   if (!field) return <div className="p-8 text-center text-muted-foreground uppercase font-mono">Field not found</div>;
@@ -56,8 +76,12 @@ export default function FieldDetailScreen() {
       {/* Premium Header */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors">
-            <ArrowLeft size={24} className="text-foreground" />
+          <button 
+            onClick={() => navigate(-1)} 
+            className="w-16 h-16 -ml-4 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
+            aria-label="Go back"
+          >
+            <ArrowLeft size={28} className="text-foreground" />
           </button>
           <Logo />
           <div className="w-10" /> {/* Spacer for balance */}
@@ -80,7 +104,7 @@ export default function FieldDetailScreen() {
           <div className="bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
             <CloudRain size={32} className="text-spray" />
             <div className="text-center">
-              {loading ? (
+              {status === 'loading' ? (
                 <Loader2 size={24} className="animate-spin text-muted-foreground mx-auto" />
               ) : (
                 <>
@@ -95,7 +119,7 @@ export default function FieldDetailScreen() {
 
           {/* Current Wind Widget */}
           <div className="bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
-            {loading ? (
+            {status === 'loading' ? (
               <Loader2 size={24} className="animate-spin text-muted-foreground mx-auto" />
             ) : (
               <>
@@ -120,7 +144,7 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* Detailed Rainfall Breakdown */}
-        {!loading && rainfall && (
+        {status !== 'loading' && rainfall && (
           <section className="bg-card border border-border rounded-3xl p-6 shadow-xl space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">Precise Precipitation</h2>
@@ -152,24 +176,26 @@ export default function FieldDetailScreen() {
               </div>
             </div>
             
-            <div className="pt-4 border-t border-border/50 flex items-center justify-between">
+            <div className="pt-6 border-t border-border/50 flex flex-col space-y-4">
               <button 
                 onClick={async () => {
                   if (field.id) {
                     await WeatherService.triggerBackfill(field.id);
                     // Reload data after a short delay
                     setTimeout(() => {
-                      WeatherService.fetchFieldRainfall(field.id!).then(setRainfall);
+                      if (field.id) WeatherService.fetchFieldRainfall(field.id).then(setRainfall);
                     }, 1000);
                   }
                 }}
-                className="text-[10px] font-bold text-primary uppercase hover:underline"
+                className="w-full h-16 bg-primary text-primary-foreground rounded-2xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 Refresh History
               </button>
-              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase font-mono">
-                Updated: {rainfall.last_updated ? new Date(rainfall.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
-              </span>
+              <div className="flex items-center justify-center">
+                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase font-mono">
+                  Updated: {rainfall.last_updated ? new Date(rainfall.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
+                </span>
+              </div>
             </div>
           </section>
         )}
@@ -178,16 +204,10 @@ export default function FieldDetailScreen() {
         <section className="space-y-4">
           <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] text-center px-1">Field Actions</h2>
           <div className="grid grid-cols-3 gap-3">
-            {[
-              { id: 'plant', label: 'Plant', icon: Leaf, color: 'text-plant', bg: 'bg-plant/10', border: 'border-plant/20' },
-              { id: 'spray', label: 'Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
-              { id: 'fertilizer', label: 'Fertilizer', icon: Sprout, color: 'text-lime-500', bg: 'bg-lime-500/10', border: 'border-lime-500/20' },
-              { id: 'harvest', label: 'Harvest', icon: Wheat, color: 'text-harvest', bg: 'bg-harvest/10', border: 'border-harvest/20' },
-              { id: 'hay', label: 'Hay', icon: Tractor, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' }
-            ].map((action) => (
+            {FIELD_ACTIONS.map((action) => (
               <button
                 key={action.id}
-                onClick={() => setModal(action.id as any)}
+                onClick={() => setModal(action.id as ModalType)}
                 className={`w-full aspect-square flex flex-col items-center justify-center gap-2 rounded-2xl ${action.bg} border ${action.border} ${action.color} transition-all active:scale-95 hover:brightness-110 shadow-lg`}
               >
                 <action.icon size={28} strokeWidth={2.5} />
