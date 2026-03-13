@@ -52,8 +52,7 @@ describe('Mappers', () => {
             farm_id: 'farm-1',
             field_id: 'field-1',
             field_name: 'North Field',
-            product: 'Herbicide A',
-            products: [],
+            products: [{ product: 'Herbicide A', rate: '22', rateUnit: 'oz/ac', epaRegNumber: '123' }],
             wind_speed: 5,
             temperature: 75,
             spray_date: '2023-06-01',
@@ -77,7 +76,7 @@ describe('Mappers', () => {
 
         it('maps from DB correctly', () => {
             const result = mapSprayFromDb(dbRow);
-            expect(result.product).toBe(dbRow.product);
+            expect(result.products?.[0]?.product).toBe('Herbicide A');
             expect(result.treatedAreaSize).toBe('100');
         });
 
