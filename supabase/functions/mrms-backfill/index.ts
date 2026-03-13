@@ -54,7 +54,7 @@ serve(async (req: Request) => {
             const records = fields.map((f: any, i: number) => ({
                 field_id: f.id,
                 timestamp_utc: targetTs.toISOString(),
-                rainfall_mm: rainfallValues[i],
+                rainfall_in: rainfallValues[i],
                 source: 'MRMS',
                 finalized: true // Pass2/Historical
             }))
