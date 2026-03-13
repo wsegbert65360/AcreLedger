@@ -5,14 +5,12 @@ const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebService
 import { supabase } from '@/lib/supabase';
 
 export interface RainfallStats {
-    today_in: number;
-    yesterday_in: number;
+    last_24h_in: number;
+    last_72h_in: number;
     last_7_days_in: number;
-    since_planting_in: number;
-    since_last_spray_in: number;
     last_updated: string | null;
     source: string;
-    historical_backfill_status: 'pending' | 'processing' | 'complete' | 'failed';
+    backfill_status: 'not_started' | 'pending' | 'processing' | 'complete' | 'failed';
     isError?: boolean;
 }
 
@@ -41,14 +39,12 @@ export const WeatherService = {
         } catch (error) {
             console.error('[WeatherService] Error fetching field rainfall:', error);
             return {
-                today_in: 0,
-                yesterday_in: 0,
+                last_24h_in: 0,
+                last_72h_in: 0,
                 last_7_days_in: 0,
-                since_planting_in: 0,
-                since_last_spray_in: 0,
                 last_updated: null,
                 source: 'Supabase (Error)',
-                historical_backfill_status: 'failed',
+                backfill_status: 'failed',
                 isError: true
             };
         }
