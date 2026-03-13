@@ -30,32 +30,39 @@ export default function FieldDetailScreen() {
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
   const [rainfall, setRainfall] = useState<RainfallStats | null>(null);
-  const [conditions, setConditions] = useState<{ windspeed: number; winddir: number } | null>(null);
+  const [conditions, setConditions] = useState<{ 
+    windspeed: number | null; 
+    winddir: number | null;
+    windcardinal: string;
+    temp: number | null;
+    humidity: number | null;
+    isError?: boolean;
+  } | null>(null);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [modal, setModal] = useState<ModalType>(null);
 
   useEffect(() => {
-    let isActive = true;
+    const controller = new AbortController();
     setStatus('loading');
 
     if (field?.id && field?.lat != null && field?.lng != null) {
       Promise.all([
-        WeatherService.fetchFieldRainfall(field.id),
-        WeatherService.fetchFieldConditions(field.lat, field.lng)
+        WeatherService.fetchFieldRainfall(field.id, controller.signal),
+        WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
       ]).then(([rainData, windData]) => {
-        if (!isActive) return;
         setRainfall(rainData);
         setConditions(windData);
         setStatus('success');
       }).catch((err) => {
+        if (err.name === 'AbortError') return;
         console.error('[FieldDetail] Fetch error:', err);
-        if (isActive) setStatus('error');
+        setStatus('error');
       });
     } else {
       setStatus('success');
     }
 
-    return () => { isActive = false; };
+    return () => controller.abort();
   }, [field]);
 
   if (!field) return <div className="p-8 text-center text-muted-foreground uppercase font-mono">Field not found</div>;
@@ -66,10 +73,6 @@ export default function FieldDetailScreen() {
     return 'text-foreground';
   };
 
-  const degreesToCardinal = (deg: number) => {
-    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    return directions[Math.round(deg / 22.5) % 16];
-  };
 
   return (
     <div className="min-h-screen bg-background pb-12">
@@ -124,18 +127,22 @@ export default function FieldDetailScreen() {
             ) : (
               <>
                 <div className="relative">
-                  <Navigation 
-                    size={32} 
-                    className="text-primary transition-transform duration-500" 
-                    style={{ transform: `rotate(${conditions?.winddir ?? 0}deg)` }}
-                  />
+                  {conditions?.winddir !== null && !conditions?.isError ? (
+                    <Navigation 
+                      size={32} 
+                      className="text-primary transition-transform duration-500" 
+                      style={{ transform: `rotate(${conditions?.winddir ?? 0}deg)` }}
+                    />
+                  ) : (
+                    <Wind size={32} className="text-muted-foreground opacity-20" />
+                  )}
                 </div>
                 <div className="text-center">
                   <div className={`text-2xl font-black ${getWindColor(conditions?.windspeed ?? 0)}`}>
-                    {Math.round(conditions?.windspeed ?? 0)} <span className="text-sm font-bold text-muted-foreground">MPH</span>
+                    {conditions?.windspeed !== null && !conditions?.isError ? Math.round(conditions?.windspeed ?? 0) : '--'} <span className="text-sm font-bold text-muted-foreground">MPH</span>
                   </div>
                   <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">
-                    Wind: {degreesToCardinal(conditions?.winddir ?? 0)}
+                    Wind: {conditions?.windcardinal ?? '—'}
                   </div>
                 </div>
               </>
@@ -203,15 +210,15 @@ export default function FieldDetailScreen() {
         {/* Action Grid */}
         <section className="space-y-4">
           <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] text-center px-1">Field Actions</h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {FIELD_ACTIONS.map((action) => (
               <button
                 key={action.id}
                 onClick={() => setModal(action.id as ModalType)}
-                className={`w-full aspect-square flex flex-col items-center justify-center gap-2 rounded-2xl ${action.bg} border ${action.border} ${action.color} transition-all active:scale-95 hover:brightness-110 shadow-lg`}
+                className={`w-full aspect-square flex flex-col items-center justify-center gap-4 rounded-2xl ${action.bg} border ${action.border} ${action.color} transition-all active:scale-95 hover:brightness-110 shadow-lg p-4`}
               >
-                <action.icon size={28} strokeWidth={2.5} />
-                <span className="font-mono text-[10px] uppercase font-bold tracking-tight">{action.label}</span>
+                <action.icon size={36} strokeWidth={2.5} />
+                <span className="font-mono text-xs uppercase font-bold tracking-tight">{action.label}</span>
               </button>
             ))}
           </div>
