@@ -44,7 +44,7 @@ BEGIN
     FROM spray_records WHERE field_id = p_field_id AND deleted_at IS NULL;
 
     SELECT jsonb_build_object(
-        'today_in', COALESCE((SELECT SUM(rainfall_in) FROM field_rainfall_hourly WHERE field_id = p_field_id AND timestamp_utc >= CURRENT_DATE AT TIME ZONE 'UTC'), 0),
+        'today_in', COALESCE((SELECT SUM(rainfall_in) FROM field_rainfall_hourly WHERE field_id = p_field_id AND (timestamp_utc AT TIME ZONE 'UTC' AT TIME ZONE 'America/Chicago')::DATE = CURRENT_DATE), 0),
         'yesterday_in', COALESCE((SELECT rainfall_in FROM field_rainfall_daily WHERE field_id = p_field_id AND date_local = (CURRENT_DATE - 1)), 0),
         'last_7_days_in', COALESCE((SELECT SUM(rainfall_in) FROM field_rainfall_daily WHERE field_id = p_field_id AND date_local >= (CURRENT_DATE - 7)), 0),
         'since_planting_in', COALESCE((SELECT SUM(rainfall_in) FROM field_rainfall_hourly WHERE field_id = p_field_id AND v_planting_date IS NOT NULL AND timestamp_utc >= v_planting_date), 0),
@@ -57,5 +57,20 @@ BEGIN
     RETURN v_result;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. RLS Policies (Safety Layer)
+ALTER TABLE field_rainfall_hourly ENABLE ROW LEVEL SECURITY;
+ALTER TABLE field_rainfall_daily ENABLE ROW LEVEL SECURITY;
+ALTER TABLE field_rainfall_coverage ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'field_rainfall_hourly' AND policyname = 'Allow authenticated read access') THEN
+        CREATE POLICY "Allow authenticated read access" ON field_rainfall_hourly FOR SELECT TO authenticated USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'field_rainfall_daily' AND policyname = 'Allow authenticated read access') THEN
+        CREATE POLICY "Allow authenticated read access" ON field_rainfall_daily FOR SELECT TO authenticated USING (true);
+    END IF;
+END $$;
 
 COMMIT;

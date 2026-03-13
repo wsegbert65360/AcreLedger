@@ -33,17 +33,7 @@ export const WeatherService = {
             
             if (error || !data) throw error || new Error('No rainfall data');
             
-            // Reconcile units and field names for backward compatibility
-            return {
-                today_in: data.today_in ?? data.today_mm ?? 0,
-                yesterday_in: data.yesterday_in ?? data.yesterday_mm ?? 0,
-                last_7_days_in: data.last_7_days_in ?? data.last_7_days_mm ?? 0,
-                since_planting_in: data.since_planting_in ?? data.since_planting_mm ?? 0,
-                since_last_spray_in: data.since_last_spray_in ?? data.since_last_spray_mm ?? 0,
-                last_updated: data.last_updated ?? null,
-                source: data.source ?? 'NOAA MRMS',
-                historical_backfill_status: data.historical_backfill_status ?? 'pending'
-            };
+            return data as RainfallStats;
         } catch (error) {
             console.error('[WeatherService] Error fetching field rainfall:', error);
             return {
