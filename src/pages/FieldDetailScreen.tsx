@@ -47,7 +47,7 @@ export default function FieldDetailScreen() {
 
     if (field?.id && field?.lat != null && field?.lng != null) {
       Promise.all([
-        WeatherService.fetchFieldRainfall(field.id, controller.signal),
+        WeatherService.fetchFieldRainfall(field.id),
         WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
       ]).then(([rainData, windData]) => {
         setRainfall(rainData);
