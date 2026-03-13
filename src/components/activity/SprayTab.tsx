@@ -25,7 +25,7 @@ const SprayTab: React.FC<SprayTabProps> = ({ records, selected, onToggle, onEdit
           id={r.id}
           type="spray"
           title={cleanName(r.fieldName)}
-          subtitle={r.product}
+          subtitle={r.products?.map(p => p.product).join(', ') || 'No product'}
           details={`${r.windSpeed} MPH ${r.windDirection} · ${r.temperature}°F`}
           date={formatIsoDate(r.sprayDate) || r.sprayDate || formatDate(r.timestamp)}
           isSelected={selected.has(r.id)}

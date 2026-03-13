@@ -53,7 +53,6 @@ export interface SprayRecordRow {
     farm_id: string;
     field_id: string;
     field_name: string;
-    product: string;
     products?: any[];
     wind_speed: number;
     temperature: number;

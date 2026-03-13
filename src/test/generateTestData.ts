@@ -219,7 +219,6 @@ export function generateSprayRecords(fields: Field[], count = 100): Omit<SprayRe
     return {
       fieldId: field.id,
       fieldName: field.name,
-      product: products[0].product,
       products,
       windSpeed: randInt(2, 12),
       temperature: randInt(55, 95),
