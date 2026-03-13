@@ -86,7 +86,7 @@ export default function FieldDetailScreen() {
           >
             <ArrowLeft size={28} className="text-foreground" />
           </button>
-          <Logo />
+          <Logo className="h-10" />
           <div className="w-10" /> {/* Spacer for balance */}
         </div>
       </header>
