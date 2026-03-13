@@ -15,7 +15,8 @@ export interface RainfallStats {
     historical_backfill_status: 'pending' | 'processing' | 'complete' | 'failed';
 }
 
-const SUPABASE_PROJECT_URL = 'https://rtzqswpmhlbrbxjwyywl.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 /**
  * Hardened Weather Service.
@@ -65,24 +66,47 @@ export const WeatherService = {
 
     /**
      * Fetches current wind/temp for a specific field location via Visual Crossing.
+     * Returns windspeed, cardinal direction, raw direction, temp, and humidity.
      */
-    async fetchFieldConditions(lat: number, lng: number): Promise<{ windspeed: number; winddir: number }> {
+    async fetchFieldConditions(lat: number, lng: number): Promise<{ 
+        windspeed: number; 
+        winddir: number;
+        windcardinal: string;
+        temp: number;
+        humidity: number;
+    }> {
         const location = `${lat},${lng}`;
-        if (!API_KEY || API_KEY === 'undefined') return { windspeed: 0, winddir: 0 };
+        // Default values for safety/error cases
+        const defaults = { windspeed: 0, winddir: 0, windcardinal: '—', temp: 0, humidity: 0 };
+        
+        if (!API_KEY || API_KEY === 'undefined') return defaults;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
-            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir`;
-            const response = await fetch(url);
+            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&timezone=local&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
+            const response = await fetch(url, { signal: controller.signal });
             if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
             const data = await response.json();
+            const current = data.currentConditions;
             
             return {
-                windspeed: data.currentConditions?.windspeed ?? 0,
-                winddir: data.currentConditions?.winddir ?? 0
+                windspeed: current?.windspeed ?? 0,
+                winddir: current?.winddir ?? 0,
+                windcardinal: this.degreesToDirection(current?.winddir ?? 0),
+                temp: current?.temp ?? 0,
+                humidity: current?.humidity ?? 0
             };
-        } catch (error) {
-            console.error('[WeatherService] Error fetching field conditions:', error);
-            return { windspeed: 0, winddir: 0 };
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.error('[WeatherService] Fetch conditions timed out');
+            } else {
+                console.error('[WeatherService] Error fetching field conditions:', error);
+            }
+            return defaults;
+        } finally {
+            clearTimeout(timeoutId);
         }
     },
 
@@ -94,9 +118,12 @@ export const WeatherService = {
             return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true };
         }
         
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         try {
-            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current`;
-            const response = await fetch(url);
+            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&timezone=local&key=${API_KEY}&contentType=json&include=current&elements=temp,humidity,windspeed,winddir`;
+            const response = await fetch(url, { signal: controller.signal });
             if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
             const data = await response.json();
             const current = data.currentConditions;
@@ -108,11 +135,17 @@ export const WeatherService = {
                 windDirection: this.degreesToDirection(current.winddir),
                 locationName: data.address
             };
-        } catch (error) {
-            console.error('[WeatherService] Error fetching current weather:', error);
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.error('[WeatherService] Fetch current weather timed out');
+            } else {
+                console.error('[WeatherService] Error fetching current weather:', error);
+            }
             return {
                 temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true
             };
+        } finally {
+            clearTimeout(timeoutId);
         }
     },
 
