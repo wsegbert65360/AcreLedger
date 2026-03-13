@@ -60,7 +60,10 @@ export const WeatherService = {
     async triggerBackfill(fieldId: string): Promise<boolean> {
         try {
             const { error } = await supabase.functions.invoke('mrms-backfill', {
-                body: { field_id: fieldId }
+                body: { field_id: fieldId },
+                headers: {
+                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                }
             });
             if (error) throw error;
             return true;
