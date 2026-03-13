@@ -32,7 +32,7 @@ export default function Reports() {
   const sprayRecords = allSpray.filter(r => r.seasonYear === viewingSeason);
   const harvestRecords = allHarvest.filter(r => r.seasonYear === viewingSeason);
   const hayRecords = allHay.filter(r => r.seasonYear === viewingSeason);
-  const fertilizerRecords = allFertilizer.filter(r => r.season_year === viewingSeason);
+  const fertilizerRecords = allFertilizer.filter(r => r.seasonYear === viewingSeason);
 
   // Derive available seasons for the selector
   const availableSeasons = Array.from(new Set([
@@ -42,7 +42,7 @@ export default function Reports() {
     ...allHarvest.map(r => r.seasonYear),
     ...allHay.map(r => r.seasonYear),
     ...allGrain.map(r => r.seasonYear),
-    ...allFertilizer.map(r => r.season_year)
+    ...allFertilizer.map(r => r.seasonYear)
   ])).filter((y): y is number => !!y).sort((a, b) => b - a);
 
   const fmt = (ts: number) => new Date(ts).toLocaleDateString();
@@ -225,6 +225,7 @@ export default function Reports() {
 
                       return [{
                         ...r,
+                        product: '—',
                         amountDisplay: r.totalAmountApplied ? `${r.totalAmountApplied} ${r.rateUnit || ''}` : '—'
                       }];
                     })

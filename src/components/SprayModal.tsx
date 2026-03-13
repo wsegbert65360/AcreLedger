@@ -131,7 +131,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     const data = {
       fieldId: field.id,
       fieldName: field.name,
-      product: products.map(p => p.product).join(', '),
       products: products.filter(p => p.product.trim()),
       windSpeed: weather?.wind || initialData?.windSpeed || 0,
       temperature: weather?.temp || initialData?.temperature || 0,

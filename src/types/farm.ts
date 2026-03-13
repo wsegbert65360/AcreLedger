@@ -43,7 +43,6 @@ export interface SprayRecord {
   id: string;
   fieldId: string;
   fieldName: string;
-  product: string;
   products?: SprayRecipeProduct[]; // Granular details for regulatory compliance
   windSpeed: number; // MDA mandatory: wind_speed_mph
   temperature: number; // MDA mandatory: temp_f

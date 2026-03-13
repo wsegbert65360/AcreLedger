@@ -107,7 +107,7 @@ export default function Activity() {
 
   const filteredSpray = useMemo(() =>
     sprayRecords
-      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.product.toLowerCase().includes(search.toLowerCase())))
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.products?.some(p => p.product.toLowerCase().includes(search.toLowerCase()))))
       .sort((a, b) => b.timestamp - a.timestamp),
     [sprayRecords, search, viewingSeason]
   );

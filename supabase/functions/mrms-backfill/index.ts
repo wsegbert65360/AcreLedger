@@ -37,15 +37,22 @@ serve(async (req: Request) => {
             hours.push(new Date(current))
             current.setHours(current.getHours() + 1)
         }
+        hours.reverse() // Sort newest to oldest conceptually
     } else if (field_id) {
-        // Default historical backfill: Last 10 days
+        // Default historical backfill: Last 168 hours (7 days) to match retention
         const now = new Date()
-        for (let i = 0; i < 240; i++) {
+        for (let i = 0; i < 168; i++) {
             const d = new Date(now.getTime() - (1000 * 60 * 60 * i))
             d.setMinutes(0, 0, 0)
             hours.push(d)
         }
     }
+
+    // --- CHUNKING LOGIC ---
+    // Protect against the 150s Supabase function timeout by processing short bursts
+    const CHUNK_SIZE = 48; // ~15-20 seconds of processing
+    const currentChunk = hours.slice(0, CHUNK_SIZE);
+    const remainingHours = hours.slice(CHUNK_SIZE);
 
     // 2. Fetch fields
     const { data: fields } = await supabaseClient
@@ -68,7 +75,7 @@ serve(async (req: Request) => {
             }, { onConflict: 'field_id, range_start_utc' })
     }
 
-    for (const targetTs of hours) {
+    for (const targetTs of currentChunk) {
         const tsStr = targetTs.toISOString().replace(/[:\-]/g, '').split('.')[0].replace('T', '-')
         
         // Try Pass2 first, then Pass1
@@ -93,25 +100,35 @@ serve(async (req: Request) => {
             await supabaseClient
                 .from('field_rainfall_hourly')
                 .upsert(records, { onConflict: 'field_id, timestamp_utc' })
-            
-            // Trigger rollups
-            for (const f of fields) {
-                await supabaseClient.rpc('rollup_field_rainfall', { 
-                    p_field_id: f.id, 
-                    p_date: targetTs.toISOString().split('T')[0] 
-                })
-            }
+            // No more rollup triggers needed as of the simplified SQL migration!
         }
     }
 
-    if (field_id) {
+    if (remainingHours.length > 0) {
+        // Fire and forget the next chunk asynchronously to avoid blocking this process
+        const nextStart = remainingHours[remainingHours.length - 1].toISOString();
+        const nextEnd = remainingHours[0].toISOString();
+        
+        console.log(`Chunk finished. Triggering next chunk: ${nextStart} to ${nextEnd}`);
+        
+        supabaseClient.functions.invoke('mrms-backfill', {
+            body: { field_id, start_date: nextStart, end_date: nextEnd },
+            headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}` }
+        }).catch((err: any) => console.error('Failed to trigger next chunk:', err));
+        
+    } else if (field_id) {
+        console.log("All chunks complete. Marking coverage as complete.");
         await supabaseClient
             .from('field_rainfall_coverage')
             .update({ status: 'complete', last_checked_at: new Date().toISOString() })
             .match({ field_id, range_start_utc: hours[hours.length - 1].toISOString() })
     }
 
-    return new Response(JSON.stringify({ success: true, processed_hours: hours.length }), { 
+    return new Response(JSON.stringify({ 
+        success: true, 
+        processed_hours: currentChunk.length,
+        remaining_hours: remainingHours.length
+    }), { 
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
