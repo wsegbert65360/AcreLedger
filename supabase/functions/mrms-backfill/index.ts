@@ -21,7 +21,7 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 1. Determine hours to backfill
+    // 1. Determine hours to backfill (Default to 10 days if only field_id provided)
     let hours: Date[] = []
     if (mode === 'overnight') {
         const now = new Date()
@@ -36,6 +36,14 @@ serve(async (req: Request) => {
         while (current <= end) {
             hours.push(new Date(current))
             current.setHours(current.getHours() + 1)
+        }
+    } else if (field_id) {
+        // Default historical backfill: Last 10 days
+        const now = new Date()
+        for (let i = 0; i < 240; i++) {
+            const d = new Date(now.getTime() - (1000 * 60 * 60 * i))
+            d.setMinutes(0, 0, 0)
+            hours.push(d)
         }
     }
 
