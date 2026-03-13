@@ -85,7 +85,7 @@ export default function FieldDetailScreen() {
               ) : (
                 <>
                   <div className="text-4xl font-black text-foreground">
-                    {rainfall?.today_mm.toFixed(1)}<span className="text-lg ml-0.5 text-muted-foreground">mm</span>
+                    {rainfall?.today_in.toFixed(2)}<span className="text-lg ml-0.5 text-muted-foreground">in</span>
                   </div>
                   <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">Today's Rainfall</div>
                 </>
@@ -135,19 +135,19 @@ export default function FieldDetailScreen() {
             
             <div className="grid grid-cols-2 gap-y-6 gap-x-8">
               <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.yesterday_mm.toFixed(1)} mm</div>
+                <div className="text-2xl font-black text-foreground">{rainfall.yesterday_in.toFixed(2)} in</div>
                 <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Yesterday</div>
               </div>
               <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.last_7_days_mm.toFixed(1)} mm</div>
+                <div className="text-2xl font-black text-foreground">{rainfall.last_7_days_in.toFixed(2)} in</div>
                 <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 7 Days</div>
               </div>
               <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.since_planting_mm.toFixed(1)} mm</div>
+                <div className="text-2xl font-black text-foreground">{rainfall.since_planting_in.toFixed(2)} in</div>
                 <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Since Planting</div>
               </div>
               <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.since_last_spray_mm.toFixed(1)} mm</div>
+                <div className="text-2xl font-black text-foreground">{rainfall.since_last_spray_in.toFixed(2)} in</div>
                 <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Since Spray</div>
               </div>
             </div>

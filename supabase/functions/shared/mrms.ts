@@ -101,7 +101,7 @@ export function extractRainfall(data: Uint8Array, coords: Coordinate[]): number[
     }
 
     const values: number[] = [];
-    const multiplier = Math.pow(2, exp) / Math.pow(10, decimal);
+    const multiplier = (Math.pow(2, exp) / Math.pow(10, decimal)) * 0.0393701; // mm to inches
 
     for (const coord of coords) {
         const row = Math.round((MRMS_CONFIG.grid.latStart - coord.lat) / Math.abs(MRMS_CONFIG.grid.latStep));
