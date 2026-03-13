@@ -13,6 +13,7 @@ export interface RainfallStats {
     last_updated: string | null;
     source: string;
     historical_backfill_status: 'pending' | 'processing' | 'complete' | 'failed';
+    isError?: boolean;
 }
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -27,13 +28,16 @@ export const WeatherService = {
     /**
      * Fetches detailed rainfall stats from the NOAA MRMS backend.
      */
-    async fetchFieldRainfall(fieldId: string, signal?: AbortSignal): Promise<RainfallStats> {
+    async fetchFieldRainfall(fieldId: string): Promise<RainfallStats> {
         try {
             const { data, error } = await supabase.rpc('get_field_rainfall_stats', { p_field_id: fieldId });
             
             if (error || !data) throw error || new Error('No rainfall data');
             
-            return data as RainfallStats;
+            return {
+                ...(data as RainfallStats),
+                isError: false
+            };
         } catch (error) {
             console.error('[WeatherService] Error fetching field rainfall:', error);
             return {
@@ -44,7 +48,8 @@ export const WeatherService = {
                 since_last_spray_in: 0,
                 last_updated: null,
                 source: 'Supabase (Error)',
-                historical_backfill_status: 'failed'
+                historical_backfill_status: 'failed',
+                isError: true
             };
         }
     },
@@ -52,13 +57,16 @@ export const WeatherService = {
     /**
      * Triggers a manual historical backfill for a field.
      */
-    async triggerBackfill(fieldId: string): Promise<void> {
+    async triggerBackfill(fieldId: string): Promise<boolean> {
         try {
-            await supabase.functions.invoke('mrms-backfill', {
+            const { error } = await supabase.functions.invoke('mrms-backfill', {
                 body: { field_id: fieldId }
             });
+            if (error) throw error;
+            return true;
         } catch (error) {
             console.error('[WeatherService] Error triggering backfill:', error);
+            return false;
         }
     },
 
@@ -82,10 +90,15 @@ export const WeatherService = {
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        // Link external signal to our controller
+        if (signal) {
+            signal.addEventListener('abort', () => controller.abort());
+        }
 
         try {
             const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
-            const response = await fetch(url, { signal: signal || controller.signal });
+            const response = await fetch(url, { signal: controller.signal });
             if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
             const data = await response.json();
             const current = data.currentConditions;
@@ -93,7 +106,7 @@ export const WeatherService = {
             return {
                 windspeed: current?.windspeed ?? null,
                 winddir: current?.winddir ?? null,
-                windcardinal: this.degreesToDirection(current?.winddir ?? 0),
+                windcardinal: current?.winddir != null ? this.degreesToDirection(current.winddir) : '—',
                 temp: current?.temp ?? null,
                 humidity: current?.humidity ?? null,
                 isError: false
@@ -113,7 +126,7 @@ export const WeatherService = {
     /**
      * Fetches current weather data for the Weather Bar via Visual Crossing.
      */
-    async fetchCurrentWeather(location: string): Promise<WeatherData & { locationName?: string }> {
+    async fetchCurrentWeather(location: string): Promise<WeatherData & { locationName?: string, isError?: boolean }> {
         if (!API_KEY || API_KEY === 'undefined') {
             return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true };
         }
@@ -133,7 +146,8 @@ export const WeatherService = {
                 humidity: Math.round(current.humidity),
                 wind: Math.round(current.windspeed),
                 windDirection: this.degreesToDirection(current.winddir),
-                locationName: data.address
+                locationName: data.address,
+                isError: false
             };
         } catch (error: any) {
             if (error.name === 'AbortError') {
