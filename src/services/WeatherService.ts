@@ -33,7 +33,17 @@ export const WeatherService = {
             
             if (error || !data) throw error || new Error('No rainfall data');
             
-            return data;
+            // Reconcile units and field names for backward compatibility
+            return {
+                today_in: data.today_in ?? data.today_mm ?? 0,
+                yesterday_in: data.yesterday_in ?? data.yesterday_mm ?? 0,
+                last_7_days_in: data.last_7_days_in ?? data.last_7_days_mm ?? 0,
+                since_planting_in: data.since_planting_in ?? data.since_planting_mm ?? 0,
+                since_last_spray_in: data.since_last_spray_in ?? data.since_last_spray_mm ?? 0,
+                last_updated: data.last_updated ?? null,
+                source: data.source ?? 'NOAA MRMS',
+                historical_backfill_status: data.historical_backfill_status ?? 'pending'
+            };
         } catch (error) {
             console.error('[WeatherService] Error fetching field rainfall:', error);
             return {
@@ -84,7 +94,7 @@ export const WeatherService = {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
-            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&timezone=local&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
+            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
             const response = await fetch(url, { signal: signal || controller.signal });
             if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
             const data = await response.json();
@@ -122,7 +132,7 @@ export const WeatherService = {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
-            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&timezone=local&key=${API_KEY}&contentType=json&include=current&elements=temp,humidity,windspeed,winddir`;
+            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current&elements=temp,humidity,windspeed,winddir`;
             const response = await fetch(url, { signal: controller.signal });
             if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
             const data = await response.json();

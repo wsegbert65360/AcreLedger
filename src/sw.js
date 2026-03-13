@@ -1,6 +1,6 @@
 /* 
   AcreLedger Precision Ag — Service Worker
-  Version: 2.1.0
+  Version: 2.1.2
 */
 
 import { precacheAndRoute } from 'workbox-precaching';

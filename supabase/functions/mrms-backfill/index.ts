@@ -2,7 +2,18 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { downloadAndDecompress, MRMS_CONFIG, extractRainfall } from '../shared/mrms.ts'
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+}
+
 serve(async (req: Request) => {
+  // 0. Handle CORS Preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     const { field_id, start_date, end_date, mode } = await req.json()
     const supabaseClient = createClient(
@@ -37,6 +48,18 @@ serve(async (req: Request) => {
     if (!fields) throw new Error('No fields found')
 
     // 3. Process each hour (Simplified serial process for Edge Function stability)
+    if (field_id) {
+        await supabaseClient
+            .from('field_rainfall_coverage')
+            .upsert({ 
+                field_id, 
+                range_start_utc: hours[hours.length - 1].toISOString(), 
+                range_end_utc: hours[0].toISOString(),
+                status: 'processing',
+                last_checked_at: new Date().toISOString()
+            }, { onConflict: 'field_id, range_start_utc' })
+    }
+
     for (const targetTs of hours) {
         const tsStr = targetTs.toISOString().replace(/[:\-]/g, '').split('.')[0].replace('T', '-')
         
@@ -73,10 +96,23 @@ serve(async (req: Request) => {
         }
     }
 
-    return new Response(JSON.stringify({ success: true, processed_hours: hours.length }), { status: 200 })
+    if (field_id) {
+        await supabaseClient
+            .from('field_rainfall_coverage')
+            .update({ status: 'complete', last_checked_at: new Date().toISOString() })
+            .match({ field_id, range_start_utc: hours[hours.length - 1].toISOString() })
+    }
+
+    return new Response(JSON.stringify({ success: true, processed_hours: hours.length }), { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
 
   } catch (error: any) {
     console.error(`Edge Function Error (Backfill): ${error.message}`, error.stack);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+    return new Response(JSON.stringify({ error: error.message }), { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
   }
 })
