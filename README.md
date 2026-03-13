@@ -5,9 +5,11 @@ A modern, high-performance farm management platform for precision agriculture.
 ## Key Features
 
 - **Precision Rainfall (NOAA MRMS)**: Real-time rainfall data at 1km resolution, provided by NOAA Multi-Radar Multi-Sensor (MRMS) system.
+- **PWA Update Logic**: Integrated manual and background service worker update checks for seamless versioning.
+- **Expo-Ready Architecture**: Clean, structured metadata for simplified cross-platform (Web/Native) expansion.
 - **Unit System**: All rainfall measurements are provided in **inches** for domestic agricultural standards.
 - **Audit & Compliance**: Automated generation of Missouri MP693 Spray Logs and FSA-578 planting summaries.
-- **Historical Backfill**: automated gap detection and backfilling of historical weather data.
+- **Historical Backfill**: Automated gap detection and backfilling of historical weather data via Supabase Edge Functions.
 
 ## Technology Stack
 

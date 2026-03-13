@@ -27,10 +27,8 @@ export const WeatherService = {
     /**
      * Fetches detailed rainfall stats from the NOAA MRMS backend.
      */
-    async fetchFieldRainfall(fieldId: string): Promise<RainfallStats> {
+    async fetchFieldRainfall(fieldId: string, signal?: AbortSignal): Promise<RainfallStats> {
         try {
-            // Since we are using Supabase, we can fetch stats directly from the DB
-            // rather than going through an intermediate API for reading.
             const { data, error } = await supabase.rpc('get_field_rainfall_stats', { p_field_id: fieldId });
             
             if (error || !data) throw error || new Error('No rainfall data');
@@ -68,16 +66,17 @@ export const WeatherService = {
      * Fetches current wind/temp for a specific field location via Visual Crossing.
      * Returns windspeed, cardinal direction, raw direction, temp, and humidity.
      */
-    async fetchFieldConditions(lat: number, lng: number): Promise<{ 
-        windspeed: number; 
-        winddir: number;
+    async fetchFieldConditions(lat: number, lng: number, signal?: AbortSignal): Promise<{ 
+        windspeed: number | null; 
+        winddir: number | null;
         windcardinal: string;
-        temp: number;
-        humidity: number;
+        temp: number | null;
+        humidity: number | null;
+        isError?: boolean;
     }> {
         const location = `${lat},${lng}`;
         // Default values for safety/error cases
-        const defaults = { windspeed: 0, winddir: 0, windcardinal: '—', temp: 0, humidity: 0 };
+        const defaults = { windspeed: null, winddir: null, windcardinal: '—', temp: null, humidity: null, isError: true };
         
         if (!API_KEY || API_KEY === 'undefined') return defaults;
 
@@ -86,17 +85,18 @@ export const WeatherService = {
 
         try {
             const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&timezone=local&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
-            const response = await fetch(url, { signal: controller.signal });
+            const response = await fetch(url, { signal: signal || controller.signal });
             if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
             const data = await response.json();
             const current = data.currentConditions;
             
             return {
-                windspeed: current?.windspeed ?? 0,
-                winddir: current?.winddir ?? 0,
+                windspeed: current?.windspeed ?? null,
+                winddir: current?.winddir ?? null,
                 windcardinal: this.degreesToDirection(current?.winddir ?? 0),
-                temp: current?.temp ?? 0,
-                humidity: current?.humidity ?? 0
+                temp: current?.temp ?? null,
+                humidity: current?.humidity ?? null,
+                isError: false
             };
         } catch (error: any) {
             if (error.name === 'AbortError') {
