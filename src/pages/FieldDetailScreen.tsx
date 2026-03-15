@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { RainfallStats, WeatherService } from '@/services/WeatherService';
+import { WeatherService } from '@/services/WeatherService';
 import { 
-  CloudRain, Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
+  Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
   Cloud, Loader2, Navigation, MapPin
 } from 'lucide-react';
 import PlantModal from '@/components/PlantModal';
@@ -29,7 +29,6 @@ export default function FieldDetailScreen() {
   const { fields } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
-  const [rainfall, setRainfall] = useState<RainfallStats | null>(null);
   const [conditions, setConditions] = useState<{ 
     windspeed: number | null; 
     winddir: number | null;
@@ -46,11 +45,8 @@ export default function FieldDetailScreen() {
     setStatus('loading');
 
     if (field?.id && field?.lat != null && field?.lng != null) {
-      Promise.all([
-        WeatherService.fetchFieldRainfall(field.id),
-        WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
-      ]).then(([rainData, windData]) => {
-        setRainfall(rainData);
+      WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
+      .then((windData) => {
         setConditions(windData);
         setStatus('success');
       }).catch((err) => {
@@ -93,35 +89,17 @@ export default function FieldDetailScreen() {
 
       <main className="max-w-lg mx-auto px-4 py-8 space-y-8">
         {/* Field Info Header */}
-        <section className="text-center space-y-2">
+        <section className="text-center space-y-4">
           <h1 className="text-4xl font-black text-foreground tracking-tight">{field.name}</h1>
-          <div className="flex items-center justify-center gap-2 text-muted-foreground font-mono uppercase tracking-widest text-sm">
-            <MapPin size={16} />
+          <div className="flex items-center justify-center gap-2 text-foreground font-mono uppercase tracking-widest text-4xl font-black">
             {field.acreage} ACRES
           </div>
         </section>
 
         {/* Primary Weather Indicators */}
-        <section className="grid grid-cols-2 gap-4">
-          {/* Today's Rain Widget */}
-          <div className="bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
-            <CloudRain size={32} className="text-spray" />
-            <div className="text-center">
-              {status === 'loading' ? (
-                <Loader2 size={24} className="animate-spin text-muted-foreground mx-auto" />
-              ) : (
-                <>
-                  <div className="text-4xl font-black text-foreground">
-                    {rainfall?.last_24h_in.toFixed(2)}<span className="text-lg ml-0.5 text-muted-foreground">in</span>
-                  </div>
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">Last 24 Hours</div>
-                </>
-              )}
-            </div>
-          </div>
-
+        <section className="flex justify-center">
           {/* Current Wind Widget */}
-          <div className="bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
+          <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
             {status === 'loading' ? (
               <Loader2 size={24} className="animate-spin text-muted-foreground mx-auto" />
             ) : (
@@ -149,59 +127,6 @@ export default function FieldDetailScreen() {
             )}
           </div>
         </section>
-
-        {/* Detailed Rainfall Breakdown */}
-        {status !== 'loading' && rainfall && (
-          <section className="bg-card border border-border rounded-3xl p-6 shadow-xl space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">Precise Precipitation</h2>
-              <div className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase font-mono ${
-                rainfall.backfill_status === 'complete' ? 'bg-green-500/10 text-green-500' :
-                rainfall.backfill_status === 'processing' ? 'bg-blue-500/10 text-blue-500 animate-pulse' :
-                'bg-yellow-500/10 text-yellow-500'
-              }`}>
-                {rainfall.backfill_status.replace('_', ' ')}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-y-6 gap-x-8">
-              <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.last_24h_in.toFixed(2)} in</div>
-                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 24 Hours</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-2xl font-black text-foreground">{rainfall.last_72h_in.toFixed(2)} in</div>
-                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 72 Hours</div>
-              </div>
-              <div className="space-y-1 col-span-2">
-                <div className="text-2xl font-black text-foreground">{rainfall.last_7_days_in.toFixed(2)} in</div>
-                <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono">Last 7 Days</div>
-              </div>
-            </div>
-            
-            <div className="pt-6 border-t border-border/50 flex flex-col space-y-4">
-              <button 
-                onClick={async () => {
-                  if (field.id) {
-                    await WeatherService.triggerBackfill(field.id);
-                    // Reload data after a short delay
-                    setTimeout(() => {
-                      if (field.id) WeatherService.fetchFieldRainfall(field.id).then(setRainfall);
-                    }, 1000);
-                  }
-                }}
-                className="w-full h-16 bg-primary text-primary-foreground rounded-2xl font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-              >
-                Refresh History
-              </button>
-              <div className="flex items-center justify-center">
-                <span className="text-[10px] font-medium text-muted-foreground/60 uppercase font-mono">
-                  Updated: {rainfall.last_updated ? new Date(rainfall.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
-                </span>
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Action Grid */}
         <section className="space-y-4">

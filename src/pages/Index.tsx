@@ -11,16 +11,35 @@ import { Settings, History, Tractor } from 'lucide-react';
 const Index = () => {
   const navigate = useNavigate();
   const { fields: allFields } = useFarm();
-  const { rowCrops, pastureHay } = useMemo(() => {
+  const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
+    let total = 0;
+    const totals: Record<string, number> = {};
+
+    const rc = [];
+    const ph = [];
+
+    for (const f of allFields) {
+      const use = f.intendedUse ? f.intendedUse.trim() : 'Unassigned';
+      const useLower = use.toLowerCase();
+      
+      total += f.acreage;
+      totals[use] = (totals[use] || 0) + f.acreage;
+
+      if (useLower.includes('pasture') || useLower.includes('hay')) {
+        ph.push(f);
+      } else {
+        rc.push(f);
+      }
+    }
+
+    const sortedCropTotals = Object.entries(totals)
+      .sort((a, b) => b[1] - a[1]);
+
     return {
-      rowCrops: allFields.filter(f => {
-        const use = (f.intendedUse || '').toLowerCase();
-        return !use.includes('pasture') && !use.includes('hay');
-      }),
-      pastureHay: allFields.filter(f => {
-        const use = (f.intendedUse || '').toLowerCase();
-        return use.includes('pasture') || use.includes('hay');
-      })
+      rowCrops: rc,
+      pastureHay: ph,
+      totalAcres: total,
+      cropTotals: sortedCropTotals
     };
   }, [allFields]);
 
@@ -86,6 +105,23 @@ const Index = () => {
                 <p className="text-xs text-muted-foreground font-mono leading-relaxed max-w-[200px] mx-auto uppercase">
                   Use the <Settings size={12} className="inline mx-0.5" /> icon above to add your first field.
                 </p>
+              </div>
+            )}
+            
+            {allFields.length > 0 && (
+              <div className="bg-card/80 backdrop-blur-md sticky bottom-[72px] mt-8 border border-border p-4 rounded-xl shadow-xl z-30">
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <div className="text-sm font-black text-foreground tracking-tight uppercase">
+                    Total Operation: {totalAcres} Acres
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] font-bold text-muted-foreground uppercase font-mono">
+                    {cropTotals.map(([crop, acres], idx) => (
+                      <span key={crop}>
+                        {crop}: {acres} ac{idx < cropTotals.length - 1 ? ' |' : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </>

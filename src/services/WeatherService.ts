@@ -2,20 +2,6 @@ import { WeatherData } from '../types/weather';
 
 const API_KEY = import.meta.env.VITE_VISUALCROSSING_KEY;
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
-import { supabase } from '@/lib/supabase';
-
-export interface RainfallStats {
-    last_24h_in: number;
-    last_72h_in: number;
-    last_7_days_in: number;
-    last_updated: string | null;
-    source: string;
-    backfill_status: 'not_started' | 'pending' | 'processing' | 'complete' | 'failed';
-    isError?: boolean;
-}
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 /**
  * Hardened Weather Service.
@@ -23,52 +9,6 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
  * Wind/Temp still provided by Visual Crossing for real-time conditions.
  */
 export const WeatherService = {
-    /**
-     * Fetches detailed rainfall stats from the NOAA MRMS backend.
-     */
-    async fetchFieldRainfall(fieldId: string): Promise<RainfallStats> {
-        try {
-            const { data, error } = await supabase.rpc('get_field_rainfall_stats', { p_field_id: fieldId });
-            
-            if (error || !data) throw error || new Error('No rainfall data');
-            
-            return {
-                ...(data as RainfallStats),
-                isError: false
-            };
-        } catch (error) {
-            console.error('[WeatherService] Error fetching field rainfall:', error);
-            return {
-                last_24h_in: 0,
-                last_72h_in: 0,
-                last_7_days_in: 0,
-                last_updated: null,
-                source: 'Supabase (Error)',
-                backfill_status: 'failed',
-                isError: true
-            };
-        }
-    },
-
-    /**
-     * Triggers a manual historical backfill for a field.
-     */
-    async triggerBackfill(fieldId: string): Promise<boolean> {
-        try {
-            const { error } = await supabase.functions.invoke('mrms-backfill', {
-                body: { field_id: fieldId },
-                headers: {
-                    Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-                }
-            });
-            if (error) throw error;
-            return true;
-        } catch (error) {
-            console.error('[WeatherService] Error triggering backfill:', error);
-            return false;
-        }
-    },
-
     /**
      * Fetches current wind/temp for a specific field location via Visual Crossing.
      * Returns windspeed, cardinal direction, raw direction, temp, and humidity.
@@ -124,21 +64,41 @@ export const WeatherService = {
 
     /**
      * Fetches current weather data for the Weather Bar via Visual Crossing.
+     * Including precip data for the last 24 and 72 hours.
      */
-    async fetchCurrentWeather(location: string): Promise<WeatherData & { locationName?: string, isError?: boolean }> {
+    async fetchCurrentWeather(location: string): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number }> {
         if (!API_KEY || API_KEY === 'undefined') {
-            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true };
+            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true, precip24h: 0, precip72h: 0 };
         }
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
-            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current&elements=temp,humidity,windspeed,winddir`;
+            // Fetch today + last 3 days to calculate accurate 24h/72h rainfall
+            const url = `${VC_BASE_URL}/${location}/last3days?unitGroup=us&key=${API_KEY}&contentType=json&include=current,days&elements=temp,humidity,windspeed,winddir,precip`;
             const response = await fetch(url, { signal: controller.signal });
             if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
             const data = await response.json();
             const current = data.currentConditions;
+            
+            const days = data.days || [];
+            // days usually returns newest to oldest or oldest to newest. Usually array is sorted by date ascending for timeline API
+            // Let's sum precip from the days array.
+            const today = new Date().toISOString().split('T')[0];
+            
+            let precip24h = 0;
+            let precip72h = 0;
+            
+            if (days.length > 0) {
+                // days typically includes the exact 3 historical dates + today depending on API nuances
+                // Let's just sum the precip from the last 1 day (today or yesterday) vs last 3 days
+                // Sort descending so days[0] is most recent just in case
+                const sortedDays = [...days].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime());
+                
+                precip24h = sortedDays[0]?.precip || 0;
+                precip72h = sortedDays.slice(0, 3).reduce((sum, day) => sum + (day.precip || 0), 0);
+            }
 
             return {
                 temp: Math.round(current.temp),
@@ -146,7 +106,9 @@ export const WeatherService = {
                 wind: Math.round(current.windspeed),
                 windDirection: this.degreesToDirection(current.winddir),
                 locationName: data.address,
-                isError: false
+                isError: false,
+                precip24h: Math.round(precip24h * 100) / 100,
+                precip72h: Math.round(precip72h * 100) / 100
             };
         } catch (error: any) {
             if (error.name === 'AbortError') {
@@ -155,7 +117,7 @@ export const WeatherService = {
                 console.error('[WeatherService] Error fetching current weather:', error);
             }
             return {
-                temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true
+                temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0
             };
         } finally {
             clearTimeout(timeoutId);
