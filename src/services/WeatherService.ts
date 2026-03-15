@@ -100,6 +100,15 @@ export const WeatherService = {
         if (!API_KEY || API_KEY === 'undefined') {
             return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true, precip24h: 0, precip72h: 0 };
         }
+
+        if (promiseCache.has(location)) {
+            try {
+                const data = await promiseCache.get(location);
+                return this._mapCurrentWeather(data);
+            } catch (error) {
+                return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0 };
+            }
+        }
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -107,39 +116,17 @@ export const WeatherService = {
         try {
             // Fetch today + last 3 days to calculate accurate 24h/72h rainfall
             const url = `${VC_BASE_URL}/${location}/last3days?unitGroup=us&key=${API_KEY}&contentType=json&include=current,days&elements=temp,humidity,windspeed,winddir,precip`;
-            const response = await fetch(url, { signal: controller.signal });
-            if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
-            const data = await response.json();
-            const current = data.currentConditions;
             
-            const days = data.days || [];
-            // days usually returns newest to oldest or oldest to newest. Usually array is sorted by date ascending for timeline API
-            // Let's sum precip from the days array.
-            const today = new Date().toISOString().split('T')[0];
-            
-            let precip24h = 0;
-            let precip72h = 0;
-            
-            if (days.length > 0) {
-                // days typically includes the exact 3 historical dates + today depending on API nuances
-                // Let's just sum the precip from the last 1 day (today or yesterday) vs last 3 days
-                // Sort descending so days[0] is most recent just in case
-                const sortedDays = [...days].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime());
+            const fetchPromise = fetch(url, { signal: controller.signal })
+                .then(res => {
+                    if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
+                    return res.json();
+                });
                 
-                precip24h = sortedDays[0]?.precip || 0;
-                precip72h = sortedDays.slice(0, 3).reduce((sum, day) => sum + (day.precip || 0), 0);
-            }
-
-            return {
-                temp: Math.round(current.temp),
-                humidity: Math.round(current.humidity),
-                wind: Math.round(current.windspeed),
-                windDirection: this.degreesToDirection(current.winddir),
-                locationName: data.address,
-                isError: false,
-                precip24h: Math.round(precip24h * 100) / 100,
-                precip72h: Math.round(precip72h * 100) / 100
-            };
+            promiseCache.set(location, fetchPromise);
+            
+            const data = await fetchPromise;
+            return this._mapCurrentWeather(data);
         } catch (error: any) {
             if (error.name === 'AbortError') {
                 console.error('[WeatherService] Fetch current weather timed out');
@@ -151,7 +138,33 @@ export const WeatherService = {
             };
         } finally {
             clearTimeout(timeoutId);
+            promiseCache.delete(location);
         }
+    },
+
+    _mapCurrentWeather(data: any) {
+        const current = data.currentConditions;
+        const days = data.days || [];
+        
+        let precip24h = 0;
+        let precip72h = 0;
+        
+        if (days.length > 0) {
+            const sortedDays = [...days].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime());
+            precip24h = sortedDays[0]?.precip || 0;
+            precip72h = sortedDays.slice(0, 3).reduce((sum, day) => sum + (day.precip || 0), 0);
+        }
+
+        return {
+            temp: Math.round(current.temp),
+            humidity: Math.round(current.humidity),
+            wind: Math.round(current.windspeed),
+            windDirection: this.degreesToDirection(current.winddir),
+            locationName: data.address,
+            isError: false,
+            precip24h: Math.round(precip24h * 100) / 100,
+            precip72h: Math.round(precip72h * 100) / 100
+        };
     },
 
     /**
