@@ -5,7 +5,7 @@ import { WeatherData } from '@/types/weather';
 import { useFarm } from '@/store/farmStore';
 
 function fallbackWeather(): WeatherData {
-  return { wind: 0, temp: 0, humidity: 0, windDirection: '—' };
+  return { wind: 0, temp: 0, humidity: 0, windDirection: '—', precip24h: 0, precip72h: 0 };
 }
 
 function loadZip(userId?: string): string {
@@ -102,6 +102,12 @@ export default function WeatherBar() {
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {weather.precip24h !== undefined && weather.precip24h > 0 && !weather.isError && (
+        <div className="flex items-center justify-center mt-2 pt-2 border-t border-border/50 text-xs font-mono font-bold text-spray">
+          24h Rain: {weather.precip24h}in | 72h Rain: {weather.precip72h}in
         </div>
       )}
 

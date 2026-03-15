@@ -4,4 +4,6 @@ export interface WeatherData {
     humidity: number;
     windDirection: string;
     isError?: boolean;
+    precip24h?: number;
+    precip72h?: number;
 }
