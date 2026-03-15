@@ -3,6 +3,9 @@ import { WeatherData } from '../types/weather';
 const API_KEY = import.meta.env.VITE_VISUALCROSSING_KEY;
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 
+// Cache in-flight requests to deduplicate concurrent calls for the same location
+const promiseCache = new Map<string, Promise<any>>();
+
 /**
  * Hardened Weather Service.
  * Rainfall now provided by local NOAA MRMS service.
@@ -27,6 +30,17 @@ export const WeatherService = {
         
         if (!API_KEY || API_KEY === 'undefined') return defaults;
 
+        // If a request for this location is already in-flight, return the shared promise
+        if (promiseCache.has(location)) {
+            try {
+                const data = await promiseCache.get(location);
+                return this._mapFieldConditions(data);
+            } catch (error) {
+                // If the cached promise fails, we fall through and try again or return defaults
+                return defaults;
+            }
+        }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
@@ -37,19 +51,18 @@ export const WeatherService = {
 
         try {
             const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
-            const response = await fetch(url, { signal: controller.signal });
-            if (!response.ok) throw new Error(`Weather API error: ${response.statusText}`);
-            const data = await response.json();
-            const current = data.currentConditions;
             
-            return {
-                windspeed: current?.windspeed ?? null,
-                winddir: current?.winddir ?? null,
-                windcardinal: current?.winddir != null ? this.degreesToDirection(current.winddir) : '—',
-                temp: current?.temp ?? null,
-                humidity: current?.humidity ?? null,
-                isError: false
-            };
+            const fetchPromise = fetch(url, { signal: controller.signal })
+                .then(res => {
+                    if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
+                    return res.json();
+                });
+
+            // Store the promise in the cache
+            promiseCache.set(location, fetchPromise);
+
+            const data = await fetchPromise;
+            return this._mapFieldConditions(data);
         } catch (error: any) {
             if (error.name === 'AbortError') {
                 console.error('[WeatherService] Fetch conditions timed out');
@@ -59,7 +72,24 @@ export const WeatherService = {
             return defaults;
         } finally {
             clearTimeout(timeoutId);
+            // Remove from cache after completion so subsequent requests fetch fresh
+            promiseCache.delete(location);
         }
+    },
+
+    /**
+     * Helper to map Visual Crossing timeline API response to our custom format.
+     */
+    _mapFieldConditions(data: any): { windspeed: number | null; winddir: number | null; windcardinal: string; temp: number | null; humidity: number | null; isError: boolean; } {
+        const current = data.currentConditions;
+        return {
+            windspeed: current?.windspeed ?? null,
+            winddir: current?.winddir ?? null,
+            windcardinal: current?.winddir != null ? this.degreesToDirection(current.winddir) : '—',
+            temp: current?.temp ?? null,
+            humidity: current?.humidity ?? null,
+            isError: false
+        };
     },
 
     /**
