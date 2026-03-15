@@ -95,6 +95,9 @@ export default defineConfig(({ mode }) => ({
       }
     })
   ].filter(Boolean),
+  build: {
+    chunkSizeWarningLimit: 1200,
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
