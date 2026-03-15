@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Field } from '@/types/farm';
-import { MapPin, ChevronRight } from 'lucide-react';
+import { MapPin, ChevronRight, Wind, Thermometer, Loader2 } from 'lucide-react';
+import { WeatherService } from '@/services/WeatherService';
 
 interface FieldCardProps {
   field: Field;
@@ -8,6 +10,28 @@ interface FieldCardProps {
 
 export default function FieldCard({ field }: FieldCardProps) {
   const navigate = useNavigate();
+  const [weather, setWeather] = useState<{ windspeed: number | null; temp: number | null; isError?: boolean } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (field.lat == null || field.lng == null) return;
+    
+    const controller = new AbortController();
+    setLoading(true);
+    WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
+      .then(data => {
+        setWeather(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error('[FieldCard] error fetching weather:', err);
+          setLoading(false);
+        }
+      });
+      
+    return () => controller.abort();
+  }, [field.lat, field.lng]);
 
   return (
     <div 
@@ -25,7 +49,30 @@ export default function FieldCard({ field }: FieldCardProps) {
           </div>
         </div>
       </div>
-      <ChevronRight size={20} className="text-muted-foreground/50" />
+      
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 font-mono text-xs">
+          {loading ? (
+             <Loader2 size={14} className="text-muted-foreground animate-spin" />
+          ) : weather && !weather.isError ? (
+            <>
+              {weather.windspeed != null && (
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <Wind size={12} className="text-spray" />
+                  {Math.round(weather.windspeed)} <span className="text-[9px]">mph</span>
+                </span>
+              )}
+              {weather.temp != null && (
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <Thermometer size={12} className="text-destructive" />
+                  {Math.round(weather.temp)}°
+                </span>
+              )}
+            </>
+          ) : null}
+        </div>
+        <ChevronRight size={20} className="text-muted-foreground/50" />
+      </div>
     </div>
   );
 }
