@@ -1,10 +1,10 @@
 import { Wind, Thermometer, Droplets, MapPin, Loader2 } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
 import { useFarm } from '@/store/farmStore';
 
-function fallbackWeather(): WeatherData {
+function initialWeather(): WeatherData {
   return { wind: 0, temp: 0, humidity: 0, windDirection: '—', precip24h: 0, precip72h: 0 };
 }
 
@@ -14,31 +14,50 @@ function loadZip(userId?: string): string {
     return localStorage.getItem(key) || '';
   } catch { return ''; }
 }
+
 function saveZip(zip: string, userId?: string) {
   const key = userId ? `${userId}_al_zip` : 'al_zip';
   localStorage.setItem(key, zip);
 }
 
+const ZIP_REGEX = /^\d{5}(-\d{4})?$/;
+
 export default function WeatherBar() {
   const { session } = useFarm();
   const userId = session?.user?.id;
-  const [zip, setZip] = useState(() => loadZip(userId));
-  const [inputZip, setInputZip] = useState(zip);
-  const [weather, setWeather] = useState<WeatherData>(fallbackWeather);
+  
+  // Initialize to empty until we know userId
+  const [zip, setZip] = useState('');
+  const [inputZip, setInputZip] = useState('');
+  
+  const [weather, setWeather] = useState<WeatherData>(initialWeather);
   const [locationName, setLocationName] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Track current loading request to prevent race conditions
+  const currentRequest = useRef<number>(0);
 
-  // Sync zip when user changes
+  // Sync zip when user changes or loads
   useEffect(() => {
-    const userZip = loadZip(userId);
-    setZip(userZip);
-    setInputZip(userZip);
+    if (userId !== undefined) {
+      const userZip = loadZip(userId);
+      setZip(userZip);
+      setInputZip(userZip);
+    }
   }, [userId]);
 
   const load = useCallback(async (z: string) => {
     if (!z.trim()) return;
+    
+    // Prevent stale race conditions
+    const requestId = ++currentRequest.current;
+    
     setLoading(true);
     const result = await WeatherService.fetchCurrentWeather(z.trim());
+    
+    // If another request was started while we were fetching, discard this result
+    if (requestId !== currentRequest.current) return;
+    
     setWeather(result);
     setLocationName(result.locationName || '');
     setLoading(false);
@@ -53,14 +72,18 @@ export default function WeatherBar() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const z = inputZip.trim();
-    if (z) {
+    if (z && ZIP_REGEX.test(z)) {
       setZip(z);
+      setLocationName(''); // Clear old location immediately
       saveZip(z, userId);
+    } else {
+      // Basic feedback if invalid
+      setInputZip(zip);
     }
   };
 
   return (
-    <div className="bg-card border border-border rounded-lg p-3 space-y-2">
+    <div className="bg-card border border-border rounded-lg p-3 space-y-2 relative">
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
         <MapPin size={16} className="text-muted-foreground shrink-0" />
         <input
@@ -78,11 +101,11 @@ export default function WeatherBar() {
         >
           Set
         </button>
-        {loading && <Loader2 size={16} className="text-primary animate-spin shrink-0" />}
+        {loading && <Loader2 size={16} className="text-primary animate-spin shrink-0 absolute right-4 top-4" />}
       </form>
 
       {zip && (
-        <div className="flex items-center justify-between">
+        <div className={`flex items-center justify-between transition-opacity duration-300 ${loading ? 'opacity-50' : 'opacity-100'}`}>
           <span className="text-xs font-mono text-muted-foreground">{locationName || zip}</span>
           {weather.isError ? (
             <span className="text-xs font-mono text-destructive">Weather unavailable</span>
@@ -106,8 +129,8 @@ export default function WeatherBar() {
       )}
 
       {weather.precip24h !== undefined && weather.precip24h > 0 && !weather.isError && (
-        <div className="flex items-center justify-center mt-2 pt-2 border-t border-border/50 text-xs font-mono font-bold text-spray">
-          24h Rain: {weather.precip24h}in | 72h Rain: {weather.precip72h}in
+        <div className={`flex items-center justify-center mt-2 pt-2 border-t border-border/50 text-xs font-mono font-bold text-spray transition-opacity duration-300 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+          24h Rain: {weather.precip24h}in | 72h Rain: {weather.precip72h != null ? weather.precip72h : 0}in
         </div>
       )}
 
