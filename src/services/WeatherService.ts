@@ -96,7 +96,7 @@ export const WeatherService = {
      * Fetches current weather data for the Weather Bar via Visual Crossing.
      * Including precip data for the last 24 and 72 hours.
      */
-    async fetchCurrentWeather(location: string): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number }> {
+    async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number }> {
         if (!API_KEY || API_KEY === 'undefined') {
             return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true, precip24h: 0, precip72h: 0 };
         }
@@ -112,6 +112,10 @@ export const WeatherService = {
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        if (signal) {
+            signal.addEventListener('abort', () => controller.abort());
+        }
 
         try {
             // Fetch today + last 3 days to calculate accurate 24h/72h rainfall along with current conditions
