@@ -114,8 +114,8 @@ export const WeatherService = {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         try {
-            // Fetch today + last 3 days to calculate accurate 24h/72h rainfall
-            const url = `${VC_BASE_URL}/${location}/last3days?unitGroup=us&key=${API_KEY}&contentType=json&include=current,days&elements=temp,humidity,windspeed,winddir,precip`;
+            // Fetch today + last 3 days to calculate accurate 24h/72h rainfall along with current conditions
+            const url = `${VC_BASE_URL}/${location}/last3days/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current,days&elements=datetime,temp,humidity,windspeed,winddir,precip`;
             
             const fetchPromise = fetch(url, { signal: controller.signal })
                 .then(res => {
