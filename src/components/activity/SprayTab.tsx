@@ -1,8 +1,7 @@
-import React from 'react';
+import { useMemo } from 'react';
 import { SprayRecord } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
-import { formatIsoDate } from '@/utils/dates';
-import { formatDate } from '@/utils/dates';
+import { formatIsoDate, formatDate } from '@/utils/dates';
 import { cleanName } from '@/utils/text';
 
 interface SprayTabProps {
@@ -12,9 +11,33 @@ interface SprayTabProps {
   onEdit: (record: SprayRecord) => void;
 }
 
-const SprayTab: React.FC<SprayTabProps> = ({ records, selected, onToggle, onEdit }) => {
+function buildDetails(r: SprayRecord): string {
+  const wind = r.windSpeed != null
+    ? `${r.windSpeed} MPH ${r.windDirection || ''}`.trim()
+    : null;
+  const temp = r.temperature != null
+    ? `${r.temperature}°F`
+    : null;
+  return [wind, temp].filter(Boolean).join(' · ') || '—';
+}
+
+function buildSubtitle(r: SprayRecord): string {
+  const names = r.products?.map(p => p.product).filter(Boolean).join(', ');
+  return names || 'No products recorded';
+}
+
+function buildDate(r: SprayRecord): string {
+  // Never pass raw r.sprayDate to the UI — always format or fall back to timestamp
+  return formatIsoDate(r.sprayDate) || formatDate(r.timestamp);
+}
+
+export default function SprayTab({ records, selected, onToggle, onEdit }: SprayTabProps) {
   if (records.length === 0) {
-    return <p className="text-center text-muted-foreground font-mono text-sm py-8">No spray records</p>;
+    return (
+      <p className="text-center text-muted-foreground font-mono text-sm py-8">
+        No spray records
+      </p>
+    );
   }
 
   return (
@@ -25,9 +48,9 @@ const SprayTab: React.FC<SprayTabProps> = ({ records, selected, onToggle, onEdit
           id={r.id}
           type="spray"
           title={cleanName(r.fieldName)}
-          subtitle={r.products?.map(p => p.product).join(', ') || 'No product'}
-          details={`${r.windSpeed} MPH ${r.windDirection} · ${r.temperature}°F`}
-          date={formatIsoDate(r.sprayDate) || r.sprayDate || formatDate(r.timestamp)}
+          subtitle={buildSubtitle(r)}
+          details={buildDetails(r)}
+          date={buildDate(r)}
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
@@ -35,6 +58,4 @@ const SprayTab: React.FC<SprayTabProps> = ({ records, selected, onToggle, onEdit
       ))}
     </div>
   );
-};
-
-export default SprayTab;
+}

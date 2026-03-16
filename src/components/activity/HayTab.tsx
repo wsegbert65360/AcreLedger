@@ -1,8 +1,6 @@
-import React from 'react';
 import { HayHarvestRecord } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
-import { formatIsoDate } from '@/utils/dates';
-import { formatDate } from '@/utils/dates';
+import { formatIsoDate, formatDate } from '@/utils/dates';
 import { cleanName } from '@/utils/text';
 
 interface HayTabProps {
@@ -11,10 +9,25 @@ interface HayTabProps {
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: HayHarvestRecord) => void;
 }
+function buildSubtitle(r: HayHarvestRecord): string {
+  return `${r.baleCount} BALES · ${r.baleType}`;
+}
 
-const HayTab: React.FC<HayTabProps> = ({ records, selected, onToggle, onEdit }) => {
+function buildDetails(r: HayHarvestRecord): string {
+  return `CUTTING #${r.cuttingNumber}`;
+}
+
+function buildDate(r: HayHarvestRecord): string {
+  return formatIsoDate(r.date) || formatDate(r.timestamp);
+}
+
+export default function HayTab({ records, selected, onToggle, onEdit }: HayTabProps) {
   if (records.length === 0) {
-    return <p className="text-center text-muted-foreground font-mono text-sm py-8">No hay records</p>;
+    return (
+      <p className="text-center text-muted-foreground font-mono text-sm py-8">
+        No hay records
+      </p>
+    );
   }
 
   return (
@@ -25,9 +38,9 @@ const HayTab: React.FC<HayTabProps> = ({ records, selected, onToggle, onEdit }) 
           id={r.id}
           type="hay"
           title={cleanName(r.fieldName)}
-          subtitle={`${r.baleCount} BALES · ${r.baleType}`}
-          details={`CUTTING #${r.cuttingNumber}`}
-          date={formatIsoDate(r.date) || r.date || formatDate(r.timestamp)}
+          subtitle={buildSubtitle(r)}
+          details={buildDetails(r)}
+          date={buildDate(r)}
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
@@ -35,6 +48,4 @@ const HayTab: React.FC<HayTabProps> = ({ records, selected, onToggle, onEdit }) 
       ))}
     </div>
   );
-};
-
-export default HayTab;
+}

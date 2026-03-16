@@ -158,9 +158,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     } else {
       addSprayRecord(data);
     }
-    if (field.id) {
-      WeatherService.triggerBackfill(field.id);
-    }
     
     onClose();
   };
@@ -364,13 +361,13 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-[9px] font-mono text-muted-foreground uppercase">8-Point Wind Direction *</Label>
+                <Label className="text-[9px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
                 <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
                   <SelectTrigger className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindDirection.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].map(dir => (
+                    {['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'].map(dir => (
                       <SelectItem key={dir} value={dir} className="font-mono text-xs">{dir}</SelectItem>
                     ))}
                   </SelectContent>

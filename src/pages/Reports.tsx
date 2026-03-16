@@ -1,66 +1,149 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History, Tractor } from 'lucide-react';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData } from '@/lib/complianceReports';
-import { formatIsoDate, parseLocalDate, formatDisplayDate } from '@/utils/dates';
+import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import ReportTable from '@/components/ReportTable';
+import { toast } from 'sonner';
+import { Field } from '@/types/farm';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harvest' | 'hay-summary';
 
+const WIND_ALERT_MPH = 10;
+
+const TABS: { key: ReportTab; icon: typeof Sprout; label: string; color: string }[] = [
+  { key: 'fsa-plant',          icon: Sprout,    label: 'FSA Plant',   color: 'text-plant' },
+  { key: 'spray-audit',        icon: CloudRain, label: 'Spray Audit', color: 'text-spray' },
+  { key: 'fertilizer-summary', icon: Sprout,    label: 'Fertilizer',  color: 'text-lime-600 dark:text-lime-400' },
+  { key: 'fsa-harvest',        icon: Wheat,     label: 'FSA Harvest', color: 'text-harvest' },
+  { key: 'hay-summary',        icon: Tractor,   label: 'Hay Summary', color: 'text-harvest' },
+];
+
+// ─── Pure helpers (module-level — not recreated on every render) ──────────────
+
+function fmt(ts: number): string {
+  return new Date(ts).toLocaleDateString();
+}
+
+function fmtDate(d?: string): string {
+  return d ? formatIsoDate(d) : '—';
+}
+
+function buildFieldMap(fields: Field[]): Map<string, Field> {
+  return new Map(fields.map(f => [f.id, f]));
+}
+
+function safeExport(fn: () => void, label: string): void {
+  try {
+    fn();
+  } catch (err) {
+    console.error(`Export failed (${label}):`, err);
+    toast.error(`Failed to export ${label}. Please try again.`);
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function Reports() {
   const {
-    plantRecords: allPlant,
-    sprayRecords: allSpray,
-    harvestRecords: allHarvest,
-    hayHarvestRecords: allHay,
-    grainMovements: allGrain,
+    plantRecords:         allPlant,
+    sprayRecords:         allSpray,
+    harvestRecords:       allHarvest,
+    hayHarvestRecords:    allHay,
+    grainMovements:       allGrain,
     fertilizerApplications: allFertilizer,
     fields,
     activeSeason,
     viewingSeason,
-    setViewingSeason
+    setViewingSeason,
   } = useFarm();
 
   const [tab, setTab] = useState<ReportTab>('fsa-plant');
 
-  // Filter records by the selected season year
-  const plantRecords = allPlant.filter(r => r.seasonYear === viewingSeason);
-  const sprayRecords = allSpray.filter(r => r.seasonYear === viewingSeason);
-  const harvestRecords = allHarvest.filter(r => r.seasonYear === viewingSeason);
-  const hayRecords = allHay.filter(r => r.seasonYear === viewingSeason);
-  const fertilizerRecords = allFertilizer.filter(r => r.seasonYear === viewingSeason);
+  // Fixed at mount — subtitle dates don't shift on re-render or after midnight
+  const reportDateRef = useRef(new Date().toLocaleDateString());
+  const reportDate = reportDateRef.current;
 
-  // Derive available seasons for the selector
-  const availableSeasons = Array.from(new Set([
+  // O(1) field lookup — built once per fields change, not per row
+  const fieldMap = useMemo(() => buildFieldMap(fields), [fields]);
+
+  // Season selector options — memoized across all record arrays
+  const availableSeasons = useMemo(() => Array.from(new Set([
     activeSeason,
     ...allPlant.map(r => r.seasonYear),
     ...allSpray.map(r => r.seasonYear),
     ...allHarvest.map(r => r.seasonYear),
     ...allHay.map(r => r.seasonYear),
     ...allGrain.map(r => r.seasonYear),
-    ...allFertilizer.map(r => r.seasonYear)
-  ])).filter((y): y is number => !!y).sort((a, b) => b - a);
+    ...allFertilizer.map(r => r.seasonYear),
+  ])).filter((y): y is number => !!y).sort((a, b) => b - a),
+  [activeSeason, allPlant, allSpray, allHarvest, allHay, allGrain, allFertilizer]);
 
-  const fmt = (ts: number) => new Date(ts).toLocaleDateString();
-  const fmtDate = (d?: string) => d ? formatIsoDate(d) : '—';
+  // Season-filtered record sets — memoized, sorted, non-mutating
+  const plantRecords = useMemo(() =>
+    [...allPlant.filter(r => r.seasonYear === viewingSeason)]
+      .sort((a, b) => a.timestamp - b.timestamp),
+  [allPlant, viewingSeason]);
 
-  const tabs: { key: ReportTab; icon: typeof Sprout; label: string; color: string }[] = [
-    { key: 'fsa-plant', icon: Sprout, label: 'FSA Plant', color: 'text-plant' },
-    { key: 'spray-audit', icon: CloudRain, label: 'Spray Audit', color: 'text-spray' },
-    { key: 'fertilizer-summary', icon: Sprout, label: 'Fertilizer', color: 'text-lime-600 dark:text-lime-400' },
-    { key: 'fsa-harvest', icon: Wheat, label: 'FSA Harvest', color: 'text-harvest' },
-    { key: 'hay-summary', icon: Tractor, label: 'Hay Summary', color: 'text-harvest' },
-  ];
+  const sprayRecords = useMemo(() =>
+    [...allSpray.filter(r => r.seasonYear === viewingSeason)]
+      .sort((a, b) => a.timestamp - b.timestamp),
+  [allSpray, viewingSeason]);
+
+  const harvestRecords = useMemo(() =>
+    [...allHarvest.filter(r => r.seasonYear === viewingSeason)]
+      .sort((a, b) => a.timestamp - b.timestamp),
+  [allHarvest, viewingSeason]);
+
+  const hayRecords = useMemo(() =>
+    allHay.filter(r => r.seasonYear === viewingSeason),
+  [allHay, viewingSeason]);
+
+  const fertilizerRecords = useMemo(() =>
+    [...allFertilizer.filter(r => r.seasonYear === viewingSeason)]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+  [allFertilizer, viewingSeason]);
+
+  // Expanded spray rows — memoized, keyed by index to avoid product-name collisions
+  const sprayRows = useMemo(() => sprayRecords.flatMap(r => {
+    const field = fieldMap.get(r.fieldId);
+    const treatedArea = parseFloat(r.treatedAreaSize || field?.acreage?.toString() || '0');
+
+    if (r.products && r.products.length > 0) {
+      return r.products.map((p, i) => ({
+        ...r,
+        _rowKey: `${r.id}-${i}`,                     // index-based key — no collision on duplicate product names
+        product: p.product,
+        epaRegNumber: p.epaRegNumber,
+        applicationRate: p.rate,
+        rateUnit: p.rateUnit,
+        amountDisplay: !isNaN(parseFloat(p.rate)) && treatedArea > 0
+          ? `${(parseFloat(p.rate) * treatedArea).toFixed(1)} ${p.rateUnit}`
+          : '—',
+      }));
+    }
+
+    return [{
+      ...r,
+      _rowKey: r.id,
+      product: '—',
+      amountDisplay: r.totalAmountApplied ? `${r.totalAmountApplied} ${r.rateUnit || ''}` : '—',
+    }];
+  }), [sprayRecords, fieldMap]);
+
+  // Summary totals
+  const totalPlantAcres  = useMemo(() => roundTo(plantRecords.reduce((s, r) => s + r.acreage,  0), 2), [plantRecords]);
+  const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
+  const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
+  const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
 
   const handlePrint = () => window.print();
-
-  // Totals based on filtered records
-  const totalPlantAcres = roundTo(plantRecords.reduce((sum, r) => sum + r.acreage, 0), 2);
-  const totalHarvestBu = roundTo(harvestRecords.reduce((sum, r) => sum + r.bushels, 0), 2);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -75,6 +158,7 @@ export default function Reports() {
               <p className="text-xs font-mono text-muted-foreground">FSA & COMPLIANCE</p>
             </div>
           </div>
+          {/* Single print button — header only, consistent across all tabs */}
           <button
             onClick={handlePrint}
             className="touch-target flex items-center gap-2 px-4 py-2 bg-muted border border-border rounded-lg text-foreground font-mono text-sm hover:bg-muted/80 transition-colors print:hidden"
@@ -95,7 +179,7 @@ export default function Reports() {
           </div>
           <Select
             value={viewingSeason.toString()}
-            onValueChange={(v) => setViewingSeason(parseInt(v))}
+            onValueChange={(v) => setViewingSeason(parseInt(v, 10))}
           >
             <SelectTrigger className="w-[120px] h-9 font-mono text-sm bg-background border-border">
               <SelectValue placeholder="Year" />
@@ -103,21 +187,22 @@ export default function Reports() {
             <SelectContent className="bg-card border-border">
               {availableSeasons.map(y => (
                 <SelectItem key={y} value={y.toString()} className="font-mono text-xs">
-                  {y} {y === activeSeason ? '(ACTIVE)' : ''}
+                  {y}{y === activeSeason ? ' (ACTIVE)' : ''}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Tabs */}
+        {/* Tab Bar */}
         <div className="flex gap-1 bg-card border border-border rounded-lg p-1 print:hidden">
-          {tabs.map(t => (
+          {TABS.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-sm font-semibold transition-all ${tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
-                }`}
+              className={`flex-1 touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-sm font-semibold transition-all ${
+                tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
+              }`}
             >
               <t.icon size={16} />
               <span className="hidden sm:inline">{t.label}</span>
@@ -125,13 +210,13 @@ export default function Reports() {
           ))}
         </div>
 
-        {/* FSA Planting Report */}
+        {/* ── FSA Planting Report ─────────────────────────────────────────────── */}
         {tab === 'fsa-plant' && (
           <ReportTable
             title="FSA Planting Report"
-            subtitle={`Acreage report for Farm Service Agency certification. Generated ${new Date().toLocaleDateString()}.`}
+            subtitle={`Acreage report for Farm Service Agency certification. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %']}
-            onExport={() => exportFsa578Data(plantRecords, fields)}
+            onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields), 'FSA planting data')}
             exportLabel="Export CSV"
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
@@ -140,26 +225,23 @@ export default function Reports() {
               </div>
             )}
           >
-            {plantRecords
-              .sort((a, b) => a.timestamp - b.timestamp)
-              .map(r => (
+            {plantRecords.map(r => {
+              const field = fieldMap.get(r.fieldId);
+              return (
                 <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(r.plantDate) || fmt(r.timestamp)}</td>
                   <td className="px-4 py-3 text-xs font-bold text-foreground">{r.fieldName}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{r.crop || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.seedVariety}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acreage}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">
-                    {fields.find(f => f.id === r.fieldId)?.fsaFarmNumber || '—'}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">
-                    {fields.find(f => f.id === r.fieldId)?.fsaTractNumber || '—'}
-                  </td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaFarmNumber  || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaTractNumber || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.intendedUse || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{(r.producerShare ?? 100).toFixed(0)}%</td>
                 </tr>
-              ))}
+              );
+            })}
             {plantRecords.length === 0 && (
               <tr>
                 <td colSpan={10} className="py-12 text-center text-muted-foreground font-mono text-xs">
@@ -170,12 +252,13 @@ export default function Reports() {
           </ReportTable>
         )}
 
+        {/* ── Spray Audit ─────────────────────────────────────────────────────── */}
         {tab === 'spray-audit' && (
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 print:border-foreground/20">
               <h2 className="font-bold text-foreground text-base mb-1">Pesticide Application Record</h2>
               <p className="text-xs font-mono text-muted-foreground mb-1">
-                Private applicator license compliance audit trail. Generated {new Date().toLocaleDateString()}.
+                Private applicator license compliance audit trail. Generated {reportDate}.
               </p>
 
               <div className="flex gap-2 pb-4 print:hidden">
@@ -183,123 +266,91 @@ export default function Reports() {
                   size="sm"
                   variant="outline"
                   className="h-8 text-[10px] font-mono border-spray/30 text-spray hover:bg-spray/10"
-                  onClick={() => generateMissouriLog(sprayRecords, fields)}
+                  onClick={() => safeExport(() => generateMissouriLog(sprayRecords, fields), 'spray log')}
                 >
                   <Download size={12} className="mr-1.5" />
                   EXPORT CSV
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-[10px] font-mono border-border text-muted-foreground hover:bg-muted"
-                  onClick={() => window.print()}
-                >
-                  <Printer size={12} className="mr-1.5" />
-                  PRINT PDF
-                </Button>
               </div>
 
-              {sprayRecords.length === 0 ? (
-                <p className="text-center text-muted-foreground font-mono text-sm py-8">No spray records to report</p>
+              {sprayRows.length === 0 ? (
+                <p className="text-center text-muted-foreground font-mono text-sm py-8">
+                  No spray records to report
+                </p>
               ) : (
                 <div className="space-y-4">
-                  {sprayRecords
-                    .sort((a, b) => a.timestamp - b.timestamp)
-                    .flatMap(r => {
-                      const field = fields.find(f => f.id === r.fieldId);
-                      const treatedArea = parseFloat(r.treatedAreaSize || field?.acreage?.toString() || '0');
-
-                      if (r.products && r.products.length > 0) {
-                        return r.products.map(p => ({
-                          ...r,
-                          id: `${r.id}-${p.product}`,
-                          product: p.product,
-                          epaRegNumber: p.epaRegNumber,
-                          applicationRate: p.rate,
-                          rateUnit: p.rateUnit,
-                          amountDisplay: !isNaN(parseFloat(p.rate)) && treatedArea > 0
-                            ? `${(parseFloat(p.rate) * treatedArea).toFixed(1)} ${p.rateUnit}`
-                            : '—'
-                        }));
-                      }
-
-                      return [{
-                        ...r,
-                        product: '—',
-                        amountDisplay: r.totalAmountApplied ? `${r.totalAmountApplied} ${r.rateUnit || ''}` : '—'
-                      }];
-                    })
-                    .map(r => (
-                      <div key={r.id} className="border border-border/50 rounded-lg p-3 space-y-2 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-spray opacity-50" />
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-foreground text-sm uppercase font-mono tracking-tight">{r.fieldName}</span>
-                          <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                            {fmtDate(r.sprayDate) || fmt(r.timestamp)} {r.startTime ? ` @ ${r.startTime}` : ''}
-                          </span>
+                  {sprayRows.map(r => (
+                    <div key={r._rowKey} className="border border-border/50 rounded-lg p-3 space-y-2 relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-spray opacity-50" />
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-foreground text-sm uppercase font-mono tracking-tight">{r.fieldName}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {fmtDate(r.sprayDate) || fmt(r.timestamp)}{r.startTime ? ` @ ${r.startTime}` : ''}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
+                        <div><span className="text-muted-foreground uppercase text-[9px]">Product:</span><div className="text-spray font-bold">{r.product}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[9px]">EPA Reg #:</span><div className="text-foreground">{r.epaRegNumber || '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[9px]">Rate / Ac:</span><div className="text-foreground">{r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[9px]">Total Acres Treated:</span><div className="text-foreground font-bold">{r.treatedAreaSize || '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[9px]">Total Product:</span><div className="text-foreground font-bold">{r.amountDisplay}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[9px]">Equipment:</span><div className="text-foreground">{r.equipmentId || '—'}</div></div>
+                        <div className="col-span-2 pt-1 border-t border-border/30 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                          <div><span className="text-muted-foreground uppercase text-[9px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || '—'}</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[9px]">Applicator:</span> <span className="text-foreground/80">{r.applicatorName || '—'}</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[9px]">License:</span> <span className="text-foreground/80">{r.licenseNumber || '—'}</span></div>
                         </div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
-                          <div className="col-span-1"><span className="text-muted-foreground uppercase text-[9px]">Product:</span> <div className="text-spray font-bold">{r.product}</div></div>
-                          <div className="col-span-1"><span className="text-muted-foreground uppercase text-[9px]">EPA Reg #:</span> <div className="text-foreground">{r.epaRegNumber || '—'}</div></div>
-                          <div className="col-span-1"><span className="text-muted-foreground uppercase text-[9px]">Rate / Ac:</span> <div className="text-foreground">{r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—'}</div></div>
-                          <div className="col-span-1"><span className="text-muted-foreground uppercase text-[9px]">Total Acres Treated:</span> <div className="text-foreground font-bold">{r.treatedAreaSize || '—'}</div></div>
-                          <div className="col-span-1"><span className="text-muted-foreground uppercase text-[9px]">Total Product:</span> <div className="text-foreground font-bold">{(r as { amountDisplay: string }).amountDisplay || '—'}</div></div>
-                          <div className="col-span-1"><span className="text-muted-foreground uppercase text-[9px]">Equipment:</span> <div className="text-foreground">{r.equipmentId || '—'}</div></div>
-                          <div className="col-span-2 pt-1 border-t border-border/30 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                            <div><span className="text-muted-foreground uppercase text-[9px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || '—'}</span></div>
-                            <div><span className="text-muted-foreground uppercase text-[9px]">Applicator:</span> <span className="text-foreground/80">{r.applicatorName || '—'}</span></div>
-                            <div><span className="text-muted-foreground uppercase text-[9px]">License:</span> <span className="text-foreground/80">{r.licenseNumber || '—'}</span></div>
-                          </div>
-                          <div className="col-span-2 pt-1 flex flex-wrap gap-x-4 text-[10px] opacity-80">
-                            <div><span className="text-muted-foreground uppercase text-[9px]">Wind:</span> <span className="text-foreground">{r.windSpeed} mph {r.windDirection || ''}</span></div>
-                            <div><span className="text-muted-foreground uppercase text-[9px]">Temp:</span> <span className="text-foreground">{r.temperature}°F</span></div>
-                            <div><span className="text-muted-foreground uppercase text-[9px]">Hum:</span> <span className="text-foreground">{r.relativeHumidity != null ? `${r.relativeHumidity}%` : '—'}</span></div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 flex-wrap pt-1">
-                          {r.windSpeed > 10 && (
-                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">⚠ WIND ALERT</span>
-                          )}
-                          {!r.epaRegNumber && (
-                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">NON-COMPLIANT: NO EPA #</span>
-                          )}
+                        <div className="col-span-2 pt-1 flex flex-wrap gap-x-4 text-[10px] opacity-80">
+                          <div><span className="text-muted-foreground uppercase text-[9px]">Wind:</span> <span className="text-foreground">{r.windSpeed} mph {r.windDirection || ''}</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[9px]">Temp:</span> <span className="text-foreground">{r.temperature}°F</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[9px]">Hum:</span> <span className="text-foreground">{r.relativeHumidity != null ? `${r.relativeHumidity}%` : '—'}</span></div>
                         </div>
                       </div>
-                    ))}
+                      <div className="flex gap-2 flex-wrap pt-1">
+                        {r.windSpeed > WIND_ALERT_MPH && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                            ⚠ WIND ALERT
+                          </span>
+                        )}
+                        {!r.epaRegNumber && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">
+                            NON-COMPLIANT: NO EPA #
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
         )}
 
+        {/* ── Fertilizer Summary ──────────────────────────────────────────────── */}
         {tab === 'fertilizer-summary' && (
           <ReportTable
             title="Fertilizer Application Summary"
-            subtitle={`Summary of fertilizer applications. Generated ${new Date().toLocaleDateString()}.`}
+            subtitle={`Summary of fertilizer applications. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'FORMULA', 'ACRES']}
-            onExport={() => exportFertilizerData(fertilizerRecords, fields)}
+            onExport={() => safeExport(() => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
             exportLabel="Export CSV"
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
                 <span className="font-bold text-muted-foreground uppercase">GRAND TOTAL APPLIED</span>
-                <span className="font-bold text-lime-600 dark:text-lime-400">
-                  {roundTo(fertilizerRecords.reduce((sum, r) => sum + r.acres, 0), 2)} AC
-                </span>
+                <span className="font-bold text-lime-600 dark:text-lime-400">{totalFertAcres} AC</span>
               </div>
             )}
           >
-            {fertilizerRecords
-              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-              .map(r => (
-                <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground uppercase tracking-tighter">{fmtDate(r.date)}</td>
-                  <td className="px-4 py-3 text-xs font-bold text-foreground sm:min-w-[120px]">
-                    {fields.find(f => f.id === r.fieldId)?.name || r.fieldName}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-lime-600 dark:text-lime-400 font-bold">{r.fertilizer_formula}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acres}</td>
-                </tr>
-              ))}
+            {fertilizerRecords.map(r => (
+              <tr key={r.id} className="hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground uppercase tracking-tighter">{fmtDate(r.date)}</td>
+                <td className="px-4 py-3 text-xs font-bold text-foreground sm:min-w-[120px]">
+                  {fieldMap.get(r.fieldId)?.name || r.fieldName}
+                </td>
+                <td className="px-4 py-3 font-mono text-[10px] text-lime-600 dark:text-lime-400 font-bold">{r.fertilizer_formula}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acres}</td>
+              </tr>
+            ))}
             {fertilizerRecords.length === 0 && (
               <tr>
                 <td colSpan={4} className="py-12 text-center text-muted-foreground font-mono text-xs">
@@ -310,12 +361,13 @@ export default function Reports() {
           </ReportTable>
         )}
 
+        {/* ── FSA Harvest Report ──────────────────────────────────────────────── */}
         {tab === 'fsa-harvest' && (
           <ReportTable
             title="FSA Harvest Report"
-            subtitle={`Grain production report for FSA certification. Generated ${new Date().toLocaleDateString()}.`}
+            subtitle={`Grain production report for FSA certification. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'FARM #', 'TRACT #']}
-            onExport={() => exportHarvestData(harvestRecords, fields)}
+            onExport={() => safeExport(() => exportHarvestData(harvestRecords, fields), 'harvest data')}
             exportLabel="Export CSV"
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
@@ -324,9 +376,9 @@ export default function Reports() {
               </div>
             )}
           >
-            {harvestRecords
-              .sort((a, b) => a.timestamp - b.timestamp)
-              .map(r => (
+            {harvestRecords.map(r => {
+              const field = fieldMap.get(r.fieldId);
+              return (
                 <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(r.harvestDate) || fmt(r.timestamp)}</td>
                   <td className="px-4 py-3 text-xs font-bold text-foreground">{r.fieldName}</td>
@@ -335,14 +387,11 @@ export default function Reports() {
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.moisturePercent}%</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.destination === 'bin' ? 'Bin' : 'Town'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.landlordSplitPercent}%</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">
-                    {fields.find(f => f.id === r.fieldId)?.fsaFarmNumber || '—'}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">
-                    {fields.find(f => f.id === r.fieldId)?.fsaTractNumber || '—'}
-                  </td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaFarmNumber  || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaTractNumber || '—'}</td>
                 </tr>
-              ))}
+              );
+            })}
             {harvestRecords.length === 0 && (
               <tr>
                 <td colSpan={9} className="py-12 text-center text-muted-foreground font-mono text-xs">
@@ -353,35 +402,35 @@ export default function Reports() {
           </ReportTable>
         )}
 
+        {/* ── Hay Summary ─────────────────────────────────────────────────────── */}
         {tab === 'hay-summary' && (
           <ReportTable
             title="Hay Production Summary"
-            subtitle={`Total bale production across all cuttings. Generated ${new Date().toLocaleDateString()}.`}
+            subtitle={`Total bale production across all cuttings. Generated ${reportDate}.`}
             headers={['FIELD', 'CUTTING #1', 'CUTTING #2', 'CUTTING #3+', 'TOTAL']}
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
                 <span className="font-bold text-muted-foreground uppercase">SEASON GRAND TOTAL</span>
-                <span className="font-bold text-harvest">
-                  {hayRecords.reduce((s, r) => s + r.baleCount, 0).toLocaleString()} BALES
-                </span>
+                <span className="font-bold text-harvest">{totalHayBales.toLocaleString()} BALES</span>
               </div>
             )}
           >
             {fields
               .filter(f => hayRecords.some(r => r.fieldId === f.id))
               .map(f => {
-                const fieldHay = hayRecords.filter(r => r.fieldId === f.id);
-                const c1 = fieldHay.filter(r => r.cuttingNumber === 1).reduce((s, r) => s + r.baleCount, 0);
-                const c2 = fieldHay.filter(r => r.cuttingNumber === 2).reduce((s, r) => s + r.baleCount, 0);
-                const c3plus = fieldHay.filter(r => r.cuttingNumber >= 3).reduce((s, r) => s + r.baleCount, 0);
-                const total = c1 + c2 + c3plus;
+                const fieldHay  = hayRecords.filter(r => r.fieldId === f.id);
+                const c1        = fieldHay.filter(r => r.cuttingNumber === 1).reduce((s, r) => s + r.baleCount, 0);
+                const c2        = fieldHay.filter(r => r.cuttingNumber === 2).reduce((s, r) => s + r.baleCount, 0);
+                const c3plus    = fieldHay.filter(r => r.cuttingNumber >= 3).reduce((s, r) => s + r.baleCount, 0);
+                const total     = c1 + c2 + c3plus;
 
                 return (
                   <tr key={f.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 text-xs font-bold text-foreground">{f.name}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c1 || '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c2 || '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c3plus || '—'}</td>
+                    {/* Use explicit zero check — c1 > 0 avoids hiding a legitimate 0 bale count */}
+                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c1 > 0 ? c1 : '—'}</td>
+                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c2 > 0 ? c2 : '—'}</td>
+                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c3plus > 0 ? c3plus : '—'}</td>
                     <td className="px-4 py-3 font-mono text-[10px] font-bold text-harvest text-right border-l border-border/20">
                       {total.toLocaleString()}
                     </td>

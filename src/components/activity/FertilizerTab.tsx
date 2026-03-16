@@ -1,8 +1,6 @@
-import React from 'react';
 import { FertilizerApplication } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
-import { formatIsoDate } from '@/utils/dates';
-import { formatDate } from '@/utils/dates';
+import { formatIsoDate, formatDate } from '@/utils/dates';
 import { cleanName } from '@/utils/text';
 
 interface FertilizerTabProps {
@@ -11,10 +9,17 @@ interface FertilizerTabProps {
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: FertilizerApplication) => void;
 }
+function buildDate(r: FertilizerApplication): string {
+  return formatIsoDate(r.date) || formatDate(new Date(r.created_at).getTime());
+}
 
-const FertilizerTab: React.FC<FertilizerTabProps> = ({ records, selected, onToggle, onEdit }) => {
+export default function FertilizerTab({ records, selected, onToggle, onEdit }: FertilizerTabProps) {
   if (records.length === 0) {
-    return <p className="text-center text-muted-foreground font-mono text-sm py-8">No fertilizer records</p>;
+    return (
+      <p className="text-center text-muted-foreground font-mono text-sm py-8">
+        No fertilizer records
+      </p>
+    );
   }
 
   return (
@@ -25,9 +30,9 @@ const FertilizerTab: React.FC<FertilizerTabProps> = ({ records, selected, onTogg
           id={r.id}
           type="fertilizer"
           title={cleanName(r.fieldName)}
-          subtitle={`${r.fertilizer_formula}`}
+          subtitle={r.fertilizer_formula}
           details={`${r.acres} AC · APPLIED`}
-          date={formatIsoDate(r.date) || r.date || formatDate(new Date(r.created_at).getTime())}
+          date={buildDate(r)}
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
@@ -35,6 +40,4 @@ const FertilizerTab: React.FC<FertilizerTabProps> = ({ records, selected, onTogg
       ))}
     </div>
   );
-};
-
-export default FertilizerTab;
+}
