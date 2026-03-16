@@ -58,11 +58,6 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setIntendedUse('');
     }
     
-    // Trigger rainfall backfill for the newly set planting date
-    if (field.id) {
-      WeatherService.triggerBackfill(field.id);
-    }
-    
     onClose();
   };
 

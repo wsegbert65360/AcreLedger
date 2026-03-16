@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { PlantRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -7,78 +7,176 @@ import { mapPlantToDb } from '@/lib/mappers';
 interface UsePlantRecordsArgs {
   farm_id: string | null;
   activeSeason: number;
-  plantRecords: PlantRecord[];
   setPlantRecords: React.Dispatch<React.SetStateAction<PlantRecord[]>>;
 }
 
-export function usePlantRecords({ farm_id, activeSeason, plantRecords, setPlantRecords }: UsePlantRecordsArgs) {
-  const addPlantRecord = useCallback(async (r: Omit<PlantRecord, 'id' | 'timestamp'>) => {
+/** Returned by all three operations: true = committed, false = rolled back or blocked. */
+type OpResult = boolean;
+
+export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UsePlantRecordsArgs) {
+  // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
+  const isAdding = useRef(false);
+
+  // Refs for passing values out of state updaters safely across await boundaries
+  const previousRef = useRef<PlantRecord | undefined>(undefined);
+  const snapshotRef = useRef<{ record: PlantRecord; index: number }[]>([]);
+
+  // ─── Add ──────────────────────────────────────────────────────────────────
+
+  const addPlantRecord = useCallback(async (
+    r: Omit<PlantRecord, 'id' | 'timestamp'>
+  ): Promise<OpResult> => {
     if (!farm_id) {
-      toast.error('No farm selected');
-      return;
+      toast.error('No farm selected.');
+      return false;
     }
+
+    if (isAdding.current) return false;
+    isAdding.current = true;
+
     const id = crypto.randomUUID();
     const timestamp = Date.now();
     const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: activeSeason };
 
+    // Map before touching state — surface mapper errors before any optimistic update
+    let mapped: ReturnType<typeof mapPlantToDb>;
+    try {
+      mapped = mapPlantToDb(newRecord);
+    } catch (err) {
+      // Replace with Sentry.captureException(err) in production
+      console.error('mapPlantToDb failed:', err);
+      isAdding.current = false;
+      toast.error('Failed to prepare record — check your inputs.');
+      return false;
+    }
+
+    // Optimistic add
     setPlantRecords(prev => [...prev, newRecord]);
 
-    const { error } = await supabase.from('plant_records').insert([{
-      ...mapPlantToDb(newRecord),
-      farm_id
-    }]);
+    try {
+      const { error } = await supabase
+        .from('plant_records')
+        .insert([{
+          ...mapped,
+          farm_id
+        }]);
 
-    if (error) {
-      console.error('Error adding plant record:', error);
-      setPlantRecords(prev => prev.filter(rec => rec.id !== id));
-      toast.error('Failed to save planting record');
-    } else {
-      toast.success('Planting record saved!');
+      if (error) {
+        // Replace with Sentry.captureException(error) in production
+        console.error('Error adding plant record:', error);
+        setPlantRecords(prev => prev.filter(rec => rec.id !== id));
+        toast.error('Failed to save planting record.');
+        return false;
+      }
+
+      toast.success('Planting record saved.');
+      return true;
+    } finally {
+      // Always release the guard
+      isAdding.current = false;
     }
   }, [activeSeason, farm_id, setPlantRecords]);
 
-  const updatePlantRecord = useCallback(async (r: PlantRecord) => {
-    if (!farm_id) {
-      toast.error('No farm selected');
-      return;
-    }
-    const previous = plantRecords.find(item => item.id === r.id);
-    setPlantRecords(prev => prev.map(existing => existing.id === r.id ? r : existing));
+  // ─── Update ───────────────────────────────────────────────────────────────
 
-    const { error } = await supabase.from('plant_records').upsert({
-      ...mapPlantToDb(r),
-      farm_id
+  const updatePlantRecord = useCallback(async (r: PlantRecord): Promise<OpResult> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+
+    let mapped: ReturnType<typeof mapPlantToDb>;
+    try {
+      mapped = mapPlantToDb(r);
+    } catch (err) {
+      console.error('mapPlantToDb failed:', err);
+      toast.error('Failed to prepare record — check your inputs.');
+      return false;
+    }
+
+    // Capture previous record into a ref INSIDE the setter so it's guaranteed
+    // to reflect the same state snapshot as the optimistic apply
+    previousRef.current = undefined;
+    setPlantRecords(prev => {
+      previousRef.current = prev.find(item => item.id === r.id);
+      return prev.map(item => item.id === r.id ? r : item);
     });
 
-    if (error) {
-      console.error('Error updating plant record:', error);
-      if (previous) setPlantRecords(prev => prev.map(item => item.id === r.id ? previous : item));
-      toast.error('Failed to update record');
-    } else {
-      toast.success('Record updated');
-    }
-  }, [farm_id, plantRecords, setPlantRecords]);
+    const { error } = await supabase
+      .from('plant_records')
+      .update(mapped)
+      .eq('id', r.id)
+      .eq('farm_id', farm_id);
 
-  const deletePlantRecords = useCallback(async (ids: string[]) => {
-    if (!farm_id) {
-      toast.error('No farm selected');
-      return;
+    if (error) {
+      // Replace with Sentry.captureException(error) in production
+      console.error('Error updating plant record:', error);
+      
+      const previous = previousRef.current;
+      if (previous) {
+        setPlantRecords(prev => prev.map(item => item.id === r.id ? previous : item));
+      } else {
+        console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
+        setPlantRecords(prev => prev.filter(item => item.id !== r.id));
+      }
+      
+      toast.error('Failed to update record.');
+      return false;
     }
-    const previous = plantRecords.filter(r => ids.includes(r.id));
-    setPlantRecords(prev => prev.filter(r => !ids.includes(r.id)));
+
+    toast.success('Record updated.');
+    return true;
+  }, [farm_id, setPlantRecords]);
+
+  // ─── Delete ───────────────────────────────────────────────────────────────
+
+  const deletePlantRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+
+    if (ids.length === 0) return true;
+
+    // Capture snapshot into a ref inside the setter
+    snapshotRef.current = [];
+    setPlantRecords(prev => {
+      snapshotRef.current = prev
+        .map((record, index) => ({ record, index }))
+        .filter(({ record }) => ids.includes(record.id));
+      return prev.filter(r => !ids.includes(r.id));
+    });
+
     const { error } = await supabase
       .from('plant_records')
       .update({ deleted_at: new Date().toISOString() })
       .in('id', ids)
       .eq('farm_id', farm_id);
+
     if (error) {
+      // Replace with Sentry.captureException(error) in production
       console.error('Error deleting plant records:', error);
-      setPlantRecords(prev => [...prev, ...previous]);
-      toast.error('Failed to delete records');
-    } else {
-      toast.success('Records deleted');
+
+      // Restore records to their original positions. Sort descending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+
+      setPlantRecords(prev => {
+        const restored = [...prev];
+        for (const { record, index } of snapshot) {
+          const insertAt = Math.min(index, restored.length);
+          restored.splice(insertAt, 0, record);
+        }
+        return restored;
+      });
+
+      toast.error('Failed to delete records.');
+      return false;
     }
-  }, [farm_id, plantRecords, setPlantRecords]);
+
+    const count = ids.length;
+    toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
+    return true;
+  }, [farm_id, setPlantRecords]);
 
   return { addPlantRecord, updatePlantRecord, deletePlantRecords };
 }

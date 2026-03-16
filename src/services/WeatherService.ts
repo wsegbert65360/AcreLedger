@@ -8,8 +8,7 @@ const promiseCache = new Map<string, Promise<any>>();
 
 /**
  * Hardened Weather Service.
- * Rainfall now provided by local NOAA MRMS service.
- * Wind/Temp still provided by Visual Crossing for real-time conditions.
+ * Fetches real-time conditions and historical rainfall via Visual Crossing.
  */
 export const WeatherService = {
     /**
