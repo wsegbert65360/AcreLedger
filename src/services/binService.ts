@@ -12,12 +12,14 @@ export const binService = {
     },
 
     async updateBin(bin: Bin, farmId: string) {
-        const updateData = {
-            ...mapBinToDb(bin),
-            farm_id: farmId,
-            deleted_at: bin.deleted_at
-        };
-        return await supabase.from('bins').upsert(updateData).select();
+        const mapped = mapBinToDb(bin);
+        const { farm_id: _f, id: _i, ...payload } = mapped;
+        return await supabase
+            .from('bins')
+            .update(payload)
+            .eq('id', bin.id)
+            .eq('farm_id', farmId)
+            .select();
     },
 
     async softDeleteBin(id: string, farmId: string) {

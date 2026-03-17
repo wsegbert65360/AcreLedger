@@ -8,8 +8,8 @@ export interface FieldRow {
     farm_id: string;
     name: string;
     acreage: number;
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
     fsa_farm_number?: string | null;
     fsa_tract_number?: string | null;
     fsa_field_number?: string | null;

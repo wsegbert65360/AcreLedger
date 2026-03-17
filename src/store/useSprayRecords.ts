@@ -28,7 +28,7 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
   // ─── Add ────────────────────────────────────────────────────────────────────
 
   const addSprayRecord = useCallback(async (
-    r: Omit<SprayRecord, 'id' | 'timestamp'>
+    r: Omit<SprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -40,7 +40,7 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: SprayRecord = { ...r, id, timestamp, seasonYear: activeSeason };
+    const newRecord: SprayRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapSprayToDb>;
@@ -104,9 +104,11 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
       return prev.map(item => item.id === r.id ? r : item);
     });
 
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+
     const { error } = await supabase
       .from('spray_records')
-      .update(mapped)                   // farm_id is a relational key — filter only, never updated
+      .update(payload)
       .eq('id', r.id)
       .eq('farm_id', farm_id);
 

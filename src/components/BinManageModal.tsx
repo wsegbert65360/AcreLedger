@@ -29,9 +29,9 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
         if (!name.trim() || isNaN(cap)) return;
 
         if (isEdit) {
-            updateBin({ id: editBin.id, name: name.trim(), capacity: cap });
+            updateBin({ id: editBin.id, name: name.trim(), capacity: cap, deleted_at: editBin.deleted_at ?? null });
         } else {
-            addBin({ name: name.trim(), capacity: cap });
+            addBin({ name: name.trim(), capacity: cap, deleted_at: null });
         }
         onClose();
     };

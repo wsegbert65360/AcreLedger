@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Database, Download, Clock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { exportDataAsJson, createBackupData } from '@/utils/backup';
+import { exportDataAsJson } from '@/utils/backup';
 
 const LAST_BACKUP_KEY = 'acreledger_last_backup';
 
@@ -30,15 +30,33 @@ function formatLastBackup(date: Date): string {
 }
 
 export default function BackupManager() {
-  const { fields, bins, grainMovements, expenses } = useFarm();
+  const {
+    fields,
+    bins,
+    plantRecords,
+    sprayRecords,
+    harvestRecords,
+    hayHarvestRecords,
+    fertilizerApplications,
+    grainMovements,
+    savedSeeds,
+    sprayRecipes,
+    activeSeason,
+  } = useFarm();
   const [backingUp, setBackingUp] = useState(false);
   const [lastBackup, setLastBackup] = useState<Date | null>(loadLastBackup);
 
   const recordCount =
     (fields?.length ?? 0) +
     (bins?.length ?? 0) +
+    (plantRecords?.length ?? 0) +
+    (sprayRecords?.length ?? 0) +
+    (harvestRecords?.length ?? 0) +
+    (hayHarvestRecords?.length ?? 0) +
+    (fertilizerApplications?.length ?? 0) +
     (grainMovements?.length ?? 0) +
-    (expenses?.length ?? 0);
+    (savedSeeds?.length ?? 0) +
+    (sprayRecipes?.length ?? 0);
 
   const hasData = recordCount > 0;
   const backupIsStale = lastBackup
@@ -53,7 +71,20 @@ export default function BackupManager() {
 
     setBackingUp(true);
     try {
-      const backupData = createBackupData({ fields, bins, grainMovements, expenses });
+      const backupData = {
+        fields,
+        bins,
+        plantRecords,
+        sprayRecords,
+        harvestRecords,
+        hayHarvestRecords,
+        fertilizerApplications,
+        grainMovements,
+        savedSeeds,
+        sprayRecipes,
+        activeSeason,
+        backupDate: new Date().toISOString(),
+      };
       const filename = `acreledger-backup-${new Date().toISOString().split('T')[0]}.json`;
 
       const success = await exportDataAsJson(backupData, filename);
@@ -98,10 +129,28 @@ export default function BackupManager() {
               <span>Bins</span><span className="text-foreground">{bins?.length ?? 0}</span>
             </div>
             <div className="flex justify-between">
+              <span>Plant Records</span><span className="text-foreground">{plantRecords?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Spray Records</span><span className="text-foreground">{sprayRecords?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Harvest Records</span><span className="text-foreground">{harvestRecords?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Hay Records</span><span className="text-foreground">{hayHarvestRecords?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Fertilizer Applications</span><span className="text-foreground">{fertilizerApplications?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
               <span>Grain Movements</span><span className="text-foreground">{grainMovements?.length ?? 0}</span>
             </div>
             <div className="flex justify-between">
-              <span>Expenses</span><span className="text-foreground">{expenses?.length ?? 0}</span>
+              <span>Saved Seeds</span><span className="text-foreground">{savedSeeds?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Spray Recipes</span><span className="text-foreground">{sprayRecipes?.length ?? 0}</span>
             </div>
             <div className="flex justify-between pt-1 border-t border-border font-bold">
               <span>Total Records</span><span className="text-foreground">{recordCount}</span>

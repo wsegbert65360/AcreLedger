@@ -24,7 +24,7 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
   // ─── Add ──────────────────────────────────────────────────────────────────
 
   const addPlantRecord = useCallback(async (
-    r: Omit<PlantRecord, 'id' | 'timestamp'>
+    r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -36,7 +36,7 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: activeSeason };
+    const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapPlantToDb>;
@@ -102,9 +102,11 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
       return prev.map(item => item.id === r.id ? r : item);
     });
 
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+
     const { error } = await supabase
       .from('plant_records')
-      .update(mapped)
+      .update(payload)
       .eq('id', r.id)
       .eq('farm_id', farm_id);
 

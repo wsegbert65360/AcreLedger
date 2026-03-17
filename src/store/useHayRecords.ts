@@ -24,7 +24,7 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
   // ─── Add ──────────────────────────────────────────────────────────────────
 
   const addHayHarvestRecord = useCallback(async (
-    r: Omit<HayHarvestRecord, 'id' | 'timestamp'>
+    r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -36,7 +36,7 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: HayHarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason };
+    const newRecord: HayHarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapHayToDb>;
@@ -102,9 +102,11 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
       return prev.map(item => item.id === r.id ? r : item);
     });
 
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+
     const { error } = await supabase
       .from('hay_harvest_records')
-      .update(mapped)
+      .update(payload)
       .eq('id', r.id)
       .eq('farm_id', farm_id);
 

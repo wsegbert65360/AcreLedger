@@ -16,7 +16,7 @@ interface HarvestModalProps {
 }
 
 export default function HarvestModal({ field, open, onClose, initialData }: HarvestModalProps) {
-  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, bins } = useFarm();
+  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, bins, activeSeason } = useFarm();
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -84,7 +84,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
           bushels: bu,
           moisturePercent: m,
           sourceFieldName: field.name,
-          timestamp: initialData.timestamp
+          timestamp: initialData.timestamp,
         });
       }
     } else {
@@ -98,7 +98,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
           bushels: bu,
           moisturePercent: m,
           sourceFieldName: field.name,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
       }
     }

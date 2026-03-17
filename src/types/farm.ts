@@ -2,8 +2,8 @@ export interface Field {
   id: string;
   name: string;
   acreage: number;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   fsaFarmNumber?: string;
   fsaTractNumber?: string;
   fsaFieldNumber?: string;
@@ -15,7 +15,7 @@ export interface Field {
     type: 'Polygon';
     coordinates: number[][][];
   } | null;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface PlantRecord {
@@ -34,9 +34,9 @@ export interface PlantRecord {
   plantDate?: string;
   producerShare?: number; // FSA 578 mandatory: 0 to 100 (%)
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated'; // FSA 578 mandatory: IR or NI
-  seasonYear?: number;
+  seasonYear: number;
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface SprayRecord {
@@ -47,9 +47,9 @@ export interface SprayRecord {
   windSpeed: number; // MDA mandatory: wind_speed_mph
   temperature: number; // MDA mandatory: temp_f
   timestamp: number;
-  seasonYear?: number;
+  seasonYear: number;
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
   // Spray audit / personal license compliance
   applicatorName?: string;
   licenseNumber?: string;
@@ -82,14 +82,14 @@ export interface HarvestRecord {
   landlordSplitPercent: number;
   bushels: number;
   timestamp: number;
-  seasonYear?: number;
+  seasonYear: number;
   // FSA compliance fields
   crop?: string;
   fsaFarmNumber?: string;
   fsaTractNumber?: string;
   harvestDate?: string;
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface HayHarvestRecord {
@@ -102,10 +102,10 @@ export interface HayHarvestRecord {
   baleType: 'Round' | 'Square';
   temperature?: number;
   conditions?: string;
-  seasonYear?: number;
+  seasonYear: number;
   timestamp: number;
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface Bin {
@@ -113,7 +113,7 @@ export interface Bin {
   name: string;
   capacity: number;
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface GrainMovement {
@@ -125,18 +125,18 @@ export interface GrainMovement {
   moisturePercent: number;
   sourceFieldName?: string;
   timestamp: number;
-  seasonYear?: number;
+  seasonYear: number;
   price?: number; // Price per bushel
   destination?: string; // Buyer or location
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface SavedSeed {
   id: string;
   name: string; // e.g. "DKC 64-35"
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface SprayRecipeProduct {
@@ -156,7 +156,7 @@ export interface SprayRecipe {
   targetPest?: string;
   epaRegNumber?: string; // Kept for backward compatibility/summary
   farm_id?: string;
-  deleted_at?: string;
+  deleted_at: string | null;
 }
 
 export interface FertilizerApplication {
@@ -167,10 +167,12 @@ export interface FertilizerApplication {
   date: string;
   acres: number;
   fertilizer_formula: string;
+  /** Unix ms timestamp representing when this application record was created */
+  timestamp: number;
   created_at: string;
   updated_at: string;
-  deleted_at?: string;
-  seasonYear?: number;
+  deleted_at: string | null;
+  seasonYear: number;
 }
 
 export type ActivityRecord =

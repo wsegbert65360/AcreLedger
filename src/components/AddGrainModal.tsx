@@ -14,7 +14,7 @@ interface AddGrainModalProps {
 }
 
 export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps) {
-    const { addGrainMovement } = useFarm();
+    const { addGrainMovement, activeSeason } = useFarm();
     const [bushels, setBushels] = useState('');
     const [moisture, setMoisture] = useState('15.0');
     const [source, setSource] = useState('');

@@ -25,7 +25,7 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
   // ─── Add ──────────────────────────────────────────────────────────────────
 
   const addFertilizerApplication = useCallback(async (
-    r: Omit<FertilizerApplication, 'id' | 'created_at' | 'updated_at' | 'fieldName'>
+    r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -36,14 +36,16 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
     isAdding.current = true;
 
     const id = crypto.randomUUID();
-    const now = new Date().toISOString();
+    const now = new Date();
     const newRecord: FertilizerApplication = {
       ...r,
       id,
-      created_at: now,
-      updated_at: now,
+      timestamp: now.getTime(),
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      deleted_at: null,
       fieldName: fields.find(f => f.id === r.fieldId)?.name || 'Unknown Field',
-      seasonYear: r.seasonYear || activeSeason
+      seasonYear: activeSeason
     };
 
     // Map before touching state — surface mapper errors before any optimistic update
@@ -105,19 +107,22 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
     // Capture previous record into a ref INSIDE the setter so it's guaranteed
     // to reflect the same state snapshot as the optimistic apply
     previousRef.current = undefined;
+    const updatedAtIso = new Date().toISOString();
     setFertilizerApplications(prev => {
       previousRef.current = prev.find(item => item.id === r.id);
-      const updatedRecord = {
+      const updatedRecord: FertilizerApplication = {
         ...r,
-        updated_at: new Date().toISOString(),
+        updated_at: updatedAtIso,
         fieldName: fields.find(f => f.id === r.fieldId)?.name || 'Unknown Field'
       };
       return prev.map(item => item.id === r.id ? updatedRecord : item);
     });
 
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+
     const { error } = await supabase
       .from('fertilizer_applications')
-      .update(mapped)
+      .update(payload)
       .eq('id', r.id)
       .eq('farm_id', farm_id);
 

@@ -22,7 +22,7 @@ interface SprayModalProps {
 }
 
 export default function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
-  const { addSprayRecord, updateSprayRecord, sprayRecipes, session } = useFarm();
+  const { addSprayRecord, updateSprayRecord, sprayRecipes, session, activeSeason } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -73,13 +73,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   };
 
   useEffect(() => {
-    if (open) {
+    if (open && field.lat != null && field.lng != null) {
       setLoading(true);
       WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
         setWeather(w);
         if (w && !manualWindDirection) setManualWindDirection(w.windDirection);
         setLoading(false);
       });
+    } else if (open) {
+      setLoading(false);
     }
   }, [open, field.lat, field.lng]);
 
@@ -151,6 +153,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       totalMixtureVolume: totalMixtureVolume.trim() || undefined,
       equipmentId: equipmentId.trim() || undefined,
       isPremixed,
+      deleted_at: null,
+      seasonYear: activeSeason,
     };
 
     if (initialData) {

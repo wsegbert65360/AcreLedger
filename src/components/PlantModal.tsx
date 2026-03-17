@@ -17,7 +17,7 @@ interface PlantModalProps {
 }
 
 export default function PlantModal({ field, open, onClose, initialData }: PlantModalProps) {
-  const { addPlantRecord, updatePlantRecord, savedSeeds } = useFarm();
+  const { addPlantRecord, updatePlantRecord, savedSeeds, activeSeason } = useFarm();
   const [seedVariety, setSeedVariety] = useState(initialData?.seedVariety || '');
   const [crop, setCrop] = useState(initialData?.crop || '');
   const [intendedUse, setIntendedUse] = useState(initialData?.intendedUse || field.intendedUse || '');

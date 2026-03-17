@@ -142,9 +142,9 @@ export function useFieldsAndBins({
       return;
     }
     const id = crypto.randomUUID();
-    setSavedSeeds(prev => [...prev, { id, name }]);
+    setSavedSeeds(prev => [...prev, { id, name, deleted_at: null }]);
     const { error } = await supabase.from('saved_seeds').insert([
-      mapSeedToDb({ id, name, farm_id })
+      mapSeedToDb({ id, name, farm_id, deleted_at: null })
     ]);
     if (error) {
       console.error('Error adding seed:', error);
@@ -203,9 +203,14 @@ export function useFieldsAndBins({
     }
     const previous = sprayRecipes.find(item => item.id === r.id);
     setSprayRecipes(prev => prev.map(existing => existing.id === r.id ? r : existing));
-    const { error } = await supabase.from('spray_recipes').upsert(
-      mapRecipeToDb({ ...r, farm_id })
-    );
+    const mapped = mapRecipeToDb({ ...r, farm_id });
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+    const { error } = await supabase
+      .from('spray_recipes')
+      .update(payload)
+      .eq('id', r.id)
+      .eq('farm_id', farm_id);
+
     if (error) {
       console.error('Error updating spray recipe:', error);
       if (previous) setSprayRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
