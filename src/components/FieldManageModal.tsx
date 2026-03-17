@@ -109,9 +109,12 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
   const handleSubmit = () => {
     const ac = parseFloat(acreage);
-    const la = parseFloat(lat);
-    const ln = parseFloat(lng);
-    if (!name.trim() || isNaN(ac) || isNaN(la) || isNaN(ln)) return;
+    if (!name.trim() || isNaN(ac) || ac <= 0) return;
+    // lat/lng may be null if geocoding skipped (BLUEPRINT)
+    const la = lat.trim() === '' ? null : parseFloat(lat);
+    const ln = lng.trim() === '' ? null : parseFloat(lng);
+    if (la !== null && (isNaN(la) || la < -90 || la > 90)) return;
+    if (ln !== null && (isNaN(ln) || ln < -180 || ln > 180)) return;
 
     let boundary: { type: 'Polygon'; coordinates: number[][][] } | null = null;
     if (points.length >= 3) {
@@ -132,18 +135,19 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       fsaFieldNumber: fsaField.trim() || undefined,
       producerShare: parseFloat(producerShare) || undefined,
       irrigationPractice: irrigation,
-      intendedUse: intendedUse.trim() || undefined
+      intendedUse: intendedUse.trim() || undefined,
+      deleted_at: null as string | null
     };
 
     if (isEdit) {
-      updateField({ id: editField.id, ...fieldData });
+      updateField({ id: editField.id, ...fieldData, deleted_at: editField.deleted_at ?? null } as Field);
     } else {
-      addField(fieldData);
+      addField(fieldData as Omit<Field, 'id'>);
     }
     onClose();
   };
 
-  const valid = name.trim() && acreage && lat && lng;
+  const valid = !!name.trim() && !!acreage && !isNaN(parseFloat(acreage)) && parseFloat(acreage) > 0;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

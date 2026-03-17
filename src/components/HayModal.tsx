@@ -18,7 +18,7 @@ interface HayModalProps {
 }
 
 export default function HayModal({ field, open, onClose, initialData }: HayModalProps) {
-    const { addHayHarvestRecord, updateHayHarvestRecord } = useFarm();
+    const { addHayHarvestRecord, updateHayHarvestRecord, activeSeason } = useFarm();
     const [baleCount, setBaleCount] = useState(initialData?.baleCount.toString() || '');
     const [cuttingNumber, setCuttingNumber] = useState(initialData?.cuttingNumber.toString() || '1');
     const [baleType, setBaleType] = useState<'Round' | 'Square'>(initialData?.baleType || 'Round');
@@ -28,7 +28,7 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
     const [loadingWeather, setLoadingWeather] = useState(false);
 
     useEffect(() => {
-        if (open && !initialData) {
+        if (open && !initialData && field.lat != null && field.lng != null) {
             setLoadingWeather(true);
             WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
                 if (w) {
@@ -38,6 +38,8 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
                 }
                 setLoadingWeather(false);
             });
+        } else if (open && !initialData) {
+            setLoadingWeather(false);
         }
     }, [open, field.lat, field.lng, initialData]);
 

@@ -14,7 +14,7 @@ interface SellModalProps {
 }
 
 export default function SellModal({ bin, open, onClose }: SellModalProps) {
-    const { addGrainMovement, getBinTotal, viewingSeason } = useFarm();
+    const { addGrainMovement, getBinTotal, viewingSeason, activeSeason } = useFarm();
     const [bushels, setBushels] = useState('');
     const [price, setPrice] = useState('');
     const [destination, setDestination] = useState('');

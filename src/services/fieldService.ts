@@ -12,12 +12,14 @@ export const fieldService = {
     },
 
     async updateField(field: Field, farmId: string) {
-        const updateData = {
-            ...mapFieldToDb(field),
-            farm_id: farmId,
-            deleted_at: field.deleted_at
-        };
-        return await supabase.from('fields').upsert(updateData).select();
+        const mapped = mapFieldToDb(field);
+        const { farm_id: _f, id: _i, ...payload } = mapped;
+        return await supabase
+            .from('fields')
+            .update(payload)
+            .eq('id', field.id)
+            .eq('farm_id', farmId)
+            .select();
     },
 
     async softDeleteField(id: string, farmId: string) {

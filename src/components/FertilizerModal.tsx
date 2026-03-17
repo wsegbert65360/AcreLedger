@@ -13,7 +13,7 @@ interface FertilizerModalProps {
 }
 
 export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
-    const { addFertilizerApplication, updateFertilizerApplication } = useFarm();
+    const { addFertilizerApplication, updateFertilizerApplication, activeSeason } = useFarm();
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [acres, setAcres] = useState(field.acreage.toString());
     const [formula, setFormula] = useState('');

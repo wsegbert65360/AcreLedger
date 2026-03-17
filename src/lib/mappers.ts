@@ -25,7 +25,7 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     seasonYear: db.season_year,
     timestamp: new Date(db.timestamp).getTime(),
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
@@ -44,7 +44,7 @@ export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
     seasonYear: db.season_year,
     timestamp: new Date(db.timestamp).getTime(),
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined,
+    deleted_at: db.deleted_at ?? null,
     targetPest: db.target_pest ?? undefined,
     windDirection: db.wind_direction ?? undefined,
     relativeHumidity: db.relative_humidity ?? undefined,
@@ -71,7 +71,7 @@ export const mapHarvestFromDb = (db: HarvestRecordRow): HarvestRecord => ({
     timestamp: new Date(db.timestamp).getTime(),
     crop: db.crop,
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapHayFromDb = (db: HayHarvestRow): HayHarvestRecord => ({
@@ -87,7 +87,7 @@ export const mapHayFromDb = (db: HayHarvestRow): HayHarvestRecord => ({
     seasonYear: db.season_year,
     timestamp: new Date(db.timestamp).getTime(),
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
@@ -103,7 +103,7 @@ export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
     seasonYear: db.season_year,
     timestamp: new Date(db.timestamp).getTime(),
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapFieldFromDb = (db: FieldRow): Field => ({
@@ -120,7 +120,7 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     intendedUse: db.intended_use ?? undefined,
     boundary: db.boundary as any,
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapBinFromDb = (db: BinRow): Bin => ({
@@ -128,14 +128,14 @@ export const mapBinFromDb = (db: BinRow): Bin => ({
     name: db.name,
     capacity: db.capacity,
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapSeedFromDb = (db: SavedSeedRow): SavedSeed => ({
     id: db.id,
     name: db.name,
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapRecipeFromDb = (db: SprayRecipeRow): SprayRecipe => ({
@@ -147,7 +147,7 @@ export const mapRecipeFromDb = (db: SprayRecipeRow): SprayRecipe => ({
     targetPest: db.target_pest ?? undefined,
     epaRegNumber: db.epa_reg_number ?? undefined,
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? undefined
+    deleted_at: db.deleted_at ?? null
 });
 
 export const mapFertilizerFromDb = (db: FertilizerApplicationRow): FertilizerApplication => ({
@@ -158,9 +158,10 @@ export const mapFertilizerFromDb = (db: FertilizerApplicationRow): FertilizerApp
     date: db.date,
     acres: Number(db.acres),
     fertilizer_formula: db.fertilizer_formula,
+    timestamp: new Date(db.created_at || db.date).getTime(),
     created_at: db.created_at,
     updated_at: db.updated_at,
-    deleted_at: db.deleted_at ?? undefined,
+    deleted_at: db.deleted_at ?? null,
     seasonYear: db.season_year
 });
 

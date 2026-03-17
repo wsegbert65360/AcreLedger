@@ -25,7 +25,7 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
   // ─── Add ──────────────────────────────────────────────────────────────────
 
   const addGrainMovement = useCallback(async (
-    r: Omit<GrainMovement, 'id'> & { timestamp?: number }
+    r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear'> & { timestamp?: number }
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -37,7 +37,7 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
 
     const id = crypto.randomUUID();
     const timestamp = r.timestamp || Date.now();
-    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: activeSeason };
+    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapGrainToDb>;
@@ -103,9 +103,11 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
       return prev.map(item => item.id === r.id ? r : item);
     });
 
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+
     const { error } = await supabase
       .from('grain_movements')
-      .update(mapped)
+      .update(payload)
       .eq('id', r.id)
       .eq('farm_id', farm_id);
 

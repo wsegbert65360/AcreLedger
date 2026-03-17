@@ -57,29 +57,29 @@ interface FarmState {
   /** Method to transition the entire farm state to a new season */
   rolloverToNewSeason: (year: number) => void;
   /** Operations for managing planting records */
-  addPlantRecord: (r: Omit<PlantRecord, 'id' | 'timestamp'>) => void;
-  updatePlantRecord: (r: PlantRecord) => void;
-  deletePlantRecords: (ids: string[]) => void;
+  addPlantRecord: (r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  updatePlantRecord: (r: PlantRecord) => Promise<boolean>;
+  deletePlantRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing spray application records */
-  addSprayRecord: (r: Omit<SprayRecord, 'id' | 'timestamp'>) => void;
-  updateSprayRecord: (r: SprayRecord) => void;
-  deleteSprayRecords: (ids: string[]) => void;
+  addSprayRecord: (r: Omit<SprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  updateSprayRecord: (r: SprayRecord) => Promise<boolean>;
+  deleteSprayRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing harvest production records */
-  addHarvestRecord: (r: Omit<HarvestRecord, 'id' | 'timestamp'>) => void;
-  updateHarvestRecord: (r: HarvestRecord) => void;
-  deleteHarvestRecords: (ids: string[]) => void;
+  addHarvestRecord: (r: Omit<HarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  updateHarvestRecord: (r: HarvestRecord) => Promise<boolean>;
+  deleteHarvestRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing hay harvest records */
-  addHayHarvestRecord: (r: Omit<HayHarvestRecord, 'id' | 'timestamp'>) => void;
-  updateHayHarvestRecord: (r: HayHarvestRecord) => void;
-  deleteHayHarvestRecords: (ids: string[]) => void;
+  addHayHarvestRecord: (r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  updateHayHarvestRecord: (r: HayHarvestRecord) => Promise<boolean>;
+  deleteHayHarvestRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing fertilizer applications */
-  addFertilizerApplication: (r: Omit<FertilizerApplication, 'id' | 'created_at' | 'updated_at' | 'fieldName'>) => void;
-  updateFertilizerApplication: (r: FertilizerApplication) => void;
-  deleteFertilizerApplications: (ids: string[]) => void;
+  addFertilizerApplication: (r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  updateFertilizerApplication: (r: FertilizerApplication) => Promise<boolean>;
+  deleteFertilizerApplications: (ids: string[]) => Promise<boolean>;
   /** Operations for managing grain inventory */
-  addGrainMovement: (r: Omit<GrainMovement, 'id'> & { timestamp?: number }) => void;
-  updateGrainMovement: (r: GrainMovement) => void;
-  deleteGrainMovements: (ids: string[]) => void;
+  addGrainMovement: (r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear'> & { timestamp?: number }) => Promise<boolean>;
+  updateGrainMovement: (r: GrainMovement) => Promise<boolean>;
+  deleteGrainMovements: (ids: string[]) => Promise<boolean>;
   /** Calculation utility for bin inventory levels */
   getBinTotal: (binId: string, season?: number) => number;
   /** Operations for managing field definitions */
@@ -104,7 +104,7 @@ interface FarmState {
   /** Unique ID for the current farm */
   farm_id: string | null;
   /** Restores the entire farm state from a JSON backup */
-  restoreFromBackup: (data: any) => Promise<void>;
+  restoreFromBackup: (data: any) => Promise<boolean>;
 }
 
 const FarmContext = createContext<FarmState | null>(null);
@@ -212,11 +212,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
 
   // --- Compose CRUD hooks ---
-  const plantOps = usePlantRecords({ farm_id, activeSeason, plantRecords, setPlantRecords });
-  const sprayOps = useSprayRecords({ farm_id, activeSeason, sprayRecords, setSprayRecords });
-  const harvestOps = useHarvestRecords({ farm_id, activeSeason, harvestRecords, setHarvestRecords });
-  const hayOps = useHayRecords({ farm_id, activeSeason, hayHarvestRecords, setHayHarvestRecords });
-  const fertilizerOps = useFertilizerRecords({ farm_id, activeSeason, fields, fertilizerApplications, setFertilizerApplications });
+  const plantOps = usePlantRecords({ farm_id, activeSeason, setPlantRecords });
+  const sprayOps = useSprayRecords({ farm_id, activeSeason, setSprayRecords });
+  const harvestOps = useHarvestRecords({ farm_id, activeSeason, setHarvestRecords });
+  const hayOps = useHayRecords({ farm_id, activeSeason, setHayHarvestRecords });
+  const fertilizerOps = useFertilizerRecords({ farm_id, activeSeason, fields, setFertilizerApplications });
   const grainOps = useGrainMovements({ farm_id, activeSeason, grainMovements, setGrainMovements });
 
   const entityOps = useFieldsAndBins({
