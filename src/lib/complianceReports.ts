@@ -74,7 +74,7 @@ export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
             sanitizeCsvValue(r.startTime),
             `"${sanitizeCsvValue(r.applicatorName)}"`,
             `"${sanitizeCsvValue(r.licenseNumber)}"`,
-            `"${sanitizeCsvValue(r.product)}"`,
+            '',
             `"${sanitizeCsvValue(r.epaRegNumber)}"`,
             `"${sanitizeCsvValue(r.fieldName)}"`,
             sanitizeCsvValue(treatedArea),
