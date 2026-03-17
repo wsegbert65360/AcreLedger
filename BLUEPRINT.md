@@ -90,7 +90,7 @@ Grain harvest event.
 ```ts
 { id, farm_id, fieldId, fieldName, crop, bushels, moisturePercent, harvestDate,
   timestamp, seasonYear, destination: 'bin' | 'town', landlordSplitPercent,
-  deleted_at }
+  landlordName, deleted_at }
 ```
 
 ### HayHarvestRecord
@@ -271,7 +271,8 @@ function safeExport(fn: () => void, label: string): void {
 ### ReportTable Component
 Standardized wrapper for all compliance report tabs. Props: `title`, `subtitle`, `headers[]`,
 `onExport`, `exportLabel`, `summary` (ReactNode), `children` (`<tr>` rows).
-All five report tabs use it: FSA Plant, Spray Audit, Fertilizer, FSA Harvest, Hay Summary.
+All six report tabs use it for layout or data processing: FSA Plant, Spray Audit, Fertilizer, 
+FSA Harvest, Hay Summary, Landlord Statement.
 
 ### Null Safety in Display Strings
 Always guard optional numeric/string fields before interpolation:

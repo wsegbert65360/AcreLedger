@@ -4,7 +4,7 @@ import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History, Tractor } from 'lucide-react';
-import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData } from '@/lib/complianceReports';
+import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames } from '@/lib/complianceReports';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import ReportTable from '@/components/ReportTable';
@@ -13,7 +13,7 @@ import { Field } from '@/types/farm';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harvest' | 'hay-summary';
+type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harvest' | 'hay-summary' | 'landlord-statement';
 
 const WIND_ALERT_MPH = 10;
 
@@ -23,6 +23,7 @@ const TABS: { key: ReportTab; icon: typeof Sprout; label: string; color: string 
   { key: 'fertilizer-summary', icon: Sprout,    label: 'Fertilizer',  color: 'text-lime-600 dark:text-lime-400' },
   { key: 'fsa-harvest',        icon: Wheat,     label: 'FSA Harvest', color: 'text-harvest' },
   { key: 'hay-summary',        icon: Tractor,   label: 'Hay Summary', color: 'text-harvest' },
+  { key: 'landlord-statement', icon: FileText,  label: 'Landlord',    color: 'text-blue-600' },
 ];
 
 // ─── Pure helpers (module-level — not recreated on every render) ──────────────
@@ -143,7 +144,30 @@ export default function Reports() {
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
 
+  // Landlord specific logic
+  const [selectedLandlord, setSelectedLandlord] = useState<string>('');
+  const uniqueLandlords = useMemo(() => getUniqueLandlordNames(harvestRecords), [harvestRecords]);
+
+  const landlordStatement = useMemo(() => {
+    if (!selectedLandlord) return null;
+    return generateLandlordStatement(harvestRecords, selectedLandlord);
+  }, [harvestRecords, selectedLandlord]);
+
   const handlePrint = () => window.print();
+
+  const handleExportLandlordCSV = () => {
+    if (!landlordStatement) return;
+    safeExport(() => {
+      const csv = generateLandlordStatementCSV(landlordStatement);
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${selectedLandlord.replace(/\s+/g, '_')}_CropShare.csv`);
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000); // Wait 2s to ensure browser starts download
+    }, 'landlord statement');
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -445,6 +469,93 @@ export default function Reports() {
               </tr>
             )}
           </ReportTable>
+        )}
+
+        {/* ── Landlord Statement ──────────────────────────────────────────────── */}
+        {tab === 'landlord-statement' && (
+          <div className="space-y-4">
+            <div className="bg-card border border-border rounded-lg p-4 print:border-foreground/20">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 print:hidden">
+                <div>
+                  <h2 className="font-bold text-foreground text-base mb-1">Landlord Crop Share Statement</h2>
+                  <p className="text-xs font-mono text-muted-foreground">
+                    Per-landlord production summary. Generated {reportDate}.
+                  </p>
+                </div>
+                <Select value={selectedLandlord} onValueChange={setSelectedLandlord}>
+                  <SelectTrigger className="w-full sm:w-[200px] h-9 font-mono text-sm bg-background border-border">
+                    <SelectValue placeholder="Select Landlord" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {uniqueLandlords.map((name: string) => (
+                      <SelectItem key={name} value={name} className="font-mono text-xs">
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {!selectedLandlord ? (
+                <div className="py-12 text-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+                  <p className="text-muted-foreground font-mono text-sm">
+                    Select a landlord to generate their statement
+                  </p>
+                </div>
+              ) : landlordStatement ? (
+                <div className="space-y-6">
+                  <div className="flex gap-2 print:hidden">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[10px] font-mono border-blue-500/30 text-blue-600 hover:bg-blue-50"
+                      onClick={handleExportLandlordCSV}
+                    >
+                      <Download size={12} className="mr-1.5" />
+                      EXPORT CSV
+                    </Button>
+                  </div>
+
+                  <div className="overflow-x-auto border border-border rounded-lg">
+                    <table className="w-full border-collapse">
+                      <thead className="bg-muted/50 border-b border-border">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-mono text-[10px] text-muted-foreground uppercase">Field</th>
+                          <th className="px-4 py-3 text-left font-mono text-[10px] text-muted-foreground uppercase">Crop</th>
+                          <th className="px-4 py-3 text-left font-mono text-[10px] text-muted-foreground uppercase">Date</th>
+                          <th className="px-4 py-3 text-right font-mono text-[10px] text-muted-foreground uppercase">Total Bu.</th>
+                          <th className="px-4 py-3 text-right font-mono text-[10px] text-muted-foreground uppercase">Split %</th>
+                          <th className="px-4 py-3 text-right font-mono text-[10px] text-muted-foreground uppercase">Your Share</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {landlordStatement.rows.map((r: any, i: number) => (
+                          <tr key={i} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3 text-xs font-bold text-foreground">{r.fieldName}</td>
+                            <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{r.crop}</td>
+                            <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.harvestDate}</td>
+                            <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.totalBushels.toLocaleString()}</td>
+                            <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.landlordSplitPercent}%</td>
+                            <td className="px-4 py-3 font-mono text-[10px] text-blue-600 font-bold text-right">{r.landlordBushels.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-blue-500/5 border-t-2 border-primary">
+                        <tr>
+                          <td colSpan={5} className="px-4 py-4 font-mono text-sm font-bold text-muted-foreground uppercase">
+                            Total Landlord Share
+                          </td>
+                          <td className="px-4 py-4 font-mono text-base font-black text-blue-600 text-right">
+                            {landlordStatement.totalLandlordBushels.toLocaleString()} BU
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
         )}
       </main>
 

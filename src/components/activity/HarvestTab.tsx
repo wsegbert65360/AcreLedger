@@ -14,7 +14,9 @@ function buildSubtitle(r: HarvestRecord): string {
 }
 
 function buildDetails(r: HarvestRecord): string {
-  return `${r.moisturePercent}% MST · BIN ${r.binId ? 'ID:' + r.binId : 'N/A'}`;
+  const parts = [`${r.moisturePercent}% MST`, `BIN ${r.binId ? 'ID:' + r.binId : 'N/A'}`];
+  if (r.scaleTicketNumber) parts.push(`TKT: ${r.scaleTicketNumber}`);
+  return parts.join(' · ');
 }
 
 function buildDate(r: HarvestRecord): string {
