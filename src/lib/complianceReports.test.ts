@@ -14,7 +14,8 @@ describe('Compliance Reports', () => {
         acreage: 100,
         lat: 0,
         lng: 0,
-        farm_id: 'farm-1'
+        farm_id: 'farm-1',
+        deleted_at: null
     }];
 
     describe('CSV Sanitization', () => {

@@ -94,7 +94,7 @@ export default function Logistics() {
                     variant="outline"
                     size="sm"
                     className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
-                    onClick={() => setAddingBin({ id: bin.id, name: bin.name, capacity: bin.capacity })}
+                    onClick={() => setAddingBin({ id: bin.id, name: bin.name, capacity: bin.capacity, deleted_at: null })}
                   >
                     <Plus size={16} className="mr-2" />
                     Add Grain
@@ -104,7 +104,7 @@ export default function Logistics() {
                     size="sm"
                     disabled={bin.total <= 0}
                     className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
-                    onClick={() => setSellingBin({ id: bin.id, name: bin.name, capacity: bin.capacity })}
+                    onClick={() => setSellingBin({ id: bin.id, name: bin.name, capacity: bin.capacity, deleted_at: null })}
                   >
                     <Banknote size={16} className="mr-2" />
                     Sell from Bin

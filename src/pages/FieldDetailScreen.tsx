@@ -4,8 +4,10 @@ import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { 
   Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
-  Cloud, Loader2, Navigation, MapPin
+  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, AlertCircle
 } from 'lucide-react';
+import { RainService } from '@/services/RainService';
+import type { RainData } from '@/types/weather';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
@@ -37,7 +39,9 @@ export default function FieldDetailScreen() {
     humidity: number | null;
     isError?: boolean;
   } | null>(null);
+  const [rainData, setRainData] = useState<RainData | null>(null);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
 
   useEffect(() => {
@@ -69,6 +73,24 @@ export default function FieldDetailScreen() {
     return 'text-foreground';
   };
 
+  const handleFetchRain = async () => {
+    if (!field || fetchingRain) return;
+    
+    setFetchingRain(true);
+    try {
+      const data = await RainService.fetchRainfall({
+        lat: field.lat ?? undefined,
+        lon: field.lng ?? undefined,
+        polygon: field.boundary?.coordinates[0] as [number, number][]
+      });
+      setRainData(data);
+    } catch (err) {
+      console.error('[FieldDetail] Rain fetch error:', err);
+    } finally {
+      setFetchingRain(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-background pb-12">
@@ -97,7 +119,7 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* Primary Weather Indicators */}
-        <section className="flex justify-center">
+        <section className="flex flex-col items-center gap-4">
           {/* Current Wind Widget */}
           <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
             {status === 'loading' ? (
@@ -124,6 +146,68 @@ export default function FieldDetailScreen() {
                   </div>
                 </div>
               </>
+            )}
+          </div>
+
+          {/* Rainfall Widget */}
+          <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 flex flex-col space-y-4 shadow-xl">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                  <Droplets size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Rainfall</h3>
+                  <p className="text-[10px] font-mono text-muted-foreground uppercase">Stage IV Radar</p>
+                </div>
+              </div>
+              <button
+                onClick={handleFetchRain}
+                disabled={fetchingRain}
+                className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+                aria-label="Refresh rainfall data"
+              >
+                <RefreshCw size={18} className={`${fetchingRain ? 'animate-spin' : ''} text-muted-foreground`} />
+              </button>
+            </div>
+
+            {!rainData ? (
+              <div className="text-center py-4">
+                <button
+                  onClick={handleFetchRain}
+                  className="text-xs font-bold text-blue-500 hover:text-blue-600 uppercase tracking-widest"
+                >
+                  {fetchingRain ? 'Fetching...' : 'Click to Load Rainfall'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: '12H', value: rainData.rain['12h'] },
+                    { label: '24H', value: rainData.rain['24h'] },
+                    { label: '72H', value: rainData.rain['72h'] }
+                  ].map((period) => (
+                    <div key={period.label} className="text-center p-2 rounded-xl bg-muted/30 border border-border/50">
+                      <div className="text-[10px] font-bold text-muted-foreground mb-1">{period.label}</div>
+                      <div className="text-lg font-black text-foreground">{period.value}<span className="text-[10px] ml-0.5">"</span></div>
+                    </div>
+                  ))}
+                </div>
+                
+                {rainData.dataWarning && (
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
+                    <AlertCircle size={14} className="text-yellow-500 shrink-0 mt-0.5" />
+                    <p className="text-[9px] font-medium text-yellow-600/80 leading-tight italic">
+                      {rainData.dataWarning}
+                    </p>
+                  </div>
+                )}
+                
+                <div className="text-[8px] font-mono text-muted-foreground text-center uppercase tracking-tighter">
+                  End: {new Date(rainData.periodEndUtc).toLocaleString()}
+                </div>
+              </div>
             )}
           </div>
         </section>
