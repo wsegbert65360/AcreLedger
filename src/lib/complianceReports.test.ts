@@ -5,7 +5,7 @@ import {
     exportHarvestData, 
     exportFertilizerData 
 } from './complianceReports';
-import { PlantRecord, SprayRecord, HarvestRecord, FertilizerApplication, Field } from '../types/farm';
+import { PlantRecord, Field } from '../types/farm';
 
 describe('Compliance Reports', () => {
     const fields: Field[] = [{
@@ -19,13 +19,15 @@ describe('Compliance Reports', () => {
     }];
 
     describe('CSV Sanitization', () => {
-        // Internal test for sanitization would be good, but we test the exported functions
         it('exports without crashing', () => {
             const records: PlantRecord[] = [];
-            // We can't easily test 'downloadFile' in node/vitest without mocking
-            // but we can verify the logic runs.
-            // For now, these are placeholder tests ensuring the imports and types work.
             expect(exportFsa578Data).toBeDefined();
+        });
+
+        it('has all core export functions defined', () => {
+            expect(generateMissouriLog).toBeDefined();
+            expect(exportHarvestData).toBeDefined();
+            expect(exportFertilizerData).toBeDefined();
         });
     });
 });

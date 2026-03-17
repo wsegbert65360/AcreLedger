@@ -88,6 +88,8 @@ export interface HarvestRecord {
   fsaFarmNumber?: string;
   fsaTractNumber?: string;
   harvestDate?: string;
+  landlordName?: string;
+  scaleTicketNumber?: string;
   farm_id?: string;
   deleted_at: string | null;
 }

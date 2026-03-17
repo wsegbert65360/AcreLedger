@@ -91,6 +91,8 @@ export interface HarvestRecordRow {
     season_year: number;
     timestamp: string;
     crop: string;
+    landlord_name?: string | null;
+    scale_ticket_number?: string | null;
     deleted_at?: string | null;
 }
 

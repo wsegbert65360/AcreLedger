@@ -23,6 +23,8 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
   const [landlordSplit, setLandlordSplit] = useState(initialData?.landlordSplitPercent?.toString() || '');
   const [bushels, setBushels] = useState(initialData?.bushels?.toString() || '');
   const [crop, setCrop] = useState(initialData?.crop || '');
+  const [landlordName, setLandlordName] = useState(initialData?.landlordName || '');
+  const [scaleTicketNumber, setScaleTicketNumber] = useState(initialData?.scaleTicketNumber || '');
   const [harvestDate, setHarvestDate] = useState(initialData?.harvestDate || new Date().toISOString().split('T')[0]);
 
   const reset = () => {
@@ -33,6 +35,8 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
       setLandlordSplit('');
       setBushels('');
       setCrop('');
+      setLandlordName('');
+      setScaleTicketNumber('');
     }
   };
 
@@ -52,6 +56,8 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
       landlordSplitPercent: ls,
       bushels: bu,
       crop: crop.trim() || undefined,
+      landlordName: landlordName.trim() || undefined,
+      scaleTicketNumber: scaleTicketNumber.trim() || undefined,
       harvestDate: harvestDate || undefined,
     };
 
@@ -166,6 +172,29 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
                 value={crop}
                 onChange={e => setCrop(e.target.value)}
                 placeholder="e.g. Corn, Soybeans"
+                className="mt-1 bg-muted border-border text-foreground"
+              />
+            </div>
+            <div>
+              <Label htmlFor="landlordName" className="text-muted-foreground font-mono text-xs">LANDLORD NAME</Label>
+              <Input
+                id="landlordName"
+                name="landlordName"
+                value={landlordName}
+                onChange={e => setLandlordName(e.target.value)}
+                placeholder="Optional"
+                className="mt-1 bg-muted border-border text-foreground"
+              />
+            </div>
+            <div>
+              <Label htmlFor="scaleTicketNumber" className="text-muted-foreground font-mono text-xs">SCALE TICKET #</Label>
+              <Input
+                id="scaleTicketNumber"
+                name="scaleTicketNumber"
+                value={scaleTicketNumber}
+                onChange={e => setScaleTicketNumber(e.target.value)}
+                placeholder="Optional — e.g. TKT-00482"
+                autoCapitalize="characters"
                 className="mt-1 bg-muted border-border text-foreground"
               />
             </div>
