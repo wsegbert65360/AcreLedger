@@ -40,6 +40,7 @@ export default function FieldDetailScreen() {
     isError?: boolean;
   } | null>(null);
   const [rainData, setRainData] = useState<RainData | null>(null);
+  const [rainError, setRainError] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
@@ -77,15 +78,31 @@ export default function FieldDetailScreen() {
     if (!field || fetchingRain) return;
     
     setFetchingRain(true);
+    setRainError(null);
     try {
+      const lat = field.lat;
+      const lng = field.lng;
+
+      if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+        setRainError('Location not available. Please wait and try again.');
+        return;
+      }
+
       const data = await RainService.fetchRainfall({
-        lat: field.lat ?? undefined,
-        lon: field.lng ?? undefined,
+        lat: lat,
+        lon: lng,
         polygon: field.boundary?.coordinates[0] as [number, number][]
       });
       setRainData(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[FieldDetail] Rain fetch error:', err);
+      if (err.message.includes('404')) {
+        setRainError('This location is outside supported coverage (US only).');
+      } else if (err.message.includes('502')) {
+        setRainError('Weather data temporarily unavailable. Please try again in a minute.');
+      } else {
+        setRainError('Could not load rainfall data. Please try again.');
+      }
     } finally {
       setFetchingRain(false);
     }
@@ -163,8 +180,8 @@ export default function FieldDetailScreen() {
               </div>
               <button
                 onClick={handleFetchRain}
-                disabled={fetchingRain}
-                className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+                disabled={fetchingRain || field.lat == null || field.lng == null || isNaN(field.lat) || isNaN(field.lng)}
+                className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
                 aria-label="Refresh rainfall data"
               >
                 <RefreshCw size={18} className={`${fetchingRain ? 'animate-spin' : ''} text-muted-foreground`} />
@@ -203,10 +220,28 @@ export default function FieldDetailScreen() {
                     </p>
                   </div>
                 )}
+
+                {rainError && (
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-destructive/5 border border-destructive/10">
+                    <AlertCircle size={14} className="text-destructive shrink-0 mt-0.5" />
+                    <p className="text-[9px] font-medium text-destructive leading-tight italic">
+                      {rainError}
+                    </p>
+                  </div>
+                )}
                 
                 <div className="text-[8px] font-mono text-muted-foreground text-center uppercase tracking-tighter">
                   End: {new Date(rainData.periodEndUtc).toLocaleString()}
                 </div>
+              </div>
+            )}
+
+            {rainError && !rainData && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-destructive/5 border border-destructive/10">
+                <AlertCircle size={16} className="text-destructive shrink-0 mt-0.5" />
+                <p className="text-[11px] font-medium text-destructive leading-normal italic">
+                  {rainError}
+                </p>
               </div>
             )}
           </div>

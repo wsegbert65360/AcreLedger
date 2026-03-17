@@ -19,6 +19,7 @@ export const RainService = {
     let res: Response;
 
     if (polygon && polygon.length > 0) {
+      console.log('[RainAPI] Calling Polygon URL:', `${RAIN_API_BASE_URL}/rain`);
       // POST polygon query
       res = await fetch(`${RAIN_API_BASE_URL}/rain`, {
         method: 'POST',
@@ -27,14 +28,24 @@ export const RainService = {
         signal
       });
     } else if (lat != null && lon != null) {
-      // GET point query
+      if (isNaN(lat) || isNaN(lon)) {
+        console.error('[RainAPI] Blocked — lat/lon are NaN:', { lat, lon });
+        throw new Error('Invalid coordinates: lat/lon are NaN');
+      }
+
       const params = new URLSearchParams({ 
         lat: String(lat), 
         lon: String(lon), 
         tz 
       });
-      res = await fetch(`${RAIN_API_BASE_URL}/rain?${params}`, { signal });
+      const url = `${RAIN_API_BASE_URL}/rain?${params}`;
+      console.log('[RainAPI] Calling Point URL:', url);
+      console.log('[RainAPI] lat:', lat, 'lon:', lon);
+
+      // GET point query
+      res = await fetch(url, { signal });
     } else {
+      console.error('[RainAPI] Blocked — lat/lon missing:', { lat, lon });
       throw new Error('Missing location data for rainfall query');
     }
 

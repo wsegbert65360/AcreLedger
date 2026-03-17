@@ -34,7 +34,8 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Icons | Lucide React | All iconography — no other icon lib |
 | Toasts | Sonner | User feedback — success / error / warning / info |
 | Validation | Zod (`@/lib/backupSchema`) | Backup file schema validation on restore |
-| Weather | Visual Crossing API | Current conditions + 24h/72h precipitation |
+| Weather | Visual Crossing API | Current wind/temp conditions |
+| Rainfall | Rain API (Stage IV Radar) | 12h, 24h, 72h radar-derived precipitation |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
 | Reports | `@/lib/complianceReports` | CSV export generators (FSA, spray log, etc.) |
@@ -128,6 +129,19 @@ Saved tank-mix recipe for reuse on spray records. Not season-scoped.
 { id, farm_id, name, products: { product, epaRegNumber, rate, rateUnit }[],
   deleted_at }
 ```
+
+### RainData
+Radar-derived precipitation totals from the Stage IV dataset.
+```ts
+{ 
+  periodEndUtc, units, 
+  rain: { '12h', '24h', '72h' },
+  rainMm: { '12h', '24h', '72h' },
+  location: { type, lat?, lon?, centroidLat?, centroidLon? },
+  dataWarning? 
+}
+```
+Used on-demand in `FieldDetailScreen`. Not persisted in Supabase.
 
 ---
 
@@ -471,6 +485,12 @@ Show in BackupManager UI. Amber warning if > 7 days old or never taken.
 | Operation committed successfully | `toast.success('...')` |
 | Informational, no action needed | `toast.info('...')` |
 | SW update available (user must act) | `toast('Title', { description, action: { label, onClick } })` |
+
+### Rain API Error States
+- **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by UI guards.
+- **API 404**: Location outside supported coverage (CONUS only). Friendly app message required.
+- **API 502**: IEM service unreachable. Friendly app message required.
+- **NaN / Missing Coords**: Blocked by `RainService` and UI level; button disabled.
 
 ### Sentry Placeholder Pattern
 ```ts
