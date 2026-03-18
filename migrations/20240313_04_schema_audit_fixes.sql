@@ -135,7 +135,7 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public, extensions;
 
 -- Attach trigger to field_rainfall_hourly (safe to re-run)
 DO $$

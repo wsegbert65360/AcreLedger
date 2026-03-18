@@ -144,6 +144,8 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
         'Moisture %',
         'Destination',
         'Landlord Share %',
+        'Landlord Name',
+        'Scale Ticket #',
         'Farm #',
         'Tract #'
     ].join(',');
@@ -156,8 +158,10 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
             `"${sanitizeCsvValue(r.crop)}"`,
             sanitizeCsvValue(r.bushels),
             sanitizeCsvValue(r.moisturePercent),
-            sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale'),
+            `"${sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale')}"`,
             sanitizeCsvValue(r.landlordSplitPercent),
+            `"${sanitizeCsvValue(r.landlordName)}"`,
+            `"${sanitizeCsvValue(r.scaleTicketNumber)}"`,
             sanitizeCsvValue(field?.fsaFarmNumber),
             sanitizeCsvValue(field?.fsaTractNumber)
         ].join(',');
@@ -197,6 +201,8 @@ function downloadFile(content: string, fileName: string, contentType: string) {
     const link = document.createElement('a');
     link.setAttribute('href', url);
     link.setAttribute('download', fileName);
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

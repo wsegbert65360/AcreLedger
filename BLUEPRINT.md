@@ -90,7 +90,7 @@ Grain harvest event.
 ```ts
 { id, farm_id, fieldId, fieldName, crop, bushels, moisturePercent, harvestDate,
   timestamp, seasonYear, destination: 'bin' | 'town', landlordSplitPercent,
-  landlordName, deleted_at }
+  landlordName, scaleTicketNumber, deleted_at }
 ```
 
 ### HayHarvestRecord
