@@ -40,7 +40,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const m = parseFloat(moisture);
     const ls = parseFloat(landlordSplit);
     const bu = parseFloat(bushels);
@@ -61,8 +61,10 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
       harvestDate: harvestDate || undefined,
     };
 
+    let success = false;
     if (initialData) {
-      updateHarvestRecord({ ...initialData, ...harvestData });
+      success = await updateHarvestRecord({ ...initialData, ...harvestData });
+      if (!success) return;
 
       // Sync linked grain movement
       if (initialData.destination === 'bin') {
@@ -73,7 +75,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
         );
         if (movement) {
           const bin = bins.find(b => b.id === binId);
-          updateGrainMovement({
+          await updateGrainMovement({
             ...movement,
             binId: binId,
             binName: bin?.name || 'Unknown',
@@ -83,7 +85,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
         }
       } else if (destination === 'bin') {
         const bin = bins.find(b => b.id === binId);
-        addGrainMovement({
+        await addGrainMovement({
           binId,
           binName: bin?.name || 'Unknown',
           type: 'in',
@@ -94,10 +96,12 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
         });
       }
     } else {
-      addHarvestRecord(harvestData);
+      success = await addHarvestRecord(harvestData);
+      if (!success) return;
+
       if (destination === 'bin') {
         const bin = bins.find(b => b.id === binId);
-        addGrainMovement({
+        await addGrainMovement({
           binId,
           binName: bin?.name || 'Unknown',
           type: 'in',

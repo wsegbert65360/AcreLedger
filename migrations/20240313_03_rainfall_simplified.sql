@@ -76,7 +76,7 @@ BEGIN
 
     RETURN v_result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 
 -- ============================================================
@@ -89,7 +89,7 @@ BEGIN
     DELETE FROM field_rainfall_hourly
     WHERE timestamp_utc < NOW() - INTERVAL '7 days';
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 
 -- ============================================================

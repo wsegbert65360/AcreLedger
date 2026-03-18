@@ -20,7 +20,7 @@ BEGIN
         rainfall_in = EXCLUDED.rainfall_in,
         last_updated_at = NOW(); -- FIXED: was updated_at
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- 2. Aggressively drop all previous variants of get_field_rainfall_stats
 DROP FUNCTION IF EXISTS get_field_rainfall_stats(UUID, INTEGER);
@@ -56,7 +56,7 @@ BEGIN
 
     RETURN v_result;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- 4. RLS Policies (Safety Layer)
 ALTER TABLE field_rainfall_hourly ENABLE ROW LEVEL SECURITY;

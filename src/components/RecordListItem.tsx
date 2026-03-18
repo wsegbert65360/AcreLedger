@@ -1,4 +1,4 @@
-import { Check, Edit2, Tractor, CloudRain, Wheat, Beaker, FileText } from 'lucide-react';
+import { Check, Edit2, Tractor, CloudRain, Wheat, Beaker, FileText, AlertTriangle } from 'lucide-react';
 
 interface RecordListItemProps {
   id: string;
@@ -10,10 +10,11 @@ interface RecordListItemProps {
   onToggle: (id: string, shift: boolean) => void;
   onEdit: () => void;
   type: 'plant' | 'spray' | 'harvest' | 'grain' | 'hay' | 'fertilizer';
+  warning?: boolean;
 }
 
 export default function RecordListItem({
-  id, title, subtitle, details, date, isSelected, onToggle, onEdit, type
+  id, title, subtitle, details, date, isSelected, onToggle, onEdit, type, warning
 }: RecordListItemProps) {
   const Icon = type === 'plant' ? Tractor
     : type === 'spray' ? CloudRain
@@ -53,7 +54,10 @@ export default function RecordListItem({
             <h3 className="font-bold text-sm text-foreground truncate">{title}</h3>
             <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">{date}</span>
           </div>
-          <p className="text-[11px] font-medium text-muted-foreground truncate uppercase tracking-tight">{subtitle}</p>
+          <div className="flex items-center gap-1.5 overflow-hidden">
+            {warning && <AlertTriangle size={12} className="text-amber-500 shrink-0" />}
+            <p className="text-[11px] font-medium text-muted-foreground truncate uppercase tracking-tight">{subtitle}</p>
+          </div>
           <p className="text-[10px] font-mono text-muted-foreground/70 mt-1 line-clamp-1">{details}</p>
         </div>
         <div className="flex flex-col gap-2 items-center justify-center ml-2">

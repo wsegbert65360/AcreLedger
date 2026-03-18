@@ -40,6 +40,7 @@ export default function GrainTab({ records, selected, onToggle, onEdit }: GrainT
           isSelected={selected.has(m.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(m)}
+          warning={m.bushels < 0}
         />
       ))}
     </div>

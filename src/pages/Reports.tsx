@@ -390,7 +390,7 @@ export default function Reports() {
           <ReportTable
             title="FSA Harvest Report"
             subtitle={`Grain production report for FSA certification. Generated ${reportDate}.`}
-            headers={['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'FARM #', 'TRACT #']}
+            headers={['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'LL NAME', 'TICKET #', 'FARM #', 'TRACT #']}
             onExport={() => safeExport(() => exportHarvestData(harvestRecords, fields), 'harvest data')}
             exportLabel="Export CSV"
             summary={(
@@ -411,6 +411,8 @@ export default function Reports() {
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.moisturePercent}%</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.destination === 'bin' ? 'Bin' : 'Town'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.landlordSplitPercent}%</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{r.landlordName || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{r.scaleTicketNumber || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaFarmNumber  || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaTractNumber || '—'}</td>
                 </tr>

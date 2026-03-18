@@ -43,7 +43,7 @@ BEGIN
     AND r.timestamp_utc::date BETWEEN p_start_date AND p_end_date
     AND r.finalized = true;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 
 -- Grant execute to authenticated users (for your frontend)
 GRANT EXECUTE ON FUNCTION public.get_rainfall_stats(uuid, date, date) TO authenticated;
@@ -82,7 +82,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public, extensions;
 
 DROP TRIGGER IF EXISTS trg_update_rainfall_coverage ON public.field_rainfall_hourly;
 CREATE TRIGGER trg_update_rainfall_coverage
