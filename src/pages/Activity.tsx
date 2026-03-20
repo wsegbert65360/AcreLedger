@@ -4,7 +4,7 @@ import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout } from 'lucide-react';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
-import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, GrainMovement } from '@/types/farm';
+import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, GrainMovement, ActivityRecord } from '@/types/farm';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
@@ -33,10 +33,12 @@ import HarvestTab from '@/components/activity/HarvestTab';
 import HayTab from '@/components/activity/HayTab';
 import FertilizerTab from '@/components/activity/FertilizerTab';
 import GrainTab from '@/components/activity/GrainTab';
+import HistoryFeed from '@/components/activity/HistoryFeed';
 
-type Tab = 'plant' | 'spray' | 'fertilizer' | 'harvest' | 'hay' | 'grain';
+type Tab = 'all' | 'plant' | 'spray' | 'fertilizer' | 'harvest' | 'hay' | 'grain';
 
 const TABS: { key: Tab; icon: React.ElementType; label: string; color: string }[] = [
+  { key: 'all', icon: ClipboardList, label: 'All', color: 'text-foreground' },
   { key: 'plant', icon: Leaf, label: 'Planting', color: 'text-plant' },
   { key: 'spray', icon: CloudRain, label: 'Spraying', color: 'text-spray' },
   { key: 'fertilizer', icon: Sprout, label: 'Fertilizer', color: 'text-lime-600 dark:text-lime-400' },
@@ -69,7 +71,7 @@ export default function Activity() {
   } = useFarm();
 
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<Tab>('plant');
+  const [tab, setTab] = useState<Tab>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
@@ -140,6 +142,18 @@ export default function Activity() {
     [fertilizerApplications, search, viewingSeason]
   );
 
+  const unifiedRecords = useMemo(() => {
+    const all: (ActivityRecord & { timestamp: number })[] = [
+      ...filteredPlant.map(r => ({ type: 'plant' as const, data: r, timestamp: r.timestamp })),
+      ...filteredSpray.map(r => ({ type: 'spray' as const, data: r, timestamp: r.timestamp })),
+      ...filteredHarvest.map(r => ({ type: 'harvest' as const, data: r, timestamp: r.timestamp })),
+      ...filteredHay.map(r => ({ type: 'hay' as const, data: r, timestamp: r.timestamp })),
+      ...filteredFertilizer.map(r => ({ type: 'fertilizer' as const, data: r, timestamp: new Date(r.date).getTime() })),
+      ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
+    ];
+    return all.sort((a, b) => b.timestamp - a.timestamp);
+  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredGrain]);
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
@@ -207,24 +221,36 @@ export default function Activity() {
         {/* Tabs */}
         <div className="flex gap-1 bg-card border border-border rounded-lg p-1 overflow-x-auto no-scrollbar">
           {TABS.map(t => {
-            const count = t.key === 'plant' ? filteredPlant.length
+            const count = t.key === 'all' ? unifiedRecords.length
+              : t.key === 'plant' ? filteredPlant.length
               : t.key === 'spray' ? filteredSpray.length
               : t.key === 'harvest' ? filteredHarvest.length
               : t.key === 'grain' ? filteredGrain.length
               : t.key === 'hay' ? filteredHay.length
               : filteredFertilizer.length;
 
+            const isActive = tab === t.key;
+
             return (
               <button
                 key={t.key}
-                onClick={() => { setTab(t.key); setSelected(new Set()); }}
-                className={`flex-1 min-w-[80px] touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-[10px] font-semibold transition-all ${tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
+                onClick={() => {
+                  if (isActive) setTab('all');
+                  else setTab(t.key);
+                  setSelected(new Set());
+                }}
+                className={`flex-1 min-w-[80px] touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-[10px] font-bold transition-all ${isActive
+                  ? 'bg-primary text-primary-foreground shadow-sm ring-1 ring-primary'
+                  : 'text-muted-foreground hover:bg-muted/50'
                   }`}
               >
                 <t.icon size={14} />
                 <span className="flex items-center gap-1">
                   {t.label.toUpperCase()}
-                  <span className={`px-1.5 py-0.5 rounded-full text-[8px] bg-background/50 border border-border/20 ${tab === t.key ? t.color : 'text-muted-foreground'}`}>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[8px] border transition-colors ${isActive
+                    ? 'bg-primary-foreground/20 border-primary-foreground/30 text-primary-foreground'
+                    : `bg-background/50 border-border/20 ${t.color}`
+                    }`}>
                     {count}
                   </span>
                 </span>
@@ -260,6 +286,7 @@ export default function Activity() {
 
         {/* Records */}
         <div className="space-y-2">
+          {tab === 'all' && <HistoryFeed records={unifiedRecords} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
           {tab === 'plant' && <PlantTab records={filteredPlant} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
           {tab === 'spray' && <SprayTab records={filteredSpray} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
           {tab === 'harvest' && <HarvestTab records={filteredHarvest} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}

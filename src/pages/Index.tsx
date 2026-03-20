@@ -44,7 +44,23 @@ const Index = () => {
   }, [allFields]);
 
   const [managing, setManaging] = useState(false);
-  const activeFieldsList = useMemo(() => [...rowCrops, ...pastureHay], [rowCrops, pastureHay]);
+  const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
+
+  const { filteredRowCrops, filteredPastureHay } = useMemo(() => {
+    if (selectedCrops.length === 0) {
+      return { filteredRowCrops: rowCrops, filteredPastureHay: pastureHay };
+    }
+    return {
+      filteredRowCrops: rowCrops.filter(f => selectedCrops.includes(f.intendedUse?.trim() || 'Unassigned')),
+      filteredPastureHay: pastureHay.filter(f => selectedCrops.includes(f.intendedUse?.trim() || 'Unassigned'))
+    };
+  }, [rowCrops, pastureHay, selectedCrops]);
+
+  const toggleCrop = (crop: string) => {
+    setSelectedCrops(prev =>
+      prev.includes(crop) ? prev.filter(c => c !== crop) : [...prev, crop]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -73,12 +89,12 @@ const Index = () => {
           <FieldManager />
         ) : (
           <>
-            {rowCrops.length > 0 && (
+            {filteredRowCrops.length > 0 && (
               <div className="space-y-3">
-                {pastureHay.length > 0 && (
+                {filteredPastureHay.length > 0 && (
                   <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
                 )}
-                {rowCrops.map(field => (
+                {filteredRowCrops.map(field => (
                   <FieldCard
                     key={field.id}
                     field={field}
@@ -87,10 +103,10 @@ const Index = () => {
               </div>
             )}
 
-            {pastureHay.length > 0 && (
+            {filteredPastureHay.length > 0 && (
               <div className="space-y-3 pt-2">
                 <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
-                {pastureHay.map(field => (
+                {filteredPastureHay.map(field => (
                   <FieldCard
                     key={field.id}
                     field={field}
@@ -98,7 +114,7 @@ const Index = () => {
                 ))}
               </div>
             )}
-            {rowCrops.length === 0 && pastureHay.length === 0 && (
+            {filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
                 <Tractor size={48} className="mx-auto text-muted-foreground/30 mb-4" />
                 <h3 className="text-lg font-mono font-bold text-foreground mb-1 italic">No Fields Detected</h3>
@@ -114,12 +130,23 @@ const Index = () => {
                   <div className="text-sm font-black text-foreground tracking-tight uppercase">
                     Total Operation: {totalAcres} Acres
                   </div>
-                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] font-bold text-muted-foreground uppercase font-mono">
-                    {cropTotals.map(([crop, acres], idx) => (
-                      <span key={crop}>
-                        {crop}: {acres} ac{idx < cropTotals.length - 1 ? ' |' : ''}
-                      </span>
-                    ))}
+                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase font-mono">
+                    {cropTotals.map(([crop, acres], idx) => {
+                      const isActive = selectedCrops.includes(crop);
+                      return (
+                        <button
+                          key={crop}
+                          onClick={() => toggleCrop(crop)}
+                          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all active:scale-95 ${isActive
+                            ? 'bg-primary border-primary text-primary-foreground shadow-sm ring-1 ring-primary'
+                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
+                            }`}
+                        >
+                          <span>{crop}: {acres} AC</span>
+                          {idx < cropTotals.length - 1 && !isActive && <span className="text-border/40 ml-1">|</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
