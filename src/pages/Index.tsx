@@ -65,7 +65,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border print:hidden pb-0">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Logo />
             <div className="flex flex-col">
@@ -90,7 +90,7 @@ const Index = () => {
         ) : (
           <>
             {filteredRowCrops.length > 0 && (
-              <div className="space-y-3">
+              <div className="space-y-1">
                 {filteredPastureHay.length > 0 && (
                   <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
                 )}
@@ -104,7 +104,7 @@ const Index = () => {
             )}
 
             {filteredPastureHay.length > 0 && (
-              <div className="space-y-3 pt-2">
+              <div className="space-y-1 pt-1">
                 <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
                 {filteredPastureHay.map(field => (
                   <FieldCard
@@ -125,21 +125,21 @@ const Index = () => {
             )}
             
             {allFields.length > 0 && (
-              <div className="bg-card/80 backdrop-blur-md sticky bottom-[72px] mt-8 border border-border p-4 rounded-xl shadow-xl z-30">
-                <div className="flex flex-col items-center justify-center space-y-2">
-                  <div className="text-sm font-black text-foreground tracking-tight uppercase">
+              <div className="bg-background/60 backdrop-blur-xl sticky bottom-[72px] mt-8 border-t border-border/50 px-4 py-2 pb-3 z-30">
+                <div className="flex flex-col items-center justify-center space-y-1.5">
+                  <div className="text-[10px] font-bold text-muted-foreground tracking-widest uppercase">
                     Total Operation: {totalAcres} Acres
                   </div>
-                  <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold uppercase tracking-widest">
+                  <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
                     {cropTotals.map(([crop, acres]) => {
                       const isActive = selectedCrops.includes(crop);
                       return (
                         <button
                           key={crop}
                           onClick={() => toggleCrop(crop)}
-                          className={`flex items-center justify-center h-[48px] px-4 rounded-xl border transition-all active:scale-95 ${isActive
+                          className={`flex-none flex items-center justify-center h-10 px-3 rounded-xl border transition-all active:scale-95 text-xs font-bold uppercase tracking-widest ${isActive
                             ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
-                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50 font-bold'
+                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
                             }`}
                         >
                           {crop}: {acres} AC

@@ -101,72 +101,51 @@ export default function WeatherBar() {
     weather.precip24h > 0;
 
   return (
-    <div className="bg-card border border-border rounded-lg p-3 space-y-2">
-      <form onSubmit={handleSubmit} className="flex items-center gap-2">
-        <MapPin size={16} className="text-muted-foreground shrink-0" />
-        <input
-          id="weatherZip"
-          name="weatherZip"
-          value={inputZip}
-          onChange={e => { setInputZip(e.target.value); setZipError(''); }}
-          placeholder="Enter zip code..."
-          className="flex-1 bg-muted border border-border rounded-md px-3 py-1.5 text-foreground font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          maxLength={10}
-          inputMode="numeric"
-          aria-label="Zip code"
-        />
-        <button
-          type="submit"
-          className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary rounded-md font-mono text-xs font-bold hover:bg-primary/20 transition-colors"
-        >
-          Set
-        </button>
-        {loading && <Loader2 size={16} className="text-primary animate-spin shrink-0" aria-label="Loading weather" />}
-      </form>
-
-      {zipError && (
-        <p className="text-xs font-mono text-destructive px-1">{zipError}</p>
-      )}
-
-      {zip && (
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-mono text-muted-foreground">
+    <div className="bg-card border border-border rounded-lg p-1.5 px-3 flex items-center justify-between gap-3 min-h-[44px]">
+      <div className="flex items-center gap-2 flex-1">
+        <MapPin size={14} className="text-muted-foreground shrink-0" />
+        <form onSubmit={handleSubmit} className="flex-1 contents">
+          <input
+            id="weatherZip"
+            name="weatherZip"
+            value={inputZip}
+            onChange={e => { setInputZip(e.target.value); setZipError(''); }}
+            placeholder="Zip..."
+            className="w-16 bg-muted/50 border border-border rounded px-1.5 py-0.5 text-foreground font-mono text-[10px] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            maxLength={5}
+            inputMode="numeric"
+          />
+        </form>
+        {zip && !zipError && (
+          <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[80px]">
             {locationName || zip}
-            {loading && <span className="ml-1 opacity-50">(updating…)</span>}
           </span>
-          {weather.isError ? (
-            <span className="text-xs font-mono text-destructive">Weather unavailable</span>
-          ) : (
-            <div className="flex items-center gap-4 text-foreground font-mono text-sm">
-              <span className="flex items-center gap-1">
-                <Wind size={14} className="text-spray" />
-                {weather.wind} mph {weather.windDirection}
-              </span>
-              <span className="flex items-center gap-1">
-                <Thermometer size={14} className="text-destructive" />
-                {weather.temp}°F
-              </span>
-              <span className="flex items-center gap-1">
-                <Droplets size={14} className="text-spray" />
-                {weather.humidity}%
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
-      {hasPrecip && (
-        <div className="flex items-center justify-center mt-2 pt-2 border-t border-border/50 text-xs font-mono font-bold text-spray">
-          24h Rain: {weather.precip24h}in
-          {weather.precip72h != null && <> | 72h Rain: {weather.precip72h}in</>}
-        </div>
-      )}
-
-      {!zip && (
-        <p className="text-xs font-mono text-muted-foreground text-center">
-          Enter a zip code for live weather
-        </p>
-      )}
+      <div className="flex items-center gap-3 text-foreground font-mono text-[11px] shrink-0">
+        {weather.isError ? (
+          <span className="text-destructive">Offline</span>
+        ) : (
+          <>
+            <span className="flex items-center gap-1">
+              <Thermometer size={12} className="text-destructive" />
+              {weather.temp}°
+            </span>
+            <span className="flex items-center gap-1 hidden xs:flex">
+              <Wind size={12} className="text-spray" />
+              {weather.wind}m
+            </span>
+            {hasPrecip && (
+              <span className="flex items-center gap-1 text-spray font-bold">
+                <Droplets size={12} />
+                {weather.precip24h}"
+              </span>
+            )}
+          </>
+        )}
+        {loading && <Loader2 size={12} className="text-primary animate-spin" />}
+      </div>
     </div>
   );
-}
+}
