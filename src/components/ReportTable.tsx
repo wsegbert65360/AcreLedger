@@ -7,12 +7,13 @@ interface ReportTableProps {
   headers: string[];
   children: ReactNode;
   onExport?: () => void;
+  onExportPdf?: () => void;
   exportLabel?: string;
   summary?: ReactNode;
 }
 
 export default function ReportTable({
-  title, subtitle, headers, children, onExport, exportLabel = "Export", summary
+  title, subtitle, headers, children, onExport, onExportPdf, exportLabel = "Export", summary
 }: ReportTableProps) {
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
@@ -21,15 +22,26 @@ export default function ReportTable({
           <h2 className="text-sm font-bold text-foreground font-mono uppercase tracking-wider">{title}</h2>
           <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{subtitle}</p>
         </div>
-        {onExport && (
-          <button
-            onClick={onExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-[10px] font-mono font-bold hover:bg-muted transition-colors print:hidden"
-          >
-            <FileDown size={14} />
-            {exportLabel.toUpperCase()}
-          </button>
-        )}
+        <div className="flex gap-2 print:hidden">
+          {onExport && (
+            <button
+              onClick={onExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-[10px] font-mono font-bold hover:bg-muted transition-colors"
+            >
+              <FileDown size={14} className="text-muted-foreground" />
+              {exportLabel.toUpperCase()}
+            </button>
+          )}
+          {onExportPdf && (
+            <button
+              onClick={onExportPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-[10px] font-mono font-bold hover:bg-muted transition-colors text-primary"
+            >
+              <FileDown size={14} />
+              PDF
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">

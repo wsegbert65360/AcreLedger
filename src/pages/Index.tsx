@@ -130,20 +130,19 @@ const Index = () => {
                   <div className="text-sm font-black text-foreground tracking-tight uppercase">
                     Total Operation: {totalAcres} Acres
                   </div>
-                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase font-mono">
-                    {cropTotals.map(([crop, acres], idx) => {
+                  <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold uppercase tracking-widest">
+                    {cropTotals.map(([crop, acres]) => {
                       const isActive = selectedCrops.includes(crop);
                       return (
                         <button
                           key={crop}
                           onClick={() => toggleCrop(crop)}
-                          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all active:scale-95 ${isActive
-                            ? 'bg-primary border-primary text-primary-foreground shadow-sm ring-1 ring-primary'
-                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
+                          className={`flex items-center justify-center h-[48px] px-4 rounded-xl border transition-all active:scale-95 ${isActive
+                            ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
+                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50 font-bold'
                             }`}
                         >
-                          <span>{crop}: {acres} AC</span>
-                          {idx < cropTotals.length - 1 && !isActive && <span className="text-border/40 ml-1">|</span>}
+                          {crop}: {acres} AC
                         </button>
                       );
                     })}

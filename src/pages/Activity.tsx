@@ -219,7 +219,7 @@ export default function Activity() {
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
         {/* Tabs */}
-        <div className="flex gap-1 bg-card border border-border rounded-lg p-1 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-4 border-y border-border bg-card/50">
           {TABS.map(t => {
             const count = t.key === 'all' ? unifiedRecords.length
               : t.key === 'plant' ? filteredPlant.length
@@ -239,18 +239,15 @@ export default function Activity() {
                   else setTab(t.key);
                   setSelected(new Set());
                 }}
-                className={`flex-1 min-w-[80px] touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-[10px] font-bold transition-all ${isActive
-                  ? 'bg-primary text-primary-foreground shadow-sm ring-1 ring-primary'
-                  : 'text-muted-foreground hover:bg-muted/50'
+                className={`flex-shrink-0 h-[48px] flex items-center justify-center gap-2 px-4 rounded-xl transition-all text-xs uppercase tracking-widest ${isActive
+                  ? 'ring-2 ring-primary bg-primary/10 text-primary font-black shadow-sm'
+                  : 'text-muted-foreground font-bold hover:bg-muted/50'
                   }`}
               >
-                <t.icon size={14} />
-                <span className="flex items-center gap-1">
-                  {t.label.toUpperCase()}
-                  <span className={`px-1.5 py-0.5 rounded-full text-[8px] border transition-colors ${isActive
-                    ? 'bg-primary-foreground/20 border-primary-foreground/30 text-primary-foreground'
-                    : `bg-background/50 border-border/20 ${t.color}`
-                    }`}>
+                <t.icon size={16} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
+                <span className="flex items-center gap-2">
+                  {t.label}
+                  <span className="bg-muted px-2 py-0.5 rounded-full text-[10px] font-bold text-muted-foreground">
                     {count}
                   </span>
                 </span>
