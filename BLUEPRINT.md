@@ -38,7 +38,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Rainfall | Rain API (Stage IV Radar) | 12h, 24h, 72h radar-derived precipitation |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
-| Reports | `@/lib/complianceReports` | CSV export generators (FSA, spray log, etc.) |
+| Reports | `@/lib/complianceReports` | CSV & PDF export generators (FSA, spray log, etc.) |
 
 ---
 
@@ -272,7 +272,7 @@ function safeExport(fn: () => void, label: string): void {
 Standardized wrapper for all compliance report tabs. Props: `title`, `subtitle`, `headers[]`,
 `onExport`, `exportLabel`, `summary` (ReactNode), `children` (`<tr>` rows).
 All six report tabs use it for layout or data processing: FSA Plant, Spray Audit, Fertilizer, 
-FSA Harvest, Hay Summary, Landlord Statement.
+FSA Harvest, Hay Summary, Landlord Statement. Supports both CSV and PDF direct exports.
 
 ### Null Safety in Display Strings
 Always guard optional numeric/string fields before interpolation:
@@ -502,6 +502,7 @@ console.error('Descriptive context label:', err);
 ### No Silent Failures
 - Destructive operations (delete, rollover, cache clear) always show explicit feedback.
 - Export functions always wrapped in `safeExport` — never bare in `onExport` props.
+- PDF generation uses `jspdf` and `jspdf-autotable` for consistent tabular output.
 - Blocked operations (`farm_id` null, empty data) always return `false` and show a toast.
 - User-visible error messages never say "check the console" — surface the actual reason.
 

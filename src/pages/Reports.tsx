@@ -4,7 +4,7 @@ import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History, Tractor } from 'lucide-react';
-import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames } from '@/lib/complianceReports';
+import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import ReportTable from '@/components/ReportTable';
@@ -169,6 +169,145 @@ export default function Reports() {
     }, 'landlord statement');
   };
 
+  const handleExportFsaPlantPdf = () => {
+    safeExport(() => {
+      exportToPdf({
+        title: 'FSA Planting Report',
+        subtitle: `Acreage report for Farm Service Agency certification. Generated ${reportDate}.`,
+        headers: ['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %'],
+        rows: plantRecords.map(r => {
+          const field = fieldMap.get(r.fieldId);
+          return [
+            fmtDate(r.plantDate) || fmt(r.timestamp),
+            r.fieldName,
+            r.crop || '—',
+            r.seedVariety,
+            r.acreage,
+            field?.fsaFarmNumber || '—',
+            field?.fsaTractNumber || '—',
+            r.intendedUse || '—',
+            r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI',
+            `${(r.producerShare ?? 100).toFixed(0)}%`
+          ];
+        }),
+        fileName: `FSA_Planting_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        summaryText: 'Total Planted Acreage',
+        summaryValue: `${totalPlantAcres} AC`
+      });
+    }, 'FSA planting PDF');
+  };
+
+  const handleExportSprayAuditPdf = () => {
+    safeExport(() => {
+      exportToPdf({
+        title: 'Pesticide Application Record',
+        subtitle: `Compliance audit trail. Generated ${reportDate}.`,
+        headers: ['DATE', 'FIELD', 'PRODUCT', 'EPA #', 'RATE', 'ACRES', 'TOTAL', 'WIND'],
+        rows: sprayRows.map(r => [
+          fmtDate(r.sprayDate) || fmt(r.timestamp),
+          r.fieldName,
+          r.product,
+          r.epaRegNumber || '—',
+          r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—',
+          r.treatedAreaSize || '—',
+          r.amountDisplay,
+          `${r.windSpeed} mph ${r.windDirection || ''}`
+        ]),
+        fileName: `Spray_Log_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`
+      });
+    }, 'spray audit PDF');
+  };
+
+  const handleExportFertilizerPdf = () => {
+    safeExport(() => {
+      exportToPdf({
+        title: 'Fertilizer Application Summary',
+        subtitle: `Generated ${reportDate}.`,
+        headers: ['DATE', 'FIELD', 'FORMULA', 'ACRES'],
+        rows: fertilizerRecords.map(r => [
+          fmtDate(r.date),
+          fieldMap.get(r.fieldId)?.name || r.fieldName,
+          r.fertilizer_formula,
+          r.acres
+        ]),
+        fileName: `Fertilizer_Summary_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        summaryText: 'Grand Total Applied',
+        summaryValue: `${totalFertAcres} AC`
+      });
+    }, 'fertilizer PDF');
+  };
+
+  const handleExportHarvestPdf = () => {
+    safeExport(() => {
+      exportToPdf({
+        title: 'FSA Harvest Report',
+        subtitle: `Grain production report for FSA certification. Generated ${reportDate}.`,
+        headers: ['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'LL NAME', 'TICKET #'],
+        rows: harvestRecords.map(r => [
+          fmtDate(r.harvestDate) || fmt(r.timestamp),
+          r.fieldName,
+          r.crop || '—',
+          r.bushels.toLocaleString(),
+          `${r.moisturePercent}%`,
+          r.destination === 'bin' ? 'Bin' : 'Town',
+          `${r.landlordSplitPercent}%`,
+          r.landlordName || '—',
+          r.scaleTicketNumber || '—'
+        ]),
+        fileName: `FSA_Harvest_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        summaryText: 'Total Harvest Production',
+        summaryValue: `${totalHarvestBu.toLocaleString()} BU`
+      });
+    }, 'harvest PDF');
+  };
+
+  const handleExportHayPdf = () => {
+    safeExport(() => {
+      const records = fields
+        .filter(f => hayRecords.some(r => r.fieldId === f.id))
+        .map(f => {
+          const fieldHay = hayRecords.filter(r => r.fieldId === f.id);
+          const c1 = fieldHay.filter(r => r.cuttingNumber === 1).reduce((s, r) => s + r.baleCount, 0);
+          const c2 = fieldHay.filter(r => r.cuttingNumber === 2).reduce((s, r) => s + r.baleCount, 0);
+          const c3plus = fieldHay.filter(r => r.cuttingNumber >= 3).reduce((s, r) => s + r.baleCount, 0);
+          const total = c1 + c2 + c3plus;
+          return [f.name, c1 || '—', c2 || '—', c3plus || '—', total.toLocaleString()];
+        });
+
+      exportToPdf({
+        title: 'Hay Production Summary',
+        subtitle: `Total bale production across all cuttings. Generated ${reportDate}.`,
+        headers: ['FIELD', 'CUTTING #1', 'CUTTING #2', 'CUTTING #3+', 'TOTAL'],
+        rows: records,
+        fileName: `Hay_Summary_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        summaryText: 'Season Grand Total',
+        summaryValue: `${totalHayBales.toLocaleString()} BALES`
+      });
+    }, 'hay summary PDF');
+  };
+
+  const handleExportLandlordPdf = () => {
+    if (!landlordStatement) return;
+    safeExport(() => {
+      exportToPdf({
+        title: 'Landlord Crop Share Statement',
+        subtitle: `Prepared for: ${selectedLandlord}. Generated ${reportDate}.`,
+        headers: ['FIELD', 'CROP', 'DATE', 'TOTAL BU.', 'SPLIT %', 'YOUR SHARE'],
+        rows: landlordStatement.rows.map(r => [
+          r.fieldName,
+          r.crop,
+          r.harvestDate, // already formatted MM/DD/YYYY in the statement generator
+          r.totalBushels.toLocaleString(),
+          `${r.landlordSplitPercent}%`,
+          r.landlordBushels.toLocaleString()
+        ]),
+        fileName: `${selectedLandlord.replace(/\s+/g, '_')}_CropShare_${viewingSeason}.pdf`,
+        summaryText: 'Total Landlord Share',
+        summaryValue: `${landlordStatement.totalLandlordBushels.toLocaleString()} BU`
+      });
+    }, 'landlord PDF');
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0 print:bg-background print:border-0">
@@ -241,7 +380,8 @@ export default function Reports() {
             subtitle={`Acreage report for Farm Service Agency certification. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %']}
             onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields), 'FSA planting data')}
-            exportLabel="Export CSV"
+            onExportPdf={handleExportFsaPlantPdf}
+            exportLabel="CSV"
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
                 <span className="font-bold text-muted-foreground uppercase">TOTAL PLANTED ACREAGE</span>
@@ -293,7 +433,16 @@ export default function Reports() {
                   onClick={() => safeExport(() => generateMissouriLog(sprayRecords, fields), 'spray log')}
                 >
                   <Download size={12} className="mr-1.5" />
-                  EXPORT CSV
+                  CSV
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-[10px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={handleExportSprayAuditPdf}
+                >
+                  <Download size={12} className="mr-1.5" />
+                  PDF
                 </Button>
               </div>
 
@@ -357,7 +506,8 @@ export default function Reports() {
             subtitle={`Summary of fertilizer applications. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'FORMULA', 'ACRES']}
             onExport={() => safeExport(() => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
-            exportLabel="Export CSV"
+            onExportPdf={handleExportFertilizerPdf}
+            exportLabel="CSV"
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
                 <span className="font-bold text-muted-foreground uppercase">GRAND TOTAL APPLIED</span>
@@ -392,7 +542,8 @@ export default function Reports() {
             subtitle={`Grain production report for FSA certification. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'LL NAME', 'TICKET #', 'FARM #', 'TRACT #']}
             onExport={() => safeExport(() => exportHarvestData(harvestRecords, fields), 'harvest data')}
-            exportLabel="Export CSV"
+            onExportPdf={handleExportHarvestPdf}
+            exportLabel="CSV"
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
                 <span className="font-bold text-muted-foreground uppercase">TOTAL HARVEST PRODUCTION</span>
@@ -434,6 +585,7 @@ export default function Reports() {
             title="Hay Production Summary"
             subtitle={`Total bale production across all cuttings. Generated ${reportDate}.`}
             headers={['FIELD', 'CUTTING #1', 'CUTTING #2', 'CUTTING #3+', 'TOTAL']}
+            onExportPdf={handleExportHayPdf}
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
                 <span className="font-bold text-muted-foreground uppercase">SEASON GRAND TOTAL</span>
@@ -514,7 +666,16 @@ export default function Reports() {
                       onClick={handleExportLandlordCSV}
                     >
                       <Download size={12} className="mr-1.5" />
-                      EXPORT CSV
+                      CSV
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-[10px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+                      onClick={handleExportLandlordPdf}
+                    >
+                      <Download size={12} className="mr-1.5" />
+                      PDF
                     </Button>
                   </div>
 
