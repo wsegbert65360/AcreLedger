@@ -182,4 +182,5 @@ export type ActivityRecord =
   | { type: 'spray'; data: SprayRecord }
   | { type: 'harvest'; data: HarvestRecord }
   | { type: 'hay'; data: HayHarvestRecord }
-  | { type: 'fertilizer'; data: FertilizerApplication };
+  | { type: 'fertilizer'; data: FertilizerApplication }
+  | { type: 'grain'; data: GrainMovement };
