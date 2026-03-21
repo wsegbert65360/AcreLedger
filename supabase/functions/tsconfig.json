@@ -10,8 +10,6 @@
     "baseUrl": ".",
     "paths": {
       "shared/*": ["./shared/*"],
-      "https://deno.land/std@0.168.0/http/server.ts": ["./deno.d.ts"],
-      "https://esm.sh/@supabase/supabase-js@2": ["../../node_modules/@supabase/supabase-js"],
       "../shared/mrms.ts": ["./shared/mrms.ts"]
     }
   },
