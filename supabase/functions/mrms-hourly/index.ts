@@ -53,7 +53,7 @@ serve(async (req: Request) => {
       timestamp_utc: targetTs.toISOString(),
       rainfall_in: rainfallValues[i],
       source: 'MRMS',
-      finalized: false
+      finalized: true
     }))
 
     // 4. Save
