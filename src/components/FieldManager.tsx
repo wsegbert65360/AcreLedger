@@ -53,7 +53,7 @@ function FieldCard({
 }
 
 export default function FieldManager() {
-  const { fields: allFields, deleteField } = useFarm();
+  const { fields: allFields, deleteField, fetchError } = useFarm();
   const { rowCrops, pastureHay } = useMemo(() => {
     const activeFields = allFields.filter(f => !f.deleted_at);
     const sorted = [...activeFields].sort((a, b) => a.name.localeCompare(b.name));
@@ -91,11 +91,24 @@ export default function FieldManager() {
           Add New Field
         </button>
 
-        {/* ✅ Fix: Empty state */}
+        {/* ✅ Fix: Empty and Error states */}
         {!hasFields && (
-          <p className="text-xs font-mono text-muted-foreground text-center py-4">
-            No fields added yet. Add your first field above.
-          </p>
+          <div className="text-center py-8 px-4 border border-dashed border-border rounded-lg bg-muted/5">
+            {fetchError ? (
+              <>
+                <p className="text-xs font-mono text-destructive font-bold uppercase tracking-widest mb-1">
+                  Cloud Sync Failed
+                </p>
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  Showing local cache. Check your connection.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs font-mono text-muted-foreground">
+                No fields added yet. Add your first field above.
+              </p>
+            )}
+          </div>
         )}
 
         {hasFields && (

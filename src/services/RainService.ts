@@ -37,6 +37,10 @@ export const RainService = {
     }
 
     // RPC returns a table/array of results
+    if (!stats24h?.length || !stats72h?.length) {
+      console.warn(`[RainService] No rainfall data returned for field ${fieldId}. Check if records are finalized.`);
+    }
+
     const s24 = stats24h?.[0] || { total_inches: 0 };
     const s72 = stats72h?.[0] || { total_inches: 0 };
 
