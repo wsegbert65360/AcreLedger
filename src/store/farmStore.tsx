@@ -28,6 +28,8 @@ interface FarmState {
   session: Session | null;
   /** Global loading state for data fetching */
   loading: boolean;
+  /** Global error state for data fetching */
+  fetchError: boolean;
   /** List of farm fields, filtered and sorted */
   fields: Field[];
   /** List of storage bins, filtered and sorted */
@@ -112,6 +114,7 @@ const FarmContext = createContext<FarmState | null>(null);
 export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Auth & Session ---
   const auth = useAuth();
+  const [fetchError, setFetchError] = useState(false);
   const {
     session, loading, setLoading,
     farm_id, setFarmId,
@@ -136,6 +139,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     if (session && farm_id) {
       const fetchData = async () => {
         setLoading(true);
+        setFetchError(false);
         try {
           const query = (table: string) => supabase.from(table).select('*').eq('farm_id', farm_id).is('deleted_at', null);
 
@@ -173,6 +177,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
           if (fetchErrors.length > 0) {
             console.error('Data fetch errors:', fetchErrors);
+            setFetchError(true);
             toast.error('Some data failed to load from cloud. Showing local cache.');
           }
 
@@ -189,6 +194,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
         } catch (error) {
           console.error('Error fetching data:', error);
+          setFetchError(true);
         } finally {
           setLoading(false);
         }
@@ -256,7 +262,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   return (
     <FarmContext.Provider value={{
-      session, loading,
+      session, loading, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords,

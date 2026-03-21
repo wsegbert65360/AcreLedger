@@ -58,6 +58,19 @@ describe('RainService', () => {
       .rejects.toThrow('Rainfall data unavailable: Database error');
   });
 
+  it('should handle missing expected fields (contract test)', async () => {
+    // Mock successful response but with missing total_inches field
+    (supabase.rpc as any)
+      .mockResolvedValueOnce({ data: [{ wrong_field: 0.5 }], error: null })
+      .mockResolvedValueOnce({ data: [{ total_inches: 1.0 }], error: null });
+
+    const result = await RainService.fetchRainfall({ fieldId: mockFieldId });
+
+    // Should default to 0 for the missing field
+    expect(result.rain['24h']).toBe(0);
+    expect(result.rain['72h']).toBe(1.0);
+  });
+
   it('should identify CONUS coordinates correctly', () => {
     // Inside CONUS
     expect(RainService.isWithinCONUS(39.0, -95.0)).toBe(true);
