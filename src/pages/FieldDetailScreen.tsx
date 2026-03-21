@@ -94,9 +94,12 @@ export default function FieldDetailScreen() {
       setRainData(data);
     } catch (err: any) {
       console.error('[FieldDetail] Rain fetch error:', err);
-      if (err.message.includes('404')) {
+      const msg = err.message || '';
+      if (msg.includes('RPC_ERROR')) {
+        setRainError(`Database Error: ${msg.replace('RPC_ERROR: ', '')}`);
+      } else if (msg.includes('404')) {
         setRainError('This location is outside supported coverage (US only).');
-      } else if (err.message.includes('502')) {
+      } else if (msg.includes('502')) {
         setRainError('Weather data temporarily unavailable. Please try again in a minute.');
       } else {
         setRainError('Could not load rainfall data. Please try again.');

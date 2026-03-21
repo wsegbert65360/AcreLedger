@@ -32,8 +32,11 @@ export const RainService = {
     });
 
     if (error24h || error72h) {
-      console.error('[RainService] RPC Error:', error24h || error72h);
-      throw new Error(`Rainfall data unavailable: ${error24h?.message || error72h?.message}`);
+      const err = error24h || error72h;
+      if (err) {
+        console.error('[RainService] RPC Error:', err);
+        throw new Error(`RPC_ERROR: ${err.code || 'UNKNOWN'} - ${err.message}`);
+      }
     }
 
     // RPC returns a table/array of results
