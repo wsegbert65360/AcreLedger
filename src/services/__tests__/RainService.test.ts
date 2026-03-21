@@ -55,7 +55,7 @@ describe('RainService', () => {
       .mockResolvedValueOnce({ data: null, error: null });
 
     await expect(RainService.fetchRainfall({ fieldId: mockFieldId }))
-      .rejects.toThrow('Rainfall data unavailable: Database error');
+      .rejects.toThrow('RPC_ERROR: UNKNOWN - Database error');
   });
 
   it('should handle missing expected fields (contract test)', async () => {
