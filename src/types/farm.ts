@@ -66,10 +66,11 @@ export interface SprayRecord {
   startTime?: string; // MDA mandatory: start_time
   involvedTechnicians?: string;
   siteAddress?: string;
-  treatedAreaSize?: string;
-  totalAmountApplied?: string;
+  treatedAreaSize?: number;
+  totalAmountApplied?: number;
   equipmentId?: string; // Auditor requirement: Machine ID (e.g. Miller Nitro)
   isPremixed?: boolean;
+  nonCompliant?: boolean;
 }
 
 export interface HarvestRecord {
@@ -136,7 +137,13 @@ export interface GrainMovement {
 
 export interface SavedSeed {
   id: string;
-  name: string; // e.g. "DKC 64-35"
+  name: string; // Display name
+  crop: string;
+  variety: string;
+  supplier: string;
+  lotNumber: string;
+  year: number;
+  notes: string;
   farm_id?: string;
   deleted_at: string | null;
 }

@@ -27,6 +27,7 @@ export default function ReportTable({
             <button
               onClick={onExport}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-[10px] font-mono font-bold hover:bg-muted transition-colors"
+              aria-label={`Export ${exportLabel}`}
             >
               <FileDown size={14} className="text-muted-foreground" />
               {exportLabel.toUpperCase()}
@@ -36,6 +37,7 @@ export default function ReportTable({
             <button
               onClick={onExportPdf}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-[10px] font-mono font-bold hover:bg-muted transition-colors text-primary"
+              aria-label="Export PDF"
             >
               <FileDown size={14} />
               PDF

@@ -44,8 +44,8 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
     }, [open, field.lat, field.lng, initialData]);
 
     const handleSubmit = () => {
-        const count = parseInt(baleCount);
-        const cutting = parseInt(cuttingNumber);
+        const count = parseInt(baleCount, 10);
+        const cutting = parseInt(cuttingNumber, 10);
         if (isNaN(count) || isNaN(cutting)) return;
 
         if (initialData) {
@@ -176,7 +176,7 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
                 <DialogFooter className="mt-2">
                     <Button
                         onClick={handleSubmit}
-                        disabled={!baleCount || isNaN(parseInt(baleCount))}
+                        disabled={!baleCount || isNaN(parseInt(baleCount, 10))}
                         className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold uppercase tracking-widest text-xs py-5"
                     >
                         {initialData ? 'Update Record' : 'Record Hay Baling'}

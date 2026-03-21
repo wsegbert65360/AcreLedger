@@ -1,0 +1,65 @@
+import { describe, it, expect } from 'vitest';
+import { 
+    mapFieldFromDb, mapFieldToDb,
+    mapPlantFromDb, mapPlantToDb,
+    mapSprayFromDb, mapSprayToDb,
+    mapHarvestFromDb, mapHarvestToDb,
+    mapSeedFromDb, mapSeedToDb
+} from '../mappers';
+import { SprayRecord, SavedSeed } from '../../types/farm';
+
+describe('Mappers Round-Trip', () => {
+    it('should maintain SprayRecord integrity through round-trip', () => {
+        const original: SprayRecord = {
+            id: '123',
+            fieldId: 'field-1',
+            fieldName: 'North Field',
+            products: [{ product: 'Roundup', rate: '22', rateUnit: 'oz/ac', epaRegNumber: '524-549' }],
+            windSpeed: 5,
+            temperature: 75,
+            timestamp: Date.now(),
+            seasonYear: 2026,
+            treatedAreaSize: 80.5,
+            totalAmountApplied: 1771,
+            nonCompliant: false,
+            deleted_at: null,
+            applicatorName: 'Test Applicator',
+            licenseNumber: 'L12345',
+            epaRegNumber: '524-549',
+            farm_id: 'farm-1'
+        };
+        
+        const db = mapSprayToDb(original) as any;
+        const result = mapSprayFromDb(db);
+        
+        expect(result.treatedAreaSize).toBe(original.treatedAreaSize);
+        expect(result.totalAmountApplied).toBe(original.totalAmountApplied);
+        expect(result.nonCompliant).toBe(original.nonCompliant);
+        expect(result.products).toEqual(original.products);
+    });
+
+    it('should handle SavedSeed new fields in round-trip', () => {
+        const original: SavedSeed = {
+            id: 'seed-1',
+            name: 'Test Seed',
+            crop: 'Corn',
+            variety: 'DKC 64-35',
+            supplier: 'Bayer',
+            lotNumber: 'LOT123',
+            year: 2025,
+            notes: 'Stored in shed',
+            deleted_at: null,
+            farm_id: 'farm-1'
+        };
+        
+        const db = mapSeedToDb(original) as any;
+        db.id = original.id; // Mapper doesn't map ID back in mapSeedToDb (it returns a partial)
+        const result = mapSeedFromDb(db);
+        
+        expect(result.crop).toBe(original.crop);
+        expect(result.variety).toBe(original.variety);
+        expect(result.supplier).toBe(original.supplier);
+        expect(result.lotNumber).toBe(original.lotNumber);
+        expect(result.year).toBe(original.year);
+    });
+});

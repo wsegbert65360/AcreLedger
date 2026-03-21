@@ -26,6 +26,7 @@ export default function BottomNav() {
               onClick={() => navigate(path)}
               className={`relative touch-target flex flex-col items-center justify-center gap-1 py-3 px-3 transition-colors ${active ? 'text-primary' : 'text-muted-foreground'
                 }`}
+              aria-label={label}
             >
               {active && (
                 <motion.div

@@ -25,7 +25,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
     const handleSubmit = () => {
         const amount = parseFloat(bushels);
         const p = parseFloat(price);
-        if (isNaN(amount) || amount <= 0) return;
+        if (isNaN(amount)) return;
 
         addGrainMovement({
             binId: bin.id,
@@ -130,7 +130,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
                 <DialogFooter className="pt-2">
                     <Button
                         onClick={handleSubmit}
-                        disabled={!bushels || isNaN(parseFloat(bushels)) || parseFloat(bushels) <= 0}
+                        disabled={!bushels || isNaN(parseFloat(bushels))}
                         className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold py-6 text-lg"
                     >
                         Confirm Sale

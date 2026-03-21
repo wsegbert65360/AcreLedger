@@ -36,12 +36,14 @@ function FieldCard({
         <button
           onClick={() => onEdit(field)}
           className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Edit field"
         >
           <Pencil size={16} />
         </button>
         <button
           onClick={() => onDelete(field.id)}
           className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+          aria-label="Delete field"
         >
           <Trash2 size={16} />
         </button>

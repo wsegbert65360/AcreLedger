@@ -1,3 +1,4 @@
+/// <reference lib="deno.ns" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { downloadAndDecompress, MRMS_CONFIG, extractRainfall } from '../shared/mrms.ts'
@@ -62,13 +63,8 @@ serve(async (req: Request) => {
 
     if (saveError) throw saveError
 
-    // 5. Trigger Rollups
-    for (const f of fields) {
-        await supabaseClient.rpc('rollup_field_rainfall', { 
-            p_field_id: f.id, 
-            p_date: targetTs.toISOString().split('T')[0] 
-        })
-    }
+    // 5. Success
+    console.log(`Successfully processed ${records.length} rainfall records for ${targetTs.toISOString()}`)
 
     return new Response(JSON.stringify({ success: true, count: records.length }), { 
         status: 200,

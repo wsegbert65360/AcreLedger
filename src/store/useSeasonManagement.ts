@@ -11,6 +11,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,29 +56,6 @@ function isValidYear(year: number): boolean {
   return Number.isInteger(year) && year >= MIN_SEASON_YEAR && year <= MAX_SEASON_YEAR;
 }
 
-/**
- * Triggers a JSON file download. Returns true if the download was initiated
- * successfully, false if anything went wrong.
- */
-function downloadJson(data: unknown, filename: string): boolean {
-  try {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Defer revoke so the browser has time to start the download
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    return true;
-  } catch (err) {
-    // Replace with Sentry.captureException(err) in production
-    console.error('downloadJson failed:', err);
-    return false;
-  }
-}
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -112,7 +90,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       };
 
       const filename = `Pre_Season_Reset_${new Date().toISOString().split('T')[0]}.json`;
-      const downloaded = downloadJson(backupData, filename);
+      const downloaded = exportDataAsJson(backupData, filename);
 
       if (!downloaded) {
         toast.error('Could not create pre-rollover backup. Season was NOT changed.');

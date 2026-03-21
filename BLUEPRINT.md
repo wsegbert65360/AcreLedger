@@ -35,7 +35,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Toasts | Sonner | User feedback — success / error / warning / info |
 | Validation | Zod (`@/lib/backupSchema`) | Backup file schema validation on restore |
 | Weather | Visual Crossing API | Current wind/temp conditions |
-| Rainfall | Rain API (Stage IV Radar) | 12h, 24h, 72h radar-derived precipitation |
+| Rainfall | MRMS Hourly + Supabase | Persisted radar-derived hourly precipitation |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
 | Reports | `@/lib/complianceReports` | CSV & PDF export generators (FSA, spray log, etc.) |
@@ -53,9 +53,10 @@ excluded by RLS policies server-side and by `.filter(r => !r.deleted_at)` client
 Physical farm field. Referenced by `fieldId` on all activity records.
 ```ts
 { id, name, acreage, lat, lng, intendedUse, fsaFarmNumber, fsaTractNumber,
-  irrigationPractice, deleted_at }
+  irrigationPractice, deleted_at, boundary: { type, coordinates } }
 ```
 `lat`/`lng` may be null if geocoding was skipped — always guard before calling `.toFixed()`.
+`boundary` is a GeoJSON Polygon for field geometry.
 
 ### Bin
 Grain storage bin. Tracks current inventory.
@@ -68,7 +69,7 @@ Single planting event on a field. Core FSA 578 source record.
 ```ts
 { id, farm_id, fieldId, fieldName, crop, seedVariety, seedingRate, population,
   acreage, plantDate, timestamp, seasonYear, intendedUse, irrigationPractice,
-  producerShare, deleted_at }
+  producerShare, fsaFarmNumber, fsaTractNumber, fsaFieldNumber, deleted_at }
 ```
 
 ### SprayRecord
@@ -79,7 +80,8 @@ Pesticide/herbicide application. Supports multiple products per application (tan
   treatedAreaSize, totalAmountApplied, rateUnit,
   windSpeed, windDirection, temperature, relativeHumidity,
   targetPest, applicatorName, licenseNumber, equipmentId,
-  deleted_at }
+  siteAddress, involvedTechnicians, mixtureRate, totalMixtureVolume,
+  isPremixed, deleted_at }
 ```
 - Wind alert threshold: `WIND_ALERT_MPH = 10` (named constant — never hardcode `10`).
 - Records missing `epaRegNumber` are flagged `NON-COMPLIANT` in audit reports.
@@ -103,9 +105,10 @@ Hay cutting event. Tracked by cutting number per field per season.
 ### FertilizerApplication
 ```ts
 { id, farm_id, fieldId, fieldName, fertilizer_formula, acres, date,
-  timestamp, seasonYear, deleted_at }
+  timestamp, seasonYear, created_at, updated_at, deleted_at }
 ```
 Note: `date` is an ISO date string; `timestamp` is Unix ms. Both exist on the same record.
+`created_at`/`updated_at` are managed by DB triggers.
 
 ### GrainMovement
 Grain in/out of a bin, including sales and contracts.
@@ -130,18 +133,22 @@ Saved tank-mix recipe for reuse on spray records. Not season-scoped.
   deleted_at }
 ```
 
-### RainData
-Radar-derived precipitation totals from the Stage IV dataset.
+### Rainfall
+Radar-derived precipitation totals from the NOAA MRMS dataset. Persisted in Supabase
+to support historical analysis and performance.
+
+#### field_rainfall_hourly
 ```ts
-{ 
-  periodEndUtc, units, 
-  rain: { '12h', '24h', '72h' },
-  rainMm: { '12h', '24h', '72h' },
-  location: { type, lat?, lon?, centroidLat?, centroidLon? },
-  dataWarning? 
-}
+{ id, field_id, timestamp_utc, rainfall_in, finalized, source }
 ```
-Used on-demand in `FieldDetailScreen`. Not persisted in Supabase.
+#### field_rainfall_coverage
+```ts
+{ field_id, range_start_utc, range_end_utc, status, last_checked_at }
+```
+- **Stats RPC**: `get_rainfall_stats(field_id, start_date, end_date)` returns total inches,
+  hours with rain, max hourly intensity, and coverage percentage.
+- **Pipeline**: Managed by `mrms-hourly` Edge Function.
+- **Status**: `pending` | `partial` | `complete`.
 
 ---
 
@@ -227,6 +234,16 @@ by filtering `!r.deleted_at` when loading state.
 `.update().eq('id', r.id).eq('farm_id', farm_id)` for edits — always.
 **Never use `.upsert()` for edit operations.** Upsert silently inserts a ghost row if the
 record ID is absent from the DB, corrupting inventory and report totals.
+
+### Security Hardening
+All locally-managed functions, RPCs, and triggers MUST include a explicit search path:
+```sql
+CREATE OR REPLACE FUNCTION ...
+RETURNS ... AS $$
+...
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
+```
+This prevents "search_path not set" security warnings and protects against search-path hijacking.
 
 ---
 
@@ -487,9 +504,10 @@ Show in BackupManager UI. Amber warning if > 7 days old or never taken.
 | Informational, no action needed | `toast.info('...')` |
 | SW update available (user must act) | `toast('Title', { description, action: { label, onClick } })` |
 
-### Rain API Error States
+### Rainfall Pipeline Error States
+- **Coverage Gaps**: Indicated by `status IN ('pending', 'partial')` in `field_rainfall_coverage`.
 - **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by UI guards.
-- **API 404**: Location outside supported coverage (CONUS only). Friendly app message required.
+- **API 404**: Location outside supported coverage (CONUS only).
 - **API 502**: IEM service unreachable. Friendly app message required.
 - **NaN / Missing Coords**: Blocked by `RainService` and UI level; button disabled.
 
