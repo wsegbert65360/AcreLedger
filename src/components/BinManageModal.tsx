@@ -25,7 +25,7 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
     const isEdit = !!editBin;
 
     const handleSubmit = () => {
-        const cap = parseInt(capacity);
+        const cap = parseInt(capacity, 10);
         if (!name.trim() || isNaN(cap)) return;
 
         if (isEdit) {
@@ -116,12 +116,14 @@ export function BinManager() {
                             <button
                                 onClick={() => setEditBin(bin)}
                                 className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label="Edit bin"
                             >
                                 <Pencil size={16} />
                             </button>
                             <button
                                 onClick={() => setDeleteConfirm(bin.id)}
                                 className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                aria-label="Delete bin"
                             >
                                 <Trash2 size={16} />
                             </button>

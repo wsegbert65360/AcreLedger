@@ -89,9 +89,7 @@ export default function FieldDetailScreen() {
       }
 
       const data = await RainService.fetchRainfall({
-        lat: lat,
-        lon: lng,
-        polygon: field.boundary?.coordinates[0] as [number, number][]
+        fieldId: field.id
       });
       setRainData(data);
     } catch (err: any) {

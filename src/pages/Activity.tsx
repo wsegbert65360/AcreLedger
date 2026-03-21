@@ -167,7 +167,7 @@ export default function Activity() {
                 <h1 className="text-lg font-bold text-foreground tracking-tight">Activity</h1>
                 <Select
                   value={viewingSeason.toString()}
-                  onValueChange={(v) => setViewingSeason(parseInt(v))}
+                  onValueChange={(v) => setViewingSeason(parseInt(v, 10))}
                 >
                   <SelectTrigger className="h-7 min-w-[80px] bg-muted border-none font-mono text-[10px] font-bold py-0">
                     <SelectValue />

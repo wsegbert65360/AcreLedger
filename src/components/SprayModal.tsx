@@ -35,8 +35,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [startTime, setStartTime] = useState(() => initialData?.startTime || new Date().toTimeString().slice(0, 5));
   const [involvedTechnicians, setInvolvedTechnicians] = useState(initialData?.involvedTechnicians || '');
   const [siteAddress, setSiteAddress] = useState(initialData?.siteAddress || field.name);
-  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize || field.acreage.toString());
-  const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied || '');
+  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || field.acreage.toString());
+  const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied?.toString() || '');
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
   const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
   const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
@@ -111,7 +111,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [showValidation, setShowValidation] = useState(false);
 
   const isFormValid = products.length > 0 &&
-    products.every(p => p.product.trim() && p.epaRegNumber?.trim()) &&
+    products.every(p => p.product.trim()) && // ✅ EPA can now be empty (triggers nonCompliant)
     startTime.trim() &&
     (!!weather && !weather.isError) &&
     applicatorName.trim() &&
@@ -147,12 +147,13 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       startTime: startTime || undefined,
       involvedTechnicians: involvedTechnicians.trim() || undefined,
       siteAddress: siteAddress.trim() || undefined,
-      treatedAreaSize: treatedAreaSize.trim() || undefined,
-      totalAmountApplied: totalAmountApplied.trim() || undefined,
+      treatedAreaSize: parseFloat(treatedAreaSize) || 0,
+      totalAmountApplied: parseFloat(totalAmountApplied) || 0,
       mixtureRate: mixtureRate.trim() || undefined,
       totalMixtureVolume: totalMixtureVolume.trim() || undefined,
       equipmentId: equipmentId.trim() || undefined,
       isPremixed,
+      nonCompliant: products.some(p => !p.epaRegNumber?.trim()),
       deleted_at: null,
       seasonYear: activeSeason,
     };
@@ -229,8 +230,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                           name={`epaReg-${i}`}
                           value={p.epaRegNumber}
                           onChange={e => updateProduct(i, 'epaRegNumber', e.target.value)}
-                          placeholder="524-549"
-                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.epaRegNumber?.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                          placeholder="524-549 (Optional)"
+                          className="mt-0.5 bg-background border-border text-foreground text-xs h-8"
                         />
                       </div>
                     </div>

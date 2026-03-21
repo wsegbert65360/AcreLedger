@@ -1,4 +1,4 @@
-import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../types/farm';
+import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
 
 function sanitizeCsvValue(val: string | number | null | undefined): string {
     if (val === null || val === undefined) return '';
@@ -8,35 +8,14 @@ function sanitizeCsvValue(val: string | number | null | undefined): string {
     return str;
 }
 
-export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
-    const header = [
-        'Date',
-        'Start Time',
-        'Applicator Name',
-        'License #',
-        'Trade Name',
-        'EPA Reg #',
-        'Site/Field',
-        'Total Acres Treated',
-        'App Rate (per ac)',
-        'Total Product Applied',
-        'Total Mixture Volume (Mix + Water)',
-        'Equipment ID',
-        'Wind Speed (mph)',
-        'Wind Direction',
-        'Temp (F)',
-        'Relative Humidity (%)',
-        'Target Pest(s)',
-        'Technicians'
-    ].join(',');
-
-    const rows = records.flatMap(r => {
+export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {
+    return records.flatMap(r => {
         const field = fields.find(f => f.id === r.fieldId);
         const treatedArea = r.treatedAreaSize || field?.acreage || '';
 
         // If there are granular products, create a row for each herbicide in the mix
         if (r.products && r.products.length > 0) {
-            return r.products.map(p => {
+            return r.products.map((p: any) => {
                 // Calculate individual product total for the treated area
                 const rateNum = parseFloat(p.rate);
                 const areaNum = parseFloat(treatedArea.toString());
@@ -90,7 +69,17 @@ export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
             `"${sanitizeCsvValue(r.involvedTechnicians)}"`
         ].join(',')];
     });
+}
 
+export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
+    const header = [
+        'Date', 'Start Time', 'Applicator Name', 'License #', 'Trade Name', 'EPA Reg #',
+        'Site/Field', 'Total Acres Treated', 'App Rate (per ac)', 'Total Product Applied',
+        'Total Mixture Volume (Mix + Water)', 'Equipment ID', 'Wind Speed (mph)',
+        'Wind Direction', 'Temp (F)', 'Relative Humidity (%)', 'Target Pest(s)', 'Technicians'
+    ].join(',');
+
+    const rows = generateMissouriLogRows(records, fields);
     const csvContent = [header, ...rows].join('\n');
     downloadFile(csvContent, `Missouri_Spray_Log_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
 }

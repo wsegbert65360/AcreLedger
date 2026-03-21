@@ -73,6 +73,9 @@ export interface SprayRecordRow {
     involved_technicians?: string | null;
     mixture_rate?: string | null;
     total_mixture_volume?: string | null;
+    site_address?: string | null;
+    is_premixed?: boolean | null;
+    non_compliant?: boolean | null;
 }
 
 export interface HarvestRecordRow {
@@ -130,8 +133,14 @@ export interface GrainMovementRow {
 
 export interface SavedSeedRow {
     id: string;
-    farm_id: string;
     name: string;
+    crop?: string | null;
+    variety?: string | null;
+    supplier?: string | null;
+    lot_number?: string | null;
+    year?: number | null;
+    notes?: string | null;
+    farm_id: string;
     deleted_at?: string | null;
 }
 
