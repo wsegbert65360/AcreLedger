@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { Field, HarvestRecord } from '@/types/farm';
-import { Wheat, Warehouse, Truck } from 'lucide-react';
+import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface HarvestModalProps {
   field: Field;
@@ -26,6 +27,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
   const [landlordName, setLandlordName] = useState(initialData?.landlordName || '');
   const [scaleTicketNumber, setScaleTicketNumber] = useState(initialData?.scaleTicketNumber || '');
   const [harvestDate, setHarvestDate] = useState(initialData?.harvestDate || new Date().toISOString().split('T')[0]);
+  const [isSaving, setIsSaving] = useState(false);
 
   const reset = () => {
     if (!initialData) {
@@ -47,74 +49,88 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
     if (isNaN(m) || isNaN(ls) || isNaN(bu) || !destination) return;
     if (destination === 'bin' && !binId) return;
 
-    const harvestData = {
-      fieldId: field.id,
-      fieldName: field.name,
-      destination,
-      binId: destination === 'bin' ? binId : undefined,
-      moisturePercent: m,
-      landlordSplitPercent: ls,
-      bushels: bu,
-      crop: crop.trim() || undefined,
-      landlordName: landlordName.trim() || undefined,
-      scaleTicketNumber: scaleTicketNumber.trim() || undefined,
-      harvestDate: harvestDate || undefined,
-    };
+    setIsSaving(true);
+    try {
+      const harvestData = {
+        fieldId: field.id,
+        fieldName: field.name,
+        destination,
+        binId: destination === 'bin' ? binId : undefined,
+        moisturePercent: m,
+        landlordSplitPercent: ls,
+        bushels: bu,
+        crop: crop.trim() || undefined,
+        landlordName: landlordName.trim() || undefined,
+        scaleTicketNumber: scaleTicketNumber.trim() || undefined,
+        harvestDate: harvestDate || undefined,
+      };
 
-    let success = false;
-    if (initialData) {
-      success = await updateHarvestRecord({ ...initialData, ...harvestData });
-      if (!success) return;
+      let success = false;
+      if (initialData) {
+        success = await updateHarvestRecord({ ...initialData, ...harvestData });
+        if (!success) {
+          toast.error('Failed to update harvest record.');
+          return;
+        }
 
-      // Sync linked grain movement
-      if (initialData.destination === 'bin') {
-        const movement = grainMovements.find(gm =>
-          gm.sourceFieldName === field.name &&
-          gm.timestamp === initialData.timestamp &&
-          gm.type === 'in'
-        );
-        if (movement) {
+        // Sync linked grain movement
+        if (initialData.destination === 'bin') {
+          const movement = grainMovements.find(gm =>
+            gm.sourceFieldName === field.name &&
+            gm.timestamp === initialData.timestamp &&
+            gm.type === 'in'
+          );
+          if (movement) {
+            const bin = bins.find(b => b.id === binId);
+            await updateGrainMovement({
+              ...movement,
+              binId: binId,
+              binName: bin?.name || 'Unknown',
+              bushels: bu,
+              moisturePercent: m,
+            });
+          }
+        } else if (destination === 'bin') {
           const bin = bins.find(b => b.id === binId);
-          await updateGrainMovement({
-            ...movement,
-            binId: binId,
+          await addGrainMovement({
+            binId,
             binName: bin?.name || 'Unknown',
+            type: 'in',
             bushels: bu,
             moisturePercent: m,
+            sourceFieldName: field.name,
+            timestamp: initialData.timestamp,
           });
         }
-      } else if (destination === 'bin') {
-        const bin = bins.find(b => b.id === binId);
-        await addGrainMovement({
-          binId,
-          binName: bin?.name || 'Unknown',
-          type: 'in',
-          bushels: bu,
-          moisturePercent: m,
-          sourceFieldName: field.name,
-          timestamp: initialData.timestamp,
-        });
-      }
-    } else {
-      success = await addHarvestRecord(harvestData);
-      if (!success) return;
+      } else {
+        success = await addHarvestRecord(harvestData);
+        if (!success) {
+          toast.error('Failed to save harvest record.');
+          return;
+        }
 
-      if (destination === 'bin') {
-        const bin = bins.find(b => b.id === binId);
-        await addGrainMovement({
-          binId,
-          binName: bin?.name || 'Unknown',
-          type: 'in',
-          bushels: bu,
-          moisturePercent: m,
-          sourceFieldName: field.name,
-          timestamp: Date.now(),
-        });
+        if (destination === 'bin') {
+          const bin = bins.find(b => b.id === binId);
+          await addGrainMovement({
+            binId,
+            binName: bin?.name || 'Unknown',
+            type: 'in',
+            bushels: bu,
+            moisturePercent: m,
+            sourceFieldName: field.name,
+            timestamp: Date.now(),
+          });
+        }
       }
+
+      reset();
+      onClose();
+    } catch (err) {
+      console.error('Submission error:', err);
+      toast.error('An unexpected error occurred while saving.');
+    } finally {
+      setIsSaving(false);
     }
-
-    reset();
-    onClose();
   };
 
   const valid = destination && moisture && landlordSplit && bushels && (destination === 'town' || binId);
@@ -261,10 +277,17 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!valid}
+              disabled={!valid || isSaving}
               className="touch-target flex-1 bg-harvest text-harvest-foreground hover:bg-harvest/90 glow-harvest font-bold"
             >
-              {initialData ? 'Update Record' : 'Log Harvest'}
+              {isSaving ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="animate-spin" size={20} />
+                  <span>Saving...</span>
+                </div>
+              ) : (
+                initialData ? 'Update Record' : 'Log Harvest'
+              )}
             </Button>
           </DialogFooter>
         )}

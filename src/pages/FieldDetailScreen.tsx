@@ -36,7 +36,8 @@ export default function FieldDetailScreen() {
     sprayRecords, 
     harvestRecords, 
     hayHarvestRecords, 
-    fertilizerApplications 
+    fertilizerApplications,
+    viewingSeason
   } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
@@ -60,11 +61,11 @@ export default function FieldDetailScreen() {
     
     // Convert all record types into a unified structure for the feed
     const all = [
-      ...plantRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'plant' as const, data: r })),
-      ...sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'spray' as const, data: r })),
-      ...harvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'harvest' as const, data: r })),
-      ...hayHarvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'hay' as const, data: r })),
-      ...fertilizerApplications.filter(r => r.fieldId === field.id && new Date(r.date).getFullYear() === 2026).map(r => ({ type: 'fertilizer' as const, data: r })),
+      ...plantRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'plant' as const, data: r })),
+      ...sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'spray' as const, data: r })),
+      ...harvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'harvest' as const, data: r })),
+      ...hayHarvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'hay' as const, data: r })),
+      ...fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'fertilizer' as const, data: r })),
     ];
 
     // Helper to get a stable timestamp for sorting
@@ -77,7 +78,7 @@ export default function FieldDetailScreen() {
 
     // Sort newest first
     return all.sort((a, b) => getTS(b.data) - getTS(a.data));
-  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications]);
+  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, viewingSeason]);
 
   const handleEdit = (type: ModalType, record: any) => {
     setEditingRecord(record);

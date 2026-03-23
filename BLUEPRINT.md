@@ -294,7 +294,7 @@ FSA Harvest, Hay Summary, Landlord Statement. Supports both CSV and PDF direct e
 
 ### ActivityFeed Component
 Reusable component for displaying field-specific historical records. Filters records for the 
-`viewingSeason` (typically 2026) and provides an `onEdit` callback for granular record editing.
+`viewingSeason` and provides an `onEdit` callback for granular record editing.
 
 ### FieldNotes Component (Auto-Save)
 Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange` 
@@ -400,6 +400,22 @@ setXRecords(prev => {
 ### Records Array Not in Deps
 Never include the entity array (e.g. `sprayRecords`) in `useCallback` deps. The callback
 recreates on every optimistic update it triggers. Use functional updaters and refs instead.
+
+### Modal Submission Hardening
+All data-entry modals must use an `isSaving` state and `await` the result of store actions.
+```tsx
+const [isSaving, setIsSaving] = useState(false);
+const handleSubmit = async () => {
+  setIsSaving(true);
+  try {
+    const success = await addRecord(data);
+    if (success) onClose();
+  } finally {
+    setIsSaving(false);
+  }
+};
+```
+This prevents double-submissions and ensures the modal only closes when the data is safe.
 
 ---
 
@@ -528,6 +544,8 @@ console.error('Descriptive context label:', err);
 ```
 
 ### No Silent Failures
+- Data-entry modals (Plant, Spray, Fertilizer, Harvest) must `await` the save operation and
+  only close on success (`return true` from store).
 - Destructive operations (delete, rollover, cache clear) always show explicit feedback.
 - Export functions always wrapped in `safeExport` — never bare in `onExport` props.
 - PDF generation uses `jspdf` and `jspdf-autotable` for consistent tabular output.

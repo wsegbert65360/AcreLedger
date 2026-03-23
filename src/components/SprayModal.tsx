@@ -42,6 +42,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
   const [manualWindDirection, setManualWindDirection] = useState<string>(initialData?.windDirection || '');
   const [isPremixed, setIsPremixed] = useState(initialData?.isPremixed || false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const selectedRecipe = sprayRecipes.find(r => r.id === selectedRecipeId);
 
@@ -119,52 +120,63 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     manualWindDirection.trim() &&
     equipmentId.trim();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isFormValid) {
       setShowValidation(true);
       toast.error('Please complete all required compliance fields');
       return;
     }
 
-    if (applicatorName.trim()) localStorage.setItem(`al_applicator_name_${userPrefix}`, applicatorName.trim());
-    if (licenseNumber.trim()) localStorage.setItem(`al_license_number_${userPrefix}`, licenseNumber.trim());
-    if (equipmentId.trim()) localStorage.setItem(`al_equipment_id_${userPrefix}`, equipmentId.trim());
+    setIsSaving(true);
+    try {
+      if (applicatorName.trim()) localStorage.setItem(`al_applicator_name_${userPrefix}`, applicatorName.trim());
+      if (licenseNumber.trim()) localStorage.setItem(`al_license_number_${userPrefix}`, licenseNumber.trim());
+      if (equipmentId.trim()) localStorage.setItem(`al_equipment_id_${userPrefix}`, equipmentId.trim());
 
-    const data = {
-      fieldId: field.id,
-      fieldName: field.name,
-      products: products.filter(p => p.product.trim()),
-      windSpeed: weather?.wind || initialData?.windSpeed || 0,
-      temperature: weather?.temp || initialData?.temperature || 0,
-      applicatorName: applicatorName.trim(),
-      licenseNumber: licenseNumber.trim(),
-      epaRegNumber: products[0]?.epaRegNumber, // Fallback for legacy
-      targetPest: targetPest.trim() || undefined,
-      windDirection: manualWindDirection || weather?.windDirection || initialData?.windDirection,
-      relativeHumidity: weather?.humidity || initialData?.relativeHumidity || 0,
-      sprayDate: sprayDate || undefined,
-      // Regulatory fields
-      startTime: startTime || undefined,
-      involvedTechnicians: involvedTechnicians.trim() || undefined,
-      siteAddress: siteAddress.trim() || undefined,
-      treatedAreaSize: parseFloat(treatedAreaSize) || 0,
-      totalAmountApplied: parseFloat(totalAmountApplied) || 0,
-      mixtureRate: mixtureRate.trim() || undefined,
-      totalMixtureVolume: totalMixtureVolume.trim() || undefined,
-      equipmentId: equipmentId.trim() || undefined,
-      isPremixed,
-      nonCompliant: products.some(p => !p.epaRegNumber?.trim()),
-      deleted_at: null,
-      seasonYear: activeSeason,
-    };
+      const data = {
+        fieldId: field.id,
+        fieldName: field.name,
+        products: products.filter(p => p.product.trim()),
+        windSpeed: weather?.wind || initialData?.windSpeed || 0,
+        temperature: weather?.temp || initialData?.temperature || 0,
+        applicatorName: applicatorName.trim(),
+        licenseNumber: licenseNumber.trim(),
+        epaRegNumber: products[0]?.epaRegNumber, // Fallback for legacy
+        targetPest: targetPest.trim() || undefined,
+        windDirection: manualWindDirection || weather?.windDirection || initialData?.windDirection,
+        relativeHumidity: weather?.humidity || initialData?.relativeHumidity || 0,
+        sprayDate: sprayDate || undefined,
+        // Regulatory fields
+        startTime: startTime || undefined,
+        involvedTechnicians: involvedTechnicians.trim() || undefined,
+        siteAddress: siteAddress.trim() || undefined,
+        treatedAreaSize: parseFloat(treatedAreaSize) || 0,
+        totalAmountApplied: parseFloat(totalAmountApplied) || 0,
+        mixtureRate: mixtureRate.trim() || undefined,
+        totalMixtureVolume: totalMixtureVolume.trim() || undefined,
+        equipmentId: equipmentId.trim() || undefined,
+        isPremixed,
+        nonCompliant: products.some(p => !p.epaRegNumber?.trim()),
+        deleted_at: null,
+        seasonYear: activeSeason,
+      };
 
-    if (initialData) {
-      updateSprayRecord({ ...initialData, ...data });
-    } else {
-      addSprayRecord(data);
+      let success = false;
+      if (initialData) {
+        success = await updateSprayRecord({ ...initialData, ...data });
+      } else {
+        success = await addSprayRecord(data);
+      }
+
+      if (success) {
+        onClose();
+      }
+    } catch (err) {
+      console.error('Submission error:', err);
+      toast.error('An unexpected error occurred while saving.');
+    } finally {
+      setIsSaving(false);
     }
-    
-    onClose();
   };
 
   return (
@@ -405,10 +417,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         <DialogFooter className="sticky bottom-0 bg-card pt-2">
           <Button
             onClick={handleSubmit}
-            disabled={!isFormValid || loading}
+            disabled={!isFormValid || loading || isSaving}
             className="touch-target w-full bg-spray text-white hover:bg-spray/90 glow-spray font-bold py-6 text-base disabled:opacity-50 disabled:grayscale"
           >
-            {loading ? <Loader2 size={20} className="animate-spin" /> :
+            {isSaving ? (
+              <div className="flex items-center gap-2">
+                <Loader2 size={24} className="animate-spin" />
+                <span>Saving...</span>
+              </div>
+            ) : loading ? <Loader2 size={20} className="animate-spin" /> :
               !isFormValid ? 'Compliance Information Missing' :
                 initialData ? 'Update Record' : 'Complete MDA Record'}
           </Button>

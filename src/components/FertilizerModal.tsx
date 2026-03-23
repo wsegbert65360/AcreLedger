@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
-import { Sprout, X, Calendar, MapPin, Gauge } from 'lucide-react';
+import { Sprout, X, Calendar, MapPin, Gauge, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -17,6 +17,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [acres, setAcres] = useState(field.acreage.toString());
     const [formula, setFormula] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (initialData) {
@@ -32,7 +33,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
 
     if (!open) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const data = {
@@ -53,13 +54,24 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
             return;
         }
 
-        if (initialData) {
-            updateFertilizerApplication({ ...initialData, ...data });
-        } else {
-            addFertilizerApplication(data);
-        }
+        setIsSaving(true);
+        try {
+            let success = false;
+            if (initialData) {
+                success = await updateFertilizerApplication({ ...initialData, ...data });
+            } else {
+                success = await addFertilizerApplication(data);
+            }
 
-        onClose();
+            if (success) {
+                onClose();
+            }
+        } catch (err) {
+            console.error('Submission error:', err);
+            toast.error('An unexpected error occurred while saving.');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -137,9 +149,17 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                     <div className="pt-2">
                         <Button
                             type="submit"
+                            disabled={isSaving}
                             className="w-full h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target"
                         >
-                            {initialData ? 'Update Application' : 'Save Application'}
+                            {isSaving ? (
+                                <div className="flex items-center gap-2">
+                                    <Loader2 className="animate-spin" size={24} />
+                                    <span>Saving...</span>
+                                </div>
+                            ) : (
+                                initialData ? 'Update Application' : 'Save Application'
+                            )}
                         </Button>
                     </div>
                 </form>

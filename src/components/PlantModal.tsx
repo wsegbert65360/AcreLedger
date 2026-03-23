@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
-import { Sprout } from 'lucide-react';
+import { Sprout, Loader2 } from 'lucide-react';
 import { WeatherService } from '@/services/WeatherService';
 
 interface PlantModalProps {
@@ -24,41 +25,52 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   const [producerShare, setProducerShare] = useState(initialData?.producerShare?.toString() || field.producerShare?.toString() || '100');
   const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!seedVariety.trim()) return;
 
-    if (initialData) {
-      updatePlantRecord({
-        ...initialData,
-        seedVariety: seedVariety.trim(),
-        crop: crop.trim() || undefined,
-        intendedUse: intendedUse.trim() || undefined,
-        plantDate: plantDate || undefined,
-        producerShare: parseFloat(producerShare) || 100,
-        irrigationPractice,
-      });
-    } else {
-      addPlantRecord({
-        fieldId: field.id,
-        fieldName: field.name,
-        seedVariety: seedVariety.trim(),
-        acreage: field.acreage,
-        crop: crop.trim() || undefined,
-        intendedUse: intendedUse.trim() || undefined,
-        plantDate: plantDate || undefined,
-        producerShare: parseFloat(producerShare) || 100,
-        irrigationPractice,
-      });
-    }
+    setIsSaving(true);
+    try {
+      let success = false;
+      if (initialData) {
+        success = await updatePlantRecord({
+          ...initialData,
+          seedVariety: seedVariety.trim(),
+          crop: crop.trim() || undefined,
+          intendedUse: intendedUse.trim() || undefined,
+          plantDate: plantDate || undefined,
+          producerShare: parseFloat(producerShare) || 100,
+          irrigationPractice,
+        });
+      } else {
+        success = await addPlantRecord({
+          fieldId: field.id,
+          fieldName: field.name,
+          seedVariety: seedVariety.trim(),
+          acreage: field.acreage,
+          crop: crop.trim() || undefined,
+          intendedUse: intendedUse.trim() || undefined,
+          plantDate: plantDate || undefined,
+          producerShare: parseFloat(producerShare) || 100,
+          irrigationPractice,
+        });
+      }
 
-    if (!initialData) {
-      setSeedVariety('');
-      setCrop('');
-      setIntendedUse('');
+      if (success) {
+        if (!initialData) {
+          setSeedVariety('');
+          setCrop('');
+          setIntendedUse('');
+        }
+        onClose();
+      }
+    } catch (err) {
+      console.error('Submission error:', err);
+      toast.error('An unexpected error occurred while saving.');
+    } finally {
+      setIsSaving(false);
     }
-    
-    onClose();
   };
 
   return (
@@ -170,10 +182,17 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
         <DialogFooter>
           <Button
             onClick={handleSubmit}
-            disabled={!seedVariety.trim()}
+            disabled={!seedVariety.trim() || isSaving}
             className="touch-target w-full bg-plant text-plant-foreground hover:bg-plant/90 glow-plant font-bold"
           >
-            {initialData ? 'Update Record' : 'Log Planting'}
+            {isSaving ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="animate-spin" size={20} />
+                <span>Saving...</span>
+              </div>
+            ) : (
+              initialData ? 'Update Record' : 'Log Planting'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
