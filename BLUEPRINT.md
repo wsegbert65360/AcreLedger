@@ -53,8 +53,9 @@ excluded by RLS policies server-side and by `.filter(r => !r.deleted_at)` client
 Physical farm field. Referenced by `fieldId` on all activity records.
 ```ts
 { id, name, acreage, lat, lng, intendedUse, fsaFarmNumber, fsaTractNumber,
-  irrigationPractice, deleted_at, boundary: { type, coordinates } }
+  irrigationPractice, notes, deleted_at, boundary: { type, coordinates } }
 ```
+`notes` is a TEXT field used for informal scratchpad entries, persisted with auto-save.
 `lat`/`lng` may be null if geocoding was skipped — always guard before calling `.toFixed()`.
 `boundary` is a GeoJSON Polygon for field geometry.
 
@@ -290,6 +291,15 @@ Standardized wrapper for all compliance report tabs. Props: `title`, `subtitle`,
 `onExport`, `exportLabel`, `summary` (ReactNode), `children` (`<tr>` rows).
 All six report tabs use it for layout or data processing: FSA Plant, Spray Audit, Fertilizer, 
 FSA Harvest, Hay Summary, Landlord Statement. Supports both CSV and PDF direct exports.
+
+### ActivityFeed Component
+Reusable component for displaying field-specific historical records. Filters records for the 
+`viewingSeason` (typically 2026) and provides an `onEdit` callback for granular record editing.
+
+### FieldNotes Component (Auto-Save)
+Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange` 
+event to automatically sync content to Supabase. Includes a visual "Syncing..." / "Saved" 
+status indicator to confirm persistence without blocking user input.
 
 ### Null Safety in Display Strings
 Always guard optional numeric/string fields before interpolation:
