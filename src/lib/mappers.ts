@@ -23,7 +23,8 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     intendedUse: db.intended_use ?? undefined,
     boundary: db.boundary as Field['boundary'],
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? null
+    deleted_at: db.deleted_at ?? null,
+    notes: db.notes ?? undefined
 });
 
 export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
@@ -193,7 +194,8 @@ export const mapFieldToDb = (f: Field) => ({
     irrigation_practice: f.irrigationPractice,
     intended_use: f.intendedUse,
     boundary: f.boundary,
-    deleted_at: f.deleted_at
+    deleted_at: f.deleted_at,
+    notes: f.notes
 });
 
 export const mapPlantToDb = (r: PlantRecord) => ({

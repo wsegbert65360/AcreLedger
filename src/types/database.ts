@@ -18,6 +18,7 @@ export interface FieldRow {
     intended_use?: string | null;
     boundary?: any;
     deleted_at?: string | null;
+    notes?: string | null;
 }
 
 export interface BinRow {

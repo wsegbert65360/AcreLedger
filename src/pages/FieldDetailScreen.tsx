@@ -15,6 +15,7 @@ import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
+import FieldNotes from '@/components/FieldNotes';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | null;
 
@@ -311,6 +312,9 @@ export default function FieldDetailScreen() {
             ))}
           </div>
         </section>
+
+        {/* Persistent Field Notes */}
+        <FieldNotes field={field} />
 
         <ActivityFeed records={unifiedRecords} onEdit={handleEdit} />
       </main>

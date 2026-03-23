@@ -21,6 +21,7 @@ export interface Field {
     sprayed: number;
     fertilized: number;
   };
+  notes?: string;
 }
 
 export interface PlantRecord {
