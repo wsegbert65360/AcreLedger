@@ -87,10 +87,15 @@ export default function FieldDetailScreen() {
 
   useEffect(() => {
     const controller = new AbortController();
-    setStatus('loading');
+    
+    // v2.9.2 - Stabilized dependency: Only fetch when field ID or location changes
+    if (!field?.id || field.lat == null || field.lng == null) {
+      setStatus('success');
+      return;
+    }
 
-    if (field?.id && field?.lat != null && field?.lng != null) {
-      WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
+    setStatus('loading');
+    WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
       .then((windData) => {
         setConditions(windData);
         setStatus('success');
@@ -99,12 +104,9 @@ export default function FieldDetailScreen() {
         console.error('[FieldDetail] Fetch error:', err);
         setStatus('error');
       });
-    } else {
-      setStatus('success');
-    }
 
     return () => controller.abort();
-  }, [field]);
+  }, [field?.id, field?.lat, field?.lng]);
 
   const location = useLocation();
   useEffect(() => {
@@ -158,7 +160,7 @@ export default function FieldDetailScreen() {
 
 
   return (
-    <div className="min-h-screen bg-background pb-12">
+    <div className="min-h-screen bg-background pb-24">
       {/* Premium Header */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">
