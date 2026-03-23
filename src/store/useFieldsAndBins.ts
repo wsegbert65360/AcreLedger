@@ -60,6 +60,7 @@ export function useFieldsAndBins({
     } else {
       toast.success('Field updated');
     }
+    return { error };
   }, [farm_id, fields, setFields]);
 
   const deleteField = useCallback(async (id: string) => {
@@ -142,9 +143,17 @@ export function useFieldsAndBins({
       return;
     }
     const id = crypto.randomUUID();
-    setSavedSeeds(prev => [...prev, { id, name, deleted_at: null }]);
+    setSavedSeeds(prev => [...prev, { 
+      id, name, deleted_at: null, 
+      crop: '—', variety: '—', supplier: '—', lotNumber: '—', 
+      year: new Date().getFullYear(), notes: '' 
+    }]);
     const { error } = await supabase.from('saved_seeds').insert([
-      mapSeedToDb({ id, name, farm_id, deleted_at: null })
+      mapSeedToDb({ 
+        id, name, farm_id, deleted_at: null,
+        crop: '—', variety: '—', supplier: '—', lotNumber: '—',
+        year: new Date().getFullYear(), notes: ''
+      })
     ]);
     if (error) {
       console.error('Error adding seed:', error);
