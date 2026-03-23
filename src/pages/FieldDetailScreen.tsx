@@ -14,8 +14,9 @@ import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import Logo from '@/components/Logo';
+import ActivityFeed from '@/components/ActivityFeed';
 
-type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | null;
+export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | null;
 
 const FIELD_ACTIONS = [
   { id: 'plant', label: 'Plant', icon: Leaf, color: 'text-plant', bg: 'bg-plant/10', border: 'border-plant/20' },
@@ -76,25 +77,6 @@ export default function FieldDetailScreen() {
     // Sort newest first
     return all.sort((a, b) => getTS(b.data) - getTS(a.data));
   }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications]);
-
-  const getFeedInfo = (record: { type: string; data: any }) => {
-    const { type, data } = record;
-    
-    switch (type) {
-      case 'plant':
-        return { emoji: '🌱', label: 'Plant', detail: data.crop || data.seedVariety };
-      case 'spray':
-        return { emoji: '☁️', label: 'Spray', detail: data.products?.[0]?.product || 'Herbicide' };
-      case 'fertilizer':
-        return { emoji: '🧪', label: 'Fertilizer', detail: data.fertilizer_formula };
-      case 'harvest':
-        return { emoji: '🌾', label: 'Harvest', detail: `${data.crop || 'Grain'} (${data.bushels} bu)` };
-      case 'hay':
-        return { emoji: '🚜', label: 'Hay', detail: `${data.baleCount} Bales (${data.cuttingNumber} Cut)` };
-      default:
-        return { emoji: '📝', label: 'Activity', detail: 'Farm Record' };
-    }
-  };
 
   const handleEdit = (type: ModalType, record: any) => {
     setEditingRecord(record);
@@ -330,46 +312,7 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* 2026 Activity Feed */}
-        <section className="space-y-3 pb-8">
-          <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">2026 Activity Feed</h2>
-          <div className="bg-card/40 backdrop-blur-md border border-border rounded-2xl overflow-hidden divide-y divide-border/20 shadow-xl">
-            {unifiedRecords.map((record, i) => {
-              const info = getFeedInfo(record);
-              const r = record.data;
-              const dateRaw = (r as any).date || (r as any).plantDate || (r as any).sprayDate || (r as any).harvestDate;
-              const formattedDate = dateRaw ? 
-                new Date(dateRaw).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) :
-                new Date((r as any).timestamp).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-
-              return (
-                <div 
-                  key={i}
-                  onClick={() => handleEdit(record.type as ModalType, record.data)}
-                  className="p-3.5 flex items-center justify-between group cursor-pointer hover:bg-muted/30 transition-all active:bg-muted/50"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="text-[10px] font-mono font-bold text-muted-foreground/60 w-8">{formattedDate}</span>
-                    <span className="text-lg">{info.emoji}</span>
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{info.label}</span>
-                      <span className="text-xs font-semibold text-foreground line-clamp-1">{info.detail}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Edit2 size={12} className="text-muted-foreground opacity-20 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </div>
-              );
-            })}
-            {unifiedRecords.length === 0 && (
-              <div className="p-12 text-center space-y-2">
-                <div className="text-2xl opacity-20">🚜</div>
-                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">No activities for 2026</p>
-              </div>
-            )}
-          </div>
-        </section>
+        <ActivityFeed records={unifiedRecords} onEdit={handleEdit} />
       </main>
 
       {/* Modals */}
