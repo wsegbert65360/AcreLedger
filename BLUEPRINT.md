@@ -60,10 +60,11 @@ Physical farm field. Referenced by `fieldId` on all activity records.
 `boundary` is a GeoJSON Polygon for field geometry.
 
 ### Bin
-Grain storage bin. Tracks current inventory.
+Grain storage bin. Tracks capacity and identity.
 ```ts
-{ id, farm_id, name, capacityBushels, currentBushels, deleted_at }
+{ id, farm_id, name, capacity, deleted_at }
 ```
+- **Inventory**: `currentBushels` is a derived value calculated via `getBinTotal()` in the store.
 
 ### PlantRecord
 Single planting event on a field. Core FSA 578 source record.
