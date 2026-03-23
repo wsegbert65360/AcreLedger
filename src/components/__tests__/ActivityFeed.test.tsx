@@ -7,11 +7,13 @@ import ActivityFeed from '../ActivityFeed';
 
 describe('ActivityFeed', () => {
   it('handles null or empty records without crashing', () => {
-    const { rerender } = render(<ActivityFeed records={[]} onEdit={vi.fn()} />);
+    const { rerender } = render(<ActivityFeed records={[]} year={2026} onEdit={vi.fn()} />);
+    expect(screen.getByText(/2026 Activity Feed/i)).toBeDefined();
     expect(screen.getByText(/No activities for 2026/i)).toBeDefined();
 
     // @ts-ignore - testing null handling
-    rerender(<ActivityFeed records={null} onEdit={vi.fn()} />);
+    rerender(<ActivityFeed records={null} year={2026} onEdit={vi.fn()} />);
+    expect(screen.getByText(/2026 Activity Feed/i)).toBeDefined();
     expect(screen.getByText(/No activities for 2026/i)).toBeDefined();
   });
 
@@ -28,7 +30,7 @@ describe('ActivityFeed', () => {
       }
     };
 
-    render(<ActivityFeed records={[mockRecord]} onEdit={onEdit} />);
+    render(<ActivityFeed records={[mockRecord]} year={2026} onEdit={onEdit} />);
     
     // Use a more flexible way to find the record row
     const editIcon = screen.getByTestId('edit-icon-spray-spray-1');
@@ -43,7 +45,7 @@ describe('ActivityFeed', () => {
       { type: 'hay', data: { id: 'h1', baleCount: 50, cuttingNumber: 1, date: '2026-05-20' } }
     ];
 
-    render(<ActivityFeed records={records} onEdit={vi.fn()} />);
+    render(<ActivityFeed records={records} year={2026} onEdit={vi.fn()} />);
     
     expect(screen.queryAllByText('🌱').length).toBeGreaterThan(0);
     expect(screen.getByText('Corn')).toBeDefined();

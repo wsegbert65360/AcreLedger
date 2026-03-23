@@ -317,7 +317,7 @@ export default function FieldDetailScreen() {
         {/* Persistent Field Notes */}
         <FieldNotes field={field} />
 
-        <ActivityFeed records={unifiedRecords} onEdit={handleEdit} />
+        <ActivityFeed records={unifiedRecords} year={viewingSeason} onEdit={handleEdit} />
       </main>
 
       {/* Modals */}

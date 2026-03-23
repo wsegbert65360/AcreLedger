@@ -3,10 +3,11 @@ import { ModalType } from '@/pages/FieldDetailScreen';
 
 interface ActivityFeedProps {
   records: any[];
+  year: number;
   onEdit: (type: any, data: any) => void;
 }
 
-export default function ActivityFeed({ records, onEdit }: ActivityFeedProps) {
+export default function ActivityFeed({ records, year, onEdit }: ActivityFeedProps) {
   const getFeedInfo = (record: { type: string; data: any }) => {
     const { type, data } = record;
     
@@ -28,7 +29,7 @@ export default function ActivityFeed({ records, onEdit }: ActivityFeedProps) {
 
   return (
     <section className="space-y-3 pb-8">
-      <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">2026 Activity Feed</h2>
+      <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">{year} Activity Feed</h2>
       <div className="bg-card/40 backdrop-blur-md border border-border rounded-2xl overflow-hidden divide-y divide-border/20 shadow-xl">
         {records?.map((record, i) => {
           const info = getFeedInfo(record);
@@ -65,7 +66,7 @@ export default function ActivityFeed({ records, onEdit }: ActivityFeedProps) {
         {(!records || records.length === 0) && (
           <div className="p-12 text-center space-y-2">
             <div className="text-2xl opacity-20">🚜</div>
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">No activities for 2026</p>
+            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">No activities for {year}</p>
           </div>
         )}
       </div>
