@@ -114,7 +114,7 @@ export default function Reports() {
   // Expanded spray rows — memoized, keyed by index to avoid product-name collisions
   const sprayRows = useMemo(() => sprayRecords.flatMap(r => {
     const field = fieldMap.get(r.fieldId);
-    const treatedArea = parseFloat(r.treatedAreaSize || field?.acreage?.toString() || '0');
+    const treatedArea = r.treatedAreaSize ?? field?.acreage ?? 0;
 
     if (r.products && r.products.length > 0) {
       return r.products.map((p, i) => ({

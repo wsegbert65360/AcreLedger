@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { 
@@ -65,6 +65,13 @@ export default function FieldDetailScreen() {
 
     return () => controller.abort();
   }, [field]);
+
+  const location = useLocation();
+  useEffect(() => {
+    if (location.hash === '#planting') setModal('plant');
+    if (location.hash === '#spraying') setModal('spray');
+    if (location.hash === '#fertilizer') setModal('fertilizer');
+  }, [location.hash]);
 
   if (!field) return <div className="p-8 text-center text-muted-foreground uppercase font-mono">Field not found</div>;
 
