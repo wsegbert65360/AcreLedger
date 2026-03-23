@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { Field, HayHarvestRecord } from '@/types/farm';
-import { Tractor, Thermometer, Cloud, Hash, Layers } from 'lucide-react';
+import { Tractor, Thermometer, Cloud, Hash, Layers, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
 
@@ -26,6 +27,7 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
     const [conditions, setConditions] = useState(initialData?.conditions || '');
     const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
     const [loadingWeather, setLoadingWeather] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (open && !initialData && field.lat != null && field.lng != null) {
@@ -43,35 +45,46 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
         }
     }, [open, field.lat, field.lng, initialData]);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         const count = parseInt(baleCount, 10);
         const cutting = parseInt(cuttingNumber, 10);
         if (isNaN(count) || isNaN(cutting)) return;
 
-        if (initialData) {
-            updateHayHarvestRecord({
-                ...initialData,
-                date,
-                baleCount: count,
-                cuttingNumber: cutting,
-                baleType,
-                temperature: parseFloat(temp) || undefined,
-                conditions: conditions.trim() || undefined,
-            });
-        } else {
-            addHayHarvestRecord({
-                fieldId: field.id,
-                fieldName: field.name,
-                date,
-                baleCount: count,
-                cuttingNumber: cutting,
-                baleType,
-                temperature: parseFloat(temp) || undefined,
-                conditions: conditions.trim() || undefined,
-            });
-        }
+        setIsSaving(true);
+        try {
+            let success = false;
+            if (initialData) {
+                success = await updateHayHarvestRecord({
+                    ...initialData,
+                    date,
+                    baleCount: count,
+                    cuttingNumber: cutting,
+                    baleType,
+                    temperature: parseFloat(temp) || undefined,
+                    conditions: conditions.trim() || undefined,
+                });
+            } else {
+                success = await addHayHarvestRecord({
+                    fieldId: field.id,
+                    fieldName: field.name,
+                    date,
+                    baleCount: count,
+                    cuttingNumber: cutting,
+                    baleType,
+                    temperature: parseFloat(temp) || undefined,
+                    conditions: conditions.trim() || undefined,
+                });
+            }
 
-        onClose();
+            if (success) {
+                onClose();
+            }
+        } catch (err) {
+            console.error('Submission error:', err);
+            toast.error('An unexpected error occurred while saving.');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -176,10 +189,17 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
                 <DialogFooter className="mt-2">
                     <Button
                         onClick={handleSubmit}
-                        disabled={!baleCount || isNaN(parseInt(baleCount, 10))}
+                        disabled={!baleCount || isNaN(parseInt(baleCount, 10)) || isSaving}
                         className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold uppercase tracking-widest text-xs py-5"
                     >
-                        {initialData ? 'Update Record' : 'Record Hay Baling'}
+                        {isSaving ? (
+                            <div className="flex items-center gap-2">
+                                <Loader2 className="animate-spin" size={20} />
+                                <span>Saving...</span>
+                            </div>
+                        ) : (
+                            initialData ? 'Update Record' : 'Record Hay Baling'
+                        )}
                     </Button>
                 </DialogFooter>
             </DialogContent>
