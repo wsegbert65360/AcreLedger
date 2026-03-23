@@ -4,7 +4,7 @@ import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { 
   Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
-  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, AlertCircle
+  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, AlertCircle, Plus, Edit2
 } from 'lucide-react';
 import { RainService } from '@/services/RainService';
 import type { RainData } from '@/types/weather';
@@ -28,7 +28,14 @@ const FIELD_ACTIONS = [
 export default function FieldDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { fields } = useFarm();
+  const { 
+    fields, 
+    plantRecords, 
+    sprayRecords, 
+    harvestRecords, 
+    hayHarvestRecords, 
+    fertilizerApplications 
+  } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
   const [conditions, setConditions] = useState<{ 
@@ -44,6 +51,55 @@ export default function FieldDetailScreen() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
+
+  const unifiedRecords = useMemo(() => {
+    if (!field) return [];
+    
+    // Convert all record types into a unified structure for the feed
+    const all = [
+      ...plantRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'plant' as const, data: r })),
+      ...sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'spray' as const, data: r })),
+      ...harvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'harvest' as const, data: r })),
+      ...hayHarvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === 2026).map(r => ({ type: 'hay' as const, data: r })),
+      ...fertilizerApplications.filter(r => r.fieldId === field.id && new Date(r.date).getFullYear() === 2026).map(r => ({ type: 'fertilizer' as const, data: r })),
+    ];
+
+    // Helper to get a stable timestamp for sorting
+    const getTS = (r: any) => {
+      if (r.timestamp) return r.timestamp;
+      const dateStr = r.date || r.plantDate || r.sprayDate || r.harvestDate;
+      if (dateStr) return new Date(dateStr).getTime();
+      return 0;
+    };
+
+    // Sort newest first
+    return all.sort((a, b) => getTS(b.data) - getTS(a.data));
+  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications]);
+
+  const getFeedInfo = (record: { type: string; data: any }) => {
+    const { type, data } = record;
+    
+    switch (type) {
+      case 'plant':
+        return { emoji: '🌱', label: 'Plant', detail: data.crop || data.seedVariety };
+      case 'spray':
+        return { emoji: '☁️', label: 'Spray', detail: data.products?.[0]?.product || 'Herbicide' };
+      case 'fertilizer':
+        return { emoji: '🧪', label: 'Fertilizer', detail: data.fertilizer_formula };
+      case 'harvest':
+        return { emoji: '🌾', label: 'Harvest', detail: `${data.crop || 'Grain'} (${data.bushels} bu)` };
+      case 'hay':
+        return { emoji: '🚜', label: 'Hay', detail: `${data.baleCount} Bales (${data.cuttingNumber} Cut)` };
+      default:
+        return { emoji: '📝', label: 'Activity', detail: 'Farm Record' };
+    }
+  };
+
+  const handleEdit = (type: ModalType, record: any) => {
+    setEditingRecord(record);
+    setModal(type);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -255,30 +311,108 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* Action Grid */}
+        {/* Action Bar (Compact) */}
         <section className="space-y-4">
-          <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] text-center px-1">Field Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-row flex-wrap gap-2 justify-center">
             {FIELD_ACTIONS.map((action) => (
               <button
                 key={action.id}
-                onClick={() => setModal(action.id as ModalType)}
-                className={`w-full aspect-square flex flex-col items-center justify-center gap-4 rounded-2xl ${action.bg} border ${action.border} ${action.color} transition-all active:scale-95 hover:brightness-110 shadow-lg p-4`}
+                onClick={() => {
+                  setEditingRecord(null);
+                  setModal(action.id as ModalType);
+                }}
+                className={`h-10 px-4 flex items-center gap-2 rounded-full border ${action.bg} ${action.border} ${action.color} transition-all active:scale-95 hover:brightness-110 shadow-sm`}
               >
-                <action.icon size={36} strokeWidth={2.5} />
-                <span className="font-mono text-xs uppercase font-bold tracking-tight">{action.label}</span>
+                <action.icon size={16} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">{action.label}</span>
               </button>
             ))}
+          </div>
+        </section>
+
+        {/* 2026 Activity Feed */}
+        <section className="space-y-3 pb-8">
+          <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">2026 Activity Feed</h2>
+          <div className="bg-card/40 backdrop-blur-md border border-border rounded-2xl overflow-hidden divide-y divide-border/20 shadow-xl">
+            {unifiedRecords.map((record, i) => {
+              const info = getFeedInfo(record);
+              const r = record.data;
+              const dateRaw = (r as any).date || (r as any).plantDate || (r as any).sprayDate || (r as any).harvestDate;
+              const formattedDate = dateRaw ? 
+                new Date(dateRaw).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) :
+                new Date((r as any).timestamp).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+
+              return (
+                <div 
+                  key={i}
+                  onClick={() => handleEdit(record.type as ModalType, record.data)}
+                  className="p-3.5 flex items-center justify-between group cursor-pointer hover:bg-muted/30 transition-all active:bg-muted/50"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="text-[10px] font-mono font-bold text-muted-foreground/60 w-8">{formattedDate}</span>
+                    <span className="text-lg">{info.emoji}</span>
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{info.label}</span>
+                      <span className="text-xs font-semibold text-foreground line-clamp-1">{info.detail}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Edit2 size={12} className="text-muted-foreground opacity-20 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+              );
+            })}
+            {unifiedRecords.length === 0 && (
+              <div className="p-12 text-center space-y-2">
+                <div className="text-2xl opacity-20">🚜</div>
+                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">No activities for 2026</p>
+              </div>
+            )}
           </div>
         </section>
       </main>
 
       {/* Modals */}
-      {modal === 'plant' && <PlantModal field={field} open onClose={() => setModal(null)} />}
-      {modal === 'spray' && <SprayModal field={field} open onClose={() => setModal(null)} />}
-      {modal === 'harvest' && <HarvestModal field={field} open onClose={() => setModal(null)} />}
-      {modal === 'hay' && <HayModal field={field} open onClose={() => setModal(null)} />}
-      {modal === 'fertilizer' && <FertilizerModal field={field} open onClose={() => setModal(null)} />}
+      {modal === 'plant' && (
+        <PlantModal 
+          field={field} 
+          open 
+          initialData={editingRecord}
+          onClose={() => { setModal(null); setEditingRecord(null); }} 
+        />
+      )}
+      {modal === 'spray' && (
+        <SprayModal 
+          field={field} 
+          open 
+          initialData={editingRecord}
+          onClose={() => { setModal(null); setEditingRecord(null); }} 
+        />
+      )}
+      {modal === 'harvest' && (
+        <HarvestModal 
+          field={field} 
+          open 
+          initialData={editingRecord}
+          onClose={() => { setModal(null); setEditingRecord(null); }} 
+        />
+      )}
+      {modal === 'hay' && (
+        <HayModal 
+          field={field} 
+          open 
+          initialData={editingRecord}
+          onClose={() => { setModal(null); setEditingRecord(null); }} 
+        />
+      )}
+      {modal === 'fertilizer' && (
+        <FertilizerModal 
+          field={field} 
+          open 
+          initialData={editingRecord}
+          onClose={() => { setModal(null); setEditingRecord(null); }} 
+        />
+      )}
     </div>
   );
 }
