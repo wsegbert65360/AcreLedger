@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import FieldCard from '@/components/FieldCard';
+import FieldList from '@/components/FieldList';
 import BottomNav from '@/components/BottomNav';
 import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
@@ -94,24 +94,14 @@ const Index = () => {
                 {filteredPastureHay.length > 0 && (
                   <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
                 )}
-                {filteredRowCrops.map(field => (
-                  <FieldCard
-                    key={field.id}
-                    field={field}
-                  />
-                ))}
+                <FieldList fields={filteredRowCrops} />
               </div>
             )}
 
             {filteredPastureHay.length > 0 && (
               <div className="space-y-1 pt-1">
                 <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
-                {filteredPastureHay.map(field => (
-                  <FieldCard
-                    key={field.id}
-                    field={field}
-                  />
-                ))}
+                <FieldList fields={filteredPastureHay} />
               </div>
             )}
             {filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (

@@ -16,6 +16,11 @@ export interface Field {
     coordinates: number[][][];
   } | null;
   deleted_at: string | null;
+  activitySummary?: {
+    planted: boolean;
+    sprayed: number;
+    fertilized: number;
+  };
 }
 
 export interface PlantRecord {
