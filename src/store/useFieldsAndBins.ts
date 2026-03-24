@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
-import { Field, Bin, SavedSeed, SprayRecipe } from '@/types/farm';
+import { Field, Bin, SavedSeed, SprayRecipe, FertilizerRecipe } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { fieldService } from '@/services/fieldService';
 import { binService } from '@/services/binService';
-import { mapSeedToDb, mapRecipeToDb } from '@/lib/mappers';
+import { mapSeedToDb, mapRecipeToDb, mapFertilizerRecipeToDb } from '@/lib/mappers';
 
 interface UseFieldsAndBinsArgs {
   farm_id: string | null;
@@ -16,11 +16,14 @@ interface UseFieldsAndBinsArgs {
   setSavedSeeds: React.Dispatch<React.SetStateAction<SavedSeed[]>>;
   sprayRecipes: SprayRecipe[];
   setSprayRecipes: React.Dispatch<React.SetStateAction<SprayRecipe[]>>;
+  fertilizerRecipes: FertilizerRecipe[];
+  setFertilizerRecipes: React.Dispatch<React.SetStateAction<FertilizerRecipe[]>>;
 }
 
 export function useFieldsAndBins({
   farm_id, fields, setFields, bins, setBins,
-  savedSeeds, setSavedSeeds, sprayRecipes, setSprayRecipes
+  savedSeeds, setSavedSeeds, sprayRecipes, setSprayRecipes,
+  fertilizerRecipes, setFertilizerRecipes
 }: UseFieldsAndBinsArgs) {
 
   // --- Fields ---
@@ -229,6 +232,71 @@ export function useFieldsAndBins({
     }
   }, [farm_id, sprayRecipes, setSprayRecipes]);
 
+  // --- Fertilizer Recipes ---
+  const addFertilizerRecipe = useCallback(async (r: Omit<FertilizerRecipe, 'id'>) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
+    const id = crypto.randomUUID();
+    setFertilizerRecipes(prev => [...prev, { ...r, id }]);
+    const { error } = await supabase.from('fertilizer_recipes').insert([
+      mapFertilizerRecipeToDb({ ...r, id, farm_id, deleted_at: null })
+    ]);
+    if (error) {
+      console.error('Error adding fertilizer recipe:', error);
+      setFertilizerRecipes(prev => prev.filter(rec => rec.id !== id));
+      toast.error('Failed to save recipe');
+    } else {
+      toast.success('Fertilizer recipe created!');
+    }
+  }, [farm_id, setFertilizerRecipes]);
+
+  const updateFertilizerRecipe = useCallback(async (r: FertilizerRecipe) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
+    const previous = fertilizerRecipes.find(item => item.id === r.id);
+    setFertilizerRecipes(prev => prev.map(existing => existing.id === r.id ? r : existing));
+    const mapped = mapFertilizerRecipeToDb({ ...r, farm_id });
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+    const { error } = await supabase
+      .from('fertilizer_recipes')
+      .update(payload)
+      .eq('id', r.id)
+      .eq('farm_id', farm_id);
+
+    if (error) {
+      console.error('Error updating fertilizer recipe:', error);
+      if (previous) setFertilizerRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
+      toast.error('Failed to update recipe');
+    } else {
+      toast.success('Recipe updated');
+    }
+  }, [farm_id, fertilizerRecipes, setFertilizerRecipes]);
+
+  const deleteFertilizerRecipe = useCallback(async (id: string) => {
+    if (!farm_id) {
+      toast.error('No farm selected');
+      return;
+    }
+    const previous = fertilizerRecipes.find(r => r.id === id);
+    setFertilizerRecipes(prev => prev.filter(r => r.id !== id));
+    const { error } = await supabase
+      .from('fertilizer_recipes')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('farm_id', farm_id);
+    if (error) {
+      console.error('Error deleting fertilizer recipe:', error);
+      if (previous) setFertilizerRecipes(prev => [...prev, previous]);
+      toast.error('Failed to delete recipe');
+    } else {
+      toast.success('Recipe removed');
+    }
+  }, [farm_id, fertilizerRecipes, setFertilizerRecipes]);
+
   const deleteSprayRecipe = useCallback(async (id: string) => {
     if (!farm_id) {
       toast.error('No farm selected');
@@ -255,5 +323,6 @@ export function useFieldsAndBins({
     addBin, updateBin, deleteBin,
     addSeed, deleteSeed,
     addSprayRecipe, updateSprayRecipe, deleteSprayRecipe,
+    addFertilizerRecipe, updateFertilizerRecipe, deleteFertilizerRecipe,
   };
 }

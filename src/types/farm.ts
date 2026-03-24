@@ -174,6 +174,14 @@ export interface SprayRecipe {
   deleted_at: string | null;
 }
 
+export interface FertilizerRecipe {
+  id: string;
+  name: string;
+  npkRatio: string;
+  farm_id?: string;
+  deleted_at: string | null;
+}
+
 export interface FertilizerApplication {
   id: string;
   farm_id: string;
@@ -190,10 +198,24 @@ export interface FertilizerApplication {
   seasonYear: number;
 }
 
+export interface TillageRecord {
+  id: string;
+  farm_id: string;
+  fieldId: string;
+  fieldName: string;
+  date: string;
+  implementType: string;
+  notes?: string;
+  seasonYear: number;
+  timestamp: number;
+  deleted_at: string | null;
+}
+
 export type ActivityRecord =
   | { type: 'plant'; data: PlantRecord }
   | { type: 'spray'; data: SprayRecord }
   | { type: 'harvest'; data: HarvestRecord }
   | { type: 'hay'; data: HayHarvestRecord }
   | { type: 'fertilizer'; data: FertilizerApplication }
+  | { type: 'tillage'; data: TillageRecord }
   | { type: 'grain'; data: GrainMovement };

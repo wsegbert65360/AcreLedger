@@ -1,7 +1,7 @@
 {
   "name": "acre-ledger",
   "private": true,
-  "version": "2.9.2-AcreLedger",
+  "version": "3.0.0-AcreLedger",
   "type": "module",
   "scripts": {
     "dev": "vite",

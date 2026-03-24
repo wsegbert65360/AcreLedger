@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
-import { Sprout, X, Calendar, MapPin, Gauge, Loader2 } from 'lucide-react';
+import { Sprout, X, Calendar, MapPin, Gauge, Loader2, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 interface FertilizerModalProps {
@@ -13,7 +14,7 @@ interface FertilizerModalProps {
 }
 
 export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
-    const { addFertilizerApplication, updateFertilizerApplication, activeSeason } = useFarm();
+    const { addFertilizerApplication, updateFertilizerApplication, fertilizerRecipes, activeSeason } = useFarm();
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [acres, setAcres] = useState(field.acreage.toString());
     const [formula, setFormula] = useState('');
@@ -108,6 +109,31 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                                 required
                             />
                         </div>
+
+                        {/* Recipe Selection (New for v3.0.0) */}
+                        {!initialData && fertilizerRecipes.length > 0 && (
+                            <div className="space-y-1.5">
+                                <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                                    <ClipboardList size={12} />
+                                    Use Recipe
+                                </label>
+                                <Select onValueChange={(val) => {
+                                    const recipe = fertilizerRecipes.find(r => r.id === val);
+                                    if (recipe) setFormula(recipe.npkRatio);
+                                }}>
+                                    <SelectTrigger className="w-full h-12 bg-muted/30 border-dashed border-border/60 rounded-xl focus:ring-1 focus:ring-primary/20">
+                                        <SelectValue placeholder="Select a saved recipe..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {fertilizerRecipes.map(r => (
+                                            <SelectItem key={r.id} value={r.id}>
+                                                {r.name} ({r.npkRatio})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
 
                         {/* Acres Field */}
                         <div className="space-y-1.5">

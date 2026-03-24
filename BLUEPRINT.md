@@ -104,6 +104,13 @@ Hay cutting event. Tracked by cutting number per field per season.
   timestamp, seasonYear, deleted_at }
 ```
 
+### TillageRecord
+Track tillage events (Disk, Cultivation, etc.) per field per season.
+```ts
+{ id, farm_id, fieldId, fieldName, date, implementType, notes,
+  timestamp, seasonYear, deleted_at }
+```
+
 ### FertilizerApplication
 ```ts
 { id, farm_id, fieldId, fieldName, fertilizer_formula, acres, date,
@@ -133,6 +140,12 @@ Saved tank-mix recipe for reuse on spray records. Not season-scoped.
 ```ts
 { id, farm_id, name, products: { product, epaRegNumber, rate, rateUnit }[],
   deleted_at }
+```
+
+### FertilizerRecipe
+Saved fertilizer formulas for reuse on fertilizer application records.
+```ts
+{ id, farm_id, name, npkRatio, deleted_at }
 ```
 
 ### Rainfall
@@ -198,8 +211,10 @@ every mutation function — before validation, mapping, or any state change.
 | HarvestRecord | `harvest_records` |
 | HayHarvestRecord | `hay_harvest_records` |
 | FertilizerApplication | `fertilizer_applications` |
+| TillageRecord | `tillage_records` |
 | GrainMovement | `grain_movements` |
 | SavedSeed | `saved_seeds` |
+| FertilizerRecipe | `fertilizer_recipes` |
 | SprayRecipe | `spray_recipes` |
 | User profile / active season | `profiles` |
 

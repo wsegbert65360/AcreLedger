@@ -9,7 +9,7 @@ interface RecordListItemProps {
   isSelected: boolean;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: () => void;
-  type: 'plant' | 'spray' | 'harvest' | 'grain' | 'hay' | 'fertilizer';
+  type: 'plant' | 'spray' | 'harvest' | 'grain' | 'hay' | 'fertilizer' | 'tillage';
   warning?: boolean;
 }
 
@@ -21,6 +21,7 @@ export default function RecordListItem({
     : type === 'harvest' ? Wheat
     : type === 'grain' ? Wheat
     : type === 'hay' ? FileText
+    : type === 'tillage' ? Tractor
     : Beaker;
 
   const colorClass = type === 'plant' ? 'text-plant'
@@ -28,6 +29,7 @@ export default function RecordListItem({
     : type === 'harvest' ? 'text-harvest'
     : type === 'grain' ? 'text-harvest'
     : type === 'hay' ? 'text-harvest'
+    : type === 'tillage' ? 'text-orange-600'
     : 'text-plant';
 
   const bgClass = type === 'plant' ? 'bg-plant/10'
@@ -35,6 +37,7 @@ export default function RecordListItem({
     : type === 'harvest' ? 'bg-harvest/10'
     : type === 'grain' ? 'bg-harvest/10'
     : type === 'hay' ? 'bg-harvest/10'
+    : type === 'tillage' ? 'bg-orange-600/10'
     : 'bg-plant/10';
 
   return (

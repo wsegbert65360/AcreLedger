@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
 import {
   Field, Bin, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord,
-  FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe
+  FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe, FertilizerRecipe, TillageRecord
 } from '@/types/farm';
 import {
   mapFieldToDb, mapBinToDb, mapPlantToDb, mapSprayToDb,
   mapHarvestToDb, mapHayToDb, mapGrainToDb, mapSeedToDb,
-  mapRecipeToDb, mapFertilizerToDb
+  mapRecipeToDb, mapFertilizerToDb, mapFertilizerRecipeToDb, mapTillageToDb
 } from '@/lib/mappers';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -28,7 +28,9 @@ interface UseSeasonManagementArgs {
   fertilizerApplications: FertilizerApplication[];
   grainMovements: GrainMovement[];
   savedSeeds: SavedSeed[];
+  fertilizerRecipes: FertilizerRecipe[];
   sprayRecipes: SprayRecipe[];
+  tillageRecords: TillageRecord[];
   activeSeason: number;
   setActiveSeason: React.Dispatch<React.SetStateAction<number>>;
   setViewingSeason: React.Dispatch<React.SetStateAction<number>>;
@@ -42,7 +44,9 @@ interface UseSeasonManagementArgs {
   setFertilizerApplications: React.Dispatch<React.SetStateAction<FertilizerApplication[]>>;
   setGrainMovements: React.Dispatch<React.SetStateAction<GrainMovement[]>>;
   setSavedSeeds: React.Dispatch<React.SetStateAction<SavedSeed[]>>;
+  setFertilizerRecipes: React.Dispatch<React.SetStateAction<FertilizerRecipe[]>>;
   setSprayRecipes: React.Dispatch<React.SetStateAction<SprayRecipe[]>>;
+  setTillageRecords: React.Dispatch<React.SetStateAction<TillageRecord[]>>;
   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
@@ -64,11 +68,12 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     session, farm_id,
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, fertilizerApplications, grainMovements,
-    savedSeeds, sprayRecipes, activeSeason,
+    savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
-    setGrainMovements, setSavedSeeds, setSprayRecipes, setFarmId,
+    setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
+    setTillageRecords, setFarmId,
   } = args;
 
   // ─── Rollover ───────────────────────────────────────────────────────────────
@@ -84,8 +89,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       // 1. Attempt backup FIRST — do not proceed if it fails
       const backupData = {
         fields, bins, plantRecords, sprayRecords, harvestRecords,
-        hayHarvestRecords, fertilizerApplications, grainMovements,
-        savedSeeds, sprayRecipes, activeSeason,
+        hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+        savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
         rolloverDate: new Date().toISOString(),
       };
 
@@ -122,8 +127,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     }
   }, [
     session, fields, bins, plantRecords, sprayRecords, harvestRecords,
-    hayHarvestRecords, fertilizerApplications, grainMovements,
-    savedSeeds, sprayRecipes, activeSeason,
+    hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+    savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
   ]);
 
@@ -153,8 +158,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => ({ ...mapHarvestToDb(r),    farm_id }));
       const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => ({ ...mapHayToDb(r),        farm_id }));
       const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => ({ ...mapFertilizerToDb(r), farm_id }));
+      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => ({ ...mapTillageToDb(r),    farm_id }));
       const grainToDb       = (backupData.grainMovements       ?? []).map((m) => ({ ...mapGrainToDb(m),      farm_id }));
       const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => ({ ...mapSeedToDb(s),       farm_id }));
+      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => ({ ...mapFertilizerRecipeToDb(r), farm_id }));
       const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => ({ ...mapRecipeToDb(r),     farm_id }));
 
       // 3. Upsert sequentially so a failure is caught before partial writes
@@ -168,8 +175,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         ['harvest_records',         harvestsToDb],
         ['hay_harvest_records',     hayToDb],
         ['fertilizer_applications', fertilizerToDb],
+        ['tillage_records',         tillageToDb],
         ['grain_movements',         grainToDb],
         ['saved_seeds',             seedsToDb],
+        ['fertilizer_recipes',      fRecipesToDb],
         ['spray_recipes',           recipesToDb],
       ];
 
@@ -192,8 +201,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       if (backupData.harvestRecords       !== undefined) setHarvestRecords(backupData.harvestRecords);
       if (backupData.hayHarvestRecords    !== undefined) setHayHarvestRecords(backupData.hayHarvestRecords);
       if (backupData.fertilizerApplications !== undefined) setFertilizerApplications(backupData.fertilizerApplications);
+      if (backupData.tillageRecords         !== undefined) setTillageRecords(backupData.tillageRecords);
       if (backupData.grainMovements       !== undefined) setGrainMovements(backupData.grainMovements);
       if (backupData.savedSeeds           !== undefined) setSavedSeeds(backupData.savedSeeds);
+      if (backupData.fertilizerRecipes    !== undefined) setFertilizerRecipes(backupData.fertilizerRecipes);
       if (backupData.sprayRecipes         !== undefined) setSprayRecipes(backupData.sprayRecipes);
       if (backupData.activeSeason !== undefined) {
         setActiveSeason(backupData.activeSeason);
@@ -214,7 +225,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     farm_id, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
-    setGrainMovements, setSavedSeeds, setSprayRecipes,
+    setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setActiveSeason, setViewingSeason,
   ]);
 
@@ -252,7 +263,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     session,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
-    setGrainMovements, setSavedSeeds, setSprayRecipes,
+    setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setFarmId, setActiveSeason, setViewingSeason,
   ]);
 
