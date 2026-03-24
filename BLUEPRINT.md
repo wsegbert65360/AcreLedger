@@ -6,6 +6,11 @@
 
 ---
 
+### External Resources
+- **Testing & Credentials**: [TESTING.md](file:///c:/Projects/AcreLedger/TESTING.md)
+
+---
+
 ## 1. Application Overview
 
 AcreLedger is a mobile-first, PWA-ready agricultural record-keeping and compliance reporting
@@ -129,6 +134,11 @@ Grain in/out of a bin, including sales and contracts.
 (more grain removed than estimated). This is intentional business logic — do not block or clamp.
 Display with an amber `AlertTriangle` warning only.
 
+#### The "Ghost Row" Prevention Rule
+To prevent inventory drift if two sessions edit the same bin simultaneously, all Grain Movement edits must include a **Concurrency Guard**:
+- Use a `Last-Modified` or `version` stamp check in the `WHERE` clause of the update.
+- If the count of updated rows is 0, notify the user that the record has been modified by another session and trigger a state refresh.
+
 ### SavedSeed
 Seed inventory reference. Not season-scoped.
 ```ts
@@ -141,6 +151,9 @@ Saved tank-mix recipe for reuse on spray records. Not season-scoped.
 { id, farm_id, name, products: { product, epaRegNumber, rate, rateUnit }[],
   deleted_at }
 ```
+
+#### Tank-Mix Product Identity
+For the `products` array in SprayRecords, generate a temporary `ui_id` (e.g., `crypto.randomUUID()`) when adding a row in the modal. Use this for React key props instead of array index to prevent input focus loss during reorders.
 
 ### FertilizerRecipe
 Saved fertilizer formulas for reuse on fertilizer application records.
@@ -339,6 +352,13 @@ value != null ? value : '—'  // Right for measurements where 0 is valid
 ### Sorting
 Never call `.sort()` directly on a state-derived array — `Array.sort` mutates in place.
 Always spread first inside `useMemo`: `[...arr].sort((a, b) => ...)`.
+
+### Z-Index Layering Standard
+To prevent overlap conflicts between the floating Farm Summary, Modals, and Navigation:
+- **layer-base**: `0` (Fields, Cards)
+- **layer-navigation**: `10` (Bottom Nav Bar)
+- **layer-summary**: `20` (Floating Farm Summary - must clear `pb-24`)
+- **layer-overlay**: `50` (Dialogs, Modals, Toasts)
 
 ### Report Date Stability
 Capture report generation date at mount via `useRef`:
@@ -604,3 +624,5 @@ Use `window.addEventListener('online'/'offline')` in parallel with channel statu
 - **GrainMovement `bushels` may be negative.** Intentional adjustment — warn in UI, never reject.
 - **Spray product row keys use index.** `` `${r.id}-${i}` `` not `` `${r.id}-${p.product}` `` — product names can duplicate.
 - **One import statement per module path.** `import { a, b } from '@/utils/dates'` — never two lines from the same path.
+### Verification
+See [TESTING.md](file:///c:/Projects/AcreLedger/TESTING.md) for detailed verification protocols and bot credentials.

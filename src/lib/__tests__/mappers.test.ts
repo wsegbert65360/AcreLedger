@@ -53,7 +53,7 @@ describe('Mappers Round-Trip', () => {
         };
         
         const db = mapSeedToDb(original) as any;
-        db.id = original.id; // Mapper doesn't map ID back in mapSeedToDb (it returns a partial)
+        db.id = original.id;
         const result = mapSeedFromDb(db);
         
         expect(result.crop).toBe(original.crop);
@@ -61,5 +61,22 @@ describe('Mappers Round-Trip', () => {
         expect(result.supplier).toBe(original.supplier);
         expect(result.lotNumber).toBe(original.lotNumber);
         expect(result.year).toBe(original.year);
+    });
+
+    describe('Validation Errors', () => {
+        it('should throw if mapFieldToDb is missing farm_id', () => {
+            const invalidField: any = { id: '1', name: 'Test' };
+            expect(() => mapFieldToDb(invalidField)).toThrow('[Mapper Error] mapFieldToDb: Missing required field "farm_id"');
+        });
+
+        it('should throw if mapPlantToDb is missing seasonYear', () => {
+            const invalidPlant: any = { id: '1', farm_id: 'f1', fieldId: 'fld1' };
+            expect(() => mapPlantToDb(invalidPlant)).toThrow('[Mapper Error] mapPlantToDb: Missing required field "seasonYear"');
+        });
+
+        it('should throw if mapFertilizerToDb is missing fieldId', () => {
+            const invalidFert: any = { id: '1', farm_id: 'f1', seasonYear: 2026 };
+            expect(() => mapPlantToDb(invalidFert)).toThrow('[Mapper Error] mapPlantToDb: Missing required field "fieldId"');
+        });
     });
 });

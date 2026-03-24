@@ -233,10 +233,10 @@ export function useFieldsAndBins({
   }, [farm_id, sprayRecipes, setSprayRecipes]);
 
   // --- Fertilizer Recipes ---
-  const addFertilizerRecipe = useCallback(async (r: Omit<FertilizerRecipe, 'id'>) => {
+  const addFertilizerRecipe = useCallback(async (r: Omit<FertilizerRecipe, 'id'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     const id = crypto.randomUUID();
     setFertilizerRecipes(prev => [...prev, { ...r, id }]);
@@ -247,15 +247,17 @@ export function useFieldsAndBins({
       console.error('Error adding fertilizer recipe:', error);
       setFertilizerRecipes(prev => prev.filter(rec => rec.id !== id));
       toast.error('Failed to save recipe');
+      return false;
     } else {
       toast.success('Fertilizer recipe created!');
+      return true;
     }
   }, [farm_id, setFertilizerRecipes]);
 
-  const updateFertilizerRecipe = useCallback(async (r: FertilizerRecipe) => {
+  const updateFertilizerRecipe = useCallback(async (r: FertilizerRecipe): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     const previous = fertilizerRecipes.find(item => item.id === r.id);
     setFertilizerRecipes(prev => prev.map(existing => existing.id === r.id ? r : existing));
@@ -271,15 +273,17 @@ export function useFieldsAndBins({
       console.error('Error updating fertilizer recipe:', error);
       if (previous) setFertilizerRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
       toast.error('Failed to update recipe');
+      return false;
     } else {
       toast.success('Recipe updated');
+      return true;
     }
   }, [farm_id, fertilizerRecipes, setFertilizerRecipes]);
 
-  const deleteFertilizerRecipe = useCallback(async (id: string) => {
+  const deleteFertilizerRecipe = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     const previous = fertilizerRecipes.find(r => r.id === id);
     setFertilizerRecipes(prev => prev.filter(r => r.id !== id));
@@ -292,8 +296,10 @@ export function useFieldsAndBins({
       console.error('Error deleting fertilizer recipe:', error);
       if (previous) setFertilizerRecipes(prev => [...prev, previous]);
       toast.error('Failed to delete recipe');
+      return false;
     } else {
       toast.success('Recipe removed');
+      return true;
     }
   }, [farm_id, fertilizerRecipes, setFertilizerRecipes]);
 

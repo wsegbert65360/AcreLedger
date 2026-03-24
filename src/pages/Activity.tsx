@@ -4,12 +4,16 @@ import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout } from 'lucide-react';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
-import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, GrainMovement, ActivityRecord } from '@/types/farm';
+import type { 
+  PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, 
+  FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord 
+} from '@/types/farm';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
+import TillageModal from '@/components/TillageModal';
 import GrainMovementModal from '@/components/GrainMovementModal';
 import DeletedFieldFallback from '@/components/DeletedFieldFallback';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -32,10 +36,11 @@ import SprayTab from '@/components/activity/SprayTab';
 import HarvestTab from '@/components/activity/HarvestTab';
 import HayTab from '@/components/activity/HayTab';
 import FertilizerTab from '@/components/activity/FertilizerTab';
+import TillageTab from '@/components/activity/TillageTab';
 import GrainTab from '@/components/activity/GrainTab';
 import HistoryFeed from '@/components/activity/HistoryFeed';
 
-type Tab = 'all' | 'plant' | 'spray' | 'fertilizer' | 'harvest' | 'hay' | 'grain';
+type Tab = 'all' | 'plant' | 'spray' | 'fertilizer' | 'tillage' | 'harvest' | 'hay' | 'grain';
 
 const TABS: { key: Tab; icon: React.ElementType; label: string; color: string }[] = [
   { key: 'all', icon: ClipboardList, label: 'All', color: 'text-foreground' },
@@ -45,9 +50,10 @@ const TABS: { key: Tab; icon: React.ElementType; label: string; color: string }[
   { key: 'harvest', icon: Wheat, label: 'Harvesting', color: 'text-harvest' },
   { key: 'hay', icon: Tractor, label: 'Hay/Forage', color: 'text-orange-700 dark:text-orange-400' },
   { key: 'grain', icon: Warehouse, label: 'Grain', color: 'text-harvest' },
+  { key: 'tillage', icon: Tractor, label: 'Tillage', color: 'text-orange-600' },
 ];
 
-type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | GrainMovement;
+type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | GrainMovement | TillageRecord;
 
 export default function Activity() {
   const navigate = useNavigate();
@@ -58,12 +64,14 @@ export default function Activity() {
     harvestRecords,
     hayHarvestRecords,
     fertilizerApplications,
+    tillageRecords,
     grainMovements,
     deletePlantRecords,
     deleteSprayRecords,
     deleteHarvestRecords,
     deleteHayHarvestRecords,
     deleteFertilizerApplications,
+    deleteTillageRecords,
     activeSeason,
     viewingSeason,
     setViewingSeason,
@@ -90,12 +98,24 @@ export default function Activity() {
 
   const handleDelete = () => {
     const ids = Array.from(selected);
-    if (tab === 'plant') deletePlantRecords(ids);
-    else if (tab === 'spray') deleteSprayRecords(ids);
-    else if (tab === 'harvest') deleteHarvestRecords(ids);
-    else if (tab === 'hay') deleteHayHarvestRecords(ids);
-    else if (tab === 'fertilizer') deleteFertilizerApplications(ids);
-    else deleteGrainMovements(ids);
+    
+    // When deleting from 'all' tab, we must route each ID to its correct delete function
+    // based on the record type. We can use unifiedRecords to find the types.
+    const toDelete = unifiedRecords.filter(r => ids.includes(r.data.id));
+    const byType = toDelete.reduce((acc, r) => {
+      acc[r.type] = acc[r.type] || [];
+      acc[r.type].push(r.data.id);
+      return acc;
+    }, {} as Record<string, string[]>);
+
+    if (byType.plant) deletePlantRecords(byType.plant);
+    if (byType.spray) deleteSprayRecords(byType.spray);
+    if (byType.harvest) deleteHarvestRecords(byType.harvest);
+    if (byType.hay) deleteHayHarvestRecords(byType.hay);
+    if (byType.fertilizer) deleteFertilizerApplications(byType.fertilizer);
+    if (byType.tillage) deleteTillageRecords(byType.tillage);
+    if (byType.grain) deleteGrainMovements(byType.grain);
+
     setSelected(new Set());
     setConfirmDelete(false);
   };
@@ -141,6 +161,13 @@ export default function Activity() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [fertilizerApplications, search, viewingSeason]
   );
+  
+  const filteredTillage = useMemo(() =>
+    tillageRecords
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.implementType.toLowerCase().includes(search.toLowerCase())))
+      .sort((a, b) => b.timestamp - a.timestamp),
+    [tillageRecords, search, viewingSeason]
+  );
 
   const unifiedRecords = useMemo(() => {
     const all: (ActivityRecord & { timestamp: number })[] = [
@@ -149,10 +176,11 @@ export default function Activity() {
       ...filteredHarvest.map(r => ({ type: 'harvest' as const, data: r, timestamp: r.timestamp })),
       ...filteredHay.map(r => ({ type: 'hay' as const, data: r, timestamp: r.timestamp })),
       ...filteredFertilizer.map(r => ({ type: 'fertilizer' as const, data: r, timestamp: new Date(r.date).getTime() })),
+      ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
     ];
     return all.sort((a, b) => b.timestamp - a.timestamp);
-  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredGrain]);
+  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredTillage, filteredGrain]);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -227,6 +255,7 @@ export default function Activity() {
               : t.key === 'harvest' ? filteredHarvest.length
               : t.key === 'grain' ? filteredGrain.length
               : t.key === 'hay' ? filteredHay.length
+              : t.key === 'tillage' ? filteredTillage.length
               : filteredFertilizer.length;
 
             const isActive = tab === t.key;
@@ -289,6 +318,7 @@ export default function Activity() {
           {tab === 'harvest' && <HarvestTab records={filteredHarvest} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
           {tab === 'hay' && <HayTab records={filteredHay} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
           {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'tillage' && <TillageTab records={filteredTillage} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
           {tab === 'grain' && <GrainTab records={filteredGrain} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
         </div>
       </main>
@@ -377,6 +407,18 @@ export default function Activity() {
             onClose={() => setEditingRecord(null)}
             field={editField}
             initialData={editingRecord as FertilizerApplication}
+          />
+        );
+      })()}
+      {tab === 'tillage' && editingRecord && (() => {
+        const editField = getEditField((editingRecord as TillageRecord).fieldId);
+        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
+        return (
+          <TillageModal
+            open={!!editingRecord}
+            onClose={() => setEditingRecord(null)}
+            field={editField}
+            initialData={editingRecord as TillageRecord}
           />
         );
       })()}

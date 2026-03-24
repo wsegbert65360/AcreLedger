@@ -75,6 +75,15 @@ function getRecordInfo(record: ActivityRecord) {
         date: formatDate(r.timestamp)
       };
     }
+    case 'tillage': {
+      const r = data;
+      return {
+        title: cleanName(r.fieldName),
+        subtitle: r.implementType,
+        details: r.notes || 'No notes',
+        date: formatIsoDate(r.date) || formatDate(r.timestamp)
+      };
+    }
     default:
       return {
         title: 'Unknown',
