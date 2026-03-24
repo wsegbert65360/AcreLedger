@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication } from '@/types/farm';
+import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
-import {
-  mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
+import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
   mapHarvestFromDb, mapHayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
-  mapFertilizerFromDb
+  mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb
 } from '../lib/mappers';
+import { FertilizerRecipeRow, TillageRecordRow } from '../types/database';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -19,6 +19,7 @@ import { useFertilizerRecords } from './useFertilizerRecords';
 import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
 import { useSeasonManagement } from './useSeasonManagement';
+import { useTillageRecords } from './useTillageRecords';
 
 /**
  * Represents the global state and operations for the AcreLedger application.
@@ -44,10 +45,14 @@ interface FarmState {
   hayHarvestRecords: HayHarvestRecord[];
   /** Fertilizer application records */
   fertilizerApplications: FertilizerApplication[];
+  /** Tillage records */
+  tillageRecords: TillageRecord[];
   /** Grain inventory movements (in/out of bins) */
   grainMovements: GrainMovement[];
   /** List of saved seed varieties available for planting */
   savedSeeds: SavedSeed[];
+  /** Pre-defined fertilizer recipes */
+  fertilizerRecipes: FertilizerRecipe[];
   /** Pre-defined chemical recipes for spray applications */
   sprayRecipes: SprayRecipe[];
   /** The current chronological season year */
@@ -78,6 +83,10 @@ interface FarmState {
   addFertilizerApplication: (r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
   updateFertilizerApplication: (r: FertilizerApplication) => Promise<boolean>;
   deleteFertilizerApplications: (ids: string[]) => Promise<boolean>;
+  /** Operations for managing tillage records */
+  addTillageRecord: (r: Omit<TillageRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  updateTillageRecord: (r: TillageRecord) => Promise<boolean>;
+  deleteTillageRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing grain inventory */
   addGrainMovement: (r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear'> & { timestamp?: number }) => Promise<boolean>;
   updateGrainMovement: (r: GrainMovement) => Promise<boolean>;
@@ -99,6 +108,10 @@ interface FarmState {
   addSprayRecipe: (r: Omit<SprayRecipe, 'id'>) => void;
   updateSprayRecipe: (r: SprayRecipe) => void;
   deleteSprayRecipe: (id: string) => void;
+  /** Operations for managing fertilizer recipes */
+  addFertilizerRecipe: (r: Omit<FertilizerRecipe, 'id'>) => void;
+  updateFertilizerRecipe: (r: FertilizerRecipe) => void;
+  deleteFertilizerRecipe: (id: string) => void;
   /** Global sign out and cache clearing */
   signOut: () => void;
   /** Clears all local application storage */
@@ -130,8 +143,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>(() => loadFromStorage('al_harvest', [], auth.session?.user?.id));
   const [hayHarvestRecords, setHayHarvestRecords] = useState<HayHarvestRecord[]>(() => loadFromStorage('al_hay', [], auth.session?.user?.id));
   const [fertilizerApplications, setFertilizerApplications] = useState<FertilizerApplication[]>(() => loadFromStorage('al_fertilizer', [], auth.session?.user?.id));
+  const [tillageRecords, setTillageRecords] = useState<TillageRecord[]>(() => loadFromStorage('al_tillage', [], auth.session?.user?.id));
   const [grainMovements, setGrainMovements] = useState<GrainMovement[]>(() => loadFromStorage('al_grain', [], auth.session?.user?.id));
   const [savedSeeds, setSavedSeeds] = useState<SavedSeed[]>(() => loadFromStorage('al_seeds', [], auth.session?.user?.id));
+  const [fertilizerRecipes, setFertilizerRecipes] = useState<FertilizerRecipe[]>(() => loadFromStorage('al_f_recipes', [], auth.session?.user?.id));
   const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>(() => loadFromStorage('al_recipes', [], auth.session?.user?.id));
 
   // --- Fetch data when farm_id is stable ---
@@ -151,8 +166,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             { data: harvestData, error: harvestErr },
             { data: hayData, error: hayErr },
             { data: fertilizerData, error: fertilizerErr },
+            { data: tillageData, error: tillageErr },
             { data: grainData, error: grainErr },
             { data: seedsData, error: seedsErr },
+            { data: fertilizerRecipesData, error: fertilizerRecipesErr },
             { data: recipesData, error: recipesErr }
           ] = await Promise.all([
             query('fields'),
@@ -165,14 +182,17 @@ export function FarmProvider({ children }: { children: ReactNode }) {
               .select('*, fields(name)')
               .eq('farm_id', farm_id)
               .is('deleted_at', null),
+            query('tillage_records'),
             query('grain_movements'),
             query('saved_seeds'),
+            query('fertilizer_recipes'),
             query('spray_recipes')
           ]);
 
           const fetchErrors = [
             fieldsErr, binsErr, plantErr, sprayErr, harvestErr,
-            hayErr, fertilizerErr, grainErr, seedsErr, recipesErr
+            hayErr, fertilizerErr, tillageErr, grainErr, seedsErr,
+            fertilizerRecipesErr, recipesErr
           ].filter(Boolean);
 
           if (fetchErrors.length > 0) {
@@ -188,8 +208,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           if (harvestData) setHarvestRecords(harvestData.map(mapHarvestFromDb));
           if (hayData) setHayHarvestRecords(hayData.map(mapHayFromDb));
           if (fertilizerData) setFertilizerApplications(fertilizerData.map(mapFertilizerFromDb));
+          if (tillageData) setTillageRecords(tillageData.map(mapTillageFromDb));
           if (grainData) setGrainMovements(grainData.map(mapGrainFromDb));
           if (seedsData) setSavedSeeds(seedsData.map(mapSeedFromDb));
+          if (fertilizerRecipesData) setFertilizerRecipes(fertilizerRecipesData.map(mapFertilizerRecipeFromDb));
           if (recipesData) setSprayRecipes(recipesData.map(mapRecipeFromDb));
 
         } catch (error) {
@@ -211,8 +233,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveToStorage('al_harvest', harvestRecords, session?.user?.id); }, [harvestRecords, session?.user?.id]);
   useEffect(() => { saveToStorage('al_hay', hayHarvestRecords, session?.user?.id); }, [hayHarvestRecords, session?.user?.id]);
   useEffect(() => { saveToStorage('al_fertilizer', fertilizerApplications, session?.user?.id); }, [fertilizerApplications, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_tillage', tillageRecords, session?.user?.id); }, [tillageRecords, session?.user?.id]);
   useEffect(() => { saveToStorage('al_grain', grainMovements, session?.user?.id); }, [grainMovements, session?.user?.id]);
   useEffect(() => { saveToStorage('al_seeds', savedSeeds, session?.user?.id); }, [savedSeeds, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_f_recipes', fertilizerRecipes, session?.user?.id); }, [fertilizerRecipes, session?.user?.id]);
   useEffect(() => { saveToStorage('al_recipes', sprayRecipes, session?.user?.id); }, [sprayRecipes, session?.user?.id]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
@@ -223,22 +247,25 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const harvestOps = useHarvestRecords({ farm_id, activeSeason, setHarvestRecords });
   const hayOps = useHayRecords({ farm_id, activeSeason, setHayHarvestRecords });
   const fertilizerOps = useFertilizerRecords({ farm_id, activeSeason, fields, setFertilizerApplications });
+  const tillageOps = useTillageRecords({ farm_id, activeSeason, setTillageRecords });
   const grainOps = useGrainMovements({ farm_id, activeSeason, grainMovements, setGrainMovements });
 
   const entityOps = useFieldsAndBins({
     farm_id, fields, setFields, bins, setBins,
-    savedSeeds, setSavedSeeds, sprayRecipes, setSprayRecipes
+    savedSeeds, setSavedSeeds, 
+    fertilizerRecipes, setFertilizerRecipes,
+    sprayRecipes, setSprayRecipes
   });
 
   const seasonOps = useSeasonManagement({
     session, farm_id,
     fields, bins, plantRecords, sprayRecords, harvestRecords,
-    hayHarvestRecords, fertilizerApplications, grainMovements,
-    savedSeeds, sprayRecipes, activeSeason,
+    hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+    savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
-    setGrainMovements, setSavedSeeds, setSprayRecipes, setFarmId,
+    setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
   });
 
   // --- Composed signOut (auth + cache clear) ---
@@ -267,8 +294,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords,
       fertilizerApplications,
+      tillageRecords,
       grainMovements,
-      savedSeeds, sprayRecipes,
+      savedSeeds,
+      fertilizerRecipes,
+      sprayRecipes,
       activeSeason, viewingSeason, setViewingSeason,
       rolloverToNewSeason: seasonOps.rolloverToNewSeason,
       ...plantOps,
@@ -276,6 +306,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       ...harvestOps,
       ...hayOps,
       ...fertilizerOps,
+      ...tillageOps,
       ...grainOps,
       ...entityOps,
       signOut,

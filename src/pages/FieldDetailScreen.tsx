@@ -4,7 +4,7 @@ import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { 
   Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
-  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, AlertCircle, Plus, Edit2
+  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, AlertCircle, Plus, Edit2, Layers
 } from 'lucide-react';
 import { RainService } from '@/services/RainService';
 import type { RainData } from '@/types/weather';
@@ -13,18 +13,20 @@ import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
+import TillageModal from '@/components/TillageModal';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
 
-export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | null;
+export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
 
 const FIELD_ACTIONS = [
   { id: 'plant', label: 'Plant', icon: Leaf, color: 'text-plant', bg: 'bg-plant/10', border: 'border-plant/20' },
   { id: 'spray', label: 'Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
   { id: 'fertilizer', label: 'Fertilizer', icon: Sprout, color: 'text-lime-500', bg: 'bg-lime-500/10', border: 'border-lime-500/20' },
+  { id: 'tillage', label: 'Tillage', icon: Tractor, color: 'text-orange-600', bg: 'bg-orange-600/10', border: 'border-orange-600/20' },
   { id: 'harvest', label: 'Harvest', icon: Wheat, color: 'text-harvest', bg: 'bg-harvest/10', border: 'border-harvest/20' },
-  { id: 'hay', label: 'Hay', icon: Tractor, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' }
+  { id: 'hay', label: 'Hay', icon: Layers, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' }
 ] as const;
 
 export default function FieldDetailScreen() {
@@ -37,6 +39,7 @@ export default function FieldDetailScreen() {
     harvestRecords, 
     hayHarvestRecords, 
     fertilizerApplications,
+    tillageRecords,
     viewingSeason
   } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
@@ -66,12 +69,13 @@ export default function FieldDetailScreen() {
       ...harvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'harvest' as const, data: r })),
       ...hayHarvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'hay' as const, data: r })),
       ...fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'fertilizer' as const, data: r })),
+      ...tillageRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'tillage' as const, data: r })),
     ];
 
     // Helper to get a stable timestamp for sorting
     const getTS = (r: any) => {
       if (r.timestamp) return r.timestamp;
-      const dateStr = r.date || r.plantDate || r.sprayDate || r.harvestDate;
+      const dateStr = r.date || r.plantDate || r.sprayDate || r.harvestDate || r.date;
       if (dateStr) return new Date(dateStr).getTime();
       return 0;
     };
@@ -113,6 +117,7 @@ export default function FieldDetailScreen() {
     if (location.hash === '#planting') setModal('plant');
     if (location.hash === '#spraying') setModal('spray');
     if (location.hash === '#fertilizer') setModal('fertilizer');
+    if (location.hash === '#tillage') setModal('tillage');
   }, [location.hash]);
 
   if (!field) return <div className="p-8 text-center text-muted-foreground uppercase font-mono">Field not found</div>;
@@ -357,6 +362,14 @@ export default function FieldDetailScreen() {
       )}
       {modal === 'fertilizer' && (
         <FertilizerModal 
+          field={field} 
+          open 
+          initialData={editingRecord}
+          onClose={() => { setModal(null); setEditingRecord(null); }} 
+        />
+      )}
+      {modal === 'tillage' && (
+        <TillageModal 
           field={field} 
           open 
           initialData={editingRecord}

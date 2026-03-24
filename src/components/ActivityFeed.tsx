@@ -21,7 +21,9 @@ export default function ActivityFeed({ records, year, onEdit }: ActivityFeedProp
       case 'harvest':
         return { emoji: '🌾', label: 'Harvest', detail: `${data.crop || 'Grain'} (${data.bushels} bu)` };
       case 'hay':
-        return { emoji: '🚜', label: 'Hay', detail: `${data.baleCount} Bales (${data.cuttingNumber} Cut)` };
+        return { emoji: '📦', label: 'Hay', detail: `${data.baleCount} Bales (${data.cuttingNumber} Cut)` };
+      case 'tillage':
+        return { emoji: '🚜', label: 'Tillage', detail: data.implementType };
       default:
         return { emoji: '📝', label: 'Activity', detail: 'Farm Record' };
     }

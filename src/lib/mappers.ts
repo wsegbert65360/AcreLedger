@@ -1,12 +1,12 @@
 import {
     PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord,
     GrainMovement, Field, Bin, SavedSeed, SprayRecipe, FertilizerApplication,
-    SprayRecipeProduct
+    SprayRecipeProduct, FertilizerRecipe, TillageRecord
 } from '../types/farm';
 import {
     PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow,
     GrainMovementRow, FieldRow, BinRow, SavedSeedRow, SprayRecipeRow,
-    FertilizerApplicationRow
+    FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow
 } from '../types/database';
 
 export const mapFieldFromDb = (db: FieldRow): Field => ({
@@ -163,6 +163,14 @@ export const mapRecipeFromDb = (db: SprayRecipeRow): SprayRecipe => ({
     deleted_at: db.deleted_at ?? null
 });
 
+export const mapFertilizerRecipeFromDb = (db: FertilizerRecipeRow): FertilizerRecipe => ({
+    id: db.id,
+    name: db.name,
+    npkRatio: db.npk_ratio,
+    farm_id: db.farm_id,
+    deleted_at: db.deleted_at ?? null
+});
+
 export const mapFertilizerFromDb = (db: FertilizerApplicationRow): FertilizerApplication => ({
     id: db.id,
     farm_id: db.farm_id,
@@ -176,6 +184,19 @@ export const mapFertilizerFromDb = (db: FertilizerApplicationRow): FertilizerApp
     updated_at: db.updated_at,
     deleted_at: db.deleted_at ?? null,
     seasonYear: db.season_year
+});
+
+export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    fieldId: db.field_id,
+    fieldName: (db as any).fields?.name || (db as any).field_name || 'Unknown Field',
+    date: db.date,
+    implementType: db.implement_type,
+    notes: db.notes ?? '',
+    seasonYear: db.season_year,
+    timestamp: new Date(db.timestamp).getTime(),
+    deleted_at: db.deleted_at ?? null
 });
 
 // --- Reverse Mappers (Frontend -> DB) ---
@@ -322,6 +343,14 @@ export const mapRecipeToDb = (r: SprayRecipe) => ({
     deleted_at: r.deleted_at
 });
 
+export const mapFertilizerRecipeToDb = (r: FertilizerRecipe) => ({
+    id: r.id,
+    farm_id: r.farm_id,
+    name: r.name,
+    npk_ratio: r.npkRatio,
+    deleted_at: r.deleted_at
+});
+
 export const mapFertilizerToDb = (r: FertilizerApplication) => ({
     id: r.id,
     farm_id: r.farm_id,
@@ -331,5 +360,18 @@ export const mapFertilizerToDb = (r: FertilizerApplication) => ({
     fertilizer_formula: r.fertilizer_formula,
     acres: r.acres,
     season_year: r.seasonYear,
+    deleted_at: r.deleted_at
+});
+
+export const mapTillageToDb = (r: TillageRecord) => ({
+    id: r.id,
+    farm_id: r.farm_id,
+    field_id: r.fieldId,
+    field_name: r.fieldName,
+    date: r.date,
+    implement_type: r.implementType,
+    notes: r.notes,
+    season_year: r.seasonYear,
+    timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
     deleted_at: r.deleted_at
 });

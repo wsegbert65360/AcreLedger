@@ -157,6 +157,14 @@ export interface SprayRecipeRow {
     deleted_at?: string | null;
 }
 
+export interface FertilizerRecipeRow {
+    id: string;
+    farm_id: string;
+    name: string;
+    npk_ratio: string;
+    deleted_at?: string | null;
+}
+
 export interface FertilizerApplicationRow {
     id: string;
     farm_id: string;
@@ -170,4 +178,16 @@ export interface FertilizerApplicationRow {
     deleted_at?: string | null;
     fields?: { name: string };
     field_name?: string;
+}
+
+export interface TillageRecordRow {
+    id: string;
+    farm_id: string;
+    field_id: string;
+    date: string;
+    implement_type: string;
+    notes?: string | null;
+    season_year: number;
+    timestamp: string;
+    deleted_at?: string | null;
 }
