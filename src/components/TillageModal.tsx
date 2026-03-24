@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { TillageRecord, Field } from '@/types/farm';
-import { Tractor, X, Calendar, PenTool, Loader2, Info } from 'lucide-react';
+import { Tractor, X, Calendar, PenTool, Loader2, Info, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,7 +15,7 @@ interface TillageModalProps {
 }
 
 export default function TillageModal({ field, open, onClose, initialData }: TillageModalProps) {
-    const { addTillageRecord, updateTillageRecord, activeSeason } = useFarm();
+    const { addTillageRecord, updateTillageRecord, deleteTillageRecords, activeSeason } = useFarm();
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [implementType, setImplementType] = useState('Disk');
     const [notes, setNotes] = useState('');
@@ -64,6 +64,24 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
             toast.error('An unexpected error occurred while saving.');
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!initialData) return;
+        if (window.confirm('Are you sure you want to delete this tillage record?')) {
+            setIsSaving(true);
+            try {
+                const success = await deleteTillageRecords([initialData.id]);
+                if (success) {
+                    onClose();
+                }
+            } catch (err) {
+                console.error('Delete error:', err);
+                toast.error('Failed to delete record.');
+            } finally {
+                setIsSaving(false);
+            }
         }
     };
 
@@ -136,11 +154,23 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                         </div>
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-2 flex gap-3">
+                        {initialData && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleDelete}
+                                disabled={isSaving}
+                                className="flex-1 h-16 text-lg font-bold border-destructive/30 text-destructive hover:bg-destructive/5 rounded-xl transition-all touch-target"
+                            >
+                                <Trash2 size={24} className="mr-2" />
+                                Delete
+                            </Button>
+                        )}
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className="w-full h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target"
+                            className={`${initialData ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target`}
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">
@@ -148,7 +178,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                                     <span>Saving...</span>
                                 </div>
                             ) : (
-                                initialData ? 'Update Record' : 'Save Record'
+                                initialData ? 'Update' : 'Save Record'
                             )}
                         </Button>
                     </div>

@@ -109,9 +109,9 @@ interface FarmState {
   updateSprayRecipe: (r: SprayRecipe) => void;
   deleteSprayRecipe: (id: string) => void;
   /** Operations for managing fertilizer recipes */
-  addFertilizerRecipe: (r: Omit<FertilizerRecipe, 'id'>) => void;
-  updateFertilizerRecipe: (r: FertilizerRecipe) => void;
-  deleteFertilizerRecipe: (id: string) => void;
+  addFertilizerRecipe: (r: Omit<FertilizerRecipe, 'id'>) => Promise<boolean>;
+  updateFertilizerRecipe: (r: FertilizerRecipe) => Promise<boolean>;
+  deleteFertilizerRecipe: (id: string) => Promise<boolean>;
   /** Global sign out and cache clearing */
   signOut: () => void;
   /** Clears all local application storage */

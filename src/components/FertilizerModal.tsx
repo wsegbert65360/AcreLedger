@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
-import { Sprout, X, Calendar, MapPin, Gauge, Loader2, ClipboardList } from 'lucide-react';
+import { Sprout, X, Calendar, MapPin, Gauge, Loader2, ClipboardList, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 interface FertilizerModalProps {
@@ -14,11 +18,23 @@ interface FertilizerModalProps {
 }
 
 export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
-    const { addFertilizerApplication, updateFertilizerApplication, fertilizerRecipes, activeSeason } = useFarm();
+    const { 
+        addFertilizerApplication, 
+        updateFertilizerApplication, 
+        deleteFertilizerApplications,
+        addFertilizerRecipe,
+        deleteFertilizerRecipe,
+        fertilizerRecipes, 
+        activeSeason 
+    } = useFarm();
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [acres, setAcres] = useState(field.acreage.toString());
     const [formula, setFormula] = useState('');
+    const [saveAsRecipe, setSaveAsRecipe] = useState(false);
+    const [newRecipeName, setNewRecipeName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const queryClient = useQueryClient();
 
     useEffect(() => {
         if (initialData) {
@@ -62,6 +78,28 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                 success = await updateFertilizerApplication({ ...initialData, ...data });
             } else {
                 success = await addFertilizerApplication(data);
+
+                // If application was successful, check if we need to save the recipe too
+                if (success && saveAsRecipe) {
+                    if (!newRecipeName.trim()) {
+                        toast.error('Please enter a recipe name to save');
+                        // We don't return here because the application was already saved successfully
+                    } else {
+                        try {
+                            await addFertilizerRecipe({
+                                name: newRecipeName.trim(),
+                                npkRatio: formula.trim(),
+                                farm_id: field.farm_id || '',
+                                deleted_at: null
+                            });
+                            // Invalidate the query to update dropdowns
+                            queryClient.invalidateQueries({ queryKey: ['fertilizer_recipes'] });
+                        } catch (recipeErr) {
+                            console.error('Recipe save failed:', recipeErr);
+                            toast.error('Application saved, but recipe failed to save.');
+                        }
+                    }
+                }
             }
 
             if (success) {
@@ -72,6 +110,44 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
             toast.error('An unexpected error occurred while saving.');
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!initialData) return;
+        if (window.confirm('Are you sure you want to delete this fertilizer application?')) {
+            setIsSaving(true);
+            try {
+                const success = await deleteFertilizerApplications([initialData.id]);
+                if (success) {
+                    onClose();
+                }
+            } catch (err) {
+                console.error('Delete error:', err);
+                toast.error('Failed to delete application.');
+            } finally {
+                setIsSaving(false);
+            }
+        }
+    };
+
+    const handleDeleteRecipe = async (e: React.MouseEvent, id: string, name: string) => {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        if (window.confirm(`Delete recipe "${name}"?`)) {
+            setIsDeleting(id);
+            try {
+                const success = await deleteFertilizerRecipe(id);
+                if (success) {
+                    queryClient.invalidateQueries({ queryKey: ['fertilizer_recipes'] });
+                }
+            } catch (err) {
+                console.error('Delete failed:', err);
+                toast.error('Failed to delete recipe');
+            } finally {
+                setIsDeleting(null);
+            }
         }
     };
 
@@ -125,9 +201,27 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                                         <SelectValue placeholder="Select a saved recipe..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {fertilizerRecipes.map(r => (
-                                            <SelectItem key={r.id} value={r.id}>
-                                                {r.name} ({r.npkRatio})
+                                        {fertilizerRecipes.map((recipe) => (
+                                            <SelectItem 
+                                                key={recipe.id} 
+                                                value={recipe.id}
+                                                className="group relative pr-10"
+                                            >
+                                                {recipe.name} ({recipe.npkRatio})
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="absolute right-2 h-7 w-7 text-destructive/60 hover:text-destructive hover:bg-destructive/10 hidden group-hover:flex transition-all z-10"
+                                                    onClick={(e) => handleDeleteRecipe(e, recipe.id, recipe.name)}
+                                                    disabled={isDeleting === recipe.id}
+                                                >
+                                                    {isDeleting === recipe.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    )}
+                                                </Button>
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -170,13 +264,55 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                                 required
                             />
                         </div>
+
+                        {/* Save as Recipe - v3.1.0 */}
+                        {!initialData && (
+                            <div className="space-y-4 pt-2 border-t border-border/50">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="save-recipe" className="text-sm font-bold">Save as Recipe?</Label>
+                                        <p className="text-[10px] text-muted-foreground uppercase font-mono tracking-wider">Add to your reusable templates</p>
+                                    </div>
+                                    <Switch
+                                        id="save-recipe"
+                                        checked={saveAsRecipe}
+                                        onCheckedChange={setSaveAsRecipe}
+                                    />
+                                </div>
+
+                                {saveAsRecipe && (
+                                    <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                                        <Label htmlFor="recipe-name" className="text-[10px] font-mono font-bold text-muted-foreground uppercase ml-1">Recipe Name</Label>
+                                        <Input
+                                            id="recipe-name"
+                                            value={newRecipeName}
+                                            onChange={(e) => setNewRecipeName(e.target.value)}
+                                            placeholder="e.g. Corn Pre-plant Mix"
+                                            className="h-12 bg-muted/30 border-primary/20 focus:border-primary transition-all"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-2 flex gap-3">
+                        {initialData && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleDelete}
+                                disabled={isSaving}
+                                className="flex-1 h-16 text-lg font-bold border-destructive/30 text-destructive hover:bg-destructive/5 rounded-xl transition-all touch-target"
+                            >
+                                <Trash2 size={24} className="mr-2" />
+                                Delete
+                            </Button>
+                        )}
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className="w-full h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target"
+                            className={`${initialData ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target`}
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">
@@ -184,7 +320,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                                     <span>Saving...</span>
                                 </div>
                             ) : (
-                                initialData ? 'Update Application' : 'Save Application'
+                                initialData ? 'Update' : 'Save Application'
                             )}
                         </Button>
                     </div>
