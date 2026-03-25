@@ -58,6 +58,51 @@ describe('RainService', () => {
       .rejects.toThrow('RPC_ERROR: UNKNOWN - Database error');
   });
 
+  it('should throw error when 72h RPC fails and include code', async () => {
+    (supabase.rpc as any)
+      .mockResolvedValueOnce({ data: [{ total_inches: 1.0 }], error: null })
+      .mockResolvedValueOnce({ data: null, error: { code: '500', message: 'Timeout' } });
+
+    await expect(RainService.fetchRainfall({ fieldId: mockFieldId }))
+      .rejects.toThrow('RPC_ERROR: 500 - Timeout');
+  });
+
+  it('should warn and handle when 24h data is missing but 72h data exists', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    (supabase.rpc as any)
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [{ total_inches: 1.0 }], error: null });
+
+    const result = await RainService.fetchRainfall({ fieldId: mockFieldId });
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      `[RainService] No rainfall data returned for field ${mockFieldId}. Check if records are finalized.`
+    );
+    expect(result.rain['24h']).toBe(0);
+    expect(result.rain['72h']).toBe(1.0);
+
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('should warn and handle when 72h data is missing but 24h data exists', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    (supabase.rpc as any)
+      .mockResolvedValueOnce({ data: [{ total_inches: 1.5 }], error: null })
+      .mockResolvedValueOnce({ data: [], error: null });
+
+    const result = await RainService.fetchRainfall({ fieldId: mockFieldId });
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      `[RainService] No rainfall data returned for field ${mockFieldId}. Check if records are finalized.`
+    );
+    expect(result.rain['24h']).toBe(1.5);
+    expect(result.rain['72h']).toBe(0);
+
+    consoleWarnSpy.mockRestore();
+  });
+
   it('should handle missing expected fields (contract test)', async () => {
     // Mock successful response but with missing total_inches field
     (supabase.rpc as any)
