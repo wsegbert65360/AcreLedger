@@ -10,10 +10,22 @@ describe('dates utility', () => {
         expect(d.getDate()).toBe(1);
     });
 
-    it('formatDisplayDate should format correctly', () => {
-        const d = new Date(2024, 2, 1); // March 1st
-        // Use a regex or check for inclusion to be robust against env locales
-        expect(formatDisplayDate(d)).toMatch(/Mar 1, 2024|03\/01\/2024/);
+    describe('formatDisplayDate', () => {
+        it('should format a valid date correctly', () => {
+            const d = new Date(2024, 2, 1); // March 1st
+            // Use a regex or check for inclusion to be robust against env locales
+            expect(formatDisplayDate(d)).toMatch(/Mar 1, 2024|03\/01\/2024/);
+        });
+
+        it('should handle undefined and null inputs', () => {
+            expect(formatDisplayDate(undefined)).toBe('');
+            expect(formatDisplayDate(null)).toBe('');
+        });
+
+        it('should handle invalid date objects safely', () => {
+            const invalidDate = new Date('invalid-date-string');
+            expect(formatDisplayDate(invalidDate)).toBe('');
+        });
     });
 
     it('formatIsoDate should handle various inputs', () => {

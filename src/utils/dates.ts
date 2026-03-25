@@ -10,7 +10,8 @@ export function parseLocalDate(iso: string): Date {
 /**
  * Format a Date for display using the user's local timezone.
  */
-export function formatDisplayDate(date: Date): string {
+export function formatDisplayDate(date?: Date | null): string {
+    if (!date || isNaN(date.getTime())) return '';
     return date.toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
