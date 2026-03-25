@@ -8,12 +8,43 @@ describe('dates utility', () => {
         expect(d.getFullYear()).toBe(2024);
         expect(d.getMonth()).toBe(2); // March (0-indexed)
         expect(d.getDate()).toBe(1);
+
+        // Leap year
+        const leap = parseLocalDate('2024-02-29');
+        expect(leap.getFullYear()).toBe(2024);
+        expect(leap.getMonth()).toBe(1); // February (0-indexed)
+        expect(leap.getDate()).toBe(29);
+
+        // Single digit month/day
+        const single = parseLocalDate('2024-1-5');
+        expect(single.getFullYear()).toBe(2024);
+        expect(single.getMonth()).toBe(0); // January (0-indexed)
+        expect(single.getDate()).toBe(5);
+
+        // End of year
+        const endOfYear = parseLocalDate('2023-12-31');
+        expect(endOfYear.getFullYear()).toBe(2023);
+        expect(endOfYear.getMonth()).toBe(11); // December (0-indexed)
+        expect(endOfYear.getDate()).toBe(31);
+    });
+
+    it('parseLocalDate should handle invalid, null, or malformed inputs', () => {
+        expect(isNaN(parseLocalDate('invalid').getTime())).toBe(true);
+        expect(isNaN(parseLocalDate('2024-13').getTime())).toBe(true);
+        expect(isNaN(parseLocalDate('2024-03-01T12:00:00Z').getTime())).toBe(true);
+        expect(isNaN(parseLocalDate('').getTime())).toBe(true);
+        expect(isNaN(parseLocalDate(null as unknown as string).getTime())).toBe(true);
+        expect(isNaN(parseLocalDate(undefined as unknown as string).getTime())).toBe(true);
     });
 
     it('formatDisplayDate should format correctly', () => {
         const d = new Date(2024, 2, 1); // March 1st
         // Use a regex or check for inclusion to be robust against env locales
         expect(formatDisplayDate(d)).toMatch(/Mar 1, 2024|03\/01\/2024/);
+
+        // Invalid date should return empty string
+        expect(formatDisplayDate(new Date(NaN))).toBe('');
+        expect(formatDisplayDate(null as unknown as Date)).toBe('');
     });
 
     it('formatIsoDate should handle various inputs', () => {
@@ -22,6 +53,9 @@ describe('dates utility', () => {
         expect(formatIsoDate('')).toBe('');
         expect(formatIsoDate(undefined)).toBe('');
         expect(formatIsoDate(null)).toBe('');
+
+        // Invalid iso strings
+        expect(formatIsoDate('invalid')).toBe('');
     });
 });
 
