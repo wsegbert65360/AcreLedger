@@ -103,4 +103,9 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  test: {
+    env: {
+      VITE_VISUALCROSSING_KEY: 'test-key'
+    }
+  }
 }));
