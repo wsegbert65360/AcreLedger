@@ -80,19 +80,21 @@ Single planting event on a field. Core FSA 578 source record.
 ```
 
 ### SprayRecord
-Pesticide/herbicide application. Supports multiple products per application (tank-mix).
+Pesticide/herbicide application. Refactored for universal private-applicator compliance (45+ states).
+Supports multiple products per application (tank-mix) and advanced environmental tracking.
 ```ts
-{ id, farm_id, fieldId, fieldName, sprayDate, startTime, timestamp, seasonYear,
-  products: { product, epaRegNumber, rate, rateUnit }[],
-  treatedAreaSize, totalAmountApplied, rateUnit,
+{ id, farm_id, fieldId, fieldName, sprayDate, startTime, endTime, timestamp, seasonYear,
+  products: { product, epaRegNumber, rate, rateUnit, totalProductAmount, totalProductUnit }[],
+  treatedAreaSize, treatedAreaUnit, totalAmountApplied,
   windSpeed, windDirection, temperature, relativeHumidity,
   targetPest, applicatorName, licenseNumber, equipmentId,
   siteAddress, involvedTechnicians, mixtureRate, totalMixtureVolume,
-  isPremixed, deleted_at }
+  rei, notes, complianceProfile: 'universal', isPremixed, nonCompliant, deleted_at }
 ```
-- Wind alert threshold: `WIND_ALERT_MPH = 10` (named constant — never hardcode `10`).
-- Records missing `epaRegNumber` are flagged `NON-COMPLIANT` in audit reports.
-- `products` may be an empty array if using legacy single-product fields.
+- **End Time Estimation**: Application duration is auto-calculated at a default rate of **54.5 acres/hour** with manual override.
+- **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
+- **Non-Compliant Flag**: Triggered if any product is missing an `epaRegNumber`.
+- **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
 
 ### HarvestRecord
 Grain harvest event.
@@ -149,7 +151,7 @@ Seed inventory reference. Not season-scoped.
 Saved tank-mix recipe for reuse on spray records. Not season-scoped.
 ```ts
 { id, farm_id, name, products: { product, epaRegNumber, rate, rateUnit }[],
-  deleted_at }
+  applicatorName, licenseNumber, targetPest, epaRegNumber, deleted_at }
 ```
 
 #### Tank-Mix Product Identity

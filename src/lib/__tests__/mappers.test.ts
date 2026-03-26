@@ -26,6 +26,20 @@ describe('Mappers Round-Trip', () => {
             applicatorName: 'Test Applicator',
             licenseNumber: 'L12345',
             epaRegNumber: '524-549',
+            sprayDate: '2026-03-25',
+            startTime: '08:00',
+            endTime: '09:30',
+            siteAddress: 'North Field Entry',
+            cropOrSiteTreated: 'Corn',
+            applicationMethod: 'Ground Broadcast',
+            targetPest: 'Grass',
+            treatedAreaUnit: 'ac',
+            windDirection: 'NW',
+            relativeHumidity: 45,
+            rei: '12h',
+            equipmentId: 'Miller Nitro',
+            notes: 'Test notes',
+            complianceProfile: 'universal',
             farm_id: 'farm-1'
         };
         

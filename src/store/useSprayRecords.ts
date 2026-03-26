@@ -40,7 +40,7 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: SprayRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
+    const newRecord: SprayRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapSprayToDb>;
@@ -88,7 +88,7 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
 
     let mapped: ReturnType<typeof mapSprayToDb>;
     try {
-      mapped = mapSprayToDb(r);
+      mapped = mapSprayToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapSprayToDb failed:', err);
       toast.error('Failed to prepare spray record — check your inputs.');
