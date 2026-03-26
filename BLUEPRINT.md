@@ -84,7 +84,7 @@ Pesticide/herbicide application. Refactored for universal private-applicator com
 Supports multiple products per application (tank-mix) and advanced environmental tracking.
 ```ts
 { id, farm_id, fieldId, fieldName, sprayDate, startTime, endTime, timestamp, seasonYear,
-  products: { product, epaRegNumber, rate, rateUnit, totalProductAmount, totalProductUnit }[],
+  products: { product, epaRegNumber, activeIngredients, rate, rateUnit, totalProductAmount, totalProductUnit }[],
   treatedAreaSize, treatedAreaUnit, totalAmountApplied,
   windSpeed, windDirection, temperature, relativeHumidity,
   targetPest, applicatorName, licenseNumber, equipmentId,
@@ -193,7 +193,7 @@ to support historical analysis and performance.
 
 ### farmStore (Zustand)
 Single global store in `farmStore.tsx`. Exposes all entity arrays, their setters, `session`,
-`farm_id`, `activeSeason`, `viewingSeason`, and all CRUD action methods. Accessed everywhere
+`farm_id`, `farmName`, `activeSeason`, `viewingSeason`, and all CRUD action methods. Accessed everywhere
 via `useFarm()`. Never import Zustand's `useStore` directly in components.
 
 ### Optimistic Update Pattern
@@ -332,9 +332,11 @@ FSA Harvest, Hay Summary, Landlord Statement. Supports both CSV and PDF direct e
 
 ### Universal Spray Log Export
 The `generateSprayPDF` utility (`@/lib/sprayExport.ts`) provides a production-grade, state-neutral 
-PDF export for spray records. It handles both single-record and date-range exports, follows 
-black-and-white friendly printing rules, and automatically includes mandatory compliance fields 
-(EPA Reg #, Wind, Temp, Equipment). It is the primary export path for private applicators.
+PDF export for spray records. It handles both single-record (with field name) and multi-record 
+(with farm name and date range) exports, follows black-and-white friendly printing rules, and 
+automatically includes mandatory compliance fields (EPA Reg #, Active Ingredients, Wind, Temp, 
+Equipment, Mix Details, and Personnel). It generates dynamic, sanitized filenames for 
+professional log management. It is the primary export path for private applicators.
 
 ### ActivityFeed Component
 Reusable component for displaying field-specific historical records. Filters records for the 

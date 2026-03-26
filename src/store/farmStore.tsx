@@ -118,6 +118,8 @@ interface FarmState {
   clearLocalCache: () => void;
   /** Unique ID for the current farm */
   farm_id: string | null;
+  /** Display name of the current farm */
+  farmName: string | null;
   /** Restores the entire farm state from a JSON backup */
   restoreFromBackup: (data: any) => Promise<boolean>;
 }
@@ -134,6 +136,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     activeSeason, setActiveSeason,
     viewingSeason, setViewingSeason,
   } = auth;
+
+  const [farmName, setFarmName] = useState<string | null>(null);
 
   // --- Data State ---
   const [fields, setFields] = useState<Field[]>(() => loadFromStorage('al_fields', [], auth.session?.user?.id));
@@ -170,7 +174,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             { data: grainData, error: grainErr },
             { data: seedsData, error: seedsErr },
             { data: fertilizerRecipesData, error: fertilizerRecipesErr },
-            { data: recipesData, error: recipesErr }
+            { data: recipesData, error: recipesErr },
+            { data: farmData, error: farmErr }
           ] = await Promise.all([
             query('fields'),
             query('bins'),
@@ -186,13 +191,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             query('grain_movements'),
             query('saved_seeds'),
             query('fertilizer_recipes'),
-            query('spray_recipes')
+            query('spray_recipes'),
+            supabase.from('farms').select('name').eq('id', farm_id).single()
           ]);
 
           const fetchErrors = [
             fieldsErr, binsErr, plantErr, sprayErr, harvestErr,
             hayErr, fertilizerErr, tillageErr, grainErr, seedsErr,
-            fertilizerRecipesErr, recipesErr
+            fertilizerRecipesErr, recipesErr, farmErr
           ].filter(Boolean);
 
           if (fetchErrors.length > 0) {
@@ -213,6 +219,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           if (seedsData) setSavedSeeds(seedsData.map(mapSeedFromDb));
           if (fertilizerRecipesData) setFertilizerRecipes(fertilizerRecipesData.map(mapFertilizerRecipeFromDb));
           if (recipesData) setSprayRecipes(recipesData.map(mapRecipeFromDb));
+          
+          if (farmData && farmData.name) {
+            setFarmName(farmData.name);
+          }
 
         } catch (error) {
           console.error('Error fetching data:', error);
@@ -312,6 +322,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       signOut,
       clearLocalCache: seasonOps.clearLocalCache,
       farm_id,
+      farmName,
       restoreFromBackup: seasonOps.restoreFromBackup,
     }}>
       {children}

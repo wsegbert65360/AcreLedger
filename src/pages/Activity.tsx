@@ -76,7 +76,8 @@ export default function Activity() {
     activeSeason,
     viewingSeason,
     setViewingSeason,
-    deleteGrainMovements
+    deleteGrainMovements,
+    farmName
   } = useFarm();
 
   const [search, setSearch] = useState('');
@@ -221,7 +222,7 @@ export default function Activity() {
                   const toExport = selected.size > 0 
                     ? filteredSpray.filter(r => selected.has(r.id))
                     : filteredSpray;
-                  generateSprayPDF(toExport, 'My Farm');
+                  generateSprayPDF(toExport, farmName);
                 }}
                 className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
                 title="Export Universal Spray Log PDF"
