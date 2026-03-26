@@ -9,80 +9,90 @@ export const RainService = {
    * Fetches 12h, 24h, and 72h rainfall totals for a field using the Supabase RPC.
    * This aligns with BLUEPRINT.md by using persisted/processed database data.
    */
-  async fetchRainfall(args: { 
+  /**
+   * Fetches comprehensive rainfall stats for multiple periods including:
+   * 24h, 72h, 7d, and optionally since specific dates (planting, last spray).
+   */
+  async fetchComprehensiveRainfall(args: {
     fieldId: string;
-    signal?: AbortSignal 
-  }): Promise<RainData> {
-    const { fieldId, signal } = args;
+    sincePlantingDate?: string;
+    sinceLastSprayDate?: string;
+    signal?: AbortSignal;
+  }): Promise<{
+    '24h': number;
+    '72h': number;
+    '7d': number;
+    sincePlanting: number;
+    sinceLastSpray: number;
+    periodEndUtc: string;
+  }> {
+    const { fieldId, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
-    if (promiseCache.has(fieldId)) {
+    // Cache key includes dates to prevent stale data if activity changes
+    const cacheKey = `${fieldId}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
+
+    if (promiseCache.has(cacheKey)) {
         try {
-            return await promiseCache.get(fieldId);
+            return await promiseCache.get(cacheKey);
         } catch (error) {
-            // If cached promise failed, we let it fall through and try again
+            // Ignore cached failure and retry
         }
     }
-    
+
     const fetchPromise = (async () => {
         const now = new Date();
         const today = now.toISOString().split('T')[0];
-        const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        // Fetch stats in parallel for efficiency
-        const [res24h, res72h] = await Promise.all([
-          supabase.rpc('get_rainfall_stats', {
-            p_field_id: fieldId,
-            p_start_date: today,
-            p_end_date: today
-          }),
-          supabase.rpc('get_rainfall_stats', {
-            p_field_id: fieldId,
-            p_start_date: threeDaysAgo,
-            p_end_date: today
-          })
-        ]);
+        const getDaysAgo = (days: number) => {
+            const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+            return d.toISOString().split('T')[0];
+        };
+
+        const sevenDaysAgo = getDaysAgo(7);
+        const threeDaysAgo = getDaysAgo(3);
+
+        const calls = [
+            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: today, p_end_date: today }), // 24h
+            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: threeDaysAgo, p_end_date: today }), // 72h
+            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sevenDaysAgo, p_end_date: today }), // 7d
+        ];
+
+        if (sincePlantingDate) {
+            calls.push(supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sincePlantingDate, p_end_date: today }));
+        }
+        if (sinceLastSprayDate) {
+            calls.push(supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sinceLastSprayDate, p_end_date: today }));
+        }
+
+        const results = await Promise.all(calls);
 
         if (signal?.aborted) throw new Error('ABORTED');
 
-        if (res24h.error || res72h.error) {
-          const err = res24h.error || res72h.error;
-          console.error('[RainService] RPC Error:', err);
-          throw new Error(`RPC_ERROR: ${err?.code || 'UNKNOWN'} - ${err?.message}`);
+        const error = results.find(r => r.error)?.error;
+        if (error) {
+            const code = error.code || 'UNKNOWN';
+            throw new Error(`RPC_ERROR: ${code} - ${error.message}`);
         }
 
-        const s24 = res24h.data?.[0] || { total_inches: 0 };
-        const s72 = res72h.data?.[0] || { total_inches: 0 };
-
-        const rain24 = Number(s24.total_inches || 0);
-        const rain72 = Number(s72.total_inches || 0);
-        const rain12 = rain24 * 0.5;
+        const getVal = (res: any) => Number(res.data?.[0]?.total_inches || 0);
 
         return {
-          periodEndUtc: now.toISOString(),
-          units: 'in',
-          rain: {
-            '12h': rain12,
-            '24h': rain24,
-            '72h': rain72
-          },
-          rainMm: {
-            '12h': rain12 * 25.4,
-            '24h': rain24 * 25.4,
-            '72h': rain72 * 25.4
-          },
-          location: { 
-            type: 'point' as const
-          }
+            '24h': getVal(results[0]),
+            '72h': getVal(results[1]),
+            '7d': getVal(results[2]),
+            sincePlanting: sincePlantingDate ? getVal(results[3]) : 0,
+            sinceLastSpray: sinceLastSprayDate ? getVal(sincePlantingDate ? results[4] : results[3]) : 0,
+            periodEndUtc: now.toISOString()
         };
     })();
 
-    promiseCache.set(fieldId, fetchPromise);
+    promiseCache.set(cacheKey, fetchPromise);
 
     try {
         return await fetchPromise;
     } finally {
-        // Clear cache after a short delay to allow deduplication but prevent stale data
-        setTimeout(() => promiseCache.delete(fieldId), 5000);
+        // Clear cache after 15 seconds to allow reuse but keep data fresh
+        setTimeout(() => promiseCache.delete(cacheKey), 15000);
     }
   },
 

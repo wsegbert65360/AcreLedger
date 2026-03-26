@@ -4,10 +4,11 @@ import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { 
   Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
-  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, AlertCircle, Plus, Edit2, Layers
+  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw,
+  AlertCircle, Plus, Edit2, Layers, Calendar, History,
+  FileText, ExternalLink, ChevronRight, Info, CheckCircle2
 } from 'lucide-react';
 import { RainService } from '@/services/RainService';
-import type { RainData } from '@/types/weather';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
@@ -17,16 +18,15 @@ import TillageModal from '@/components/TillageModal';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
+import { generateSprayPDF } from '@/lib/sprayExport';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
 
 const FIELD_ACTIONS = [
-  { id: 'plant', label: 'Plant', icon: Leaf, color: 'text-plant', bg: 'bg-plant/10', border: 'border-plant/20' },
-  { id: 'spray', label: 'Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
-  { id: 'fertilizer', label: 'Fertilizer', icon: Sprout, color: 'text-lime-500', bg: 'bg-lime-500/10', border: 'border-lime-500/20' },
-  { id: 'tillage', label: 'Tillage', icon: Tractor, color: 'text-orange-600', bg: 'bg-orange-600/10', border: 'border-orange-600/20' },
-  { id: 'harvest', label: 'Harvest', icon: Wheat, color: 'text-harvest', bg: 'bg-harvest/10', border: 'border-harvest/20' },
-  { id: 'hay', label: 'Hay', icon: Layers, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' }
+  { id: 'spray', label: 'Log Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
+  { id: 'plant', label: 'Log Plant', icon: Leaf, color: 'text-plant', bg: 'bg-plant/10', border: 'border-plant/20' },
+  { id: 'fertilizer', label: 'Log Fert', icon: Sprout, color: 'text-lime-500', bg: 'bg-lime-500/10', border: 'border-lime-500/20' },
+  { id: 'tillage', label: 'Log Till', icon: Tractor, color: 'text-orange-600', bg: 'bg-orange-600/10', border: 'border-orange-600/20' }
 ] as const;
 
 export default function FieldDetailScreen() {
@@ -40,7 +40,8 @@ export default function FieldDetailScreen() {
     hayHarvestRecords, 
     fertilizerApplications,
     tillageRecords,
-    viewingSeason
+    viewingSeason,
+    farmName
   } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
@@ -52,17 +53,25 @@ export default function FieldDetailScreen() {
     humidity: number | null;
     isError?: boolean;
   } | null>(null);
-  const [rainData, setRainData] = useState<RainData | null>(null);
+
+  const [rainStats, setRainStats] = useState<{
+    '24h': number;
+    '72h': number;
+    '7d': number;
+    sincePlanting: number;
+    sinceLastSpray: number;
+    periodEndUtc: string;
+  } | null>(null);
+
   const [rainError, setRainError] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
   const [editingRecord, setEditingRecord] = useState<any>(null);
 
+  // Derived Values
   const unifiedRecords = useMemo(() => {
     if (!field) return [];
-    
-    // Convert all record types into a unified structure for the feed
     const all = [
       ...plantRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'plant' as const, data: r })),
       ...sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'spray' as const, data: r })),
@@ -71,33 +80,43 @@ export default function FieldDetailScreen() {
       ...fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'fertilizer' as const, data: r })),
       ...tillageRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'tillage' as const, data: r })),
     ];
-
-    // Helper to get a stable timestamp for sorting
     const getTS = (r: any) => {
       if (r.timestamp) return r.timestamp;
       const dateStr = r.date || r.plantDate || r.sprayDate || r.harvestDate || r.date;
-      if (dateStr) return new Date(dateStr).getTime();
-      return 0;
+      return dateStr ? new Date(dateStr).getTime() : 0;
     };
-
-    // Sort newest first
     return all.sort((a, b) => getTS(b.data) - getTS(a.data));
-  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, viewingSeason]);
+  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
 
-  const handleEdit = (type: ModalType, record: any) => {
-    setEditingRecord(record);
-    setModal(type);
-  };
+  const latestActivity = unifiedRecords[0];
 
+  const latestPlanting = useMemo(() =>
+    plantRecords
+      .filter(r => r.fieldId === field?.id && r.seasonYear === viewingSeason)
+      .sort((a,b) => new Date(b.plantDate || 0).getTime() - new Date(a.plantDate || 0).getTime())[0]
+  , [plantRecords, field?.id, viewingSeason]);
+
+  const latestSpray = useMemo(() =>
+    sprayRecords
+      .filter(r => r.fieldId === field?.id && r.seasonYear === viewingSeason)
+      .sort((a,b) => new Date(b.sprayDate || 0).getTime() - new Date(a.sprayDate || 0).getTime())[0]
+  , [sprayRecords, field?.id, viewingSeason]);
+
+  const crop = latestPlanting?.crop || field?.intendedUse || 'No Crop Logged';
+
+  const daysSinceSpray = useMemo(() => {
+    if (!latestSpray?.sprayDate) return null;
+    const diff = new Date().getTime() - new Date(latestSpray.sprayDate).getTime();
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  }, [latestSpray]);
+
+  // Fetching Logic
   useEffect(() => {
     const controller = new AbortController();
-    
-    // v2.9.2 - Stabilized dependency: Only fetch when field ID or location changes
     if (!field?.id || field.lat == null || field.lng == null) {
       setStatus('success');
       return;
     }
-
     setStatus('loading');
     WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
       .then((windData) => {
@@ -105,12 +124,33 @@ export default function FieldDetailScreen() {
         setStatus('success');
       }).catch((err) => {
         if (err.name === 'AbortError') return;
-        console.error('[FieldDetail] Fetch error:', err);
         setStatus('error');
       });
-
     return () => controller.abort();
   }, [field?.id, field?.lat, field?.lng]);
+
+  const handleFetchRain = async () => {
+    if (!field || fetchingRain) return;
+    setFetchingRain(true);
+    setRainError(null);
+    try {
+      const data = await RainService.fetchComprehensiveRainfall({
+        fieldId: field.id,
+        sincePlantingDate: latestPlanting?.plantDate,
+        sinceLastSprayDate: latestSpray?.sprayDate
+      });
+      setRainStats(data);
+    } catch (err: any) {
+      console.error('[FieldDetail] Rain fetch error:', err);
+      setRainError(err.message || 'Could not load rainfall data.');
+    } finally {
+      setFetchingRain(false);
+    }
+  };
+
+  useEffect(() => {
+    if (field?.id) handleFetchRain();
+  }, [field?.id, latestPlanting?.plantDate, latestSpray?.sprayDate]);
 
   const location = useLocation();
   useEffect(() => {
@@ -122,259 +162,374 @@ export default function FieldDetailScreen() {
 
   if (!field) return <div className="p-8 text-center text-muted-foreground uppercase font-mono">Field not found</div>;
 
-  const getWindColor = (speed: number) => {
-    if (speed > 15) return 'text-destructive';
-    if (speed > 10) return 'text-yellow-500';
-    return 'text-foreground';
+  const handleEdit = (type: ModalType, record: any) => {
+    setEditingRecord(record);
+    setModal(type);
   };
-
-  const handleFetchRain = async () => {
-    if (!field || fetchingRain) return;
-    
-    setFetchingRain(true);
-    setRainError(null);
-    try {
-      const lat = field.lat;
-      const lng = field.lng;
-
-      if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
-        setRainError('Location not available. Please wait and try again.');
-        return;
-      }
-
-      const data = await RainService.fetchRainfall({
-        fieldId: field.id
-      });
-      setRainData(data);
-    } catch (err: any) {
-      console.error('[FieldDetail] Rain fetch error:', err);
-      const msg = err.message || '';
-      if (msg.includes('RPC_ERROR')) {
-        setRainError(`Database Error: ${msg.replace('RPC_ERROR: ', '')}`);
-      } else if (msg.includes('404')) {
-        setRainError('This location is outside supported coverage (US only).');
-      } else if (msg.includes('502')) {
-        setRainError('Weather data temporarily unavailable. Please try again in a minute.');
-      } else {
-        setRainError('Could not load rainfall data. Please try again.');
-      }
-    } finally {
-      setFetchingRain(false);
-    }
-  };
-
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      {/* Premium Header */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4">
+    <div className="min-h-screen bg-slate-50 pb-24 dark:bg-slate-950">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200 p-4 dark:bg-slate-900/80 dark:border-slate-800">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="w-16 h-16 -ml-4 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
-            aria-label="Go back"
-          >
-            <ArrowLeft size={28} className="text-foreground" />
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <ArrowLeft size={24} />
           </button>
-          <Logo className="h-10" />
-          <div className="w-10" /> {/* Spacer for balance */}
+          <Logo className="h-8" />
+          <div className="w-10" />
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-8 space-y-8">
-        {/* Field Info Header */}
-        <section className="text-center space-y-4">
-          <h1 className="text-4xl font-black text-foreground tracking-tight">{field.name}</h1>
-          <div className="flex items-center justify-center gap-2 text-foreground font-mono uppercase tracking-widest text-4xl font-black">
-            {field.acreage} ACRES
-          </div>
-        </section>
+      <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
 
-        {/* Primary Weather Indicators */}
-        <section className="flex flex-col items-center gap-4">
-          {/* Current Wind Widget */}
-          <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 flex flex-col items-center justify-center space-y-2 shadow-xl">
-            {status === 'loading' ? (
-              <Loader2 size={24} className="animate-spin text-muted-foreground mx-auto" />
-            ) : (
-              <>
-                <div className="relative">
-                  {conditions?.winddir !== null && !conditions?.isError ? (
-                    <Navigation 
-                      size={32} 
-                      className="text-primary transition-transform duration-500" 
-                      style={{ transform: `rotate(${conditions?.winddir ?? 0}deg)` }}
-                    />
-                  ) : (
-                    <Wind size={32} className="text-muted-foreground opacity-20" />
-                  )}
-                </div>
-                <div className="text-center">
-                  <div className={`text-2xl font-black ${getWindColor(conditions?.windspeed ?? 0)}`}>
-                    {conditions?.windspeed !== null && !conditions?.isError ? Math.round(conditions?.windspeed ?? 0) : '--'} <span className="text-sm font-bold text-muted-foreground">MPH</span>
-                  </div>
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase font-mono tracking-tighter">
-                    Wind: {conditions?.windcardinal ?? '—'}
-                  </div>
-                </div>
-              </>
-            )}
+        {/* 1. Dashboard Header */}
+        <section className="space-y-1">
+          <div className="flex items-baseline justify-between">
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{field.name}</h1>
+            <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">{field.acreage} ac</span>
           </div>
-
-          {/* Rainfall Widget */}
-          <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 flex flex-col space-y-4 shadow-xl">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
-                  <Droplets size={20} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Rainfall</h3>
-                  <p className="text-[10px] font-mono text-muted-foreground uppercase">Stage IV Radar</p>
-                </div>
-              </div>
-              <button
-                onClick={handleFetchRain}
-                disabled={fetchingRain || field.lat == null || field.lng == null || isNaN(field.lat) || isNaN(field.lng)}
-                className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
-                aria-label="Refresh rainfall data"
-              >
-                <RefreshCw size={18} className={`${fetchingRain ? 'animate-spin' : ''} text-muted-foreground`} />
-              </button>
+          <div className="flex flex-wrap gap-2 items-center text-slate-600 dark:text-slate-400">
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-tight">
+              <Sprout size={12} className="text-emerald-500" />
+              {crop}
             </div>
-
-            {!rainData ? (
-              <div className="text-center py-4">
-                <button
-                  onClick={handleFetchRain}
-                  className="text-xs font-bold text-blue-500 hover:text-blue-600 uppercase tracking-widest"
-                >
-                  {fetchingRain ? 'Fetching...' : 'Click to Load Rainfall'}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: '12H', value: rainData.rain['12h'] },
-                    { label: '24H', value: rainData.rain['24h'] },
-                    { label: '72H', value: rainData.rain['72h'] }
-                  ].map((period) => (
-                    <div key={period.label} className="text-center p-2 rounded-xl bg-muted/30 border border-border/50">
-                      <div className="text-[10px] font-bold text-muted-foreground mb-1">{period.label}</div>
-                      <div className="text-lg font-black text-foreground">{period.value}<span className="text-[10px] ml-0.5">"</span></div>
-                    </div>
-                  ))}
-                </div>
-                
-                {rainData.dataWarning && (
-                  <div className="flex items-start gap-2 p-2 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
-                    <AlertCircle size={14} className="text-yellow-500 shrink-0 mt-0.5" />
-                    <p className="text-[9px] font-medium text-yellow-600/80 leading-tight italic">
-                      {rainData.dataWarning}
-                    </p>
-                  </div>
-                )}
-
-                {rainError && (
-                  <div className="flex items-start gap-2 p-2 rounded-lg bg-destructive/5 border border-destructive/10">
-                    <AlertCircle size={14} className="text-destructive shrink-0 mt-0.5" />
-                    <p className="text-[9px] font-medium text-destructive leading-tight italic">
-                      {rainError}
-                    </p>
-                  </div>
-                )}
-                
-                <div className="text-[8px] font-mono text-muted-foreground text-center uppercase tracking-tighter">
-                  End: {new Date(rainData.periodEndUtc).toLocaleString()}
-                </div>
-              </div>
-            )}
-
-            {rainError && !rainData && (
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-destructive/5 border border-destructive/10">
-                <AlertCircle size={16} className="text-destructive shrink-0 mt-0.5" />
-                <p className="text-[11px] font-medium text-destructive leading-normal italic">
-                  {rainError}
-                </p>
+            {(field.fsaFarmNumber || field.fsaTractNumber) && (
+              <div className="text-[10px] font-mono text-slate-400 uppercase">
+                FSA: {field.fsaFarmNumber || '—'} / {field.fsaTractNumber || '—'} / {field.fsaFieldNumber || '—'}
               </div>
             )}
           </div>
+          <p className="text-[10px] font-medium text-slate-400 italic">
+            Rainfall updated daily at 6:00 AM
+          </p>
         </section>
 
-        {/* Action Bar (Compact) */}
-        <section className="space-y-4">
-          <div className="flex flex-row flex-wrap gap-2 justify-center">
+        {/* 2. Today at a Glance - Grid of 4 Cards */}
+        <section className="grid grid-cols-2 gap-3 pb-2">
+          {/* Rainfall Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500">
+                <Droplets size={16} />
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Rainfall</span>
+            </div>
+            <div className="space-y-1">
+              <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+                {fetchingRain && !rainStats ? (
+                  <span className="text-slate-300 animate-pulse">...</span>
+                ) : (
+                  `${rainStats?.['24h'] ?? '0.00'}"`
+                )}
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium">
+                7D: <span className="text-slate-900 dark:text-slate-300 font-bold">{rainStats?.['7d'] ?? '0.00'}"</span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium truncate">
+                Plant: <span className="text-slate-900 dark:text-slate-300 font-bold">{rainStats?.sincePlanting ?? '0.00'}"</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Spray Status Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-500">
+                <Cloud size={16} />
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Spray</span>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xl font-black text-slate-900 dark:text-white leading-tight">
+                {daysSinceSpray === null ? 'None' : daysSinceSpray === 0 ? 'Today' : `${daysSinceSpray}d ago`}
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium truncate">
+                Rain: <span className="text-slate-900 dark:text-slate-300 font-bold">{rainStats?.sinceLastSpray ?? '0.00'}"</span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium truncate italic h-4">
+                {latestSpray?.products?.[0]?.product || 'No product'}
+              </div>
+            </div>
+          </div>
+
+          {/* Latest Activity Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-500">
+                <History size={16} />
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Latest</span>
+            </div>
+            <div className="space-y-1">
+              <div className="text-lg font-black text-slate-900 dark:text-white capitalize leading-tight">
+                {latestActivity?.type || 'No Activity'}
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium">
+                {latestActivity ? (() => {
+                  const d = latestActivity.data as any;
+                  const dateVal = d.date || d.plantDate || d.sprayDate || d.harvestDate || '';
+                  return dateVal ? new Date(dateVal).toLocaleDateString() : '—';
+                })() : '—'}
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium truncate">
+                {latestActivity ? (latestActivity.data as any).startTime ? `Started @ ${(latestActivity.data as any).startTime}` : '—' : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Crop Status Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500">
+                <Leaf size={16} />
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Crop</span>
+            </div>
+            <div className="space-y-1">
+              <div className="text-lg font-black text-slate-900 dark:text-white leading-tight truncate">
+                {crop || 'Fallow'}
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium truncate">
+                {latestPlanting?.plantDate ? `Set ${new Date(latestPlanting.plantDate).toLocaleDateString()}` : 'Not planted'}
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium truncate italic h-4">
+                {latestPlanting?.seedVariety || ''}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. Quick Actions */}
+        <section className="space-y-3">
+          <div className="grid grid-cols-4 gap-2">
             {FIELD_ACTIONS.map((action) => (
               <button
                 key={action.id}
-                onClick={() => {
-                  setEditingRecord(null);
-                  setModal(action.id as ModalType);
-                }}
-                className={`h-10 px-4 flex items-center gap-2 rounded-full border ${action.bg} ${action.border} ${action.color} transition-all active:scale-95 hover:brightness-110 shadow-sm`}
+                onClick={() => { setEditingRecord(null); setModal(action.id as ModalType); }}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm transition-transform active:scale-95"
               >
-                <action.icon size={16} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">{action.label}</span>
+                <div className={`p-2 rounded-xl ${action.bg} ${action.color}`}>
+                  <action.icon size={20} />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-tighter text-slate-600 dark:text-slate-400">{action.label.split(' ')[1]}</span>
               </button>
             ))}
           </div>
+          <button
+            onClick={() => {
+              const el = document.getElementById('history-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors"
+          >
+            <History size={14} />
+            View Full History
+          </button>
         </section>
 
-        {/* Persistent Field Notes */}
-        <FieldNotes field={field} />
+        {/* 4. Rainfall Summary Section */}
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+              <Droplets size={16} className="text-blue-500" />
+              Rainfall Summary
+            </h3>
+            <button
+              onClick={handleFetchRain}
+              disabled={fetchingRain}
+              className="p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-30"
+            >
+              <RefreshCw size={16} className={`${fetchingRain ? 'animate-spin' : ''} text-slate-400`} />
+            </button>
+          </div>
 
-        <ActivityFeed records={unifiedRecords} year={viewingSeason} onEdit={handleEdit} />
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: '24 Hours', value: rainStats?.['24h'] ?? '0.00' },
+              { label: '72 Hours', value: rainStats?.['72h'] ?? '0.00' },
+              { label: '7 Days', value: rainStats?.['7d'] ?? '0.00' },
+              { label: 'Planted', value: rainStats?.sincePlanting ?? '0.00', sub: 'Since' },
+              { label: 'Sprayed', value: rainStats?.sinceLastSpray ?? '0.00', sub: 'Since' },
+            ].map((stat, i) => (
+              <div key={i} className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 ${stat.label === 'Planted' || stat.label === 'Sprayed' ? 'col-span-1' : ''}`}>
+                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
+                <div className="text-xl font-black text-slate-900 dark:text-white leading-none">{stat.value}"</div>
+              </div>
+            ))}
+          </div>
+
+          {rainError && (
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex gap-2">
+              <AlertCircle size={14} className="text-red-500 shrink-0" />
+              <p className="text-[10px] text-red-600 dark:text-red-400 font-medium leading-tight">{rainError}</p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
+            <Info size={12} />
+            Data updated daily @ 6:00 AM. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+          </div>
+        </section>
+
+        {/* 5. Spray Summary Card */}
+        {latestSpray && (
+          <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                <Cloud size={16} className="text-purple-500" />
+                Latest Spray
+              </h3>
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                <CheckCircle2 size={12} />
+                {latestSpray.nonCompliant ? 'Attention Needed' : 'Compliant'}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Application Date</label>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  {new Date(latestSpray.sprayDate || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+                <div className="text-[10px] text-slate-500">{latestSpray.startTime} - {latestSpray.endTime}</div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Rain Since Spray</label>
+                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Droplets size={14} className="text-blue-400" />
+                  {rainStats?.sinceLastSpray ?? '0.00'}"
+                </div>
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Applied Products</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {latestSpray.products?.map((p, idx) => (
+                    <span key={idx} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {p.product} ({p.rate} {p.rateUnit})
+                    </span>
+                  )) || <span className="text-slate-400 text-xs">No products logged</span>}
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Target Pest</label>
+                <div className="text-sm font-bold text-slate-900 dark:text-white truncate">{latestSpray.targetPest || 'General'}</div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => handleEdit('spray', latestSpray)}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-100 transition-colors"
+              >
+                <FileText size={14} />
+                View Record
+              </button>
+              <button
+                onClick={() => generateSprayPDF([latestSpray], farmName)}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase tracking-widest hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+              >
+                <ExternalLink size={14} />
+                Export PDF
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* 6. Field History Timeline */}
+        <section id="history-section" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+              <History size={16} className="text-slate-400" />
+              Field History
+            </h3>
+            <button
+              onClick={() => { /* Potential full history dialog/navigation */ }}
+              className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+            >
+              View Full
+            </button>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-2 shadow-sm">
+            <ActivityFeed
+              records={unifiedRecords.slice(0, 8)}
+              year={viewingSeason}
+              onEdit={handleEdit}
+              hideHeader
+            />
+            {unifiedRecords.length > 8 && (
+              <button
+                className="w-full py-4 text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+              >
+                + {unifiedRecords.length - 8} more activities
+              </button>
+            )}
+            {unifiedRecords.length === 0 && (
+              <div className="py-12 text-center space-y-2">
+                <div className="p-3 rounded-full bg-slate-50 dark:bg-slate-800 w-fit mx-auto text-slate-300">
+                  <History size={24} />
+                </div>
+                <p className="text-xs font-medium text-slate-400">No activity logged for this season</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 7. Field Details (Meta) */}
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+          <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+            <MapPin size={16} className="text-emerald-500" />
+            Field Details
+          </h3>
+
+          <div className="grid grid-cols-2 gap-y-4 text-xs">
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Acreage</label>
+              <div className="font-bold text-slate-700 dark:text-slate-300">{field.acreage} Calculated Acres</div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Location</label>
+              <div className="font-mono text-[10px] text-slate-700 dark:text-slate-300">{field.lat?.toFixed(4)}, {field.lng?.toFixed(4)}</div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Irrigation</label>
+              <div className="font-bold text-slate-700 dark:text-slate-300">{field.irrigationPractice || 'Non-Irrigated'}</div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Intended Use</label>
+              <div className="font-bold text-slate-700 dark:text-slate-300">{field.intendedUse || 'Cash Grain'}</div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Share %</label>
+              <div className="font-bold text-slate-700 dark:text-slate-300">{field.producerShare || 100}% Producer</div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+            <FieldNotes field={field} />
+          </div>
+        </section>
+
       </main>
 
-      {/* Modals */}
+      {/* Modals - Reusing existing implementation */}
       {modal === 'plant' && (
-        <PlantModal 
-          field={field} 
-          open 
-          initialData={editingRecord}
-          onClose={() => { setModal(null); setEditingRecord(null); }} 
-        />
+        <PlantModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
       )}
       {modal === 'spray' && (
-        <SprayModal 
-          field={field} 
-          open 
-          initialData={editingRecord}
-          onClose={() => { setModal(null); setEditingRecord(null); }} 
-        />
+        <SprayModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
       )}
       {modal === 'harvest' && (
-        <HarvestModal 
-          field={field} 
-          open 
-          initialData={editingRecord}
-          onClose={() => { setModal(null); setEditingRecord(null); }} 
-        />
+        <HarvestModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
       )}
       {modal === 'hay' && (
-        <HayModal 
-          field={field} 
-          open 
-          initialData={editingRecord}
-          onClose={() => { setModal(null); setEditingRecord(null); }} 
-        />
+        <HayModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
       )}
       {modal === 'fertilizer' && (
-        <FertilizerModal 
-          field={field} 
-          open 
-          initialData={editingRecord}
-          onClose={() => { setModal(null); setEditingRecord(null); }} 
-        />
+        <FertilizerModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
       )}
       {modal === 'tillage' && (
-        <TillageModal 
-          field={field} 
-          open 
-          initialData={editingRecord}
-          onClose={() => { setModal(null); setEditingRecord(null); }} 
-        />
+        <TillageModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
       )}
     </div>
   );

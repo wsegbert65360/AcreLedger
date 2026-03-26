@@ -5,9 +5,10 @@ interface ActivityFeedProps {
   records: any[];
   year: number;
   onEdit: (type: any, data: any) => void;
+  hideHeader?: boolean;
 }
 
-export default function ActivityFeed({ records, year, onEdit }: ActivityFeedProps) {
+export default function ActivityFeed({ records, year, onEdit, hideHeader }: ActivityFeedProps) {
   const getFeedInfo = (record: { type: string; data: any }) => {
     const { type, data } = record;
     
@@ -31,7 +32,9 @@ export default function ActivityFeed({ records, year, onEdit }: ActivityFeedProp
 
   return (
     <section className="space-y-3 pb-8">
-      <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">{year} Activity Feed</h2>
+      {!hideHeader && (
+        <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">{year} Activity Feed</h2>
+      )}
       <div className="bg-card/40 backdrop-blur-md border border-border rounded-2xl overflow-hidden divide-y divide-border/20 shadow-xl">
         {records?.map((record, i) => {
           const info = getFeedInfo(record);

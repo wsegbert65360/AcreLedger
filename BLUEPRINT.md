@@ -182,6 +182,8 @@ to support historical analysis and performance.
 ```
 - **Stats RPC**: `get_rainfall_stats(field_id, start_date, end_date)` returns total inches,
   hours with rain, max hourly intensity, and coverage percentage.
+- **Service Cache**: `RainService` implements a 15-second `promiseCache` to deduplicate
+  concurrent requests for the same field during dashboard navigation.
 - **Pipeline**: Managed by `mrms-hourly` Edge Function.
 - **Summary Rollup**: `rollup_all_farms_daily(p_date)` runs at 6:00 AM daily via `pg_cron` 
   to precompute farm-level summaries for the previous day.
@@ -338,9 +340,21 @@ automatically includes mandatory compliance fields (EPA Reg #, Active Ingredient
 Equipment, Mix Details, and Personnel). It generates dynamic, sanitized filenames for 
 professional log management. It is the primary export path for private applicators.
 
+### Field Dashboard (Mobile-First)
+The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time
+signals over static data. The hierarchy is strictly enforced:
+1. **Header**: Name, Crop, FSA Identity, and Last Sync timestamp.
+2. **Today at a Glance**: 4-card grid (Rainfall, Spray Status, Latest Activity, Crop).
+3. **Quick Actions**: Touch-friendly grid for the 4 most common field logs.
+4. **Rainfall Analysis**: Comparative breakdown (24h/72h/7d/Planting/Spray).
+5. **Latest Spray**: Detail card + dedicated PDF export button.
+6. **Recent History**: Scannable timeline of the last 8 events via `ActivityFeed`.
+7. **Static Metadata**: Acreage, coordinates, and irrigation at the bottom.
+
 ### ActivityFeed Component
 Reusable component for displaying field-specific historical records. Filters records for the 
-`viewingSeason` and provides an `onEdit` callback for granular record editing.
+`viewingSeason`. On the Field Dashboard, it is limited to the **latest 8 items** via the
+`limit` prop to maintain scanability. Supports a `hideHeader` prop for nested board use.
 
 ### FieldNotes Component (Auto-Save)
 Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange` 

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { parseLocalDate, formatDisplayDate, formatIsoDate } from './dates';
 import { cleanName } from './text';
 import { roundTo, formatMeasurement } from './numbers';
-import { cleanName } from './text';
 
 describe('dates utility', () => {
     it('parseLocalDate should parse YYYY-MM-DD correctly without shift', () => {
@@ -92,6 +91,48 @@ describe('text utility', () => {
     });
 });
 
+describe('text utility', () => {
+    describe('cleanName', () => {
+        it('should return empty string for empty input', () => {
+            expect(cleanName('')).toBe('');
+        });
+
+        it('should not modify a normal string without UUIDs or dashes', () => {
+            expect(cleanName('Field North')).toBe('Field North');
+        });
+
+        it('should remove a single UUID from the string', () => {
+            expect(cleanName('Field North 123e4567-e89b-12d3-a456-426614174000')).toBe('Field North');
+            expect(cleanName('123e4567-e89b-12d3-a456-426614174000')).toBe('');
+        });
+
+        it('should remove multiple UUIDs from the string', () => {
+            expect(cleanName('Field 123e4567-e89b-12d3-a456-426614174000 North 123e4567-e89b-12d3-a456-426614174001')).toBe('Field North');
+        });
+
+        it('should remove trailing dashes', () => {
+            expect(cleanName('Field North -')).toBe('Field North');
+            expect(cleanName('Field North-')).toBe('Field North');
+            expect(cleanName('Field North  -  ')).toBe('Field North');
+        });
+
+        it('should remove trailing em-dashes', () => {
+            expect(cleanName('Field North —')).toBe('Field North');
+            expect(cleanName('Field North—')).toBe('Field North');
+            expect(cleanName('Field North  —  ')).toBe('Field North');
+        });
+
+        it('should handle combinations of UUIDs and dashes', () => {
+            expect(cleanName('Field North - 123e4567-e89b-12d3-a456-426614174000')).toBe('Field North');
+            expect(cleanName('123e4567-e89b-12d3-a456-426614174000 - Field North - ')).toBe('Field North');
+        });
+
+        it('should handle lowercase and uppercase UUIDs', () => {
+            expect(cleanName('Field North 123E4567-E89B-12D3-A456-426614174000')).toBe('Field North');
+        });
+    });
+});
+
 describe('numbers utility', () => {
     it('roundTo should round correctly', () => {
         expect(roundTo(1.2345, 2)).toBe(1.23);
@@ -122,48 +163,6 @@ describe('numbers utility', () => {
             expect(formatMeasurement(undefined as any, 'ac')).toBe('0 ac');
             expect(formatMeasurement(null as any, 'ac')).toBe('0 ac');
             expect(formatMeasurement('invalid' as any, 'ac')).toBe('0 ac');
-        });
-    });
-});
-
-describe('text utility', () => {
-    describe('cleanName', () => {
-        it('should return empty string for empty input', () => {
-            expect(cleanName('')).toBe('');
-        });
-
-        it('should not modify a normal string without UUIDs or dashes', () => {
-            expect(cleanName('Field North')).toBe('Field North');
-        });
-
-        it('should remove a single UUID from the string', () => {
-            expect(cleanName('Field North 123e4567-e89b-12d3-a456-426614174000')).toBe('Field North');
-            expect(cleanName('123e4567-e89b-12d3-a456-426614174000')).toBe('');
-        });
-
-        it('should remove multiple UUIDs from the string', () => {
-            expect(cleanName('Field 123e4567-e89b-12d3-a456-426614174000 North 123e4567-e89b-12d3-a456-426614174001')).toBe('Field  North');
-        });
-
-        it('should remove trailing dashes', () => {
-            expect(cleanName('Field North -')).toBe('Field North');
-            expect(cleanName('Field North-')).toBe('Field North');
-            expect(cleanName('Field North  -  ')).toBe('Field North');
-        });
-
-        it('should remove trailing em-dashes', () => {
-            expect(cleanName('Field North —')).toBe('Field North');
-            expect(cleanName('Field North—')).toBe('Field North');
-            expect(cleanName('Field North  —  ')).toBe('Field North');
-        });
-
-        it('should handle combinations of UUIDs and dashes', () => {
-            expect(cleanName('Field North - 123e4567-e89b-12d3-a456-426614174000')).toBe('Field North');
-            expect(cleanName('123e4567-e89b-12d3-a456-426614174000 - Field North - ')).toBe('- Field North');
-        });
-
-        it('should handle lowercase and uppercase UUIDs', () => {
-            expect(cleanName('Field North 123E4567-E89B-12D3-A456-426614174000')).toBe('Field North');
         });
     });
 });
