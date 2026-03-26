@@ -10,8 +10,9 @@ We use **Vitest** for unit testing core logic, mappers, and compliance report ge
 # Run all tests once
 npm test
 
-# Run tests in watch mode
-npm run test:watch
+# Run specific service/utility tests
+npm test src/services/__tests__/RainService.test.ts
+npm test src/utils/utils.test.ts
 ```
 
 ## Automated Smoke Testing (Bot)
@@ -31,7 +32,13 @@ For end-to-end verification and UI smoke testing, use the following bot credenti
    - Verify the recipe appears in the "Use Recipe" dropdown.
    - Delete the recipe using the Trash icon.
    - Verify the confirmation dialog appears and the recipe is removed upon confirmation.
-4. **Wait-and-Verify**: Ensure that application saves are not blocked by recipe save failures.
+4. **Tillage Records**:
+   - Create a tillage record.
+   - Verify the "Activity Item" displays the field name alongside the implement type.
+5. **Rainfall Resilience**:
+   - Rapidly refresh field details.
+   - Verify that `RainService` deduplicates calls (monitored via DevTools Network tab — only 2 RPCs per field per refresh).
+6. **Wait-and-Verify**: Ensure that application saves are not blocked by recipe save failures.
 
 ## Architectural Standards
 All tests must adhere to the "Wait-and-Verify" and "OpResult" patterns defined in the [BLUEPRINT.md](file:///c:/Projects/AcreLedger/BLUEPRINT.md).

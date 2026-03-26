@@ -568,6 +568,7 @@ Show in BackupManager UI. Amber warning if > 7 days old or never taken.
 
 ### Rainfall Pipeline Error States
 - **Coverage Gaps**: Indicated by `status IN ('pending', 'partial')` in `field_rainfall_coverage`.
+- **Hardened Error Handling**: `RainService` and `WeatherService` must normalize all upstream errors (RPC, Fetch, Timeout) into consistent app-level formats (e.g. `RPC_ERROR`).
 - **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by UI guards.
 - **API 404**: Location outside supported coverage (CONUS only).
 - **API 502**: IEM service unreachable. Friendly app message required.
