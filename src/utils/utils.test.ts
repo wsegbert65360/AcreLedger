@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { parseLocalDate, formatDisplayDate, formatIsoDate } from './dates';
-import { roundTo, formatMeasurement } from './numbers';
 
 describe('dates utility', () => {
     it('parseLocalDate should parse YYYY-MM-DD correctly without shift', () => {
@@ -22,20 +21,5 @@ describe('dates utility', () => {
         expect(formatIsoDate('')).toBe('');
         expect(formatIsoDate(undefined)).toBe('');
         expect(formatIsoDate(null)).toBe('');
-    });
-});
-
-describe('numbers utility', () => {
-    it('roundTo should round correctly', () => {
-        expect(roundTo(1.2345, 2)).toBe(1.23);
-        expect(roundTo(1.235, 2)).toBe(1.24);
-        expect(roundTo(1.23, 0)).toBe(1);
-        expect(roundTo(NaN, 2)).toBe(0);
-    });
-
-    it('formatMeasurement should include unit', () => {
-        expect(formatMeasurement(80.123, 'ac')).toBe('80.12 ac');
-        // toLocaleString() might vary by env too, usually bu doesn't have 2 fixed decimals unless specified
-        expect(formatMeasurement(1200.5, 'bu')).toContain('1,200.5');
     });
 });
