@@ -610,6 +610,7 @@ Use `window.addEventListener('online'/'offline')` in parallel with channel statu
 - **Backup gates rollover.** `downloadJson` returning `false` aborts the season change entirely.
 - **`isAdding` boolean ref, not UUID Set.** UUID Set does not prevent double-tap; boolean does.
 - **`try/finally` on in-flight guards.** Guard must release even on unexpected throw.
+- **Service Promise Caching.** Multi-call services (Rain, Weather) MUST implement a `promiseCache` (Map) to deduplicate concurrent requests for the same identity (fieldId, location).
 - **Module-level pure helpers only.** Functions with no component dependency go outside the component.
 - **Memoize all derived data.** `fieldMap`, filtered/sorted arrays, season lists, totals — all `useMemo`.
 - **`[...arr].sort()` never `arr.sort()`.** Sort mutates in place — spread first.
