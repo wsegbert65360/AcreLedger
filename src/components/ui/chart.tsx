@@ -66,24 +66,33 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   }
 
   return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
+    <style>
+      {Object.entries(THEMES)
+        .map(
+          ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
     const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
+    
+    // Security: Validate key and color to prevent CSS/XSS injection
+    const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, "");
+    const isValidColor = (c?: string) => {
+      if (!c) return false;
+      // Strict regex for hex, rgb, rgba, hsl, hsla, and CSS variables
+      const colorRegex = /^(#[0-9a-f]{3,8}|(rgb|hsl)a?\(\s*[\d.%,/ ]+\s*\)|[a-z-]+|var\(--[a-z0-9-]+\))$/i;
+      return colorRegex.test(c);
+    };
+
+    return color && isValidColor(color) ? `  --color-${safeKey}: ${color};` : null;
   })
+  .filter(Boolean)
   .join("\n")}
 }
 `,
-          )
-          .join("\n"),
-      }}
-    />
+        )
+        .join("\n")}
+    </style>
   );
 };
 

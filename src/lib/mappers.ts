@@ -190,7 +190,7 @@ export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
     id: db.id,
     farm_id: db.farm_id,
     fieldId: db.field_id,
-    fieldName: (db as any).fields?.name || (db as any).field_name || 'Unknown Field',
+    fieldName: (db as any).fields?.name || db.field_name || 'Unknown Field',
     date: db.date,
     implementType: db.implement_type,
     notes: db.notes ?? '',

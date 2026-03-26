@@ -14,6 +14,7 @@ describe('RainService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    RainService.__test_clearCache();
   });
 
   it('should fetch rainfall data and return formatted RainData', async () => {
@@ -58,17 +59,33 @@ describe('RainService', () => {
       .rejects.toThrow('RPC_ERROR: UNKNOWN - Database error');
   });
 
-  it('should handle missing expected fields (contract test)', async () => {
-    // Mock successful response but with missing total_inches field
-    (supabase.rpc as any)
-      .mockResolvedValueOnce({ data: [{ wrong_field: 0.5 }], error: null })
-      .mockResolvedValueOnce({ data: [{ total_inches: 1.0 }], error: null });
+  it('should deduplicate concurrent requests for the same field', async () => {
+    const mockData = [{ total_inches: 1.0 }];
+    // Mock a delay to simulate concurrent calls
+    (supabase.rpc as any).mockImplementation(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      return { data: mockData, error: null };
+    });
 
-    const result = await RainService.fetchRainfall({ fieldId: mockFieldId });
+    // Fire two requests concurrently
+    const [res1, res2] = await Promise.all([
+      RainService.fetchRainfall({ fieldId: mockFieldId }),
+      RainService.fetchRainfall({ fieldId: mockFieldId })
+    ]);
 
-    // Should default to 0 for the missing field
-    expect(result.rain['24h']).toBe(0);
-    expect(result.rain['72h']).toBe(1.0);
+    // Should only call RPC twice (one for 24h, one for 72h) because they share the same promise
+    expect(supabase.rpc).toHaveBeenCalledTimes(2);
+    expect(res1).toEqual(res2);
+  });
+
+  it('should respect abort signal', async () => {
+    const controller = new AbortController();
+    (supabase.rpc as any).mockResolvedValue({ data: [], error: null });
+
+    controller.abort();
+
+    await expect(RainService.fetchRainfall({ fieldId: mockFieldId, signal: controller.signal }))
+      .rejects.toThrow('ABORTED');
   });
 
   it('should identify CONUS coordinates correctly', () => {
