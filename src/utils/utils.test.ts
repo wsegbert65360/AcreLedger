@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseLocalDate, formatDisplayDate, formatIsoDate } from './dates';
+import { cleanName } from './text';
 import { roundTo, formatMeasurement } from './numbers';
 
 describe('dates utility', () => {
@@ -22,6 +23,52 @@ describe('dates utility', () => {
         expect(formatIsoDate('')).toBe('');
         expect(formatIsoDate(undefined)).toBe('');
         expect(formatIsoDate(null)).toBe('');
+    });
+
+    it('formatDisplayDate should format correctly', () => {
+        const d = new Date(2024, 2, 1); // March 1st 2024
+        expect(formatDisplayDate(d)).toMatch(/Mar 1, 2024|03\/01\/2024/);
+    });
+
+    it('formatDisplayDate should handle invalid dates', () => {
+        const d = new Date('invalid');
+        expect(formatDisplayDate(d)).toBe('');
+    });
+
+    it('formatDisplayDate should handle year end correctly', () => {
+        const d = new Date(2023, 11, 31); // Dec 31st 2023
+        expect(formatDisplayDate(d)).toMatch(/Dec 31, 2023|12\/31\/2023/);
+    });
+});
+
+describe('text utility', () => {
+    it('cleanName should remove UUIDs and trailing symbols', () => {
+        expect(cleanName('Field Name - 550e8400-e29b-41d4-a716-446655440000')).toBe('Field Name');
+        expect(cleanName('Field Name — 550e8400-e29b-41d4-a716-446655440000')).toBe('Field Name');
+        expect(cleanName('Field-Name 550e8400-e29b-41d4-a716-446655440000')).toBe('Field-Name');
+    });
+
+    it('cleanName should handle multiple UUIDs', () => {
+        const twoUuids = '550e8400-e29b-41d4-a716-446655440000-667f8511-f30c-52e5-b827-557766551111';
+        expect(cleanName(twoUuids)).toBe('');
+        
+        expect(cleanName('Start 550e8400-e29b-41d4-a716-446655440000 Mid 667f8511-f30c-52e5-b827-557766551111 End'))
+            .toBe('Start  Mid  End');
+    });
+
+    it('cleanName should trim whitespace and trailing dashes', () => {
+        expect(cleanName('  Field Name  ')).toBe('Field Name');
+        expect(cleanName('Field Name -')).toBe('Field Name');
+        expect(cleanName('Field Name — ')).toBe('Field Name');
+        expect(cleanName('Field Name - ')).toBe('Field Name');
+    });
+
+    it('cleanName should handle empty strings', () => {
+        expect(cleanName('')).toBe('');
+    });
+
+    it('cleanName should not remove non-UUID dashes', () => {
+        expect(cleanName('Field-Name-123')).toBe('Field-Name-123');
     });
 });
 

@@ -184,6 +184,7 @@ export interface TillageRecordRow {
     id: string;
     farm_id: string;
     field_id: string;
+    field_name?: string;
     date: string;
     implement_type: string;
     notes?: string | null;
