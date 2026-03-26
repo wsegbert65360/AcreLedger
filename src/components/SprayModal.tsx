@@ -23,7 +23,7 @@ interface SprayModalProps {
 }
 
 export default function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
-  const { addSprayRecord, updateSprayRecord, sprayRecipes, session, activeSeason } = useFarm();
+  const { addSprayRecord, updateSprayRecord, sprayRecipes, session, activeSeason, farmName } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -521,7 +521,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           {initialData && (
             <Button
               variant="outline"
-              onClick={() => generateSprayPDF([initialData], 'My Farm')}
+              onClick={() => generateSprayPDF([initialData], farmName)}
               className="touch-target w-full border-spray/30 text-spray hover:bg-spray/10 font-bold py-6 text-base"
             >
               <FileDown size={20} className="mr-2" />

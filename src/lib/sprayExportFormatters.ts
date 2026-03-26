@@ -70,3 +70,11 @@ export function formatReportDate(dateStr?: string | null): string {
 export function joinParts(parts: (string | number | undefined | null)[], sep: string = ' '): string {
   return parts.filter(p => p != null && p !== '').join(sep) || '—';
 }
+
+/**
+ * Removes illegal characters from filenames.
+ */
+export function sanitizeFilename(name: string): string {
+  if (!name) return 'export';
+  return name.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+}

@@ -4,7 +4,8 @@ import {
   formatUnit, 
   getComplianceStatus, 
   formatTime, 
-  formatReportDate 
+  formatReportDate,
+  sanitizeFilename 
 } from './sprayExportFormatters';
 
 describe('sprayExportFormatters', () => {
@@ -59,10 +60,19 @@ describe('sprayExportFormatters', () => {
 
   describe('formatReportDate', () => {
     it('formats ISO dates correctly', () => {
-      // formatIsoDate uses parseLocalDate which is local-safe
-      // We just check it doesn't crash and returns a string
       expect(typeof formatReportDate('2024-03-25')).toBe('string');
       expect(formatReportDate('')).toBe('—');
+    });
+  });
+
+  describe('sanitizeFilename', () => {
+    it('removes illegal characters', () => {
+      expect(sanitizeFilename('My Farm: Log?')).toBe('My_Farm__Log_');
+      expect(sanitizeFilename('Fields/2026*')).toBe('Fields_2026_');
+    });
+
+    it('replaces spaces with underscores', () => {
+      expect(sanitizeFilename('Spray Log 2026')).toBe('Spray_Log_2026');
     });
   });
 });
