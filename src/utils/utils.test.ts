@@ -33,9 +33,28 @@ describe('numbers utility', () => {
         expect(roundTo(NaN, 2)).toBe(0);
     });
 
-    it('formatMeasurement should include unit', () => {
-        expect(formatMeasurement(80.123, 'ac')).toBe('80.12 ac');
-        // toLocaleString() might vary by env too, usually bu doesn't have 2 fixed decimals unless specified
-        expect(formatMeasurement(1200.5, 'bu')).toContain('1,200.5');
+    describe('formatMeasurement', () => {
+        it('should format simple measurements with default decimals', () => {
+            expect(formatMeasurement(80.123, 'ac')).toBe('80.12 ac');
+            expect(formatMeasurement(10, 'lbs')).toBe('10 lbs');
+        });
+
+        it('should format with custom decimals', () => {
+            expect(formatMeasurement(1.2345, 'gal', 3)).toBe('1.235 gal');
+            expect(formatMeasurement(1.2345, 'gal', 0)).toBe('1 gal');
+            expect(formatMeasurement(1.9, 'gal', 0)).toBe('2 gal');
+        });
+
+        it('should format large numbers with commas', () => {
+            expect(formatMeasurement(1234567.89, 'bu')).toBe('1,234,567.89 bu');
+            expect(formatMeasurement(1200.5, 'bu', 1)).toBe('1,200.5 bu');
+        });
+
+        it('should handle invalid inputs gracefully', () => {
+            expect(formatMeasurement(NaN, 'ac')).toBe('0 ac');
+            expect(formatMeasurement(undefined as any, 'ac')).toBe('0 ac');
+            expect(formatMeasurement(null as any, 'ac')).toBe('0 ac');
+            expect(formatMeasurement('invalid' as any, 'ac')).toBe('0 ac');
+        });
     });
 });
