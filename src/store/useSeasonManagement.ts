@@ -241,7 +241,24 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     const keysToRemove = Object.keys(localStorage).filter(key =>
       key.startsWith('al_') || (userPrefix && key.startsWith(userPrefix))
     );
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+
+    // Batch the removal to avoid synchronous blocking of the main thread
+    const batchRemove = (keys: string[], startIndex: number = 0) => {
+      const BATCH_SIZE = 100;
+      const endIndex = Math.min(startIndex + BATCH_SIZE, keys.length);
+
+      for (let i = startIndex; i < endIndex; i++) {
+        localStorage.removeItem(keys[i]);
+      }
+
+      if (endIndex < keys.length) {
+        requestAnimationFrame(() => batchRemove(keys, endIndex));
+      }
+    };
+
+    if (keysToRemove.length > 0) {
+      batchRemove(keysToRemove);
+    }
 
     // Reset all local state in one logical pass
     setFields([]);
