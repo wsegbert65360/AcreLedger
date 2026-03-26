@@ -42,26 +42,60 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
   const [manualWindDirection, setManualWindDirection] = useState<string>(initialData?.windDirection || '');
   const [isPremixed, setIsPremixed] = useState(initialData?.isPremixed || false);
+
+  // New Universal Fields
+  const [endTime, setEndTime] = useState(initialData?.endTime || '');
+  const [isEndTimeManual, setIsEndTimeManual] = useState(!!initialData?.endTime);
+  const [cropOrSiteTreated, setCropOrSiteTreated] = useState(initialData?.cropOrSiteTreated || '');
+  const [applicationMethod, setApplicationMethod] = useState(initialData?.applicationMethod || 'Ground Broadcast');
+  const [treatedAreaUnit, setTreatedAreaUnit] = useState(initialData?.treatedAreaUnit || 'ac');
+  const [rei, setRei] = useState(initialData?.rei || '12h');
+  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedRecipe = sprayRecipes.find(r => r.id === selectedRecipeId);
 
   // Auto-calculate total amount based on first product or general rate if needed 
-  // (In reality, multiple products might have different rates, but total volume is usually per field)
   useEffect(() => {
     const rate = parseFloat(products[0]?.rate || '0');
     const acres = parseFloat(treatedAreaSize);
     if (!isNaN(rate) && !isNaN(acres)) {
-      // Only auto-calc if not manually overridden or as a hint
-      // For now keeping simple auto-fill logic
       setTotalAmountApplied((rate * acres).toFixed(1));
     }
   }, [products, treatedAreaSize]);
 
+  // Handle End Time Estimation
+  useEffect(() => {
+    if (isEndTimeManual || !startTime || !treatedAreaSize) return;
+    
+    const acres = parseFloat(treatedAreaSize);
+    if (isNaN(acres) || acres <= 0) return;
+
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const startMins = hours * 60 + minutes;
+    
+    // 54.5 acres per hour = 0.90833 acres per minute
+    // duration_mins = acres / (54.5 / 60)
+    const durationMins = Math.round(acres / (54.5 / 60));
+    const endTotalMins = (startMins + durationMins) % (24 * 60);
+    
+    const endH = Math.floor(endTotalMins / 60).toString().padStart(2, '0');
+    const endM = (endTotalMins % 60).toString().padStart(2, '0');
+    
+    setEndTime(`${endH}:${endM}`);
+  }, [startTime, treatedAreaSize, isEndTimeManual]);
+
   const resetComplianceFields = () => {
     const now = new Date();
     setStartTime(now.toTimeString().slice(0, 5));
-    setInvolvedTechnicians('');
+    setEndTime('');
+    setIsEndTimeManual(false);
+    setCropOrSiteTreated('');
+    setApplicationMethod('Ground Broadcast');
+    setTreatedAreaUnit('ac');
+    setRei('12h');
+    setNotes('');
     setSiteAddress(field.name);
     setTreatedAreaSize(field.acreage.toString());
     setTargetPest('grass/broadleaves');
@@ -70,7 +104,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setTotalMixtureVolume('');
     setIsPremixed(false);
     setManualWindDirection('');
-    setProducts([{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+    setProducts([{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
   };
 
   useEffect(() => {
@@ -112,12 +146,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [showValidation, setShowValidation] = useState(false);
 
   const isFormValid = products.length > 0 &&
-    products.every(p => p.product.trim()) && // ✅ EPA can now be empty (triggers nonCompliant)
+    products.every(p => p.product.trim()) && 
     startTime.trim() &&
+    endTime.trim() &&
     (!!weather && !weather.isError) &&
     applicatorName.trim() &&
     licenseNumber.trim() &&
     manualWindDirection.trim() &&
+    cropOrSiteTreated.trim() &&
+    applicationMethod.trim() &&
     equipmentId.trim();
 
   const handleSubmit = async () => {
@@ -136,25 +173,36 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       const data = {
         fieldId: field.id,
         fieldName: field.name,
-        products: products.filter(p => p.product.trim()),
+        products: products.filter(p => p.product.trim()).map(p => ({
+          ...p,
+          // Calculate individual amount if needed, though record has totalAmountApplied
+          totalProductAmount: p.totalProductAmount || undefined,
+          totalProductUnit: p.totalProductUnit || 'gal'
+        })),
         windSpeed: weather?.wind || initialData?.windSpeed || 0,
         temperature: weather?.temp || initialData?.temperature || 0,
         applicatorName: applicatorName.trim(),
         licenseNumber: licenseNumber.trim(),
-        epaRegNumber: products[0]?.epaRegNumber, // Fallback for legacy
+        epaRegNumber: products[0]?.epaRegNumber, // Legacy support
         targetPest: targetPest.trim() || undefined,
         windDirection: manualWindDirection || weather?.windDirection || initialData?.windDirection,
         relativeHumidity: weather?.humidity || initialData?.relativeHumidity || 0,
         sprayDate: sprayDate || undefined,
-        // Regulatory fields
         startTime: startTime || undefined,
-        involvedTechnicians: involvedTechnicians.trim() || undefined,
+        endTime: endTime || undefined,
         siteAddress: siteAddress.trim() || undefined,
+        cropOrSiteTreated: cropOrSiteTreated.trim() || undefined,
+        applicationMethod: applicationMethod.trim() || undefined,
         treatedAreaSize: parseFloat(treatedAreaSize) || 0,
+        treatedAreaUnit: treatedAreaUnit || 'ac',
         totalAmountApplied: parseFloat(totalAmountApplied) || 0,
         mixtureRate: mixtureRate.trim() || undefined,
         totalMixtureVolume: totalMixtureVolume.trim() || undefined,
+        involvedTechnicians: involvedTechnicians.trim() || undefined,
         equipmentId: equipmentId.trim() || undefined,
+        rei: rei.trim() || undefined,
+        notes: notes.trim() || undefined,
+        complianceProfile,
         isPremixed,
         nonCompliant: products.some(p => !p.epaRegNumber?.trim()),
         deleted_at: null,
@@ -225,13 +273,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="col-span-1">
-                        <Label htmlFor={`productName-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Trade Name</Label>
+                        <Label htmlFor={`productName-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Trade Name *</Label>
                         <Input
                           id={`productName-${i}`}
-                          name={`productName-${i}`}
                           value={p.product}
                           onChange={e => updateProduct(i, 'product', e.target.value)}
-                          placeholder="Roundup"
+                          placeholder="e.g. Roundup"
                           className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.product.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
                         />
                       </div>
@@ -239,20 +286,38 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                         <Label htmlFor={`epaReg-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
                         <Input
                           id={`epaReg-${i}`}
-                          name={`epaReg-${i}`}
                           value={p.epaRegNumber}
                           onChange={e => updateProduct(i, 'epaRegNumber', e.target.value)}
-                          placeholder="524-549 (Optional)"
-                          className="mt-0.5 bg-background border-border text-foreground text-xs h-8"
+                          placeholder="e.g. 524-549"
+                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.epaRegNumber?.trim() ? 'border-yellow-500/50' : ''}`}
                         />
                       </div>
                     </div>
+                    
+                    <div>
+                      <Label htmlFor={`activeIngredients-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Active Ingredients</Label>
+                      <Input
+                        id={`activeIngredients-${i}`}
+                        value={p.activeIngredients || ''}
+                        onChange={e => updateProduct(i, 'activeIngredients', e.target.value)}
+                        placeholder="e.g. Glyphosate 41%"
+                        className="mt-0.5 bg-background border-border text-foreground text-xs h-8"
+                      />
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label htmlFor={`appRate-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">App Rate</Label>
+                        <Label htmlFor={`appRate-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Rate *</Label>
                         <div className="flex gap-1">
-                          <Input id={`appRate-${i}`} name={`appRate-${i}`} value={p.rate} onChange={e => updateProduct(i, 'rate', e.target.value)} placeholder="22" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 flex-1" />
-                          <Input value={p.rateUnit} onChange={e => updateProduct(i, 'rateUnit', e.target.value)} placeholder="oz/ac" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 w-12" />
+                          <Input id={`appRate-${i}`} value={p.rate} onChange={e => updateProduct(i, 'rate', e.target.value)} placeholder="22" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 flex-1" />
+                          <Input value={p.rateUnit} onChange={e => updateProduct(i, 'rateUnit', e.target.value)} placeholder="oz" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 w-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor={`totalProduct-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Total Product Amt</Label>
+                        <div className="flex gap-1">
+                          <Input id={`totalProduct-${i}`} value={p.totalProductAmount || ''} onChange={e => updateProduct(i, 'totalProductAmount', e.target.value)} placeholder="15" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 flex-1" />
+                          <Input value={p.totalProductUnit || 'gal'} onChange={e => updateProduct(i, 'totalProductUnit', e.target.value)} placeholder="gal" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 w-10" />
                         </div>
                       </div>
                     </div>
@@ -261,7 +326,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               ))}
 
               <Button onClick={addProduct} variant="outline" size="sm" className="w-full border-dashed border-spray/30 text-spray text-[10px] h-8 font-bold">
-                <Plus size={12} className="mr-1" /> ADD ANOTHER HERBICIDE
+                <Plus size={12} className="mr-1" /> ADD ANOTHER PRODUCT
               </Button>
             </div>
 
@@ -275,103 +340,143 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           <Accordion type="single" collapsible className="w-full" defaultValue="compliance">
             <AccordionItem value="compliance" className="border-spray/20">
               <AccordionTrigger className="text-spray font-mono text-xs font-bold hover:no-underline py-2">
-                REGULATORY COMPLIANCE DETAILS (2 CSR 70-25.120)
+                APPLICATION & COMPLIANCE DETAILS
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
                 {/* 1. Timing */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
-                    <Clock size={12} /> Timing
+                    <Clock size={12} /> timing
                   </div>
-                  <div>
-                    <Label htmlFor="startTime" className="text-[10px] font-mono text-muted-foreground">START TIME *</Label>
-                    <Input id="startTime" name="startTime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !startTime.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="startTime" className="text-[10px] font-mono text-muted-foreground uppercase">Start Time *</Label>
+                      <Input id="startTime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !startTime.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="endTime" className="text-[10px] font-mono text-muted-foreground uppercase">End Time *</Label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[8px] font-mono text-muted-foreground">MANUAL</span>
+                          <Switch id="endTimeManual" checked={isEndTimeManual} onCheckedChange={setIsEndTimeManual} className="scale-75 h-4 w-7" />
+                        </div>
+                      </div>
+                      <Input id="endTime" type="time" value={endTime} onChange={e => { setEndTime(e.target.value); setIsEndTimeManual(true); }} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !endTime.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                    </div>
                   </div>
                 </div>
 
-                {/* 2. Site */}
+                {/* 2. Site & Crop */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
-                    <MapPin size={12} /> Site Details
+                    <MapPin size={12} /> site & crop
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-1">
-                      <Label htmlFor="siteAddress" className="text-[10px] font-mono text-muted-foreground">SITE DESCRIPTION / ADDR</Label>
-                      <Input id="siteAddress" name="siteAddress" value={siteAddress} onChange={e => setSiteAddress(e.target.value)} placeholder="Field name or addr" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                      <Label htmlFor="cropTreated" className="text-[10px] font-mono text-muted-foreground uppercase">Crop / Site Treated *</Label>
+                      <Input id="cropTreated" value={cropOrSiteTreated} onChange={e => setCropOrSiteTreated(e.target.value)} placeholder="e.g. Corn" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !cropOrSiteTreated.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                     <div>
-                      <Label htmlFor="treatedArea" className="text-[10px] font-mono text-muted-foreground">TREATED AREA SIZE</Label>
-                      <Input id="treatedArea" name="treatedArea" value={treatedAreaSize} onChange={e => setTreatedAreaSize(e.target.value)} placeholder="e.g. 80 ac" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                      <Label htmlFor="appMethod" className="text-[10px] font-mono text-muted-foreground uppercase">App Method *</Label>
+                      <Select value={applicationMethod} onValueChange={setApplicationMethod}>
+                        <SelectTrigger className={`mt-0.5 bg-muted border-border text-foreground h-9 text-xs ${showValidation && !applicationMethod.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
+                          <SelectValue placeholder="Select method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {['Ground Broadcast', 'Ground Banded', 'Ground Directed', 'Aerial', 'Chemigation', 'Handheld'].map(m => (
+                            <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="siteAddress" className="text-[10px] font-mono text-muted-foreground uppercase">Site Description / Address</Label>
+                    <Input id="siteAddress" value={siteAddress} onChange={e => setSiteAddress(e.target.value)} placeholder="Field name or location" className="mt-0.5 bg-muted border-border text-foreground h-9" />
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
-                    <FileText size={12} /> Use Specifics
+                    <FileText size={12} /> area & volume
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <Label htmlFor="totalAmount" className="text-[10px] font-mono text-muted-foreground uppercase tracking-tight">TOTAL PRODUCT APPLIED (ACROSS ALL HERBICIDES)</Label>
-                      <Input id="totalAmount" name="totalAmount" value={totalAmountApplied} onChange={e => setTotalAmountApplied(e.target.value)} placeholder="Auto-calculated sum" className="mt-0.5 bg-muted border-border text-foreground h-9 font-bold" />
+                    <div>
+                      <Label htmlFor="treatedArea" className="text-[10px] font-mono text-muted-foreground uppercase">Treated Area Size *</Label>
+                      <div className="flex gap-1">
+                        <Input id="treatedArea" value={treatedAreaSize} onChange={e => setTreatedAreaSize(e.target.value)} placeholder="80" className={`mt-0.5 bg-muted border-border text-foreground h-9 flex-1 ${showValidation && !treatedAreaSize.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                        <Select value={treatedAreaUnit} onValueChange={setTreatedAreaUnit}>
+                          <SelectTrigger className="mt-0.5 bg-muted border-border text-foreground h-9 w-16 text-xs capitaize">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ac">ac</SelectItem>
+                            <SelectItem value="sqft">sqft</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="targetPest" className="text-[10px] font-mono text-muted-foreground uppercase">Target Pest(s) *</Label>
+                      <Input id="targetPest" value={targetPest} onChange={e => setTargetPest(e.target.value)} placeholder="e.g. Pigweed" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !targetPest.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                   </div>
 
-                  {/* MDA Mandatory Mixture Fields */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="mixtureRate" className="text-[10px] font-mono text-muted-foreground uppercase">Mixture Rate</Label>
-                      <Input id="mixtureRate" name="mixtureRate" value={mixtureRate} onChange={e => setMixtureRate(e.target.value)} placeholder="e.g. 15 gal/ac" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                      <Label htmlFor="totalAmount" className="text-[10px] font-mono text-muted-foreground uppercase">Total Material Applied</Label>
+                      <Input id="totalAmount" value={totalAmountApplied} onChange={e => setTotalAmountApplied(e.target.value)} placeholder="Auto-sum" className="mt-0.5 bg-muted border-border text-foreground h-9 font-bold" />
                     </div>
-                    <div>
-                      <Label htmlFor="totalVolume" className="text-[10px] font-mono text-muted-foreground uppercase">Total Mixture Vol</Label>
-                      <Input id="totalVolume" name="totalVolume" value={totalMixtureVolume} onChange={e => setTotalMixtureVolume(e.target.value)} placeholder="e.g. 1200 gal" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                    <div className="flex items-center space-x-2 pt-5">
+                      <Switch id="premixed" checked={isPremixed} onCheckedChange={setIsPremixed} />
+                      <Label htmlFor="premixed" className="text-[10px] font-mono text-muted-foreground uppercase">Premixed</Label>
                     </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="targetPest" className="text-[10px] font-mono text-muted-foreground">TARGET PEST(S)</Label>
-                    <Input id="targetPest" name="targetPest" value={targetPest} onChange={e => setTargetPest(e.target.value)} placeholder="e.g. Pigweed" className="mt-0.5 bg-muted border-border text-foreground h-9" />
-                  </div>
-                  <div className="flex items-center space-x-2 py-2">
-                    <Switch id="premixed" checked={isPremixed} onCheckedChange={setIsPremixed} />
-                    <Label htmlFor="premixed" className="text-xs font-mono text-muted-foreground">PREMIXED PRODUCT</Label>
                   </div>
                 </div>
 
-                {/* 4. Applicators */}
+                {/* 4. Applicators & Other */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
-                    <User size={12} /> Applicators
+                    <User size={12} /> APPLICATORS & SAFETY
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="applicator" className="text-[10px] font-mono text-muted-foreground">CERT. APPLICATOR *</Label>
-                      <Input id="applicator" name="applicator" value={applicatorName} onChange={e => setApplicatorName(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !applicatorName.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                      <Label htmlFor="applicator" className="text-[10px] font-mono text-muted-foreground uppercase">Cert. Applicator *</Label>
+                      <Input id="applicator" value={applicatorName} onChange={e => setApplicatorName(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !applicatorName.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                     <div>
-                      <Label htmlFor="license" className="text-[10px] font-mono text-muted-foreground">LICENSE # *</Label>
-                      <Input id="license" name="license" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !licenseNumber.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                      <Label htmlFor="license" className="text-[10px] font-mono text-muted-foreground uppercase">License # *</Label>
+                      <Input id="license" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !licenseNumber.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="equipmentId" className="text-[10px] font-mono text-muted-foreground uppercase">Equipment ID *</Label>
+                      <Input id="equipmentId" value={equipmentId} onChange={e => setEquipmentId(e.target.value)} placeholder="e.g. Miller Nitro" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !equipmentId.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                    </div>
+                    <div>
+                      <Label htmlFor="rei" className="text-[10px] font-mono text-muted-foreground uppercase">REI (Re-entry)</Label>
+                      <Input id="rei" value={rei} onChange={e => setRei(e.target.value)} placeholder="e.g. 12h" className="mt-0.5 bg-muted border-border text-foreground h-9" />
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="technicians" className="text-[10px] font-mono text-muted-foreground">INVOLVED TECHNICIANS / NON-CERTIFIED</Label>
-                    <Input id="technicians" name="technicians" value={involvedTechnicians} onChange={e => setInvolvedTechnicians(e.target.value)} placeholder="Name and license of others involved" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+                    <Label htmlFor="technicians" className="text-[10px] font-mono text-muted-foreground uppercase">Involved Technicians / Helpers (Optional)</Label>
+                    <Input id="technicians" value={involvedTechnicians} onChange={e => setInvolvedTechnicians(e.target.value)} placeholder="e.g. John Doe, Mike Smith" className="mt-0.5 bg-muted border-border text-foreground h-9" />
                   </div>
                   <div>
-                    <Label htmlFor="equipmentId" className="text-[10px] font-mono text-muted-foreground uppercase">Equipment ID (Machine) *</Label>
-                    <Input id="equipmentId" name="equipmentId" value={equipmentId} onChange={e => setEquipmentId(e.target.value)} placeholder="e.g. Miller Nitro" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !equipmentId.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                    <Label htmlFor="notes" className="text-[10px] font-mono text-muted-foreground uppercase">Notes / Additional Info</Label>
+                    <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add any extra compliance or field notes here..." className="mt-0.5 bg-muted border-border text-foreground text-xs resize-none" rows={2} />
                   </div>
                 </div>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
 
-          {/* Weather (Auto-filled but editable for 8-point validation) */}
+          {/* Environmental Conditions */}
           <div className={`rounded-lg border p-3 space-y-3 ${weather ? 'border-spray/20 bg-muted/30' : 'border-destructive/30 bg-destructive/5'}`}>
             <div className="flex items-center justify-between">
               <span className={`font-mono text-[10px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
-                Environmental Conditions (Required)
+                Environmental Conditions *
               </span>
               {loading && <Loader2 size={12} className="text-spray animate-spin" />}
             </div>
@@ -381,17 +486,17 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 <Label className="text-[9px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
                 <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
                   <SelectTrigger className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindDirection.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
-                    <SelectValue placeholder="Select" />
+                    <SelectValue placeholder="Dir" />
                   </SelectTrigger>
                   <SelectContent>
-                    {['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'].map(dir => (
+                    {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW', 'CALM'].map(dir => (
                       <SelectItem key={dir} value={dir} className="font-mono text-xs">{dir}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-[9px] font-mono text-muted-foreground uppercase text-right block">Wind Speed</Label>
+                <Label className="text-[9px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
                 <div className="text-sm font-mono font-bold text-right pt-1">{weather?.wind || 0} mph</div>
               </div>
             </div>
@@ -399,22 +504,19 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             {weather && (
               <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
                 <div className="space-y-0.5">
-                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Temperature</div>
+                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Temp (°F) *</div>
                   <div className="text-xs font-mono font-bold">{weather.temp}°F</div>
                 </div>
                 <div className="space-y-0.5 text-right">
-                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Humidity</div>
+                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Humidity (%)</div>
                   <div className="text-xs font-mono font-bold">{weather.humidity}%</div>
                 </div>
               </div>
             )}
-
-            {!weather && !loading && (
-              <div className="text-[10px] font-mono text-destructive">Weather data missing. Please check location settings.</div>
-            )}
           </div>
+          <div className="h-20" aria-hidden="true" /> {/* Spacer for sticky footer */}
         </div>
-        <DialogFooter className="sticky bottom-0 bg-card pt-2">
+        <DialogFooter className="sticky bottom-0 bg-card pt-2 border-t border-border/20">
           <Button
             onClick={handleSubmit}
             disabled={!isFormValid || loading || isSaving}
@@ -427,7 +529,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               </div>
             ) : loading ? <Loader2 size={20} className="animate-spin" /> :
               !isFormValid ? 'Compliance Information Missing' :
-                initialData ? 'Update Record' : 'Complete MDA Record'}
+                initialData ? 'Update Spray Record' : 'Save Spray Record'}
           </Button>
         </DialogFooter>
       </DialogContent>

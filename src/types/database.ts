@@ -59,6 +59,7 @@ export interface SprayRecordRow {
     temperature: number;
     spray_date: string;
     start_time: string;
+    end_time: string | null;
     equipment_id: string;
     applicator_name: string;
     license_number: string;
@@ -70,11 +71,17 @@ export interface SprayRecordRow {
     wind_direction?: string | null;
     relative_humidity?: number | null;
     treated_area_size?: number | null;
+    treated_area_unit?: string | null;
     total_amount_applied?: number | null;
     involved_technicians?: string | null;
     mixture_rate?: string | null;
     total_mixture_volume?: string | null;
     site_address?: string | null;
+    crop_or_site_treated?: string | null;
+    application_method?: string | null;
+    rei?: string | null;
+    notes?: string | null;
+    compliance_profile?: string | null;
     is_premixed?: boolean | null;
     non_compliant?: boolean | null;
 }

@@ -49,34 +49,45 @@ export interface SprayRecord {
   id: string;
   fieldId: string;
   fieldName: string;
-  products?: SprayRecipeProduct[]; // Granular details for regulatory compliance
-  windSpeed: number; // MDA mandatory: wind_speed_mph
-  temperature: number; // MDA mandatory: temp_f
+  products?: SprayRecipeProduct[];
+  windSpeed: number;
+  temperature: number;
   timestamp: number;
   seasonYear: number;
   farm_id?: string;
   deleted_at: string | null;
-  // Spray audit / personal license compliance
+  // Applicator Identity
   applicatorName?: string;
   licenseNumber?: string;
-  epaRegNumber?: string; // MDA mandatory: epa_reg_num
+  // Application Details
+  sprayDate?: string;
+  startTime?: string;
+  endTime?: string;
+  siteAddress?: string;
+  cropOrSiteTreated?: string;
+  targetPest?: string;
+  applicationMethod?: string;
+  // Use / Area
+  treatedAreaSize?: number;
+  treatedAreaUnit?: string; // Default 'ac'
+  // Weather (Extended)
+  windDirection?: string;
+  relativeHumidity?: number;
+  // Other Compliance
+  rei?: string;
+  equipmentId?: string;
+  notes?: string;
+  complianceProfile?: string; // e.g. 'universal'
+  nonCompliant?: boolean;
+  // Legacy support
+  involvedTechnicians?: string;
+  epaRegNumber?: string;
   applicationRate?: string;
   rateUnit?: string;
-  mixtureRate?: string; // MDA mandatory: mixture_rate
-  totalMixtureVolume?: string; // MDA mandatory: total_mixture_volume
-  targetPest?: string;
-  windDirection?: string; // MDA mandatory: wind_direction
-  relativeHumidity?: number;
-  sprayDate?: string;
-  // Regulatory compliance fields (2 CSR 70-25.120)
-  startTime?: string; // MDA mandatory: start_time
-  involvedTechnicians?: string;
-  siteAddress?: string;
-  treatedAreaSize?: number;
+  mixtureRate?: string;
+  totalMixtureVolume?: string;
   totalAmountApplied?: number;
-  equipmentId?: string; // Auditor requirement: Machine ID (e.g. Miller Nitro)
   isPremixed?: boolean;
-  nonCompliant?: boolean;
 }
 
 export interface HarvestRecord {
@@ -159,7 +170,10 @@ export interface SprayRecipeProduct {
   product: string;
   rate: string;
   rateUnit: string;
-  epaRegNumber?: string; // Granular audit info
+  epaRegNumber?: string;
+  activeIngredients?: string;
+  totalProductAmount?: string;
+  totalProductUnit?: string;
 }
 
 export interface SprayRecipe {
