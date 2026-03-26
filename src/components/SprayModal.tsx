@@ -8,7 +8,8 @@ import { useFarm } from '@/store/farmStore';
 import { Field, SprayRecipeProduct, SprayRecord } from '@/types/farm';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
-import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus } from 'lucide-react';
+import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus, FileDown } from 'lucide-react';
+import { generateSprayPDF } from '@/lib/sprayExport';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -516,7 +517,17 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           </div>
           <div className="h-20" aria-hidden="true" /> {/* Spacer for sticky footer */}
         </div>
-        <DialogFooter className="sticky bottom-0 bg-card pt-2 border-t border-border/20">
+        <DialogFooter className="sticky bottom-0 bg-card pt-2 border-t border-border/20 flex flex-col gap-2">
+          {initialData && (
+            <Button
+              variant="outline"
+              onClick={() => generateSprayPDF([initialData], 'My Farm')}
+              className="touch-target w-full border-spray/30 text-spray hover:bg-spray/10 font-bold py-6 text-base"
+            >
+              <FileDown size={20} className="mr-2" />
+              Export PDF
+            </Button>
+          )}
           <Button
             onClick={handleSubmit}
             disabled={!isFormValid || loading || isSaving}

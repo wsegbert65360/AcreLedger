@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout } from 'lucide-react';
-import { generateMissouriLog, exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
+import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout, Share } from 'lucide-react';
+import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
+import { generateSprayPDF } from '@/lib/sprayExport';
 import type { 
   PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, 
   FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord 
@@ -214,14 +215,21 @@ export default function Activity() {
           </div>
 
           {tab === 'spray' && (
-            <button
-              onClick={() => generateMissouriLog(filteredSpray, fields)}
-              className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
-              title="Export Missouri Spray Log (MP693)"
-            >
-              <FileDown size={16} />
-              EXPORT LOG
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const toExport = selected.size > 0 
+                    ? filteredSpray.filter(r => selected.has(r.id))
+                    : filteredSpray;
+                  generateSprayPDF(toExport, 'My Farm');
+                }}
+                className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
+                title="Export Universal Spray Log PDF"
+              >
+                <FileDown size={16} />
+                EXPORT LOG
+              </button>
+            </div>
           )}
           {(tab === 'plant' || tab === 'harvest') && (
             <button

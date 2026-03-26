@@ -14,15 +14,10 @@ interface UseFertilizerRecordsArgs {
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerApplications, fields }: UseFertilizerRecordsArgs) {
-  // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
+// ─── Internal Helper Hooks ──────────────────────────────────────────────────
+
+function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerApplications }: UseFertilizerRecordsArgs) {
   const isAdding = useRef(false);
-
-  // Refs for passing values out of state updaters safely across await boundaries
-  const previousRef = useRef<FertilizerApplication | undefined>(undefined);
-  const snapshotRef = useRef<{ record: FertilizerApplication; index: number }[]>([]);
-
-  // ─── Add ──────────────────────────────────────────────────────────────────
 
   const addFertilizerApplication = useCallback(async (
     r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>
@@ -48,19 +43,16 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
       seasonYear: activeSeason
     };
 
-    // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapFertilizerToDb>;
     try {
       mapped = mapFertilizerToDb(newRecord);
     } catch (err) {
-      // Replace with Sentry.captureException(err) in production
       console.error('mapFertilizerToDb failed:', err);
       isAdding.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
     }
 
-    // Optimistic add
     setFertilizerApplications(prev => [...prev, newRecord]);
 
     try {
@@ -72,7 +64,6 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
         }]);
 
       if (error) {
-        // Replace with Sentry.captureException(error) in production
         console.error('Error adding fertilizer record:', error);
         setFertilizerApplications(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save fertilizer application.');
@@ -82,12 +73,15 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
       toast.success('Fertilizer application recorded.');
       return true;
     } finally {
-      // Always release the guard
       isAdding.current = false;
     }
   }, [activeSeason, farm_id, fields, setFertilizerApplications]);
 
-  // ─── Update ───────────────────────────────────────────────────────────────
+  return { addFertilizerApplication };
+}
+
+function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications }: Omit<UseFertilizerRecordsArgs, 'activeSeason'>) {
+  const previousRef = useRef<FertilizerApplication | undefined>(undefined);
 
   const updateFertilizerApplication = useCallback(async (r: FertilizerApplication): Promise<OpResult> => {
     if (!farm_id) {
@@ -104,8 +98,6 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
       return false;
     }
 
-    // Capture previous record into a ref INSIDE the setter so it's guaranteed
-    // to reflect the same state snapshot as the optimistic apply
     previousRef.current = undefined;
     const updatedAtIso = new Date().toISOString();
     setFertilizerApplications(prev => {
@@ -127,7 +119,6 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
       .eq('farm_id', farm_id);
 
     if (error) {
-      // Replace with Sentry.captureException(error) in production
       console.error('Error updating fertilizer application:', error);
       
       const previous = previousRef.current;
@@ -146,7 +137,11 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
     return true;
   }, [farm_id, setFertilizerApplications, fields]);
 
-  // ─── Delete ───────────────────────────────────────────────────────────────
+  return { updateFertilizerApplication };
+}
+
+function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications }: Pick<UseFertilizerRecordsArgs, 'farm_id' | 'setFertilizerApplications'>) {
+  const snapshotRef = useRef<{ record: FertilizerApplication; index: number }[]>([]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]): Promise<OpResult> => {
     if (!farm_id) {
@@ -156,7 +151,6 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
 
     if (ids.length === 0) return true;
 
-    // Capture snapshot into a ref inside the setter
     snapshotRef.current = [];
     setFertilizerApplications(prev => {
       snapshotRef.current = prev
@@ -172,10 +166,8 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
       .eq('farm_id', farm_id);
 
     if (error) {
-      // Replace with Sentry.captureException(error) in production
       console.error('Error deleting fertilizer applications:', error);
 
-      // Restore records to their original positions. Sort descending by index.
       const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
 
       setFertilizerApplications(prev => {
@@ -196,5 +188,19 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
     return true;
   }, [farm_id, setFertilizerApplications]);
 
-  return { addFertilizerApplication, updateFertilizerApplication, deleteFertilizerApplications };
+  return { deleteFertilizerApplications };
+}
+
+// ─── Public Hook ────────────────────────────────────────────────────────────
+
+export function useFertilizerRecords(args: UseFertilizerRecordsArgs) {
+  const { addFertilizerApplication } = useAddFertilizerRecord(args);
+  const { updateFertilizerApplication } = useUpdateFertilizerRecord(args);
+  const { deleteFertilizerApplications } = useDeleteFertilizerRecord(args);
+
+  return { 
+    addFertilizerApplication, 
+    updateFertilizerApplication, 
+    deleteFertilizerApplications 
+  };
 }
