@@ -182,7 +182,7 @@ to support historical analysis and performance.
 ```
 - **Stats RPC**: `get_rainfall_stats(field_id, start_date, end_date)` returns total inches,
   hours with rain, max hourly intensity, and coverage percentage.
-- **Service Cache**: `RainService` implements a 15-second `promiseCache` to deduplicate 
+- **Service Cache**: `RainService` implements a 15-second `promiseCache` to deduplicate
   concurrent requests for the same field during dashboard navigation.
 - **Pipeline**: Managed by `mrms-hourly` Edge Function.
 - **Summary Rollup**: `rollup_all_farms_daily(p_date)` runs at 6:00 AM daily via `pg_cron` 
@@ -341,7 +341,7 @@ Equipment, Mix Details, and Personnel). It generates dynamic, sanitized filename
 professional log management. It is the primary export path for private applicators.
 
 ### Field Dashboard (Mobile-First)
-The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time 
+The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time
 signals over static data. The hierarchy is strictly enforced:
 1. **Header**: Name, Crop, FSA Identity, and Last Sync timestamp.
 2. **Today at a Glance**: 4-card grid (Rainfall, Spray Status, Latest Activity, Crop).
@@ -353,7 +353,7 @@ signals over static data. The hierarchy is strictly enforced:
 
 ### ActivityFeed Component
 Reusable component for displaying field-specific historical records. Filters records for the 
-`viewingSeason`. On the Field Dashboard, it is limited to the **latest 8 items** via the 
+`viewingSeason`. On the Field Dashboard, it is limited to the **latest 8 items** via the
 `limit` prop to maintain scanability. Supports a `hideHeader` prop for nested board use.
 
 ### FieldNotes Component (Auto-Save)

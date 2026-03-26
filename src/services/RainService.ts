@@ -42,7 +42,7 @@ export const RainService = {
     const fetchPromise = (async () => {
         const now = new Date();
         const today = now.toISOString().split('T')[0];
-        
+
         const getDaysAgo = (days: number) => {
             const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
             return d.toISOString().split('T')[0];
@@ -70,7 +70,8 @@ export const RainService = {
 
         const error = results.find(r => r.error)?.error;
         if (error) {
-            throw new Error(`RPC_ERROR: ${error.code} - ${error.message}`);
+            const code = error.code || 'UNKNOWN';
+            throw new Error(`RPC_ERROR: ${code} - ${error.message}`);
         }
 
         const getVal = (res: any) => Number(res.data?.[0]?.total_inches || 0);

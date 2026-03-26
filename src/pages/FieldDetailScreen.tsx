@@ -4,8 +4,8 @@ import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { 
   Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
-  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, 
-  AlertCircle, Plus, Edit2, Layers, Calendar, History, 
+  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw,
+  AlertCircle, Plus, Edit2, Layers, Calendar, History,
   FileText, ExternalLink, ChevronRight, Info, CheckCircle2
 } from 'lucide-react';
 import { RainService } from '@/services/RainService';
@@ -18,7 +18,6 @@ import TillageModal from '@/components/TillageModal';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
-import { cleanName } from '@/utils/text';
 import { generateSprayPDF } from '@/lib/sprayExport';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
@@ -54,7 +53,7 @@ export default function FieldDetailScreen() {
     humidity: number | null;
     isError?: boolean;
   } | null>(null);
-  
+
   const [rainStats, setRainStats] = useState<{
     '24h': number;
     '72h': number;
@@ -63,7 +62,7 @@ export default function FieldDetailScreen() {
     sinceLastSpray: number;
     periodEndUtc: string;
   } | null>(null);
-  
+
   const [rainError, setRainError] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [fetchingRain, setFetchingRain] = useState(false);
@@ -90,21 +89,21 @@ export default function FieldDetailScreen() {
   }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
 
   const latestActivity = unifiedRecords[0];
-  
-  const latestPlanting = useMemo(() => 
+
+  const latestPlanting = useMemo(() =>
     plantRecords
       .filter(r => r.fieldId === field?.id && r.seasonYear === viewingSeason)
       .sort((a,b) => new Date(b.plantDate || 0).getTime() - new Date(a.plantDate || 0).getTime())[0]
   , [plantRecords, field?.id, viewingSeason]);
 
-  const latestSpray = useMemo(() => 
+  const latestSpray = useMemo(() =>
     sprayRecords
       .filter(r => r.fieldId === field?.id && r.seasonYear === viewingSeason)
       .sort((a,b) => new Date(b.sprayDate || 0).getTime() - new Date(a.sprayDate || 0).getTime())[0]
   , [sprayRecords, field?.id, viewingSeason]);
 
   const crop = latestPlanting?.crop || field?.intendedUse || 'No Crop Logged';
-  
+
   const daysSinceSpray = useMemo(() => {
     if (!latestSpray?.sprayDate) return null;
     const diff = new Date().getTime() - new Date(latestSpray.sprayDate).getTime();
@@ -182,7 +181,7 @@ export default function FieldDetailScreen() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
-        
+
         {/* 1. Dashboard Header */}
         <section className="space-y-1">
           <div className="flex items-baseline justify-between">
@@ -316,7 +315,7 @@ export default function FieldDetailScreen() {
               </button>
             ))}
           </div>
-          <button 
+          <button
             onClick={() => {
               const el = document.getElementById('history-section');
               el?.scrollIntoView({ behavior: 'smooth' });
@@ -358,7 +357,7 @@ export default function FieldDetailScreen() {
               </div>
             ))}
           </div>
-          
+
           {rainError && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex gap-2">
               <AlertCircle size={14} className="text-red-500 shrink-0" />
@@ -418,14 +417,14 @@ export default function FieldDetailScreen() {
             </div>
 
             <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <button 
+              <button
                 onClick={() => handleEdit('spray', latestSpray)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-100 transition-colors"
               >
                 <FileText size={14} />
                 View Record
               </button>
-              <button 
+              <button
                 onClick={() => generateSprayPDF([latestSpray], farmName)}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase tracking-widest hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
               >
@@ -443,23 +442,23 @@ export default function FieldDetailScreen() {
               <History size={16} className="text-slate-400" />
               Field History
             </h3>
-            <button 
+            <button
               onClick={() => { /* Potential full history dialog/navigation */ }}
               className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
             >
               View Full
             </button>
           </div>
-          
+
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-2 shadow-sm">
-            <ActivityFeed 
-              records={unifiedRecords.slice(0, 8)} 
-              year={viewingSeason} 
-              onEdit={handleEdit} 
-              hideHeader 
+            <ActivityFeed
+              records={unifiedRecords.slice(0, 8)}
+              year={viewingSeason}
+              onEdit={handleEdit}
+              hideHeader
             />
             {unifiedRecords.length > 8 && (
-              <button 
+              <button
                 className="w-full py-4 text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
               >
                 + {unifiedRecords.length - 8} more activities
@@ -482,7 +481,7 @@ export default function FieldDetailScreen() {
             <MapPin size={16} className="text-emerald-500" />
             Field Details
           </h3>
-          
+
           <div className="grid grid-cols-2 gap-y-4 text-xs">
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Acreage</label>
