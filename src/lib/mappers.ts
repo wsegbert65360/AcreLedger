@@ -211,213 +211,84 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 
 // --- Reverse Mappers (Frontend -> DB) ---
 
-export const mapFieldToDb = (f: Field) => {
-    validateRequired(f, ['id', 'farm_id', 'name'], 'mapFieldToDb');
-    return {
-        id: f.id,
-        farm_id: f.farm_id,
-        name: f.name,
-        acreage: f.acreage,
-        lat: f.lat,
-        lng: f.lng,
-        fsa_farm_number: f.fsaFarmNumber,
-        fsa_tract_number: f.fsaTractNumber,
-        fsa_field_number: f.fsaFieldNumber,
-        producer_share: f.producerShare,
-        irrigation_practice: f.irrigationPractice,
-        intended_use: f.intendedUse,
-        boundary: f.boundary,
-        deleted_at: f.deleted_at,
-        notes: f.notes
-    };
-};
+export function baseMapToDb<T extends Record<string, any>>(obj: T, requiredFields: string[], allowedKeys: (keyof T)[], mapperName: string): any {
+    validateRequired(obj, requiredFields, mapperName);
+    const dbRecord: any = {};
+    for (const key of allowedKeys) {
+        const value = obj[key];
+        if (value === undefined && key !== 'timestamp') continue;
 
-export const mapPlantToDb = (r: PlantRecord) => {
-    validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapPlantToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        field_id: r.fieldId,
-        field_name: r.fieldName,
-        seed_variety: r.seedVariety,
-        acreage: r.acreage,
-        crop: r.crop,
-        plant_date: r.plantDate,
-        fsa_farm_number: r.fsaFarmNumber,
-        fsa_tract_number: r.fsaTractNumber,
-        fsa_field_number: r.fsaFieldNumber,
-        intended_use: r.intendedUse,
-        producer_share: r.producerShare,
-        irrigation_practice: r.irrigationPractice,
-        season_year: r.seasonYear,
-        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
-    };
-};
+        if (key === 'timestamp') {
+            dbRecord[key as string] = value ? new Date(value as number).toISOString() : new Date().toISOString();
+        } else {
+            const snakeKey = (key as string).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            dbRecord[snakeKey] = value;
+        }
+    }
+    return dbRecord;
+}
 
-export const mapSprayToDb = (r: SprayRecord) => {
-    validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapSprayToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        field_id: r.fieldId,
-        field_name: r.fieldName,
-        products: r.products,
-        wind_direction: r.windDirection,
-        relative_humidity: r.relativeHumidity,
-        treated_area_size: r.treatedAreaSize,
-        total_amount_applied: r.totalAmountApplied,
-        involved_technicians: r.involvedTechnicians,
-        mixture_rate: r.mixtureRate,
-        total_mixture_volume: r.totalMixtureVolume,
-        site_address: r.siteAddress,
-        is_premixed: r.isPremixed,
-        equipment_id: r.equipmentId,
-        non_compliant: r.nonCompliant,
-        deleted_at: r.deleted_at
-    };
-};
+export const mapFieldToDb = (f: Field) => baseMapToDb(f, ['id', 'farm_id', 'name'], [
+    'id', 'farm_id', 'name', 'acreage', 'lat', 'lng', 'fsaFarmNumber', 'fsaTractNumber',
+    'fsaFieldNumber', 'producerShare', 'irrigationPractice', 'intendedUse', 'boundary',
+    'deleted_at', 'notes'
+], 'mapFieldToDb');
 
-export const mapHarvestToDb = (r: HarvestRecord) => {
-    validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapHarvestToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        field_id: r.fieldId,
-        field_name: r.fieldName,
-        destination: r.destination,
-        bin_id: r.binId,
-        bushels: r.bushels,
-        moisture_percent: r.moisturePercent,
-        landlord_split_percent: r.landlordSplitPercent,
-        landlord_name: r.landlordName,
-        scale_ticket_number: r.scaleTicketNumber,
-        harvest_date: r.harvestDate,
-        fsa_farm_number: r.fsaFarmNumber,
-        fsa_tract_number: r.fsaTractNumber,
-        season_year: r.seasonYear,
-        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        crop: r.crop,
-        deleted_at: r.deleted_at
-    };
-};
+export const mapPlantToDb = (r: PlantRecord) => baseMapToDb(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], [
+    'id', 'farm_id', 'fieldId', 'fieldName', 'seedVariety', 'acreage', 'crop', 'plantDate',
+    'fsaFarmNumber', 'fsaTractNumber', 'fsaFieldNumber', 'intendedUse', 'producerShare',
+    'irrigationPractice', 'seasonYear', 'timestamp', 'deleted_at'
+], 'mapPlantToDb');
 
-export const mapHayToDb = (r: HayHarvestRecord) => {
-    validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapHayToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        field_id: r.fieldId,
-        field_name: r.fieldName,
-        date: r.date,
-        bale_count: r.baleCount,
-        cutting_number: r.cuttingNumber,
-        bale_type: r.baleType,
-        temperature: r.temperature,
-        conditions: r.conditions,
-        season_year: r.seasonYear,
-        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
-    };
-};
+export const mapSprayToDb = (r: SprayRecord) => baseMapToDb(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], [
+    'id', 'farm_id', 'fieldId', 'fieldName', 'products', 'windDirection', 'relativeHumidity',
+    'treatedAreaSize', 'totalAmountApplied', 'involvedTechnicians', 'mixtureRate',
+    'totalMixtureVolume', 'siteAddress', 'isPremixed', 'equipmentId', 'nonCompliant',
+    'deleted_at'
+], 'mapSprayToDb');
 
-export const mapGrainToDb = (m: GrainMovement) => {
-    validateRequired(m, ['id', 'farm_id', 'binId', 'seasonYear'], 'mapGrainToDb');
-    return {
-        id: m.id,
-        farm_id: m.farm_id,
-        bin_id: m.binId,
-        bin_name: m.binName,
-        type: m.type,
-        bushels: m.bushels,
-        moisture_percent: m.moisturePercent,
-        source_field_name: m.sourceFieldName,
-        destination: m.destination,
-        price: m.price,
-        season_year: m.seasonYear,
-        timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: m.deleted_at
-    };
-};
+export const mapHarvestToDb = (r: HarvestRecord) => baseMapToDb(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], [
+    'id', 'farm_id', 'fieldId', 'fieldName', 'destination', 'binId', 'bushels',
+    'moisturePercent', 'landlordSplitPercent', 'landlordName', 'scaleTicketNumber',
+    'harvestDate', 'fsaFarmNumber', 'fsaTractNumber', 'seasonYear', 'timestamp', 'crop',
+    'deleted_at'
+], 'mapHarvestToDb');
 
-export const mapBinToDb = (b: Bin) => {
-    validateRequired(b, ['id', 'farm_id', 'name'], 'mapBinToDb');
-    return {
-        id: b.id,
-        farm_id: b.farm_id,
-        name: b.name,
-        capacity: b.capacity,
-        deleted_at: b.deleted_at
-    };
-};
+export const mapHayToDb = (r: HayHarvestRecord) => baseMapToDb(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], [
+    'id', 'farm_id', 'fieldId', 'fieldName', 'date', 'baleCount', 'cuttingNumber', 'baleType',
+    'temperature', 'conditions', 'seasonYear', 'timestamp', 'deleted_at'
+], 'mapHayToDb');
+
+export const mapGrainToDb = (m: GrainMovement) => baseMapToDb(m, ['id', 'farm_id', 'binId', 'seasonYear'], [
+    'id', 'farm_id', 'binId', 'binName', 'type', 'bushels', 'moisturePercent', 'sourceFieldName',
+    'destination', 'price', 'seasonYear', 'timestamp', 'deleted_at'
+], 'mapGrainToDb');
+
+export const mapBinToDb = (b: Bin) => baseMapToDb(b, ['id', 'farm_id', 'name'], [
+    'id', 'farm_id', 'name', 'capacity', 'deleted_at'
+], 'mapBinToDb');
 
 export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
-    validateRequired(s, ['farm_id', 'name'], 'mapSeedToDb');
-    return {
-        name: s.name,
-        crop: s.crop,
-        variety: s.variety,
-        supplier: s.supplier,
-        lot_number: s.lotNumber,
-        year: s.year,
-        notes: s.notes,
-        farm_id: s.farm_id
-    };
+    return baseMapToDb(s, ['farm_id', 'name'], [
+        'name', 'crop', 'variety', 'supplier', 'lotNumber', 'year', 'notes', 'farm_id'
+    ], 'mapSeedToDb');
 };
 
-export const mapRecipeToDb = (r: SprayRecipe) => {
-    validateRequired(r, ['id', 'farm_id', 'name'], 'mapRecipeToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        name: r.name,
-        products: r.products,
-        applicator_name: r.applicatorName,
-        license_number: r.licenseNumber,
-        target_pest: r.targetPest,
-        epa_reg_number: r.epaRegNumber,
-        deleted_at: r.deleted_at
-    };
-};
+export const mapRecipeToDb = (r: SprayRecipe) => baseMapToDb(r, ['id', 'farm_id', 'name'], [
+    'id', 'farm_id', 'name', 'products', 'applicatorName', 'licenseNumber', 'targetPest',
+    'epaRegNumber', 'deleted_at'
+], 'mapRecipeToDb');
 
-export const mapFertilizerRecipeToDb = (r: FertilizerRecipe) => {
-    validateRequired(r, ['id', 'farm_id', 'name'], 'mapFertilizerRecipeToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        name: r.name,
-        npk_ratio: r.npkRatio,
-        deleted_at: r.deleted_at
-    };
-};
+export const mapFertilizerRecipeToDb = (r: FertilizerRecipe) => baseMapToDb(r, ['id', 'farm_id', 'name'], [
+    'id', 'farm_id', 'name', 'npkRatio', 'deleted_at'
+], 'mapFertilizerRecipeToDb');
 
-export const mapFertilizerToDb = (r: FertilizerApplication) => {
-    validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapFertilizerToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        field_id: r.fieldId,
-        field_name: r.fieldName,
-        date: r.date,
-        fertilizer_formula: r.fertilizer_formula,
-        acres: r.acres,
-        season_year: r.seasonYear,
-        deleted_at: r.deleted_at
-    };
-};
+export const mapFertilizerToDb = (r: FertilizerApplication) => baseMapToDb(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], [
+    'id', 'farm_id', 'fieldId', 'fieldName', 'date', 'fertilizer_formula', 'acres', 'seasonYear',
+    'deleted_at'
+], 'mapFertilizerToDb');
 
-export const mapTillageToDb = (r: TillageRecord) => {
-    validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapTillageToDb');
-    return {
-        id: r.id,
-        farm_id: r.farm_id,
-        field_id: r.fieldId,
-        field_name: r.fieldName,
-        date: r.date,
-        implement_type: r.implementType,
-        notes: r.notes,
-        season_year: r.seasonYear,
-        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
-    };
-};
+export const mapTillageToDb = (r: TillageRecord) => baseMapToDb(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], [
+    'id', 'farm_id', 'fieldId', 'fieldName', 'date', 'implementType', 'notes', 'seasonYear',
+    'timestamp', 'deleted_at'
+], 'mapTillageToDb');
