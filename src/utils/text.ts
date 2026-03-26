@@ -5,8 +5,9 @@
 export function cleanName(name: string): string {
     const uuidRegex = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi;
     return name
-        .replace(uuidRegex, '')
+        .replace(uuidRegex, ' ')
+        .replace(/\s+/g, ' ')
         .trim()
-        .replace(/\s*—\s*$/, '')
-        .replace(/\s*-\s*$/, '');
+        .replace(/^[—\-\s]+/, '')
+        .replace(/[—\-\s]+$/, '');
 }

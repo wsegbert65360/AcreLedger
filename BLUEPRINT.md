@@ -330,6 +330,12 @@ Standardized wrapper for all compliance report tabs. Props: `title`, `subtitle`,
 All six report tabs use it for layout or data processing: FSA Plant, Spray Audit, Fertilizer, 
 FSA Harvest, Hay Summary, Landlord Statement. Supports both CSV and PDF direct exports.
 
+### Universal Spray Log Export
+The `generateSprayPDF` utility (`@/lib/sprayExport.ts`) provides a production-grade, state-neutral 
+PDF export for spray records. It handles both single-record and date-range exports, follows 
+black-and-white friendly printing rules, and automatically includes mandatory compliance fields 
+(EPA Reg #, Wind, Temp, Equipment). It is the primary export path for private applicators.
+
 ### ActivityFeed Component
 Reusable component for displaying field-specific historical records. Filters records for the 
 `viewingSeason` and provides an `onEdit` callback for granular record editing.
