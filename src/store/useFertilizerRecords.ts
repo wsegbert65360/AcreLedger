@@ -14,15 +14,9 @@ interface UseFertilizerRecordsArgs {
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerApplications, fields }: UseFertilizerRecordsArgs) {
+function useAddFertilizerRecord({ farm_id, activeSeason, setFertilizerApplications, fields }: UseFertilizerRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
-
-  // Refs for passing values out of state updaters safely across await boundaries
-  const previousRef = useRef<FertilizerApplication | undefined>(undefined);
-  const snapshotRef = useRef<{ record: FertilizerApplication; index: number }[]>([]);
-
-  // ─── Add ──────────────────────────────────────────────────────────────────
 
   const addFertilizerApplication = useCallback(async (
     r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>
@@ -87,7 +81,12 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
     }
   }, [activeSeason, farm_id, fields, setFertilizerApplications]);
 
-  // ─── Update ───────────────────────────────────────────────────────────────
+  return { addFertilizerApplication };
+}
+
+function useUpdateFertilizerRecord({ farm_id, setFertilizerApplications, fields }: Omit<UseFertilizerRecordsArgs, 'activeSeason'>) {
+  // Refs for passing values out of state updaters safely across await boundaries
+  const previousRef = useRef<FertilizerApplication | undefined>(undefined);
 
   const updateFertilizerApplication = useCallback(async (r: FertilizerApplication): Promise<OpResult> => {
     if (!farm_id) {
@@ -146,7 +145,11 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
     return true;
   }, [farm_id, setFertilizerApplications, fields]);
 
-  // ─── Delete ───────────────────────────────────────────────────────────────
+  return { updateFertilizerApplication };
+}
+
+function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications }: Pick<UseFertilizerRecordsArgs, 'farm_id' | 'setFertilizerApplications'>) {
+  const snapshotRef = useRef<{ record: FertilizerApplication; index: number }[]>([]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]): Promise<OpResult> => {
     if (!farm_id) {
@@ -195,6 +198,14 @@ export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerAppli
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
   }, [farm_id, setFertilizerApplications]);
+
+  return { deleteFertilizerApplications };
+}
+
+export function useFertilizerRecords({ farm_id, activeSeason, setFertilizerApplications, fields }: UseFertilizerRecordsArgs) {
+  const { addFertilizerApplication } = useAddFertilizerRecord({ farm_id, activeSeason, setFertilizerApplications, fields });
+  const { updateFertilizerApplication } = useUpdateFertilizerRecord({ farm_id, setFertilizerApplications, fields });
+  const { deleteFertilizerApplications } = useDeleteFertilizerRecord({ farm_id, setFertilizerApplications });
 
   return { addFertilizerApplication, updateFertilizerApplication, deleteFertilizerApplications };
 }
