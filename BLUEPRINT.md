@@ -173,9 +173,16 @@ to support historical analysis and performance.
 ```ts
 { field_id, range_start_utc, range_end_utc, status, last_checked_at }
 ```
+#### farm_rainfall_daily
+```ts
+{ farm_id, date_local, avg_rainfall_in, max_rainfall_in, min_rainfall_in, 
+  max_hourly_in, fields_count, last_updated_at }
+```
 - **Stats RPC**: `get_rainfall_stats(field_id, start_date, end_date)` returns total inches,
   hours with rain, max hourly intensity, and coverage percentage.
 - **Pipeline**: Managed by `mrms-hourly` Edge Function.
+- **Summary Rollup**: `rollup_all_farms_daily(p_date)` runs at 6:00 AM daily via `pg_cron` 
+  to precompute farm-level summaries for the previous day.
 - **Status**: `pending` | `partial` | `complete`.
 
 ---
