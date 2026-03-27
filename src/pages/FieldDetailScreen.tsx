@@ -104,6 +104,10 @@ export default function FieldDetailScreen() {
 
   const crop = latestPlanting?.crop || field?.intendedUse || 'No Crop Logged';
 
+  /** Format rainfall to 2 decimal places; null/undefined fallback to '0.00' */
+  const fmtRain = (val: number | undefined | null) =>
+    val != null ? val.toFixed(2) : '0.00';
+
   const daysSinceSpray = useMemo(() => {
     if (!latestSpray?.sprayDate) return null;
     const diff = new Date().getTime() - new Date(latestSpray.sprayDate).getTime();
@@ -219,14 +223,14 @@ export default function FieldDetailScreen() {
                 {fetchingRain && !rainStats ? (
                   <span className="text-slate-300 animate-pulse">...</span>
                 ) : (
-                  `${rainStats?.['24h'] ?? '0.00'}"`
+                  `${fmtRain(rainStats?.['24h'])}"`
                 )}
               </div>
               <div className="text-[10px] text-slate-500 font-medium">
-                7D: <span className="text-slate-900 dark:text-slate-300 font-bold">{rainStats?.['7d'] ?? '0.00'}"</span>
+                7D: <span className="text-slate-900 dark:text-slate-300 font-bold">{fmtRain(rainStats?.['7d'])}"</span>
               </div>
               <div className="text-[10px] text-slate-500 font-medium truncate">
-                Plant: <span className="text-slate-900 dark:text-slate-300 font-bold">{rainStats?.sincePlanting ?? '0.00'}"</span>
+                Plant: <span className="text-slate-900 dark:text-slate-300 font-bold">{fmtRain(rainStats?.sincePlanting)}"</span>
               </div>
             </div>
           </div>
@@ -244,7 +248,7 @@ export default function FieldDetailScreen() {
                 {daysSinceSpray === null ? 'None' : daysSinceSpray === 0 ? 'Today' : `${daysSinceSpray}d ago`}
               </div>
               <div className="text-[10px] text-slate-500 font-medium truncate">
-                Rain: <span className="text-slate-900 dark:text-slate-300 font-bold">{rainStats?.sinceLastSpray ?? '0.00'}"</span>
+                Rain: <span className="text-slate-900 dark:text-slate-300 font-bold">{fmtRain(rainStats?.sinceLastSpray)}"</span>
               </div>
               <div className="text-[10px] text-slate-500 font-medium truncate italic h-4">
                 {latestSpray?.products?.[0]?.product || 'No product'}
@@ -345,11 +349,11 @@ export default function FieldDetailScreen() {
 
           <div className="grid grid-cols-3 gap-4">
             {[
-              { label: '24 Hours', value: rainStats?.['24h'] ?? '0.00' },
-              { label: '72 Hours', value: rainStats?.['72h'] ?? '0.00' },
-              { label: '7 Days', value: rainStats?.['7d'] ?? '0.00' },
-              { label: 'Planted', value: rainStats?.sincePlanting ?? '0.00', sub: 'Since' },
-              { label: 'Sprayed', value: rainStats?.sinceLastSpray ?? '0.00', sub: 'Since' },
+              { label: '24 Hours', value: fmtRain(rainStats?.['24h']) },
+              { label: '72 Hours', value: fmtRain(rainStats?.['72h']) },
+              { label: '7 Days', value: fmtRain(rainStats?.['7d']) },
+              { label: 'Planted', value: fmtRain(rainStats?.sincePlanting), sub: 'Since' },
+              { label: 'Sprayed', value: fmtRain(rainStats?.sinceLastSpray), sub: 'Since' },
             ].map((stat, i) => (
               <div key={i} className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 ${stat.label === 'Planted' || stat.label === 'Sprayed' ? 'col-span-1' : ''}`}>
                 <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
@@ -397,7 +401,7 @@ export default function FieldDetailScreen() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Rain Since Spray</label>
                 <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   <Droplets size={14} className="text-blue-400" />
-                  {rainStats?.sinceLastSpray ?? '0.00'}"
+                  {fmtRain(rainStats?.sinceLastSpray)}"
                 </div>
               </div>
               <div className="col-span-2">

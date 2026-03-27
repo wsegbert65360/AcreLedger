@@ -48,11 +48,12 @@ export const RainService = {
             return d.toISOString().split('T')[0];
         };
 
-        const sevenDaysAgo = getDaysAgo(7);
+        const oneDayAgo = getDaysAgo(1);
         const threeDaysAgo = getDaysAgo(3);
+        const sevenDaysAgo = getDaysAgo(7);
 
         const calls = [
-            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: today, p_end_date: today }), // 24h
+            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: oneDayAgo, p_end_date: today }), // 24h
             supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: threeDaysAgo, p_end_date: today }), // 72h
             supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sevenDaysAgo, p_end_date: today }), // 7d
         ];
