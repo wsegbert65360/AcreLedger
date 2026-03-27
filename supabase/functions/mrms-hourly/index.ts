@@ -29,10 +29,15 @@ serve(async (req: Request) => {
     targetTs.setMinutes(0, 0, 0)
     
     const tsStr = targetTs.toISOString().replace(/[:\-]/g, '').split('.')[0].replace('T', '-')
-    const filename = `MRMS_MultiSensor_QPE_01H_Pass1_00.00_${tsStr}.grib2.gz`
-    const url = `${MRMS_CONFIG.baseUrl}MultiSensor_QPE_01H_Pass1/${filename}`
+    
+    // Attempt Pass 2 first (more accurate), then Fallback to Pass 1
+    const pass2Filename = `MRMS_MultiSensor_QPE_01H_Pass2_00.00_${tsStr}.grib2.gz`
+    const pass2Url = `${MRMS_CONFIG.baseUrl}MultiSensor_QPE_01H_Pass2/${pass2Filename}`
+    
+    const pass1Filename = `MRMS_MultiSensor_QPE_01H_Pass1_00.00_${tsStr}.grib2.gz`
+    const pass1Url = `${MRMS_CONFIG.baseUrl}MultiSensor_QPE_01H_Pass1/${pass1Filename}`
 
-    console.log(`Processing hour: ${targetTs.toISOString()} from ${url}`)
+    console.log(`Processing hour: ${targetTs.toISOString()}`)
 
     // 1. Fetch all fields
     const { data: fields, error: fieldsError } = await supabaseClient
@@ -41,11 +46,22 @@ serve(async (req: Request) => {
     
     if (fieldsError || !fields) throw new Error('Failed to fetch fields')
 
-    // 2. Download and Decompress
-    const gribData = await downloadAndDecompress(url)
+    // 2. Download and Decompress (Try Pass 2, then Pass 1)
+    let gribData = await downloadAndDecompress(pass2Url)
+    let source = 'Pass 2'
+    
     if (!gribData) {
+        console.log(`Pass 2 not available, trying Pass 1...`)
+        gribData = await downloadAndDecompress(pass1Url)
+        source = 'Pass 1'
+    }
+
+    if (!gribData) {
+        console.log(`No MRMS data available for ${targetTs.toISOString()}`)
         return new Response(JSON.stringify({ message: 'No data available yet' }), { status: 200 })
     }
+
+    console.log(`Using ${source} data from ${source === 'Pass 2' ? pass2Url : pass1Url}`)
 
     // 3. Extract logic
     const rainfallValues = extractRainfall(gribData, fields.map((f: any) => ({ lat: f.lat, lng: f.lng })))
@@ -54,8 +70,8 @@ serve(async (req: Request) => {
       field_id: f.id,
       timestamp_utc: targetTs.toISOString(),
       rainfall_in: rainfallValues[i],
-      source: 'MRMS',
-      finalized: true
+      source: source,
+      finalized: source === 'Pass 2' // Pass 2 is considered finalized
     }))
 
     // 4. Save
