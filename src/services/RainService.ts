@@ -1,20 +1,20 @@
 import { supabase } from '../lib/supabase';
-import { RainData } from '../types/weather';
 
-// Cache in-flight requests to deduplicate concurrent calls for the same field
+// Cache in-flight requests to deduplicate concurrent calls for the same location
 const promiseCache = new Map<string, Promise<any>>();
+
+const API_KEY = import.meta.env.VITE_VISUALCROSSING_KEY;
+const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 
 export const RainService = {
   /**
-   * Fetches 12h, 24h, and 72h rainfall totals for a field using the Supabase RPC.
-   * This aligns with BLUEPRINT.md by using persisted/processed database data.
-   */
-  /**
    * Fetches comprehensive rainfall stats for multiple periods including:
    * 24h, 72h, 7d, and optionally since specific dates (planting, last spray).
+   * Now uses Visual Crossing Timeline API for near real-time hourly resolution.
    */
   async fetchComprehensiveRainfall(args: {
-    fieldId: string;
+    lat: number;
+    lng: number;
     sincePlantingDate?: string;
     sinceLastSprayDate?: string;
     signal?: AbortSignal;
@@ -26,10 +26,14 @@ export const RainService = {
     sinceLastSpray: number;
     periodEndUtc: string;
   }> {
-    const { fieldId, sincePlantingDate, sinceLastSprayDate, signal } = args;
+    const { lat, lng, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
-    // Cache key includes dates to prevent stale data if activity changes
-    const cacheKey = `${fieldId}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
+    if (!API_KEY || API_KEY === 'undefined') {
+      throw new Error('Visual Crossing API key is missing');
+    }
+
+    // Cache key includes dates and coordinates
+    const cacheKey = `${lat},${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
 
     if (promiseCache.has(cacheKey)) {
         try {
@@ -41,49 +45,94 @@ export const RainService = {
 
     const fetchPromise = (async () => {
         const now = new Date();
-        const today = now.toISOString().split('T')[0];
+        const currentEpoch = Math.floor(now.getTime() / 1000);
+        const todayStr = now.toISOString().split('T')[0];
+
         const getDaysAgo = (days: number) => {
             const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
             return d.toISOString().split('T')[0];
         };
 
-        const oneDayAgo = getDaysAgo(1);
-        const threeDaysAgo = getDaysAgo(3);
-        const sevenDaysAgo = getDaysAgo(7);
+        const sevenDaysAgoStr = getDaysAgo(7);
 
-        const calls = [
-            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: oneDayAgo, p_end_date: today }), // 24h
-            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: threeDaysAgo, p_end_date: today }), // 72h
-            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sevenDaysAgo, p_end_date: today }), // 7d
-        ];
-
-        if (sincePlantingDate) {
-            calls.push(supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sincePlantingDate, p_end_date: today }));
+        // Determine the earliest date we need data for
+        let earliestDateStr = sevenDaysAgoStr;
+        if (sincePlantingDate && new Date(sincePlantingDate) < new Date(earliestDateStr)) {
+            earliestDateStr = new Date(sincePlantingDate).toISOString().split('T')[0];
         }
-        if (sinceLastSprayDate) {
-            calls.push(supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sinceLastSprayDate, p_end_date: today }));
+        if (sinceLastSprayDate && new Date(sinceLastSprayDate) < new Date(earliestDateStr)) {
+            earliestDateStr = new Date(sinceLastSprayDate).toISOString().split('T')[0];
         }
 
-        const results = await Promise.all(calls);
+        const location = `${lat},${lng}`;
 
-        if (signal?.aborted) throw new Error('ABORTED');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        const error = results.find(r => r.error)?.error;
-        if (error) {
-            const code = error.code || 'UNKNOWN';
-            throw new Error(`RPC_ERROR: ${code} - ${error.message}`);
+        if (signal) {
+            signal.addEventListener('abort', () => controller.abort());
         }
 
-        const getVal = (res: any) => Number(res.data?.[0]?.total_inches || 0);
+        try {
+            const url = `${VC_BASE_URL}/${location}/${earliestDateStr}/${todayStr}?unitGroup=us&key=${API_KEY}&contentType=json&include=days,hours&elements=datetimeEpoch,precip`;
 
-        return {
-            '24h': getVal(results[0]),
-            '72h': getVal(results[1]),
-            '7d': getVal(results[2]),
-            sincePlanting: sincePlantingDate ? getVal(results[3]) : 0,
-            sinceLastSpray: sinceLastSprayDate ? getVal(sincePlantingDate ? results[4] : results[3]) : 0,
-            periodEndUtc: now.toISOString()
-        };
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) {
+                throw new Error(`Weather API error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const days = data.days || [];
+
+            // Flatten all hours and sort descending by epoch
+            const allHours = days.flatMap((d: any) => d.hours || []).sort((a: any, b: any) => b.datetimeEpoch - a.datetimeEpoch);
+
+            let precip24h = 0;
+            let precip72h = 0;
+            let precip7d = 0;
+            let sincePlanting = 0;
+            let sinceLastSpray = 0;
+
+            const plantingEpoch = sincePlantingDate ? Math.floor(new Date(sincePlantingDate).getTime() / 1000) : null;
+            const sprayEpoch = sinceLastSprayDate ? Math.floor(new Date(sinceLastSprayDate).getTime() / 1000) : null;
+
+            for (const hour of allHours) {
+                // Only consider hours that are <= current time to avoid future forecasts
+                if (hour.datetimeEpoch <= currentEpoch) {
+                    const p = hour.precip || 0;
+
+                    if (hour.datetimeEpoch > currentEpoch - 24 * 3600) {
+                        precip24h += p;
+                    }
+                    if (hour.datetimeEpoch > currentEpoch - 72 * 3600) {
+                        precip72h += p;
+                    }
+                    if (hour.datetimeEpoch > currentEpoch - 7 * 24 * 3600) {
+                        precip7d += p;
+                    }
+                    if (plantingEpoch !== null && hour.datetimeEpoch >= plantingEpoch) {
+                        sincePlanting += p;
+                    }
+                    if (sprayEpoch !== null && hour.datetimeEpoch >= sprayEpoch) {
+                        sinceLastSpray += p;
+                    }
+                }
+            }
+
+            // Helper to round to 2 decimals
+            const round2 = (num: number) => Math.round(num * 100) / 100;
+
+            return {
+                '24h': round2(precip24h),
+                '72h': round2(precip72h),
+                '7d': round2(precip7d),
+                sincePlanting: round2(sincePlanting),
+                sinceLastSpray: round2(sinceLastSpray),
+                periodEndUtc: now.toISOString()
+            };
+        } finally {
+            clearTimeout(timeoutId);
+        }
     })();
 
     promiseCache.set(cacheKey, fetchPromise);

@@ -136,11 +136,16 @@ export default function FieldDetailScreen() {
 
   const handleFetchRain = async () => {
     if (!field || fetchingRain) return;
+    if (field.lat == null || field.lng == null) {
+      setRainError('Location not set for this field.');
+      return;
+    }
     setFetchingRain(true);
     setRainError(null);
     try {
       const data = await RainService.fetchComprehensiveRainfall({
-        fieldId: field.id,
+        lat: field.lat,
+        lng: field.lng,
         sincePlantingDate: latestPlanting?.plantDate,
         sinceLastSprayDate: latestSpray?.sprayDate
       });
