@@ -1,0 +1,99 @@
+﻿
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90mC:/Projects/AcreLedger[39m
+
+ [31mΓ¥»[39m src/services/__tests__/RainService.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 82[2mms[22m[39m
+   [32mΓ£ô[39m RainService[2m > [22mshould fetch rainfall data using the new API and return formatted results[32m 3[2mms[22m[39m
+[31m   [31m├ù[31m RainService[2m > [22mshould handle API errors correctly[39m[32m 10[2mms[22m[39m
+[31m     ΓåÆ expected [Function] to throw error including 'RAIN_API_ERROR: 500 - Internal ServerΓÇª' but got 'Cannot read properties of undefined (ΓÇª'[39m
+   [32mΓ£ô[39m RainService[2m > [22mshould handle zero rainfall correctly[32m 0[2mms[22m[39m
+   [32mΓ£ô[39m RainService[2m > [22mshould deduplicate concurrent requests for the same field[32m 52[2mms[22m[39m
+   [32mΓ£ô[39m RainService[2m > [22mshould respect abort signal[32m 15[2mms[22m[39m
+   [32mΓ£ô[39m RainService[2m > [22mshould identify CONUS coordinates correctly[32m 0[2mms[22m[39m
+npx : 
+At line:1 char:1
++ npx vitest run src/s
+ervices/__tests__/Rain
+Service.test.ts > 
+test_outp ...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (:String) [   
+ ], RemoteExceptio    
+n
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
+»ΓÄ»[39m[1m[41m 
+Failed Tests 1 [49m[
+22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
+»ΓÄ»ΓÄ»[39m
+
+[41m[1m FAIL 
+[22m[49m src/service
+s/__tests__/RainServic
+e.test.ts[2m > 
+[22mRainService[2m 
+> [22mshould handle 
+API errors correctly
+[31m[1mAssertionErro
+r[22m: expected 
+[Function] to throw 
+error including 
+'RAIN_API_ERROR: 500 
+- Internal ServerΓÇª' 
+but got 'Cannot read 
+properties of 
+undefined (ΓÇª'[39m
+
+Expected: 
+[32m"RAIN_API_ERROR: 
+500 - Internal Server 
+Error"[39m
+Received: 
+[31m"Cannot read 
+properties of 
+undefined (reading 
+'ok')"[39m
+
+[36m [2mΓ¥»[22m src
+/services/__tests__/Ra
+inService.test.ts:[2m
+64:5[22m[39m
+    [90m 62| [39m   
+ })[33m;[39m
+    [90m 63| [39m
+    [90m 64| [39m   
+ await expect(RainServ
+ice.fetchComprehensive
+Rainfall({ fieldId: 
+mocΓÇª
+    [90m   | [39m   
+ [31m^[39m
+    [90m 65| [39m   
+   [33m.[39mrejects
+[33m.[39m[34mtoThrow
+[39m([32m'RAIN_API_E
+RROR: 500 - Internal 
+Server Error'[39m)[3
+3m;[39m
+    [90m 66| [39m  
+})[33m;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»Γ
+Ä»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
+»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/1]ΓÄ
+»[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 20:11:59
+[2m   Duration [22m 643ms[2m (transform 44ms, setup 0ms, collect 44ms, tests 82ms, environment 0ms, prepare 308ms)[22m
+
