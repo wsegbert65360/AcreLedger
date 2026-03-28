@@ -50,8 +50,11 @@ export const RainService = {
         const threeDaysAgo = getDaysAgo(3);
         const sevenDaysAgo = getDaysAgo(7);
 
-        const baseUrl = import.meta.env.VITE_RAIN_API_URL;
+        const baseUrl = import.meta.env?.VITE_RAIN_API_URL || 
+                       (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
+        
         if (!baseUrl) {
+            console.error('Rain API Configuration Error: VITE_RAIN_API_URL is not defined in environment.');
             throw new Error('VITE_RAIN_API_URL is not configured');
         }
 
