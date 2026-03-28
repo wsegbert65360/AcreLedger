@@ -184,9 +184,11 @@ to support historical analysis and performance.
   hours with rain, max hourly intensity, and coverage percentage.
 - **Service Cache**: `RainService` implements a 15-second `promiseCache` to deduplicate
   concurrent requests for the same field during dashboard navigation.
-- **Pipeline**: Managed by `mrms-hourly` Edge Function.
-- **Summary Rollup**: `rollup_all_farms_daily(p_date)` runs at 6:00 AM daily via `pg_cron` 
-  to precompute farm-level summaries for the previous day.
+- **Summary Rollup**: `rollup_all_farms_daily(p_date)` runs at 8:00 AM daily via `pg_cron` 
+  to precompute farm-level summaries for the previous day. This delay ensures "Pass 2" 
+  high-accuracy rainfall data is available from NOAA for the entire day.
+- **Hardening**: Both the daily rollup and the `get_rainfall_stats` RPC include filters
+  for `(finalized = true OR source = 'Pass 2')` to prioritize quality over speed.
 - **Status**: `pending` | `partial` | `complete`.
 
 ---
@@ -601,8 +603,8 @@ Show in BackupManager UI. Amber warning if > 7 days old or never taken.
 - **Coverage Gaps**: Indicated by `status IN ('pending', 'partial')` in `field_rainfall_coverage`.
 - **Hardened Error Handling**: `RainService` and `WeatherService` must normalize all upstream errors (RPC, Fetch, Timeout) into consistent app-level formats (e.g. `RPC_ERROR`).
 - **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by UI guards.
-- **API 404**: Location outside supported coverage (CONUS only).
-- **API 502**: IEM service unreachable. Friendly app message required.
+- **Supabase RPC Error**: Caught by `RainService`; indicates database or function permission issues.
+- **API 502**: IEM or Supabase service unreachable. Friendly app message required.
 - **NaN / Missing Coords**: Blocked by `RainService` and UI level; button disabled.
 
 ### Sentry Placeholder Pattern
