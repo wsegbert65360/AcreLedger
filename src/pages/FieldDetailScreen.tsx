@@ -205,7 +205,7 @@ export default function FieldDetailScreen() {
             )}
           </div>
           <p className="text-[10px] font-medium text-slate-400 italic">
-            Rainfall updated daily at 6:00 AM
+            Rainfall updated daily at 8:00 AM
           </p>
         </section>
 
@@ -372,7 +372,7 @@ export default function FieldDetailScreen() {
 
           <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
             <Info size={12} />
-            Data updated daily @ 6:00 AM. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+            Data updated daily @ 8:00 AM. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
           </div>
         </section>
 
