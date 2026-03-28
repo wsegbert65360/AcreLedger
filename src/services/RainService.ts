@@ -1,4 +1,3 @@
-import { supabase } from '../lib/supabase';
 import { RainData } from '../types/weather';
 
 // Cache in-flight requests to deduplicate concurrent calls for the same field
@@ -52,37 +51,38 @@ export const RainService = {
         const threeDaysAgo = getDaysAgo(3);
         const sevenDaysAgo = getDaysAgo(7);
 
-        const calls = [
-            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: oneDayAgo, p_end_date: today }), // 24h
-            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: threeDaysAgo, p_end_date: today }), // 72h
-            supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sevenDaysAgo, p_end_date: today }), // 7d
-        ];
-
-        if (sincePlantingDate) {
-            calls.push(supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sincePlantingDate, p_end_date: today }));
-        }
-        if (sinceLastSprayDate) {
-            calls.push(supabase.rpc('get_rainfall_stats', { p_field_id: fieldId, p_start_date: sinceLastSprayDate, p_end_date: today }));
+        const baseUrl = import.meta.env.VITE_RAIN_API_URL;
+        if (!baseUrl) {
+            throw new Error('VITE_RAIN_API_URL is not configured');
         }
 
-        const results = await Promise.all(calls);
+        const fetchRain = async (startDate: string, endDate: string) => {
+            const url = `${baseUrl}?field_id=${fieldId}&start_date=${startDate}&end_date=${endDate}`;
+            const response = await fetch(url, { signal });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`RAIN_API_ERROR: ${response.status} - ${errorData.error || 'Unknown error'}`);
+            }
+            const data = await response.json();
+            return Number(data.rainfall || 0);
+        };
+
+        const results = await Promise.all([
+            fetchRain(oneDayAgo, today), // 24h
+            fetchRain(threeDaysAgo, today), // 72h
+            fetchRain(sevenDaysAgo, today), // 7d
+            sincePlantingDate ? fetchRain(sincePlantingDate, today) : Promise.resolve(0),
+            sinceLastSprayDate ? fetchRain(sinceLastSprayDate, today) : Promise.resolve(0),
+        ]);
 
         if (signal?.aborted) throw new Error('ABORTED');
 
-        const error = results.find(r => r.error)?.error;
-        if (error) {
-            const code = error.code || 'UNKNOWN';
-            throw new Error(`RPC_ERROR: ${code} - ${error.message}`);
-        }
-
-        const getVal = (res: any) => Number(res.data?.[0]?.total_inches || 0);
-
         return {
-            '24h': getVal(results[0]),
-            '72h': getVal(results[1]),
-            '7d': getVal(results[2]),
-            sincePlanting: sincePlantingDate ? getVal(results[3]) : 0,
-            sinceLastSpray: sinceLastSprayDate ? getVal(sincePlantingDate ? results[4] : results[3]) : 0,
+            '24h': results[0],
+            '72h': results[1],
+            '7d': results[2],
+            sincePlanting: results[3],
+            sinceLastSpray: results[4],
             periodEndUtc: now.toISOString()
         };
     })();
