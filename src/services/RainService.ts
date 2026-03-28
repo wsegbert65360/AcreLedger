@@ -40,11 +40,14 @@ export const RainService = {
 
     const fetchPromise = (async () => {
         const now = new Date();
-        const today = now.toISOString().split('T')[0];
-
+        // Get local YYYY-MM-DD instead of UTC to fix "time is wrong" issue
+        const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+            .toISOString().split('T')[0];
+            
         const getDaysAgo = (days: number) => {
             const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-            return d.toISOString().split('T')[0];
+            return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+                .toISOString().split('T')[0];
         };
 
         const oneDayAgo = getDaysAgo(1);
@@ -61,13 +64,18 @@ export const RainService = {
 
         const fetchRain = async (startDate: string, endDate: string) => {
             const url = `${baseUrl}?field_id=${fieldId}&start_date=${startDate}&end_date=${endDate}`;
-            const response = await fetch(url, { signal });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(`RAIN_API_ERROR: ${response.status} - ${errorData.error || 'Unknown error'}`);
+            try {
+                const response = await fetch(url, { signal });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`RAIN_API_ERROR: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                }
+                const data = await response.json();
+                return Number(data.rainfall || 0);
+            } catch (err) {
+                console.error(`Fetch failed for Rain API URL: ${url}`, err);
+                throw err;
             }
-            const data = await response.json();
-            return Number(data.rainfall || 0);
         };
 
         const results = await Promise.all([
