@@ -1,99 +1,179 @@
 ﻿
 [1m[46m RUN [49m[22m [36mv3.2.4 [39m[90mC:/Projects/AcreLedger[39m
 
- [31mΓ¥»[39m src/services/__tests__/RainService.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 82[2mms[22m[39m
-   [32mΓ£ô[39m RainService[2m > [22mshould fetch rainfall data using the new API and return formatted results[32m 3[2mms[22m[39m
-[31m   [31m├ù[31m RainService[2m > [22mshould handle API errors correctly[39m[32m 10[2mms[22m[39m
-[31m     ΓåÆ expected [Function] to throw error including 'RAIN_API_ERROR: 500 - Internal ServerΓÇª' but got 'Cannot read properties of undefined (ΓÇª'[39m
-   [32mΓ£ô[39m RainService[2m > [22mshould handle zero rainfall correctly[32m 0[2mms[22m[39m
-   [32mΓ£ô[39m RainService[2m > [22mshould deduplicate concurrent requests for the same field[32m 52[2mms[22m[39m
-   [32mΓ£ô[39m RainService[2m > [22mshould respect abort signal[32m 15[2mms[22m[39m
-   [32mΓ£ô[39m RainService[2m > [22mshould identify CONUS coordinates correctly[32m 0[2mms[22m[39m
-npx : 
+npx : [90mstderr[2m | src
+/services/__tests__/RainSer
+vice.test.ts[2m > 
+[22m[2mRainService[2m > 
+[22m[2mshould throw if 
+VITE_RAIN_API_URL is not 
+configured
 At line:1 char:1
-+ npx vitest run src/s
-ervices/__tests__/Rain
-Service.test.ts > 
-test_outp ...
-+ ~~~~~~~~~~~~~~~~~~~~
-~~~~~~~~~~~~~~~~~~~~~~
-~~~~~~~~~~~~~~~~~~~~~~
-~~~~~
-    + CategoryInfo    
-          : NotSpeci  
-  fied: (:String) [   
- ], RemoteExceptio    
-n
-    + FullyQualifiedE 
-   rrorId : NativeCo  
-  mmandError
++ npx vitest src/services/_
+_tests__/RainService.test.t
+s --run --reporte ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: ([9  
+  0mstderr[2m... not co   
+ nfigured:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
  
-[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
-»ΓÄ»[39m[1m[41m 
-Failed Tests 1 [49m[
-22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
-»ΓÄ»ΓÄ»[39m
+[22m[39mRain API 
+Configuration Error: 
+VITE_RAIN_API_URL is not 
+defined in environment.
 
-[41m[1m FAIL 
-[22m[49m src/service
-s/__tests__/RainServic
-e.test.ts[2m > 
-[22mRainService[2m 
-> [22mshould handle 
-API errors correctly
-[31m[1mAssertionErro
-r[22m: expected 
-[Function] to throw 
-error including 
-'RAIN_API_ERROR: 500 
-- Internal ServerΓÇª' 
-but got 'Cannot read 
-properties of 
-undefined (ΓÇª'[39m
+ [31m├ù[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould fetch 7-day breakdown and compute 24h, 72h, 7d correctly[32m 10[2mms[22m[39m
+[31m   ΓåÆ expected 0.6 to be 0.9 // Object.is equality[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould handle API errors correctly[32m 2[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould handle zero rainfall correctly[32m 0[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould handle missing lat/lng by extracting centroid from boundary[32m 0[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould throw if no location data at all[32m 0[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould throw if VITE_RAIN_API_URL is not configured[32m 2[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould deduplicate concurrent requests for the same field[32m 65[2mms[22m[39m
+[90mstderr[2m | src/servi
+ces/__tests__/RainService.t
+est.ts[2m > 
+[22m[2mRainService[2m > 
+[22m[2mshould handle 
+custom range fetch 
+failures gracefully
+[22m[39mCustom range 
+fetch failed for 
+2026-02-27: 500
 
-Expected: 
-[32m"RAIN_API_ERROR: 
-500 - Internal Server 
-Error"[39m
-Received: 
-[31m"Cannot read 
-properties of 
-undefined (reading 
-'ok')"[39m
+[90mstderr[2m | src/servi
+ces/__tests__/RainService.t
+est.ts[2m > 
+[22m[2mRainService[2m > 
+[22m[2mshould handle 
+custom range fetch 
+failures gracefully
+[22m[39mCustom range 
+fetch failed for 
+2026-03-15 Error: Network 
+error
+    at Timeout._onTimeout 
+[90m(C:\Projects\AcreLedger
+\[39msrc\services\__tests_
+_\RainService.test.ts:235:3
+3[90m)[39m
+[90m    at listOnTimeout (
+node:internal/timers:581:17
+)[39m
+[90m    at processTimers (
+node:internal/timers:519:7)
+[39m
 
-[36m [2mΓ¥»[22m src
-/services/__tests__/Ra
-inService.test.ts:[2m
-64:5[22m[39m
-    [90m 62| [39m   
- })[33m;[39m
-    [90m 63| [39m
-    [90m 64| [39m   
- await expect(RainServ
-ice.fetchComprehensive
-Rainfall({ fieldId: 
-mocΓÇª
-    [90m   | [39m   
- [31m^[39m
-    [90m 65| [39m   
-   [33m.[39mrejects
-[33m.[39m[34mtoThrow
-[39m([32m'RAIN_API_E
-RROR: 500 - Internal 
-Server Error'[39m)[3
-3m;[39m
-    [90m 66| [39m  
+ [31m├ù[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould still deduplicate when dates differ but field/coords match[32m 118[2mms[22m[39m
+[31m   ΓåÆ expected 0.5 to not deeply equal 0.5[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould include IEM data warning in the result[32m 1[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould identify CONUS coordinates correctly[32m 0[2mms[22m[39m
+ [32mΓ£ô[39m src/services/__tests__/RainService.test.ts[2m > [22mRainService[2m > [22mshould handle custom range fetch failures gracefully[32m 16[2mms[22m[39m
+
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+[39m[1m[41m Failed Tests 
+2 [49m[22m[31mΓÄ»ΓÄ»ΓÄ»Γ
+Ä»ΓÄ»ΓÄ»ΓÄ»[39m
+
+[41m[1m FAIL [22m[49m s
+rc/services/__tests__/RainS
+ervice.test.ts[2m > 
+[22mRainService[2m > 
+[22mshould fetch 7-day 
+breakdown and compute 24h, 
+72h, 7d correctly
+[31m[1mAssertionError[22
+m: expected 0.6 to be 0.9 
+// Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0.9[39m
+[31m+ 0.6[39m
+
+[36m [2mΓ¥»[22m src/serv
+ices/__tests__/RainService.
+test.ts:[2m88:27[22m[39m
+    [90m 86| [39m    [34
+mexpect[39m(result[[32m'2
+4h'[39m])[33m.[39m[34mt
+oBe[39m([34m0.4[39m)[33
+m;[39m
+    [90m 87| [39m    
+[90m// 72h = last 3 days 
+= 0.3 + 0.2 + 0.4 = 
+0.9[39m
+    [90m 88| [39m    [34
+mexpect[39m(result[[32m'7
+2h'[39m])[33m.[39m[34mt
+oBe[39m([34m0.9[39m)[33
+m;[39m
+    [90m   | [39m        
+                  
+[31m^[39m
+    [90m 89| [39m    
+[90m// 7d = total = 0 + 
+0.1 + 0 + 0.3 + 0.2 + 0 + 
+0.4 = 1.0[39m
+    [90m 90| [39m    [34
+mexpect[39m(result[[32m'7
+d'[39m])[33m.[39m[34mto
+Be[39m([34m1.0[39m)[33m
+;[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+[1/2]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m s
+rc/services/__tests__/RainS
+ervice.test.ts[2m > 
+[22mRainService[2m > 
+[22mshould still 
+deduplicate when dates 
+differ but field/coords 
+match
+[31m[1mAssertionError[22
+m: expected 0.5 to not 
+deeply equal 0.5[39m
+[36m [2mΓ¥»[22m src/serv
+ices/__tests__/RainService.
+test.ts:[2m204:36[22m[39
+m
+    [90m202| [39m
+    [90m203| [39m    expe
+ct(fetch).toHaveBeenCalledT
+imes(4); // 2 main + 2 
+sincePlantinΓÇª
+    [90m204| [39m    [34
+mexpect[39m(res1[33m.[39
+msincePlanting)[33m.[39mn
+ot[33m.[39m[34mtoEqual[
+39m(res2[33m.[39msincePla
+nting)[33m;[39m
+    [90m   | [39m        
+                           
+[31m^[39m
+    [90m205| [39m  
 })[33m;[39m
+    [90m206| [39m
 
-[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»Γ
-Ä»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ
-»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
-ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/1]ΓÄ
-»[22m[39m
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+[2/2]ΓÄ»[22m[39m
 
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
-[2m   Start at [22m 20:11:59
-[2m   Duration [22m 643ms[2m (transform 44ms, setup 0ms, collect 44ms, tests 82ms, environment 0ms, prepare 308ms)[22m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (11)[39m
+[2m   Start at [22m 22:19:08
+[2m   Duration [22m 834ms[2m (transform 57ms, setup 0ms, collect 59ms, tests 216ms, environment 0ms, prepare 292ms)[22m
 

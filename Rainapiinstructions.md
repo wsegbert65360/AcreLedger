@@ -1,86 +1,79 @@
-# Rain API Integration Guide for AI Agents
+# Rain API Integration Guide (v2.0 - 2026-03-29)
 
-This document provides all the technical details necessary for an AI coding agent to integrate the **Rain API** into a larger system.
+This document provides the technical contract for the **Rain API** as implemented in the Vercel deployment and consumed by the AcreLedger frontend.
 
 ## Overview
 
-The Rain API is a Vercel serverless function that provides daily rainfall totals for specific fields. It serves data from the **AcreLedger Supabase instance** via a specialized RPC.
-
-## Core Components
-
-- **`api/rain.ts`**: The main entry point and request handler.
-- **Supabase RPC**: `get_rainfall_stats(p_field_id, p_date)` provides the source data.
+The Rain API serves multi-source rainfall data:
+1. **IEM Stage IV** (Radar-derived) for coordinate-based lookups.
+2. **AcreLedger Supabase (MRMS)** for field-based historical lookups.
 
 ---
 
 ## API Documentation
 
 ### Base URL
+`https://rain-api.vercel.app`
 
-When deployed to Vercel, the API is available at `/api/rain` (and aliased to `/rain` and `/rainfall` via `vercel.json`).
+### 1. Cumulative Rainfall & Breakdown (GET)
+Used for dashboard stats (24h, 72h, 7d).
 
-### 1. Field Rainfall Queries (GET)
-
-Fetch rainfall for a specific field on a specific date.
-
-**Endpoint:** `GET /api/rain`
+**Endpoint:** `GET /rain`
 
 **QueryParams:**
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `field_id` | UUID | Yes | The unique identifier for the field in AcreLedger. |
-| `date` | string | Yes | The date in `YYYY-MM-DD` format. |
+| `lat` | number | Yes | Latitude of the point. |
+| `lon` | number | Yes | Longitude of the point. |
+| `days` | number | No | Days to look back (default: 7). |
 
-**Example:**
-`GET /api/rain?field_id=550e8400-e29b-41d4-a716-446655440000&date=2026-03-27`
-
----
-
-## Response Schema
-
-A successful response (`200 OK`) returns:
-
+**Response Schema:**
 ```json
 {
-  "rainfall": 0.25
+  "mode": "iem",
+  "location": { "lat": 38.4, "lon": -93.5 },
+  "rainfall": 1.25,
+  "breakdown": {
+    "2026-03-27": 0.5,
+    "2026-03-28": 0.75
+  },
+  "period": { "start": "2026-03-22", "end": "2026-03-28", "days": 7 },
+  "units": "inches",
+  "source": "IEM Stage IV"
 }
 ```
 
-### Error Responses
+### 2. Custom Date Range (GET)
+Used for "Since Planting" and "Since Last Spray" stats.
 
-- **`400 Bad Request`**: Missing `field_id` or `date`.
-- **`500 Internal Server Error`**: Unexpected server-side failure or Supabase RPC error.
+**Endpoint:** `GET /rain`
 
----
+**QueryParams:**
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `field_id` | UUID | Yes | AcreLedger field identifier. |
+| `start_date` | string | Yes | YYYY-MM-DD. |
+| `end_date` | string | No | YYYY-MM-DD (defaults to today). |
 
-## Technical Integration Steps
-
-### 1. Networking
-The API includes CORS headers (`Access-Control-Allow-Origin: *`) allowing direct calls from a web browser. Use `fetch` or `axios`.
-
-### 2. Caching Strategy
-The API implements an internal caching strategy via `Cache-Control` headers:
-- **Finalized Dates (Past)**: Cached for 1 hour (`s-maxage=3600`).
-- **Current Day**: Cached for 5 minutes (`s-maxage=300`) to account for incoming near-real-time updates.
-
-### 3. Deployment
-The program is configured for **Vercel**.
-- Required Environment Variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
-
----
-
-## Troubleshooting
-
-### 1. Missing Parameters (400 Bad Request)
-The API strictly requires both `field_id` and `date`. If either is missing, the API returns a `400 Bad Request` with a JSON body detailing the error.
-
-**Example Error Response:**
+**Response Schema:**
 ```json
 {
-  "error": "Missing field_id or date",
-  "detail": "Both field_id and date query parameters are required."
+  "rainfall": 2.45,
+  "source": "Supabase MRMS"
 }
 ```
 
-### 2. No Data (200 OK)
-If the parameters are valid but no rainfall is recorded for that field on that date, the API returns `{"rainfall": 0}`. This is not an error; it simply indicates zero rainfall in the database for the specified window.
+---
+
+## Implementation Details
+
+### Protocol Rules
+1. **No POST:** The API only supports `GET` and `OPTIONS`. 
+2. **Coordinate Mode:** If `lat` and `lon` are present, the API uses IEM Stage IV radar data. `field_id` is ignored in this mode.
+3. **Centroid Extraction:** For fields with polygons, the client must compute a centroid coordinate to use the IEM mode.
+4. **Client-side Aggregation:** For 24h and 72h stats, the client should sum the values in the `breakdown` object.
+
+### Error Handling
+- `400 Bad Request`: Missing coordinates or required params.
+- `500 Internal Error`: Service failure.
+- Failures in custom ranges should be treated as 0.0" rainfall to prevent UI crashes.

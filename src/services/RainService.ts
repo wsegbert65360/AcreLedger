@@ -1,22 +1,21 @@
-import { RainData } from '../types/weather';
-
 // Cache in-flight requests to deduplicate concurrent calls for the same field
 const promiseCache = new Map<string, Promise<any>>();
 
+/**
+ * Sum rainfall for the last N days from a { "YYYY-MM-DD": inches } breakdown.
+ */
+function sumLastNDays(breakdown: Record<string, number>, n: number): number {
+  const dates = Object.keys(breakdown).sort();
+  if (dates.length === 0) return 0;
+  return dates.slice(-n).reduce((sum, d) => sum + (Number(breakdown[d]) || 0), 0);
+}
+
 export const RainService = {
-  /**
-   * Fetches 12h, 24h, and 72h rainfall totals for a field using the Supabase RPC.
-   * This aligns with BLUEPRINT.md by using persisted/processed database data.
-   */
-  /**
-   * Fetches comprehensive rainfall stats for multiple periods including:
-   * 24h, 72h, 168h (7d), and optionally since specific dates.
-   */
   async fetchComprehensiveRainfall(args: {
     fieldId: string;
     lat?: number | null;
     lng?: number | null;
-    boundary?: any; // Supports GeoJSON Polygon or [lon, lat][]
+    boundary?: any;
     sincePlantingDate?: string;
     sinceLastSprayDate?: string;
     signal?: AbortSignal;
@@ -31,105 +30,101 @@ export const RainService = {
   }> {
     const { fieldId, lat, lng, boundary, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
-    // Cache key includes dates and coordinates to prevent stale lookup
     const cacheKey = `${fieldId}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
 
     if (promiseCache.has(cacheKey)) {
-        try {
-            return await promiseCache.get(cacheKey);
-        } catch (error) {
-            // Ignore cached failure and retry
-        }
+      try { return await promiseCache.get(cacheKey); } catch { /* retry */ }
     }
 
     const fetchPromise = (async () => {
-        const baseUrl = import.meta.env?.VITE_RAIN_API_URL || 
-                       (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
-        
-        if (!baseUrl) {
-            console.error('Rain API Configuration Error: VITE_RAIN_API_URL is not defined in environment.');
-            throw new Error('VITE_RAIN_API_URL is not configured');
+      const baseUrl = import.meta.env?.VITE_RAIN_API_URL ||
+                     (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
+
+      if (!baseUrl) {
+        throw new Error('VITE_RAIN_API_URL is not configured');
+      }
+
+      // Get lat/lng. If missing but boundary exists, compute centroid from boundary.
+      let tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
+      let tLng = lng != null ? Math.round(lng * 10000) / 10000 : null;
+
+      if ((tLat == null || tLng == null) && boundary) {
+        const coords = Array.isArray(boundary) ? boundary : boundary?.coordinates?.[0];
+        if (coords && coords.length > 0) {
+          const sumLat = coords.reduce((s: number, c: any) => s + (Array.isArray(c) ? c[1] : c.lat), 0);
+          const sumLng = coords.reduce((s: number, c: any) => s + (Array.isArray(c) ? c[0] : c.lng), 0);
+          tLat = Math.round((sumLat / coords.length) * 10000) / 10000;
+          tLng = Math.round((sumLng / coords.length) * 10000) / 10000;
         }
+      }
 
-        // Truncate lat/lng to 4 decimal places for consistent grid matching
-        const tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
-        const tLng = lng != null ? Math.round(lng * 10000) / 10000 : null;
+      if (tLat == null || tLng == null) {
+        throw new Error('Missing location data (lat/lng or boundary) for rainfall lookup.');
+      }
 
-        // 1. Primary call for 24h, 72h, 7d using the new high-resolution API
-        // Prefer boundary (polygon) if available, fallback to lat/lon
-        let mainResponse;
-        if (boundary) {
-            mainResponse = await fetch(`${baseUrl}/rain`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ polygon: boundary, field_id: fieldId }),
-                signal
-            });
-        } else if (tLat != null && tLng != null) {
-            mainResponse = await fetch(`${baseUrl}/rain?lat=${tLat}&lon=${tLng}&field_id=${fieldId}`, { signal });
-        } else {
-            throw new Error('Missing location data (lat/lng or boundary) for rainfall lookup.');
-        }
+      // --- Main call: GET /rain?lat=X&lon=Y&days=7 (IEM Stage IV) ---
+      // Returns: { rainfall, breakdown: { "YYYY-MM-DD": inches }, period, mode }
+      const mainResponse = await fetch(`${baseUrl}/rain?lat=${tLat}&lon=${tLng}&days=7`, { signal });
 
-        if (!mainResponse.ok) {
-            const errorData = await mainResponse.json().catch(() => ({}));
-            throw new Error(`RAIN_API_ERROR: ${mainResponse.status} - ${errorData.error || 'Unknown error'}`);
-        }
-        
-        const mainData = await mainResponse.json();
+      if (!mainResponse.ok) {
+        const err = await mainResponse.json().catch(() => ({}));
+        throw new Error(`RAIN_API_ERROR: ${mainResponse.status} - ${err.error || 'Unknown error'}`);
+      }
 
-        // 2. Helper for custom ranges (sincePlanting, sinceLastSpray)
-        // For now, we continue to use the daily start_date / end_date mode of the API for these.
-        const fetchCustomRange = async (startDate: string) => {
-            const today = new Date().toISOString().split('T')[0];
-            const url = `${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`;
-            try {
-                const response = await fetch(url, { signal });
-                if (!response.ok) return 0;
-                const data = await response.json();
-                return Number(data.rainfall || 0);
-            } catch (err) {
-                console.warn(`Custom range fetch failed for ${startDate}`, err);
-                return 0;
-            }
-        };
+      const mainData = await mainResponse.ok ? await mainResponse.json() : {};
+      const breakdown: Record<string, number> = mainData.breakdown || {};
 
-        const [sincePlanting, sinceLastSpray] = await Promise.all([
-            sincePlantingDate ? fetchCustomRange(sincePlantingDate) : Promise.resolve(0),
-            sinceLastSprayDate ? fetchCustomRange(sinceLastSprayDate) : Promise.resolve(0),
-        ]);
+      // Compute 24h, 72h, 7d from per-day breakdown
+      const inches24h = sumLastNDays(breakdown, 1);
+      const inches72h = sumLastNDays(breakdown, 3);
+      const inches7d = Number(mainData.rainfall) || sumLastNDays(breakdown, 7);
 
-        return {
-            '24h': mainData.rain['24h'],
-            '72h': mainData.rain['72h'],
-            '7d': mainData.rain['168h'],
-            sincePlanting,
-            sinceLastSpray,
-            periodEndUtc: mainData.periodEndUtc,
-            dataWarning: mainData.dataWarning
-        };
+      const periodEndUtc = mainData.period?.end
+        ? `${mainData.period.end}T23:59:59Z`
+        : new Date().toISOString();
+
+      const dataWarning = mainData.mode === 'iem' ? 'IEM Stage IV data — 1-2 hour lag from real-time' : undefined;
+
+      // --- Custom range calls: field_id + start_date/end_date (Supabase RPC) ---
+      const fetchCustomRange = async (startDate: string): Promise<number> => {
+        const today = new Date().toISOString().split('T')[0];
+        try {
+          const r = await fetch(`${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`, { signal });
+          if (!r.ok) return 0;
+          const d = await r.json();
+          return Number(d.rainfall || 0);
+        } catch { return 0; }
+      };
+
+      const [sincePlanting, sinceLastSpray] = await Promise.all([
+        sincePlantingDate ? fetchCustomRange(sincePlantingDate) : Promise.resolve(0),
+        sinceLastSprayDate ? fetchCustomRange(sinceLastSprayDate) : Promise.resolve(0),
+      ]);
+
+      return {
+        '24h': Math.round(inches24h * 1000) / 1000,
+        '72h': Math.round(inches72h * 1000) / 1000,
+        '7d': Math.round(inches7d * 1000) / 1000,
+        sincePlanting: Math.round(sincePlanting * 1000) / 1000,
+        sinceLastSpray: Math.round(sinceLastSpray * 1000) / 1000,
+        periodEndUtc,
+        dataWarning
+      };
     })();
 
     promiseCache.set(cacheKey, fetchPromise);
 
     try {
-        return await fetchPromise;
+      return await fetchPromise;
     } finally {
-        // Clear cache after 30 seconds to allow reuse but keep data fresh
-        setTimeout(() => promiseCache.delete(cacheKey), 30000);
+      setTimeout(() => promiseCache.delete(cacheKey), 30000);
     }
   },
 
-  /**
-   * Helper to check if coordinates are within the Continental US.
-   */
   isWithinCONUS(lat: number, lon: number): boolean {
     return lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66;
   },
 
-  /**
-   * Internal test helper to clear the promise cache.
-   */
   __test_clearCache(): void {
     promiseCache.clear();
   }
