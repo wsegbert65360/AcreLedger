@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -146,8 +147,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
   const [showValidation, setShowValidation] = useState(false);
 
-  const isFormValid = products.length > 0 &&
-    products.every(p => p.product.trim()) && 
+  // Minimum required to save — just need at least one product name and a date.
+  const isMinimumValid = products.length > 0 && products.some(p => p.product.trim()) && !!sprayDate;
+
+  // Full compliance — all fields that constitute a complete regulatory record.
+  const isFullyCompliant =
+    products.every(p => p.product.trim()) &&
     startTime.trim() &&
     endTime.trim() &&
     (!!weather && !weather.isError) &&
@@ -156,13 +161,32 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     manualWindDirection.trim() &&
     cropOrSiteTreated.trim() &&
     applicationMethod.trim() &&
-    equipmentId.trim();
+    equipmentId.trim() &&
+    products.every(p => p.epaRegNumber?.trim());
+
+  // Missing compliance field labels for the warning banner
+  const missingComplianceFields: string[] = [];
+  if (!products.every(p => p.product.trim())) missingComplianceFields.push('Product name(s)');
+  if (!startTime.trim()) missingComplianceFields.push('Start time');
+  if (!endTime.trim()) missingComplianceFields.push('End time');
+  if (!weather || weather.isError) missingComplianceFields.push('Weather data');
+  if (!applicatorName.trim()) missingComplianceFields.push('Cert. applicator');
+  if (!licenseNumber.trim()) missingComplianceFields.push('License #');
+  if (!manualWindDirection.trim()) missingComplianceFields.push('Wind direction');
+  if (!cropOrSiteTreated.trim()) missingComplianceFields.push('Crop / site treated');
+  if (!applicationMethod.trim()) missingComplianceFields.push('Application method');
+  if (!equipmentId.trim()) missingComplianceFields.push('Equipment ID');
+  if (!products.every(p => p.epaRegNumber?.trim())) missingComplianceFields.push('EPA Reg # (one or more products)');
 
   const handleSubmit = async () => {
-    if (!isFormValid) {
+    if (!isMinimumValid) {
       setShowValidation(true);
-      toast.error('Please complete all required compliance fields');
+      toast.error('Enter at least one product name and an application date to save.');
       return;
+    }
+    if (!isFullyCompliant) {
+      setShowValidation(true);
+      // Show warning but continue — record will be flagged nonCompliant
     }
 
     setIsSaving(true);
@@ -205,7 +229,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         notes: notes.trim() || undefined,
         complianceProfile,
         isPremixed,
-        nonCompliant: products.some(p => !p.epaRegNumber?.trim()),
+        nonCompliant: !isFullyCompliant,
         deleted_at: null,
         seasonYear: activeSeason,
       };
@@ -515,6 +539,23 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               </div>
             )}
           </div>
+          {/* Compliance warning banner */}
+          {showValidation && !isFullyCompliant && isMinimumValid && (
+            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-1">
+              <div className="flex items-center gap-2 text-yellow-400 font-mono text-xs font-bold uppercase tracking-wider">
+                <AlertTriangle size={14} />
+                Record will be saved as incomplete
+              </div>
+              <p className="text-[10px] text-yellow-300/80 leading-relaxed">
+                The following compliance fields are missing. You can complete them later by editing this record.
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {missingComplianceFields.map(f => (
+                  <li key={f} className="text-[10px] font-mono text-yellow-400/80">· {f}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="h-20" aria-hidden="true" /> {/* Spacer for sticky footer */}
         </div>
         <DialogFooter className="sticky bottom-0 bg-card pt-2 border-t border-border/20 flex flex-col gap-2">
@@ -530,8 +571,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           )}
           <Button
             onClick={handleSubmit}
-            disabled={!isFormValid || loading || isSaving}
-            className="touch-target w-full bg-spray text-white hover:bg-spray/90 glow-spray font-bold py-6 text-base disabled:opacity-50 disabled:grayscale"
+            disabled={!isMinimumValid || loading || isSaving}
+            className={`touch-target w-full font-bold py-6 text-base disabled:opacity-50 disabled:grayscale ${
+              isFullyCompliant
+                ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
+                : 'bg-yellow-600 text-white hover:bg-yellow-500'
+            }`}
           >
             {isSaving ? (
               <div className="flex items-center gap-2">
@@ -539,7 +584,13 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 <span>Saving...</span>
               </div>
             ) : loading ? <Loader2 size={20} className="animate-spin" /> :
-              !isFormValid ? 'Compliance Information Missing' :
+              !isMinimumValid ? 'Enter Product Name to Save' :
+              !isFullyCompliant ? (
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={18} />
+                  <span>{initialData ? 'Update (Incomplete Record)' : 'Save (Incomplete Record)'}</span>
+                </div>
+              ) :
                 initialData ? 'Update Spray Record' : 'Save Spray Record'}
           </Button>
         </DialogFooter>
