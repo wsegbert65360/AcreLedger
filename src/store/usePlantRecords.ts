@@ -36,7 +36,7 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
+    const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapPlantToDb>;
@@ -159,8 +159,8 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
       // Replace with Sentry.captureException(error) in production
       console.error('Error deleting plant records:', error);
 
-      // Restore records to their original positions. Sort descending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+      // Restore records to their original positions. Sort ascending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
 
       setPlantRecords(prev => {
         const restored = [...prev];

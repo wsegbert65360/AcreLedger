@@ -110,10 +110,11 @@ export const WeatherService = {
         }
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const onAbort = () => controller.abort();
         
         if (signal) {
-            signal.addEventListener('abort', () => controller.abort());
+            signal.addEventListener('abort', onAbort);
         }
 
         try {

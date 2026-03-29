@@ -9,40 +9,57 @@ import {
     FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow
 } from '../types/database';
 
+// --- Safe Mapping Helpers (Runtime Validation) ---
+
+function safeNum(val: any, fallback = 0): number {
+    const n = Number(val);
+    return isNaN(n) ? fallback : n;
+}
+
+function safeStr(val: any, fallback = ''): string {
+    return val === null || val === undefined ? fallback : String(val);
+}
+
+function safeTimestamp(val: any): number {
+    if (!val) return Date.now();
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? Date.now() : d.getTime();
+}
+
 export const mapFieldFromDb = (db: FieldRow): Field => ({
     id: db.id,
-    name: db.name,
-    acreage: db.acreage,
-    lat: db.lat,
-    lng: db.lng,
-    fsaFarmNumber: db.fsa_farm_number ?? '',
-    fsaTractNumber: db.fsa_tract_number ?? '',
-    fsaFieldNumber: db.fsa_field_number ?? '',
+    name: safeStr(db.name, 'Unnamed Field'),
+    acreage: safeNum(db.acreage),
+    lat: safeNum(db.lat),
+    lng: safeNum(db.lng),
+    fsaFarmNumber: safeStr(db.fsa_farm_number),
+    fsaTractNumber: safeStr(db.fsa_tract_number),
+    fsaFieldNumber: safeStr(db.fsa_field_number),
     producerShare: db.producer_share ?? undefined,
-    irrigationPractice: db.irrigation_practice as 'Irrigated' | 'Non-Irrigated',
-    intendedUse: db.intended_use ?? '',
+    irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
+    intendedUse: safeStr(db.intended_use),
     boundary: db.boundary as Field['boundary'],
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null,
-    notes: db.notes ?? ''
+    notes: safeStr(db.notes)
 });
 
 export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     id: db.id,
     fieldId: db.field_id,
-    fieldName: db.field_name,
-    seedVariety: db.seed_variety,
-    acreage: db.acreage,
-    crop: db.crop ?? '',
-    plantDate: db.plant_date,
-    fsaFarmNumber: db.fsa_farm_number ?? '',
-    fsaTractNumber: db.fsa_tract_number ?? '',
-    fsaFieldNumber: db.fsa_field_number ?? '',
-    intendedUse: db.intended_use ?? '',
+    fieldName: safeStr(db.field_name, 'Unknown Field'),
+    seedVariety: safeStr(db.seed_variety, 'Unknown Variety'),
+    acreage: safeNum(db.acreage),
+    crop: safeStr(db.crop),
+    plantDate: safeStr(db.plant_date),
+    fsaFarmNumber: safeStr(db.fsa_farm_number),
+    fsaTractNumber: safeStr(db.fsa_tract_number),
+    fsaFieldNumber: safeStr(db.fsa_field_number),
+    intendedUse: safeStr(db.intended_use),
     producerShare: db.producer_share ?? undefined,
-    irrigationPractice: db.irrigation_practice as 'Irrigated' | 'Non-Irrigated',
-    seasonYear: db.season_year,
-    timestamp: new Date(db.timestamp).getTime(),
+    irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
+    seasonYear: safeNum(db.season_year, 2024),
+    timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
@@ -50,57 +67,57 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
 export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
     id: db.id,
     fieldId: db.field_id,
-    fieldName: db.field_name,
-    products: db.products as SprayRecipeProduct[],
-    windSpeed: db.wind_speed,
-    temperature: db.temperature,
-    sprayDate: db.spray_date,
-    startTime: db.start_time,
+    fieldName: safeStr(db.field_name, 'Unknown Field'),
+    products: (db.products || []) as SprayRecipeProduct[],
+    windSpeed: safeNum(db.wind_speed),
+    temperature: safeNum(db.temperature),
+    sprayDate: safeStr(db.spray_date),
+    startTime: safeStr(db.start_time),
     endTime: db.end_time ?? undefined,
     equipmentId: db.equipment_id ?? undefined,
-    applicatorName: db.applicator_name,
-    licenseNumber: db.license_number,
-    epaRegNumber: db.epa_reg_number,
-    seasonYear: db.season_year,
-    timestamp: new Date(db.timestamp).getTime(),
+    applicatorName: safeStr(db.applicator_name),
+    licenseNumber: safeStr(db.license_number),
+    epaRegNumber: safeStr(db.epa_reg_number),
+    seasonYear: safeNum(db.season_year, 2024),
+    timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null,
-    targetPest: db.target_pest ?? '',
-    windDirection: db.wind_direction ?? '',
+    targetPest: safeStr(db.target_pest),
+    windDirection: safeStr(db.wind_direction),
     relativeHumidity: db.relative_humidity ?? undefined,
-    treatedAreaSize: Number(db.treated_area_size ?? 0),
-    treatedAreaUnit: db.treated_area_unit ?? 'ac',
-    totalAmountApplied: Number(db.total_amount_applied ?? 0),
-    involvedTechnicians: db.involved_technicians ?? '',
-    mixtureRate: db.mixture_rate ?? '',
-    totalMixtureVolume: db.total_mixture_volume ?? '',
-    siteAddress: db.site_address ?? '',
+    treatedAreaSize: safeNum(db.treated_area_size),
+    treatedAreaUnit: safeStr(db.treated_area_unit, 'ac'),
+    totalAmountApplied: safeNum(db.total_amount_applied),
+    involvedTechnicians: safeStr(db.involved_technicians),
+    mixtureRate: safeStr(db.mixture_rate),
+    totalMixtureVolume: safeStr(db.total_mixture_volume),
+    siteAddress: safeStr(db.site_address),
     cropOrSiteTreated: db.crop_or_site_treated ?? undefined,
     applicationMethod: db.application_method ?? undefined,
     rei: db.rei ?? undefined,
-    notes: db.notes ?? '',
-    complianceProfile: db.compliance_profile ?? 'universal',
-    isPremixed: db.is_premixed ?? false,
-    nonCompliant: db.non_compliant ?? false
+    notes: safeStr(db.notes),
+    complianceProfile: (db.compliance_profile || 'universal') as SprayRecord['complianceProfile'],
+    isPremixed: !!db.is_premixed,
+    nonCompliant: !!db.non_compliant
 });
 
 export const mapHarvestFromDb = (db: HarvestRecordRow): HarvestRecord => ({
     id: db.id,
     fieldId: db.field_id,
-    fieldName: db.field_name,
-    destination: db.destination as 'bin' | 'town',
+    fieldName: safeStr(db.field_name, 'Unknown Field'),
+    destination: (db.destination || 'bin') as 'bin' | 'town',
     binId: db.bin_id ?? undefined,
-    bushels: db.bushels,
-    moisturePercent: db.moisture_percent,
-    landlordSplitPercent: db.landlord_split_percent,
-    harvestDate: db.harvest_date,
-    fsaFarmNumber: db.fsa_farm_number ?? '',
-    fsaTractNumber: db.fsa_tract_number ?? '',
-    seasonYear: db.season_year,
-    timestamp: new Date(db.timestamp).getTime(),
-    crop: db.crop ?? '',
-    landlordName: db.landlord_name ?? '',
-    scaleTicketNumber: db.scale_ticket_number ?? '',
+    bushels: safeNum(db.bushels),
+    moisturePercent: safeNum(db.moisture_percent, 15.0),
+    landlordSplitPercent: safeNum(db.landlord_split_percent, 100),
+    harvestDate: safeStr(db.harvest_date),
+    fsaFarmNumber: safeStr(db.fsa_farm_number),
+    fsaTractNumber: safeStr(db.fsa_tract_number),
+    seasonYear: safeNum(db.season_year, 2024),
+    timestamp: safeTimestamp(db.timestamp),
+    crop: safeStr(db.crop),
+    landlordName: safeStr(db.landlord_name),
+    scaleTicketNumber: safeStr(db.scale_ticket_number),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
@@ -108,15 +125,15 @@ export const mapHarvestFromDb = (db: HarvestRecordRow): HarvestRecord => ({
 export const mapHayFromDb = (db: HayHarvestRow): HayHarvestRecord => ({
     id: db.id,
     fieldId: db.field_id,
-    fieldName: db.field_name,
-    date: db.date,
-    baleCount: db.bale_count,
-    cuttingNumber: db.cutting_number,
-    baleType: db.bale_type as 'Round' | 'Square',
-    temperature: db.temperature,
-    conditions: db.conditions,
-    seasonYear: db.season_year,
-    timestamp: new Date(db.timestamp).getTime(),
+    fieldName: safeStr(db.field_name, 'Unknown Field'),
+    date: safeStr(db.date),
+    baleCount: safeNum(db.bale_count),
+    cuttingNumber: safeNum(db.cutting_number, 1),
+    baleType: (db.bale_type || 'Round') as 'Round' | 'Square',
+    temperature: safeNum(db.temperature),
+    conditions: safeStr(db.conditions),
+    seasonYear: safeNum(db.season_year, 2024),
+    timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
@@ -125,55 +142,55 @@ export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
     id: db.id,
     farm_id: db.farm_id,
     binId: db.bin_id,
-    binName: db.bin_name,
-    type: db.type as 'in' | 'out',
-    bushels: db.bushels,
-    moisturePercent: db.moisture_percent,
-    sourceFieldName: db.source_field_name,
-    destination: db.destination,
-    price: db.price ?? undefined,
-    seasonYear: db.season_year,
-    timestamp: new Date(db.timestamp).getTime(),
+    binName: safeStr(db.bin_name, 'Unknown Bin'),
+    type: (db.type || 'in') as 'in' | 'out',
+    bushels: safeNum(db.bushels),
+    moisturePercent: safeNum(db.moisture_percent, 15.0),
+    sourceFieldName: db.source_field_name ?? undefined,
+    destination: db.destination ?? undefined,
+    price: safeNum(db.price, undefined),
+    seasonYear: safeNum(db.season_year, 2024),
+    timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
 });
 
 export const mapBinFromDb = (db: BinRow): Bin => ({
     id: db.id,
-    name: db.name,
-    capacity: db.capacity,
+    name: safeStr(db.name, 'Unnamed Bin'),
+    capacity: safeNum(db.capacity),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
 
 export const mapSeedFromDb = (db: SavedSeedRow): SavedSeed => ({
     id: db.id,
-    name: db.name,
-    crop: db.crop || '',
-    variety: db.variety || '',
-    supplier: db.supplier || '',
-    lotNumber: db.lot_number || '',
-    year: db.year || new Date().getFullYear(),
-    notes: db.notes || '',
+    name: safeStr(db.name, 'Unnamed Seed'),
+    crop: safeStr(db.crop),
+    variety: safeStr(db.variety),
+    supplier: safeStr(db.supplier),
+    lotNumber: safeStr(db.lot_number),
+    year: safeNum(db.year, 2024),
+    notes: safeStr(db.notes),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
 
 export const mapRecipeFromDb = (db: SprayRecipeRow): SprayRecipe => ({
     id: db.id,
-    name: db.name,
-    products: db.products as SprayRecipeProduct[],
-    applicatorName: db.applicator_name ?? '',
-    licenseNumber: db.license_number ?? '',
-    targetPest: db.target_pest ?? '',
-    epaRegNumber: db.epa_reg_number ?? '',
+    name: safeStr(db.name, 'Unnamed Recipe'),
+    products: (db.products || []) as SprayRecipeProduct[],
+    applicatorName: safeStr(db.applicator_name),
+    licenseNumber: safeStr(db.license_number),
+    targetPest: safeStr(db.target_pest),
+    epaRegNumber: safeStr(db.epa_reg_number),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
 
 export const mapFertilizerRecipeFromDb = (db: FertilizerRecipeRow): FertilizerRecipe => ({
     id: db.id,
-    name: db.name,
-    npkRatio: db.npk_ratio,
+    name: safeStr(db.name, 'Unnamed Recipe'),
+    npkRatio: safeStr(db.npk_ratio),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
@@ -182,27 +199,27 @@ export const mapFertilizerFromDb = (db: FertilizerApplicationRow): FertilizerApp
     id: db.id,
     farm_id: db.farm_id,
     fieldId: db.field_id,
-    fieldName: db.fields?.name || db.field_name || 'Unknown Field',
-    date: db.date,
-    acres: Number(db.acres),
-    fertilizer_formula: db.fertilizer_formula,
-    timestamp: new Date(db.created_at || db.date).getTime(),
-    created_at: db.created_at,
-    updated_at: db.updated_at,
+    fieldName: safeStr(db.fields?.name || db.field_name, 'Unknown Field'),
+    date: safeStr(db.date),
+    acres: safeNum(db.acres),
+    fertilizer_formula: safeStr(db.fertilizer_formula),
+    timestamp: safeTimestamp(db.created_at || db.date),
+    created_at: safeStr(db.created_at),
+    updated_at: safeStr(db.updated_at),
     deleted_at: db.deleted_at ?? null,
-    seasonYear: db.season_year
+    seasonYear: safeNum(db.season_year, 2024)
 });
 
 export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
     id: db.id,
     farm_id: db.farm_id,
     fieldId: db.field_id,
-    fieldName: (db as any).fields?.name || db.field_name || 'Unknown Field',
-    date: db.date,
-    implementType: db.implement_type,
-    notes: db.notes ?? '',
-    seasonYear: db.season_year,
-    timestamp: new Date(db.timestamp).getTime(),
+    fieldName: safeStr((db as any).fields?.name || db.field_name, 'Unknown Field'),
+    date: safeStr(db.date),
+    implementType: safeStr(db.implement_type, 'Disk'),
+    notes: safeStr(db.notes),
+    seasonYear: safeNum(db.season_year, 2024),
+    timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
 });
 

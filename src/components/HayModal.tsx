@@ -39,6 +39,8 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
                     setConditions(`${w.wind}mph ${w.windDirection}, ${w.humidity}% humidity`);
                 }
                 setLoadingWeather(false);
+            }).catch(() => {
+                setLoadingWeather(false);
             });
         } else if (open && !initialData) {
             setLoadingWeather(false);

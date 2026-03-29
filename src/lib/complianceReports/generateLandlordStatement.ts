@@ -94,6 +94,7 @@ export function generateLandlordStatementCSV(statement: LandlordStatement): stri
     '',
     '',
     '',
+    '', // aligns with 'Landlord Split %' column
     String(statement.totalLandlordBushels),
     String(statement.totalFarmerBushels),
   ];

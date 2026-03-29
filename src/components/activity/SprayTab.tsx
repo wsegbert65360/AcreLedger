@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { SprayRecord } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
 import { formatIsoDate, formatDate } from '@/utils/dates';

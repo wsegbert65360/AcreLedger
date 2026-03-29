@@ -33,7 +33,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
             type: 'out',
             bushels: amount,
             moisturePercent: 15, // Default for sales
-            timestamp: new Date(date).getTime(),
+            timestamp: date ? new Date(date).getTime() : Date.now(),
             price: isNaN(p) ? undefined : p,
             destination: destination.trim() || undefined,
         });
@@ -130,7 +130,11 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
                 <DialogFooter className="pt-2">
                     <Button
                         onClick={handleSubmit}
-                        disabled={!bushels || isNaN(parseFloat(bushels))}
+                        disabled={
+                            !bushels ||
+                            isNaN(parseFloat(bushels)) ||
+                            parseFloat(bushels) > currentInventory
+                        }
                         className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold py-6 text-lg"
                     >
                         Confirm Sale

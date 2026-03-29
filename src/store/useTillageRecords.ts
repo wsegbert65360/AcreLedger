@@ -33,7 +33,7 @@ export function useTillageRecords({ farm_id, activeSeason, setTillageRecords }: 
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: TillageRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
+    const newRecord: TillageRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
 
     let mapped: ReturnType<typeof mapTillageToDb>;
     try {
@@ -143,7 +143,8 @@ export function useTillageRecords({ farm_id, activeSeason, setTillageRecords }: 
 
     if (error) {
       console.error('Error deleting tillage records:', error);
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+      // Restore records to their original positions. Sort ascending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
       setTillageRecords(prev => {
         const restored = [...prev];
         for (const { record, index } of snapshot) {

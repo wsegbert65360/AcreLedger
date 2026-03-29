@@ -32,7 +32,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
             type: 'in',
             bushels: amount,
             moisturePercent: m,
-            timestamp: new Date(date).getTime(),
+            timestamp: date ? new Date(date).getTime() : Date.now(),
             sourceFieldName: source.trim() || undefined,
         });
 

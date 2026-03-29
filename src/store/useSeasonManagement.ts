@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   Field, Bin, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord,
   FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe, FertilizerRecipe, TillageRecord
@@ -182,19 +182,15 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         ['spray_recipes',           recipesToDb],
       ];
 
-      // 3. Upsert in parallel for better performance while maintaining fail-fast behavior.
-      const upsertPromises = tables
-        .filter(([_, data]) => data.length > 0)
-        .map(async ([table, data]) => {
-          const { error } = await supabase.from(table).upsert(data);
-          if (error) {
-            // Replace with Sentry.captureException(error) in production
-            console.error(`Restore failed on table "${table}":`, error);
-            throw new Error(`Failed to restore "${table}": ${error.message}`);
-          }
-        });
-
-      await Promise.all(upsertPromises);
+      // 3. Upsert sequentially so a failure is caught before partial writes
+      for (const [table, data] of tables) {
+        if (data.length === 0) continue;
+        const { error } = await supabase.from(table).upsert(data);
+        if (error) {
+          console.error(`Restore failed on table "${table}":`, error);
+          throw new Error(`Failed to restore "${table}": ${error.message}`);
+        }
+      }
 
       // 4. All DB writes succeeded — update local state in one pass.
       //    Use !== undefined (not falsy) so empty arrays are applied correctly.
@@ -275,6 +271,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setGrainMovements([]);
     setSavedSeeds([]);
     setSprayRecipes([]);
+    setFertilizerRecipes([]);
+    setTillageRecords([]);
     setFarmId(null);
     setActiveSeason(CURRENT_YEAR);
     setViewingSeason(CURRENT_YEAR);
@@ -288,5 +286,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setFarmId, setActiveSeason, setViewingSeason,
   ]);
 
-  return { rolloverToNewSeason, restoreFromBackup, clearLocalCache };
+  return useMemo(() => ({
+    rolloverToNewSeason,
+    restoreFromBackup,
+    clearLocalCache
+  }), [rolloverToNewSeason, restoreFromBackup, clearLocalCache]);
 }

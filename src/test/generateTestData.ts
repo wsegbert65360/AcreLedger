@@ -118,14 +118,16 @@ export function generateFields(count = 100): Field[] {
     id: uid(),
     name: i < FIELD_NAMES.length ? FIELD_NAMES[i] : `Field ${i + 1}`,
     acreage: randFloat(15, 200, 1),
-    lat: randFloat(36.5, 40.5, 6),  // Missouri lat range
-    lng: randFloat(-95.5, -89.5, 6), // Missouri lng range
+    lat: randFloat(36.5, 40.5, 6),
+    lng: randFloat(-95.5, -89.5, 6),
     fsaFarmNumber: `${randInt(1000, 9999)}`,
     fsaTractNumber: `${randInt(100, 999)}`,
     fsaFieldNumber: `${randInt(1, 50)}`,
     producerShare: pick([100, 100, 100, 66, 50, 75]),
     irrigationPractice: pick(['Non-Irrigated', 'Non-Irrigated', 'Non-Irrigated', 'Irrigated']) as 'Irrigated' | 'Non-Irrigated',
     intendedUse: pick(INTENDED_USES),
+    farm_id: 'test-farm',
+    deleted_at: null,
   }));
 }
 
@@ -134,6 +136,8 @@ export function generateBins(count = 100): Bin[] {
     id: uid(),
     name: i < BIN_NAMES.length ? BIN_NAMES[i] : `Bin ${i + 1}`,
     capacity: pick([5000, 8000, 10000, 12000, 15000, 20000, 25000, 30000, 50000]),
+    farm_id: 'test-farm',
+    deleted_at: null,
   }));
 }
 
@@ -146,10 +150,20 @@ export function generateSavedSeeds(count = 100): SavedSeed[] {
     } else {
       name = `Variety-${randInt(1000, 9999)}`;
     }
-    // Deduplicate
     while (usedNames.has(name)) name = `${name}-${randInt(1, 99)}`;
     usedNames.add(name);
-    return { id: uid(), name };
+    return { 
+      id: uid(), 
+      name, 
+      crop: pick(CROPS),
+      variety: `Var-${i}`,
+      supplier: 'Test Seeds',
+      lotNumber: `LOT-${randInt(100,999)}`,
+      year: SEASON_YEAR,
+      notes: '',
+      farm_id: 'test-farm',
+      deleted_at: null 
+    };
   });
 }
 
@@ -173,6 +187,9 @@ export function generateSprayRecipes(count = 100): Omit<SprayRecipe, 'id'>[] {
       applicatorName: pick(APPLICATORS),
       licenseNumber: `MO-${randInt(10000, 99999)}`,
       targetPest: pick(TARGET_PESTS),
+      epaRegNumber: products[0].epaRegNumber,
+      farm_id: 'test-farm',
+      deleted_at: null
     };
   });
 }
@@ -199,6 +216,8 @@ export function generatePlantRecords(fields: Field[], seeds: SavedSeed[], count 
       producerShare: field.producerShare ?? 100,
       irrigationPractice: field.irrigationPractice || 'Non-Irrigated',
       seasonYear: SEASON_YEAR,
+      farm_id: 'test-farm',
+      deleted_at: null
     };
   });
 }
@@ -231,9 +250,11 @@ export function generateSprayRecords(fields: Field[], count = 100): Omit<SprayRe
       targetPest: pick(TARGET_PESTS),
       windDirection: pick(WIND_DIRECTIONS),
       relativeHumidity: randInt(30, 85),
-      treatedAreaSize: `${field.acreage}`,
-      totalAmountApplied: `${(parseFloat(products[0].rate) * field.acreage).toFixed(1)}`,
+      treatedAreaSize: field.acreage,
+      totalAmountApplied: parseFloat((parseFloat(products[0].rate) * field.acreage).toFixed(1)),
       seasonYear: SEASON_YEAR,
+      farm_id: 'test-farm',
+      deleted_at: null
     };
   });
 }
@@ -260,6 +281,8 @@ export function generateHarvestRecords(fields: Field[], bins: Bin[], count = 100
       fsaFarmNumber: field.fsaFarmNumber,
       fsaTractNumber: field.fsaTractNumber,
       seasonYear: SEASON_YEAR,
+      farm_id: 'test-farm',
+      deleted_at: null
     };
   });
 }
@@ -270,7 +293,6 @@ export function generateHayRecords(fields: Field[], count = 100): Omit<HayHarves
     (f.intendedUse || '').toLowerCase().includes('pasture') ||
     (f.intendedUse || '').toLowerCase().includes('forage')
   );
-  // If not enough hay fields, use any
   const pool = hayFields.length >= 10 ? hayFields : fields;
 
   return Array.from({ length: count }, () => {
@@ -289,6 +311,8 @@ export function generateHayRecords(fields: Field[], count = 100): Omit<HayHarves
       temperature: randInt(70, 100),
       conditions: pick(HAY_CONDITIONS),
       seasonYear: SEASON_YEAR,
+      farm_id: 'test-farm',
+      deleted_at: null,
     };
   });
 }
@@ -296,16 +320,18 @@ export function generateHayRecords(fields: Field[], count = 100): Omit<HayHarves
 export function generateFertilizerRecords(fields: Field[], count = 100): Omit<FertilizerApplication, 'id' | 'created_at' | 'updated_at' | 'fieldName'>[] {
   return Array.from({ length: count }, () => {
     const field = pick(fields);
-    const month = pick([2, 3, 4, 10, 11]); // Pre-plant or fall
+    const month = pick([2, 3, 4, 10, 11]);
     const day = randInt(1, 28);
 
     return {
-      farm_id: '',
       fieldId: field.id,
       date: isoDate(SEASON_YEAR, month, day),
       acres: field.acreage,
       fertilizer_formula: pick(FERTILIZER_FORMULAS),
-      season_year: SEASON_YEAR,
+      seasonYear: SEASON_YEAR,
+      timestamp: Date.now(),
+      farm_id: 'test-farm',
+      deleted_at: null,
     };
   });
 }
@@ -329,6 +355,8 @@ export function generateGrainMovements(bins: Bin[], fields: Field[], count = 100
       price: type === 'out' ? randFloat(4.0, 7.5, 2) : undefined,
       timestamp: new Date(SEASON_YEAR, month - 1, day, randInt(7, 18)).getTime(),
       seasonYear: SEASON_YEAR,
+      farm_id: 'test-farm',
+      deleted_at: null,
     };
   });
 }

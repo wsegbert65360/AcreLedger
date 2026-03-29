@@ -36,7 +36,7 @@ export function useHarvestRecords({ farm_id, activeSeason, setHarvestRecords }: 
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: HarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
+    const newRecord: HarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapHarvestToDb>;
@@ -159,8 +159,8 @@ export function useHarvestRecords({ farm_id, activeSeason, setHarvestRecords }: 
       // Replace with Sentry.captureException(error) in production
       console.error('Error deleting harvest records:', error);
 
-      // Restore records to their original positions. Sort descending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+      // Restore records to their original positions. Sort ascending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
 
       setHarvestRecords(prev => {
         const restored = [...prev];

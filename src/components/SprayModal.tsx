@@ -122,6 +122,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         setWeather(w);
         if (w && !manualWindDirection) setManualWindDirection(w.windDirection);
         setLoading(false);
+      }).catch(() => {
+        setLoading(false);
       });
     } else if (open) {
       setLoading(false);
