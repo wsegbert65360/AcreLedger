@@ -1,12 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { 
-  Wind, Sprout, Wheat, Leaf, Tractor, ArrowLeft, 
-  Cloud, Loader2, Navigation, MapPin, Droplets, RefreshCw, 
-  AlertCircle, Plus, Edit2, Layers, Calendar, History, 
-  FileText, ExternalLink, ChevronRight, Info, CheckCircle2
+  Sprout, Leaf, Tractor, ArrowLeft, 
+  Cloud, MapPin, Droplets, RefreshCw, 
+  AlertCircle, History, 
+  FileText, ExternalLink, Info, CheckCircle2
 } from 'lucide-react';
 import { RainService } from '@/services/RainService';
 import PlantModal from '@/components/PlantModal';
@@ -18,7 +18,6 @@ import TillageModal from '@/components/TillageModal';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
-import { cleanName } from '@/utils/text';
 import { generateSprayPDF } from '@/lib/sprayExport';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
@@ -70,6 +69,7 @@ export default function FieldDetailScreen() {
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
   const [editingRecord, setEditingRecord] = useState<any>(null);
+  const fetchingRainRef = useRef(false);
 
   // Derived Values
   const unifiedRecords = useMemo(() => {
@@ -135,8 +135,10 @@ export default function FieldDetailScreen() {
     return () => controller.abort();
   }, [field?.id, field?.lat, field?.lng]);
 
-  const handleFetchRain = async () => {
-    if (!field || fetchingRain) return;
+
+  const handleFetchRain = useCallback(async () => {
+    if (!field || fetchingRainRef.current) return;
+    fetchingRainRef.current = true;
     setFetchingRain(true);
     setRainError(null);
     try {
@@ -153,13 +155,14 @@ export default function FieldDetailScreen() {
       console.error('[FieldDetail] Rain fetch error:', err);
       setRainError(err.message || 'Could not load rainfall data.');
     } finally {
+      fetchingRainRef.current = false;
       setFetchingRain(false);
     }
-  };
+  }, [field, latestPlanting?.plantDate, latestSpray?.sprayDate]);
 
   useEffect(() => {
     if (field?.id) handleFetchRain();
-  }, [field?.id, latestPlanting?.plantDate, latestSpray?.sprayDate]);
+  }, [field?.id, latestPlanting?.plantDate, latestSpray?.sprayDate, handleFetchRain]);
 
   const location = useLocation();
   useEffect(() => {
