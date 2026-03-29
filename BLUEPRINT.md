@@ -94,6 +94,7 @@ Supports multiple products per application (tank-mix) and advanced environmental
 - **End Time Estimation**: Application duration is auto-calculated at a default rate of **54.5 acres/hour** with manual override.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
 - **Non-Compliant Flag**: Triggered if any product is missing an `epaRegNumber`.
+- **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
 - **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
 
 ### HarvestRecord
@@ -150,8 +151,8 @@ Seed inventory reference. Not season-scoped.
 ### SprayRecipe
 Saved tank-mix recipe for reuse on spray records. Not season-scoped.
 ```ts
-{ id, farm_id, name, products: { product, epaRegNumber, rate, rateUnit }[],
-  applicatorName, licenseNumber, targetPest, epaRegNumber, deleted_at }
+{ id, farm_id, name, products: { product, epaRegNumber, activeIngredients, rate, rateUnit }[],
+  applicatorName, licenseNumber, targetPest, deleted_at }
 ```
 
 #### Tank-Mix Product Identity
@@ -164,32 +165,25 @@ Saved fertilizer formulas for reuse on fertilizer application records.
 ```
 
 ### Rainfall
-Radar-derived precipitation totals from the NOAA MRMS dataset. Persisted in Supabase
-to support historical analysis and performance.
+High-resolution precipitation tracking using the **Rain API** (Stage IV Radar + Supabase).
+The system uses an **Aggressive Hybrid Merge** strategy to ensure data reliability.
 
-#### field_rainfall_hourly
-```ts
-{ id, field_id, timestamp_utc, rainfall_in, finalized, source }
-```
-#### field_rainfall_coverage
-```ts
-{ field_id, range_start_utc, range_end_utc, status, last_checked_at }
-```
-#### farm_rainfall_daily
-```ts
-{ farm_id, date_local, avg_rainfall_in, max_rainfall_in, min_rainfall_in, 
-  max_hourly_in, fields_count, last_updated_at }
-```
-- **Stats RPC**: `get_rainfall_stats(field_id, start_date, end_date)` returns total inches,
-  hours with rain, max hourly intensity, and coverage percentage.
-- **Service Cache**: `RainService` implements a 15-second `promiseCache` to deduplicate
-  concurrent requests for the same field during dashboard navigation.
-- **Summary Rollup**: `rollup_all_farms_daily(p_date)` runs at 8:00 AM daily via `pg_cron` 
-  to precompute farm-level summaries for the previous day. This delay ensures "Pass 2" 
-  high-accuracy rainfall data is available from NOAA for the entire day.
-- **Hardening**: Both the daily rollup and the `get_rainfall_stats` RPC include filters
-  for `(finalized = true OR source = 'Pass 2')` to prioritize quality over speed.
-- **Status**: `pending` | `partial` | `complete`.
+#### Rain API Core Logic
+- **Primary Source (Radar)**: IEM Stage IV hourly dataset (Pass 2). Fetched via parallel UTC hour keys.
+- **Secondary Source (Database)**: AcreLedger Supabase `get_rainfall_stats` RPC (daily totals).
+- **Merge Strategy**: Returns the **Maximum** of Radar or Database per time window (24h, 72h, 7d).
+- **Coordinate Precision**: Lat/Lng are truncated to **4 decimal places** for consistent 4km radar grid matching.
+- **Precision Mode**: Polygon boundaries are normalized to centroids before radar sampling.
+
+#### Database Persistence
+Legacy records and "Since Planting" historical ranges are fulfilled by the Supabase tables:
+- **field_rainfall_hourly**: Individual NEXRAD captures.
+- **farm_rainfall_daily**: Precomputed farm-level rollup for dashboard performance.
+
+- **Service Cache**: `RainService` implements a 30-second `promiseCache` to deduplicate
+  concurrent requests and allow for rapid manual refreshes.
+- **Summary Rollup**: Runs at 8:00 AM daily via `pg_cron` to process the previous day's Pass 2 data.
+- **Data Quality Alerts**: Triggered if radar coverage is < 90% or if the Aggressive Merge pulls significantly (> 0.1") from the historical database rather than radar.
 
 ---
 
