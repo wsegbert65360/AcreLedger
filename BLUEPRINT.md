@@ -40,7 +40,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Toasts | Sonner | User feedback — success / error / warning / info |
 | Validation | Zod (`@/lib/backupSchema`) | Backup file schema validation on restore |
 | Weather | Visual Crossing API | Current wind/temp conditions |
-| Rainfall | MRMS Hourly + Supabase | Persisted radar-derived hourly precipitation |
+| Rainfall | IEM Stage IV + Supabase RPC | Dual-source precipitation tracking (Radar + DB) |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
 | Reports | `@/lib/complianceReports` | CSV & PDF export generators (FSA, spray log, etc.) |
@@ -165,25 +165,20 @@ Saved fertilizer formulas for reuse on fertilizer application records.
 ```
 
 ### Rainfall
-High-resolution precipitation tracking using the **Rain API** (Stage IV Radar + Supabase).
-The system uses an **Aggressive Hybrid Merge** strategy to ensure data reliability.
+High-resolution precipitation tracking using the **Rain API** (IEM Stage IV + Supabase RPC).
+The system uses a **Dual-Source Lookup** strategy to ensure data reliability and range coverage.
 
 #### Rain API Core Logic
-- **Primary Source (Radar)**: IEM Stage IV hourly dataset (Pass 2). Fetched via parallel UTC hour keys.
-- **Secondary Source (Database)**: AcreLedger Supabase `get_rainfall_stats` RPC (daily totals).
-- **Merge Strategy**: Returns the **Maximum** of Radar or Database per time window (24h, 72h, 7d).
-- **Coordinate Precision**: Lat/Lng are truncated to **4 decimal places** for consistent 4km radar grid matching.
-- **Precision Mode**: Polygon boundaries are normalized to centroids before radar sampling.
+- **Primary Source (Radar)**: IEM Stage IV hourly dataset (CONUS only). Fetched via `GET /rain?lat=X&lon=Y&days=7`.
+- **Secondary Source (Database)**: AcreLedger Supabase `get_rainfall_stats` RPC. Fetched via `GET /rain?field_id=X&start_date=Y&end_date=Z`.
+- **Aggregation**: 24h, 72h, and 7d totals are computed on the client from the daily `breakdown` provided by the IEM response.
+- **Coordinate Precision**: Lat/Lng are rounded to **4 decimal places** for consistent matching with the 4km radar grid.
+- **Centroid Logic**: Polygon boundaries automatically fall back to centroids if explicit field coordinates are null or invalid.
 
-#### Database Persistence
-Legacy records and "Since Planting" historical ranges are fulfilled by the Supabase tables:
-- **field_rainfall_hourly**: Individual NEXRAD captures.
-- **farm_rainfall_daily**: Precomputed farm-level rollup for dashboard performance.
-
-- **Service Cache**: `RainService` implements a 30-second `promiseCache` to deduplicate
-  concurrent requests and allow for rapid manual refreshes.
-- **Summary Rollup**: Runs at 8:00 AM daily via `pg_cron` to process the previous day's Pass 2 data.
-- **Data Quality Alerts**: Triggered if radar coverage is < 90% or if the Aggressive Merge pulls significantly (> 0.1") from the historical database rather than radar.
+#### Service Reliability
+- **Service Cache**: `RainService` implements a 30-second `promiseCache` to deduplicate concurrent requests (e.g., when switching between tabs or fields rapidly).
+- **Data Warning**: IEM data reflects a 1-2 hour lag from real-time; UI shows an explicit warning card if the "iem" mode is active.
+- **RPC Fallback**: Custom range fetches (Planting/Spray dates) return `0` gracefully on failure to prevent UI crashes.
 
 ---
 
@@ -594,12 +589,10 @@ Show in BackupManager UI. Amber warning if > 7 days old or never taken.
 | SW update available (user must act) | `toast('Title', { description, action: { label, onClick } })` |
 
 ### Rainfall Pipeline Error States
-- **Coverage Gaps**: Indicated by `status IN ('pending', 'partial')` in `field_rainfall_coverage`.
-- **Hardened Error Handling**: `RainService` and `WeatherService` must normalize all upstream errors (RPC, Fetch, Timeout) into consistent app-level formats (e.g. `RPC_ERROR`).
-- **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by UI guards.
-- **Supabase RPC Error**: Caught by `RainService`; indicates database or function permission issues.
-- **API 502**: IEM or Supabase service unreachable. Friendly app message required.
-- **NaN / Missing Coords**: Blocked by `RainService` and UI level; button disabled.
+- **RPC Failure**: Caught by `RainService`; indicates Supabase connection or permission issues. Returns 0 for custom ranges.
+- **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by RainService error handling.
+- **IEM Unreachable**: Main call returns `RAIN_API_ERROR`; surfaced to user via `rainError` state in `FieldDetailScreen`.
+- **NaN / Missing Coords**: Blocked by centroid fallback logic; throws a descriptive "Missing location data" error if both are absent.
 
 ### Sentry Placeholder Pattern
 ```ts
