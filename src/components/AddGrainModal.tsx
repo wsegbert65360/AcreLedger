@@ -20,30 +20,38 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
     const [source, setSource] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-    const handleSubmit = () => {
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSubmit = async () => {
         const amount = parseFloat(bushels);
         const m = parseFloat(moisture);
         if (isNaN(amount) || amount <= 0) return;
         if (isNaN(m)) return;
 
-        addGrainMovement({
-            binId: bin.id,
-            binName: bin.name,
-            type: 'in',
-            bushels: amount,
-            moisturePercent: m,
-            timestamp: date ? new Date(date).getTime() : Date.now(),
-            sourceFieldName: source.trim() || undefined,
-        });
-
-        setBushels('');
-        setMoisture('15.0');
-        setSource('');
-        onClose();
+        setIsSaving(true);
+        try {
+            const success = await addGrainMovement({
+                binId: bin.id,
+                binName: bin.name,
+                type: 'in',
+                bushels: amount,
+                moisturePercent: m,
+                timestamp: date ? new Date(date).getTime() : Date.now(),
+                sourceFieldName: source.trim() || undefined,
+            });
+            if (success) {
+                setBushels('');
+                setMoisture('15.0');
+                setSource('');
+                onClose();
+            }
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
+        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-harvest/30 max-w-sm">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-harvest font-bold text-lg">
@@ -117,10 +125,10 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                 <DialogFooter className="pt-2">
                     <Button
                         onClick={handleSubmit}
-                        disabled={!bushels || isNaN(parseFloat(bushels)) || parseFloat(bushels) <= 0}
+                        disabled={isSaving || !bushels || isNaN(parseFloat(bushels)) || parseFloat(bushels) <= 0}
                         className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold py-6 text-lg"
                     >
-                        Save Inventory
+                        {isSaving ? 'Saving...' : 'Save Inventory'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

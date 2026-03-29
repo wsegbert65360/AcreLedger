@@ -42,10 +42,11 @@ export const WeatherService = {
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
+        let abortListener: (() => void) | undefined;
         
-        // Link external signal to our controller
         if (signal) {
-            signal.addEventListener('abort', () => controller.abort());
+            abortListener = () => controller.abort();
+            signal.addEventListener('abort', abortListener);
         }
 
         try {
@@ -71,6 +72,7 @@ export const WeatherService = {
             return defaults;
         } finally {
             clearTimeout(timeoutId);
+            if (abortListener && signal) signal.removeEventListener('abort', abortListener);
             // Remove from cache after completion so subsequent requests fetch fresh
             promiseCache.delete(location);
         }
@@ -111,10 +113,11 @@ export const WeatherService = {
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const onAbort = () => controller.abort();
+        let abortListener: (() => void) | undefined;
         
         if (signal) {
-            signal.addEventListener('abort', onAbort);
+            abortListener = () => controller.abort();
+            signal.addEventListener('abort', abortListener);
         }
 
         try {
@@ -142,12 +145,16 @@ export const WeatherService = {
             };
         } finally {
             clearTimeout(timeoutId);
+            if (abortListener && signal) signal.removeEventListener('abort', abortListener);
             promiseCache.delete(location);
         }
     },
 
     _mapCurrentWeather(data: any) {
         const current = data.currentConditions;
+        if (!current) {
+            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: data.address || 'Unknown', isError: true, precip24h: 0, precip72h: 0 };
+        }
         const days = data.days || [];
         
         let precip24h = 0;

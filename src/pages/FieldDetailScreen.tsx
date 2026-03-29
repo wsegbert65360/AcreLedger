@@ -138,6 +138,7 @@ export default function FieldDetailScreen() {
 
   const handleFetchRain = useCallback(async () => {
     if (!field || fetchingRainRef.current) return;
+    const controller = new AbortController();
     fetchingRainRef.current = true;
     setFetchingRain(true);
     setRainError(null);
@@ -148,21 +149,27 @@ export default function FieldDetailScreen() {
         lng: field.lng,
         boundary: field.boundary,
         sincePlantingDate: latestPlanting?.plantDate,
-        sinceLastSprayDate: latestSpray?.sprayDate
+        sinceLastSprayDate: latestSpray?.sprayDate,
+        signal: controller.signal
       });
       setRainStats(data);
     } catch (err: any) {
+      if (err.name === 'AbortError') return;
       console.error('[FieldDetail] Rain fetch error:', err);
       setRainError(err.message || 'Could not load rainfall data.');
     } finally {
       fetchingRainRef.current = false;
       setFetchingRain(false);
     }
+    return () => controller.abort();
   }, [field, latestPlanting?.plantDate, latestSpray?.sprayDate]);
 
   useEffect(() => {
-    if (field?.id) handleFetchRain();
-  }, [field?.id, latestPlanting?.plantDate, latestSpray?.sprayDate, handleFetchRain]);
+    if (!field?.id) return;
+    let abortFn: (() => void) | undefined;
+    handleFetchRain().then(fn => { abortFn = fn; });
+    return () => { if (abortFn) abortFn(); };
+  }, [field?.id, handleFetchRain]);
 
   const location = useLocation();
   useEffect(() => {

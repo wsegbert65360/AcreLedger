@@ -1,10 +1,12 @@
 import { Edit2 } from 'lucide-react';
 import { ModalType } from '@/pages/FieldDetailScreen';
 
+import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
+
 interface ActivityFeedProps {
-  records: any[];
+  records: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }[];
   year: number;
-  onEdit: (type: any, data: any) => void;
+  onEdit: (type: ModalType, data: any) => void;
   hideHeader?: boolean;
 }
 
@@ -36,18 +38,31 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
         <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">{year} Activity Feed</h2>
       )}
       <div className="bg-card/40 backdrop-blur-md border border-border rounded-2xl overflow-hidden divide-y divide-border/20 shadow-xl">
-        {records?.map((record, i) => {
+        {records?.map((record) => {
           const info = getFeedInfo(record);
           const r = record.data;
           const dateRaw = (r as any).date || (r as any).plantDate || (r as any).sprayDate || (r as any).harvestDate;
-          const formattedDate = dateRaw ? 
-            new Date(dateRaw).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) :
-            new Date((r as any).timestamp).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+          let formattedDate = '—';
+          if (dateRaw) {
+            const parsed = new Date(dateRaw);
+            formattedDate = !isNaN(parsed.getTime())
+              ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+              : '—';
+          } else if ((r as any).timestamp) {
+            const parsed = new Date((r as any).timestamp);
+            formattedDate = !isNaN(parsed.getTime())
+              ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+              : '—';
+          }
 
           return (
             <div 
-              key={i}
+              key={(r as any).id}
               onClick={() => onEdit(record.type as ModalType, record.data)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(record.type as ModalType, record.data); }}}
+              role="button"
+              tabIndex={0}
+              aria-label={`${info.label}: ${info.detail}`}
               className="p-3.5 flex items-center justify-between group cursor-pointer hover:bg-muted/30 transition-all active:bg-muted/50"
             >
               <div className="flex items-center gap-4">
