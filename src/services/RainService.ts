@@ -10,10 +10,13 @@ export const RainService = {
    */
   /**
    * Fetches comprehensive rainfall stats for multiple periods including:
-   * 24h, 72h, 7d, and optionally since specific dates (planting, last spray).
+   * 24h, 72h, 168h (7d), and optionally since specific dates.
    */
   async fetchComprehensiveRainfall(args: {
     fieldId: string;
+    lat?: number | null;
+    lng?: number | null;
+    boundary?: any; // Supports GeoJSON Polygon or [lon, lat][]
     sincePlantingDate?: string;
     sinceLastSprayDate?: string;
     signal?: AbortSignal;
@@ -24,11 +27,12 @@ export const RainService = {
     sincePlanting: number;
     sinceLastSpray: number;
     periodEndUtc: string;
+    dataWarning?: string;
   }> {
-    const { fieldId, sincePlantingDate, sinceLastSprayDate, signal } = args;
+    const { fieldId, lat, lng, boundary, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
-    // Cache key includes dates to prevent stale data if activity changes
-    const cacheKey = `${fieldId}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
+    // Cache key includes dates and coordinates to prevent stale lookup
+    const cacheKey = `${fieldId}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
 
     if (promiseCache.has(cacheKey)) {
         try {
@@ -39,21 +43,6 @@ export const RainService = {
     }
 
     const fetchPromise = (async () => {
-        const now = new Date();
-        // Get local YYYY-MM-DD instead of UTC to fix "time is wrong" issue
-        const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-            .toISOString().split('T')[0];
-            
-        const getDaysAgo = (days: number) => {
-            const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-            return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-                .toISOString().split('T')[0];
-        };
-
-        const oneDayAgo = getDaysAgo(1);
-        const threeDaysAgo = getDaysAgo(3);
-        const sevenDaysAgo = getDaysAgo(7);
-
         const baseUrl = import.meta.env?.VITE_RAIN_API_URL || 
                        (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
         
@@ -62,39 +51,58 @@ export const RainService = {
             throw new Error('VITE_RAIN_API_URL is not configured');
         }
 
-        const fetchRain = async (startDate: string, endDate: string) => {
-            const url = `${baseUrl}?field_id=${fieldId}&start_date=${startDate}&end_date=${endDate}`;
+        // 1. Primary call for 24h, 72h, 7d using the new high-resolution API
+        // Prefer boundary (polygon) if available, fallback to lat/lon
+        let mainResponse;
+        if (boundary) {
+            mainResponse = await fetch(`${baseUrl}/rain`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ polygon: boundary, field_id: fieldId }),
+                signal
+            });
+        } else if (lat != null && lng != null) {
+            mainResponse = await fetch(`${baseUrl}/rain?lat=${lat}&lon=${lng}&field_id=${fieldId}`, { signal });
+        } else {
+            throw new Error('Missing location data (lat/lng or boundary) for rainfall lookup.');
+        }
+
+        if (!mainResponse.ok) {
+            const errorData = await mainResponse.json().catch(() => ({}));
+            throw new Error(`RAIN_API_ERROR: ${mainResponse.status} - ${errorData.error || 'Unknown error'}`);
+        }
+        
+        const mainData = await mainResponse.json();
+
+        // 2. Helper for custom ranges (sincePlanting, sinceLastSpray)
+        // For now, we continue to use the daily start_date / end_date mode of the API for these.
+        const fetchCustomRange = async (startDate: string) => {
+            const today = new Date().toISOString().split('T')[0];
+            const url = `${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`;
             try {
                 const response = await fetch(url, { signal });
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(`RAIN_API_ERROR: ${response.status} - ${errorData.error || 'Unknown error'}`);
-                }
+                if (!response.ok) return 0;
                 const data = await response.json();
                 return Number(data.rainfall || 0);
             } catch (err) {
-                console.error(`Fetch failed for Rain API URL: ${url}`, err);
-                throw err;
+                console.warn(`Custom range fetch failed for ${startDate}`, err);
+                return 0;
             }
         };
 
-        const results = await Promise.all([
-            fetchRain(oneDayAgo, today), // 24h
-            fetchRain(threeDaysAgo, today), // 72h
-            fetchRain(sevenDaysAgo, today), // 7d
-            sincePlantingDate ? fetchRain(sincePlantingDate, today) : Promise.resolve(0),
-            sinceLastSprayDate ? fetchRain(sinceLastSprayDate, today) : Promise.resolve(0),
+        const [sincePlanting, sinceLastSpray] = await Promise.all([
+            sincePlantingDate ? fetchCustomRange(sincePlantingDate) : Promise.resolve(0),
+            sinceLastSprayDate ? fetchCustomRange(sinceLastSprayDate) : Promise.resolve(0),
         ]);
 
-        if (signal?.aborted) throw new Error('ABORTED');
-
         return {
-            '24h': results[0],
-            '72h': results[1],
-            '7d': results[2],
-            sincePlanting: results[3],
-            sinceLastSpray: results[4],
-            periodEndUtc: now.toISOString()
+            '24h': mainData.rain['24h'],
+            '72h': mainData.rain['72h'],
+            '7d': mainData.rain['168h'],
+            sincePlanting,
+            sinceLastSpray,
+            periodEndUtc: mainData.periodEndUtc,
+            dataWarning: mainData.dataWarning
         };
     })();
 
@@ -103,8 +111,8 @@ export const RainService = {
     try {
         return await fetchPromise;
     } finally {
-        // Clear cache after 15 seconds to allow reuse but keep data fresh
-        setTimeout(() => promiseCache.delete(cacheKey), 15000);
+        // Clear cache after 60 seconds to allow reuse but keep data fresh
+        setTimeout(() => promiseCache.delete(cacheKey), 60000);
     }
   },
 

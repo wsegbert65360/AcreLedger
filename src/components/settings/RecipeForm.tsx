@@ -90,11 +90,11 @@ export default function RecipeForm({
                       <SelectValue placeholder="Unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="fl oz/ac">fl oz/ac (Liq)</SelectItem>
+                      <SelectItem value="fl oz/ac">fl oz/ac</SelectItem>
                       <SelectItem value="pt/ac">pt/ac</SelectItem>
                       <SelectItem value="qt/ac">qt/ac</SelectItem>
                       <SelectItem value="gal/ac">gal/ac</SelectItem>
-                      <SelectItem value="oz/ac">oz/ac (Dry)</SelectItem>
+                      <SelectItem value="oz/ac">oz/ac</SelectItem>
                       <SelectItem value="lb/ac">lb/ac</SelectItem>
                     </SelectContent>
                   </Select>
@@ -111,6 +111,17 @@ export default function RecipeForm({
                   className="mt-0.5 bg-muted border-border text-foreground text-xs h-9 px-2 w-full"
                 />
               </div>
+            </div>
+            <div>
+              <Label htmlFor={`active-${i}`} className="text-[10px] font-mono text-muted-foreground uppercase">Active Ingredients</Label>
+              <Input
+                id={`active-${i}`}
+                name={`active-${i}`}
+                value={p.activeIngredients || ''}
+                onChange={e => updateProduct(i, 'activeIngredients', e.target.value)}
+                placeholder="e.g. Glyphosate 41%"
+                className="mt-0.5 bg-muted border-border text-foreground text-xs h-9 px-2 w-full"
+              />
             </div>
           </div>
           {products.length > 1 && (
