@@ -51,6 +51,10 @@ export const RainService = {
             throw new Error('VITE_RAIN_API_URL is not configured');
         }
 
+        // Truncate lat/lng to 4 decimal places for consistent grid matching
+        const tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
+        const tLng = lng != null ? Math.round(lng * 10000) / 10000 : null;
+
         // 1. Primary call for 24h, 72h, 7d using the new high-resolution API
         // Prefer boundary (polygon) if available, fallback to lat/lon
         let mainResponse;
@@ -61,8 +65,8 @@ export const RainService = {
                 body: JSON.stringify({ polygon: boundary, field_id: fieldId }),
                 signal
             });
-        } else if (lat != null && lng != null) {
-            mainResponse = await fetch(`${baseUrl}/rain?lat=${lat}&lon=${lng}&field_id=${fieldId}`, { signal });
+        } else if (tLat != null && tLng != null) {
+            mainResponse = await fetch(`${baseUrl}/rain?lat=${tLat}&lon=${tLng}&field_id=${fieldId}`, { signal });
         } else {
             throw new Error('Missing location data (lat/lng or boundary) for rainfall lookup.');
         }
@@ -111,8 +115,8 @@ export const RainService = {
     try {
         return await fetchPromise;
     } finally {
-        // Clear cache after 60 seconds to allow reuse but keep data fresh
-        setTimeout(() => promiseCache.delete(cacheKey), 60000);
+        // Clear cache after 30 seconds to allow reuse but keep data fresh
+        setTimeout(() => promiseCache.delete(cacheKey), 30000);
     }
   },
 
