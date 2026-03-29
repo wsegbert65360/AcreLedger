@@ -62,6 +62,7 @@ export default function FieldDetailScreen() {
     sincePlanting: number;
     sinceLastSpray: number;
     periodEndUtc: string;
+    dataWarning?: string;
   } | null>(null);
   
   const [rainError, setRainError] = useState<string | null>(null);
@@ -141,6 +142,9 @@ export default function FieldDetailScreen() {
     try {
       const data = await RainService.fetchComprehensiveRainfall({
         fieldId: field.id,
+        lat: field.lat,
+        lng: field.lng,
+        boundary: field.boundary,
         sincePlantingDate: latestPlanting?.plantDate,
         sinceLastSprayDate: latestSpray?.sprayDate
       });
@@ -370,9 +374,17 @@ export default function FieldDetailScreen() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
-            <Info size={12} />
-            Data updated daily @ 8:00 AM. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+          <div className="flex flex-col gap-2 text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Info size={12} />
+              Data updated hourly. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+            </div>
+            {rainStats?.dataWarning && (
+              <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400 font-bold uppercase tracking-tighter bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
+                <AlertCircle size={12} className="mt-0.5 animate-pulse" />
+                <span className="leading-tight">{rainStats.dataWarning}</span>
+              </div>
+            )}
           </div>
         </section>
 
@@ -406,12 +418,18 @@ export default function FieldDetailScreen() {
                 </div>
               </div>
               <div className="col-span-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Applied Products</label>
                 <div className="flex flex-wrap gap-1.5">
                   {latestSpray.products?.map((p, idx) => (
-                    <span key={idx} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300">
-                      {p.product} ({p.rate} {p.rateUnit})
-                    </span>
+                    <div key={idx} className="flex flex-col gap-0.5 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        {p.product} ({p.rate} {p.rateUnit})
+                      </span>
+                      {p.activeIngredients && (
+                        <span className="text-[9px] font-mono text-slate-400 italic leading-none pb-0.5">
+                          {p.activeIngredients}
+                        </span>
+                      )}
+                    </div>
                   )) || <span className="text-slate-400 text-xs">No products logged</span>}
                 </div>
               </div>
