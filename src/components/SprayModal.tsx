@@ -15,6 +15,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { calculateTotalAmount } from '@/utils/unitConversion';
 
 interface SprayModalProps {
   field: Field;
@@ -62,8 +63,13 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   useEffect(() => {
     const rate = parseFloat(products[0]?.rate || '0');
     const acres = parseFloat(treatedAreaSize);
+    const unit = products[0]?.rateUnit || 'fl oz/ac';
+    
     if (!isNaN(rate) && !isNaN(acres)) {
-      setTotalAmountApplied((rate * acres).toFixed(1));
+      const { value, unit: resultUnit } = calculateTotalAmount(rate, acres, unit);
+      setTotalAmountApplied(value.toString());
+      // Optionally sync the total unit if we had a field for it, 
+      // but the UI currently just shows a string for totalAmountApplied.
     }
   }, [products, treatedAreaSize]);
 
@@ -332,17 +338,59 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label htmlFor={`appRate-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Rate *</Label>
-                        <div className="flex gap-1">
-                          <Input id={`appRate-${i}`} value={p.rate} onChange={e => updateProduct(i, 'rate', e.target.value)} placeholder="22" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 flex-1" />
-                          <Input value={p.rateUnit} onChange={e => updateProduct(i, 'rateUnit', e.target.value)} placeholder="oz" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 w-10" />
+                        <Label htmlFor={`appRate-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Rate / Ac *</Label>
+                        <div className="flex gap-1.5 mt-0.5">
+                          <Input 
+                            id={`appRate-${i}`} 
+                            value={p.rate} 
+                            onChange={e => updateProduct(i, 'rate', e.target.value)} 
+                            placeholder="22" 
+                            className="bg-background border-border text-foreground text-xs h-8 px-2 w-16" 
+                          />
+                          <Select 
+                            value={p.rateUnit} 
+                            onValueChange={(val) => updateProduct(i, 'rateUnit', val)}
+                          >
+                            <SelectTrigger className="bg-background border-border text-foreground text-[10px] h-8 px-2 flex-1">
+                              <SelectValue placeholder="Unit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="fl oz/ac">fl oz/ac</SelectItem>
+                              <SelectItem value="pt/ac">pt/ac</SelectItem>
+                              <SelectItem value="qt/ac">qt/ac</SelectItem>
+                              <SelectItem value="gal/ac">gal/ac</SelectItem>
+                              <SelectItem value="oz/ac">oz/ac</SelectItem>
+                              <SelectItem value="lb/ac">lb/ac</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                       <div>
                         <Label htmlFor={`totalProduct-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Total Product Amt</Label>
-                        <div className="flex gap-1">
-                          <Input id={`totalProduct-${i}`} value={p.totalProductAmount || ''} onChange={e => updateProduct(i, 'totalProductAmount', e.target.value)} placeholder="15" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 flex-1" />
-                          <Input value={p.totalProductUnit || 'gal'} onChange={e => updateProduct(i, 'totalProductUnit', e.target.value)} placeholder="gal" className="mt-0.5 bg-background border-border text-foreground text-xs h-7 px-1 w-10" />
+                        <div className="flex gap-1.5 mt-0.5">
+                          <Input 
+                            id={`totalProduct-${i}`} 
+                            value={p.totalProductAmount || ''} 
+                            onChange={e => updateProduct(i, 'totalProductAmount', e.target.value)} 
+                            placeholder="15" 
+                            className="bg-background border-border text-foreground text-xs h-8 px-2 w-16" 
+                          />
+                          <Select 
+                            value={p.totalProductUnit || 'gal'} 
+                            onValueChange={(val) => updateProduct(i, 'totalProductUnit', val)}
+                          >
+                            <SelectTrigger className="bg-background border-border text-foreground text-[10px] h-8 px-2 flex-1">
+                              <SelectValue placeholder="Unit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="gal">gal</SelectItem>
+                              <SelectItem value="qt">qt</SelectItem>
+                              <SelectItem value="pt">pt</SelectItem>
+                              <SelectItem value="fl oz">fl oz</SelectItem>
+                              <SelectItem value="lb">lb</SelectItem>
+                              <SelectItem value="oz">oz</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>

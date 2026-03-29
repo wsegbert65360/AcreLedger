@@ -1,0 +1,69 @@
+/**
+ * Utility for agricultural spray unit conversions.
+ * Handles fl oz, qt, gal (liquid) and oz, lb (dry).
+ */
+
+export type SprayUnit = 'fl oz/ac' | 'pt/ac' | 'qt/ac' | 'gal/ac' | 'oz/ac' | 'lb/ac';
+export type TotalUnit = 'fl oz' | 'pt' | 'qt' | 'gal' | 'oz' | 'lb';
+
+export const LIQUID_UNITS: SprayUnit[] = ['fl oz/ac', 'pt/ac', 'qt/ac', 'gal/ac'];
+export const DRY_UNITS: SprayUnit[] = ['oz/ac', 'lb/ac'];
+
+/**
+ * Calculates total amount applied and returns value and most appropriate unit.
+ */
+export function calculateTotalAmount(rate: number, acres: number, unit: string): { value: number; unit: string } {
+  if (isNaN(rate) || isNaN(acres) || rate <= 0 || acres <= 0) {
+    return { value: 0, unit: unit.replace('/ac', '') || 'gal' };
+  }
+
+  const rawTotal = rate * acres;
+
+  // Liquid Conversions
+  if (unit === 'fl oz/ac') {
+    if (rawTotal >= 128) return { value: Number((rawTotal / 128).toFixed(2)), unit: 'gal' };
+    if (rawTotal >= 32) return { value: Number((rawTotal / 32).toFixed(2)), unit: 'qt' };
+    if (rawTotal >= 16) return { value: Number((rawTotal / 16).toFixed(2)), unit: 'pt' };
+    return { value: Number(rawTotal.toFixed(1)), unit: 'fl oz' };
+  }
+
+  if (unit === 'pt/ac') {
+    if (rawTotal >= 8) return { value: Number((rawTotal / 8).toFixed(2)), unit: 'gal' };
+    if (rawTotal >= 2) return { value: Number((rawTotal / 2).toFixed(2)), unit: 'qt' };
+    return { value: Number(rawTotal.toFixed(1)), unit: 'pt' };
+  }
+
+  if (unit === 'qt/ac') {
+    if (rawTotal >= 4) return { value: Number((rawTotal / 4).toFixed(2)), unit: 'gal' };
+    return { value: Number(rawTotal.toFixed(1)), unit: 'qt' };
+  }
+
+  if (unit === 'gal/ac') {
+    return { value: Number(rawTotal.toFixed(2)), unit: 'gal' };
+  }
+
+  // Dry Conversions
+  if (unit === 'oz/ac' || unit === 'oz (dry)/ac') {
+    if (rawTotal >= 16) return { value: Number((rawTotal / 16).toFixed(2)), unit: 'lb' };
+    return { value: Number(rawTotal.toFixed(1)), unit: 'oz' };
+  }
+
+  if (unit === 'lb/ac') {
+    return { value: Number(rawTotal.toFixed(2)), unit: 'lb' };
+  }
+
+  return { value: Number(rawTotal.toFixed(2)), unit: unit.replace('/ac', '') || 'gal' };
+}
+
+/**
+ * Normalizes unit string for display in the UI.
+ */
+export function getUnitLabel(unit: string): string {
+  switch (unit) {
+    case 'fl oz/ac': return 'fl oz/ac (Liq)';
+    case 'pt/ac': return 'pt/ac';
+    case 'oz/ac':
+    case 'oz (dry)/ac': return 'oz/ac (Dry)';
+    default: return unit;
+  }
+}

@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { X, Plus } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getUnitLabel } from '@/utils/unitConversion';
 import type { SprayRecipeProduct } from '@/types/farm';
 
 export default function RecipeForm({
@@ -68,29 +70,37 @@ export default function RecipeForm({
               placeholder="Product name (e.g. Roundup)"
               className="bg-muted border-border text-foreground text-sm"
             />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div className="col-span-1">
-                <Label htmlFor={`rate-${i}`} className="text-[10px] font-mono text-muted-foreground uppercase">Rate</Label>
-                <div className="flex gap-1">
+                <Label htmlFor={`rate-${i}`} className="text-[10px] font-mono text-muted-foreground uppercase">Rate / Ac</Label>
+                <div className="flex gap-1.5 mt-0.5">
                   <Input
                     id={`rate-${i}`}
                     name={`rate-${i}`}
                     value={p.rate}
                     onChange={e => updateProduct(i, 'rate', e.target.value)}
                     placeholder="22"
-                    className="mt-0.5 bg-muted border-border text-foreground text-xs h-8 px-2 flex-1"
+                    className="bg-muted border-border text-foreground text-xs h-9 px-2 w-20"
                   />
-                  <Input
-                    id={`unit-${i}`}
-                    name={`unit-${i}`}
-                    value={p.rateUnit}
-                    onChange={e => updateProduct(i, 'rateUnit', e.target.value)}
-                    placeholder="oz/ac"
-                    className="mt-0.5 bg-muted border-border text-foreground text-xs h-8 px-2 w-14"
-                  />
+                  <Select 
+                    value={p.rateUnit} 
+                    onValueChange={(val) => updateProduct(i, 'rateUnit', val)}
+                  >
+                    <SelectTrigger className="bg-muted border-border text-foreground text-xs h-9 px-2 flex-1">
+                      <SelectValue placeholder="Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fl oz/ac">fl oz/ac (Liq)</SelectItem>
+                      <SelectItem value="pt/ac">pt/ac</SelectItem>
+                      <SelectItem value="qt/ac">qt/ac</SelectItem>
+                      <SelectItem value="gal/ac">gal/ac</SelectItem>
+                      <SelectItem value="oz/ac">oz/ac (Dry)</SelectItem>
+                      <SelectItem value="lb/ac">lb/ac</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
                 <Label htmlFor={`epa-${i}`} className="text-[10px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
                 <Input
                   id={`epa-${i}`}
@@ -98,7 +108,7 @@ export default function RecipeForm({
                   value={p.epaRegNumber}
                   onChange={e => updateProduct(i, 'epaRegNumber', e.target.value)}
                   placeholder="e.g. 524-549"
-                  className="mt-0.5 bg-muted border-border text-foreground text-xs h-8"
+                  className="mt-0.5 bg-muted border-border text-foreground text-xs h-9 px-2 w-full"
                 />
               </div>
             </div>
