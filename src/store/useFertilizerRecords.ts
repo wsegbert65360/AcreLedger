@@ -168,7 +168,8 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications }: Pick<
     if (error) {
       console.error('Error deleting fertilizer applications:', error);
 
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+      // Restore records to their original positions. Sort ascending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
 
       setFertilizerApplications(prev => {
         const restored = [...prev];

@@ -163,9 +163,8 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
       // Replace with Sentry.captureException(error) in production
       console.error('Error deleting spray records:', error);
 
-      // Restore records to their original positions. Sort descending by index
-      // so each splice lands correctly regardless of prior insertions in the loop.
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+      // Restore records to their original positions. Sort ascending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
 
       setSprayRecords(prev => {
         const restored = [...prev];

@@ -28,7 +28,7 @@ const pageVariants = {
 
 const pageTransition = {
   duration: 0.2,
-  ease: [0.4, 0, 0.2, 1], // Standard ease-out cubic-bezier
+  ease: [0.4, 0, 0.2, 1] as const, // Cast to constant for Framer Motion types
 };
 
 const AnimatedRoutes = () => {

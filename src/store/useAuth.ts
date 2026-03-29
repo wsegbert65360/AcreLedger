@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
-import { loadFromStorage} from './storageUtils';
+// Storage utilities for session persistence
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [farm_id, setFarmId] = useState<string | null>(() => loadFromStorage('al_farm_id', null));
-  const [activeSeason, setActiveSeason] = useState<number>(() => loadFromStorage('al_active_season', new Date().getFullYear()));
-  const [viewingSeason, setViewingSeason] = useState<number>(() => loadFromStorage('al_active_season', new Date().getFullYear()));
+  const [farm_id, setFarmId] = useState<string | null>(null);
+  const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
+  const [viewingSeason, setViewingSeason] = useState<number>(new Date().getFullYear());
 
   // Initialize Supabase session & handle Auth Changes
   useEffect(() => {
@@ -19,6 +19,18 @@ export function useAuth() {
         setSession(initialSession);
 
         if (initialSession?.user) {
+          // Priority 1: Storage (Fastest persistent path)
+          const prefix = initialSession.user.id;
+          const storedId = localStorage.getItem(`${prefix}_al_farm_id`);
+          const storedSeason = localStorage.getItem(`${prefix}_al_active_season`);
+          
+          if (storedId) setFarmId(storedId);
+          if (storedSeason) {
+            setActiveSeason(parseInt(storedSeason, 10));
+            setViewingSeason(parseInt(storedSeason, 10));
+          }
+
+          // Priority 2: JWT (Authoritative cloud path)
           const jwtFarmId = initialSession.user.app_metadata?.farm_id || initialSession.user.user_metadata?.farm_id;
           if (jwtFarmId) setFarmId(jwtFarmId);
         }

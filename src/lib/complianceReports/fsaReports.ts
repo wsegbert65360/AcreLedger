@@ -1,11 +1,11 @@
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
 
 function sanitizeCsvValue(val: string | number | null | undefined): string {
-    if (val === null || val === undefined) return '';
-    const str = String(val);
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
     // Prefix with ' if it starts with injection characters
-    if (/^[=+\-@\t\r]/.test(str)) return `'${str}`;
-    return str;
+    if (/^[=+\-@\t\r]/.test(str)) return `"'${str}"`;
+    return `"${str}"`;
 }
 
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {

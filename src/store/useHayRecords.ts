@@ -36,7 +36,7 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: HayHarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
+    const newRecord: HayHarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapHayToDb>;
@@ -159,8 +159,8 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
       // Replace with Sentry.captureException(error) in production
       console.error('Error deleting hay harvest records:', error);
 
-      // Restore records to their original positions. Sort descending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+      // Restore records to their original positions. Sort ascending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
 
       setHayHarvestRecords(prev => {
         const restored = [...prev];

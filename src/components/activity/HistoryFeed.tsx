@@ -41,7 +41,7 @@ function getRecordInfo(record: ActivityRecord) {
       return {
         title: cleanName(r.fieldName),
         subtitle: `${r.crop || 'Grain'} · ${r.bushels} BU`,
-        details: `${r.moisturePercent}% Moisture · ${r.destination.toUpperCase()}`,
+        details: `${r.moisturePercent}% Moisture · ${(r.destination || 'unknown').toUpperCase()}`,
         date: formatIsoDate(r.harvestDate) || formatDate(r.timestamp)
       };
     }

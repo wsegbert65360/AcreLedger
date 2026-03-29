@@ -571,7 +571,7 @@ export default function Reports() {
             })}
             {harvestRecords.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-muted-foreground font-mono text-xs">
+                <td colSpan={11} className="py-12 text-center text-muted-foreground font-mono text-xs">
                   No harvest records to report for this season
                 </td>
               </tr>

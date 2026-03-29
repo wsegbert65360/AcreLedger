@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
   mapHarvestFromDb, mapHayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
   mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb
 } from '../lib/mappers';
-import { FertilizerRecipeRow, TillageRecordRow } from '../types/database';
+// Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -88,29 +88,29 @@ interface FarmState {
   updateTillageRecord: (r: TillageRecord) => Promise<boolean>;
   deleteTillageRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing grain inventory */
-  addGrainMovement: (r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear'> & { timestamp?: number }) => Promise<boolean>;
+  addGrainMovement: (r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear' | 'farm_id'> & { timestamp?: number }) => Promise<boolean>;
   updateGrainMovement: (r: GrainMovement) => Promise<boolean>;
   deleteGrainMovements: (ids: string[]) => Promise<boolean>;
   /** Calculation utility for bin inventory levels */
   getBinTotal: (binId: string, season?: number) => number;
   /** Operations for managing field definitions */
-  addField: (f: Omit<Field, 'id'>) => void;
-  updateField: (f: Field) => void;
-  deleteField: (id: string) => void;
+  addField: (field: Omit<Field, 'id'>) => Promise<void>;
+  updateField: (field: Field) => Promise<any>;
+  deleteField: (id: string) => Promise<void>;
   /** Operations for managing bin definitions */
-  addBin: (b: Omit<Bin, 'id'>) => void;
-  updateBin: (b: Bin) => void;
-  deleteBin: (id: string) => void;
+  addBin: (bin: Omit<Bin, 'id'>) => Promise<void>;
+  updateBin: (bin: Bin) => Promise<void>;
+  deleteBin: (id: string) => Promise<void>;
   /** Operations for managing seed varieties */
-  addSeed: (name: string) => void;
-  deleteSeed: (id: string) => void;
+  addSeed: (name: string) => Promise<void>;
+  deleteSeed: (id: string) => Promise<void>;
   /** Operations for managing spray recipes */
-  addSprayRecipe: (r: Omit<SprayRecipe, 'id'>) => void;
-  updateSprayRecipe: (r: SprayRecipe) => void;
-  deleteSprayRecipe: (id: string) => void;
+  addSprayRecipe: (recipe: Omit<SprayRecipe, 'id'>) => Promise<void>;
+  updateSprayRecipe: (recipe: SprayRecipe) => Promise<void>;
+  deleteSprayRecipe: (id: string) => Promise<void>;
   /** Operations for managing fertilizer recipes */
-  addFertilizerRecipe: (r: Omit<FertilizerRecipe, 'id'>) => Promise<boolean>;
-  updateFertilizerRecipe: (r: FertilizerRecipe) => Promise<boolean>;
+  addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id'>) => Promise<boolean>;
+  updateFertilizerRecipe: (recipe: FertilizerRecipe) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
   /** Global sign out and cache clearing */
   signOut: () => void;
@@ -282,7 +282,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await auth.signOut();
     seasonOps.clearLocalCache();
-  }, [auth, seasonOps]);
+  }, [auth, seasonOps.clearLocalCache]);
 
   // --- Derived data ---
   const sortedFields = useMemo(() =>

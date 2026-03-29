@@ -25,7 +25,7 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
   // ─── Add ──────────────────────────────────────────────────────────────────
 
   const addGrainMovement = useCallback(async (
-    r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear'> & { timestamp?: number }
+    r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear' | 'farm_id'> & { timestamp?: number }
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -37,7 +37,7 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
 
     const id = crypto.randomUUID();
     const timestamp = r.timestamp || Date.now();
-    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null };
+    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapGrainToDb>;
@@ -160,8 +160,8 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
       // Replace with Sentry.captureException(error) in production
       console.error('Error deleting grain movements:', error);
 
-      // Restore records to their original positions. Sort descending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+      // Restore records to their original positions. Sort ascending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
 
       setGrainMovements(prev => {
         const restored = [...prev];
@@ -185,7 +185,7 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
 
   const binTotals = useMemo(() => {
     const totals: Record<string, number> = {};
-    grainMovements.forEach(m => {
+    grainMovements.filter(m => !m.deleted_at).forEach(m => {
       const sKey = `${m.binId}-${m.seasonYear}`;
       totals[sKey] = (totals[sKey] || 0) + (m.type === 'in' ? m.bushels : -m.bushels);
 

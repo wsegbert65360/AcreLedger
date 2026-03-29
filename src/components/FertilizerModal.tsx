@@ -17,6 +17,8 @@ interface FertilizerModalProps {
     initialData?: FertilizerApplication;
 }
 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+
 export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
     const { 
         addFertilizerApplication, 
@@ -48,8 +50,6 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
         }
     }, [initialData, field, open]);
 
-    if (!open) return null;
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -79,25 +79,23 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
             } else {
                 success = await addFertilizerApplication(data);
 
-                // If application was successful, check if we need to save the recipe too
                 if (success && saveAsRecipe) {
                     if (!newRecipeName.trim()) {
                         toast.error('Please enter a recipe name to save');
-                        // We don't return here because the application was already saved successfully
-                    } else {
-                        try {
-                            await addFertilizerRecipe({
-                                name: newRecipeName.trim(),
-                                npkRatio: formula.trim(),
-                                farm_id: field.farm_id || '',
-                                deleted_at: null
-                            });
-                            // Invalidate the query to update dropdowns
-                            queryClient.invalidateQueries({ queryKey: ['fertilizer_recipes'] });
-                        } catch (recipeErr) {
-                            console.error('Recipe save failed:', recipeErr);
-                            toast.error('Application saved, but recipe failed to save.');
-                        }
+                        setIsSaving(false);
+                        return;
+                    }
+                    try {
+                        await addFertilizerRecipe({
+                            name: newRecipeName.trim(),
+                            npkRatio: formula.trim(),
+                            farm_id: field.farm_id || '',
+                            deleted_at: null
+                        });
+                        queryClient.invalidateQueries({ queryKey: ['fertilizer_recipes'] });
+                    } catch (recipeErr) {
+                        console.error('Recipe save failed:', recipeErr);
+                        toast.error('Application saved, but recipe failed to save.');
                     }
                 }
             }
@@ -152,21 +150,18 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-card border border-border w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
                 <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-lime-500/10 flex items-center justify-center">
                             <Sprout className="text-lime-600 dark:text-lime-400" size={20} />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-foreground leading-tight">Fertilizer</h2>
+                            <DialogTitle className="text-lg font-bold text-foreground leading-tight">Fertilizer</DialogTitle>
                             <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors touch-target">
-                        <X size={20} className="text-muted-foreground" />
-                    </button>
                 </header>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -186,7 +181,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                             />
                         </div>
 
-                        {/* Recipe Selection (New for v3.0.0) */}
+                        {/* Recipe Selection */}
                         {!initialData && fertilizerRecipes.length > 0 && (
                             <div className="space-y-1.5">
                                 <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
@@ -265,7 +260,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                             />
                         </div>
 
-                        {/* Save as Recipe - v3.1.0 */}
+                        {/* Save as Recipe */}
                         {!initialData && (
                             <div className="space-y-4 pt-2 border-t border-border/50">
                                 <div className="flex items-center justify-between">
@@ -325,7 +320,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                         </Button>
                     </div>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }
