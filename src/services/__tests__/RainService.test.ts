@@ -87,10 +87,30 @@ describe('RainService', () => {
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: null, lng: null,
-      boundary: [[-93.5, 38.46], [-93.54, 38.46], [-93.54, 38.48], [-93.5, 38.48], [-93.5, 38.46]]
+      boundary: {
+        type: 'Polygon' as const,
+        coordinates: [[[-93.5, 38.46], [-93.54, 38.46], [-93.54, 38.48], [-93.5, 38.48], [-93.5, 38.46]]]
+      }
     });
     expect(result['24h']).toBe(0.25);
-    expect((fetch as any).mock.calls[0][0]).toContain('lat=');
+    expect((fetch as any).mock.calls[0][0]).toContain('lat=38.468');
+    expect((fetch as any).mock.calls[0][0]).toContain('lon=-93.516');
+  });
+
+  it('extracts centroid from GeoJSON boundary (real format)', async () => {
+    (fetch as any).mockResolvedValue(buildIemResponse({ [today()]: 0.25 }));
+
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: null, lng: null,
+      boundary: {
+        type: 'Polygon' as const,
+        coordinates: [[[-93.5, 38.46], [-93.54, 38.46], [-93.54, 38.48], [-93.5, 38.48], [-93.5, 38.46]]]
+      }
+    });
+    expect(result['24h']).toBe(0.25);
+    const calledUrl = (fetch as any).mock.calls[0][0];
+    expect(calledUrl).toContain('lat=38.468');
+    expect(calledUrl).toContain('lon=-93.516');
   });
 
   it('throws when no location data at all', async () => {
@@ -127,12 +147,6 @@ describe('RainService', () => {
     expect(result.dataWarning).toContain('IEM Stage IV');
   });
 
-  it('identifies CONUS coordinates', () => {
-    expect(RainService.isWithinCONUS(39.0, -95.0)).toBe(true);
-    expect(RainService.isWithinCONUS(64.0, -150.0)).toBe(false);
-    expect(RainService.isWithinCONUS(23.0, -100.0)).toBe(false);
-    expect(RainService.isWithinCONUS(40.0, -126.0)).toBe(false);
-  });
 
   it('handles custom range failures gracefully', async () => {
     const breakdown: Record<string, number> = {};

@@ -7,7 +7,7 @@
 ---
 
 ### External Resources
-- **Testing & Credentials**: [TESTING.md](file:///c:/Projects/AcreLedger/TESTING.md)
+- **Testing & Credentials**: [TESTING.md](./TESTING.md)
 
 ---
 
@@ -647,4 +647,4 @@ Use `window.addEventListener('online'/'offline')` in parallel with channel statu
 - **Spray product row keys use index.** `` `${r.id}-${i}` `` not `` `${r.id}-${p.product}` `` — product names can duplicate.
 - **One import statement per module path.** `import { a, b } from '@/utils/dates'` — never two lines from the same path.
 ### Verification
-See [TESTING.md](file:///c:/Projects/AcreLedger/TESTING.md) for detailed verification protocols and bot credentials.
+See [TESTING.md](./TESTING.md) for detailed verification protocols and bot credentials.

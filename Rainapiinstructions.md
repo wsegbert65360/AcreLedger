@@ -58,8 +58,7 @@ Used for "Since Planting" and "Since Last Spray" stats.
 **Response Schema:**
 ```json
 {
-  "rainfall": 2.45,
-  "source": "Supabase MRMS"
+  "rainfall": 2.45
 }
 ```
 

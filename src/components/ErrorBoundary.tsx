@@ -25,7 +25,6 @@ class ErrorBoundary extends Component<Props, State> {
     }
 
     private handleRetry = () => {
-        this.setState({ hasError: false });
         window.location.reload();
     };
 

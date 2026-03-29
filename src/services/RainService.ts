@@ -71,7 +71,7 @@ export const RainService = {
         throw new Error(`RAIN_API_ERROR: ${mainResponse.status} - ${err.error || 'Unknown error'}`);
       }
 
-      const mainData = await mainResponse.ok ? await mainResponse.json() : {};
+      const mainData = await mainResponse.json();
       const breakdown: Record<string, number> = mainData.breakdown || {};
 
       // Compute 24h, 72h, 7d from per-day breakdown
@@ -121,9 +121,6 @@ export const RainService = {
     }
   },
 
-  isWithinCONUS(lat: number, lon: number): boolean {
-    return lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66;
-  },
 
   __test_clearCache(): void {
     promiseCache.clear();

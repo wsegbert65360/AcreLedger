@@ -84,7 +84,7 @@ export default function WeatherBar() {
     const z = inputZip.trim();
 
     if (!ZIP_REGEX.test(z)) {
-      setZipError('Enter a valid 5-digit zip code');
+      setZipError('Enter a valid 5 or 9-digit zip code');
       return;
     }
 
@@ -112,7 +112,7 @@ export default function WeatherBar() {
             onChange={e => { setInputZip(e.target.value); setZipError(''); }}
             placeholder="Zip..."
             className="w-16 bg-muted/50 border border-border rounded px-2 py-1 text-foreground font-mono text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            maxLength={5}
+            maxLength={10}
             inputMode="numeric"
           />
         </form>
