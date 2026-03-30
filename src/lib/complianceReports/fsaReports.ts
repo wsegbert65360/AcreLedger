@@ -27,22 +27,22 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
                 return [
                     sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
                     sanitizeCsvValue(r.startTime),
-                    `"${sanitizeCsvValue(r.applicatorName)}"`,
-                    `"${sanitizeCsvValue(r.licenseNumber)}"`,
-                    `"${sanitizeCsvValue(p.product)}"`,
-                    `"${sanitizeCsvValue(p.epaRegNumber || 'N/A')}"`,
-                    `"${sanitizeCsvValue(r.fieldName)}"`,
+                    sanitizeCsvValue(r.applicatorName),
+                    sanitizeCsvValue(r.licenseNumber),
+                    sanitizeCsvValue(p.product),
+                    sanitizeCsvValue(p.epaRegNumber || 'N/A'),
+                    sanitizeCsvValue(r.fieldName),
                     sanitizeCsvValue(treatedArea),
-                    `"${sanitizeCsvValue(`${p.rate} ${p.rateUnit}`)}"`,
-                    `"${sanitizeCsvValue(productTotalDisplay)}"`,
-                    `"${sanitizeCsvValue(r.totalMixtureVolume)}"`,
-                    `"${sanitizeCsvValue(r.equipmentId)}"`,
+                    sanitizeCsvValue(`${p.rate} ${p.rateUnit}`),
+                    sanitizeCsvValue(productTotalDisplay),
+                    sanitizeCsvValue(r.totalMixtureVolume),
+                    sanitizeCsvValue(r.equipmentId),
                     sanitizeCsvValue(r.windSpeed),
                     sanitizeCsvValue(r.windDirection),
                     sanitizeCsvValue(r.temperature),
                     sanitizeCsvValue(r.relativeHumidity),
-                    `"${sanitizeCsvValue(r.targetPest)}"`,
-                    `"${sanitizeCsvValue(r.involvedTechnicians)}"`
+                    sanitizeCsvValue(r.targetPest),
+                    sanitizeCsvValue(r.involvedTechnicians)
                 ].join(',');
             });
         }
@@ -51,22 +51,22 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
         return [[
             sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
             sanitizeCsvValue(r.startTime),
-            `"${sanitizeCsvValue(r.applicatorName)}"`,
-            `"${sanitizeCsvValue(r.licenseNumber)}"`,
+            sanitizeCsvValue(r.applicatorName),
+            sanitizeCsvValue(r.licenseNumber),
             '',
-            `"${sanitizeCsvValue(r.epaRegNumber)}"`,
-            `"${sanitizeCsvValue(r.fieldName)}"`,
+            sanitizeCsvValue(r.epaRegNumber),
+            sanitizeCsvValue(r.fieldName),
             sanitizeCsvValue(treatedArea),
-            `"${sanitizeCsvValue(r.mixtureRate)}"`,
+            sanitizeCsvValue(r.mixtureRate),
             '',
-            `"${sanitizeCsvValue(r.totalMixtureVolume)}"`,
-            `"${sanitizeCsvValue(r.equipmentId)}"`,
+            sanitizeCsvValue(r.totalMixtureVolume),
+            sanitizeCsvValue(r.equipmentId),
             sanitizeCsvValue(r.windSpeed),
             sanitizeCsvValue(r.windDirection),
             sanitizeCsvValue(r.temperature),
             sanitizeCsvValue(r.relativeHumidity),
-            `"${sanitizeCsvValue(r.targetPest)}"`,
-            `"${sanitizeCsvValue(r.involvedTechnicians)}"`
+            sanitizeCsvValue(r.targetPest),
+            sanitizeCsvValue(r.involvedTechnicians)
         ].join(',')];
     });
 }
@@ -112,8 +112,8 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
             sanitizeCsvValue(field?.fsaTractNumber),
             sanitizeCsvValue(field?.fsaFieldNumber),
             sanitizeCsvValue(r.acreage),
-            `"${sanitizeCsvValue(r.crop)}"`,
-            `"${sanitizeCsvValue(r.intendedUse || field?.intendedUse)}"`,
+            sanitizeCsvValue(r.crop),
+            sanitizeCsvValue(r.intendedUse || field?.intendedUse),
             sanitizeCsvValue(irrigationCode),
             sanitizeCsvValue(`${shareDisplay}%`),
             sanitizeCsvValue(r.plantDate || new Date(r.timestamp).toLocaleDateString())
@@ -144,13 +144,13 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
         return [
             sanitizeCsvValue(r.harvestDate || new Date(r.timestamp).toLocaleDateString()),
             sanitizeCsvValue(r.fieldName),
-            `"${sanitizeCsvValue(r.crop)}"`,
+            sanitizeCsvValue(r.crop),
             sanitizeCsvValue(r.bushels),
             sanitizeCsvValue(r.moisturePercent),
-            `"${sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale')}"`,
+            sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale'),
             sanitizeCsvValue(r.landlordSplitPercent),
-            `"${sanitizeCsvValue(r.landlordName)}"`,
-            `"${sanitizeCsvValue(r.scaleTicketNumber)}"`,
+            sanitizeCsvValue(r.landlordName),
+            sanitizeCsvValue(r.scaleTicketNumber),
             sanitizeCsvValue(field?.fsaFarmNumber),
             sanitizeCsvValue(field?.fsaTractNumber)
         ].join(',');
@@ -173,9 +173,9 @@ export function exportFertilizerData(records: FertilizerApplication[], fields: F
         const field = fields.find(f => f.id === r.fieldId);
         return [
             sanitizeCsvValue(r.date),
-            `"${sanitizeCsvValue(field?.name || r.fieldName)}"`,
+            sanitizeCsvValue(field?.name || r.fieldName),
             sanitizeCsvValue(r.acres),
-            `"${sanitizeCsvValue(r.fertilizer_formula)}"`,
+            sanitizeCsvValue(r.fertilizer_formula),
             sanitizeCsvValue(r.seasonYear)
         ].join(',');
     });

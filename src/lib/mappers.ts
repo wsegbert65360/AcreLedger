@@ -21,9 +21,9 @@ function safeStr(val: any, fallback = ''): string {
 }
 
 function safeTimestamp(val: any): number {
-    if (!val) return Date.now();
+    if (val == null) return 0;
     const d = new Date(val);
-    return isNaN(d.getTime()) ? Date.now() : d.getTime();
+    return isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
 export const mapFieldFromDb = (db: FieldRow): Field => ({
@@ -148,7 +148,7 @@ export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
     moisturePercent: safeNum(db.moisture_percent, 15.0),
     sourceFieldName: db.source_field_name || undefined,
     destination: db.destination || undefined,
-    price: safeNum(db.price, undefined),
+    price: db.price != null ? safeNum(db.price) : undefined,
     seasonYear: safeNum(db.season_year, 2024),
     timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
@@ -214,7 +214,7 @@ export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
     id: db.id,
     farm_id: db.farm_id,
     fieldId: db.field_id,
-    fieldName: safeStr((db as any).fields?.name || db.field_name, 'Unknown Field'),
+    fieldName: safeStr(db.field_name, 'Unknown Field'),
     date: safeStr(db.date),
     implementType: safeStr(db.implement_type, 'Disk'),
     notes: safeStr(db.notes),

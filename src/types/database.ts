@@ -144,8 +144,8 @@ export interface GrainMovementRow {
     type: 'in' | 'out';
     bushels: number;
     moisture_percent: number;
-    source_field_name: string | null;
-    destination: string | null;
+    source_field_name?: string | null;
+    destination?: string | null;
     price?: number | null;
     season_year: number;
     timestamp: string;

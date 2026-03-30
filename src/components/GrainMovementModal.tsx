@@ -16,7 +16,7 @@ interface GrainMovementModalProps {
 }
 
 export default function GrainMovementModal({ open, onClose, initialData }: GrainMovementModalProps) {
-  const { updateGrainMovement, bins } = useFarm();
+  const { updateGrainMovement, bins, fields } = useFarm();
   const [binId, setBinId] = useState(initialData.binId);
   const [bushels, setBushels] = useState(initialData.bushels.toString());
   const [moisture, setMoisture] = useState(initialData.moisturePercent.toString());
@@ -175,16 +175,22 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
           {/* Type-specific fields */}
           {initialData.type === 'in' ? (
             <div>
-              <Label htmlFor="sourceField" className="text-muted-foreground font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              <Label className="text-muted-foreground font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
                 SOURCE FIELD
               </Label>
-              <Input
-                id="sourceField"
-                value={sourceField}
-                onChange={e => setSourceField(e.target.value)}
-                placeholder="e.g. Home Place"
-                className="mt-1 bg-muted border-border font-mono text-sm"
-              />
+              <Select value={sourceField} onValueChange={(val) => setSourceField(val)}>
+                <SelectTrigger className="mt-1 bg-muted border-border font-mono text-sm">
+                  <SelectValue placeholder="Select field name..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {fields.filter(f => !f.deleted_at).map(f => (
+                    <SelectItem key={f.id} value={f.name} className="font-mono text-xs">{f.name}</SelectItem>
+                  ))}
+                  {sourceField && !fields.find(f => f.name === sourceField) && (
+                    <SelectItem value={sourceField} className="font-mono text-xs">{sourceField} (Current)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           ) : (
             <div className="space-y-3">

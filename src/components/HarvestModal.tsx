@@ -45,9 +45,9 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
       setDestination(null);
       setBinId('');
       setMoisture('');
-      setLandlordSplit('');
+      setLandlordSplit(field.producerShare ? (100 - field.producerShare).toString() : '0');
       setBushels('');
-      setCrop('');
+      setCrop(field.intendedUse || '');
       setLandlordName('');
       setScaleTicketNumber('');
       setHarvestDate(new Date().toISOString().split('T')[0]);

@@ -97,30 +97,6 @@ export default function Activity() {
     });
   };
 
-  const handleDelete = async () => {
-    const ids = Array.from(selected);
-    
-    const toDelete = unifiedRecords.filter(r => ids.includes(r.data.id));
-    const byType = toDelete.reduce((acc, r) => {
-      acc[r.type] = acc[r.type] || [];
-      acc[r.type].push(r.data.id);
-      return acc;
-    }, {} as Record<string, string[]>);
-
-    await Promise.all([
-      byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
-      byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
-      byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
-      byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
-      byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
-      byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
-      byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
-    ]);
-
-    setSelected(new Set());
-    setConfirmDelete(false);
-  };
-
   const filteredPlant = useMemo(() =>
     plantRecords
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.seedVariety.toLowerCase().includes(search.toLowerCase())))
@@ -162,7 +138,7 @@ export default function Activity() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [fertilizerApplications, search, viewingSeason]
   );
-  
+
   const filteredTillage = useMemo(() =>
     tillageRecords
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.implementType.toLowerCase().includes(search.toLowerCase())))
@@ -182,6 +158,30 @@ export default function Activity() {
     ];
     return all.sort((a, b) => b.timestamp - a.timestamp);
   }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredTillage, filteredGrain]);
+
+  const handleDelete = async () => {
+    const ids = Array.from(selected);
+    
+    const toDelete = unifiedRecords.filter(r => ids.includes(r.data.id));
+    const byType = toDelete.reduce((acc, r) => {
+      acc[r.type] = acc[r.type] || [];
+      acc[r.type].push(r.data.id);
+      return acc;
+    }, {} as Record<string, string[]>);
+
+    await Promise.all([
+      byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
+      byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
+      byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
+      byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
+      byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
+      byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
+      byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
+    ]);
+
+    setSelected(new Set());
+    setConfirmDelete(false);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">

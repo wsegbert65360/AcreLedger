@@ -45,15 +45,6 @@ export default function FieldDetailScreen() {
   } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
-  const [conditions, setConditions] = useState<{ 
-    windspeed: number | null; 
-    winddir: number | null;
-    windcardinal: string;
-    temp: number | null;
-    humidity: number | null;
-    isError?: boolean;
-  } | null>(null);
-  
   const [rainStats, setRainStats] = useState<{
     '24h': number;
     '72h': number;
@@ -65,7 +56,6 @@ export default function FieldDetailScreen() {
   } | null>(null);
   
   const [rainError, setRainError] = useState<string | null>(null);
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
   const [editingRecord, setEditingRecord] = useState<any>(null);
@@ -118,27 +108,20 @@ export default function FieldDetailScreen() {
 
   // Fetching Logic
   useEffect(() => {
+    if (!field?.id || field.lat == null || field.lng == null) return;
     const controller = new AbortController();
-    if (!field?.id || field.lat == null || field.lng == null) {
-      setStatus('success');
-      return;
-    }
-    setStatus('loading');
     WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
-      .then((windData) => {
-        setConditions(windData);
-        setStatus('success');
+      .then(() => {
+        // Data fetched but unused presently in UI header - keeping side effect for now if needed elsewhere
       }).catch((err) => {
         if (err.name === 'AbortError') return;
-        setStatus('error');
       });
     return () => controller.abort();
   }, [field?.id, field?.lat, field?.lng]);
 
 
-  const handleFetchRain = useCallback(async () => {
+  const handleFetchRain = useCallback(async (signal?: AbortSignal) => {
     if (!field || fetchingRainRef.current) return;
-    const controller = new AbortController();
     fetchingRainRef.current = true;
     setFetchingRain(true);
     setRainError(null);
@@ -150,7 +133,7 @@ export default function FieldDetailScreen() {
         boundary: field.boundary,
         sincePlantingDate: latestPlanting?.plantDate,
         sinceLastSprayDate: latestSpray?.sprayDate,
-        signal: controller.signal
+        signal
       });
       setRainStats(data);
     } catch (err: any) {
@@ -161,14 +144,13 @@ export default function FieldDetailScreen() {
       fetchingRainRef.current = false;
       setFetchingRain(false);
     }
-    return () => controller.abort();
   }, [field, latestPlanting?.plantDate, latestSpray?.sprayDate]);
 
   useEffect(() => {
     if (!field?.id) return;
-    let abortFn: (() => void) | undefined;
-    handleFetchRain().then(fn => { abortFn = fn; });
-    return () => { if (abortFn) abortFn(); };
+    const controller = new AbortController();
+    handleFetchRain(controller.signal);
+    return () => controller.abort();
   }, [field?.id, handleFetchRain]);
 
   const location = useLocation();
@@ -354,7 +336,7 @@ export default function FieldDetailScreen() {
               Rainfall Summary
             </h3>
             <button
-              onClick={handleFetchRain}
+              onClick={() => handleFetchRain()}
               disabled={fetchingRain}
               className="p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-30"
             >
