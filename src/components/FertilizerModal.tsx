@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
-import { Sprout, X, Calendar, MapPin, Gauge, Loader2, ClipboardList, Trash2 } from 'lucide-react';
+import { Sprout, Calendar, MapPin, Gauge, Loader2, ClipboardList, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 interface FertilizerModalProps {
@@ -17,7 +16,7 @@ interface FertilizerModalProps {
     initialData?: FertilizerApplication;
 }
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
     const { 
@@ -26,8 +25,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
         deleteFertilizerApplications,
         addFertilizerRecipe,
         deleteFertilizerRecipe,
-        fertilizerRecipes, 
-        activeSeason 
+        fertilizerRecipes
     } = useFarm();
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -36,7 +34,6 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
     const [saveAsRecipe, setSaveAsRecipe] = useState(false);
     const [newRecipeName, setNewRecipeName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const queryClient = useQueryClient();
 
     useEffect(() => {
         if (initialData) {
@@ -92,7 +89,6 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                             farm_id: field.farm_id || '',
                             deleted_at: null
                         });
-                        queryClient.invalidateQueries({ queryKey: ['fertilizer_recipes'] });
                     } catch (recipeErr) {
                         console.error('Recipe save failed:', recipeErr);
                         toast.error('Application saved, but recipe failed to save.');
@@ -136,10 +132,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
         if (window.confirm(`Delete recipe "${name}"?`)) {
             setIsDeleting(id);
             try {
-                const success = await deleteFertilizerRecipe(id);
-                if (success) {
-                    queryClient.invalidateQueries({ queryKey: ['fertilizer_recipes'] });
-                }
+                await deleteFertilizerRecipe(id);
             } catch (err) {
                 console.error('Delete failed:', err);
                 toast.error('Failed to delete recipe');
@@ -150,7 +143,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
     };
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
+        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
                 <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
                     <div className="flex items-center gap-3">

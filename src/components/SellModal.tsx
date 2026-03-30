@@ -14,7 +14,7 @@ interface SellModalProps {
 }
 
 export default function SellModal({ bin, open, onClose }: SellModalProps) {
-    const { addGrainMovement, getBinTotal, viewingSeason, activeSeason } = useFarm();
+    const { addGrainMovement, getBinTotal, viewingSeason } = useFarm();
     const [bushels, setBushels] = useState('');
     const [price, setPrice] = useState('');
     const [destination, setDestination] = useState('');
@@ -45,7 +45,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
     };
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
+        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-harvest/30 max-w-sm">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-harvest font-bold text-lg">

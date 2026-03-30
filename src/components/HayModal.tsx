@@ -9,7 +9,6 @@ import { Field, HayHarvestRecord } from '@/types/farm';
 import { Tractor, Thermometer, Cloud, Hash, Layers, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { WeatherService } from '@/services/WeatherService';
-import { WeatherData } from '@/types/weather';
 
 interface HayModalProps {
     field: Field;
@@ -19,7 +18,7 @@ interface HayModalProps {
 }
 
 export default function HayModal({ field, open, onClose, initialData }: HayModalProps) {
-    const { addHayHarvestRecord, updateHayHarvestRecord, activeSeason } = useFarm();
+    const { addHayHarvestRecord, updateHayHarvestRecord } = useFarm();
     const [baleCount, setBaleCount] = useState(initialData?.baleCount.toString() || '');
     const [cuttingNumber, setCuttingNumber] = useState(initialData?.cuttingNumber.toString() || '1');
     const [baleType, setBaleType] = useState<'Round' | 'Square'>(initialData?.baleType || 'Round');
@@ -90,7 +89,7 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
     };
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
+        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-harvest/30 max-w-sm max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-harvest font-bold uppercase tracking-tight">

@@ -143,8 +143,8 @@ export function useTillageRecords({ farm_id, activeSeason, setTillageRecords }: 
 
     if (error) {
       console.error('Error deleting tillage records:', error);
-      // Restore records to their original positions. Sort ascending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
+      // Restore records to their original positions. Sort descending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
       setTillageRecords(prev => {
         const restored = [...prev];
         for (const { record, index } of snapshot) {

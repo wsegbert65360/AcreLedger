@@ -56,7 +56,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [fsaTract, setFsaTract] = useState(editField?.fsaTractNumber || '');
   const [fsaField, setFsaField] = useState(editField?.fsaFieldNumber || '');
   const [producerShare, setProducerShare] = useState(editField?.producerShare?.toString() || '100');
-  const [irrigation, setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
+  const [irrigation, _setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
   const [intendedUse, setIntendedUse] = useState(editField?.intendedUse || 'Grain');
 
   // GIS State
@@ -150,7 +150,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const valid = !!name.trim() && !!acreage && !isNaN(parseFloat(acreage)) && parseFloat(acreage) > 0;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="bg-card border-primary/30 max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-primary">

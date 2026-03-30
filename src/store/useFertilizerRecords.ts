@@ -18,6 +18,8 @@ type OpResult = boolean;
 
 function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerApplications }: UseFertilizerRecordsArgs) {
   const isAdding = useRef(false);
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
 
   const addFertilizerApplication = useCallback(async (
     r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>
@@ -39,7 +41,7 @@ function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerAp
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
       deleted_at: null,
-      fieldName: fields.find(f => f.id === r.fieldId)?.name || 'Unknown Field',
+      fieldName: fieldsRef.current.find(f => f.id === r.fieldId)?.name || 'Unknown Field',
       seasonYear: activeSeason
     };
 
@@ -75,13 +77,15 @@ function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerAp
     } finally {
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, fields, setFertilizerApplications]);
+  }, [activeSeason, farm_id, setFertilizerApplications]);
 
   return { addFertilizerApplication };
 }
 
 function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications }: Omit<UseFertilizerRecordsArgs, 'activeSeason'>) {
   const previousRef = useRef<FertilizerApplication | undefined>(undefined);
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
 
   const updateFertilizerApplication = useCallback(async (r: FertilizerApplication): Promise<OpResult> => {
     if (!farm_id) {
@@ -105,7 +109,7 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications 
       const updatedRecord: FertilizerApplication = {
         ...r,
         updated_at: updatedAtIso,
-        fieldName: fields.find(f => f.id === r.fieldId)?.name || 'Unknown Field'
+        fieldName: fieldsRef.current.find(f => f.id === r.fieldId)?.name || 'Unknown Field'
       };
       return prev.map(item => item.id === r.id ? updatedRecord : item);
     });
@@ -135,7 +139,7 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications 
 
     toast.success('Fertilizer application updated.');
     return true;
-  }, [farm_id, setFertilizerApplications, fields]);
+  }, [farm_id, setFertilizerApplications]);
 
   return { updateFertilizerApplication };
 }
@@ -168,8 +172,8 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications }: Pick<
     if (error) {
       console.error('Error deleting fertilizer applications:', error);
 
-      // Restore records to their original positions. Sort ascending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
+      // Restore records to their original positions. Sort descending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
 
       setFertilizerApplications(prev => {
         const restored = [...prev];

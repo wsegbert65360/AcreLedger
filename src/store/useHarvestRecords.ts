@@ -159,8 +159,8 @@ export function useHarvestRecords({ farm_id, activeSeason, setHarvestRecords }: 
       // Replace with Sentry.captureException(error) in production
       console.error('Error deleting harvest records:', error);
 
-      // Restore records to their original positions. Sort ascending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => a.index - b.index);
+      // Restore records to their original positions. Sort descending by index.
+      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
 
       setHarvestRecords(prev => {
         const restored = [...prev];

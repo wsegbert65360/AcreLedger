@@ -261,10 +261,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const grainOps = useGrainMovements({ farm_id, activeSeason, grainMovements, setGrainMovements });
 
   const entityOps = useFieldsAndBins({
-    farm_id, fields, setFields, bins, setBins,
-    savedSeeds, setSavedSeeds, 
-    fertilizerRecipes, setFertilizerRecipes,
-    sprayRecipes, setSprayRecipes
+    farm_id, setFields, setBins,
+    setSavedSeeds, 
+    setFertilizerRecipes,
+    setSprayRecipes
   });
 
   const seasonOps = useSeasonManagement({

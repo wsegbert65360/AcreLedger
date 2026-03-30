@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { TillageRecord, Field } from '@/types/farm';
-import { Tractor, X, Calendar, PenTool, Loader2, Info, Trash2 } from 'lucide-react';
+import { Tractor, Calendar, PenTool, Loader2, Info, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 interface TillageModalProps {
     field: Field;
@@ -14,10 +15,8 @@ interface TillageModalProps {
     initialData?: TillageRecord;
 }
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-
 export default function TillageModal({ field, open, onClose, initialData }: TillageModalProps) {
-    const { addTillageRecord, updateTillageRecord, deleteTillageRecords, activeSeason } = useFarm();
+    const { addTillageRecord, updateTillageRecord, deleteTillageRecords } = useFarm();
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [implementType, setImplementType] = useState('Disk');
     const [notes, setNotes] = useState('');
@@ -86,7 +85,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
     };
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
+        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
                 <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
                     <div className="flex items-center gap-3">
