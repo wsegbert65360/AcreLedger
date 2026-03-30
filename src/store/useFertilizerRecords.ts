@@ -22,7 +22,7 @@ function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerAp
   fieldsRef.current = fields;
 
   const addFertilizerApplication = useCallback(async (
-    r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>
+    r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear' | 'farm_id'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -37,6 +37,7 @@ function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerAp
     const newRecord: FertilizerApplication = {
       ...r,
       id,
+      farm_id,
       timestamp: now.getTime(),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),

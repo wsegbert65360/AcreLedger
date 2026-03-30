@@ -67,10 +67,10 @@ export function useFieldsAndBins({
     }
   }, [farm_id, setFields]);
 
-  const deleteField = useCallback(async (id: string) => {
+  const deleteField = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     let capturedPrevious: Field | undefined;
     setFields(prev => {
@@ -84,8 +84,10 @@ export function useFieldsAndBins({
       console.error('Error deleting field:', error);
       if (capturedPrevious) setFields(prev => prev.map(f => f.id === id ? capturedPrevious! : f));
       toast.error('Failed to delete field');
+      return false;
     } else {
       toast.success('Field deleted');
+      return true;
     }
   }, [farm_id, setFields]);
 
@@ -131,10 +133,10 @@ export function useFieldsAndBins({
     }
   }, [farm_id, setBins]);
 
-  const deleteBin = useCallback(async (id: string) => {
+  const deleteBin = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     let capturedPrevious: Bin | undefined;
     setBins(prev => {
@@ -148,16 +150,18 @@ export function useFieldsAndBins({
       console.error('Error deleting bin:', error);
       if (capturedPrevious) setBins(prev => prev.map(b => b.id === id ? capturedPrevious! : b));
       toast.error('Failed to delete bin');
+      return false;
     } else {
       toast.success('Bin deleted');
+      return true;
     }
   }, [farm_id, setBins]);
 
   // --- Seeds ---
-  const addSeed = useCallback(async (name: string) => {
+  const addSeed = useCallback(async (name: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     const id = crypto.randomUUID();
     setSavedSeeds(prev => [...prev, { 
@@ -176,15 +180,17 @@ export function useFieldsAndBins({
       console.error('Error adding seed:', error);
       setSavedSeeds(prev => prev.filter(s => s.id !== id));
       toast.error('Failed to save seed');
+      return false;
     } else {
       toast.success('Seed variety added!');
+      return true;
     }
   }, [farm_id, setSavedSeeds]);
 
-  const deleteSeed = useCallback(async (id: string) => {
+  const deleteSeed = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     let capturedPrevious: SavedSeed | undefined;
     setSavedSeeds(prev => {
@@ -200,16 +206,18 @@ export function useFieldsAndBins({
       console.error('Error deleting seed:', error);
       if (capturedPrevious) setSavedSeeds(prev => [...prev, capturedPrevious!]);
       toast.error('Failed to delete seed');
+      return false;
     } else {
       toast.success('Seed variety removed');
+      return true;
     }
   }, [farm_id, setSavedSeeds]);
 
   // --- Spray Recipes ---
-  const addSprayRecipe = useCallback(async (r: Omit<SprayRecipe, 'id'>) => {
+  const addSprayRecipe = useCallback(async (r: Omit<SprayRecipe, 'id'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     const id = crypto.randomUUID();
     setSprayRecipes(prev => [...prev, { ...r, id }]);
@@ -220,15 +228,17 @@ export function useFieldsAndBins({
       console.error('Error adding spray recipe:', error);
       setSprayRecipes(prev => prev.filter(rec => rec.id !== id));
       toast.error('Failed to save recipe');
+      return false;
     } else {
       toast.success('Spray recipe created!');
+      return true;
     }
   }, [farm_id, setSprayRecipes]);
 
-  const updateSprayRecipe = useCallback(async (r: SprayRecipe) => {
+  const updateSprayRecipe = useCallback(async (r: SprayRecipe): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     let capturedPrevious: SprayRecipe | undefined;
     setSprayRecipes(prev => {
@@ -242,24 +252,26 @@ export function useFieldsAndBins({
       .update(payload)
       .eq('id', r.id)
       .eq('farm_id', farm_id);
-
+ 
     if (error) {
       console.error('Error updating spray recipe:', error);
       if (capturedPrevious) setSprayRecipes(prev => prev.map(item => item.id === r.id ? capturedPrevious! : item));
       toast.error('Failed to update recipe');
+      return false;
     } else {
       toast.success('Recipe updated');
+      return true;
     }
   }, [farm_id, setSprayRecipes]);
 
   // --- Fertilizer Recipes ---
-  const addFertilizerRecipe = useCallback(async (r: Omit<FertilizerRecipe, 'id'>): Promise<boolean> => {
+  const addFertilizerRecipe = useCallback(async (r: Omit<FertilizerRecipe, 'id' | 'farm_id'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
       return false;
     }
     const id = crypto.randomUUID();
-    setFertilizerRecipes(prev => [...prev, { ...r, id }]);
+    setFertilizerRecipes(prev => [...prev, { ...r, id, farm_id }]);
     const { error } = await supabase.from('fertilizer_recipes').insert([
       mapFertilizerRecipeToDb({ ...r, id, farm_id, deleted_at: null })
     ]);
@@ -329,10 +341,10 @@ export function useFieldsAndBins({
     }
   }, [farm_id, setFertilizerRecipes]);
 
-  const deleteSprayRecipe = useCallback(async (id: string) => {
+  const deleteSprayRecipe = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     let capturedPrevious: SprayRecipe | undefined;
     setSprayRecipes(prev => {
@@ -348,8 +360,10 @@ export function useFieldsAndBins({
       console.error('Error deleting spray recipe:', error);
       if (capturedPrevious) setSprayRecipes(prev => [...prev, capturedPrevious!]);
       toast.error('Failed to delete recipe');
+      return false;
     } else {
       toast.success('Recipe removed');
+      return true;
     }
   }, [farm_id, setSprayRecipes]);
 

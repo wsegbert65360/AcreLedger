@@ -175,8 +175,8 @@ export default function FieldManager() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (deleteConfirm) deleteField(deleteConfirm);
+              onClick={async () => {
+                if (deleteConfirm) await deleteField(deleteConfirm);
                 setDeleteConfirm(null);
               }}
               className="touch-target bg-destructive text-destructive-foreground glow-destructive"

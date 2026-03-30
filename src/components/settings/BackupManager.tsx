@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,8 +38,10 @@ export default function BackupManager() {
     harvestRecords,
     hayHarvestRecords,
     fertilizerApplications,
+    tillageRecords,
     grainMovements,
     savedSeeds,
+    fertilizerRecipes,
     sprayRecipes,
     activeSeason,
   } = useFarm();
@@ -54,8 +56,10 @@ export default function BackupManager() {
     (harvestRecords?.length ?? 0) +
     (hayHarvestRecords?.length ?? 0) +
     (fertilizerApplications?.length ?? 0) +
+    (tillageRecords?.length ?? 0) +
     (grainMovements?.length ?? 0) +
     (savedSeeds?.length ?? 0) +
+    (fertilizerRecipes?.length ?? 0) +
     (sprayRecipes?.length ?? 0);
 
   const hasData = recordCount > 0;
@@ -79,8 +83,10 @@ export default function BackupManager() {
         harvestRecords,
         hayHarvestRecords,
         fertilizerApplications,
+        tillageRecords,
         grainMovements,
         savedSeeds,
+        fertilizerRecipes,
         sprayRecipes,
         activeSeason,
         backupDate: new Date().toISOString(),
@@ -151,6 +157,12 @@ export default function BackupManager() {
             </div>
             <div className="flex justify-between">
               <span>Spray Recipes</span><span className="text-foreground">{sprayRecipes?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Fertilizer Recipes</span><span className="text-foreground">{fertilizerRecipes?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Tillage Records</span><span className="text-foreground">{tillageRecords?.length ?? 0}</span>
             </div>
             <div className="flex justify-between pt-1 border-t border-border font-bold">
               <span>Total Records</span><span className="text-foreground">{recordCount}</span>

@@ -27,10 +27,10 @@ export default function RecipeManager() {
         )}
         {adding && (
           <RecipeForm
-            onSave={(r: any) => {
+            onSave={async (r: any) => {
               if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
               if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
-              addSprayRecipe(r);
+              await addSprayRecipe(r);
               setAdding(false);
             }}
             onCancel={() => setAdding(false)}
@@ -45,10 +45,10 @@ export default function RecipeManager() {
               <RecipeForm
                 key={recipe.id}
                 initial={recipe}
-                onSave={(r: any) => {
+                onSave={async (r: any) => {
                   if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
                   if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
-                  updateSprayRecipe({ ...r, id: recipe.id });
+                  await updateSprayRecipe({ ...r, id: recipe.id });
                   setEditingId(null);
                 }}
                 onCancel={() => setEditingId(null)}
@@ -59,7 +59,7 @@ export default function RecipeManager() {
                   <span className="text-foreground font-mono font-bold text-sm">{recipe.name}</span>
                   <div className="flex gap-2">
                     <button onClick={() => setEditingId(recipe.id)} className="text-muted-foreground hover:text-foreground text-xs font-mono underline">Edit</button>
-                    <button onClick={() => deleteSprayRecipe(recipe.id)} className="text-destructive hover:text-destructive/80">
+                    <button onClick={async () => { await deleteSprayRecipe(recipe.id); }} className="text-destructive hover:text-destructive/80">
                       <Trash2 size={14} />
                     </button>
                   </div>

@@ -536,7 +536,8 @@ createBackupData(store)
 // Right:
 createBackupData({ fields, bins, plantRecords, sprayRecords,
                    harvestRecords, hayHarvestRecords, fertilizerApplications,
-                   grainMovements, savedSeeds, sprayRecipes, activeSeason })
+                   tillageRecords, grainMovements, savedSeeds, fertilizerRecipes,
+                   sprayRecipes, activeSeason })
 ```
 
 ### downloadJson Contract
@@ -645,6 +646,7 @@ Use `window.addEventListener('online'/'offline')` in parallel with channel statu
 - **`lat`/`lng` are nullable on Field.** Guard before `.toFixed()`: `field.lat != null ? field.lat.toFixed(3) : '—'`.
 - **GrainMovement `bushels` may be negative.** Intentional adjustment — warn in UI, never reject.
 - **Spray product row keys use index.** `` `${r.id}-${i}` `` not `` `${r.id}-${p.product}` `` — product names can duplicate.
+- **Callers never pass `farm_id` to `add` operations.** The store hook has `farm_id` in its closure and applies it automatically. Passing it from a component is dead code.
 - **One import statement per module path.** `import { a, b } from '@/utils/dates'` — never two lines from the same path.
 ### Verification
 See [TESTING.md](./TESTING.md) for detailed verification protocols and bot credentials.

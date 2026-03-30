@@ -55,7 +55,6 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
             date,
             acres: parseFloat(acres),
             fertilizer_formula: formula,
-            farm_id: field.farm_id || '',
         };
 
         if (isNaN(data.acres) || data.acres <= 0) {
@@ -86,7 +85,6 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                         await addFertilizerRecipe({
                             name: newRecipeName.trim(),
                             npkRatio: formula.trim(),
-                            farm_id: field.farm_id || '',
                             deleted_at: null
                         });
                     } catch (recipeErr) {
