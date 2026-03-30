@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { Field } from '@/types/farm';
 import { useFarm } from '@/store/farmStore';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,7 +21,7 @@ export default function FieldNotes({ field }: FieldNotesProps) {
     setStatus('idle');
   }, [field.id, field.notes]);
 
-  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleNotesChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setNotes(newValue);
     setStatus('syncing');
@@ -30,9 +30,9 @@ export default function FieldNotes({ field }: FieldNotesProps) {
 
     timerRef.current = setTimeout(async () => {
       // Use the latest local value for the save
-      const { error } = await (updateField({ ...field, notes: newValue }) as any);
+      const success = await updateField({ ...field, notes: newValue });
       
-      if (!error) {
+      if (success) {
         setStatus('saved');
         // Return to idle after a brief "Saved" confirmation
         setTimeout(() => setStatus('idle'), 2000);

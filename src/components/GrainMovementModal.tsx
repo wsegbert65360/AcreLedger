@@ -24,6 +24,7 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
   const [destination, setDestination] = useState(initialData.destination || '');
   const [sourceField, setSourceField] = useState(initialData.sourceFieldName || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   const bu = parseFloat(bushels);
   const m = parseFloat(moisture);
@@ -41,7 +42,7 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
 
     const bin = bins.find(b => b.id === binId);
@@ -50,18 +51,25 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
       return;
     }
 
-    updateGrainMovement({
-      ...initialData,
-      binId,
-      binName: bin.name,
-      bushels: bu,
-      moisturePercent: m,
-      price: price ? parseFloat(price) : undefined,
-      destination: destination || undefined,
-      sourceFieldName: sourceField || undefined,
-    });
+    setIsSaving(true);
+    try {
+      const success = await updateGrainMovement({
+        ...initialData,
+        binId,
+        binName: bin.name,
+        bushels: bu,
+        moisturePercent: m,
+        price: price ? parseFloat(price) : undefined,
+        destination: destination || undefined,
+        sourceFieldName: sourceField || undefined,
+      });
 
-    onClose();
+      if (success) {
+        onClose();
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const fieldClass = (key: string) =>
@@ -212,10 +220,10 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
         <DialogFooter className="pt-2">
           <Button
             onClick={handleSubmit}
-            disabled={bins.length === 0}
+            disabled={isSaving || bins.length === 0}
             className="w-full bg-harvest text-white hover:bg-harvest/90 font-bold glow-harvest"
           >
-            Update Movement Record
+            {isSaving ? 'Updating...' : 'Update Movement Record'}
           </Button>
         </DialogFooter>
       </DialogContent>

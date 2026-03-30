@@ -33,7 +33,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Database | Supabase (Postgres + RLS) | Persistent storage, Row Level Security |
 | Auth | Supabase Auth | Session, JWT, user identity |
 | Realtime | Supabase Realtime channels | Connection health probe (sync status) |
-| State | Zustand (`farmStore.tsx`) | Global client state + CRUD actions |
+| State | React Context (`farmStore.tsx`) | Global client state + CRUD actions |
 | UI Components | shadcn/ui (Radix primitives) | Dialog, Select, Alert, Button, Card, etc. |
 | Styling | Tailwind CSS v3 | Utility classes, CSS variables for theming |
 | Icons | Lucide React | All iconography — no other icon lib |

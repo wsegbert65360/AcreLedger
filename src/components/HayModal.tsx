@@ -29,12 +29,30 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
+        if (!open) return;
+        if (initialData) {
+            setBaleCount(initialData.baleCount.toString());
+            setCuttingNumber(initialData.cuttingNumber.toString());
+            setBaleType(initialData.baleType);
+            setTemp(initialData.temperature?.toString() || '');
+            setConditions(initialData.conditions || '');
+            setDate(initialData.date || new Date().toISOString().split('T')[0]);
+        } else {
+            setBaleCount('');
+            setCuttingNumber('1');
+            setBaleType('Round');
+            setTemp('');
+            setConditions('');
+            setDate(new Date().toISOString().split('T')[0]);
+        }
+    }, [open, initialData]);
+
+    useEffect(() => {
         if (open && !initialData && field.lat != null && field.lng != null) {
             setLoadingWeather(true);
             WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
                 if (w) {
                     setTemp(w.temp.toString());
-                    // Map some conditions if possible, or just use temp
                     setConditions(`${w.wind}mph ${w.windDirection}, ${w.humidity}% humidity`);
                 }
                 setLoadingWeather(false);

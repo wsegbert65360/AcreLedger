@@ -167,6 +167,7 @@ export interface SavedSeed {
 
 export interface SprayRecipeProduct {
   id?: string;
+  ui_id?: string;
   product: string;
   rate: string;
   rateUnit: string;

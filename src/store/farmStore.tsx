@@ -62,7 +62,7 @@ interface FarmState {
   /** Method to change the currently viewed season */
   setViewingSeason: (year: number) => void;
   /** Method to transition the entire farm state to a new season */
-  rolloverToNewSeason: (year: number) => void;
+  rolloverToNewSeason: (year: number) => Promise<boolean>;
   /** Operations for managing planting records */
   addPlantRecord: (r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
   updatePlantRecord: (r: PlantRecord) => Promise<boolean>;
@@ -94,12 +94,12 @@ interface FarmState {
   /** Calculation utility for bin inventory levels */
   getBinTotal: (binId: string, season?: number) => number;
   /** Operations for managing field definitions */
-  addField: (field: Omit<Field, 'id'>) => Promise<void>;
-  updateField: (field: Field) => Promise<any>;
+  addField: (field: Omit<Field, 'id'>) => Promise<boolean>;
+  updateField: (field: Field) => Promise<boolean>;
   deleteField: (id: string) => Promise<void>;
   /** Operations for managing bin definitions */
-  addBin: (bin: Omit<Bin, 'id'>) => Promise<void>;
-  updateBin: (bin: Bin) => Promise<void>;
+  addBin: (bin: Omit<Bin, 'id'>) => Promise<boolean>;
+  updateBin: (bin: Bin) => Promise<boolean>;
   deleteBin: (id: string) => Promise<void>;
   /** Operations for managing seed varieties */
   addSeed: (name: string) => Promise<void>;
@@ -258,7 +258,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const hayOps = useHayRecords({ farm_id, activeSeason, setHayHarvestRecords });
   const fertilizerOps = useFertilizerRecords({ farm_id, activeSeason, fields, setFertilizerApplications });
   const tillageOps = useTillageRecords({ farm_id, activeSeason, setTillageRecords });
-  const grainOps = useGrainMovements({ farm_id, activeSeason, grainMovements, setGrainMovements });
+  const grainOps = useGrainMovements({ farm_id, activeSeason, setGrainMovements });
 
   const entityOps = useFieldsAndBins({
     farm_id, setFields, setBins,
@@ -297,6 +297,23 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     [bins]
   );
 
+  const binTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    grainMovements.filter(m => !m.deleted_at).forEach(m => {
+      const sKey = `${m.binId}-${m.seasonYear}`;
+      totals[sKey] = (totals[sKey] || 0) + (m.type === 'in' ? m.bushels : -m.bushels);
+
+      const aKey = `${m.binId}-all`;
+      totals[aKey] = (totals[aKey] || 0) + (m.type === 'in' ? m.bushels : -m.bushels);
+    });
+    return totals;
+  }, [grainMovements]);
+
+  const getBinTotal = useCallback((binId: string, season?: number) => {
+    const key = season ? `${binId}-${season}` : `${binId}-all`;
+    return binTotals[key] || 0;
+  }, [binTotals]);
+
   return (
     <FarmContext.Provider value={{
       session, loading, fetchError,
@@ -318,6 +335,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       ...fertilizerOps,
       ...tillageOps,
       ...grainOps,
+      getBinTotal,
       ...entityOps,
       signOut,
       clearLocalCache: seasonOps.clearLocalCache,

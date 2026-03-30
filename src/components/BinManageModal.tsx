@@ -21,19 +21,28 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
     const { addBin, updateBin } = useFarm();
     const [name, setName] = useState(editBin?.name || '');
     const [capacity, setCapacity] = useState(editBin?.capacity?.toString() || '');
+    const [isSaving, setIsSaving] = useState(false);
 
     const isEdit = !!editBin;
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         const cap = parseInt(capacity, 10);
         if (!name.trim() || isNaN(cap)) return;
 
-        if (isEdit) {
-            updateBin({ id: editBin.id, name: name.trim(), capacity: cap, deleted_at: editBin.deleted_at ?? null });
-        } else {
-            addBin({ name: name.trim(), capacity: cap, deleted_at: null });
+        setIsSaving(true);
+        try {
+            let success = false;
+            if (isEdit) {
+                success = await updateBin({ id: editBin.id, name: name.trim(), capacity: cap, deleted_at: editBin.deleted_at ?? null });
+            } else {
+                success = await addBin({ name: name.trim(), capacity: cap, deleted_at: null });
+            }
+            if (success) {
+                onClose();
+            }
+        } finally {
+            setIsSaving(false);
         }
-        onClose();
     };
 
     const valid = name.trim() && capacity;
@@ -76,10 +85,10 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
                 <DialogFooter>
                     <Button
                         onClick={handleSubmit}
-                        disabled={!valid}
+                        disabled={isSaving || !valid}
                         className="touch-target w-full bg-harvest text-harvest-foreground hover:bg-harvest/90 glow-harvest font-bold"
                     >
-                        {isEdit ? 'Save Changes' : 'Add Bin'}
+                        {isSaving ? (isEdit ? 'Saving...' : 'Adding...') : (isEdit ? 'Save Changes' : 'Add Bin')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
