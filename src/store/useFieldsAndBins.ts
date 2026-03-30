@@ -22,10 +22,10 @@ export function useFieldsAndBins({
 }: UseFieldsAndBinsArgs) {
 
   // --- Fields ---
-  const addField = useCallback(async (f: Omit<Field, 'id'>) => {
+  const addField = useCallback(async (f: Omit<Field, 'id'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     const id = crypto.randomUUID();
     setFields(prev => [...prev, { ...f, id }]);
@@ -36,15 +36,17 @@ export function useFieldsAndBins({
       console.error('Supabase error adding field:', error);
       setFields(prev => prev.filter(field => field.id !== id));
       toast.error('Failed to save field');
+      return false;
     } else {
       toast.success('Field created!');
+      return true;
     }
   }, [farm_id, setFields]);
 
-  const updateField = useCallback(async (f: Field) => {
+  const updateField = useCallback(async (f: Field): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     let capturedPrevious: Field | undefined;
     setFields(prev => {
@@ -58,10 +60,11 @@ export function useFieldsAndBins({
       console.error('Supabase error updating field:', error);
       if (capturedPrevious) setFields(prev => prev.map(item => item.id === f.id ? capturedPrevious! : item));
       toast.error('Failed to update field');
+      return false;
     } else {
       toast.success('Field updated');
+      return true;
     }
-    return { error };
   }, [farm_id, setFields]);
 
   const deleteField = useCallback(async (id: string) => {
@@ -87,10 +90,10 @@ export function useFieldsAndBins({
   }, [farm_id, setFields]);
 
   // --- Bins ---
-  const addBin = useCallback(async (b: Omit<Bin, 'id'>) => {
+  const addBin = useCallback(async (b: Omit<Bin, 'id'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     const id = crypto.randomUUID();
     setBins(prev => [...prev, { ...b, id }]);
@@ -99,15 +102,17 @@ export function useFieldsAndBins({
       console.error('Error adding bin:', error);
       setBins(prev => prev.filter(bin => bin.id !== id));
       toast.error('Failed to save bin');
+      return false;
     } else {
       toast.success('Bin created!');
+      return true;
     }
   }, [farm_id, setBins]);
 
-  const updateBin = useCallback(async (b: Bin) => {
+  const updateBin = useCallback(async (b: Bin): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
-      return;
+      return false;
     }
     let capturedPrevious: Bin | undefined;
     setBins(prev => {
@@ -119,8 +124,10 @@ export function useFieldsAndBins({
       console.error('Error updating bin:', error);
       if (capturedPrevious) setBins(prev => prev.map(item => item.id === b.id ? capturedPrevious! : item));
       toast.error('Failed to update bin');
+      return false;
     } else {
       toast.success('Bin updated');
+      return true;
     }
   }, [farm_id, setBins]);
 

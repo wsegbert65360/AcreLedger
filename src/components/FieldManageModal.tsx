@@ -58,6 +58,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [producerShare, setProducerShare] = useState(editField?.producerShare?.toString() || '100');
   const [irrigation, _setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
   const [intendedUse, setIntendedUse] = useState(editField?.intendedUse || 'Grain');
+  const [isSaving, setIsSaving] = useState(false);
 
   // GIS State
   const [points, setPoints] = useState<[number, number][]>(editField?.boundary?.coordinates?.[0]?.slice(0, -1).map((c: any) => [c[1], c[0]]) || []);
@@ -107,7 +108,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     setIsCapturing(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const ac = parseFloat(acreage);
     if (!name.trim() || isNaN(ac) || ac <= 0) return;
     // lat/lng may be null if geocoding skipped (BLUEPRINT)
@@ -139,12 +140,20 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       deleted_at: null as string | null
     };
 
-    if (isEdit) {
-      updateField({ id: editField.id, ...fieldData, deleted_at: editField.deleted_at ?? null } as Field);
-    } else {
-      addField(fieldData as Omit<Field, 'id'>);
+    setIsSaving(true);
+    try {
+      let success = false;
+      if (isEdit) {
+        success = await updateField({ id: editField.id, ...fieldData, deleted_at: editField.deleted_at ?? null } as Field);
+      } else {
+        success = await addField(fieldData as Omit<Field, 'id'>);
+      }
+      if (success) {
+        onClose();
+      }
+    } finally {
+      setIsSaving(false);
     }
-    onClose();
   };
 
   const valid = !!name.trim() && !!acreage && !isNaN(parseFloat(acreage)) && parseFloat(acreage) > 0;
@@ -341,10 +350,10 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         <DialogFooter className="mt-4">
           <Button
             onClick={handleSubmit}
-            disabled={!valid}
+            disabled={isSaving || !valid}
             className="touch-target w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-plant font-bold"
           >
-            {isEdit ? 'Save Changes' : 'Add Field'}
+            {isSaving ? (isEdit ? 'Saving...' : 'Adding...') : (isEdit ? 'Save Changes' : 'Add Field')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useFarm } from '@/store/farmStore';
-import { AlertTriangle, Database, ArrowRight, History, Upload, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, History, Upload, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function SeasonRolloverModal() {
     const { activeSeason, rolloverToNewSeason, restoreFromBackup } = useFarm();
@@ -23,9 +23,11 @@ export default function SeasonRolloverModal() {
         return () => window.removeEventListener('open-rollover', handleManualOpen);
     }, [activeSeason, currentYear, setOpen]);
 
-    const handleRollover = () => {
-        rolloverToNewSeason(currentYear);
-        setOpen(false);
+    const handleRollover = async () => {
+        const success = await rolloverToNewSeason(currentYear);
+        if (success) {
+            setOpen(false);
+        }
     };
 
     const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -50,7 +50,18 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
         try {
             let success = false;
             if (initialData) {
-                success = await updateTillageRecord({ ...initialData, ...data } as TillageRecord);
+                success = await updateTillageRecord({
+                    id: initialData.id,
+                    fieldId: data.fieldId,
+                    fieldName: data.fieldName,
+                    date: data.date,
+                    implementType: data.implementType,
+                    notes: data.notes,
+                    seasonYear: initialData.seasonYear,
+                    timestamp: initialData.timestamp,
+                    deleted_at: initialData.deleted_at,
+                    farm_id: data.farm_id
+                });
             } else {
                 success = await addTillageRecord(data);
             }

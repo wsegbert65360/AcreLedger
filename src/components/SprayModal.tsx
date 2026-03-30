@@ -29,7 +29,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [products, setProducts] = useState<SprayRecipeProduct[]>(initialData?.products || [{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+  const [products, setProducts] = useState<SprayRecipeProduct[]>(initialData?.products?.map(p => ({ ...p, ui_id: p.ui_id || crypto.randomUUID() })) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
   const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
@@ -107,14 +107,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setTotalMixtureVolume('');
     setIsPremixed(false);
     setManualWindDirection('');
-    setProducts([{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
+    setProducts([{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
     setSelectedRecipeId('');
   };
 
   useEffect(() => {
     if (!open) return;
     if (initialData) {
-      setProducts(initialData.products || [{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+      setProducts(initialData.products?.map(p => ({ ...p, ui_id: p.ui_id || crypto.randomUUID() })) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
       setApplicatorName(initialData.applicatorName || '');
       setLicenseNumber(initialData.licenseNumber || '');
       setTargetPest(initialData.targetPest || 'grass/broadleaves');
@@ -161,7 +161,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setSelectedRecipeId(recipeId);
     const recipe = sprayRecipes.find(r => r.id === recipeId);
     if (recipe) {
-      setProducts(recipe.products.map(p => ({ ...p, epaRegNumber: p.epaRegNumber || '' })));
+      setProducts(recipe.products.map(p => ({ ...p, ui_id: crypto.randomUUID(), epaRegNumber: p.epaRegNumber || '' })));
       if (recipe.applicatorName) setApplicatorName(recipe.applicatorName);
       if (recipe.licenseNumber) setLicenseNumber(recipe.licenseNumber);
       if (recipe.targetPest) setTargetPest(recipe.targetPest);
@@ -173,7 +173,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   };
 
   const addProduct = () => {
-    setProducts(prev => [...prev, { product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+    setProducts(prev => [...prev, { ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
   };
 
   const removeProduct = (i: number) => {
@@ -318,7 +318,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               </div>
 
               {products.map((p, i) => (
-                <div key={i} className="bg-muted p-2.5 rounded-md border border-border/50 relative">
+                <div key={p.ui_id || i} className="bg-muted p-2.5 rounded-md border border-border/50 relative">
                   {products.length > 1 && (
                     <button onClick={() => removeProduct(i)} className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 shadow-md hover:bg-destructive/80 transition-colors">
                       <X size={12} />

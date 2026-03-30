@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { GrainMovement } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -7,14 +7,13 @@ import { mapGrainToDb } from '@/lib/mappers';
 interface UseGrainMovementsArgs {
   farm_id: string | null;
   activeSeason: number;
-  grainMovements: GrainMovement[]; // Still needed for the useMemo calculation
   setGrainMovements: React.Dispatch<React.SetStateAction<GrainMovement[]>>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGrainMovements }: UseGrainMovementsArgs) {
+export function useGrainMovements({ farm_id, activeSeason, setGrainMovements }: UseGrainMovementsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -181,24 +180,5 @@ export function useGrainMovements({ farm_id, activeSeason, grainMovements, setGr
     return true;
   }, [farm_id, setGrainMovements]);
 
-  // ─── Computations ─────────────────────────────────────────────────────────
-
-  const binTotals = useMemo(() => {
-    const totals: Record<string, number> = {};
-    grainMovements.filter(m => !m.deleted_at).forEach(m => {
-      const sKey = `${m.binId}-${m.seasonYear}`;
-      totals[sKey] = (totals[sKey] || 0) + (m.type === 'in' ? m.bushels : -m.bushels);
-
-      const aKey = `${m.binId}-all`;
-      totals[aKey] = (totals[aKey] || 0) + (m.type === 'in' ? m.bushels : -m.bushels);
-    });
-    return totals;
-  }, [grainMovements]);
-
-  const getBinTotal = useCallback((binId: string, season?: number) => {
-    const key = season ? `${binId}-${season}` : `${binId}-all`;
-    return binTotals[key] || 0;
-  }, [binTotals]);
-
-  return { addGrainMovement, updateGrainMovement, deleteGrainMovements, getBinTotal };
+  return { addGrainMovement, updateGrainMovement, deleteGrainMovements };
 }

@@ -17,31 +17,42 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
     const { addGrainMovement, getBinTotal, viewingSeason } = useFarm();
     const [bushels, setBushels] = useState('');
     const [price, setPrice] = useState('');
+    const [moisture, setMoisture] = useState('');
     const [destination, setDestination] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isSaving, setIsSaving] = useState(false);
 
     const currentInventory = getBinTotal(bin.id, viewingSeason);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         const amount = parseFloat(bushels);
         const p = parseFloat(price);
-        if (isNaN(amount)) return;
+        const m = parseFloat(moisture) || 15.0;
+        if (isNaN(amount) || amount <= 0) return;
 
-        addGrainMovement({
-            binId: bin.id,
-            binName: bin.name,
-            type: 'out',
-            bushels: amount,
-            moisturePercent: 15, // Default for sales
-            timestamp: date ? new Date(date).getTime() : Date.now(),
-            price: isNaN(p) ? undefined : p,
-            destination: destination.trim() || undefined,
-        });
+        setIsSaving(true);
+        try {
+            const success = await addGrainMovement({
+                binId: bin.id,
+                binName: bin.name,
+                type: 'out',
+                bushels: amount,
+                moisturePercent: m,
+                timestamp: date ? new Date(date).getTime() : Date.now(),
+                price: isNaN(p) ? undefined : p,
+                destination: destination.trim() || undefined,
+            });
 
-        setBushels('');
-        setPrice('');
-        setDestination('');
-        onClose();
+            if (success) {
+                setBushels('');
+                setPrice('');
+                setMoisture('');
+                setDestination('');
+                onClose();
+            }
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -131,13 +142,14 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
                     <Button
                         onClick={handleSubmit}
                         disabled={
+                            isSaving ||
                             !bushels ||
                             isNaN(parseFloat(bushels)) ||
                             parseFloat(bushels) > currentInventory
                         }
                         className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold py-6 text-lg"
                     >
-                        Confirm Sale
+                        {isSaving ? 'Selling...' : 'Confirm Sale'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
