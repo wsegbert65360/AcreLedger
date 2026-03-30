@@ -19,7 +19,7 @@ export default function FieldNotes({ field }: FieldNotesProps) {
   useEffect(() => {
     setNotes(field.notes || '');
     setStatus('idle');
-  }, [field.id, field.notes]);
+  }, [field.id]);
 
   const handleNotesChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;

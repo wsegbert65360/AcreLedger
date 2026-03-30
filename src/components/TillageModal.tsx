@@ -23,6 +23,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
+        if (!open) return;
         if (initialData) {
             setDate(initialData.date);
             setImplementType(initialData.implementType);

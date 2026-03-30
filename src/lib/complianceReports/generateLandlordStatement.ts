@@ -65,6 +65,11 @@ export function generateLandlordStatement(
   };
 }
 
+function escapeCsvCell(val: string | number): string {
+  const str = String(val).replace(/"/g, '""');
+  return `"${str}"`;
+}
+
 export function generateLandlordStatementCSV(statement: LandlordStatement): string {
   const headers = [
     'Field Name',
@@ -100,7 +105,7 @@ export function generateLandlordStatementCSV(statement: LandlordStatement): stri
   ];
 
   const allRows = [headers, ...dataRows, totalsRow];
-  return allRows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  return allRows.map(row => row.map(cell => escapeCsvCell(cell)).join(',')).join('\n');
 }
 
 export function generateLandlordStatementHTML(statement: LandlordStatement): string {

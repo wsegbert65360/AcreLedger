@@ -1,5 +1,13 @@
-// Cache in-flight requests to deduplicate concurrent calls for the same field
-const promiseCache = new Map<string, Promise<any>>();
+type RainfallResult = {
+  '24h': number;
+  '72h': number;
+  '7d': number;
+  sincePlanting: number;
+  sinceLastSpray: number;
+  periodEndUtc: string;
+  dataWarning?: string;
+};
+const promiseCache = new Map<string, Promise<RainfallResult>>();
 
 /**
  * Sum rainfall for the last N days from a { "YYYY-MM-DD": inches } breakdown.
@@ -15,25 +23,18 @@ export const RainService = {
     fieldId: string;
     lat?: number | null;
     lng?: number | null;
-    boundary?: any;
+    boundary?: { type: string; coordinates: number[][][] } | null;
     sincePlantingDate?: string;
     sinceLastSprayDate?: string;
     signal?: AbortSignal;
-  }): Promise<{
-    '24h': number;
-    '72h': number;
-    '7d': number;
-    sincePlanting: number;
-    sinceLastSpray: number;
-    periodEndUtc: string;
-    dataWarning?: string;
-  }> {
+  }): Promise<RainfallResult> {
     const { fieldId, lat, lng, boundary, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
     const cacheKey = `${fieldId}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
 
-    if (promiseCache.has(cacheKey)) {
-      try { return await promiseCache.get(cacheKey); } catch { /* retry */ }
+    const existing = promiseCache.get(cacheKey);
+    if (existing) {
+      try { return await existing; } catch { /* retry */ }
     }
 
     const fetchPromise = (async () => {
@@ -117,7 +118,11 @@ export const RainService = {
     try {
       return await fetchPromise;
     } finally {
-      setTimeout(() => promiseCache.delete(cacheKey), 30000);
+      setTimeout(() => {
+        if (promiseCache.get(cacheKey) === fetchPromise) {
+          promiseCache.delete(cacheKey);
+        }
+      }, 30000);
     }
   },
 
