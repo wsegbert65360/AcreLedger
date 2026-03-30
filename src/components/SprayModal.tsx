@@ -57,8 +57,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
 
-  const selectedRecipe = sprayRecipes.find(r => r.id === selectedRecipeId);
-
   // Auto-calculate total amount based on first product or general rate if needed 
   useEffect(() => {
     const rate = parseFloat(products[0]?.rate || '0');
@@ -66,10 +64,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     const unit = products[0]?.rateUnit || 'fl oz/ac';
     
     if (!isNaN(rate) && !isNaN(acres)) {
-      const { value, unit: resultUnit } = calculateTotalAmount(rate, acres, unit);
+      const { value } = calculateTotalAmount(rate, acres, unit);
       setTotalAmountApplied(value.toString());
-      // Optionally sync the total unit if we had a field for it, 
-      // but the UI currently just shows a string for totalAmountApplied.
     }
   }, [products, treatedAreaSize]);
 
@@ -84,7 +80,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     const startMins = hours * 60 + minutes;
     
     // 54.5 acres per hour = 0.90833 acres per minute
-    // duration_mins = acres / (54.5 / 60)
     const durationMins = Math.round(acres / (54.5 / 60));
     const endTotalMins = (startMins + durationMins) % (24 * 60);
     
@@ -113,7 +108,39 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setIsPremixed(false);
     setManualWindDirection('');
     setProducts([{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
+    setSelectedRecipeId('');
   };
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialData) {
+      setProducts(initialData.products || [{ product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+      setApplicatorName(initialData.applicatorName || '');
+      setLicenseNumber(initialData.licenseNumber || '');
+      setTargetPest(initialData.targetPest || 'grass/broadleaves');
+      setSprayDate(initialData.sprayDate || new Date().toISOString().split('T')[0]);
+      setStartTime(initialData.startTime || '');
+      setEndTime(initialData.endTime || '');
+      setIsEndTimeManual(!!initialData.endTime);
+      setSiteAddress(initialData.siteAddress || field.name);
+      setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field.acreage.toString());
+      setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
+      setTotalAmountApplied(initialData.totalAmountApplied?.toString() || '');
+      setMixtureRate(initialData.mixtureRate || '');
+      setTotalMixtureVolume(initialData.totalMixtureVolume || '');
+      setInvolvedTechnicians(initialData.involvedTechnicians || '');
+      setEquipmentId(initialData.equipmentId || '');
+      setManualWindDirection(initialData.windDirection || '');
+      setIsPremixed(initialData.isPremixed || false);
+      setCropOrSiteTreated(initialData.cropOrSiteTreated || '');
+      setApplicationMethod(initialData.applicationMethod || 'Ground Broadcast');
+      setRei(initialData.rei || '12h');
+      setNotes(initialData.notes || '');
+      setSelectedRecipeId('');
+    } else {
+      resetComplianceFields();
+    }
+  }, [open, initialData, field]);
 
   useEffect(() => {
     if (open && field.lat != null && field.lng != null) {
@@ -155,10 +182,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
   const [showValidation, setShowValidation] = useState(false);
 
-  // Minimum required to save — just need at least one product name and a date.
   const isMinimumValid = products.length > 0 && products.some(p => p.product.trim()) && !!sprayDate;
 
-  // Full compliance — all fields that constitute a complete regulatory record.
   const isFullyCompliant =
     products.every(p => p.product.trim()) &&
     startTime.trim() &&
@@ -172,7 +197,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     equipmentId.trim() &&
     products.every(p => p.epaRegNumber?.trim());
 
-  // Missing compliance field labels for the warning banner
   const missingComplianceFields: string[] = [];
   if (!products.every(p => p.product.trim())) missingComplianceFields.push('Product name(s)');
   if (!startTime.trim()) missingComplianceFields.push('Start time');
@@ -194,7 +218,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     }
     if (!isFullyCompliant) {
       setShowValidation(true);
-      // Show warning but continue — record will be flagged nonCompliant
     }
 
     setIsSaving(true);
@@ -208,7 +231,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         fieldName: field.name,
         products: products.filter(p => p.product.trim()).map(p => ({
           ...p,
-          // Calculate individual amount if needed, though record has totalAmountApplied
           totalProductAmount: p.totalProductAmount || undefined,
           totalProductUnit: p.totalProductUnit || 'gal'
         })),
@@ -216,7 +238,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         temperature: weather?.temp || initialData?.temperature || 0,
         applicatorName: applicatorName.trim(),
         licenseNumber: licenseNumber.trim(),
-        epaRegNumber: products[0]?.epaRegNumber, // Legacy support
+        epaRegNumber: products[0]?.epaRegNumber,
         targetPest: targetPest.trim() || undefined,
         windDirection: manualWindDirection || weather?.windDirection || initialData?.windDirection,
         relativeHumidity: weather?.humidity || initialData?.relativeHumidity || 0,
@@ -261,7 +283,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-spray font-bold">
@@ -270,7 +292,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          {/* Main Info */}
           <div className="space-y-3">
             {sprayRecipes.length > 0 && (
               <div>
@@ -411,14 +432,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             </div>
           </div>
 
-          {/* Compliance Accordion */}
           <Accordion type="single" collapsible className="w-full" defaultValue="compliance">
             <AccordionItem value="compliance" className="border-spray/20">
               <AccordionTrigger className="text-spray font-mono text-xs font-bold hover:no-underline py-2">
                 APPLICATION & COMPLIANCE DETAILS
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
-                {/* 1. Timing */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
                     <Clock size={12} /> timing
@@ -441,7 +460,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                 </div>
 
-                {/* 2. Site & Crop */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
                     <MapPin size={12} /> site & crop
@@ -509,7 +527,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                 </div>
 
-                {/* 4. Applicators & Other */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
                     <User size={12} /> APPLICATORS & SAFETY
@@ -547,7 +564,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             </AccordionItem>
           </Accordion>
 
-          {/* Environmental Conditions */}
           <div className={`rounded-lg border p-3 space-y-3 ${weather ? 'border-spray/20 bg-muted/30' : 'border-destructive/30 bg-destructive/5'}`}>
             <div className="flex items-center justify-between">
               <span className={`font-mono text-[10px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
@@ -589,7 +605,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               </div>
             )}
           </div>
-          {/* Compliance warning banner */}
           {showValidation && !isFullyCompliant && isMinimumValid && (
             <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-1">
               <div className="flex items-center gap-2 text-yellow-400 font-mono text-xs font-bold uppercase tracking-wider">
@@ -606,7 +621,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               </ul>
             </div>
           )}
-          <div className="h-20" aria-hidden="true" /> {/* Spacer for sticky footer */}
+          <div className="h-20" aria-hidden="true" />
         </div>
         <DialogFooter className="sticky bottom-0 bg-card pt-2 border-t border-border/20 flex flex-col gap-2">
           {initialData && (
@@ -648,4 +663,3 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     </Dialog>
   );
 }
-

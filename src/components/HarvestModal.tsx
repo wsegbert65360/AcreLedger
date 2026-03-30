@@ -17,7 +17,7 @@ interface HarvestModalProps {
 }
 
 export default function HarvestModal({ field, open, onClose, initialData }: HarvestModalProps) {
-  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, bins, activeSeason } = useFarm();
+  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, bins } = useFarm();
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -82,17 +82,21 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
           );
           if (movement) {
             const bin = bins.find(b => b.id === binId);
-            await updateGrainMovement({
+            const gmSuccess = await updateGrainMovement({
               ...movement,
               binId: binId,
               binName: bin?.name || 'Unknown',
               bushels: bu,
               moisturePercent: m,
             });
+            if (!gmSuccess) {
+              toast.error('Harvest saved but grain movement update failed.');
+              return;
+            }
           }
         } else if (destination === 'bin') {
           const bin = bins.find(b => b.id === binId);
-          await addGrainMovement({
+          const gmSuccess = await addGrainMovement({
             binId,
             binName: bin?.name || 'Unknown',
             type: 'in',
@@ -101,6 +105,10 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
             sourceFieldName: field.name,
             timestamp: initialData.timestamp,
           });
+          if (!gmSuccess) {
+            toast.error('Harvest saved but grain movement addition failed.');
+            return;
+          }
         }
       } else {
         success = await addHarvestRecord(harvestData);
@@ -111,7 +119,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
 
         if (destination === 'bin') {
           const bin = bins.find(b => b.id === binId);
-          await addGrainMovement({
+          const gmSuccess = await addGrainMovement({
             binId,
             binName: bin?.name || 'Unknown',
             type: 'in',
@@ -120,6 +128,10 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
             sourceFieldName: field.name,
             timestamp: Date.now(),
           });
+          if (!gmSuccess) {
+            toast.error('Harvest saved but grain movement addition failed.');
+            return;
+          }
         }
       }
 

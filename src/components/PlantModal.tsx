@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
 import { Sprout, Loader2 } from 'lucide-react';
-import { WeatherService } from '@/services/WeatherService';
 
 interface PlantModalProps {
   field: Field;
@@ -18,7 +17,7 @@ interface PlantModalProps {
 }
 
 export default function PlantModal({ field, open, onClose, initialData }: PlantModalProps) {
-  const { addPlantRecord, updatePlantRecord, savedSeeds, activeSeason } = useFarm();
+  const { addPlantRecord, updatePlantRecord, savedSeeds } = useFarm();
   const [seedVariety, setSeedVariety] = useState(initialData?.seedVariety || '');
   const [crop, setCrop] = useState(initialData?.crop || '');
   const [intendedUse, setIntendedUse] = useState(initialData?.intendedUse || field.intendedUse || '');
@@ -26,6 +25,25 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialData) {
+      setSeedVariety(initialData.seedVariety || '');
+      setCrop(initialData.crop || '');
+      setIntendedUse(initialData.intendedUse || field.intendedUse || '');
+      setProducerShare(initialData.producerShare?.toString() || field.producerShare?.toString() || '100');
+      setIrrigationPractice(initialData.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
+      setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
+    } else {
+      setSeedVariety('');
+      setCrop('');
+      setIntendedUse(field.intendedUse || '');
+      setProducerShare(field.producerShare?.toString() || '100');
+      setIrrigationPractice(field.irrigationPractice || 'Non-Irrigated');
+      setPlantDate(new Date().toISOString().split('T')[0]);
+    }
+  }, [initialData, field, open]);
 
   const handleSubmit = async () => {
     if (!seedVariety.trim()) return;
@@ -74,7 +92,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="bg-card border-plant/30 max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-plant">

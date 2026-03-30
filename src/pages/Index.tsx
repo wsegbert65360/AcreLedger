@@ -1,15 +1,13 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import FieldList from '@/components/FieldList';
 import BottomNav from '@/components/BottomNav';
 import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
 import Logo from '@/components/Logo';
-import { Settings, History, Tractor } from 'lucide-react';
+import { Settings, Tractor } from 'lucide-react';
 
 const Index = () => {
-  const navigate = useNavigate();
   const { fields: allFields } = useFarm();
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
     let total = 0;

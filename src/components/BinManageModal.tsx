@@ -39,7 +39,7 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
     const valid = name.trim() && capacity;
 
     return (
-        <Dialog open={open} onOpenChange={onClose}>
+        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-harvest/30 max-w-sm">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-harvest">
