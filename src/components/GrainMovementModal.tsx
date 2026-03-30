@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,19 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
   const [sourceField, setSourceField] = useState(initialData.sourceFieldName || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialData) {
+      setBinId(initialData.binId);
+      setBushels(initialData.bushels.toString());
+      setMoisture(initialData.moisturePercent.toString());
+      setPrice(initialData.price?.toString() || '');
+      setDestination(initialData.destination || '');
+      setSourceField(initialData.sourceFieldName || '');
+      setErrors({});
+    }
+  }, [open, initialData]);
 
   const bu = parseFloat(bushels);
   const m = parseFloat(moisture);

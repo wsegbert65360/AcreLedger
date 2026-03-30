@@ -67,6 +67,40 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [mapCenter, setMapCenter] = useState<[number, number]>(points.length > 0 ? points[0] : [38.5, -92.5]);
   const [mapZoom, setMapZoom] = useState(points.length > 0 ? 15 : 4);
 
+  useEffect(() => {
+    if (!open) return;
+    if (editField) {
+      setName(editField.name || '');
+      setAcreage(editField.acreage?.toString() || '');
+      setLat(editField.lat?.toString() || '');
+      setLng(editField.lng?.toString() || '');
+      setFsaFarm(editField.fsaFarmNumber || '');
+      setFsaTract(editField.fsaTractNumber || '');
+      setFsaField(editField.fsaFieldNumber || '');
+      setProducerShare(editField.producerShare?.toString() || '100');
+      setIrrigation(editField.irrigationPractice || 'Non-Irrigated');
+      setIntendedUse(editField.intendedUse || 'Grain');
+      const newPoints: [number, number][] = (editField?.boundary?.coordinates?.[0]?.slice(0, -1).map((c: any) => [c[1], c[0]]) as [number, number][]) || [];
+      setPoints(newPoints);
+      setMapCenter(newPoints.length > 0 ? newPoints[0] : [38.5, -92.5]);
+      setMapZoom(newPoints.length > 0 ? 15 : 4);
+    } else {
+      setName('');
+      setAcreage('');
+      setLat('');
+      setLng('');
+      setFsaFarm('');
+      setFsaTract('');
+      setFsaField('');
+      setProducerShare('100');
+      setIrrigation('Non-Irrigated');
+      setIntendedUse('Grain');
+      setPoints([]);
+      setMapCenter([38.5, -92.5]);
+      setMapZoom(4);
+    }
+  }, [editField, open]);
+
   // Attempt Geolocation on Mount if no field is being edited
   useEffect(() => {
     if (!editField && navigator.geolocation) {

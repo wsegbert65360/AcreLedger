@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,17 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
     const [name, setName] = useState(editBin?.name || '');
     const [capacity, setCapacity] = useState(editBin?.capacity?.toString() || '');
     const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+        if (editBin) {
+            setName(editBin.name);
+            setCapacity(editBin.capacity?.toString() || '');
+        } else {
+            setName('');
+            setCapacity('');
+        }
+    }, [editBin, open]);
 
     const isEdit = !!editBin;
 
