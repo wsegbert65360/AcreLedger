@@ -184,10 +184,10 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 
 ## 4. State Management Rules
 
-### farmStore (Zustand)
+### farmStore (React Context)
 Single global store in `farmStore.tsx`. Exposes all entity arrays, their setters, `session`,
 `farm_id`, `farmName`, `activeSeason`, `viewingSeason`, and all CRUD action methods. Accessed everywhere
-via `useFarm()`. Never import Zustand's `useStore` directly in components.
+via `useFarm()`.
 
 ### Optimistic Update Pattern
 Every mutation follows this exact sequence — no exceptions:

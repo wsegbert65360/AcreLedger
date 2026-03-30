@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import { MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
@@ -56,7 +57,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [fsaTract, setFsaTract] = useState(editField?.fsaTractNumber || '');
   const [fsaField, setFsaField] = useState(editField?.fsaFieldNumber || '');
   const [producerShare, setProducerShare] = useState(editField?.producerShare?.toString() || '100');
-  const [irrigation, _setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
+  const [irrigation, setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
   const [intendedUse, setIntendedUse] = useState(editField?.intendedUse || 'Grain');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -144,9 +145,17 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     try {
       let success = false;
       if (isEdit) {
-        success = await updateField({ id: editField.id, ...fieldData, deleted_at: editField.deleted_at ?? null } as Field);
+        const updatedField: Field = {
+          id: editField.id,
+          ...fieldData,
+          deleted_at: editField.deleted_at ?? null
+        };
+        success = await updateField(updatedField);
       } else {
-        success = await addField(fieldData as Omit<Field, 'id'>);
+        const newField: Omit<Field, 'id'> = {
+          ...fieldData
+        };
+        success = await addField(newField);
       }
       if (success) {
         onClose();
@@ -324,15 +333,16 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/20">
             <div>
-              <Label htmlFor="fieldProducerShare" className="text-muted-foreground font-mono text-xs uppercase">Producer Share %</Label>
-              <Input
-                id="fieldProducerShare"
-                name="fieldProducerShare"
-                type="number"
-                value={producerShare}
-                onChange={e => setProducerShare(e.target.value)}
-                className="mt-1 bg-muted border-border text-foreground font-mono"
-              />
+              <Label htmlFor="fieldIrrigation" className="text-muted-foreground font-mono text-xs uppercase">Irrigation</Label>
+              <Select value={irrigation} onValueChange={(val: any) => setIrrigation(val)}>
+                <SelectTrigger id="fieldIrrigation" className="h-10 mt-1 bg-muted border-border font-mono text-sm leading-tight text-foreground/80 focus:ring-1 focus:ring-primary/30">
+                  <SelectValue placeholder="Non-Irrigated" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Non-Irrigated">Non-Irrigated</SelectItem>
+                  <SelectItem value="Irrigated">Irrigated</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="fieldIntendedUse" className="text-muted-foreground font-mono text-xs uppercase">Intended Use</Label>
@@ -341,9 +351,22 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
                 name="fieldIntendedUse"
                 value={intendedUse}
                 onChange={e => setIntendedUse(e.target.value)}
-                className="mt-1 bg-muted border-border text-foreground"
+                placeholder="Grain"
+                className="mt-1 bg-muted border-border text-foreground font-mono"
               />
             </div>
+          </div>
+
+          <div className="pt-2">
+            <Label htmlFor="fieldProducerShare" className="text-muted-foreground font-mono text-xs uppercase">Producer Share %</Label>
+            <Input
+              id="fieldProducerShare"
+              name="fieldProducerShare"
+              type="number"
+              value={producerShare}
+              onChange={e => setProducerShare(e.target.value)}
+              className="mt-1 bg-muted border-border text-foreground font-mono"
+            />
           </div>
         </div>
 

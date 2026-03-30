@@ -64,6 +64,7 @@ export function useAuth() {
         const { data: profileData } = await supabase
           .from('profiles')
           .select('farm_id, active_season')
+          .eq('id', session.user.id)
           .single();
 
         if (profileData) {
