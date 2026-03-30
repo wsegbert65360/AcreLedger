@@ -10,9 +10,9 @@ export default function SeedManager() {
   const { savedSeeds, addSeed, deleteSeed } = useFarm();
   const [newSeed, setNewSeed] = useState('');
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newSeed.trim()) return;
-    addSeed(newSeed.trim());
+    await addSeed(newSeed.trim());
     setNewSeed('');
   };
 
@@ -47,7 +47,7 @@ export default function SeedManager() {
           {savedSeeds.map(seed => (
             <div key={seed.id} className="flex items-center justify-between px-3 py-2 bg-muted rounded-md">
               <span className="text-foreground font-mono text-sm">{seed.name}</span>
-              <button onClick={() => deleteSeed(seed.id)} className="text-destructive hover:text-destructive/80">
+              <button onClick={async () => { await deleteSeed(seed.id); }} className="text-destructive hover:text-destructive/80">
                 <Trash2 size={14} />
               </button>
             </div>

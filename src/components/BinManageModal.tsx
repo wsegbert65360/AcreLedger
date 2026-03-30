@@ -159,7 +159,7 @@ export function BinManager() {
                     <AlertDialogFooter>
                         <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={() => { if (deleteConfirm) deleteBin(deleteConfirm); setDeleteConfirm(null); }}
+                            onClick={async () => { if (deleteConfirm) await deleteBin(deleteConfirm); setDeleteConfirm(null); }}
                             className="touch-target bg-destructive text-destructive-foreground glow-destructive"
                         >
                             Delete

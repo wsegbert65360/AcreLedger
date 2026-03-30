@@ -80,7 +80,7 @@ interface FarmState {
   updateHayHarvestRecord: (r: HayHarvestRecord) => Promise<boolean>;
   deleteHayHarvestRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing fertilizer applications */
-  addFertilizerApplication: (r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  addFertilizerApplication: (r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updateFertilizerApplication: (r: FertilizerApplication) => Promise<boolean>;
   deleteFertilizerApplications: (ids: string[]) => Promise<boolean>;
   /** Operations for managing tillage records */
@@ -96,20 +96,20 @@ interface FarmState {
   /** Operations for managing field definitions */
   addField: (field: Omit<Field, 'id'>) => Promise<boolean>;
   updateField: (field: Field) => Promise<boolean>;
-  deleteField: (id: string) => Promise<void>;
+  deleteField: (id: string) => Promise<boolean>;
   /** Operations for managing bin definitions */
   addBin: (bin: Omit<Bin, 'id'>) => Promise<boolean>;
   updateBin: (bin: Bin) => Promise<boolean>;
-  deleteBin: (id: string) => Promise<void>;
+  deleteBin: (id: string) => Promise<boolean>;
   /** Operations for managing seed varieties */
-  addSeed: (name: string) => Promise<void>;
-  deleteSeed: (id: string) => Promise<void>;
+  addSeed: (name: string) => Promise<boolean>;
+  deleteSeed: (id: string) => Promise<boolean>;
   /** Operations for managing spray recipes */
-  addSprayRecipe: (recipe: Omit<SprayRecipe, 'id'>) => Promise<void>;
-  updateSprayRecipe: (recipe: SprayRecipe) => Promise<void>;
-  deleteSprayRecipe: (id: string) => Promise<void>;
+  addSprayRecipe: (recipe: Omit<SprayRecipe, 'id'>) => Promise<boolean>;
+  updateSprayRecipe: (recipe: SprayRecipe) => Promise<boolean>;
+  deleteSprayRecipe: (id: string) => Promise<boolean>;
   /** Operations for managing fertilizer recipes */
-  addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id'>) => Promise<boolean>;
+  addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id' | 'farm_id'>) => Promise<boolean>;
   updateFertilizerRecipe: (recipe: FertilizerRecipe) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
   /** Global sign out and cache clearing */
