@@ -98,11 +98,9 @@ export default function Activity() {
     });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     const ids = Array.from(selected);
     
-    // When deleting from 'all' tab, we must route each ID to its correct delete function
-    // based on the record type. We can use unifiedRecords to find the types.
     const toDelete = unifiedRecords.filter(r => ids.includes(r.data.id));
     const byType = toDelete.reduce((acc, r) => {
       acc[r.type] = acc[r.type] || [];
@@ -110,13 +108,15 @@ export default function Activity() {
       return acc;
     }, {} as Record<string, string[]>);
 
-    if (byType.plant) deletePlantRecords(byType.plant);
-    if (byType.spray) deleteSprayRecords(byType.spray);
-    if (byType.harvest) deleteHarvestRecords(byType.harvest);
-    if (byType.hay) deleteHayHarvestRecords(byType.hay);
-    if (byType.fertilizer) deleteFertilizerApplications(byType.fertilizer);
-    if (byType.tillage) deleteTillageRecords(byType.tillage);
-    if (byType.grain) deleteGrainMovements(byType.grain);
+    await Promise.all([
+      byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
+      byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
+      byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
+      byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
+      byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
+      byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
+      byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
+    ]);
 
     setSelected(new Set());
     setConfirmDelete(false);
