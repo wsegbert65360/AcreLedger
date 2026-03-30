@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useFarm } from '@/store/farmStore';
+import { toast } from 'sonner';
 import { AlertTriangle, ArrowRight, History, Upload, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function SeasonRolloverModal() {
-    const { activeSeason, rolloverToNewSeason, restoreFromBackup } = useFarm();
+    const { activeSeason, rolloverToNewSeason, restoreFromBackup, loading } = useFarm();
     const [open, setOpen] = useState(false);
     const [restoring, setRestoring] = useState(false);
     const [restoreSuccess, setRestoreSuccess] = useState(false);
@@ -38,15 +39,19 @@ export default function SeasonRolloverModal() {
         try {
             const text = await file.text();
             const data = JSON.parse(text);
-            await restoreFromBackup(data);
-            setRestoreSuccess(true);
-            setTimeout(() => {
-                setRestoreSuccess(false);
-                setOpen(false);
-            }, 2000);
+            const success = await restoreFromBackup(data);
+            if (success) {
+                setRestoreSuccess(true);
+                setTimeout(() => {
+                    setRestoreSuccess(false);
+                    setOpen(false);
+                }, 2000);
+            } else {
+                toast.error('Restore failed. Check your backup file.');
+            }
         } catch (err) {
             console.error('Failed to restore:', err);
-            alert('Invalid backup file format.');
+            toast.error('Invalid backup file format.');
         } finally {
             setRestoring(false);
         }
@@ -139,9 +144,17 @@ export default function SeasonRolloverModal() {
                     </Button>
                     <Button
                         onClick={handleRollover}
-                        className="bg-amber-500 text-amber-950 hover:bg-amber-600 font-bold"
+                        disabled={loading}
+                        className="bg-amber-500 text-amber-950 hover:bg-amber-600 font-bold min-w-[140px]"
                     >
-                        START {currentYear} SEASON
+                        {loading ? (
+                            <>
+                                <Loader2 size={16} className="mr-2 animate-spin" />
+                                ROLLING OVER...
+                            </>
+                        ) : (
+                            `START ${currentYear} SEASON`
+                        )}
                     </Button>
                 </DialogFooter>
             </DialogContent>

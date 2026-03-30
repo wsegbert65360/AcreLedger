@@ -52,9 +52,9 @@ interface UseSeasonManagementArgs {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const CURRENT_YEAR = new Date().getFullYear();
+const getCurrentYear = () => new Date().getFullYear();
 const MIN_SEASON_YEAR = 2000;
-const MAX_SEASON_YEAR = CURRENT_YEAR + 1;
+const MAX_SEASON_YEAR = getCurrentYear() + 1;
 
 function isValidYear(year: number): boolean {
   return Number.isInteger(year) && year >= MIN_SEASON_YEAR && year <= MAX_SEASON_YEAR;
@@ -274,8 +274,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setFertilizerRecipes([]);
     setTillageRecords([]);
     setFarmId(null);
-    setActiveSeason(CURRENT_YEAR);
-    setViewingSeason(CURRENT_YEAR);
+    setActiveSeason(getCurrentYear());
+    setViewingSeason(getCurrentYear());
 
     toast.success(`Local cache cleared (${keysToRemove.length} item${keysToRemove.length !== 1 ? 's' : ''} removed).`);
   }, [

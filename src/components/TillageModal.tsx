@@ -43,7 +43,6 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
             date,
             implementType: implementType,
             notes: notes.trim(),
-            farm_id: field.farm_id || '',
         };
 
         setIsSaving(true);
@@ -60,7 +59,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                     seasonYear: initialData.seasonYear,
                     timestamp: initialData.timestamp,
                     deleted_at: initialData.deleted_at,
-                    farm_id: data.farm_id
+                    farm_id: initialData.farm_id
                 });
             } else {
                 success = await addTillageRecord(data);

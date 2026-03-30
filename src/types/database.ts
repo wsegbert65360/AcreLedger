@@ -1,6 +1,9 @@
 /**
  * Manual type definitions for Supabase table rows.
  * In a production app, these would be generated via 'supabase gen types typescript'.
+ * 
+ * Note on Timestamps: DB stores as ISO string (timestamptz), mappers convert 
+ * to/from Unix ms numbers for app-level standard.
  */
 
 export interface FieldRow {
@@ -16,9 +19,19 @@ export interface FieldRow {
     producer_share?: number | null;
     irrigation_practice?: string | null;
     intended_use?: string | null;
-    boundary?: any;
+    boundary?: { type: string; coordinates: number[][][] } | null;
     deleted_at?: string | null;
     notes?: string | null;
+}
+
+export interface ProductEntry {
+    product: string;
+    rate: string;
+    rateUnit: string;
+    epaRegNumber?: string | null;
+    activeIngredients?: string | null;
+    totalProductAmount?: string | null;
+    totalProductUnit?: string | null;
 }
 
 export interface BinRow {
@@ -54,11 +67,11 @@ export interface SprayRecordRow {
     farm_id: string;
     field_id: string;
     field_name: string;
-    products?: any[];
+    products?: ProductEntry[] | null;
     wind_speed: number;
     temperature: number;
-    spray_date: string;
-    start_time: string;
+    spray_date: string | null;
+    start_time: string | null;
     end_time: string | null;
     equipment_id: string;
     applicator_name: string;
@@ -116,8 +129,8 @@ export interface HayHarvestRow {
     bale_count: number;
     cutting_number: number;
     bale_type: string;
-    temperature: number;
-    conditions: string;
+    temperature: number | null;
+    conditions: string | null;
     season_year: number;
     timestamp: string;
     deleted_at?: string | null;
@@ -131,8 +144,8 @@ export interface GrainMovementRow {
     type: 'in' | 'out';
     bushels: number;
     moisture_percent: number;
-    source_field_name: string;
-    destination: string;
+    source_field_name: string | null;
+    destination: string | null;
     price?: number | null;
     season_year: number;
     timestamp: string;
@@ -156,7 +169,7 @@ export interface SprayRecipeRow {
     id: string;
     farm_id: string;
     name: string;
-    products: any[];
+    products: ProductEntry[];
     applicator_name: string;
     license_number: string;
     target_pest: string;

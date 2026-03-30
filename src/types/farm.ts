@@ -215,7 +215,7 @@ export interface FertilizerApplication {
 
 export interface TillageRecord {
   id: string;
-  farm_id: string;
+  farm_id?: string;
   fieldId: string;
   fieldName: string;
   date: string;
