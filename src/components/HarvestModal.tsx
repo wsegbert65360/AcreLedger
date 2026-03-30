@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,31 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
   const [scaleTicketNumber, setScaleTicketNumber] = useState(initialData?.scaleTicketNumber || '');
   const [harvestDate, setHarvestDate] = useState(initialData?.harvestDate || new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialData) {
+      setDestination(initialData.destination || null);
+      setBinId(initialData.binId || '');
+      setMoisture(initialData.moisturePercent?.toString() || '');
+      setLandlordSplit(initialData.landlordSplitPercent?.toString() || '');
+      setBushels(initialData.bushels?.toString() || '');
+      setCrop(initialData.crop || '');
+      setLandlordName(initialData.landlordName || '');
+      setScaleTicketNumber(initialData.scaleTicketNumber || '');
+      setHarvestDate(initialData.harvestDate || new Date().toISOString().split('T')[0]);
+    } else {
+      setDestination(null);
+      setBinId('');
+      setMoisture('');
+      setLandlordSplit('');
+      setBushels('');
+      setCrop('');
+      setLandlordName('');
+      setScaleTicketNumber('');
+      setHarvestDate(new Date().toISOString().split('T')[0]);
+    }
+  }, [initialData, field, open]);
 
   const reset = () => {
     if (!initialData) {
