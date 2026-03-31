@@ -19,20 +19,27 @@ export function useAuth() {
         setSession(initialSession);
 
         if (initialSession?.user) {
-          // Priority 1: Storage (Fastest persistent path)
-          const prefix = initialSession.user.id;
-          const storedId = localStorage.getItem(`${prefix}_al_farm_id`);
-          const storedSeason = localStorage.getItem(`${prefix}_al_active_season`);
-          
-          if (storedId) setFarmId(storedId);
-          if (storedSeason) {
-            setActiveSeason(parseInt(storedSeason, 10));
-            setViewingSeason(parseInt(storedSeason, 10));
-          }
-
-          // Priority 2: JWT (Authoritative cloud path)
+          // Use JWT as the single authoritative source for farm_id.
+          // Skip localStorage read to avoid flash of stale data.
           const jwtFarmId = initialSession.user.app_metadata?.farm_id || initialSession.user.user_metadata?.farm_id;
           if (jwtFarmId) setFarmId(jwtFarmId);
+
+          // Only fall back to localStorage if JWT has no farm_id (e.g., first login)
+          if (!jwtFarmId) {
+            const prefix = initialSession.user.id;
+            const storedId = localStorage.getItem(`${prefix}_al_farm_id`);
+            if (storedId) setFarmId(storedId);
+          }
+
+          const prefix = initialSession.user.id;
+          const storedSeason = localStorage.getItem(`${prefix}_al_active_season`);
+          if (storedSeason) {
+            const parsedSeason = parseInt(storedSeason, 10);
+            if (!isNaN(parsedSeason)) {
+              setActiveSeason(parsedSeason);
+              setViewingSeason(parsedSeason);
+            }
+          }
         }
       } catch (err) {
         console.error('Session initialization failed:', err);
