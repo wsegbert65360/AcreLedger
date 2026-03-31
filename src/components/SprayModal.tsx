@@ -167,6 +167,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   useEffect(() => {
     if (!open) return;
     if (initialData) {
+      // Immediately show validation for incomplete records
+      if (initialData.nonCompliant) {
+        setShowValidation(true);
+        setComplianceOpen(true);
+      }
       const acres = parseFloat(initialData.treatedAreaSize?.toString() || field.acreage.toString());
       setProducts(initialData.products?.map(p => {
         const rate = parseFloat(p.rate || '0');
@@ -206,6 +211,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       if (initialData.temperature && initialData.temperature > 0) setManualTemperature(initialData.temperature.toString());
       if (initialData.relativeHumidity && initialData.relativeHumidity > 0) setManualHumidity(initialData.relativeHumidity.toString());
     } else {
+      setShowValidation(false);
+      setComplianceOpen(true);
       resetComplianceFields();
     }
   }, [open, initialData, field]);
@@ -292,7 +299,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setProducts(prev => prev.filter((_, idx) => idx !== i));
   };
 
-  const [showValidation, setShowValidation] = useState(false);
+  const [showValidation, setShowValidation] = useState(() => !!initialData?.nonCompliant);
   const [complianceOpen, setComplianceOpen] = useState(true);
 
   /** Returns class names to visually highlight a required field that's empty during validation. */
@@ -462,23 +469,23 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="col-span-1">
-                        <Label htmlFor={`productName-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Trade Name *</Label>
+                        <Label htmlFor={`productName-${i}`} className={`text-[9px] font-mono uppercase ${missingLabel(p.product)}`}>Trade Name *{needBadge(p.product)}</Label>
                         <Input
                           id={`productName-${i}`}
                           value={p.product}
                           onChange={e => updateProduct(i, 'product', e.target.value)}
                           placeholder="e.g. Roundup"
-                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.product.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${missing(p.product)}`}
                         />
                       </div>
                       <div className="col-span-1">
-                        <Label htmlFor={`epaReg-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
+                        <Label htmlFor={`epaReg-${i}`} className={`text-[9px] font-mono uppercase ${missingLabel(p.epaRegNumber || '')}`}>EPA Reg # {needBadge(p.epaRegNumber || '')}</Label>
                         <Input
                           id={`epaReg-${i}`}
                           value={p.epaRegNumber}
                           onChange={e => updateProduct(i, 'epaRegNumber', e.target.value)}
                           placeholder="e.g. 524-549"
-                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.epaRegNumber?.trim() ? 'border-yellow-500/50' : ''}`}
+                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${missing(p.epaRegNumber || '')}`}
                         />
                       </div>
                     </div>
