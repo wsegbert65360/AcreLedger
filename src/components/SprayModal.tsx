@@ -57,15 +57,20 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Auto-calculate total amount based on first product or general rate if needed 
+  // Auto-calculate total amount applied: sum ALL products' per-product totals
   useEffect(() => {
-    const rate = parseFloat(products[0]?.rate || '0');
     const acres = parseFloat(treatedAreaSize);
-    const unit = products[0]?.rateUnit || 'fl oz/ac';
-    
-    if (!isNaN(rate) && !isNaN(acres)) {
-      const { value } = calculateTotalAmount(rate, acres, unit);
-      setTotalAmountApplied(value.toString());
+    if (isNaN(acres) || acres <= 0) return;
+
+    let grandTotal = 0;
+    for (const p of products) {
+      const rate = parseFloat(p.rate || '0');
+      if (isNaN(rate) || rate <= 0) continue;
+      const { value } = calculateTotalAmount(rate, acres, p.rateUnit);
+      grandTotal += value;
+    }
+    if (grandTotal > 0) {
+      setTotalAmountApplied(grandTotal.toFixed(2).replace(/\.?0+$/, ''));
     }
   }, [products, treatedAreaSize]);
 
@@ -114,7 +119,19 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   useEffect(() => {
     if (!open) return;
     if (initialData) {
-      setProducts(initialData.products?.map(p => ({ ...p, ui_id: p.ui_id || crypto.randomUUID() })) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+      const acres = parseFloat(initialData.treatedAreaSize?.toString() || field.acreage.toString());
+      setProducts(initialData.products?.map(p => {
+        const rate = parseFloat(p.rate || '0');
+        let totalProductAmount = p.totalProductAmount || '';
+        let totalProductUnit = p.totalProductUnit || 'gal';
+        // Auto-fill per-product totals for records saved before this feature existed
+        if (!totalProductAmount && !isNaN(rate) && !isNaN(acres) && rate > 0 && acres > 0) {
+          const { value, unit } = calculateTotalAmount(rate, acres, p.rateUnit);
+          totalProductAmount = value.toString();
+          totalProductUnit = unit;
+        }
+        return { ...p, ui_id: p.ui_id || crypto.randomUUID(), epaRegNumber: p.epaRegNumber || '', totalProductAmount, totalProductUnit };
+      }) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
       setApplicatorName(initialData.applicatorName || '');
       setLicenseNumber(initialData.licenseNumber || '');
       setTargetPest(initialData.targetPest || 'grass/broadleaves');
@@ -125,7 +142,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setSiteAddress(initialData.siteAddress || field.name);
       setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field.acreage.toString());
       setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
-      setTotalAmountApplied(initialData.totalAmountApplied?.toString() || '');
+      // Don't override totalAmountApplied here — the useEffect above will recalculate it
       setMixtureRate(initialData.mixtureRate || '');
       setTotalMixtureVolume(initialData.totalMixtureVolume || '');
       setInvolvedTechnicians(initialData.involvedTechnicians || '');
@@ -143,18 +160,24 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   }, [open, initialData, field]);
 
   useEffect(() => {
-    if (open && field.lat != null && field.lng != null) {
-      setLoading(true);
-      WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
-        setWeather(w);
-        if (w && !manualWindDirection) setManualWindDirection(w.windDirection);
-        setLoading(false);
-      }).catch(() => {
-        setLoading(false);
-      });
-    } else if (open) {
+    if (!open) return;
+    if (field.lat == null || field.lng == null) {
       setLoading(false);
+      return;
     }
+    const controller = new AbortController();
+    setLoading(true);
+    WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`, controller.signal)
+      .then(w => {
+        if (!controller.signal.aborted) {
+          setWeather(w);
+          if (w && !manualWindDirection) setManualWindDirection(w.windDirection);
+          setLoading(false);
+        }
+      }).catch((err) => {
+        if (err.name !== 'AbortError') setLoading(false);
+      });
+    return () => controller.abort();
   }, [open, field.lat, field.lng]);
 
   const handleRecipeSelect = (recipeId: string) => {

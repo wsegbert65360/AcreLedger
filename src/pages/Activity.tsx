@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout } from 'lucide-react';
+import { toast } from 'sonner';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import type { 
@@ -106,7 +107,7 @@ export default function Activity() {
 
   const filteredSpray = useMemo(() =>
     sprayRecords
-      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.products?.some(p => p.product.toLowerCase().includes(search.toLowerCase()))))
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.products?.some(p => p.product?.toLowerCase().includes(search.toLowerCase()))))
       .sort((a, b) => b.timestamp - a.timestamp),
     [sprayRecords, search, viewingSeason]
   );
@@ -169,18 +170,23 @@ export default function Activity() {
       return acc;
     }, {} as Record<string, string[]>);
 
-    await Promise.all([
-      byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
-      byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
-      byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
-      byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
-      byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
-      byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
-      byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
-    ]);
+    try {
+      await Promise.all([
+        byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
+        byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
+        byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
+        byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
+        byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
+        byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
+        byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
+      ]);
 
-    setSelected(new Set());
-    setConfirmDelete(false);
+      setSelected(new Set());
+      setConfirmDelete(false);
+    } catch (error) {
+      console.error('Bulk delete failed:', error);
+      toast.error('Delete failed — some records could not be deleted. Please try again.');
+    }
   };
 
   return (
