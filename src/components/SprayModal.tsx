@@ -809,7 +809,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             className={`touch-target w-full font-bold py-6 text-base disabled:opacity-50 disabled:grayscale ${
               isFullyCompliant
                 ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
-                : 'bg-destructive text-white hover:bg-destructive/90'
+                : 'bg-yellow-600 text-white hover:bg-yellow-500'
             }`}
           >
             {isSaving ? (
