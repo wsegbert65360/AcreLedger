@@ -147,10 +147,29 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
     setLoading(true);
     try {
-      // 1. Validate schema
+      // 1. Validate schema with strict per-table type checking
       const backupData = backupSchema.parse(rawData);
 
-      // 2. Map all records to DB format
+      // 2. Safety net: auto-backup current state before restoring.
+      //    If the restore fails partway through, the user has a recovery point.
+      const preRestoreBackup = {
+        fields, bins, plantRecords, sprayRecords, harvestRecords,
+        hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+        savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
+        rolloverDate: new Date().toISOString(),
+        _preRestoreMarker: true,
+      };
+      const preRestoreBlob = new Blob([JSON.stringify(preRestoreBackup)], { type: 'application/json' });
+      const preRestoreUrl = URL.createObjectURL(preRestoreBlob);
+      const preRestoreLink = document.createElement('a');
+      preRestoreLink.href = preRestoreUrl;
+      preRestoreLink.download = `PRE_RESTORE_BACKUP_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(preRestoreLink);
+      preRestoreLink.click();
+      document.body.removeChild(preRestoreLink);
+      setTimeout(() => URL.revokeObjectURL(preRestoreUrl), 2000);
+
+      // 3. Map all records to DB format
       const fieldsToDb      = (backupData.fields               ?? []).map((f) => ({ ...mapFieldToDb(f),      farm_id }));
       const binsToDb        = (backupData.bins                 ?? []).map((b) => ({ ...mapBinToDb(b),        farm_id }));
       const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => ({ ...mapPlantToDb(r),      farm_id }));
@@ -164,9 +183,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => ({ ...mapFertilizerRecipeToDb(r), farm_id }));
       const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => ({ ...mapRecipeToDb(r),     farm_id }));
 
-      // 3. Upsert sequentially so a failure is caught before partial writes
-      //    compound beyond the first table. This is the safest approach without
-      //    DB-level transactions available on the client.
+      // 4. Upsert sequentially. Note: a server-side atomic transaction
+      //    would require a dedicated edge function. In the interim,
+      //    the pre-restore backup downloaded above serves as the recovery
+      //    mechanism if a partial write occurs.
       const tables: [string, unknown[]][] = [
         ['fields',                  fieldsToDb],
         ['bins',                    binsToDb],
@@ -182,13 +202,12 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         ['spray_recipes',           recipesToDb],
       ];
 
-      // 3. Upsert sequentially so a failure is caught before partial writes
       for (const [table, data] of tables) {
         if (data.length === 0) continue;
         const { error } = await supabase.from(table).upsert(data);
         if (error) {
           console.error(`Restore failed on table "${table}":`, error);
-          throw new Error(`Failed to restore "${table}": ${error.message}`);
+          throw new Error(`Failed to restore "${table}": ${error.message}. Use the PRE_RESTORE_BACKUP file to recover.`);
         }
       }
 
