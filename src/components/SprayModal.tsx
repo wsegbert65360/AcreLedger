@@ -29,6 +29,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const { addSprayRecord, updateSprayRecord, sprayRecipes, session, activeSeason, farmName } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
 
+  /** Read saved defaults from localStorage (set in Settings > Spray Defaults) */
+  const getDefaults = () => ({
+    equipmentId: localStorage.getItem(`al_equipment_id_${userPrefix}`) || '',
+    cropOrSiteTreated: localStorage.getItem(`al_default_crop_${userPrefix}`) || '',
+    applicationMethod: localStorage.getItem(`al_default_app_method_${userPrefix}`) || 'Ground Broadcast',
+    rei: localStorage.getItem(`al_default_rei_${userPrefix}`) || '12h',
+    targetPest: localStorage.getItem(`al_default_target_pest_${userPrefix}`) || '',
+  });
+
   /** Creates a new empty product entry with all fields initialized to defaults. */
   const createEmptyProduct = (): SprayRecipeProduct => ({
     ui_id: crypto.randomUUID(),
@@ -47,7 +56,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
   const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
-  const [targetPest, setTargetPest] = useState(initialData?.targetPest || 'grass/broadleaves');
+  const [targetPest, setTargetPest] = useState(initialData?.targetPest || getDefaults().targetPest || 'grass/broadleaves');
   const [sprayDate, setSprayDate] = useState(initialData?.sprayDate || new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState(() => initialData?.startTime || new Date().toTimeString().slice(0, 5));
   const [involvedTechnicians, setInvolvedTechnicians] = useState(initialData?.involvedTechnicians || '');
@@ -55,17 +64,18 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || field.acreage.toString());
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
   const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
-  const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
+  const defaults = getDefaults();
+  const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || defaults.equipmentId || 'Miller Nitro');
   const [manualWindDirection, setManualWindDirection] = useState<string>(initialData?.windDirection || '');
   const [isPremixed, setIsPremixed] = useState(initialData?.isPremixed || false);
 
   // New Universal Fields
   const [endTime, setEndTime] = useState(initialData?.endTime || '');
   const [isEndTimeManual, setIsEndTimeManual] = useState(!!initialData?.endTime);
-  const [cropOrSiteTreated, setCropOrSiteTreated] = useState(initialData?.cropOrSiteTreated || '');
-  const [applicationMethod, setApplicationMethod] = useState(initialData?.applicationMethod || 'Ground Broadcast');
+  const [cropOrSiteTreated, setCropOrSiteTreated] = useState(initialData?.cropOrSiteTreated || defaults.cropOrSiteTreated || '');
+  const [applicationMethod, setApplicationMethod] = useState(initialData?.applicationMethod || defaults.applicationMethod || 'Ground Broadcast');
   const [treatedAreaUnit, setTreatedAreaUnit] = useState(initialData?.treatedAreaUnit || 'ac');
-  const [rei, setRei] = useState(initialData?.rei || '12h');
+  const [rei, setRei] = useState(initialData?.rei || defaults.rei || '12h');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
@@ -129,17 +139,19 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
   const resetComplianceFields = () => {
     const now = new Date();
+    const d = getDefaults();
     setStartTime(now.toTimeString().slice(0, 5));
     setEndTime('');
     setIsEndTimeManual(false);
-    setCropOrSiteTreated('');
-    setApplicationMethod('Ground Broadcast');
+    setCropOrSiteTreated(d.cropOrSiteTreated || '');
+    setApplicationMethod(d.applicationMethod || 'Ground Broadcast');
     setTreatedAreaUnit('ac');
-    setRei('12h');
+    setRei(d.rei || '12h');
     setNotes('');
     setSiteAddress(field.name);
     setTreatedAreaSize(field.acreage.toString());
-    setTargetPest('grass/broadleaves');
+    setTargetPest(d.targetPest || 'grass/broadleaves');
+    setEquipmentId(d.equipmentId || 'Miller Nitro');
     setMixtureRate('');
     setTotalMixtureVolume('');
     setIsPremixed(false);
