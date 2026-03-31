@@ -161,15 +161,52 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setSelectedRecipeId(recipeId);
     const recipe = sprayRecipes.find(r => r.id === recipeId);
     if (recipe) {
-      setProducts(recipe.products.map(p => ({ ...p, ui_id: crypto.randomUUID(), epaRegNumber: p.epaRegNumber || '' })));
+      const acres = parseFloat(treatedAreaSize);
+      setProducts(recipe.products.map(p => {
+        const rate = parseFloat(p.rate || '0');
+        let totalProductAmount = p.totalProductAmount || '';
+        let totalProductUnit = p.totalProductUnit || 'gal';
+        if (!isNaN(rate) && !isNaN(acres) && rate > 0 && acres > 0) {
+          const { value, unit } = calculateTotalAmount(rate, acres, p.rateUnit);
+          totalProductAmount = value.toString();
+          totalProductUnit = unit;
+        }
+        return { ...p, ui_id: crypto.randomUUID(), epaRegNumber: p.epaRegNumber || '', totalProductAmount, totalProductUnit };
+      }));
       if (recipe.applicatorName) setApplicatorName(recipe.applicatorName);
       if (recipe.licenseNumber) setLicenseNumber(recipe.licenseNumber);
       if (recipe.targetPest) setTargetPest(recipe.targetPest);
     }
   };
 
+  const updateTreatedArea = (val: string) => {
+    setTreatedAreaSize(val);
+    const acres = parseFloat(val);
+    if (isNaN(acres) || acres <= 0) return;
+    setProducts(prev => prev.map(p => {
+      const rate = parseFloat(p.rate || '0');
+      if (isNaN(rate) || rate <= 0) return p;
+      const { value, unit } = calculateTotalAmount(rate, acres, p.rateUnit);
+      return { ...p, totalProductAmount: value.toString(), totalProductUnit: unit };
+    }));
+  };
+
   const updateProduct = (i: number, field: keyof SprayRecipeProduct, value: string) => {
-    setProducts(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+    setProducts(prev => prev.map((p, idx) => {
+      if (idx !== i) return p;
+      const updated = { ...p, [field]: value };
+      // Auto-calculate per-product total when rate or unit changes
+      if (field === 'rate' || field === 'rateUnit') {
+        const acres = parseFloat(treatedAreaSize);
+        const rate = parseFloat(updated.rate || '0');
+        if (!isNaN(rate) && !isNaN(acres) && rate > 0 && acres > 0) {
+          const { value: totalVal, unit: totalUnit } = calculateTotalAmount(rate, acres, updated.rateUnit);
+          updated.totalProductAmount = totalVal.toString();
+          updated.totalProductUnit = totalUnit;
+        }
+      }
+      return updated;
+    }));
   };
 
   const addProduct = () => {
@@ -378,12 +415,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                               <SelectValue placeholder="Unit" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="fl oz/ac">fl oz/ac</SelectItem>
-                              <SelectItem value="pt/ac">pt/ac</SelectItem>
-                              <SelectItem value="qt/ac">qt/ac</SelectItem>
-                              <SelectItem value="gal/ac">gal/ac</SelectItem>
-                              <SelectItem value="oz/ac">oz/ac</SelectItem>
-                              <SelectItem value="lb/ac">lb/ac</SelectItem>
+                              <SelectItem value="fl oz/ac">fl oz/ac (Liq)</SelectItem>
+                              <SelectItem value="pt/ac">pt/ac (Liq)</SelectItem>
+                              <SelectItem value="qt/ac">qt/ac (Liq)</SelectItem>
+                              <SelectItem value="gal/ac">gal/ac (Liq)</SelectItem>
+                              <SelectItem value="oz/ac">oz/ac (Dry)</SelectItem>
+                              <SelectItem value="lb/ac">lb/ac (Dry)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -406,12 +443,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                               <SelectValue placeholder="Unit" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="gal">gal</SelectItem>
-                              <SelectItem value="qt">qt</SelectItem>
-                              <SelectItem value="pt">pt</SelectItem>
-                              <SelectItem value="fl oz">fl oz</SelectItem>
-                              <SelectItem value="lb">lb</SelectItem>
-                              <SelectItem value="oz">oz</SelectItem>
+                              <SelectItem value="gal">gal (Liq)</SelectItem>
+                              <SelectItem value="qt">qt (Liq)</SelectItem>
+                              <SelectItem value="pt">pt (Liq)</SelectItem>
+                              <SelectItem value="fl oz">fl oz (Liq)</SelectItem>
+                              <SelectItem value="lb">lb (Dry)</SelectItem>
+                              <SelectItem value="oz">oz (Dry)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -497,7 +534,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     <div>
                       <Label htmlFor="treatedArea" className="text-[10px] font-mono text-muted-foreground uppercase">Treated Area Size *</Label>
                       <div className="flex gap-1">
-                        <Input id="treatedArea" value={treatedAreaSize} onChange={e => setTreatedAreaSize(e.target.value)} placeholder="80" className={`mt-0.5 bg-muted border-border text-foreground h-9 flex-1 ${showValidation && !treatedAreaSize.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+                        <Input id="treatedArea" value={treatedAreaSize} onChange={e => updateTreatedArea(e.target.value)} placeholder="80" className={`mt-0.5 bg-muted border-border text-foreground h-9 flex-1 ${showValidation && !treatedAreaSize.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                         <Select value={treatedAreaUnit} onValueChange={setTreatedAreaUnit}>
                           <SelectTrigger className="mt-0.5 bg-muted border-border text-foreground h-9 w-16 text-xs capitaize">
                             <SelectValue />

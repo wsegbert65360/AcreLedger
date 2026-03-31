@@ -90,12 +90,12 @@ export default function RecipeForm({
                       <SelectValue placeholder="Unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="fl oz/ac">fl oz/ac</SelectItem>
-                      <SelectItem value="pt/ac">pt/ac</SelectItem>
-                      <SelectItem value="qt/ac">qt/ac</SelectItem>
-                      <SelectItem value="gal/ac">gal/ac</SelectItem>
-                      <SelectItem value="oz/ac">oz/ac</SelectItem>
-                      <SelectItem value="lb/ac">lb/ac</SelectItem>
+                      <SelectItem value="fl oz/ac">fl oz/ac (Liq)</SelectItem>
+                      <SelectItem value="pt/ac">pt/ac (Liq)</SelectItem>
+                      <SelectItem value="qt/ac">qt/ac (Liq)</SelectItem>
+                      <SelectItem value="gal/ac">gal/ac (Liq)</SelectItem>
+                      <SelectItem value="oz/ac">oz/ac (Dry)</SelectItem>
+                      <SelectItem value="lb/ac">lb/ac (Dry)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
