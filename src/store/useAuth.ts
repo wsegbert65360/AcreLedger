@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { RainService } from '@/services/RainService';
 // Storage utilities for session persistence
 
 export function useAuth() {
@@ -112,6 +113,7 @@ export function useAuth() {
   }, [session?.user?.id]); // Only runs when user changes
 
   const signOut = useCallback(async () => {
+    RainService.clearCache();
     await supabase.auth.signOut();
   }, []);
 

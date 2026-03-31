@@ -129,5 +129,10 @@ export const RainService = {
 
   __test_clearCache(): void {
     promiseCache.clear();
+  },
+
+  /** Clear all cached rainfall promises (call on logout to prevent stale data) */
+  clearCache(): void {
+    promiseCache.clear();
   }
 };

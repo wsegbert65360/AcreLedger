@@ -11,7 +11,8 @@ import {
 
 // --- Safe Mapping Helpers (Runtime Validation) ---
 
-function safeNum(val: any, fallback = 0): number {
+function safeNum(val: unknown, fallback = 0): number {
+    if (val === null || val === undefined) return fallback;
     const n = Number(val);
     return isNaN(n) ? fallback : n;
 }

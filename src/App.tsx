@@ -17,7 +17,14 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { AnimatePresence, motion } from "framer-motion";
 import FieldDetailScreen from "./pages/FieldDetailScreen";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60_000, // 5 minutes
+      retry: 1,
+    },
+  },
+});
 
 const pageVariants = {
   initial: { opacity: 0, y: 8 },

@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { WeatherService } from '@/services/WeatherService';
 import { 
   Sprout, Leaf, Tractor, ArrowLeft, 
   Cloud, MapPin, Droplets, RefreshCw, 
@@ -105,20 +104,6 @@ export default function FieldDetailScreen() {
     const diff = new Date().getTime() - new Date(latestSpray.sprayDate).getTime();
     return Math.floor(diff / (1000 * 60 * 60 * 24));
   }, [latestSpray]);
-
-  // Fetching Logic
-  useEffect(() => {
-    if (!field?.id || field.lat == null || field.lng == null) return;
-    const controller = new AbortController();
-    WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
-      .then(() => {
-        // Data fetched but unused presently in UI header - keeping side effect for now if needed elsewhere
-      }).catch((err) => {
-        if (err.name === 'AbortError') return;
-      });
-    return () => controller.abort();
-  }, [field?.id, field?.lat, field?.lng]);
-
 
   const handleFetchRain = useCallback(async (signal?: AbortSignal) => {
     if (!field || fetchingRainRef.current) return;

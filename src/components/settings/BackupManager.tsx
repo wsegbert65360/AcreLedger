@@ -1,23 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Database, Download, Clock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
+import { supabase } from '@/lib/supabase';
 
-const LAST_BACKUP_KEY = 'acreledger_last_backup';
+function getBackupKey(): string {
+  // Scope to user to prevent cross-user timestamp leaks
+  try {
+    const { data: { session } } = supabase.auth.getSession();
+    if (session?.user?.id) return `${session.user.id}_acreledger_last_backup`;
+  } catch { /* fall through */ }
+  return 'acreledger_last_backup';
+}
 
 function loadLastBackup(): Date | null {
   try {
-    const raw = localStorage.getItem(LAST_BACKUP_KEY);
+    const raw = localStorage.getItem(getBackupKey());
     return raw ? new Date(raw) : null;
   } catch { return null; }
 }
 
 function saveLastBackup(): void {
   try {
-    localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+    localStorage.setItem(getBackupKey(), new Date().toISOString());
   } catch { /* ignore */ }
 }
 
