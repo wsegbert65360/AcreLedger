@@ -297,11 +297,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
   /** Returns class names to visually highlight a required field that's empty during validation. */
   const missing = (value: string) => showValidation && !value.trim()
-    ? 'border-destructive ring-2 ring-destructive bg-destructive/10'
+    ? 'border-red-500 ring-2 ring-red-500 bg-red-100 dark:bg-red-900/30'
     : '';
   const missingLabel = (value: string) => showValidation && !value.trim()
-    ? 'text-destructive font-bold'
+    ? 'text-red-600 dark:text-red-400 font-bold'
     : '';
+  /** Inline indicator — renders a red "FILL" tag next to the label text. */
+  const needBadge = (value: string) => showValidation && !value.trim()
+    ? <span className="text-red-500 font-bold ml-1 text-[9px]">← FILL</span>
+    : null;
 
   const isMinimumValid = products.length > 0 && products.some(p => p.product.trim()) && !!sprayDate;
 
@@ -567,6 +571,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             <AccordionItem value="compliance" className="border-spray/20">
               <AccordionTrigger className="text-spray font-mono text-xs font-bold hover:no-underline py-2">
                 APPLICATION & COMPLIANCE DETAILS
+                {showValidation && !isFullyCompliant && (
+                  <span className="ml-2 inline-flex items-center bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                    {missingComplianceFields.length} needed
+                  </span>
+                )}
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
                 <div className="space-y-2">
@@ -575,12 +584,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="startTime" className={`text-[10px] font-mono uppercase ${missingLabel(startTime)}`}>Start Time *</Label>
+                      <Label htmlFor="startTime" className={`text-[10px] font-mono uppercase ${missingLabel(startTime)}`}>Start Time *{needBadge(startTime)}</Label>
                       <Input id="startTime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${missing(startTime)}`} />
                     </div>
                     <div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="endTime" className={`text-[10px] font-mono uppercase ${missingLabel(endTime)}`}>End Time *</Label>
+                        <Label htmlFor="endTime" className={`text-[10px] font-mono uppercase ${missingLabel(endTime)}`}>End Time *{needBadge(endTime)}</Label>
                         <div className="flex items-center gap-1">
                           <span className="text-[8px] font-mono text-muted-foreground">MANUAL</span>
                           <Switch id="endTimeManual" checked={isEndTimeManual} onCheckedChange={setIsEndTimeManual} className="scale-75 h-4 w-7" />
@@ -597,11 +606,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-1">
-                      <Label htmlFor="cropTreated" className={`text-[10px] font-mono uppercase ${missingLabel(cropOrSiteTreated)}`}>Crop / Site Treated *</Label>
+                      <Label htmlFor="cropTreated" className={`text-[10px] font-mono uppercase ${missingLabel(cropOrSiteTreated)}`}>Crop / Site Treated *{needBadge(cropOrSiteTreated)}</Label>
                       <Input id="cropTreated" value={cropOrSiteTreated} onChange={e => setCropOrSiteTreated(e.target.value)} placeholder="e.g. Corn" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${missing(cropOrSiteTreated)}`} />
                     </div>
                     <div>
-                      <Label htmlFor="appMethod" className={`text-[10px] font-mono uppercase ${missingLabel(applicationMethod)}`}>App Method *</Label>
+                      <Label htmlFor="appMethod" className={`text-[10px] font-mono uppercase ${missingLabel(applicationMethod)}`}>App Method *{needBadge(applicationMethod)}</Label>
                       <Select value={applicationMethod} onValueChange={setApplicationMethod}>
                         <SelectTrigger className={`mt-0.5 bg-muted border-border text-foreground h-9 text-xs ${missing(applicationMethod)}`}>
                           <SelectValue placeholder="Select method" />
@@ -626,7 +635,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="treatedArea" className={`text-[10px] font-mono uppercase ${missingLabel(treatedAreaSize)}`}>Treated Area Size *</Label>
+                      <Label htmlFor="treatedArea" className={`text-[10px] font-mono uppercase ${missingLabel(treatedAreaSize)}`}>Treated Area Size *{needBadge(treatedAreaSize)}</Label>
                       <div className="flex gap-1">
                         <Input id="treatedArea" value={treatedAreaSize} onChange={e => updateTreatedArea(e.target.value)} placeholder="80" className={`mt-0.5 bg-muted border-border text-foreground h-9 flex-1 ${missing(treatedAreaSize)}`} />
                         <Select value={treatedAreaUnit} onValueChange={setTreatedAreaUnit}>
@@ -641,7 +650,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="targetPest" className={`text-[10px] font-mono uppercase ${missingLabel(targetPest)}`}>Target Pest(s) *</Label>
+                      <Label htmlFor="targetPest" className={`text-[10px] font-mono uppercase ${missingLabel(targetPest)}`}>Target Pest(s) *{needBadge(targetPest)}</Label>
                       <Input id="targetPest" value={targetPest} onChange={e => setTargetPest(e.target.value)} placeholder="e.g. Pigweed" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${missing(targetPest)}`} />
                     </div>
                   </div>
@@ -658,17 +667,17 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="applicator" className={`text-[10px] font-mono uppercase ${missingLabel(applicatorName)}`}>Cert. Applicator *</Label>
+                      <Label htmlFor="applicator" className={`text-[10px] font-mono uppercase ${missingLabel(applicatorName)}`}>Cert. Applicator *{needBadge(applicatorName)}</Label>
                       <Input id="applicator" value={applicatorName} onChange={e => setApplicatorName(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${missing(applicatorName)}`} />
                     </div>
                     <div>
-                      <Label htmlFor="license" className={`text-[10px] font-mono uppercase ${missingLabel(licenseNumber)}`}>License # *</Label>
+                      <Label htmlFor="license" className={`text-[10px] font-mono uppercase ${missingLabel(licenseNumber)}`}>License # *{needBadge(licenseNumber)}</Label>
                       <Input id="license" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${missing(licenseNumber)}`} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="equipmentId" className={`text-[10px] font-mono uppercase ${missingLabel(equipmentId)}`}>Equipment ID *</Label>
+                      <Label htmlFor="equipmentId" className={`text-[10px] font-mono uppercase ${missingLabel(equipmentId)}`}>Equipment ID *{needBadge(equipmentId)}</Label>
                       <Input id="equipmentId" value={equipmentId} onChange={e => setEquipmentId(e.target.value)} placeholder="e.g. Miller Nitro" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${missing(equipmentId)}`} />
                     </div>
                     <div>
@@ -710,7 +719,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className={`text-[9px] font-mono uppercase ${missingLabel(manualWindDirection)}`}>Wind Direction *</Label>
+                <Label className={`text-[9px] font-mono uppercase ${missingLabel(manualWindDirection)}`}>Wind Direction *{needBadge(manualWindDirection)}</Label>
                 <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
                   <SelectTrigger className={`h-8 bg-background border-border text-xs font-mono ${missing(manualWindDirection)}`}>
                     <SelectValue placeholder="Dir" />
@@ -723,7 +732,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className={`text-[9px] font-mono uppercase ${missingLabel(isManualWeather ? manualWindSpeed : (weather?.wind?.toString() || ''))}`}>Wind Speed (mph) *</Label>
+                <Label className={`text-[9px] font-mono uppercase ${missingLabel(isManualWeather ? manualWindSpeed : (weather?.wind?.toString() || ''))}`}>Wind Speed (mph) *{needBadge(isManualWeather ? manualWindSpeed : (weather?.wind?.toString() || ''))}</Label>
                 {isManualWeather ? (
                   <Input
                     id="manualWindSpeed"
@@ -743,7 +752,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
               <div className="space-y-1">
                 <div className={`text-[9px] font-mono uppercase flex items-center gap-1 ${missingLabel(isManualWeather ? manualTemperature : (weather?.temp?.toString() || ''))}`}>
-                  <Thermometer size={9} /> Temp (°F) *
+                  <Thermometer size={9} /> Temp (°F) *{needBadge(isManualWeather ? manualTemperature : (weather?.temp?.toString() || ''))}
                 </div>
                 {isManualWeather ? (
                   <Input
@@ -761,7 +770,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               </div>
               <div className="space-y-1 text-right">
                 <div className={`text-[9px] font-mono uppercase flex items-center gap-1 justify-end ${missingLabel(isManualWeather ? manualHumidity : (weather?.humidity?.toString() || ''))}`}>
-                  <Droplets size={9} /> Humidity (%) *
+                  <Droplets size={9} /> Humidity (%) *{needBadge(isManualWeather ? manualHumidity : (weather?.humidity?.toString() || ''))}
                 </div>
                 {isManualWeather ? (
                   <Input
