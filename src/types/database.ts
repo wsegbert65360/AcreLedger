@@ -1,10 +1,37 @@
 /**
  * Manual type definitions for Supabase table rows.
  * In a production app, these would be generated via 'supabase gen types typescript'.
- * 
- * Note on Timestamps: DB stores as ISO string (timestamptz), mappers convert 
+ *
+ * Note on Timestamps: DB stores as ISO string (timestamptz), mappers convert
  * to/from Unix ms numbers for app-level standard.
+ *
+ * Last synced: 2026-04-01 against live DB schema (OpenAPI) + all migrations.
  */
+
+// ============================================================
+// Core / Auth Tables
+// ============================================================
+
+export interface FarmRow {
+    id: string;
+    name: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ProfileRow {
+    id: string;
+    farm_data?: Record<string, unknown> | null;
+    updated_at?: string;
+    email?: string | null;
+    farm_id?: string | null;
+    role?: string | null;
+    active_season?: number | null;
+}
+
+// ============================================================
+// Field & Storage Tables
+// ============================================================
 
 export interface FieldRow {
     id: string;
@@ -39,6 +66,7 @@ export interface BinRow {
     farm_id: string;
     name: string;
     capacity: number;
+    created_at?: string;
     deleted_at?: string | null;
 }
 
@@ -155,6 +183,7 @@ export interface GrainMovementRow {
 export interface SavedSeedRow {
     id: string;
     name: string;
+    created_at?: string;
     crop?: string | null;
     variety?: string | null;
     supplier?: string | null;
@@ -182,6 +211,7 @@ export interface FertilizerRecipeRow {
     farm_id: string;
     name: string;
     npk_ratio: string;
+    created_at?: string;
     deleted_at?: string | null;
 }
 
@@ -211,4 +241,44 @@ export interface TillageRecordRow {
     season_year: number;
     timestamp: string;
     deleted_at?: string | null;
+}
+
+// ============================================================
+// Rainfall / Weather Tables
+// ============================================================
+
+export interface FieldRainfallHourlyRow {
+    id: string;
+    field_id: string;
+    timestamp_utc: string;
+    rainfall_in: number;
+    source: string;
+    finalized: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface FieldRainfallCoverageRow {
+    field_id: string;
+    range_start_utc: string;
+    range_end_utc: string;
+    status: string;
+    last_checked_at?: string;
+}
+
+export interface FarmRainfallDailyRow {
+    farm_id: string;
+    date_local: string;
+    avg_rainfall_in: number;
+    max_rainfall_in: number;
+    min_rainfall_in: number;
+    max_hourly_in: number;
+    fields_count: number;
+    last_updated_at?: string;
+}
+
+export interface RainfallSettingsRow {
+    farm_id: string;
+    key: string;
+    value?: string | null;
 }
