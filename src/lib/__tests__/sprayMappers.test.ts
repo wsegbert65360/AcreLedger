@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mapSprayFromDb } from '../mappers';
 import { SprayRecordRow } from '../../types/database';
 
@@ -166,6 +166,40 @@ describe('mapSprayFromDb — numeric fields', () => {
     const row = makeSprayRow({ treated_area_size: null });
     const result = mapSprayFromDb(row);
     expect(result.treatedAreaSize).toBe(0);
+  });
+
+  it('handles treated_area_size empty string as 0', () => {
+    const row = makeSprayRow({ treated_area_size: '' });
+    const result = mapSprayFromDb(row);
+    expect(result.treatedAreaSize).toBe(0);
+  });
+
+  it('handles treated_area_size valid number', () => {
+    const row = makeSprayRow({ treated_area_size: '80.5' });
+    const result = mapSprayFromDb(row);
+    expect(result.treatedAreaSize).toBe(80.5);
+  });
+
+  it('warns and defaults to 0 for non-numeric treated_area_size', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const row = makeSprayRow({ treated_area_size: 'N/A' });
+    const result = mapSprayFromDb(row);
+    expect(result.treatedAreaSize).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('treated_area_size is non-numeric for record "spray-1": "N/A"')
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('warns and defaults to 0 for non-numeric total_amount_applied', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const row = makeSprayRow({ total_amount_applied: 'unknown' });
+    const result = mapSprayFromDb(row);
+    expect(result.totalAmountApplied).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('total_amount_applied is non-numeric for record "spray-1": "unknown"')
+    );
+    warnSpy.mockRestore();
   });
 
   it('relativeHumidity becomes undefined for null', () => {

@@ -16,6 +16,25 @@ function safeNum(val: any, fallback = 0): number {
     return isNaN(n) ? fallback : n;
 }
 
+/**
+ * Converts a text DB column to a number, but warns when the value is non-numeric.
+ * This guards against the live DB columns (treated_area_size, total_amount_applied)
+ * that are still `text` and may contain garbage like "N/A" or "" — which `safeNum()`
+ * would silently convert to 0, hiding data quality issues.
+ */
+function safeNumericText(val: any, columnName: string, recordId: string, fallback = 0): number {
+    if (val == null || val === '') return fallback;
+    if (typeof val === 'number') return val;
+    const n = Number(val);
+    if (isNaN(n)) {
+        console.warn(
+            `[Mapper Warning] ${columnName} is non-numeric for record "${recordId}": "${val}". Defaulting to ${fallback}.`
+        );
+        return fallback;
+    }
+    return n;
+}
+
 function safeStr(val: any, fallback = ''): string {
     return val === null || val === undefined ? fallback : String(val);
 }
@@ -115,9 +134,9 @@ export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
     targetPest: optionalStr(db.target_pest),
     windDirection: optionalStr(db.wind_direction),
     relativeHumidity: db.relative_humidity ?? undefined,
-    treatedAreaSize: safeNum(db.treated_area_size),
+    treatedAreaSize: safeNumericText(db.treated_area_size, 'treated_area_size', db.id),
     treatedAreaUnit: optionalStr(db.treated_area_unit) || 'ac',
-    totalAmountApplied: safeNum(db.total_amount_applied),
+    totalAmountApplied: safeNumericText(db.total_amount_applied, 'total_amount_applied', db.id),
     involvedTechnicians: optionalStr(db.involved_technicians),
     mixtureRate: optionalStr(db.mixture_rate),
     totalMixtureVolume: optionalStr(db.total_mixture_volume),
@@ -316,7 +335,8 @@ export const mapSprayToDb = (r: SprayRecord) => {
         farm_id: r.farm_id,
         field_id: r.fieldId,
         field_name: r.fieldName,
-        products: r.products,
+        // Strip client-only keys (ui_id, id) before persisting to JSONB
+        products: r.products?.map(({ ui_id, id, ...rest }: SprayRecipeProduct) => rest),
         wind_speed: r.windSpeed,
         temperature: r.temperature,
         spray_date: r.sprayDate,
@@ -442,7 +462,8 @@ export const mapRecipeToDb = (r: SprayRecipe) => {
         id: r.id,
         farm_id: r.farm_id,
         name: r.name,
-        products: r.products,
+        // Strip client-only keys (ui_id, id) before persisting to JSONB
+        products: r.products?.map(({ ui_id, id, ...rest }: SprayRecipeProduct) => rest),
         applicator_name: r.applicatorName,
         license_number: r.licenseNumber,
         target_pest: r.targetPest,

@@ -4,9 +4,10 @@ import {
     mapPlantFromDb, mapPlantToDb,
     mapSprayFromDb, mapSprayToDb,
     mapHarvestFromDb, mapHarvestToDb,
-    mapSeedFromDb, mapSeedToDb
+    mapSeedFromDb, mapSeedToDb,
+    mapRecipeToDb
 } from '../mappers';
-import { SprayRecord, SavedSeed } from '../../types/farm';
+import { SprayRecord, SprayRecipe, SavedSeed } from '../../types/farm';
 
 describe('Mappers Round-Trip', () => {
     it('should maintain SprayRecord integrity through round-trip', () => {
@@ -92,5 +93,52 @@ describe('Mappers Round-Trip', () => {
             const invalidFert: any = { id: '1', farm_id: 'f1', seasonYear: 2026 };
             expect(() => mapPlantToDb(invalidFert)).toThrow('[Mapper Error] mapPlantToDb: Missing required field "fieldId"');
         });
+    });
+
+    it('should strip client-only ui_id and id from products in mapSprayToDb', () => {
+        const record: SprayRecord = {
+            id: '123',
+            fieldId: 'field-1',
+            fieldName: 'Test Field',
+            products: [
+                { ui_id: 'client-key-1', id: 'db-id-1', product: 'Roundup', rate: '22', rateUnit: 'oz/ac', epaRegNumber: '524-549' },
+                { ui_id: 'client-key-2', product: 'Atrazine', rate: '1.5', rateUnit: 'qt/ac' },
+            ],
+            windSpeed: 5,
+            temperature: 75,
+            timestamp: Date.now(),
+            seasonYear: 2026,
+            treatedAreaSize: 80,
+            nonCompliant: false,
+            deleted_at: null,
+            farm_id: 'f1',
+        };
+
+        const db = mapSprayToDb(record) as any;
+
+        // Products should NOT have ui_id or id
+        expect(db.products[0].ui_id).toBeUndefined();
+        expect(db.products[0].id).toBeUndefined();
+        expect(db.products[0].product).toBe('Roundup');
+        expect(db.products[0].rate).toBe('22');
+        expect(db.products[1].ui_id).toBeUndefined();
+        expect(db.products[1].product).toBe('Atrazine');
+    });
+
+    it('should strip client-only ui_id and id from products in mapRecipeToDb', () => {
+        const recipe: SprayRecipe = {
+            id: 'r1',
+            name: 'Test Recipe',
+            products: [
+                { ui_id: 'client-key', id: 'db-key', product: 'Roundup', rate: '22', rateUnit: 'oz/ac' },
+            ],
+            farm_id: 'f1',
+            deleted_at: null,
+        };
+
+        const db = mapRecipeToDb(recipe) as any;
+        expect(db.products[0].ui_id).toBeUndefined();
+        expect(db.products[0].id).toBeUndefined();
+        expect(db.products[0].product).toBe('Roundup');
     });
 });

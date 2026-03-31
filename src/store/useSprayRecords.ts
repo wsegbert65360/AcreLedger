@@ -26,9 +26,24 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
   // The isAdding ref prevents rapid double-tap, but a page reload between API success
   // and modal close could still allow duplicates.
 
-  // Refs for passing values out of state updaters safely across await boundaries
-  const previousRef = useRef<SprayRecord | undefined>(undefined);
+  // Ref for delete rollback (positioned snapshot of removed records)
   const snapshotRef = useRef<{ record: SprayRecord; index: number }[]>([]);
+
+  // Per-record snapshot stack for update rollback.
+  // Only the FIRST snapshot for a given record ID is kept (the true original).
+  // This prevents rapid re-updates from overwriting the original with an
+  // intermediate optimistic value, which would cause incorrect rollback.
+  const originalSnapshotRef = useRef<Map<string, SprayRecord>>(new Map());
+
+  // Helper: capture the true original for a record, only if not already captured
+  const captureOriginal = (records: SprayRecord[], recordId: string) => {
+    if (!originalSnapshotRef.current.has(recordId)) {
+      const original = records.find(r => r.id === recordId);
+      if (original) {
+        originalSnapshotRef.current.set(recordId, { ...original });
+      }
+    }
+  };
 
   // ─── Add ────────────────────────────────────────────────────────────────────
 
@@ -100,12 +115,11 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
       return false;
     }
 
-    // Capture previous record into a ref INSIDE the setter so it's guaranteed
-    // to reflect the same state snapshot as the optimistic apply — safe to read
-    // after the following await.
-    previousRef.current = undefined;
+    // Capture the true original BEFORE any optimistic update.
+    // If this is the first update to this record, the snapshot is the DB-backed state.
+    // Subsequent rapid updates to the same record won't overwrite the original.
     setSprayRecords(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
+      captureOriginal(prev, r.id);
       return prev.map(item => item.id === r.id ? r : item);
     });
 
@@ -118,15 +132,15 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
       .eq('farm_id', farm_id);
 
     if (error) {
-      // Replace with Sentry.captureException(error) in production
       console.error('Error updating spray record:', error);
 
-      const previous = previousRef.current;
-      if (previous) {
-        setSprayRecords(prev => prev.map(item => item.id === r.id ? previous : item));
+      const original = originalSnapshotRef.current.get(r.id);
+      if (original) {
+        originalSnapshotRef.current.delete(r.id);
+        setSprayRecords(prev => prev.map(item => item.id === r.id ? original : item));
       } else {
         // Record wasn't in local state — pull the optimistic entry out entirely
-        console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
+        console.warn('No original record found for rollback, removing optimistic entry:', r.id);
         setSprayRecords(prev => prev.filter(item => item.id !== r.id));
       }
 
