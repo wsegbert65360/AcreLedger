@@ -285,7 +285,7 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 // --- Reverse Mappers (Frontend -> DB) ---
 
 export const mapFieldToDb = (f: Field) => {
-    validateRequired(f, ['id', 'farm_id', 'name'], 'mapFieldToDb');
+    validateRequired(f, ['id', 'name'], 'mapFieldToDb');
     return {
         id: f.id,
         farm_id: f.farm_id,

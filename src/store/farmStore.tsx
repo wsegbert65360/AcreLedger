@@ -215,7 +215,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             // Safety net: heal records with missing/invalid seasonYear so they
             // appear under the current active season instead of disappearing from
             // all views (r.seasonYear === viewingSeason would never match 0 or NaN).
-            const validSeason = activeSeason || new Date().getFullYear();
+            // Use current year from Date() to avoid stale closure on activeSeason.
+            const validSeason = new Date().getFullYear();
             mappedSpray.forEach(r => {
               if (!r.seasonYear || isNaN(r.seasonYear) || r.seasonYear < MIN_SEASON_YEAR) {
                 r.seasonYear = validSeason;
