@@ -149,6 +149,8 @@ export default function FieldDetailScreen() {
   useEffect(() => {
     if (!field?.id) return;
     const controller = new AbortController();
+    // Reset guard so rapid dep changes (e.g. store data loading) don't skip the fetch
+    fetchingRainRef.current = false;
     handleFetchRain(controller.signal);
     return () => controller.abort();
   }, [field?.id, handleFetchRain]);
