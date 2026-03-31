@@ -775,19 +775,19 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             )}
           </div>
           {showValidation && !isFullyCompliant && isMinimumValid && (
-            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-1">
-              <div className="flex items-center gap-2 text-yellow-400 font-mono text-xs font-bold uppercase tracking-wider">
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 space-y-1">
+              <div className="flex items-center gap-2 text-destructive font-mono text-xs font-bold uppercase tracking-wider">
                 <AlertTriangle size={14} />
-                Record will be saved as incomplete
+                Missing {missingComplianceFields.length} field{missingComplianceFields.length !== 1 ? 's' : ''} — record will be saved as incomplete
               </div>
-              <p className="text-[10px] text-yellow-300/80 leading-relaxed">
-                The following compliance fields are missing. You can complete them later by editing this record.
-              </p>
-              <ul className="mt-1 space-y-0.5">
+              <ul className="mt-1.5 space-y-0.5">
                 {missingComplianceFields.map(f => (
-                  <li key={f} className="text-[10px] font-mono text-yellow-400/80">· {f}</li>
+                  <li key={f} className="text-xs font-mono text-destructive font-semibold">✗ {f}</li>
                 ))}
               </ul>
+              <p className="text-[10px] font-mono text-destructive/60 mt-1.5">
+                Fill these in now or complete later by editing the record.
+              </p>
             </div>
           )}
           <div className="h-20" aria-hidden="true" />
@@ -809,7 +809,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             className={`touch-target w-full font-bold py-6 text-base disabled:opacity-50 disabled:grayscale ${
               isFullyCompliant
                 ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
-                : 'bg-yellow-600 text-white hover:bg-yellow-500'
+                : 'bg-destructive text-white hover:bg-destructive/90'
             }`}
           >
             {isSaving ? (
