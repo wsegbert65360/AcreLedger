@@ -20,7 +20,9 @@ export function useFieldsAndBins({
   setSavedSeeds, setSprayRecipes,
   setFertilizerRecipes
 }: UseFieldsAndBinsArgs) {
-  const previousRef = useRef<any | undefined>(undefined);
+  // Snapshot store keyed by "entityType:id" to prevent concurrent
+  // update/delete operations from clobbering each other's rollback data.
+  const snapshotRef = useRef<Map<string, unknown>>(new Map());
 
   // --- Fields ---
   const addField = useCallback(async (f: Omit<Field, 'id'>): Promise<boolean> => {
@@ -49,9 +51,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`field:${f.id}`, undefined);
     setFields(prev => {
-      previousRef.current = prev.find(item => item.id === f.id);
+      snapshotRef.current.set(`field:${f.id}`, prev.find(item => item.id === f.id));
       return prev.map(existing => existing.id === f.id ? f : existing);
     });
 
@@ -59,8 +61,8 @@ export function useFieldsAndBins({
 
     if (error) {
       console.error('Supabase error updating field:', error);
-      const previous = previousRef.current;
-      if (previous) setFields(prev => prev.map(item => item.id === f.id ? previous : item));
+      const previous = snapshotRef.current.get(`field:${f.id}`);
+      if (previous) setFields(prev => prev.map(item => item.id === f.id ? previous as Field : item));
       toast.error('Failed to update field');
       return false;
     } else {
@@ -74,9 +76,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`field:${id}`, undefined);
     setFields(prev => {
-      previousRef.current = prev.find(f => f.id === id);
+      snapshotRef.current.set(`field:${id}`, prev.find(f => f.id === id));
       return prev.map(f =>
         f.id === id ? { ...f, deleted_at: new Date().toISOString() } : f
       );
@@ -84,8 +86,8 @@ export function useFieldsAndBins({
     const { error } = await fieldService.softDeleteField(id, farm_id);
     if (error) {
       console.error('Error deleting field:', error);
-      const previous = previousRef.current;
-      if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
+      const previous = snapshotRef.current.get(`field:${id}`);
+      if (previous) setFields(prev => prev.map(f => f.id === id ? previous as Field : f));
       toast.error('Failed to delete field');
       return false;
     } else {
@@ -119,16 +121,16 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`bin:${b.id}`, undefined);
     setBins(prev => {
-      previousRef.current = prev.find(item => item.id === b.id);
+      snapshotRef.current.set(`bin:${b.id}`, prev.find(item => item.id === b.id));
       return prev.map(existing => existing.id === b.id ? b : existing);
     });
     const { error } = await binService.updateBin(b, farm_id);
     if (error) {
       console.error('Error updating bin:', error);
-      const previous = previousRef.current;
-      if (previous) setBins(prev => prev.map(item => item.id === b.id ? previous : item));
+      const previous = snapshotRef.current.get(`bin:${b.id}`);
+      if (previous) setBins(prev => prev.map(item => item.id === b.id ? previous as Bin : item));
       toast.error('Failed to update bin');
       return false;
     } else {
@@ -142,9 +144,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`bin:${id}`, undefined);
     setBins(prev => {
-      previousRef.current = prev.find(b => b.id === id);
+      snapshotRef.current.set(`bin:${id}`, prev.find(b => b.id === id));
       return prev.map(b =>
         b.id === id ? { ...b, deleted_at: new Date().toISOString() } : b
       );
@@ -152,8 +154,8 @@ export function useFieldsAndBins({
     const { error } = await binService.softDeleteBin(id, farm_id);
     if (error) {
       console.error('Error deleting bin:', error);
-      const previous = previousRef.current;
-      if (previous) setBins(prev => prev.map(b => b.id === id ? previous : b));
+      const previous = snapshotRef.current.get(`bin:${id}`);
+      if (previous) setBins(prev => prev.map(b => b.id === id ? previous as Bin : b));
       toast.error('Failed to delete bin');
       return false;
     } else {
@@ -197,9 +199,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`seed:${id}`, undefined);
     setSavedSeeds(prev => {
-      previousRef.current = prev.find(s => s.id === id);
+      snapshotRef.current.set(`seed:${id}`, prev.find(s => s.id === id));
       return prev.filter(s => s.id !== id);
     });
     const { error } = await supabase
@@ -209,8 +211,8 @@ export function useFieldsAndBins({
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting seed:', error);
-      const previous = previousRef.current;
-      if (previous) setSavedSeeds(prev => [...prev, previous]);
+      const previous = snapshotRef.current.get(`seed:${id}`);
+      if (previous) setSavedSeeds(prev => [...prev, previous as SavedSeed]);
       toast.error('Failed to delete seed');
       return false;
     } else {
@@ -246,9 +248,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`sprayRecipe:${r.id}`, undefined);
     setSprayRecipes(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
+      snapshotRef.current.set(`sprayRecipe:${r.id}`, prev.find(item => item.id === r.id));
       return prev.map(existing => existing.id === r.id ? r : existing);
     });
     const mapped = mapRecipeToDb({ ...r, farm_id });
@@ -261,8 +263,8 @@ export function useFieldsAndBins({
  
     if (error) {
       console.error('Error updating spray recipe:', error);
-      const previous = previousRef.current;
-      if (previous) setSprayRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
+      const previous = snapshotRef.current.get(`sprayRecipe:${r.id}`);
+      if (previous) setSprayRecipes(prev => prev.map(item => item.id === r.id ? previous as SprayRecipe : item));
       toast.error('Failed to update recipe');
       return false;
     } else {
@@ -298,9 +300,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`fertilizerRecipe:${r.id}`, undefined);
     setFertilizerRecipes(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
+      snapshotRef.current.set(`fertilizerRecipe:${r.id}`, prev.find(item => item.id === r.id));
       return prev.map(existing => existing.id === r.id ? r : existing);
     });
     const mapped = mapFertilizerRecipeToDb({ ...r, farm_id });
@@ -313,8 +315,8 @@ export function useFieldsAndBins({
  
     if (error) {
       console.error('Error updating fertilizer recipe:', error);
-      const previous = previousRef.current;
-      if (previous) setFertilizerRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
+      const previous = snapshotRef.current.get(`fertilizerRecipe:${r.id}`);
+      if (previous) setFertilizerRecipes(prev => prev.map(item => item.id === r.id ? previous as FertilizerRecipe : item));
       toast.error('Failed to update recipe');
       return false;
     } else {
@@ -328,9 +330,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`fertilizerRecipe:${id}`, undefined);
     setFertilizerRecipes(prev => {
-      previousRef.current = prev.find(r => r.id === id);
+      snapshotRef.current.set(`fertilizerRecipe:${id}`, prev.find(r => r.id === id));
       return prev.filter(r => r.id !== id);
     });
     const { error } = await supabase
@@ -340,8 +342,8 @@ export function useFieldsAndBins({
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting fertilizer recipe:', error);
-      const previous = previousRef.current;
-      if (previous) setFertilizerRecipes(prev => [...prev, previous]);
+      const previous = snapshotRef.current.get(`fertilizerRecipe:${id}`);
+      if (previous) setFertilizerRecipes(prev => [...prev, previous as FertilizerRecipe]);
       toast.error('Failed to delete recipe');
       return false;
     } else {
@@ -355,9 +357,9 @@ export function useFieldsAndBins({
       toast.error('No farm selected');
       return false;
     }
-    previousRef.current = undefined;
+    snapshotRef.current.set(`sprayRecipe:${id}`, undefined);
     setSprayRecipes(prev => {
-      previousRef.current = prev.find(r => r.id === id);
+      snapshotRef.current.set(`sprayRecipe:${id}`, prev.find(r => r.id === id));
       return prev.filter(r => r.id !== id);
     });
     const { error } = await supabase
@@ -367,8 +369,8 @@ export function useFieldsAndBins({
       .eq('farm_id', farm_id);
     if (error) {
       console.error('Error deleting spray recipe:', error);
-      const previous = previousRef.current;
-      if (previous) setSprayRecipes(prev => [...prev, previous]);
+      const previous = snapshotRef.current.get(`sprayRecipe:${id}`);
+      if (previous) setSprayRecipes(prev => [...prev, previous as SprayRecipe]);
       toast.error('Failed to delete recipe');
       return false;
     } else {
