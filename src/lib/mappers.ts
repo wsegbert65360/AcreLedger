@@ -26,6 +26,36 @@ function safeTimestamp(val: any): number {
     return isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
+/**
+ * Converts a value to `string | undefined`, treating `null`, `undefined`, and `""`
+ * as "not set". Use for optional string fields on domain types so that downstream
+ * code can reliably distinguish between "has a value" and "does not have a value"
+ * without worrying about empty-string falsy gotchas.
+ */
+function optionalStr(val: any): string | undefined {
+    if (val == null || val === '') return undefined;
+    return String(val);
+}
+
+/**
+ * Maps a database ProductEntry to an application SprayRecipeProduct.
+ * ProductEntry comes from Supabase (snake_case optional fields);
+ * SprayRecipeProduct is the frontend type (camelCase optional fields).
+ * Using explicit field mapping instead of `as SprayRecipeProduct[]` prevents
+ * silent type drift when the DB schema changes.
+ */
+function mapProductFromDb(p: ProductEntry): SprayRecipeProduct {
+    return {
+        product: safeStr(p.product),
+        rate: safeStr(p.rate),
+        rateUnit: safeStr(p.rateUnit, 'oz/ac'),
+        epaRegNumber: p.epaRegNumber ?? undefined,
+        activeIngredients: p.activeIngredients ?? undefined,
+        totalProductAmount: p.totalProductAmount ?? undefined,
+        totalProductUnit: p.totalProductUnit ?? undefined,
+    };
+}
+
 export const mapFieldFromDb = (db: FieldRow): Field => ({
     id: db.id,
     name: safeStr(db.name, 'Unnamed Field'),
@@ -68,35 +98,35 @@ export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
     id: db.id,
     fieldId: db.field_id,
     fieldName: safeStr(db.field_name, 'Unknown Field'),
-    products: (db.products || []) as SprayRecipeProduct[],
+    products: (db.products || []).map(mapProductFromDb),
     windSpeed: safeNum(db.wind_speed),
     temperature: safeNum(db.temperature),
-    sprayDate: db.spray_date || undefined,
-    startTime: db.start_time || undefined,
-    endTime: db.end_time ?? undefined,
-    equipmentId: db.equipment_id ?? undefined,
-    applicatorName: safeStr(db.applicator_name),
-    licenseNumber: safeStr(db.license_number),
-    epaRegNumber: safeStr(db.epa_reg_number),
+    sprayDate: optionalStr(db.spray_date),
+    startTime: optionalStr(db.start_time),
+    endTime: optionalStr(db.end_time),
+    equipmentId: optionalStr(db.equipment_id),
+    applicatorName: optionalStr(db.applicator_name),
+    licenseNumber: optionalStr(db.license_number),
+    epaRegNumber: optionalStr(db.epa_reg_number),
     seasonYear: safeNum(db.season_year, 2024),
     timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null,
-    targetPest: safeStr(db.target_pest),
-    windDirection: safeStr(db.wind_direction),
+    targetPest: optionalStr(db.target_pest),
+    windDirection: optionalStr(db.wind_direction),
     relativeHumidity: db.relative_humidity ?? undefined,
     treatedAreaSize: safeNum(db.treated_area_size),
-    treatedAreaUnit: safeStr(db.treated_area_unit, 'ac'),
+    treatedAreaUnit: optionalStr(db.treated_area_unit) || 'ac',
     totalAmountApplied: safeNum(db.total_amount_applied),
-    involvedTechnicians: safeStr(db.involved_technicians),
-    mixtureRate: safeStr(db.mixture_rate),
-    totalMixtureVolume: safeStr(db.total_mixture_volume),
-    siteAddress: safeStr(db.site_address),
-    cropOrSiteTreated: db.crop_or_site_treated ?? undefined,
-    applicationMethod: db.application_method ?? undefined,
-    rei: db.rei ?? undefined,
-    notes: safeStr(db.notes),
-    complianceProfile: (db.compliance_profile || 'universal') as SprayRecord['complianceProfile'],
+    involvedTechnicians: optionalStr(db.involved_technicians),
+    mixtureRate: optionalStr(db.mixture_rate),
+    totalMixtureVolume: optionalStr(db.total_mixture_volume),
+    siteAddress: optionalStr(db.site_address),
+    cropOrSiteTreated: optionalStr(db.crop_or_site_treated),
+    applicationMethod: optionalStr(db.application_method),
+    rei: optionalStr(db.rei),
+    notes: optionalStr(db.notes),
+    complianceProfile: optionalStr(db.compliance_profile) || 'universal',
     isPremixed: !!db.is_premixed,
     nonCompliant: !!db.non_compliant
 });
@@ -178,11 +208,11 @@ export const mapSeedFromDb = (db: SavedSeedRow): SavedSeed => ({
 export const mapRecipeFromDb = (db: SprayRecipeRow): SprayRecipe => ({
     id: db.id,
     name: safeStr(db.name, 'Unnamed Recipe'),
-    products: (db.products || []) as SprayRecipeProduct[],
-    applicatorName: safeStr(db.applicator_name),
-    licenseNumber: safeStr(db.license_number),
-    targetPest: safeStr(db.target_pest),
-    epaRegNumber: safeStr(db.epa_reg_number),
+    products: (db.products || []).map(mapProductFromDb),
+    applicatorName: optionalStr(db.applicator_name),
+    licenseNumber: optionalStr(db.license_number),
+    targetPest: optionalStr(db.target_pest),
+    epaRegNumber: optionalStr(db.epa_reg_number),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });

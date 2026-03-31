@@ -53,8 +53,8 @@ interface UseSeasonManagementArgs {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getCurrentYear = () => new Date().getFullYear();
-const MIN_SEASON_YEAR = 2000;
-const MAX_SEASON_YEAR = getCurrentYear() + 1;
+export const MIN_SEASON_YEAR = 2000;
+export const MAX_SEASON_YEAR = getCurrentYear() + 1;
 
 function isValidYear(year: number): boolean {
   return Number.isInteger(year) && year >= MIN_SEASON_YEAR && year <= MAX_SEASON_YEAR;

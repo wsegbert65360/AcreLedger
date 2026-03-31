@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { calculateTotalAmount } from '@/utils/unitConversion';
+import { Thermometer, Droplets } from 'lucide-react';
 
 interface SprayModalProps {
   field: Field;
@@ -27,9 +28,22 @@ interface SprayModalProps {
 export default function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
   const { addSprayRecord, updateSprayRecord, sprayRecipes, session, activeSeason, farmName } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
+
+  /** Creates a new empty product entry with all fields initialized to defaults. */
+  const createEmptyProduct = (): SprayRecipeProduct => ({
+    ui_id: crypto.randomUUID(),
+    product: '',
+    rate: '',
+    rateUnit: 'oz/ac',
+    epaRegNumber: '',
+    activeIngredients: '',
+    totalProductAmount: '',
+    totalProductUnit: 'gal',
+  });
+
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [products, setProducts] = useState<SprayRecipeProduct[]>(initialData?.products?.map(p => ({ ...p, ui_id: p.ui_id || crypto.randomUUID() })) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+  const [products, setProducts] = useState<SprayRecipeProduct[]>(initialData?.products?.map(p => ({ ...p, ui_id: p.ui_id || crypto.randomUUID() })) || [createEmptyProduct()]);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
   const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
@@ -39,7 +53,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [involvedTechnicians, setInvolvedTechnicians] = useState(initialData?.involvedTechnicians || '');
   const [siteAddress, setSiteAddress] = useState(initialData?.siteAddress || field.name);
   const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || field.acreage.toString());
-  const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied?.toString() || '');
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
   const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
   const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
@@ -57,22 +70,42 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Auto-calculate total amount applied: sum ALL products' per-product totals
-  useEffect(() => {
-    const acres = parseFloat(treatedAreaSize);
-    if (isNaN(acres) || acres <= 0) return;
+  // Ref for treatedAreaSize — used inside setProducts callbacks to avoid stale closure
+  const treatedAreaRef = useRef(treatedAreaSize);
+  treatedAreaRef.current = treatedAreaSize;
 
-    let grandTotal = 0;
-    for (const p of products) {
-      const rate = parseFloat(p.rate || '0');
-      if (isNaN(rate) || rate <= 0) continue;
-      const { value } = calculateTotalAmount(rate, acres, p.rateUnit);
-      grandTotal += value;
+  // Manual weather overrides (used when API is unavailable or user prefers manual entry)
+  const [manualWindSpeed, setManualWindSpeed] = useState(() =>
+    initialData?.windSpeed && initialData?.windSpeed > 0 ? initialData.windSpeed.toString() : ''
+  );
+  const [manualTemperature, setManualTemperature] = useState(() =>
+    initialData?.temperature && initialData?.temperature > 0 ? initialData.temperature.toString() : ''
+  );
+  const [manualHumidity, setManualHumidity] = useState(() =>
+    initialData?.relativeHumidity && initialData.relativeHumidity > 0 ? initialData.relativeHumidity.toString() : ''
+  );
+  const [isManualWeather, setIsManualWeather] = useState(false);
+
+  // Set manual weather mode when API fails or no coords
+  useEffect(() => {
+    if (!open) return;
+    if (field.lat == null || field.lng == null) {
+      setIsManualWeather(true);
     }
-    if (grandTotal > 0) {
-      setTotalAmountApplied(grandTotal.toFixed(2).replace(/\.?0+$/, ''));
+  }, [open, field.lat, field.lng]);
+
+  // Auto-set manual weather fields from API data when not in manual mode
+  useEffect(() => {
+    if (!open || isManualWeather) return;
+    if (weather && !weather.isError) {
+      if (!manualWindSpeed) setManualWindSpeed(weather.wind.toString());
+      if (!manualTemperature) setManualTemperature(weather.temp.toString());
+      if (!manualHumidity) setManualHumidity(weather.humidity.toString());
+    } else if (weather?.isError) {
+      // API failed — switch to manual mode
+      setIsManualWeather(true);
     }
-  }, [products, treatedAreaSize]);
+  }, [open, weather, isManualWeather]);
 
   // Handle End Time Estimation
   useEffect(() => {
@@ -107,12 +140,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setSiteAddress(field.name);
     setTreatedAreaSize(field.acreage.toString());
     setTargetPest('grass/broadleaves');
-    setTotalAmountApplied('');
     setMixtureRate('');
     setTotalMixtureVolume('');
     setIsPremixed(false);
     setManualWindDirection('');
-    setProducts([{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
+    setManualWindSpeed('');
+    setManualTemperature('');
+    setManualHumidity('');
+    setIsManualWeather(false);
+    setProducts([createEmptyProduct()]);
     setSelectedRecipeId('');
   };
 
@@ -131,7 +167,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           totalProductUnit = unit;
         }
         return { ...p, ui_id: p.ui_id || crypto.randomUUID(), epaRegNumber: p.epaRegNumber || '', totalProductAmount, totalProductUnit };
-      }) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
+      }) || [createEmptyProduct()]);
       setApplicatorName(initialData.applicatorName || '');
       setLicenseNumber(initialData.licenseNumber || '');
       setTargetPest(initialData.targetPest || 'grass/broadleaves');
@@ -142,7 +178,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setSiteAddress(initialData.siteAddress || field.name);
       setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field.acreage.toString());
       setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
-      // Don't override totalAmountApplied here — the useEffect above will recalculate it
       setMixtureRate(initialData.mixtureRate || '');
       setTotalMixtureVolume(initialData.totalMixtureVolume || '');
       setInvolvedTechnicians(initialData.involvedTechnicians || '');
@@ -154,6 +189,10 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setRei(initialData.rei || '12h');
       setNotes(initialData.notes || '');
       setSelectedRecipeId('');
+      // Pre-populate manual weather fields from saved record
+      if (initialData.windSpeed && initialData.windSpeed > 0) setManualWindSpeed(initialData.windSpeed.toString());
+      if (initialData.temperature && initialData.temperature > 0) setManualTemperature(initialData.temperature.toString());
+      if (initialData.relativeHumidity && initialData.relativeHumidity > 0) setManualHumidity(initialData.relativeHumidity.toString());
     } else {
       resetComplianceFields();
     }
@@ -220,7 +259,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       const updated = { ...p, [field]: value };
       // Auto-calculate per-product total when rate or unit changes
       if (field === 'rate' || field === 'rateUnit') {
-        const acres = parseFloat(treatedAreaSize);
+        const acres = parseFloat(treatedAreaRef.current); // use ref to avoid stale closure
         const rate = parseFloat(updated.rate || '0');
         if (!isNaN(rate) && !isNaN(acres) && rate > 0 && acres > 0) {
           const { value: totalVal, unit: totalUnit } = calculateTotalAmount(rate, acres, updated.rateUnit);
@@ -233,7 +272,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   };
 
   const addProduct = () => {
-    setProducts(prev => [...prev, { ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+    setProducts(prev => [...prev, createEmptyProduct()]);
   };
 
   const removeProduct = (i: number) => {
@@ -244,11 +283,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
   const isMinimumValid = products.length > 0 && products.some(p => p.product.trim()) && !!sprayDate;
 
+  const hasWeatherData = isManualWeather
+    ? (manualWindSpeed.trim() && manualTemperature.trim() && manualHumidity.trim())
+    : (!!weather && !weather.isError);
+
   const isFullyCompliant =
     products.every(p => p.product.trim()) &&
     startTime.trim() &&
     endTime.trim() &&
-    (!!weather && !weather.isError) &&
+    hasWeatherData &&
     applicatorName.trim() &&
     licenseNumber.trim() &&
     manualWindDirection.trim() &&
@@ -257,18 +300,21 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     equipmentId.trim() &&
     products.every(p => p.epaRegNumber?.trim());
 
-  const missingComplianceFields: string[] = [];
-  if (!products.every(p => p.product.trim())) missingComplianceFields.push('Product name(s)');
-  if (!startTime.trim()) missingComplianceFields.push('Start time');
-  if (!endTime.trim()) missingComplianceFields.push('End time');
-  if (!weather || weather.isError) missingComplianceFields.push('Weather data');
-  if (!applicatorName.trim()) missingComplianceFields.push('Cert. applicator');
-  if (!licenseNumber.trim()) missingComplianceFields.push('License #');
-  if (!manualWindDirection.trim()) missingComplianceFields.push('Wind direction');
-  if (!cropOrSiteTreated.trim()) missingComplianceFields.push('Crop / site treated');
-  if (!applicationMethod.trim()) missingComplianceFields.push('Application method');
-  if (!equipmentId.trim()) missingComplianceFields.push('Equipment ID');
-  if (!products.every(p => p.epaRegNumber?.trim())) missingComplianceFields.push('EPA Reg # (one or more products)');
+  const missingComplianceFields = useMemo(() => {
+    const fields: string[] = [];
+    if (!products.every(p => p.product.trim())) fields.push('Product name(s)');
+    if (!startTime.trim()) fields.push('Start time');
+    if (!endTime.trim()) fields.push('End time');
+    if (!hasWeatherData) fields.push('Weather data (wind speed, temp, humidity)');
+    if (!applicatorName.trim()) fields.push('Cert. applicator');
+    if (!licenseNumber.trim()) fields.push('License #');
+    if (!manualWindDirection.trim()) fields.push('Wind direction');
+    if (!cropOrSiteTreated.trim()) fields.push('Crop / site treated');
+    if (!applicationMethod.trim()) fields.push('Application method');
+    if (!equipmentId.trim()) fields.push('Equipment ID');
+    if (!products.every(p => p.epaRegNumber?.trim())) fields.push('EPA Reg # (one or more products)');
+    return fields;
+  }, [products, startTime, endTime, hasWeatherData, applicatorName, licenseNumber, manualWindDirection, cropOrSiteTreated, applicationMethod, equipmentId]);
 
   const handleSubmit = async () => {
     if (!isMinimumValid) {
@@ -294,14 +340,16 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           totalProductAmount: p.totalProductAmount || undefined,
           totalProductUnit: p.totalProductUnit || 'gal'
         })),
-        windSpeed: weather?.wind || initialData?.windSpeed || 0,
-        temperature: weather?.temp || initialData?.temperature || 0,
+        windSpeed: parseFloat(manualWindSpeed) || weather?.wind || initialData?.windSpeed || 0,
+        temperature: parseFloat(manualTemperature) || weather?.temp || initialData?.temperature || 0,
         applicatorName: applicatorName.trim(),
         licenseNumber: licenseNumber.trim(),
-        epaRegNumber: products[0]?.epaRegNumber,
+        // DEPRECATED (3.3a): Legacy record-level epaRegNumber — no longer written.
+        // EPA reg numbers are now per-product only. Kept for backward read compatibility.
+        // epaRegNumber: products[0]?.epaRegNumber,
         targetPest: targetPest.trim() || undefined,
         windDirection: manualWindDirection || weather?.windDirection || initialData?.windDirection,
-        relativeHumidity: weather?.humidity || initialData?.relativeHumidity || 0,
+        relativeHumidity: parseFloat(manualHumidity) || weather?.humidity || initialData?.relativeHumidity || 0,
         sprayDate: sprayDate || undefined,
         startTime: startTime || undefined,
         endTime: endTime || undefined,
@@ -310,7 +358,6 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         applicationMethod: applicationMethod.trim() || undefined,
         treatedAreaSize: parseFloat(treatedAreaSize) || 0,
         treatedAreaUnit: treatedAreaUnit || 'ac',
-        totalAmountApplied: parseFloat(totalAmountApplied) || 0,
         mixtureRate: mixtureRate.trim() || undefined,
         totalMixtureVolume: totalMixtureVolume.trim() || undefined,
         involvedTechnicians: involvedTechnicians.trim() || undefined,
@@ -575,15 +622,9 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label htmlFor="totalAmount" className="text-[10px] font-mono text-muted-foreground uppercase">Total Material Applied</Label>
-                      <Input id="totalAmount" value={totalAmountApplied} onChange={e => setTotalAmountApplied(e.target.value)} placeholder="Auto-sum" className="mt-0.5 bg-muted border-border text-foreground h-9 font-bold" />
-                    </div>
-                    <div className="flex items-center space-x-2 pt-5">
-                      <Switch id="premixed" checked={isPremixed} onCheckedChange={setIsPremixed} />
-                      <Label htmlFor="premixed" className="text-[10px] font-mono text-muted-foreground uppercase">Premixed</Label>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch id="premixed" checked={isPremixed} onCheckedChange={setIsPremixed} />
+                    <Label htmlFor="premixed" className="text-[10px] font-mono text-muted-foreground uppercase">Premixed</Label>
                   </div>
                 </div>
 
@@ -624,12 +665,23 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             </AccordionItem>
           </Accordion>
 
-          <div className={`rounded-lg border p-3 space-y-3 ${weather ? 'border-spray/20 bg-muted/30' : 'border-destructive/30 bg-destructive/5'}`}>
+          <div className={`rounded-lg border p-3 space-y-3 ${hasWeatherData ? 'border-spray/20 bg-muted/30' : 'border-destructive/30 bg-destructive/5'}`}>
             <div className="flex items-center justify-between">
-              <span className={`font-mono text-[10px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
+              <span className={`font-mono text-[10px] font-bold uppercase tracking-wider ${hasWeatherData ? 'text-spray' : 'text-destructive'}`}>
                 Environmental Conditions *
               </span>
-              {loading && <Loader2 size={12} className="text-spray animate-spin" />}
+              <div className="flex items-center gap-2">
+                {loading && <Loader2 size={12} className="text-spray animate-spin" />}
+                {!loading && weather && !isManualWeather && (
+                  <button
+                    type="button"
+                    onClick={() => setIsManualWeather(true)}
+                    className="text-[8px] font-mono text-muted-foreground hover:text-foreground underline"
+                  >
+                    Enter Manually
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -647,22 +699,66 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-[9px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
-                <div className="text-sm font-mono font-bold text-right pt-1">{weather?.wind || 0} mph</div>
+                <Label className="text-[9px] font-mono text-muted-foreground uppercase">Wind Speed (mph) *</Label>
+                {isManualWeather ? (
+                  <Input
+                    id="manualWindSpeed"
+                    type="number"
+                    inputMode="decimal"
+                    value={manualWindSpeed}
+                    onChange={e => setManualWindSpeed(e.target.value)}
+                    placeholder="e.g. 8"
+                    className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindSpeed.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                  />
+                ) : (
+                  <div className="text-sm font-mono font-bold text-right pt-1">{weather?.wind || 0} mph</div>
+                )}
               </div>
             </div>
 
-            {weather && (
-              <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
-                <div className="space-y-0.5">
-                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Temp (°F) *</div>
-                  <div className="text-xs font-mono font-bold">{weather.temp}°F</div>
+            <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
+              <div className="space-y-1">
+                <div className="text-[9px] font-mono text-muted-foreground uppercase flex items-center gap-1">
+                  <Thermometer size={9} /> Temp (°F) *
                 </div>
-                <div className="space-y-0.5 text-right">
-                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Humidity (%)</div>
-                  <div className="text-xs font-mono font-bold">{weather.humidity}%</div>
-                </div>
+                {isManualWeather ? (
+                  <Input
+                    id="manualTemperature"
+                    type="number"
+                    inputMode="decimal"
+                    value={manualTemperature}
+                    onChange={e => setManualTemperature(e.target.value)}
+                    placeholder="e.g. 78"
+                    className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualTemperature.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                  />
+                ) : (
+                  <div className="text-xs font-mono font-bold">{weather?.temp || 0}°F</div>
+                )}
               </div>
+              <div className="space-y-1 text-right">
+                <div className="text-[9px] font-mono text-muted-foreground uppercase flex items-center gap-1 justify-end">
+                  <Droplets size={9} /> Humidity (%) *
+                </div>
+                {isManualWeather ? (
+                  <Input
+                    id="manualHumidity"
+                    type="number"
+                    inputMode="decimal"
+                    value={manualHumidity}
+                    onChange={e => setManualHumidity(e.target.value)}
+                    placeholder="e.g. 55"
+                    className={`h-8 bg-background border-border text-xs font-mono text-right ${showValidation && !manualHumidity.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                  />
+                ) : (
+                  <div className="text-xs font-mono font-bold">{weather?.humidity || 0}%</div>
+                )}
+              </div>
+            </div>
+
+            {isManualWeather && (
+              <p className="text-[9px] font-mono text-muted-foreground/70 italic">
+                Manual mode — enter conditions observed at time of application.
+              </p>
             )}
           </div>
           {showValidation && !isFullyCompliant && isMinimumValid && (

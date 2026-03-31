@@ -136,6 +136,11 @@ export function generateSprayPDF(
     }
 
     // 3. Products Table
+    // Ensure enough room for at least the table header + a few rows before rendering
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
     if (record.products && record.products.length > 0) {
       autoTable(doc, {
         startY: yPos,
@@ -160,16 +165,19 @@ export function generateSprayPDF(
           yPos = data.cursor?.y || yPos;
         }
       });
-      // @ts-ignore - autoTable adds lastAutoTable to doc
-      yPos = doc.lastAutoTable.finalY + 8;
+      yPos = (doc.lastAutoTable && doc.lastAutoTable.finalY) || yPos;
     } else {
       doc.text('No products recorded for this application.', 14, yPos);
       yPos += 10;
     }
 
     // 4. Notes & Compliance
-    // Page break safety for notes
-    if (yPos > 260) {
+    // Page break safety — estimate space needed for notes + site address + compliance line
+    const estimatedNotesHeight = record.notes
+      ? Math.ceil(record.notes.length / 90) * 4 + 5
+      : 0;
+    const estimatedSectionHeight = estimatedNotesHeight + (record.siteAddress ? 10 : 0) + 12;
+    if (yPos + estimatedSectionHeight > 280) {
       doc.addPage();
       yPos = 20;
     }
@@ -212,13 +220,15 @@ export function generateSprayPDF(
   // Filename Generation (NEW)
   let finalFilename = options.filename;
   if (!finalFilename) {
-    if (isMulti) {
+    if (isMulti && records.length > 0) {
       const start = options.startDate || records[records.length - 1].sprayDate || 'Start';
       const end = options.endDate || records[0].sprayDate || 'End';
       finalFilename = `SprayLog_${sanitizeFilename(displayFarmName)}_${start}_to_${end}.pdf`;
-    } else {
+    } else if (records.length > 0) {
       const rec = records[0];
       finalFilename = `SprayRecord_${sanitizeFilename(rec.fieldName)}_${rec.sprayDate || 'NoDate'}.pdf`;
+    } else {
+      finalFilename = `SprayRecord_${sanitizeFilename(displayFarmName)}_Empty.pdf`;
     }
   }
   if (!finalFilename.endsWith('.pdf')) finalFilename += '.pdf';

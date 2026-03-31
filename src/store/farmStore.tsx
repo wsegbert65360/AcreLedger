@@ -18,7 +18,7 @@ import { useHayRecords } from './useHayRecords';
 import { useFertilizerRecords } from './useFertilizerRecords';
 import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
-import { useSeasonManagement } from './useSeasonManagement';
+import { useSeasonManagement, MIN_SEASON_YEAR } from './useSeasonManagement';
 import { useTillageRecords } from './useTillageRecords';
 
 /**
@@ -210,7 +210,19 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           if (fieldsData) setFields(fieldsData.map(mapFieldFromDb));
           if (binsData) setBins(binsData.map(mapBinFromDb));
           if (plantData) setPlantRecords(plantData.map(mapPlantFromDb));
-          if (sprayData) setSprayRecords(sprayData.map(mapSprayFromDb));
+          if (sprayData) {
+            const mappedSpray = sprayData.map(mapSprayFromDb);
+            // Safety net: heal records with missing/invalid seasonYear so they
+            // appear under the current active season instead of disappearing from
+            // all views (r.seasonYear === viewingSeason would never match 0 or NaN).
+            const validSeason = activeSeason || new Date().getFullYear();
+            mappedSpray.forEach(r => {
+              if (!r.seasonYear || isNaN(r.seasonYear) || r.seasonYear < MIN_SEASON_YEAR) {
+                r.seasonYear = validSeason;
+              }
+            });
+            setSprayRecords(mappedSpray);
+          }
           if (harvestData) setHarvestRecords(harvestData.map(mapHarvestFromDb));
           if (hayData) setHayHarvestRecords(hayData.map(mapHayFromDb));
           if (fertilizerData) setFertilizerApplications(fertilizerData.map(mapFertilizerFromDb));

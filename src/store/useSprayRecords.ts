@@ -21,6 +21,11 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
+  // TODO (5.6): For stronger protection, consider adding a DB-level unique constraint
+  // on (farm_id, field_id, spray_date, start_time) in the spray_records table.
+  // The isAdding ref prevents rapid double-tap, but a page reload between API success
+  // and modal close could still allow duplicates.
+
   // Refs for passing values out of state updaters safely across await boundaries
   const previousRef = useRef<SprayRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: SprayRecord; index: number }[]>([]);
