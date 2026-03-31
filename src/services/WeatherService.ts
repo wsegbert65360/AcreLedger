@@ -179,11 +179,21 @@ export const WeatherService = {
     },
 
     /**
-     * Helper to convert degrees to cardinal direction.
+     * Helper to convert degrees to 8-point cardinal direction.
+     * Maps to the same options used in the spray record dropdown
+     * (N, NE, E, SE, S, SW, W, NW).
      */
     degreesToDirection(deg: number): string {
         const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
         const idx = Math.round(deg / 22.5) % 16;
-        return directions[idx];
+        const full = directions[idx];
+        // Map 16-point to 8-point: strip the middle letter from compound directions
+        const map: Record<string, string> = {
+            'N': 'N', 'NNE': 'NE', 'NE': 'NE', 'ENE': 'E',
+            'E': 'E', 'ESE': 'SE', 'SE': 'SE', 'SSE': 'S',
+            'S': 'S', 'SSW': 'SW', 'SW': 'SW', 'WSW': 'W',
+            'W': 'W', 'WNW': 'NW', 'NW': 'NW', 'NNW': 'N',
+        };
+        return map[full] || 'N';
     }
 };

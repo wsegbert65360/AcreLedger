@@ -293,6 +293,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   };
 
   const [showValidation, setShowValidation] = useState(false);
+  const [complianceOpen, setComplianceOpen] = useState(true);
 
   /** Returns class names to visually highlight a required field that's empty during validation. */
   const missing = (value: string) => showValidation && !value.trim()
@@ -340,11 +341,13 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const handleSubmit = async () => {
     if (!isMinimumValid) {
       setShowValidation(true);
+      setComplianceOpen(true);
       toast.error('Enter at least one product name and an application date to save.');
       return;
     }
     if (!isFullyCompliant) {
       setShowValidation(true);
+      setComplianceOpen(true);
     }
 
     setIsSaving(true);
@@ -560,7 +563,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             </div>
           </div>
 
-          <Accordion type="single" collapsible className="w-full" defaultValue={showValidation && !isFullyCompliant ? 'compliance' : undefined}>
+          <Accordion type="single" collapsible className="w-full" value={complianceOpen ? 'compliance' : undefined} onValueChange={(v) => setComplianceOpen(v === 'compliance')}>
             <AccordionItem value="compliance" className="border-spray/20">
               <AccordionTrigger className="text-spray font-mono text-xs font-bold hover:no-underline py-2">
                 APPLICATION & COMPLIANCE DETAILS
