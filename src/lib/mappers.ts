@@ -233,6 +233,7 @@ export const mapRecipeFromDb = (db: SprayRecipeRow): SprayRecipe => ({
     licenseNumber: optionalStr(db.license_number),
     targetPest: optionalStr(db.target_pest),
     epaRegNumber: optionalStr(db.epa_reg_number),
+    cropOrSiteTreated: optionalStr(db.crop_or_site_treated),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
@@ -469,6 +470,7 @@ export const mapRecipeToDb = (r: SprayRecipe) => {
         license_number: r.licenseNumber,
         target_pest: r.targetPest,
         epa_reg_number: r.epaRegNumber,
+        crop_or_site_treated: r.cropOrSiteTreated,
         deleted_at: r.deleted_at
     };
 };

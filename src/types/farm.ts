@@ -185,6 +185,7 @@ export interface SprayRecipe {
   licenseNumber?: string;
   targetPest?: string;
   epaRegNumber?: string; // Kept for backward compatibility/summary
+  cropOrSiteTreated?: string;
   farm_id?: string;
   deleted_at: string | null;
 }

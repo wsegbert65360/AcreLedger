@@ -304,6 +304,7 @@ CREATE TABLE IF NOT EXISTS public.spray_recipes (
     license_number text,
     target_pest text,
     epa_reg_number text,
+    crop_or_site_treated text,
     CONSTRAINT spray_recipes_pkey PRIMARY KEY (id),
     CONSTRAINT spray_recipes_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
 );

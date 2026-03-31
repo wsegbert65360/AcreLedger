@@ -13,8 +13,8 @@ export default function RecipeForm({
   onSave,
   onCancel,
 }: {
-  initial?: { name: string; products: SprayRecipeProduct[]; applicatorName?: string; licenseNumber?: string; epaRegNumber?: string; targetPest?: string };
-  onSave: (r: { name: string; products: SprayRecipeProduct[]; applicatorName?: string; licenseNumber?: string; epaRegNumber?: string; targetPest?: string }) => void;
+  initial?: { name: string; products: SprayRecipeProduct[]; applicatorName?: string; licenseNumber?: string; epaRegNumber?: string; targetPest?: string; cropOrSiteTreated?: string };
+  onSave: (r: { name: string; products: SprayRecipeProduct[]; applicatorName?: string; licenseNumber?: string; epaRegNumber?: string; targetPest?: string; cropOrSiteTreated?: string }) => void;
   onCancel: () => void;
 }) {
   const { session } = useFarm();
@@ -29,6 +29,7 @@ export default function RecipeForm({
   const [licenseNumber, setLicenseNumber] = useState(initial?.licenseNumber ?? localStorage.getItem(`al_license_number_${userPrefix}`) ?? '');
   const [epaRegNumber, setEpaRegNumber] = useState(initial?.epaRegNumber ?? '');
   const [targetPest, setTargetPest] = useState(initial?.targetPest ?? '');
+  const [cropOrSiteTreated, setCropOrSiteTreated] = useState(initial?.cropOrSiteTreated ?? '');
 
   const updateProduct = (i: number, field: keyof SprayRecipeProduct, value: string) => {
     setProducts(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
@@ -136,6 +137,17 @@ export default function RecipeForm({
       </Button>
       <div className="border-t border-border/50 pt-3 space-y-2">
         <h4 className="text-muted-foreground font-mono text-xs font-bold">DEFAULT AUDIT INFO</h4>
+        <div>
+          <Label htmlFor="cropTreated" className="text-muted-foreground font-mono text-[10px]">CROP / SITE TREATED</Label>
+          <Input
+            id="cropTreated"
+            name="cropTreated"
+            value={cropOrSiteTreated}
+            onChange={e => setCropOrSiteTreated(e.target.value)}
+            placeholder="e.g. Corn, Soybeans"
+            className="mt-0.5 bg-muted border-border text-foreground text-sm"
+          />
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Label htmlFor="applicator" className="text-muted-foreground font-mono text-[10px]">APPLICATOR</Label>
@@ -180,6 +192,7 @@ export default function RecipeForm({
           licenseNumber: licenseNumber.trim() || undefined,
           epaRegNumber: epaRegNumber.trim() || undefined,
           targetPest: targetPest.trim() || undefined,
+          cropOrSiteTreated: cropOrSiteTreated.trim() || undefined,
         })} disabled={!valid} size="sm" className="bg-spray text-spray-foreground hover:bg-spray/90">
           Save
         </Button>

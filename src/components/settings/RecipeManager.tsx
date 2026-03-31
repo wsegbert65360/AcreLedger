@@ -70,8 +70,9 @@ export default function RecipeManager() {
                     {p.epaRegNumber && <span className="ml-2 text-[10px] opacity-70">(EPA: {p.epaRegNumber})</span>}
                   </div>
                 ))}
-                {(recipe.applicatorName || recipe.licenseNumber || recipe.targetPest || recipe.epaRegNumber) && (
+                {(recipe.applicatorName || recipe.licenseNumber || recipe.targetPest || recipe.epaRegNumber || recipe.cropOrSiteTreated) && (
                   <div className="text-muted-foreground font-mono text-[10px] pl-2 pt-1 border-t border-border/50 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                    {recipe.cropOrSiteTreated && <div>Crop: <span className="text-foreground/70">{recipe.cropOrSiteTreated}</span></div>}
                     {recipe.applicatorName && <div>Applicator: <span className="text-foreground/70">{recipe.applicatorName}{recipe.licenseNumber ? ` (${recipe.licenseNumber})` : ''}</span></div>}
                     {recipe.epaRegNumber && <div>Gen EPA: <span className="text-foreground/70">{recipe.epaRegNumber}</span></div>}
                     {recipe.targetPest && <div>Target: <span className="text-foreground/70">{recipe.targetPest}</span></div>}

@@ -250,6 +250,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       if (recipe.applicatorName) setApplicatorName(recipe.applicatorName);
       if (recipe.licenseNumber) setLicenseNumber(recipe.licenseNumber);
       if (recipe.targetPest) setTargetPest(recipe.targetPest);
+      if (recipe.cropOrSiteTreated) setCropOrSiteTreated(recipe.cropOrSiteTreated);
     }
   };
 
