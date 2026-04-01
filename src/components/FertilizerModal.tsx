@@ -149,7 +149,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                             <Sprout className="text-lime-600 dark:text-lime-400" size={20} />
                         </div>
                         <div>
-                            <DialogTitle className="text-lg font-bold text-foreground leading-tight">Fertilizer</DialogTitle>
+                            <DialogTitle className="text-lg font-bold text-lime-600 dark:text-lime-400 leading-tight">Fertilizer</DialogTitle>
                             <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
