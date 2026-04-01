@@ -6,7 +6,15 @@ import { FlaskConical } from 'lucide-react';
 import { toast } from 'sonner';
 import { seedDatabase } from '@/test/seedDatabase';
 
+// SECURITY: Only expose DevTools in development builds.
+// In production, this component renders nothing to prevent
+// users from flooding the database with test data.
+const isDev = import.meta.env.DEV;
+
 export default function DevTools() {
+  // Guard: render nothing in production
+  if (!isDev) return null;
+
   const store = useFarm();
   const [seeding, setSeeding] = useState(false);
   const [progress, setProgress] = useState('');

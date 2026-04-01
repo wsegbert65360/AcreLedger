@@ -243,6 +243,51 @@ DO $$ BEGIN
 END $$;
 
 -- ============================================================
+-- FIX VULN-12: Add explicit WITH CHECK to fertilizer_recipes and tillage_records
+-- Supabase linter warning 0011 requires explicit WITH CHECK clauses.
+-- PostgreSQL defaults WITH CHECK to USING, so functionally equivalent,
+-- but explicit clauses satisfy the linter and improve clarity.
+-- ============================================================
+
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'fertilizer_recipes'
+      AND policyname = 'Users can manage their own fertilizer recipes'
+      AND with_check IS NULL
+  ) THEN
+    DROP POLICY "Users can manage their own fertilizer recipes" ON public.fertilizer_recipes;
+    CREATE POLICY "Users can manage their own fertilizer recipes"
+    ON public.fertilizer_recipes
+    FOR ALL USING (
+      farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
+    ) WITH CHECK (
+      farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
+    );
+    RAISE NOTICE 'Added explicit WITH CHECK to fertilizer_recipes policy';
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'tillage_records'
+      AND policyname = 'Users can manage their own tillage records'
+      AND with_check IS NULL
+  ) THEN
+    DROP POLICY "Users can manage their own tillage records" ON public.tillage_records;
+    CREATE POLICY "Users can manage their own tillage records"
+    ON public.tillage_records
+    FOR ALL USING (
+      farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
+    ) WITH CHECK (
+      farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
+    );
+    RAISE NOTICE 'Added explicit WITH CHECK to tillage_records policy';
+  END IF;
+END $$;
+
+-- ============================================================
 -- FIX VULN-02 (edge function): The mrms-hourly edge function
 -- currently accepts anon-key auth. We add a safeguard here by
 -- ensuring only service_role can call rollup_field_rainfall directly.

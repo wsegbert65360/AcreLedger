@@ -73,13 +73,21 @@ ALTER TABLE field_rainfall_coverage ENABLE ROW LEVEL SECURITY;
 -- You may need to adjust these based on your exact isolation model
 
 -- 5. Cron Jobs
+-- NOTE (2026-04-02): The original cron.schedule calls contained a hardcoded
+-- project URL. This has been sanitized. In production, the edge function
+-- URL should be referenced via an environment variable or the Supabase
+-- project settings, not hardcoded in SQL.
+-- The cron jobs should be configured through the Supabase Dashboard
+-- (Database > Webhooks) or via the Supabase CLI.
+
 -- Hourly ingestion at minute 20 (standard NOAA latency offset)
+-- Original URL sanitized — configure via Supabase Dashboard
 SELECT cron.schedule(
     'mrms-hourly-ingestion',
     '20 * * * *',
     $$
     SELECT net.http_post(
-        url := 'https://rtzqswpmhlbrbxjwyywl.supabase.co/functions/v1/mrms-hourly',
+        url := 'https://' || current_setting('app.settings.project_ref') || '.supabase.co/functions/v1/mrms-hourly',
         headers := jsonb_build_object(
             'Content-Type', 'application/json',
             'Authorization', 'Bearer ' || (SELECT value FROM rainfall_settings WHERE key = 'service_role_key' LIMIT 1)
@@ -94,7 +102,7 @@ SELECT cron.schedule(
     '5 7 * * *',
     $$
     SELECT net.http_post(
-        url := 'https://rtzqswpmhlbrbxjwyywl.supabase.co/functions/v1/mrms-backfill',
+        url := 'https://' || current_setting('app.settings.project_ref') || '.supabase.co/functions/v1/mrms-backfill',
         headers := jsonb_build_object(
             'Content-Type', 'application/json',
             'Authorization', 'Bearer ' || (SELECT value FROM rainfall_settings WHERE key = 'service_role_key' LIMIT 1)
