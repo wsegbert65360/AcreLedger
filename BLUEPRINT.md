@@ -31,8 +31,9 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Build | Vite + Vite PWA Plugin | Bundler, dev server, service worker |
 | Routing | React Router v6 | Page navigation |
 | Database | Supabase (Postgres + RLS) | Persistent storage, Row Level Security |
-| Auth | Supabase Auth | Session, JWT, user identity |
+| Auth | Supabase Auth | Session, JWT, user identity, email confirmations |
 | Realtime | Supabase Realtime channels | Connection health probe (sync status) |
+| Security Headers | Vercel `vercel.json` | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, X-XSS-Protection |
 | State | React Context (`farmStore.tsx`) | Global client state + CRUD actions |
 | UI Components | shadcn/ui (Radix primitives) | Dialog, Select, Alert, Button, Card, etc. |
 | Styling | Tailwind CSS v3 | Utility classes, CSS variables for theming |
@@ -40,7 +41,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Toasts | Sonner | User feedback — success / error / warning / info |
 | Validation | Zod (`@/lib/backupSchema`) | Backup file schema validation on restore |
 | Weather | Visual Crossing API | Current wind/temp conditions |
-| Rainfall | IEM Stage IV + Supabase RPC | Dual-source precipitation tracking (Radar + DB) |
+| Rainfall | IEM Stage IV (coordinate-based) | Precipitation tracking via radar data, no field_id dependency |
 | Rain Utilities | `@/utils/rain.ts` | Shared helpers: URL sanitization, coordinate resolution, breakdown aggregation |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
@@ -166,12 +167,14 @@ Saved fertilizer formulas for reuse on fertilizer application records.
 ```
 
 ### Rainfall
-High-resolution precipitation tracking using the **Rain API** (IEM Stage IV + Supabase RPC).
-The system uses a **Dual-Source Lookup** strategy to ensure data reliability and range coverage.
+High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar data).
+All rain queries use **coordinate-based lookups** (`lat`/`lon`) to ensure reliable data delivery
+independent of Supabase MRMS data availability.
 
 #### Rain API Core Logic
-- **Primary Source (Radar)**: IEM Stage IV hourly dataset (CONUS only). Fetched via `GET /rain?lat=X&lon=Y&days=7`.
-- **Secondary Source (Database)**: AcreLedger Supabase `get_rainfall_stats` RPC. Fetched via `GET /rain?field_id=X&start_date=Y&end_date=Z`.
+- **Source**: IEM Stage IV hourly dataset (CONUS only). Fetched via `GET /rain?lat=X&lon=Y&days=N`.
+- **All queries use lat/lon**: Both the standard 7-day breakdown and custom date ranges (since-planting, since-spray) use coordinate-based IEM queries. The `field_id` parameter on the Rain API is NOT used by the frontend.
+- **Custom ranges**: The `fetchDaysSince(dateStr)` helper calculates days between a reference date and today, caps at 365 days, then queries `GET /rain?lat=X&lon=Y&days=N`. This replaced the old `field_id`-based approach which depended on Supabase MRMS data.
 - **Aggregation**: 24h, 72h, and 7d totals are computed on the client from the daily `breakdown` provided by the IEM response.
 - **Coordinate Precision**: Lat/Lng are rounded to **4 decimal places** for consistent matching with the 4km radar grid.
 - **Centroid Logic**: Polygon boundaries automatically fall back to centroids if explicit field coordinates are null or invalid.
@@ -188,9 +191,9 @@ The app has three rain data consumers with distinct strategies:
 
 1. **`FieldCard` (`useFieldRain` hook)**: Lightweight, single-purpose hook that fetches only the 24h rainfall for field list badges. Uses direct `fetch()` (bypasses `RainService` cache). Includes a 3-second hydration delay for store readiness. Silently hides the badge on any failure.
 
-2. **`FieldDetailScreen` (`doFetchRain`)**: Comprehensive fetch for the Rainfall Summary section (24h, 72h, 7d, since-planting, since-spray). Uses direct `fetch()` with ref-based store reads to avoid stale closures. Auto-fetches on mount with a 2-second hydration delay. Manual refresh via button.
+2. **`FieldDetailScreen` (`doFetchRain`)**: Comprehensive fetch for the Rainfall Summary section (24h, 72h, 7d, since-planting, since-spray). All queries use coordinate-based IEM lookups via `fetchDaysSince(dateStr)`. Uses ref-based store reads to avoid stale closures. Auto-fetches on mount with a 2-second hydration delay. Manual refresh via button.
 
-3. **`RainService`**: Complex service with promise-based cache and `AbortSignal` support. Used by test suites. Still functional but not consumed by UI components directly (they use direct fetch for simpler error handling and to avoid cached rejected promises).
+3. **`RainService`**: Complex service with promise-based cache and `AbortSignal` support. Used by test suites. Still functional but not consumed by UI components directly.
 
 #### Environment Variable Sanitization (CRITICAL)
 Vite inlines environment variables at build time. If `VITE_RAIN_API_URL` contains invisible characters like `\r` (carriage return) — which happens when values are pasted in Vercel or CI dashboards — every rain request will go to a broken URL. **Always** read the URL through `getRainApiBaseUrl()` which sanitizes it. Never access `import.meta.env.VITE_RAIN_API_URL` directly in consumer code.
@@ -252,6 +255,10 @@ every mutation function — before validation, mapping, or any state change.
 | FertilizerRecipe | `fertilizer_recipes` |
 | SprayRecipe | `spray_recipes` |
 | User profile / active season | `profiles` |
+| Rainfall hourly (MRMS) | `field_rainfall_hourly` (read-only for users) |
+| Rainfall coverage | `field_rainfall_coverage` (read-only for users) |
+| Farm rainfall daily | `farm_rainfall_daily` (read-only for users) |
+| Rainfall settings | `rainfall_settings` (service_role only) |
 
 Application state uses `camelCase`; DB columns use `snake_case`. Mappers handle all translation.
 
@@ -288,7 +295,7 @@ by filtering `!r.deleted_at` when loading state.
 record ID is absent from the DB, corrupting inventory and report totals.
 
 ### Security Hardening
-All locally-managed functions, RPCs, and triggers MUST include a explicit search path:
+All locally-managed functions, RPCs, and triggers MUST include an explicit search path:
 ```sql
 CREATE OR REPLACE FUNCTION ...
 RETURNS ... AS $$
@@ -296,6 +303,51 @@ RETURNS ... AS $$
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 ```
 This prevents "search_path not set" security warnings and protects against search-path hijacking.
+
+#### Row-Level Security (RLS) Policies
+Every table in the public schema MUST have RLS enabled with farm-scoped policies. The canonical pattern is:
+```sql
+ALTER TABLE public.<table> ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Farm-scoped access" ON public.<table>
+  FOR ALL USING (
+    farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
+  ) WITH CHECK (
+    farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
+  );
+```
+Key RLS rules:
+- **Every policy MUST have both `USING` and `WITH CHECK` clauses.** PostgreSQL defaults `WITH CHECK` to `USING`, but explicit clauses satisfy the Supabase linter (warning 0011) and prevent ambiguity.
+- **Service-role-only tables**: Tables like `rainfall_settings` and `farm_rainfall_daily` use `FOR ALL TO service_role` instead of public policies. Never use `USING (true) WITH CHECK (true)` without a `TO service_role` qualifier — this would grant all users full access.
+- **Read-only tables**: Weather tables (`field_rainfall_hourly`, `field_rainfall_coverage`) use `FOR SELECT TO authenticated` for users and `FOR ALL TO service_role` for the edge function.
+- **RPC ownership checks**: All `SECURITY DEFINER` functions that query user data MUST include `auth.uid()` checks. Never expose an RPC that accepts a `field_id` without verifying the caller owns the farm that field belongs to.
+- **Function grants**: SECURITY DEFINER functions should only be executable by `service_role` unless explicitly needed by `authenticated` users. Use `REVOKE EXECUTE ON FUNCTION ... FROM authenticated` for admin-only functions.
+
+#### Edge Function Authentication
+Edge functions that use the `service_role` Supabase client (bypasses all RLS) MUST accept only `service_role` authentication:
+```typescript
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const token = authHeader?.replace('Bearer ', '') ?? '';
+const isAuthorized = token === serviceRoleKey;
+```
+Never accept `anon` key authentication for functions that create a service_role client. This would allow any authenticated user to bypass RLS.
+
+#### DevTools Gating
+Development-only components (e.g., database seeding tools) MUST be gated behind `import.meta.env.DEV`:
+```typescript
+const isDev = import.meta.env.DEV;
+export default function DevTools() {
+  if (!isDev) return null;
+  // ...component body
+}
+```
+This prevents production users from accessing developer utilities.
+
+#### Credential Handling
+- **Never commit secrets** to the repository. `.env`, `.env.local`, `.env*.local` are in `.gitignore`.
+- **`.env.example`** contains only empty placeholder values (no actual keys).
+- **Supabase keys** (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) are build-time env vars — never hardcode.
+- **Legacy migration files** must not contain hardcoded project URLs or API keys. Use `current_setting()` or environment variable references.
+- **Rain API URL** (`VITE_RAIN_API_URL`) is always accessed through `getRainApiBaseUrl()` which sanitizes invisible characters.
 
 ---
 
@@ -653,6 +705,7 @@ Use `window.addEventListener('online'/'offline')` in parallel with channel statu
 - **`isAdding` boolean ref, not UUID Set.** UUID Set does not prevent double-tap; boolean does.
 - **`try/finally` on in-flight guards.** Guard must release even on unexpected throw.
 - **Service Promise Caching.** Multi-call services (Rain, Weather) MUST implement a `promiseCache` (Map) to deduplicate concurrent requests for the same identity (fieldId, location).
+- **All rain queries use coordinate-based lookups.** Never use `field_id` mode on the Rain API for custom date ranges. Always use `lat/lon/days=N` with the IEM Stage IV source.
 - **Module-level pure helpers only.** Functions with no component dependency go outside the component.
 - **Memoize all derived data.** `fieldMap`, filtered/sorted arrays, season lists, totals — all `useMemo`.
 - **`[...arr].sort()` never `arr.sort()`.** Sort mutates in place — spread first.
