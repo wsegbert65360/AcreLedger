@@ -88,6 +88,7 @@ export interface PlantRecordRow {
     season_year: number;
     timestamp: string;
     deleted_at?: string | null;
+    non_compliant?: boolean | null;
 }
 
 export interface SprayRecordRow {
