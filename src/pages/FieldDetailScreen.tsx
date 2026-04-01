@@ -5,7 +5,7 @@ import {
   Sprout, Leaf, Tractor, ArrowLeft, 
   Cloud, MapPin, Droplets, RefreshCw, 
   AlertCircle, History, 
-  FileText, ExternalLink, Info, CheckCircle2
+  FileText, ExternalLink, Info, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
@@ -265,6 +265,12 @@ export default function FieldDetailScreen() {
             {(field.fsaFarmNumber || field.fsaTractNumber) && (
               <div className="text-[10px] font-mono text-slate-400 uppercase">
                 FSA: {field.fsaFarmNumber || '—'} / {field.fsaTractNumber || '—'} / {field.fsaFieldNumber || '—'}
+              </div>
+            )}
+            {latestPlanting?.nonCompliant && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
+                <AlertTriangle size={12} />
+                FSA Incomplete
               </div>
             )}
           </div>
