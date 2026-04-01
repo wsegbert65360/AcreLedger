@@ -117,32 +117,35 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     }
   }, [open, weather, isManualWeather]);
 
-  // Handle End Time Estimation
-  useEffect(() => {
-    if (isEndTimeManual || !startTime || !treatedAreaSize) return;
-    
-    const acres = parseFloat(treatedAreaSize);
-    if (isNaN(acres) || acres <= 0) return;
-
-    const [hours, minutes] = startTime.split(':').map(Number);
+  /** Pure function — calculates estimated end time from start time + acreage.
+   *  54.5 acres/hour ≈ 0.9083 acres/minute. */
+  const calcEndTime = (st: string, acres: string): string => {
+    if (!st || !acres) return '';
+    const a = parseFloat(acres);
+    if (isNaN(a) || a <= 0) return '';
+    const [hours, minutes] = st.split(':').map(Number);
     const startMins = hours * 60 + minutes;
-    
-    // 54.5 acres per hour = 0.90833 acres per minute
-    const durationMins = Math.round(acres / (54.5 / 60));
+    const durationMins = Math.round(a / (54.5 / 60));
     const endTotalMins = (startMins + durationMins) % (24 * 60);
-    
     const endH = Math.floor(endTotalMins / 60).toString().padStart(2, '0');
     const endM = (endTotalMins % 60).toString().padStart(2, '0');
-    
-    setEndTime(`${endH}:${endM}`);
+    return `${endH}:${endM}`;
+  };
+
+  // Handle End Time Estimation (reactive — keeps auto-end-time in sync)
+  useEffect(() => {
+    if (isEndTimeManual) return;
+    const computed = calcEndTime(startTime, treatedAreaSize);
+    if (computed) setEndTime(computed);
   }, [startTime, treatedAreaSize, isEndTimeManual]);
 
   const resetComplianceFields = () => {
     const now = new Date();
     const d = getDefaults();
-    setStartTime(now.toTimeString().slice(0, 5));
-    setEndTime('');
+    const st = now.toTimeString().slice(0, 5);
+    setStartTime(st);
     setIsEndTimeManual(false);
+    setEndTime(calcEndTime(st, field.acreage.toString()));
     setCropOrSiteTreated(d.cropOrSiteTreated || '');
     setApplicationMethod(d.applicationMethod || 'Ground Broadcast');
     setTreatedAreaUnit('ac');
@@ -189,9 +192,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setLicenseNumber(initialData.licenseNumber || '');
       setTargetPest(initialData.targetPest || 'grass/broadleaves');
       setSprayDate(initialData.sprayDate || new Date().toISOString().split('T')[0]);
+      const manualEnd = !!initialData.endTime;
       setStartTime(initialData.startTime || '');
-      setEndTime(initialData.endTime || '');
-      setIsEndTimeManual(!!initialData.endTime);
+      setIsEndTimeManual(manualEnd);
+      // Compute end time synchronously so validation never sees it empty in auto mode
+      setEndTime(manualEnd
+        ? (initialData.endTime || '')
+        : calcEndTime(initialData.startTime || '', initialData.treatedAreaSize?.toString() || field.acreage.toString())
+      );
       setSiteAddress(initialData.siteAddress || field.name);
       setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field.acreage.toString());
       setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
