@@ -53,6 +53,8 @@ export default function SprayTab({ records, selected, onToggle, onEdit }: SprayT
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
+          warning={r.nonCompliant}
+          compliant={!r.nonCompliant}
         />
       ))}
     </div>
