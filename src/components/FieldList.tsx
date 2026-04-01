@@ -8,18 +8,21 @@ interface FieldListProps {
 }
 
 export default function FieldList({ fields }: FieldListProps) {
-  const { plantRecords, sprayRecords, fertilizerApplications, viewingSeason } = useFarm();
+  const { plantRecords, sprayRecords, fertilizerApplications, harvestRecords, viewingSeason } = useFarm();
 
   const augmentedFields = useMemo(() => {
     return fields.map(field => {
+      const seasonFilter = (r: { fieldId: string; seasonYear: number }) =>
+        r.fieldId === field.id && r.seasonYear === viewingSeason;
       const summary = {
-        planted: plantRecords.some(r => r.fieldId === field.id && r.seasonYear === viewingSeason),
-        sprayed: sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).length,
-        fertilized: fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).length,
+        planted: plantRecords.some(seasonFilter),
+        harvested: harvestRecords.some(seasonFilter),
+        sprayed: sprayRecords.filter(seasonFilter).length,
+        fertilized: fertilizerApplications.filter(seasonFilter).length,
       };
       return { ...field, activitySummary: summary };
     });
-  }, [fields, plantRecords, sprayRecords, fertilizerApplications, viewingSeason]);
+  }, [fields, plantRecords, sprayRecords, fertilizerApplications, harvestRecords, viewingSeason]);
 
   return (
     <div className="space-y-1">

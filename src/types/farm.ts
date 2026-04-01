@@ -18,6 +18,7 @@ export interface Field {
   deleted_at: string | null;
   activitySummary?: {
     planted: boolean;
+    harvested: boolean;
     sprayed: number;
     fertilized: number;
   };
