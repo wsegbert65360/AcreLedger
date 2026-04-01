@@ -177,7 +177,7 @@ export default function FieldDetailScreen() {
         sincePlanting: Math.round(sincePlant * 1000) / 1000,
         sinceLastSpray: Math.round(sinceSpray * 1000) / 1000,
         periodEndUtc: periodEnd,
-        dataWarning: data.mode === 'iem' ? 'IEM Stage IV data — 1-2 hour lag from real-time' : undefined,
+        dataWarning: undefined,
       });
       setRainError(null);
     } catch (err: any) {
