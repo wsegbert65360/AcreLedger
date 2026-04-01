@@ -7,7 +7,6 @@ import {
   AlertCircle, History, 
   FileText, ExternalLink, Info, CheckCircle2
 } from 'lucide-react';
-import { RainService } from '@/services/RainService';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
@@ -58,7 +57,6 @@ export default function FieldDetailScreen() {
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
   const [editingRecord, setEditingRecord] = useState<any>(null);
-  const fetchingRainRef = useRef(false);
 
   // Derived Values
   const unifiedRecords = useMemo(() => {
@@ -105,40 +103,124 @@ export default function FieldDetailScreen() {
     return Math.floor(diff / (1000 * 60 * 60 * 24));
   }, [latestSpray]);
 
-  const handleFetchRain = useCallback(async (signal?: AbortSignal) => {
-    if (!field || fetchingRainRef.current) return;
-    fetchingRainRef.current = true;
-    setFetchingRain(true);
-    setRainError(null);
+  // Keep refs to the latest store values so the async fetch reads fresh data
+  // without triggering re-fetches when the store updates.
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+  const plantRef = useRef(plantRecords);
+  plantRef.current = plantRecords;
+  const sprayRef = useRef(sprayRecords);
+  sprayRef.current = sprayRecords;
+  const seasonRef = useRef(viewingSeason);
+  seasonRef.current = viewingSeason;
+
+  /** Compute centroid from polygon boundary when lat/lng are null. */
+  function resolveCoords(f: typeof field): [number, number] | null {
+    if (f?.lat != null && f?.lng != null) return [f.lat, f.lng];
+    if (!f?.boundary?.coordinates?.[0]?.length) return null;
+    const ring = f.boundary.coordinates[0];
+    let lat = 0, lng = 0;
+    for (const c of ring) { lat += c[1]; lng += c[0]; }
+    return [lat / ring.length, lng / ring.length];
+  }
+
+  /**
+   * Direct rain fetch — bypasses RainService's promiseCache which
+   * caches rejected promises for 30s and causes persistent failures.
+   * Per rainapiinstructions.md: GET /rain?lat=X&lon=Y&days=7
+   */
+  const doFetchRain = async (fieldId: string) => {
+    const f = fieldsRef.current.find(x => x.id === fieldId);
+    if (!f) { setRainError('Field not found'); return; }
+
+    const coords = resolveCoords(f);
+    if (!coords) { setRainError('No location data for this field'); return; }
+
+    const baseUrl = import.meta.env?.VITE_RAIN_API_URL;
+    if (!baseUrl) { setRainError('Rain API not configured'); return; }
+
     try {
-      const data = await RainService.fetchComprehensiveRainfall({
-        fieldId: field.id,
-        lat: field.lat,
-        lng: field.lng,
-        boundary: field.boundary,
-        sincePlantingDate: latestPlanting?.plantDate,
-        sinceLastSprayDate: latestSpray?.sprayDate,
-        signal
+      const res = await fetch(`${baseUrl}/rain?lat=${coords[0]}&lon=${coords[1]}&days=7`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`API ${res.status}: ${err.error || 'Unknown'}`);
+      }
+      const data = await res.json();
+      const bd: Record<string, number> = data.breakdown || {};
+      const dates = Object.keys(bd).sort();
+
+      const r24 = dates.length > 0 ? (Number(bd[dates[dates.length - 1]]) || 0) : 0;
+      const r72 = dates.length >= 3 ? dates.slice(-3).reduce((s, d) => s + (Number(bd[d]) || 0), 0) : r24;
+      const r7d = Number(data.rainfall) || dates.reduce((s, d) => s + (Number(bd[d]) || 0), 0);
+
+      const periodEnd = data.period?.end
+        ? `${data.period.end}T23:59:59Z`
+        : new Date().toISOString();
+
+      // Custom range calls for since-planting / since-spray
+      const season = seasonRef.current;
+      const latestP = plantRef.current
+        .filter(r => r.fieldId === fieldId && r.seasonYear === season)
+        .sort((a, b) => new Date(b.plantDate || 0).getTime() - new Date(a.plantDate || 0).getTime())[0];
+      const latestS = sprayRef.current
+        .filter(r => r.fieldId === fieldId && r.seasonYear === season)
+        .sort((a, b) => new Date(b.sprayDate || 0).getTime() - new Date(a.sprayDate || 0).getTime())[0];
+
+      const today = new Date().toISOString().split('T')[0];
+      const fetchRange = async (startDate: string) => {
+        try {
+          const r = await fetch(`${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`);
+          if (!r.ok) return 0;
+          const d = await r.json();
+          return Number(d.rainfall || 0);
+        } catch { return 0; }
+      };
+      const [sincePlant, sinceSpray] = await Promise.all([
+        latestP?.plantDate ? fetchRange(latestP.plantDate) : 0,
+        latestS?.sprayDate ? fetchRange(latestS.sprayDate) : 0,
+      ]);
+
+      setRainStats({
+        '24h': Math.round(r24 * 1000) / 1000,
+        '72h': Math.round(r72 * 1000) / 1000,
+        '7d': Math.round(r7d * 1000) / 1000,
+        sincePlanting: Math.round(sincePlant * 1000) / 1000,
+        sinceLastSpray: Math.round(sinceSpray * 1000) / 1000,
+        periodEndUtc: periodEnd,
+        dataWarning: data.mode === 'iem' ? 'IEM Stage IV data — 1-2 hour lag from real-time' : undefined,
       });
-      setRainStats(data);
+      setRainError(null);
     } catch (err: any) {
-      if (err.name === 'AbortError') return;
       console.error('[FieldDetail] Rain fetch error:', err);
       setRainError(err.message || 'Could not load rainfall data.');
     } finally {
-      fetchingRainRef.current = false;
       setFetchingRain(false);
     }
-  }, [field, latestPlanting?.plantDate, latestSpray?.sprayDate]);
+  };
 
+  // Auto-fetch on mount with a 2-second delay to let the store hydrate.
+  // Only depends on the stable fieldId string — never on store objects.
+  const fetchedRef = useRef(false);
   useEffect(() => {
-    if (!field?.id) return;
-    const controller = new AbortController();
-    // Reset guard so rapid dep changes (e.g. store data loading) don't skip the fetch
-    fetchingRainRef.current = false;
-    handleFetchRain(controller.signal);
-    return () => controller.abort();
-  }, [field?.id, handleFetchRain]);
+    if (!id) return;
+    fetchedRef.current = false;
+    const timer = setTimeout(() => {
+      if (!fetchedRef.current) {
+        fetchedRef.current = true;
+        setFetchingRain(true);
+        doFetchRain(id);
+      }
+    }, 2000);
+    return () => { clearTimeout(timer); fetchedRef.current = false; };
+  }, [id]);
+
+  // Manual refresh button handler
+  const handleFetchRain = useCallback(() => {
+    if (!id || fetchingRain) return;
+    setFetchingRain(true);
+    setRainError(null);
+    doFetchRain(id);
+  }, [id, fetchingRain]);
 
   const location = useLocation();
   useEffect(() => {
