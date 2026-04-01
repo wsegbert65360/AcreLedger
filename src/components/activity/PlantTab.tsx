@@ -44,6 +44,8 @@ export default function PlantTab({ records, selected, onToggle, onEdit }: PlantT
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
+          warning={r.nonCompliant}
+          compliant={!r.nonCompliant}
         />
       ))}
     </div>
