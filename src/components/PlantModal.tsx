@@ -91,11 +91,23 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   useEffect(() => {
     if (!open) return;
     if (initialData) {
+      setSeedVariety(initialData.seedVariety || '');
+      setCrop(initialData.crop || '');
+      setIntendedUse(initialData.intendedUse || field.intendedUse || 'Grain');
+      setProducerShare(initialData.producerShare?.toString() || field.producerShare?.toString() || '100');
+      setIrrigationPractice(initialData.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
+      setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
       setShowValidation(!!initialData.nonCompliant);
     } else {
+      setSeedVariety('');
+      setCrop('');
+      setIntendedUse(field.intendedUse || 'Grain');
+      setProducerShare(field.producerShare?.toString() || '100');
+      setIrrigationPractice(field.irrigationPractice || 'Non-Irrigated');
+      setPlantDate(new Date().toISOString().split('T')[0]);
       setShowValidation(false);
     }
-  }, [initialData, open]);
+  }, [initialData, field, open]);
 
   // ─── Seed selection auto-populates crop (BUG-7) ─────────────────────────
   const handleSeedSelect = (val: string) => {

@@ -177,8 +177,8 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
             sanitizeCsvValue(r.landlordSplitPercent),
             sanitizeCsvValue(r.landlordName),
             sanitizeCsvValue(r.scaleTicketNumber),
-            sanitizeCsvValue(field?.fsaFarmNumber),
-            sanitizeCsvValue(field?.fsaTractNumber)
+            sanitizeCsvValue(r.fsaFarmNumber || field?.fsaFarmNumber),
+            sanitizeCsvValue(r.fsaTractNumber || field?.fsaTractNumber)
         ].join(',');
     });
 

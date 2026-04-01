@@ -183,9 +183,9 @@ export default function Reports() {
             r.crop || '—',
             r.seedVariety,
             r.acreage,
-            field?.fsaFarmNumber || '—',
-            field?.fsaTractNumber || '—',
-            field?.fsaFieldNumber || '—',
+            r.fsaFarmNumber || field?.fsaFarmNumber || '—',
+            r.fsaTractNumber || field?.fsaTractNumber || '—',
+            r.fsaFieldNumber || field?.fsaFieldNumber || '—',
             r.intendedUse || '—',
             r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI',
             `${(r.producerShare ?? 100).toFixed(0)}%`
@@ -256,8 +256,8 @@ export default function Reports() {
             `${r.landlordSplitPercent}%`,
             r.landlordName || '—',
             r.scaleTicketNumber || '—',
-            field?.fsaFarmNumber || '—',
-            field?.fsaTractNumber || '—'
+            r.fsaFarmNumber || field?.fsaFarmNumber || '—',
+            r.fsaTractNumber || field?.fsaTractNumber || '—'
           ];
         }),
         fileName: `FSA_Harvest_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
@@ -384,7 +384,7 @@ export default function Reports() {
           <ReportTable
             title="FSA Planting Report"
             subtitle={`Acreage report for Farm Service Agency certification. Generated ${reportDate}.`}
-            headers={['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %']}
+            headers={['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'FIELD #', 'USE', 'IRR', 'SHARE %']}
             onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields), 'FSA planting data')}
             onExportPdf={handleExportFsaPlantPdf}
             exportLabel="CSV"
@@ -404,8 +404,9 @@ export default function Reports() {
                   <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{r.crop || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.seedVariety}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acreage}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaFarmNumber  || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaTractNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.fsaFarmNumber || field?.fsaFarmNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.fsaTractNumber || field?.fsaTractNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.fsaFieldNumber || field?.fsaFieldNumber || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.intendedUse || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{(r.producerShare ?? 100).toFixed(0)}%</td>
@@ -414,7 +415,7 @@ export default function Reports() {
             })}
             {plantRecords.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-muted-foreground font-mono text-xs">
+                <td colSpan={11} className="py-12 text-center text-muted-foreground font-mono text-xs">
                   No planting records to report for this season
                 </td>
               </tr>
@@ -570,8 +571,8 @@ export default function Reports() {
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.landlordSplitPercent}%</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{r.landlordName || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{r.scaleTicketNumber || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaFarmNumber  || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaTractNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.fsaFarmNumber || field?.fsaFarmNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.fsaTractNumber || field?.fsaTractNumber || '—'}</td>
                 </tr>
               );
             })}
