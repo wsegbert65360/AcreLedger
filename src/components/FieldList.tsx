@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import { RainService } from '@/services/RainService';
@@ -8,24 +8,51 @@ interface FieldListProps {
   fields: Field[];
 }
 
+type RainfallResult = {
+  '24h': number;
+  '72h': number;
+  '7d': number;
+  sincePlanting: number;
+  sinceLastSpray: number;
+  periodEndUtc: string;
+  dataWarning?: string;
+};
+
 /**
- * FieldList now fetches per-field rainfall using RainService (the same API
- * that FieldDetailScreen uses).  Key design decisions:
- *
- *  1. We derive a **stable** list of `{ fieldId, lat, lng, boundary }`
- *     objects keyed only by field identity — NOT by activity summaries.
- *     This prevents the useEffect from firing on every store tick.
- *
- *  2. We track which field IDs have been **attempted** (even on error or
- *     skip) so the card can show a "—" dash instead of a spinner.
- *
- *  3. A ref guard (`fetchingRef`) prevents concurrent rain rounds.
+ * Fetches rain for a single field.  Returns null on error/abort so the
+ * caller can distinguish "loading" from "done but failed".
  */
+async function fetchFieldRain(
+  fieldId: string,
+  lat: number | null,
+  lng: number | null,
+  boundary: Field['boundary'],
+  sincePlantingDate: string | undefined,
+  sinceLastSprayDate: string | undefined,
+): Promise<RainfallResult | null> {
+  // No location → bail out immediately, not an error
+  if (lat == null && lng == null && !boundary) return null;
+
+  try {
+    return await RainService.fetchComprehensiveRainfall({
+      fieldId,
+      lat,
+      lng,
+      boundary: boundary ?? undefined,
+      sincePlantingDate,
+      sinceLastSprayDate,
+    });
+  } catch (err: any) {
+    if (err.name === 'AbortError') return null;
+    console.warn(`[FieldList] Rain fetch failed for ${fieldId}:`, err.message);
+    return null;          // error → null, card shows "—"
+  }
+}
 
 export default function FieldList({ fields }: FieldListProps) {
   const { plantRecords, sprayRecords, fertilizerApplications, harvestRecords, viewingSeason } = useFarm();
 
-  // ── Activity summaries (used for card display, NOT for rain deps) ──
+  // ── Activity summaries (pure display, no rain dependency) ──────────────
   const augmentedFields = useMemo(() => {
     return fields.map(field => {
       const seasonFilter = (r: { fieldId: string; seasonYear: number }) =>
@@ -40,115 +67,72 @@ export default function FieldList({ fields }: FieldListProps) {
     });
   }, [fields, plantRecords, sprayRecords, fertilizerApplications, harvestRecords, viewingSeason]);
 
-  // ── Stable rain-args derived only from the raw fields array ──
-  // We stringify so that React sees the same value when fields haven't
-  // changed identity (same ids, same coords) even though the parent
-  // may re-render for other reasons.
-  const rainArgsKey = useMemo(() => {
-    return fields.map(f => `${f.id}:${f.lat ?? ''}:${f.lng ?? ''}`).join('|');
-  }, [fields]);
+  // ── Rain state ─────────────────────────────────────────────────────────
+  const [rainMap, setRainMap] = useState<Record<string, RainfallResult>>({});
+  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
+  const resolvedRef = useRef(new Set<string>());
 
-  const rainArgs = useMemo(() => {
-    return fields.map(f => ({
-      fieldId: f.id,
-      lat: f.lat,
-      lng: f.lng,
-      boundary: f.boundary ?? undefined,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rainArgsKey]);
-
-  // ── Planting / spray dates per field (stable per season) ──
-  const fieldDates = useMemo(() => {
-    const dates: Record<string, { sincePlantingDate?: string; sinceLastSprayDate?: string }> = {};
-    for (const field of fields) {
-      const seasonFilter = (r: { fieldId: string; seasonYear: number }) =>
-        r.fieldId === field.id && r.seasonYear === viewingSeason;
-
-      const plantings = plantRecords.filter(seasonFilter)
-        .sort((a, b) => new Date(b.plantDate || 0).getTime() - new Date(a.plantDate || 0).getTime());
-      const sprays = sprayRecords.filter(seasonFilter)
-        .sort((a, b) => new Date(b.sprayDate || 0).getTime() - new Date(a.sprayDate || 0).getTime());
-
-      dates[field.id] = {
-        sincePlantingDate: plantings[0]?.plantDate,
-        sinceLastSprayDate: sprays[0]?.sprayDate,
-      };
-    }
-    return dates;
-  }, [fields, plantRecords, sprayRecords, viewingSeason]);
-
-  // ── Rain state ──
-  const [rainMap, setRainMap] = useState<Record<string, {
-    '24h': number;
-    '72h': number;
-    '7d': number;
-    sincePlanting: number;
-    sinceLastSpray: number;
-    periodEndUtc: string;
-    dataWarning?: string;
-  }>>({});
-
-  // Track which field IDs have finished attempting (success or fail)
-  const [attemptedIds, setAttemptedIds] = useState<Set<string>>(new Set());
-  const fetchingRef = useRef(false);
-
-  const fetchRainfall = useCallback(async (args: typeof rainArgs, signal: AbortSignal) => {
-    if (args.length === 0) return;
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-
-    const newRain: typeof rainMap = {};
-    const newAttempted = new Set<string>();
-
-    const promises = args.map(async ({ fieldId, lat, lng, boundary }) => {
-      // Skip fields with no location data at all
-      if (lat == null && lng == null && !boundary) {
-        newAttempted.add(fieldId);
-        return;
-      }
-
-      const dates = fieldDates[fieldId];
-      try {
-        const data = await RainService.fetchComprehensiveRainfall({
-          fieldId,
-          lat,
-          lng,
-          boundary,
-          sincePlantingDate: dates?.sincePlantingDate,
-          sinceLastSprayDate: dates?.sinceLastSprayDate,
-          signal,
-        });
-        newRain[fieldId] = data;
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
-        console.warn(`[FieldList] Rain fetch failed for ${fieldId}:`, err.message);
-      }
-      newAttempted.add(fieldId);
-    });
-
-    await Promise.all(promises);
-
-    if (!signal.aborted) {
-      setRainMap(prev => ({ ...prev, ...newRain }));
-      setAttemptedIds(prev => {
-        const next = new Set(prev);
-        for (const id of newAttempted) next.add(id);
-        return next;
-      });
-    }
-
-    fetchingRef.current = false;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldDates, rainArgsKey]);
-
+  /**
+   * Effect: fire ONE independent fetch per field.  Each field gets its own
+   * Promise that resolves or rejects on its own timeline — no shared abort
+   * controller, no callback that recreates on dep changes.
+   *
+   * We use field.id as the trigger so the effect only re-fires when the
+   * actual list of fields changes (added / removed), never when the store
+   * updates other slices.
+   *
+   * We de-dupe via a ref so a field that already resolved is never
+   * re-fetched within the same mount cycle.
+   */
   useEffect(() => {
-    if (rainArgs.length === 0) return;
-    const controller = new AbortController();
-    fetchingRef.current = false; // reset guard so this round can run
-    fetchRainfall(rainArgs, controller.signal);
-    return () => controller.abort();
-  }, [rainArgs, fetchRainfall]);
+    if (fields.length === 0) return;
+
+    const currentIds = fields.map(f => f.id);
+    const pending = currentIds.filter(id => !resolvedRef.current.has(id));
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+
+    const doFetch = async () => {
+      for (const fieldId of pending) {
+        const field = fields.find(f => f.id === fieldId);
+        if (!field) continue;
+
+        // Derive planting/spray dates at call-time (not via useMemo)
+        const seasonFilter = (r: { fieldId: string; seasonYear: number }) =>
+          r.fieldId === field.id && r.seasonYear === viewingSeason;
+
+        const plantings = plantRecords.filter(seasonFilter)
+          .sort((a, b) => new Date(b.plantDate || 0).getTime() - new Date(a.plantDate || 0).getTime());
+        const sprays = sprayRecords.filter(seasonFilter)
+          .sort((a, b) => new Date(b.sprayDate || 0).getTime() - new Date(a.sprayDate || 0).getTime());
+
+        const result = await fetchFieldRain(
+          field.id,
+          field.lat,
+          field.lng,
+          field.boundary,
+          plantings[0]?.plantDate,
+          sprays[0]?.sprayDate,
+        );
+
+        if (cancelled) return;
+
+        resolvedRef.current.add(fieldId);
+        setResolvedIds(prev => new Set(prev).add(fieldId));
+
+        if (result) {
+          setRainMap(prev => ({ ...prev, [fieldId]: result }));
+        }
+      }
+    };
+
+    doFetch();
+
+    return () => { cancelled = true; };
+    // Only depend on field IDs — not on the Field objects themselves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields.map(f => f.id).join(',')]);
 
   return (
     <div className="space-y-1.5">
@@ -158,7 +142,7 @@ export default function FieldList({ fields }: FieldListProps) {
           field={field}
           index={i}
           rainStats={rainMap[field.id] ?? null}
-          rainLoading={!attemptedIds.has(field.id)}
+          rainLoading={!resolvedIds.has(field.id)}
         />
       ))}
     </div>
