@@ -76,15 +76,16 @@ async function fetchRain24h(
   lat: number,
   lng: number,
 ): Promise<number | null> {
-  const baseUrl = (typeof import.meta !== 'undefined')
+  const rawUrl = (typeof import.meta !== 'undefined')
     ? import.meta.env?.VITE_RAIN_API_URL
     : (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
 
-  if (!baseUrl) {
+  if (!rawUrl) {
     console.warn('[FieldCard] VITE_RAIN_API_URL not set');
     return null;
   }
 
+  const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
   const url = `${baseUrl}/rain?lat=${lat}&lon=${lng}&days=7`;
 
   const res = await fetch(url);

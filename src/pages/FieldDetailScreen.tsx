@@ -136,8 +136,9 @@ export default function FieldDetailScreen() {
     const coords = resolveCoords(f);
     if (!coords) { setRainError('No location data for this field'); return; }
 
-    const baseUrl = import.meta.env?.VITE_RAIN_API_URL;
-    if (!baseUrl) { setRainError('Rain API not configured'); return; }
+    const rawUrl = import.meta.env?.VITE_RAIN_API_URL;
+    if (!rawUrl) { setRainError('Rain API not configured'); return; }
+    const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
 
     try {
       const res = await fetch(`${baseUrl}/rain?lat=${coords[0]}&lon=${coords[1]}&days=7`);

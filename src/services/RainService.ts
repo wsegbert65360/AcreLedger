@@ -38,12 +38,16 @@ export const RainService = {
     }
 
     const fetchPromise = (async () => {
-      const baseUrl = import.meta.env?.VITE_RAIN_API_URL ||
+      const rawUrl = import.meta.env?.VITE_RAIN_API_URL ||
                      (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
 
-      if (!baseUrl) {
+      if (!rawUrl) {
         throw new Error('VITE_RAIN_API_URL is not configured');
       }
+
+      // Sanitize: strip trailing slashes and any stray carriage returns/newlines
+      // that can appear when env vars are set in Vercel/CI dashboards.
+      const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
 
       // Get lat/lng. If missing but boundary exists, compute centroid from boundary.
       let tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
