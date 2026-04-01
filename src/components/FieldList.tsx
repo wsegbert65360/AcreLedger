@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import FieldCard from './FieldCard';
@@ -6,8 +6,6 @@ import FieldCard from './FieldCard';
 interface FieldListProps {
   fields: Field[];
 }
-
-// ── Activity summaries only (no rain logic here) ────────────────────────
 
 export default function FieldList({ fields }: FieldListProps) {
   const { plantRecords, sprayRecords, fertilizerApplications, harvestRecords, viewingSeason } = useFarm();
