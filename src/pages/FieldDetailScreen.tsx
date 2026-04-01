@@ -141,7 +141,7 @@ export default function FieldDetailScreen() {
     const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
 
     try {
-      const res = await fetch(`${baseUrl}/rain?lat=${coords[0]}&lon=${coords[1]}&days=7`);
+      const res = await fetch(`${baseUrl}?lat=${coords[0]}&lon=${coords[1]}&days=7`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(`API ${res.status}: ${err.error || 'Unknown'}`);
@@ -170,7 +170,7 @@ export default function FieldDetailScreen() {
       const today = new Date().toISOString().split('T')[0];
       const fetchRange = async (startDate: string) => {
         try {
-          const r = await fetch(`${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`);
+          const r = await fetch(`${baseUrl}?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`);
           if (!r.ok) return 0;
           const d = await r.json();
           return Number(d.rainfall || 0);

@@ -86,7 +86,7 @@ async function fetchRain24h(
   }
 
   const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
-  const url = `${baseUrl}/rain?lat=${lat}&lon=${lng}&days=7`;
+  const url = `${baseUrl}?lat=${lat}&lon=${lng}&days=7`;
 
   const res = await fetch(url);
   if (!res.ok) {

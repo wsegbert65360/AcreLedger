@@ -69,7 +69,7 @@ export const RainService = {
 
       // --- Main call: GET /rain?lat=X&lon=Y&days=7 (IEM Stage IV) ---
       // Returns: { rainfall, breakdown: { "YYYY-MM-DD": inches }, period, mode }
-      const mainResponse = await fetch(`${baseUrl}/rain?lat=${tLat}&lon=${tLng}&days=7`, { signal });
+      const mainResponse = await fetch(`${baseUrl}?lat=${tLat}&lon=${tLng}&days=7`, { signal });
 
       if (!mainResponse.ok) {
         const err = await mainResponse.json().catch(() => ({}));
@@ -94,7 +94,7 @@ export const RainService = {
       const fetchCustomRange = async (startDate: string): Promise<number> => {
         const today = new Date().toISOString().split('T')[0];
         try {
-          const r = await fetch(`${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`, { signal });
+          const r = await fetch(`${baseUrl}?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`, { signal });
           if (!r.ok) return 0;
           const d = await r.json();
           return Number(d.rainfall || 0);
