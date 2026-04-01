@@ -41,6 +41,7 @@ export interface PlantRecord {
   plantDate?: string;
   producerShare?: number; // FSA 578 mandatory: 0 to 100 (%)
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated'; // FSA 578 mandatory: IR or NI
+  nonCompliant?: boolean;
   seasonYear: number;
   farm_id?: string;
   deleted_at: string | null;
