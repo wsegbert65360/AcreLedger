@@ -1,11 +1,22 @@
 import { useNavigate } from 'react-router-dom';
 import { Field } from '@/types/farm';
-import { MapPin, ChevronRight, Sprout, Cloud, FlaskConical as Flask, Wheat } from 'lucide-react';
+import { MapPin, ChevronRight, Sprout, Cloud, FlaskConical as Flask, Wheat, Droplets, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+interface RainfallResult {
+  '24h': number;
+  '72h': number;
+  '7d': number;
+  sincePlanting: number;
+  sinceLastSpray: number;
+  periodEndUtc: string;
+  dataWarning?: string;
+}
 
 interface FieldCardProps {
   field: Field;
   index?: number;
+  rainStats?: RainfallResult | null;
 }
 
 /** Determine the field's seasonal status for color coding. */
@@ -36,12 +47,18 @@ const statusConfig = (planted: boolean, harvested: boolean) => {
   };
 };
 
-export default function FieldCard({ field, index = 0 }: FieldCardProps) {
+/** Format rainfall to 2 decimal places. */
+const fmtRain = (val: number | undefined | null) =>
+  val != null ? val.toFixed(2) : '0.00';
+
+export default function FieldCard({ field, index = 0, rainStats }: FieldCardProps) {
   const navigate = useNavigate();
   const summary = field.activitySummary;
   const planted = !!summary?.planted;
   const harvested = !!summary?.harvested;
   const status = statusConfig(planted, harvested);
+
+  const hasRain = rainStats != null;
 
   return (
     <motion.div
@@ -74,6 +91,21 @@ export default function FieldCard({ field, index = 0 }: FieldCardProps) {
       </div>
 
       <div className="flex items-center gap-0.5">
+        {/* Rainfall Badge */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/field/${field.id}`);
+          }}
+          className="h-9 px-2 flex items-center justify-center gap-1 text-blue-400/70 hover:text-blue-400 transition-colors active:scale-90 shrink-0"
+          title={hasRain ? `Rainfall — 24h: ${fmtRain(rainStats!['24h'])}" | 7d: ${fmtRain(rainStats!['7d'])}"` : 'Loading rainfall…'}
+        >
+          <Droplets size={13} />
+          <span className="text-[10px] font-mono font-bold">
+            {hasRain ? `${fmtRain(rainStats!['24h'])}"` : <Loader2 size={11} className="animate-spin" />}
+          </span>
+        </button>
+
         {/* Seasonal Activity Icons */}
         <div className="flex items-center">
           {planted && (
