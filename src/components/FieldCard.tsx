@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { Field } from '@/types/farm';
 import { MapPin, ChevronRight, Sprout, Cloud, FlaskConical as Flask, Wheat } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface FieldCardProps {
   field: Field;
+  index?: number;
 }
 
 /** Determine the field's seasonal status for color coding. */
@@ -14,7 +16,7 @@ const statusConfig = (planted: boolean, harvested: boolean) => {
     border: 'border-amber-500/30',
     iconBg: 'bg-amber-500/20',
     iconColor: 'text-amber-500',
-    dot: 'bg-amber-400',
+    dotColor: '#f59e0b',
   };
   if (planted) return {
     label: 'Planted',
@@ -22,7 +24,7 @@ const statusConfig = (planted: boolean, harvested: boolean) => {
     border: 'border-emerald-500/30',
     iconBg: 'bg-emerald-500/20',
     iconColor: 'text-emerald-500',
-    dot: 'bg-emerald-400',
+    dotColor: '#34d399',
   };
   return {
     label: 'Open',
@@ -30,11 +32,11 @@ const statusConfig = (planted: boolean, harvested: boolean) => {
     border: '',
     iconBg: 'bg-primary/10',
     iconColor: 'text-primary',
-    dot: 'bg-muted-foreground/30',
+    dotColor: '#a1a1aa',
   };
 };
 
-export default function FieldCard({ field }: FieldCardProps) {
+export default function FieldCard({ field, index = 0 }: FieldCardProps) {
   const navigate = useNavigate();
   const summary = field.activitySummary;
   const planted = !!summary?.planted;
@@ -42,16 +44,19 @@ export default function FieldCard({ field }: FieldCardProps) {
   const status = statusConfig(planted, harvested);
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay: Math.min(index * 0.04, 0.3) }}
       onClick={() => navigate(`/field/${field.id}`)}
-      className={`${status.bg} border ${status.border || 'border-border'} rounded-lg p-2.5 px-3 flex items-center justify-between ring-1 ring-white/5 shadow-xl cursor-pointer hover:bg-card/80 transition-all active:scale-[0.98] relative`}
+      className={`${status.bg} border ${status.border || 'border-border'} rounded-xl p-3 px-3.5 flex items-center justify-between ring-1 ring-white/5 shadow-xl cursor-pointer hover:bg-card/80 transition-all active:scale-[0.97] relative`}
     >
       {/* Status dot — small indicator on left edge */}
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[3px] w-1.5 h-8 rounded-r-full opacity-80" style={{ backgroundColor: status.dot === 'bg-amber-400' ? '#f59e0b' : status.dot === 'bg-emerald-400' ? '#34d399' : '#a1a1aa' }} />
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[3px] w-1.5 h-9 rounded-r-full opacity-80" style={{ backgroundColor: status.dotColor }} />
 
-      <div className="flex items-center gap-2.5">
-        <div className={`w-7 h-7 rounded-md ${status.iconBg} flex items-center justify-center ${status.iconColor} shrink-0`}>
-          {harvested ? <Wheat size={14} /> : planted ? <Sprout size={14} /> : <MapPin size={14} />}
+      <div className="flex items-center gap-3">
+        <div className={`w-8 h-8 rounded-lg ${status.iconBg} flex items-center justify-center ${status.iconColor} shrink-0`}>
+          {harvested ? <Wheat size={15} /> : planted ? <Sprout size={15} /> : <MapPin size={15} />}
         </div>
         <div>
           <div className="flex items-center gap-1.5">
@@ -77,10 +82,10 @@ export default function FieldCard({ field }: FieldCardProps) {
                 e.stopPropagation();
                 navigate(`/field/${field.id}#planting`);
               }}
-              className="h-7 w-7 flex items-center justify-center text-emerald-500/50 hover:text-emerald-500 transition-colors"
+              className="h-9 w-9 flex items-center justify-center text-emerald-500/50 hover:text-emerald-500 transition-colors active:scale-90"
               title="Planting Activity"
             >
-              <Sprout size={14} />
+              <Sprout size={15} />
             </button>
           )}
           {(summary?.sprayed ?? 0) > 0 && (
@@ -89,11 +94,11 @@ export default function FieldCard({ field }: FieldCardProps) {
                 e.stopPropagation();
                 navigate(`/field/${field.id}#spraying`);
               }}
-              className="h-7 w-7 flex items-center justify-center text-blue-400/50 hover:text-blue-400 transition-colors"
+              className="h-9 w-9 flex items-center justify-center text-blue-400/50 hover:text-blue-400 transition-colors active:scale-90"
               title="Spraying Activity"
             >
               <div className="flex items-center">
-                <Cloud size={14} />
+                <Cloud size={15} />
                 <span className="text-[9px] font-mono font-bold ml-0.5">{summary?.sprayed}</span>
               </div>
             </button>
@@ -104,10 +109,10 @@ export default function FieldCard({ field }: FieldCardProps) {
                 e.stopPropagation();
                 navigate(`/field/${field.id}#fertilizer`);
               }}
-              className="h-7 w-7 flex items-center justify-center text-purple-400/50 hover:text-purple-400 transition-colors"
+              className="h-9 w-9 flex items-center justify-center text-purple-400/50 hover:text-purple-400 transition-colors active:scale-90"
               title="Fertilizer Activity"
             >
-              <Flask size={14} />
+              <Flask size={15} />
             </button>
           )}
           {harvested && (
@@ -116,15 +121,15 @@ export default function FieldCard({ field }: FieldCardProps) {
                 e.stopPropagation();
                 navigate(`/field/${field.id}#harvest`);
               }}
-              className="h-7 w-7 flex items-center justify-center text-amber-500/50 hover:text-amber-500 transition-colors"
+              className="h-9 w-9 flex items-center justify-center text-amber-500/50 hover:text-amber-500 transition-colors active:scale-90"
               title="Harvest Activity"
             >
-              <Wheat size={14} />
+              <Wheat size={15} />
             </button>
           )}
         </div>
         <ChevronRight size={18} className="text-muted-foreground/40 ml-0.5" />
       </div>
-    </div>
+    </motion.div>
   );
 }

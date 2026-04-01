@@ -25,9 +25,9 @@ export default function FieldList({ fields }: FieldListProps) {
   }, [fields, plantRecords, sprayRecords, fertilizerApplications, harvestRecords, viewingSeason]);
 
   return (
-    <div className="space-y-1">
-      {augmentedFields.map(field => (
-        <FieldCard key={field.id} field={field} />
+    <div className="space-y-1.5">
+      {augmentedFields.map((field, i) => (
+        <FieldCard key={field.id} field={field} index={i} />
       ))}
     </div>
   );

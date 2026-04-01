@@ -162,4 +162,16 @@
     min-width: 64px;
     min-height: 64px;
   }
+
+  /* Global tap feedback for mobile */
+  button, [role="button"], a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Smooth momentum scrolling on mobile */
+  .overflow-y-auto, .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
 }
