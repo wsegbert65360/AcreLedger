@@ -8,6 +8,15 @@ function sanitizeCsvValue(val: string | number | null | undefined): string {
     return `"${str}"`;
 }
 
+function formatFsaDate(val: string | number | null | undefined): string {
+    if (!val) return '';
+    const d = val instanceof Date ? val : new Date(typeof val === 'number' ? val : val);
+    if (isNaN(d.getTime())) return '';
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${mm}/${dd}/${d.getFullYear()}`;
+}
+
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {
     return records.flatMap(r => {
         const field = fields.find(f => f.id === r.fieldId);
@@ -25,7 +34,7 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
                 const productTotalDisplay = productTotal ? `${productTotal} ${p.rateUnit}` : '';
 
                 return [
-                    sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
+                    sanitizeCsvValue(r.sprayDate || formatFsaDate(r.timestamp)),
                     sanitizeCsvValue(r.startTime),
                     sanitizeCsvValue(r.applicatorName),
                     sanitizeCsvValue(r.licenseNumber),
@@ -49,7 +58,7 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
 
         // Fallback for legacy records or records without granular product breakdown
         return [[
-            sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
+            sanitizeCsvValue(r.sprayDate || formatFsaDate(r.timestamp)),
             sanitizeCsvValue(r.startTime),
             sanitizeCsvValue(r.applicatorName),
             sanitizeCsvValue(r.licenseNumber),
@@ -97,7 +106,24 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
         'Plant Date'
     ].join(',');
 
-    const rows = plantRecords.map(r => {
+    // Sort plantRecords by FSA farm/tract/field for consistent CSV output
+    const sortedRecords = [...plantRecords].sort((a, b) => {
+        const fA = fields.find(f => f.id === a.fieldId);
+        const fB = fields.find(f => f.id === b.fieldId);
+        const farmA = a.fsaFarmNumber || fA?.fsaFarmNumber || '';
+        const farmB = b.fsaFarmNumber || fB?.fsaFarmNumber || '';
+        const cmpFarm = farmA.localeCompare(farmB);
+        if (cmpFarm !== 0) return cmpFarm;
+        const tractA = a.fsaTractNumber || fA?.fsaTractNumber || '';
+        const tractB = b.fsaTractNumber || fB?.fsaTractNumber || '';
+        const cmpTract = tractA.localeCompare(tractB);
+        if (cmpTract !== 0) return cmpTract;
+        const fieldA = a.fsaFieldNumber || fA?.fsaFieldNumber || '';
+        const fieldB = b.fsaFieldNumber || fB?.fsaFieldNumber || '';
+        return fieldA.localeCompare(fieldB);
+    });
+
+    const rows = sortedRecords.map(r => {
         const field = fields.find(f => f.id === r.fieldId);
 
         // FSA 578 uses IR for Irrigated, NI for Non-Irrigated
@@ -108,15 +134,15 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
         const shareDisplay = share.toFixed(0);
 
         return [
-            sanitizeCsvValue(field?.fsaFarmNumber),
-            sanitizeCsvValue(field?.fsaTractNumber),
-            sanitizeCsvValue(field?.fsaFieldNumber),
+            sanitizeCsvValue(r.fsaFarmNumber || field?.fsaFarmNumber),
+            sanitizeCsvValue(r.fsaTractNumber || field?.fsaTractNumber),
+            sanitizeCsvValue(r.fsaFieldNumber || field?.fsaFieldNumber),
             sanitizeCsvValue(r.acreage),
             sanitizeCsvValue(r.crop),
             sanitizeCsvValue(r.intendedUse || field?.intendedUse),
             sanitizeCsvValue(irrigationCode),
             sanitizeCsvValue(`${shareDisplay}%`),
-            sanitizeCsvValue(r.plantDate || new Date(r.timestamp).toLocaleDateString())
+            sanitizeCsvValue(r.plantDate || formatFsaDate(r.timestamp))
         ].join(',');
     });
 
@@ -142,7 +168,7 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
     const rows = harvestRecords.map(r => {
         const field = fields.find(f => f.id === r.fieldId);
         return [
-            sanitizeCsvValue(r.harvestDate || new Date(r.timestamp).toLocaleDateString()),
+            sanitizeCsvValue(r.harvestDate || formatFsaDate(r.timestamp)),
             sanitizeCsvValue(r.fieldName),
             sanitizeCsvValue(r.crop),
             sanitizeCsvValue(r.bushels),

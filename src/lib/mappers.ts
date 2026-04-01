@@ -102,16 +102,17 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     acreage: safeNum(db.acreage),
     crop: safeStr(db.crop),
     plantDate: safeStr(db.plant_date),
-    fsaFarmNumber: safeStr(db.fsa_farm_number),
-    fsaTractNumber: safeStr(db.fsa_tract_number),
-    fsaFieldNumber: safeStr(db.fsa_field_number),
-    intendedUse: safeStr(db.intended_use),
+    fsaFarmNumber: optionalStr(db.fsa_farm_number),
+    fsaTractNumber: optionalStr(db.fsa_tract_number),
+    fsaFieldNumber: optionalStr(db.fsa_field_number),
+    intendedUse: optionalStr(db.intended_use),
     producerShare: db.producer_share ?? undefined,
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
     seasonYear: safeNum(db.season_year, 2024),
     timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? null
+    deleted_at: db.deleted_at ?? null,
+    nonCompliant: !!db.non_compliant
 });
 
 export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
@@ -326,7 +327,8 @@ export const mapPlantToDb = (r: PlantRecord) => {
         irrigation_practice: r.irrigationPractice,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
+        deleted_at: r.deleted_at,
+        non_compliant: r.nonCompliant
     };
 };
 

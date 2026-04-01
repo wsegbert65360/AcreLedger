@@ -174,7 +174,7 @@ export default function Reports() {
       exportToPdf({
         title: 'FSA Planting Report',
         subtitle: `Acreage report for Farm Service Agency certification. Generated ${reportDate}.`,
-        headers: ['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %'],
+        headers: ['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'FIELD #', 'USE', 'IRR', 'SHARE %'],
         rows: plantRecords.map(r => {
           const field = fieldMap.get(r.fieldId);
           return [
@@ -185,6 +185,7 @@ export default function Reports() {
             r.acreage,
             field?.fsaFarmNumber || '—',
             field?.fsaTractNumber || '—',
+            field?.fsaFieldNumber || '—',
             r.intendedUse || '—',
             r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI',
             `${(r.producerShare ?? 100).toFixed(0)}%`
@@ -242,18 +243,23 @@ export default function Reports() {
       exportToPdf({
         title: 'FSA Harvest Report',
         subtitle: `Grain production report for FSA certification. Generated ${reportDate}.`,
-        headers: ['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'LL NAME', 'TICKET #'],
-        rows: harvestRecords.map(r => [
-          fmtDate(r.harvestDate) || fmt(r.timestamp),
-          r.fieldName,
-          r.crop || '—',
-          r.bushels.toLocaleString(),
-          `${r.moisturePercent}%`,
-          r.destination === 'bin' ? 'Bin' : 'Town',
-          `${r.landlordSplitPercent}%`,
-          r.landlordName || '—',
-          r.scaleTicketNumber || '—'
-        ]),
+        headers: ['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'LL NAME', 'TICKET #', 'FARM #', 'TRACT #'],
+        rows: harvestRecords.map(r => {
+          const field = fieldMap.get(r.fieldId);
+          return [
+            fmtDate(r.harvestDate) || fmt(r.timestamp),
+            r.fieldName,
+            r.crop || '—',
+            r.bushels.toLocaleString(),
+            `${r.moisturePercent}%`,
+            r.destination === 'bin' ? 'Bin' : 'Town',
+            `${r.landlordSplitPercent}%`,
+            r.landlordName || '—',
+            r.scaleTicketNumber || '—',
+            field?.fsaFarmNumber || '—',
+            field?.fsaTractNumber || '—'
+          ];
+        }),
         fileName: `FSA_Harvest_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
         summaryText: 'Total Harvest Production',
         summaryValue: `${totalHarvestBu.toLocaleString()} BU`
