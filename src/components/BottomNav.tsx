@@ -2,7 +2,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Map, Wheat, ClipboardList, FileText, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-// v1.2.5 - Production Guard: Implement Animated Indicator Pill
 const tabs = [
   { path: '/', icon: Map, label: 'Fields' },
   { path: '/logistics', icon: Wheat, label: 'Storage' },
@@ -16,27 +15,54 @@ export default function BottomNav() {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border print:hidden pb-[env(safe-area-inset-bottom)]">
-      <div className="flex items-center justify-around max-w-lg mx-auto relative px-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border print:hidden pb-[env(safe-area-inset-bottom)]">
+      <div className="flex items-center justify-around max-w-lg mx-auto relative px-1">
         {tabs.map(({ path, icon: Icon, label }) => {
           const active = pathname === path;
           return (
             <button
               key={path}
               onClick={() => navigate(path)}
-              className={`relative touch-target flex flex-col items-center justify-center gap-1 py-3 px-3 transition-colors ${active ? 'text-primary' : 'text-muted-foreground'
-                }`}
+              className={`relative flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-[56px] rounded-xl transition-all duration-200 active:scale-90 ${
+                active
+                  ? 'text-primary'
+                  : 'text-muted-foreground/70 hover:text-muted-foreground'
+              }`}
               aria-label={label}
+              aria-current={active ? 'page' : undefined}
             >
+              {/* Animated pill background */}
               {active && (
                 <motion.div
                   layoutId="bottom-nav-pill"
-                  className="absolute inset-x-1 inset-y-2 bg-primary/10 border border-primary/20 rounded-xl -z-10"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  className="absolute inset-1 bg-primary/10 border border-primary/20 rounded-2xl"
+                  transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
                 />
               )}
-              <Icon size={22} strokeWidth={active ? 2.5 : 1.5} />
-              <span className="text-[10px] font-mono font-medium">{label}</span>
+              {/* Icon with bounce on active */}
+              <motion.div
+                animate={{
+                  scale: active ? 1.15 : 1,
+                  y: active ? -1 : 0,
+                }}
+                transition={{ type: 'spring', bounce: 0.3, duration: 0.4 }}
+              >
+                <Icon size={21} strokeWidth={active ? 2.5 : 1.5} />
+              </motion.div>
+              {/* Label */}
+              <span className={`text-[10px] font-mono transition-all duration-200 ${
+                active ? 'font-bold text-primary' : 'font-medium'
+              }`}>
+                {label}
+              </span>
+              {/* Active dot indicator below label */}
+              {active && (
+                <motion.div
+                  layoutId="bottom-nav-dot"
+                  className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-primary"
+                  transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
+                />
+              )}
             </button>
           );
         })}
