@@ -18,19 +18,14 @@ serve(async (req: Request) => {
   }
 
   // 1. Authentication check
-  //    Accept requests from:
-  //    a) Supabase pg_cron (sends service_role key via Authorization header)
-  //    b) Dashboard / manual invocation (sends anon key or service_role key)
-  //    Reject all other callers to prevent unauthorized rainfall processing.
+  //    Only accept requests from service_role (pg_cron, trusted backends).
+  //    SECURITY FIX (2026-04-02): Removed anon-key access to prevent
+  //    authenticated users from invoking this with service_role DB client.
   const authHeader = req.headers.get('authorization');
-  const apiKey = req.headers.get('apikey');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
   const token = authHeader?.replace('Bearer ', '') ?? '';
-  const isServiceRole = token === serviceRoleKey;
-  const isAnonKey = apiKey === anonKey;
-  const isAuthorized = isServiceRole || (isAnonKey && token === anonKey);
+  const isAuthorized = token === serviceRoleKey;
 
   if (!isAuthorized) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
