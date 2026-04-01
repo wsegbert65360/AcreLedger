@@ -17,6 +17,8 @@ interface FieldCardProps {
   field: Field;
   index?: number;
   rainStats?: RainfallResult | null;
+  /** True while rain data is being fetched. */
+  rainLoading?: boolean;
 }
 
 /** Determine the field's seasonal status for color coding. */
@@ -51,14 +53,14 @@ const statusConfig = (planted: boolean, harvested: boolean) => {
 const fmtRain = (val: number | undefined | null) =>
   val != null ? val.toFixed(2) : '0.00';
 
-export default function FieldCard({ field, index = 0, rainStats }: FieldCardProps) {
+export default function FieldCard({ field, index = 0, rainStats, rainLoading = false }: FieldCardProps) {
   const navigate = useNavigate();
   const summary = field.activitySummary;
   const planted = !!summary?.planted;
   const harvested = !!summary?.harvested;
   const status = statusConfig(planted, harvested);
 
-  const hasRain = rainStats != null;
+  const hasRain = rainStats != null && !rainLoading;
 
   return (
     <motion.div
@@ -98,11 +100,21 @@ export default function FieldCard({ field, index = 0, rainStats }: FieldCardProp
             navigate(`/field/${field.id}`);
           }}
           className="h-9 px-2 flex items-center justify-center gap-1 text-blue-400/70 hover:text-blue-400 transition-colors active:scale-90 shrink-0"
-          title={hasRain ? `Rainfall — 24h: ${fmtRain(rainStats!['24h'])}" | 7d: ${fmtRain(rainStats!['7d'])}"` : 'Loading rainfall…'}
+          title={
+            hasRain
+              ? `Rainfall — 24h: ${fmtRain(rainStats!['24h'])}" | 7d: ${fmtRain(rainStats!['7d'])}"`
+              : 'View field details'
+          }
         >
           <Droplets size={13} />
           <span className="text-[10px] font-mono font-bold">
-            {hasRain ? `${fmtRain(rainStats!['24h'])}"` : <Loader2 size={11} className="animate-spin" />}
+            {rainLoading ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : hasRain ? (
+              `${fmtRain(rainStats!['24h'])}"`
+            ) : (
+              <span className="text-muted-foreground/40">—</span>
+            )}
           </span>
         </button>
 
