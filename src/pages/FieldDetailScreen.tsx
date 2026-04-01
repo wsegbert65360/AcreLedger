@@ -148,6 +148,9 @@ export default function FieldDetailScreen() {
         : new Date().toISOString();
 
       // Custom range calls for since-planting / since-spray
+      // Uses coordinate-based IEM queries (lat/lon/days=N) instead of
+      // field_id mode, which depends on Supabase MRMS data that may be
+      // incomplete or blocked by RLS changes.
       const season = seasonRef.current;
       const latestP = plantRef.current
         .filter(r => r.fieldId === fieldId && r.seasonYear === season)
@@ -156,18 +159,24 @@ export default function FieldDetailScreen() {
         .filter(r => r.fieldId === fieldId && r.seasonYear === season)
         .sort((a, b) => new Date(b.sprayDate || 0).getTime() - new Date(a.sprayDate || 0).getTime())[0];
 
-      const today = new Date().toISOString().split('T')[0];
-      const fetchRange = async (startDate: string) => {
+      const fetchDaysSince = async (dateStr: string): Promise<number> => {
         try {
-          const r = await fetch(`${baseUrl}?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`);
+          const start = new Date(dateStr);
+          const now = new Date();
+          const diffMs = now.getTime() - start.getTime();
+          const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          if (days <= 0) return 0;
+          // Cap at 365 days to avoid oversized IEM requests
+          const cappedDays = Math.min(days, 365);
+          const r = await fetch(`${baseUrl}?lat=${coords[0]}&lon=${coords[1]}&days=${cappedDays}`);
           if (!r.ok) return 0;
           const d = await r.json();
           return Number(d.rainfall || 0);
         } catch { return 0; }
       };
       const [sincePlant, sinceSpray] = await Promise.all([
-        latestP?.plantDate ? fetchRange(latestP.plantDate) : 0,
-        latestS?.sprayDate ? fetchRange(latestS.sprayDate) : 0,
+        latestP?.plantDate ? fetchDaysSince(latestP.plantDate) : 0,
+        latestS?.sprayDate ? fetchDaysSince(latestS.sprayDate) : 0,
       ]);
 
       setRainStats({
