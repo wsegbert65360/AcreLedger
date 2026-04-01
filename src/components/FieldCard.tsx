@@ -4,6 +4,7 @@ import { useFarm } from '@/store/farmStore';
 import { MapPin, ChevronRight, Sprout, Cloud, FlaskConical as Flask, Wheat, Droplets, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
+import { getRainApiBaseUrl, resolveCoords, sumLastNDays } from '@/utils/rain';
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -44,48 +45,20 @@ const statusConfig = (planted: boolean, harvested: boolean) => {
 const fmtRain = (v: number) => v.toFixed(2);
 
 /**
- * Compute a centroid [lat, lng] from a GeoJSON Polygon boundary.
- * Returns null if boundary is missing or has no coordinates.
- */
-function centroidFromBoundary(boundary: Field['boundary']): [number, number] | null {
-  if (!boundary?.coordinates?.[0]?.length) return null;
-  const ring = boundary.coordinates[0];
-  let lat = 0, lng = 0;
-  for (const c of ring) { lat += c[1]; lng += c[0]; }
-  return [lat / ring.length, lng / ring.length];
-}
-
-/**
- * Resolve the best [lat, lng] for a field — uses direct lat/lng if
- * available, otherwise falls back to computing a centroid from the
- * polygon boundary.  Returns null when neither is available.
- */
-function resolveCoords(field: Field): [number, number] | null {
-  if (field.lat != null && field.lng != null) {
-    return [field.lat, field.lng];
-  }
-  return centroidFromBoundary(field.boundary);
-}
-
-/**
- * Direct fetch to the rain API — no promise caching, no RainService,
- * no custom range calls.  Just GET /rain?lat=X&lon=Y&days=7 and
- * sum the last day from the breakdown (per the Rain API instructions).
+ * Direct fetch to the rain API — no promise caching, no RainService.
+ * Just GET /rain?lat=X&lon=Y&days=7 and return the most recent day's
+ * rainfall from the breakdown (24h value).
  */
 async function fetchRain24h(
   lat: number,
   lng: number,
 ): Promise<number | null> {
-  const rawUrl = (typeof import.meta !== 'undefined')
-    ? import.meta.env?.VITE_RAIN_API_URL
-    : (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
-
-  if (!rawUrl) {
+  const baseUrl = getRainApiBaseUrl();
+  if (!baseUrl) {
     console.warn('[FieldCard] VITE_RAIN_API_URL not set');
     return null;
   }
 
-  const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
   const url = `${baseUrl}?lat=${lat}&lon=${lng}&days=7`;
 
   const res = await fetch(url);
@@ -96,19 +69,15 @@ async function fetchRain24h(
 
   const data = await res.json();
   const breakdown: Record<string, number> = data.breakdown || {};
-  const dates = Object.keys(breakdown).sort();
-  if (dates.length === 0) return 0;
-
-  // Return the most recent day's rainfall (24h)
-  return Number(breakdown[dates[dates.length - 1]]) || 0;
+  return sumLastNDays(breakdown, 1) || 0;
 }
 
 /**
- * useFieldRain — simplest possible hook.
+ * useFieldRain — lightweight hook for field card rain badges.
  *
  * 1. Wait 3 seconds for the store to hydrate from Supabase.
  * 2. Read the field's lat/lng (or compute centroid from boundary).
- * 3. Make ONE direct fetch to the rain API.
+ * 3. Make ONE direct fetch to the rain API for 24h rainfall.
  * 4. Show result, or hide the badge on any failure.
  */
 function useFieldRain(fieldId: string) {
@@ -116,7 +85,7 @@ function useFieldRain(fieldId: string) {
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
-  const [rain24h, setRain24h] = useState<number | null>(undefined as unknown as number);
+  const [rain24h, setRain24h] = useState<number | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'hidden'>('loading');
 
   useEffect(() => {

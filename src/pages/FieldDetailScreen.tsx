@@ -17,6 +17,7 @@ import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
 import { generateSprayPDF } from '@/lib/sprayExport';
+import { getRainApiBaseUrl, resolveCoords, sumLastNDays } from '@/utils/rain';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
 
@@ -114,16 +115,6 @@ export default function FieldDetailScreen() {
   const seasonRef = useRef(viewingSeason);
   seasonRef.current = viewingSeason;
 
-  /** Compute centroid from polygon boundary when lat/lng are null. */
-  function resolveCoords(f: typeof field): [number, number] | null {
-    if (f?.lat != null && f?.lng != null) return [f.lat, f.lng];
-    if (!f?.boundary?.coordinates?.[0]?.length) return null;
-    const ring = f.boundary.coordinates[0];
-    let lat = 0, lng = 0;
-    for (const c of ring) { lat += c[1]; lng += c[0]; }
-    return [lat / ring.length, lng / ring.length];
-  }
-
   /**
    * Direct rain fetch — bypasses RainService's promiseCache which
    * caches rejected promises for 30s and causes persistent failures.
@@ -136,9 +127,8 @@ export default function FieldDetailScreen() {
     const coords = resolveCoords(f);
     if (!coords) { setRainError('No location data for this field'); return; }
 
-    const rawUrl = import.meta.env?.VITE_RAIN_API_URL;
-    if (!rawUrl) { setRainError('Rain API not configured'); return; }
-    const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
+    const baseUrl = getRainApiBaseUrl();
+    if (!baseUrl) { setRainError('Rain API not configured'); return; }
 
     try {
       const res = await fetch(`${baseUrl}?lat=${coords[0]}&lon=${coords[1]}&days=7`);
@@ -148,11 +138,10 @@ export default function FieldDetailScreen() {
       }
       const data = await res.json();
       const bd: Record<string, number> = data.breakdown || {};
-      const dates = Object.keys(bd).sort();
 
-      const r24 = dates.length > 0 ? (Number(bd[dates[dates.length - 1]]) || 0) : 0;
-      const r72 = dates.length >= 3 ? dates.slice(-3).reduce((s, d) => s + (Number(bd[d]) || 0), 0) : r24;
-      const r7d = Number(data.rainfall) || dates.reduce((s, d) => s + (Number(bd[d]) || 0), 0);
+      const r24 = sumLastNDays(bd, 1);
+      const r72 = sumLastNDays(bd, 3);
+      const r7d = Number(data.rainfall) || Object.values(bd).reduce((s, v) => s + (Number(v) || 0), 0);
 
       const periodEnd = data.period?.end
         ? `${data.period.end}T23:59:59Z`

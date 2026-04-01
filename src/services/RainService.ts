@@ -1,3 +1,5 @@
+import { getRainApiBaseUrl, centroidFromBoundary, sumLastNDays } from '@/utils/rain';
+
 type RainfallResult = {
   '24h': number;
   '72h': number;
@@ -8,15 +10,6 @@ type RainfallResult = {
   dataWarning?: string;
 };
 const promiseCache = new Map<string, Promise<RainfallResult>>();
-
-/**
- * Sum rainfall for the last N days from a { "YYYY-MM-DD": inches } breakdown.
- */
-function sumLastNDays(breakdown: Record<string, number>, n: number): number {
-  const dates = Object.keys(breakdown).sort();
-  if (dates.length === 0) return 0;
-  return dates.slice(-n).reduce((sum, d) => sum + (Number(breakdown[d]) || 0), 0);
-}
 
 export const RainService = {
   async fetchComprehensiveRainfall(args: {
@@ -38,28 +31,21 @@ export const RainService = {
     }
 
     const fetchPromise = (async () => {
-      const rawUrl = import.meta.env?.VITE_RAIN_API_URL ||
-                     (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
+      const baseUrl = getRainApiBaseUrl();
 
-      if (!rawUrl) {
+      if (!baseUrl) {
         throw new Error('VITE_RAIN_API_URL is not configured');
       }
-
-      // Sanitize: strip trailing slashes and any stray carriage returns/newlines
-      // that can appear when env vars are set in Vercel/CI dashboards.
-      const baseUrl = rawUrl.replace(/\/+$/, '').replace(/[\r\n]/g, '');
 
       // Get lat/lng. If missing but boundary exists, compute centroid from boundary.
       let tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
       let tLng = lng != null ? Math.round(lng * 10000) / 10000 : null;
 
       if ((tLat == null || tLng == null) && boundary) {
-        const coords = Array.isArray(boundary) ? boundary : boundary?.coordinates?.[0];
-        if (coords && coords.length > 0) {
-          const sumLat = coords.reduce((s: number, c: any) => s + (Array.isArray(c) ? c[1] : c.lat), 0);
-          const sumLng = coords.reduce((s: number, c: any) => s + (Array.isArray(c) ? c[0] : c.lng), 0);
-          tLat = Math.round((sumLat / coords.length) * 10000) / 10000;
-          tLng = Math.round((sumLng / coords.length) * 10000) / 10000;
+        const centroid = centroidFromBoundary(boundary as any);
+        if (centroid) {
+          tLat = Math.round(centroid[0] * 10000) / 10000;
+          tLng = Math.round(centroid[1] * 10000) / 10000;
         }
       }
 

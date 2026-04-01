@@ -41,6 +41,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Validation | Zod (`@/lib/backupSchema`) | Backup file schema validation on restore |
 | Weather | Visual Crossing API | Current wind/temp conditions |
 | Rainfall | IEM Stage IV + Supabase RPC | Dual-source precipitation tracking (Radar + DB) |
+| Rain Utilities | `@/utils/rain.ts` | Shared helpers: URL sanitization, coordinate resolution, breakdown aggregation |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
 | Reports | `@/lib/complianceReports` | CSV & PDF export generators (FSA, spray log, etc.) |
@@ -174,6 +175,25 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 - **Aggregation**: 24h, 72h, and 7d totals are computed on the client from the daily `breakdown` provided by the IEM response.
 - **Coordinate Precision**: Lat/Lng are rounded to **4 decimal places** for consistent matching with the 4km radar grid.
 - **Centroid Logic**: Polygon boundaries automatically fall back to centroids if explicit field coordinates are null or invalid.
+
+#### Shared Utilities (`@/utils/rain.ts`)
+All rain-related helpers are centralized in `src/utils/rain.ts` to prevent duplication across consumers:
+- `getRainApiBaseUrl()` — Reads `VITE_RAIN_API_URL` and strips trailing slashes plus stray `\r\n` characters (critical: env vars set in Vercel/CI dashboards often contain invisible carriage returns that break URLs at build time).
+- `resolveCoords(field)` — Returns `[lat, lng]` from direct field coordinates, or computes centroid from polygon boundary.
+- `centroidFromBoundary(boundary)` — Computes average lat/lng from GeoJSON Polygon ring.
+- `sumLastNDays(breakdown, n)` — Sums rainfall values from the last N days in a `{ "YYYY-MM-DD": inches }` breakdown object.
+
+#### Rain Consumers
+The app has three rain data consumers with distinct strategies:
+
+1. **`FieldCard` (`useFieldRain` hook)**: Lightweight, single-purpose hook that fetches only the 24h rainfall for field list badges. Uses direct `fetch()` (bypasses `RainService` cache). Includes a 3-second hydration delay for store readiness. Silently hides the badge on any failure.
+
+2. **`FieldDetailScreen` (`doFetchRain`)**: Comprehensive fetch for the Rainfall Summary section (24h, 72h, 7d, since-planting, since-spray). Uses direct `fetch()` with ref-based store reads to avoid stale closures. Auto-fetches on mount with a 2-second hydration delay. Manual refresh via button.
+
+3. **`RainService`**: Complex service with promise-based cache and `AbortSignal` support. Used by test suites. Still functional but not consumed by UI components directly (they use direct fetch for simpler error handling and to avoid cached rejected promises).
+
+#### Environment Variable Sanitization (CRITICAL)
+Vite inlines environment variables at build time. If `VITE_RAIN_API_URL` contains invisible characters like `\r` (carriage return) — which happens when values are pasted in Vercel or CI dashboards — every rain request will go to a broken URL. **Always** read the URL through `getRainApiBaseUrl()` which sanitizes it. Never access `import.meta.env.VITE_RAIN_API_URL` directly in consumer code.
 
 #### Service Reliability
 - **Service Cache**: `RainService` implements a 30-second `promiseCache` to deduplicate concurrent requests (e.g., when switching between tabs or fields rapidly).
@@ -590,10 +610,11 @@ Show in BackupManager UI. Amber warning if > 7 days old or never taken.
 | SW update available (user must act) | `toast('Title', { description, action: { label, onClick } })` |
 
 ### Rainfall Pipeline Error States
+- **Broken URL (env var corruption)**: Caught by `getRainApiBaseUrl()` in `@/utils/rain.ts` — strips `\r\n` characters. Root cause is typically pasting values in Vercel/CI dashboards. If still failing, inspect the deployed JS bundle for the inlined URL.
 - **RPC Failure**: Caught by `RainService`; indicates Supabase connection or permission issues. Returns 0 for custom ranges.
-- **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by RainService error handling.
+- **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by direct fetch error handling in consumers.
 - **IEM Unreachable**: Main call returns `RAIN_API_ERROR`; surfaced to user via `rainError` state in `FieldDetailScreen`.
-- **NaN / Missing Coords**: Blocked by centroid fallback logic; throws a descriptive "Missing location data" error if both are absent.
+- **NaN / Missing Coords**: Blocked by `resolveCoords()` centroid fallback logic; throws a descriptive "Missing location data" error if both are absent.
 
 ### Sentry Placeholder Pattern
 ```ts
