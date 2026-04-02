@@ -91,14 +91,18 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   useEffect(() => {
     if (!open) return;
     if (initialData) {
+      // Edit mode: use ONLY saved values — no field defaults.
+      // This preserves intentionally-empty compliance fields so the
+      // red highlights and missing-fields banner work correctly.
       setSeedVariety(initialData.seedVariety || '');
       setCrop(initialData.crop || '');
-      setIntendedUse(initialData.intendedUse || field.intendedUse || 'Grain');
-      setProducerShare(initialData.producerShare?.toString() || field.producerShare?.toString() || '100');
+      setIntendedUse(initialData.intendedUse || '');
+      setProducerShare(initialData.producerShare?.toString() || '');
       setIrrigationPractice(initialData.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
       setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
       setShowValidation(!!initialData.nonCompliant);
     } else {
+      // Add mode: pre-fill from field defaults for convenience
       setSeedVariety('');
       setCrop('');
       setIntendedUse(field.intendedUse || 'Grain');
