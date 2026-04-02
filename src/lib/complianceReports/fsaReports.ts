@@ -10,7 +10,18 @@ function sanitizeCsvValue(val: string | number | null | undefined): string {
 
 function formatFsaDate(val: string | number | null | undefined): string {
     if (!val) return '';
-    const d = val instanceof Date ? val : new Date(typeof val === 'number' ? val : val);
+    let d: Date;
+    if (val instanceof Date) {
+        d = val;
+    } else if (typeof val === 'number') {
+        d = new Date(val);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        // Date-only string (YYYY-MM-DD) — parse as local to avoid UTC timezone shift
+        const [y, m, day] = val.split('-').map(Number);
+        d = new Date(y, m - 1, day);
+    } else {
+        d = new Date(val);
+    }
     if (isNaN(d.getTime())) return '';
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
@@ -142,7 +153,7 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
             sanitizeCsvValue(r.intendedUse || field?.intendedUse),
             sanitizeCsvValue(irrigationCode),
             sanitizeCsvValue(`${shareDisplay}%`),
-            sanitizeCsvValue(r.plantDate || formatFsaDate(r.timestamp))
+            sanitizeCsvValue(r.plantDate ? formatFsaDate(r.plantDate) : formatFsaDate(r.timestamp))
         ].join(',');
     });
 
