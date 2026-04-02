@@ -120,6 +120,10 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
 
   // ─── Submit ──────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    if (hasDuplicatePlant) {
+      toast.error('This field already has a planting record for this season.');
+      return;
+    }
     if (!isMinimumValid) {
       setShowValidation(true);
       toast.error('Enter a seed variety and plant date to save.');
@@ -377,7 +381,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
         <DialogFooter>
           <Button
             onClick={handleSubmit}
-            disabled={!isMinimumValid || isSaving}
+            disabled={!isMinimumValid || isSaving || hasDuplicatePlant}
             className={`touch-target w-full font-bold ${
               isFullyCompliant
                 ? 'bg-plant text-plant-foreground hover:bg-plant/90 glow-plant'
@@ -388,6 +392,11 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
               <div className="flex items-center gap-2">
                 <Loader2 className="animate-spin" size={20} />
                 <span>Saving...</span>
+              </div>
+            ) : hasDuplicatePlant ? (
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} />
+                <span>Already Planted This Season</span>
               </div>
             ) : !isMinimumValid ? (
               'Enter Seed Variety to Save'
