@@ -188,7 +188,7 @@ export default function Reports() {
             r.fsaFieldNumber || field?.fsaFieldNumber || '—',
             r.intendedUse || '—',
             r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI',
-            `${(r.producerShare ?? 100).toFixed(0)}%`
+            `${(r.producerShare ?? field?.producerShare ?? 100).toFixed(0)}%`
           ];
         }),
         fileName: `FSA_Planting_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
@@ -409,7 +409,7 @@ export default function Reports() {
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.fsaFieldNumber || field?.fsaFieldNumber || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.intendedUse || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{(r.producerShare ?? 100).toFixed(0)}%</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{(r.producerShare ?? field?.producerShare ?? 100).toFixed(0)}%</td>
                 </tr>
               );
             })}

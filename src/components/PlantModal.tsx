@@ -144,7 +144,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
-          producerShare: parseFloat(producerShare) || 100,
+          producerShare: producerShare.trim() ? parseFloat(producerShare) : undefined,
           irrigationPractice,
           nonCompliant: !isFullyCompliant,
         });
@@ -157,7 +157,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
-          producerShare: parseFloat(producerShare) || 100,
+          producerShare: producerShare.trim() ? parseFloat(producerShare) : undefined,
           irrigationPractice,
           nonCompliant: !isFullyCompliant,
         });
