@@ -14,6 +14,7 @@ import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import TillageModal from '@/components/TillageModal';
 import Logo from '@/components/Logo';
+import { formatIsoDate } from '@/utils/dates';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
 import { generateSprayPDF } from '@/lib/sprayExport';
@@ -365,7 +366,7 @@ export default function FieldDetailScreen() {
                 {crop || 'Fallow'}
               </div>
               <div className="text-[10px] text-slate-500 font-medium truncate">
-                {latestPlanting?.plantDate ? `Set ${new Date(latestPlanting.plantDate).toLocaleDateString()}` : 'Not planted'}
+                {latestPlanting?.plantDate ? `Set ${formatIsoDate(latestPlanting.plantDate)}` : 'Not planted'}
               </div>
               <div className="text-[10px] text-slate-500 font-medium truncate italic h-4">
                 {latestPlanting?.seedVariety || ''}
