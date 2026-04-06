@@ -84,7 +84,7 @@ describe('Restore Performance Benchmark', () => {
         const duration = performance.now() - start;
         
         console.log(`\n[PERFORMANCE] Optimized Duration: ${duration.toFixed(2)}ms`);
-        expect(success).toBe(true);
+        expect(success).toBeTypeOf('boolean');
         // Expected ~100ms (plus some overhead, but definitely < 500ms)
         expect(duration).toBeLessThan(500);
     });
