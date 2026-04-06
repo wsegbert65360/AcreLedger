@@ -470,7 +470,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               {products.map((p, i) => (
                 <div key={p.ui_id || i} className="bg-muted p-2.5 rounded-md border border-border/50 relative">
                   {products.length > 1 && (
-                    <button onClick={() => removeProduct(i)} className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 shadow-md hover:bg-destructive/80 transition-colors">
+                    <button onClick={() => removeProduct(i)} className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 shadow-md hover:bg-destructive/80 transition-colors" aria-label="Remove product">
                       <X size={12} />
                     </button>
                   )}

@@ -59,7 +59,7 @@ export default function RecipeManager() {
                   <span className="text-foreground font-mono font-bold text-sm">{recipe.name}</span>
                   <div className="flex gap-2">
                     <button onClick={() => setEditingId(recipe.id)} className="text-muted-foreground hover:text-foreground text-xs font-mono underline">Edit</button>
-                    <button onClick={async () => { await deleteSprayRecipe(recipe.id); }} className="text-destructive hover:text-destructive/80">
+                    <button onClick={async () => { await deleteSprayRecipe(recipe.id); }} className="text-destructive hover:text-destructive/80" aria-label="Delete recipe">
                       <Trash2 size={14} />
                     </button>
                   </div>

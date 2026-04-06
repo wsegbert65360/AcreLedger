@@ -126,7 +126,7 @@ export default function RecipeForm({
             </div>
           </div>
           {products.length > 1 && (
-            <button onClick={() => removeProduct(i)} className="text-destructive hover:text-destructive/80 mt-1">
+            <button onClick={() => removeProduct(i)} className="text-destructive hover:text-destructive/80 mt-1" aria-label="Remove product">
               <X size={16} />
             </button>
           )}

@@ -47,7 +47,7 @@ export default function SeedManager() {
           {savedSeeds.map(seed => (
             <div key={seed.id} className="flex items-center justify-between px-3 py-2 bg-muted rounded-md">
               <span className="text-foreground font-mono text-sm">{seed.name}</span>
-              <button onClick={async () => { await deleteSeed(seed.id); }} className="text-destructive hover:text-destructive/80">
+              <button onClick={async () => { await deleteSeed(seed.id); }} className="text-destructive hover:text-destructive/80" aria-label="Delete seed variety">
                 <Trash2 size={14} />
               </button>
             </div>
