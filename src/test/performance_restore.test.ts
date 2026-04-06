@@ -17,7 +17,7 @@ vi.mock('../lib/supabase', () => ({
 vi.mock('sonner', () => ({
     toast: {
         success: vi.fn(),
-        error: vi.fn()
+        error: vi.fn((msg) => console.log('Toast Error:', msg))
     }
 }));
 
@@ -30,6 +30,8 @@ describe('Restore Performance Benchmark', () => {
         vi.clearAllMocks();
         vi.resetModules();
         global.fetch = vi.fn();
+        global.URL.createObjectURL = vi.fn();
+        global.URL.revokeObjectURL = vi.fn();
         vi.spyOn(console, 'error').mockImplementation(() => {});
 
         mockArgs = {
@@ -54,17 +56,17 @@ describe('Restore Performance Benchmark', () => {
     });
 
     const mockBackupData = {
-        fields: [{ id: '1', name: 'Field 1', farm_id: 'farm-123' }],
-        bins: [{ id: '2', name: 'Bin 1', farm_id: 'farm-123' }],
+        fields: [{ id: '1', name: 'Field 1', acreage: 100, farm_id: 'farm-123' }],
+        bins: [{ id: '2', name: 'Bin 1', capacity: 5000, farm_id: 'farm-123' }],
         plantRecords: [{ id: '3', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
         sprayRecords: [{ id: '4', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
         harvestRecords: [{ id: '5', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
         hayHarvestRecords: [{ id: '6', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
-        fertilizerApplications: [{ id: '7', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
-        tillageRecords: [{ id: '8', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
+        fertilizerApplications: [{ id: '7', fieldId: '1', date: '2024-05-01', acres: 100, fertilizer_formula: 'N-P-K', seasonYear: 2024, farm_id: 'farm-123' }],
+        tillageRecords: [{ id: '8', fieldId: '1', date: '2024-04-01', implementType: 'Plow', seasonYear: 2024, farm_id: 'farm-123' }],
         grainMovements: [{ id: '9', binId: '2', seasonYear: 2024, farm_id: 'farm-123' }],
         savedSeeds: [{ id: '10', name: 'Seed 1', farm_id: 'farm-123' }],
-        fertilizerRecipes: [{ id: '11', name: 'Rec 1', farm_id: 'farm-123' }],
+        fertilizerRecipes: [{ id: '11', name: 'Rec 1', npk_ratio: '10-10-10', farm_id: 'farm-123' }],
         sprayRecipes: [{ id: '12', name: 'Rec 2', farm_id: 'farm-123' }]
     };
 

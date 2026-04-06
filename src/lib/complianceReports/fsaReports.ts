@@ -31,7 +31,7 @@ function formatFsaDate(val: string | number | null | undefined): string {
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {
     return records.flatMap(r => {
         const field = fields.find(f => f.id === r.fieldId);
-        const treatedArea = r.treatedAreaSize || field?.acreage || '';
+        const treatedArea = (r.treatedAreaSize !== undefined && r.treatedAreaSize !== null && r.treatedAreaSize !== '') ? r.treatedAreaSize : (field?.acreage || '');
 
         // If there are granular products, create a row for each herbicide in the mix
         if (r.products && r.products.length > 0) {

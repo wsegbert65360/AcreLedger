@@ -202,14 +202,15 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         ['spray_recipes',           recipesToDb],
       ];
 
-      for (const [table, data] of tables) {
-        if (data.length === 0) continue;
+            const upsertPromises = tables.map(async ([table, data]) => {
+        if (data.length === 0) return null;
         const { error } = await supabase.from(table).upsert(data);
         if (error) {
           console.error(`Restore failed on table "${table}":`, error);
           throw new Error(`Failed to restore "${table}": ${error.message}. Use the PRE_RESTORE_BACKUP file to recover.`);
         }
-      }
+      });
+      await Promise.all(upsertPromises);
 
       // 4. All DB writes succeeded — update local state in one pass.
       //    Use !== undefined (not falsy) so empty arrays are applied correctly.

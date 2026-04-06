@@ -63,6 +63,6 @@ describe('Missouri Log Generation', () => {
         };
 
         const rows = generateMissouriLogRows([spray], [field]);
-        expect(rows[0]).toContain(',50,'); // Should use 50, not 100
+        expect(rows[0]).toContain(',\"50\",'); // Should use 50, not 100
     });
 });
