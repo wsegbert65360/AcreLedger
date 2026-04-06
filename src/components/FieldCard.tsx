@@ -135,23 +135,23 @@ export default function FieldCard({ field, index = 0 }: FieldCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: Math.min(index * 0.04, 0.3) }}
       onClick={() => navigate(`/field/${field.id}`)}
-      className={`${status_.bg} border ${status_.border || 'border-border'} rounded-xl p-3 px-3.5 flex items-center justify-between ring-1 ring-white/5 shadow-xl cursor-pointer hover:bg-card/80 transition-all active:scale-[0.97] relative`}
+      className={`bg-card border ${status_.border || 'border-border'} rounded-[20px] p-4 flex items-center justify-between shadow-sm hover:shadow-md cursor-pointer transition-all active:scale-[0.97] relative overflow-hidden`}
     >
       {/* Status dot */}
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[3px] w-1.5 h-9 rounded-r-full opacity-80" style={{ backgroundColor: status_.dotColor }} />
+      <div className="absolute left-0 top-0 bottom-0 w-1.5 opacity-80" style={{ backgroundColor: status_.dotColor }} />
 
       <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-lg ${status_.iconBg} flex items-center justify-center ${status_.iconColor} shrink-0`}>
+        <div className={`w-10 h-10 rounded-xl ${status_.iconBg} flex items-center justify-center ${status_.iconColor} shrink-0 ml-1`}>
           {harvested ? <Wheat size={15} /> : planted ? <Sprout size={15} /> : <MapPin size={15} />}
         </div>
         <div>
           <div className="flex items-center gap-1.5">
-            <h3 className="font-bold text-foreground text-sm">{field.name}</h3>
+            <h3 className="font-bold text-foreground text-[15px] tracking-tight">{field.name}</h3>
             <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-full ${planted ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
               {status_.label}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground font-mono text-[11px] mt-0.5">
+          <div className="flex items-center gap-2 text-muted-foreground font-mono text-xs mt-1">
             <span>{field.acreage} ac</span>
             {planted && !harvested && <span className="text-emerald-500">● In season</span>}
             {harvested && <span className="text-amber-500">● Complete</span>}

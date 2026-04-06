@@ -11,7 +11,7 @@ export default function Logo({ className = "" }: { className?: string }) {
           strokeWidth={3}
         />
       </div>
-      <span className="font-bold font-mono tracking-tighter text-foreground decoration-primary/50 decoration-2 underline-offset-4">
+      <span className="font-bold font-mono tracking-tight text-foreground decoration-primary/50 decoration-2 underline-offset-4 text-[17px]">
         AcreLedger
       </span>
     </div>

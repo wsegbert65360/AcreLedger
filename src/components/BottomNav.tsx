@@ -15,7 +15,7 @@ export default function BottomNav() {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border print:hidden pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-2xl border-t border-border/40 shadow-[0_-8px_30px_-15px_rgba(0,0,0,0.1)] print:hidden pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around max-w-lg mx-auto relative px-1">
         {tabs.map(({ path, icon: Icon, label }) => {
           const active = pathname === path;
@@ -35,7 +35,7 @@ export default function BottomNav() {
               {active && (
                 <motion.div
                   layoutId="bottom-nav-pill"
-                  className="absolute inset-1 bg-primary/10 border border-primary/20 rounded-2xl"
+                  className="absolute inset-1 bg-primary/10 rounded-[14px]"
                   transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
                 />
               )}
@@ -59,7 +59,7 @@ export default function BottomNav() {
               {active && (
                 <motion.div
                   layoutId="bottom-nav-dot"
-                  className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-primary"
+                  className="absolute -bottom-1 w-1 h-1 rounded-full bg-primary/80"
                   transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
                 />
               )}

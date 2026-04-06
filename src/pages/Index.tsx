@@ -62,7 +62,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border print:hidden pb-0">
+      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-2xl border-b border-border/40 print:hidden pb-0 shadow-sm">
         <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Logo />
@@ -73,8 +73,7 @@ const Index = () => {
           </div>
           <button
             onClick={() => setManaging(!managing)} // Re-using existing managing state for settings
-            className={`p-2.5 rounded-lg border transition-colors ${managing ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
-              }`}
+            className={`p-2 rounded-xl border transition-colors shadow-sm ${managing ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-background border-border/60 text-muted-foreground hover:text-foreground'}`}
           >
             <Settings size={20} />
           </button>
@@ -90,7 +89,7 @@ const Index = () => {
             {filteredRowCrops.length > 0 && (
               <div className="space-y-1">
                 {filteredPastureHay.length > 0 && (
-                  <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
+                  <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 mt-4">Row Crops</h2>
                 )}
                 <FieldList fields={filteredRowCrops} />
               </div>
@@ -98,7 +97,7 @@ const Index = () => {
 
             {filteredPastureHay.length > 0 && (
               <div className="space-y-1 pt-1">
-                <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
+                <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 mt-4">Pasture & Hay</h2>
                 <FieldList fields={filteredPastureHay} />
               </div>
             )}
@@ -113,12 +112,12 @@ const Index = () => {
             )}
             
             {allFields.length > 0 && (
-            <div className="bg-background/60 backdrop-blur-xl sticky bottom-[72px] mt-8 border-t border-border/50 px-4 py-2 pb-12 z-30">
+            <div className="bg-card/80 backdrop-blur-xl sticky bottom-[72px] mt-8 border-t border-border/40 px-4 py-4 pb-12 z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
               {/* Glass Gradient Transition Overlay */}
-              <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
+              <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-card/60 to-transparent pointer-events-none" />
               
               <div className="flex flex-col items-center justify-center space-y-1.5">
-                  <div className="text-[10px] font-bold text-muted-foreground tracking-widest uppercase">
+                  <div className="text-[11px] font-semibold text-muted-foreground tracking-wider uppercase mb-1">
                     Total Operation: {totalAcres} Acres
                   </div>
                   <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
@@ -130,7 +129,7 @@ const Index = () => {
                           onClick={() => toggleCrop(crop)}
                           className={`flex-none flex items-center justify-center h-10 px-3 rounded-xl border transition-all active:scale-95 text-xs font-bold uppercase tracking-widest ${isActive
                             ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
-                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
+                            : 'bg-background border-border/60 text-muted-foreground hover:bg-muted/50 shadow-sm'
                             }`}
                         >
                           {crop}: {acres} AC
