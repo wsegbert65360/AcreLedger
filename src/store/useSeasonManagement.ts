@@ -183,13 +183,18 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => ({ ...mapFertilizerRecipeToDb(r), farm_id }));
       const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => ({ ...mapRecipeToDb(r),     farm_id }));
 
-      // 4. Upsert sequentially. Note: a server-side atomic transaction
-      //    would require a dedicated edge function. In the interim,
-      //    the pre-restore backup downloaded above serves as the recovery
-      //    mechanism if a partial write occurs.
-      const tables: [string, unknown[]][] = [
-        ['fields',                  fieldsToDb],
-        ['bins',                    binsToDb],
+      // 4. Upsert in batches to respect foreign key constraints while maintaining performance.
+      //    Note: a server-side atomic transaction would be ideal, but for now we batch
+      //    parents before children.
+      const parentTables: [string, unknown[]][] = [
+        ['fields',             fieldsToDb],
+        ['bins',               binsToDb],
+        ['saved_seeds',        seedsToDb],
+        ['fertilizer_recipes', fRecipesToDb],
+        ['spray_recipes',      recipesToDb],
+      ];
+
+      const childTables: [string, unknown[]][] = [
         ['plant_records',           plantsToDb],
         ['spray_records',           spraysToDb],
         ['harvest_records',         harvestsToDb],
@@ -197,19 +202,20 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         ['fertilizer_applications', fertilizerToDb],
         ['tillage_records',         tillageToDb],
         ['grain_movements',         grainToDb],
-        ['saved_seeds',             seedsToDb],
-        ['fertilizer_recipes',      fRecipesToDb],
-        ['spray_recipes',           recipesToDb],
       ];
 
-      for (const [table, data] of tables) {
-        if (data.length === 0) continue;
+      const upsertTable = async (table: string, data: unknown[]) => {
+        if (data.length === 0) return;
         const { error } = await supabase.from(table).upsert(data);
         if (error) {
           console.error(`Restore failed on table "${table}":`, error);
           throw new Error(`Failed to restore "${table}": ${error.message}. Use the PRE_RESTORE_BACKUP file to recover.`);
         }
-      }
+      };
+
+      // Upsert parents first (parallel), then children (parallel)
+      await Promise.all(parentTables.map(([table, data]) => upsertTable(table, data)));
+      await Promise.all(childTables.map(([table, data]) => upsertTable(table, data)));
 
       // 4. All DB writes succeeded — update local state in one pass.
       //    Use !== undefined (not falsy) so empty arrays are applied correctly.
