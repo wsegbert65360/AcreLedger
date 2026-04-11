@@ -144,6 +144,20 @@ export default function Reports() {
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
 
+  // Pre-calculate hay statistics per field
+  const hayStats = useMemo(() => {
+    const statsMap = new Map<string, { c1: number; c2: number; c3plus: number; total: number }>();
+    for (const r of hayRecords) {
+      const stats = statsMap.get(r.fieldId) || { c1: 0, c2: 0, c3plus: 0, total: 0 };
+      if (r.cuttingNumber === 1) stats.c1 += r.baleCount;
+      else if (r.cuttingNumber === 2) stats.c2 += r.baleCount;
+      else if (r.cuttingNumber >= 3) stats.c3plus += r.baleCount;
+      stats.total += r.baleCount;
+      statsMap.set(r.fieldId, stats);
+    }
+    return statsMap;
+  }, [hayRecords]);
+
   // Landlord specific logic
   const [selectedLandlord, setSelectedLandlord] = useState<string>('');
   const uniqueLandlords = useMemo(() => getUniqueLandlordNames(harvestRecords), [harvestRecords]);
@@ -270,14 +284,16 @@ export default function Reports() {
   const handleExportHayPdf = () => {
     safeExport(() => {
       const records = fields
-        .filter(f => hayRecords.some(r => r.fieldId === f.id))
+        .filter(f => hayStats.has(f.id))
         .map(f => {
-          const fieldHay = hayRecords.filter(r => r.fieldId === f.id);
-          const c1 = fieldHay.filter(r => r.cuttingNumber === 1).reduce((s, r) => s + r.baleCount, 0);
-          const c2 = fieldHay.filter(r => r.cuttingNumber === 2).reduce((s, r) => s + r.baleCount, 0);
-          const c3plus = fieldHay.filter(r => r.cuttingNumber >= 3).reduce((s, r) => s + r.baleCount, 0);
-          const total = c1 + c2 + c3plus;
-          return [f.name, c1 || '—', c2 || '—', c3plus || '—', total.toLocaleString()];
+          const stats = hayStats.get(f.id)!;
+          return [
+            f.name,
+            stats.c1 || '—',
+            stats.c2 || '—',
+            stats.c3plus || '—',
+            stats.total.toLocaleString()
+          ];
         });
 
       exportToPdf({
@@ -601,23 +617,18 @@ export default function Reports() {
             )}
           >
             {fields
-              .filter(f => hayRecords.some(r => r.fieldId === f.id))
+              .filter(f => hayStats.has(f.id))
               .map(f => {
-                const fieldHay  = hayRecords.filter(r => r.fieldId === f.id);
-                const c1        = fieldHay.filter(r => r.cuttingNumber === 1).reduce((s, r) => s + r.baleCount, 0);
-                const c2        = fieldHay.filter(r => r.cuttingNumber === 2).reduce((s, r) => s + r.baleCount, 0);
-                const c3plus    = fieldHay.filter(r => r.cuttingNumber >= 3).reduce((s, r) => s + r.baleCount, 0);
-                const total     = c1 + c2 + c3plus;
-
+                const stats = hayStats.get(f.id)!;
                 return (
                   <tr key={f.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 text-xs font-bold text-foreground">{f.name}</td>
-                    {/* Use explicit zero check — c1 > 0 avoids hiding a legitimate 0 bale count */}
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c1 > 0 ? c1 : '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c2 > 0 ? c2 : '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c3plus > 0 ? c3plus : '—'}</td>
+                    {/* Use explicit zero check — stats.c1 > 0 avoids hiding a legitimate 0 bale count */}
+                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{stats.c1 > 0 ? stats.c1 : '—'}</td>
+                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{stats.c2 > 0 ? stats.c2 : '—'}</td>
+                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{stats.c3plus > 0 ? stats.c3plus : '—'}</td>
                     <td className="px-4 py-3 font-mono text-[10px] font-bold text-harvest text-right border-l border-border/20">
-                      {total.toLocaleString()}
+                      {stats.total.toLocaleString()}
                     </td>
                   </tr>
                 );
