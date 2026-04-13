@@ -253,7 +253,7 @@ export function useFieldsAndBins({
       snapshotRef.current.set(`sprayRecipe:${r.id}`, prev.find(item => item.id === r.id));
       return prev.map(existing => existing.id === r.id ? r : existing);
     });
-    const mapped = mapRecipeToDb({ ...r, farm_id });
+    const mapped = mapRecipeToDb({ ...r, farm_id: farm_id! });
     const { farm_id: _f, id: _i, ...payload } = mapped;
     const { error } = await supabase
       .from('spray_recipes')
@@ -305,7 +305,7 @@ export function useFieldsAndBins({
       snapshotRef.current.set(`fertilizerRecipe:${r.id}`, prev.find(item => item.id === r.id));
       return prev.map(existing => existing.id === r.id ? r : existing);
     });
-    const mapped = mapFertilizerRecipeToDb({ ...r, farm_id });
+    const mapped = mapFertilizerRecipeToDb({ ...r, farm_id: farm_id! });
     const { farm_id: _f, id: _i, ...payload } = mapped;
     const { error } = await supabase
       .from('fertilizer_recipes')

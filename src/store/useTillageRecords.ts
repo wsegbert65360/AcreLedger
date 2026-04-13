@@ -80,7 +80,7 @@ export function useTillageRecords({ farm_id, activeSeason, setTillageRecords }: 
 
     let mapped: ReturnType<typeof mapTillageToDb>;
     try {
-      mapped = mapTillageToDb(r);
+      mapped = mapTillageToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapTillageToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');

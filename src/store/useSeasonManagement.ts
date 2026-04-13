@@ -170,18 +170,18 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       setTimeout(() => URL.revokeObjectURL(preRestoreUrl), 2000);
 
       // 3. Map all records to DB format
-      const fieldsToDb      = (backupData.fields               ?? []).map((f) => ({ ...mapFieldToDb(f),      farm_id }));
-      const binsToDb        = (backupData.bins                 ?? []).map((b) => ({ ...mapBinToDb(b),        farm_id }));
-      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => ({ ...mapPlantToDb(r),      farm_id }));
-      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => ({ ...mapSprayToDb(r),      farm_id }));
-      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => ({ ...mapHarvestToDb(r),    farm_id }));
-      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => ({ ...mapHayToDb(r),        farm_id }));
-      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => ({ ...mapFertilizerToDb(r), farm_id }));
-      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => ({ ...mapTillageToDb(r),    farm_id }));
-      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => ({ ...mapGrainToDb(m),      farm_id }));
-      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => ({ ...mapSeedToDb(s),       farm_id }));
-      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => ({ ...mapFertilizerRecipeToDb(r), farm_id }));
-      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => ({ ...mapRecipeToDb(r),     farm_id }));
+      const fieldsToDb      = (backupData.fields               ?? []).map((f) => mapFieldToDb({ ...f,      farm_id }));
+      const binsToDb        = (backupData.bins                 ?? []).map((b) => mapBinToDb({ ...b,        farm_id }));
+      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => mapPlantToDb({ ...r,      farm_id }));
+      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => mapSprayToDb({ ...r,      farm_id }));
+      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => mapHarvestToDb({ ...r,    farm_id }));
+      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => mapHayToDb({ ...r,        farm_id }));
+      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => mapFertilizerToDb({ ...r, farm_id }));
+      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => mapTillageToDb({ ...r,    farm_id }));
+      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => mapGrainToDb({ ...m,      farm_id }));
+      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => mapSeedToDb({ ...s,       farm_id }));
+      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => mapFertilizerRecipeToDb({ ...r, farm_id }));
+      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDb({ ...r,     farm_id }));
 
       // 4. Upsert in batches to respect foreign key constraints while maintaining performance.
       //    Note: a server-side atomic transaction would be ideal, but for now we batch

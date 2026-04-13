@@ -87,7 +87,7 @@ export function useGrainMovements({ farm_id, activeSeason, setGrainMovements }: 
 
     let mapped: ReturnType<typeof mapGrainToDb>;
     try {
-      mapped = mapGrainToDb(r);
+      mapped = mapGrainToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapGrainToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');

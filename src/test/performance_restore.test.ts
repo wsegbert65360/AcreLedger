@@ -30,11 +30,45 @@ describe('Restore Performance Benchmark', () => {
         vi.clearAllMocks();
         vi.resetModules();
         global.fetch = vi.fn();
-        vi.spyOn(console, 'error').mockImplementation(() => {});
+        // Do NOT suppress console.error during debugging
+        // vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        // Mock browser APIs more robustly
+        if (typeof global.URL.createObjectURL === 'undefined') {
+            global.URL.createObjectURL = vi.fn(() => 'mock-url');
+        }
+        if (typeof global.URL.revokeObjectURL === 'undefined') {
+            global.URL.revokeObjectURL = vi.fn();
+        }
+
+        // Ensure Blob is available
+        if (typeof global.Blob === 'undefined') {
+            (global as any).Blob = class Blob {
+                constructor(public parts: any[], public options: any) {}
+            };
+        }
+
+        // Mock click for anchor elements
+        if (typeof HTMLAnchorElement.prototype.click === 'undefined') {
+            HTMLAnchorElement.prototype.click = vi.fn();
+        }
 
         mockArgs = {
             session: { user: { id: 'user-123' } },
             farm_id: 'farm-123',
+            fields: [],
+            bins: [],
+            plantRecords: [],
+            sprayRecords: [],
+            harvestRecords: [],
+            hayHarvestRecords: [],
+            fertilizerApplications: [],
+            grainMovements: [],
+            savedSeeds: [],
+            fertilizerRecipes: [],
+            sprayRecipes: [],
+            tillageRecords: [],
+            activeSeason: 2024,
             setLoading: vi.fn(),
             setFields: vi.fn(),
             setBins: vi.fn(),
@@ -50,6 +84,7 @@ describe('Restore Performance Benchmark', () => {
             setTillageRecords: vi.fn(),
             setActiveSeason: vi.fn(),
             setViewingSeason: vi.fn(),
+            setFarmId: vi.fn(),
         };
     });
 

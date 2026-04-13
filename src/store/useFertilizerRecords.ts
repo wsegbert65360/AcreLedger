@@ -96,7 +96,7 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications 
 
     let mapped: ReturnType<typeof mapFertilizerToDb>;
     try {
-      mapped = mapFertilizerToDb(r);
+      mapped = mapFertilizerToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapFertilizerToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');

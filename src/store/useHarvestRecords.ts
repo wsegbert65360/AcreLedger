@@ -87,7 +87,7 @@ export function useHarvestRecords({ farm_id, activeSeason, setHarvestRecords }: 
 
     let mapped: ReturnType<typeof mapHarvestToDb>;
     try {
-      mapped = mapHarvestToDb(r);
+      mapped = mapHarvestToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapHarvestToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');
