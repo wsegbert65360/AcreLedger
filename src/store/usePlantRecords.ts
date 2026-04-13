@@ -87,7 +87,7 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
 
     let mapped: ReturnType<typeof mapPlantToDb>;
     try {
-      mapped = mapPlantToDb(r);
+      mapped = mapPlantToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapPlantToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');

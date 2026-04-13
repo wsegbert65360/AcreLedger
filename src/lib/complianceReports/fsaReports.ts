@@ -29,8 +29,9 @@ function formatFsaDate(val: string | number | null | undefined): string {
 }
 
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {
+    const fieldMap = new Map(fields.map(f => [f.id, f]));
     return records.flatMap(r => {
-        const field = fields.find(f => f.id === r.fieldId);
+        const field = fieldMap.get(r.fieldId);
         const treatedArea = r.treatedAreaSize || field?.acreage || '';
 
         // If there are granular products, create a row for each herbicide in the mix
@@ -105,6 +106,7 @@ export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
 }
 
 export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
+    const fieldMap = new Map(fields.map(f => [f.id, f]));
     const header = [
         'Farm #',
         'Tract #',
@@ -119,8 +121,8 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
 
     // Sort plantRecords by FSA farm/tract/field for consistent CSV output
     const sortedRecords = [...plantRecords].sort((a, b) => {
-        const fA = fields.find(f => f.id === a.fieldId);
-        const fB = fields.find(f => f.id === b.fieldId);
+        const fA = fieldMap.get(a.fieldId);
+        const fB = fieldMap.get(b.fieldId);
         const farmA = a.fsaFarmNumber || fA?.fsaFarmNumber || '';
         const farmB = b.fsaFarmNumber || fB?.fsaFarmNumber || '';
         const cmpFarm = farmA.localeCompare(farmB);
@@ -135,7 +137,7 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
     });
 
     const rows = sortedRecords.map(r => {
-        const field = fields.find(f => f.id === r.fieldId);
+        const field = fieldMap.get(r.fieldId);
 
         // FSA 578 uses IR for Irrigated, NI for Non-Irrigated
         const irrigation = r.irrigationPractice || field?.irrigationPractice || 'Non-Irrigated';
@@ -162,6 +164,7 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
 }
 
 export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]) {
+    const fieldMap = new Map(fields.map(f => [f.id, f]));
     const header = [
         'Date',
         'Field',
@@ -177,7 +180,7 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
     ].join(',');
 
     const rows = harvestRecords.map(r => {
-        const field = fields.find(f => f.id === r.fieldId);
+        const field = fieldMap.get(r.fieldId);
         return [
             sanitizeCsvValue(r.harvestDate || formatFsaDate(r.timestamp)),
             sanitizeCsvValue(r.fieldName),
@@ -198,6 +201,7 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
 }
 
 export function exportFertilizerData(records: FertilizerApplication[], fields: Field[]) {
+    const fieldMap = new Map(fields.map(f => [f.id, f]));
     const header = [
         'Date',
         'Field',
@@ -207,7 +211,7 @@ export function exportFertilizerData(records: FertilizerApplication[], fields: F
     ].join(',');
 
     const rows = records.map(r => {
-        const field = fields.find(f => f.id === r.fieldId);
+        const field = fieldMap.get(r.fieldId);
         return [
             sanitizeCsvValue(r.date),
             sanitizeCsvValue(field?.name || r.fieldName),

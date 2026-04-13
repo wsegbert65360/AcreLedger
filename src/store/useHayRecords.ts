@@ -87,7 +87,7 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
 
     let mapped: ReturnType<typeof mapHayToDb>;
     try {
-      mapped = mapHayToDb(r);
+      mapped = mapHayToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapHayToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');

@@ -4,15 +4,12 @@ import { mapBinToDb } from '@/lib/mappers';
 
 export const binService = {
     async createBin(bin: Omit<Bin, 'id'>, id: string, farmId: string) {
-        const binData = {
-            ...mapBinToDb({ ...bin, id }),
-            farm_id: farmId
-        };
+        const binData = mapBinToDb({ ...bin, id, farm_id: farmId });
         return await supabase.from('bins').insert([binData]).select();
     },
 
     async updateBin(bin: Bin, farmId: string) {
-        const mapped = mapBinToDb(bin);
+        const mapped = mapBinToDb({ ...bin, farm_id: farmId });
         const { farm_id: _f, id: _i, ...payload } = mapped;
         return await supabase
             .from('bins')

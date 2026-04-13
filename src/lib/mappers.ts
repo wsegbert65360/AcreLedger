@@ -288,7 +288,7 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 // --- Reverse Mappers (Frontend -> DB) ---
 
 export const mapFieldToDb = (f: Field) => {
-    validateRequired(f, ['id', 'name'], 'mapFieldToDb');
+    validateRequired(f, ['id', 'name', 'farm_id'], 'mapFieldToDb');
     return {
         id: f.id,
         farm_id: f.farm_id,
@@ -447,8 +447,9 @@ export const mapBinToDb = (b: Bin) => {
 };
 
 export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
-    validateRequired(s, ['farm_id', 'name'], 'mapSeedToDb');
+    validateRequired(s, ['id', 'farm_id', 'name'], 'mapSeedToDb');
     return {
+        id: s.id,
         name: s.name,
         crop: s.crop,
         variety: s.variety,
