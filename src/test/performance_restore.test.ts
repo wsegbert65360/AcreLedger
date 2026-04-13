@@ -35,8 +35,6 @@ describe('Restore Performance Benchmark', () => {
 
     beforeEach(() => {
         vi.stubEnv('VITE_VISUALCROSSING_KEY', mockApiKey);
-        vi.clearAllMocks();
-        vi.resetModules();
         global.fetch = vi.fn();
 
         // Explicitly spy on console.error so we can see what happened if it fails
@@ -51,26 +49,13 @@ describe('Restore Performance Benchmark', () => {
             revokeObjectURL: vi.fn(),
         });
 
-        vi.stubGlobal('Blob', class Blob {
-            constructor(public parts: any[], public options: any) {}
+        // Use a simpler mock for Blob
+        vi.stubGlobal('Blob', class {
+            constructor() {}
         });
 
-        // Mock document.createElement and body methods more safely
-        const mockAnchor = {
-            click: vi.fn(),
-            setAttribute: vi.fn(),
-            style: {},
-            href: '',
-            download: ''
-        };
-
-        vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-            if (tag === 'a') return mockAnchor as any;
-            return global.document.createElement(tag);
-        });
-
-        vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn());
-        vi.spyOn(document.body, 'removeChild').mockImplementation(vi.fn());
+        // Mock anchor click to prevent navigation or errors during auto-backup
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(vi.fn());
 
         mockArgs = {
             session: { user: { id: 'user-123' } },

@@ -29,8 +29,8 @@ function formatFsaDate(val: string | number | null | undefined): string {
 }
 
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {
-    const fieldMap = new Map(fields.map(f => [f.id, f]));
-    return records.flatMap(r => {
+    const fieldMap = new Map((fields || []).filter(Boolean).map(f => [f.id, f]));
+    return (records || []).filter(Boolean).flatMap(r => {
         const field = fieldMap.get(r.fieldId);
         const treatedArea = r.treatedAreaSize || field?.acreage || '';
 
@@ -106,7 +106,7 @@ export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
 }
 
 export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
-    const fieldMap = new Map(fields.map(f => [f.id, f]));
+    const fieldMap = new Map((fields || []).filter(Boolean).map(f => [f.id, f]));
     const header = [
         'Farm #',
         'Tract #',
@@ -164,7 +164,7 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
 }
 
 export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]) {
-    const fieldMap = new Map(fields.map(f => [f.id, f]));
+    const fieldMap = new Map((fields || []).filter(Boolean).map(f => [f.id, f]));
     const header = [
         'Date',
         'Field',
@@ -201,7 +201,7 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
 }
 
 export function exportFertilizerData(records: FertilizerApplication[], fields: Field[]) {
-    const fieldMap = new Map(fields.map(f => [f.id, f]));
+    const fieldMap = new Map((fields || []).filter(Boolean).map(f => [f.id, f]));
     const header = [
         'Date',
         'Field',
