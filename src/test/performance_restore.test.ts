@@ -55,23 +55,18 @@ describe('Restore Performance Benchmark', () => {
             constructor(public parts: any[], public options: any) {}
         });
 
-        // Mock document.createElement and body methods more safely
-        const originalCreateElement = document.createElement.bind(document);
-        const mockAnchor = {
-            click: vi.fn(),
-            setAttribute: vi.fn(),
-            style: {},
-            href: '',
-            download: ''
-        };
+        // Mock browser APIs safely without breaking React mounting
+        if (typeof global.URL.createObjectURL === 'undefined') {
+            global.URL.createObjectURL = vi.fn(() => 'mock-url');
+        }
+        if (typeof global.URL.revokeObjectURL === 'undefined') {
+            global.URL.revokeObjectURL = vi.fn();
+        }
 
-        vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-            if (tag === 'a') return mockAnchor as any;
-            return originalCreateElement(tag);
-        });
-
-        vi.spyOn(document.body, 'appendChild').mockImplementation(vi.fn());
-        vi.spyOn(document.body, 'removeChild').mockImplementation(vi.fn());
+        // Mock anchor click to prevent navigation or errors during auto-backup
+        if (typeof HTMLAnchorElement.prototype.click === 'undefined') {
+            HTMLAnchorElement.prototype.click = vi.fn();
+        }
 
         mockArgs = {
             session: { user: { id: 'user-123' } },
