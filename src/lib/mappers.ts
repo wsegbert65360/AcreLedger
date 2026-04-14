@@ -65,6 +65,7 @@ function optionalStr(val: any): string | undefined {
  * silent type drift when the DB schema changes.
  */
 function mapProductFromDb(p: ProductEntry): SprayRecipeProduct {
+    if (!p) return { product: 'Unknown', rate: '0', rateUnit: 'oz/ac' };
     return {
         product: safeStr(p.product),
         rate: safeStr(p.rate),
@@ -85,7 +86,7 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     fsaFarmNumber: safeStr(db.fsa_farm_number),
     fsaTractNumber: safeStr(db.fsa_tract_number),
     fsaFieldNumber: safeStr(db.fsa_field_number),
-    producerShare: db.producer_share ?? undefined,
+    producerShare: safeNum(db.producer_share, 100),
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
     intendedUse: safeStr(db.intended_use),
     boundary: db.boundary as Field['boundary'],
@@ -106,7 +107,7 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     fsaTractNumber: optionalStr(db.fsa_tract_number),
     fsaFieldNumber: optionalStr(db.fsa_field_number),
     intendedUse: optionalStr(db.intended_use),
-    producerShare: db.producer_share ?? undefined,
+    producerShare: safeNum(db.producer_share, 100),
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
     seasonYear: safeNum(db.season_year, 2024),
     timestamp: safeTimestamp(db.timestamp),
@@ -278,6 +279,9 @@ export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
 // --- Helper for Validation ---
 
 function validateRequired(obj: any, fields: string[], mapperName: string) {
+    if (!obj) {
+        throw new Error(`[Mapper Error] ${mapperName}: Object is null or undefined`);
+    }
     for (const field of fields) {
         if (obj[field] === undefined || obj[field] === null || obj[field] === '') {
             throw new Error(`[Mapper Error] ${mapperName}: Missing required field "${field}"`);
@@ -340,7 +344,7 @@ export const mapSprayToDb = (r: SprayRecord) => {
         field_id: r.fieldId,
         field_name: r.fieldName,
         // Strip client-only keys (ui_id, id) before persisting to JSONB
-        products: r.products?.map(({ ui_id, id, ...rest }: SprayRecipeProduct) => rest),
+        products: (r.products || []).filter(Boolean).map(({ ui_id, id, ...rest }: SprayRecipeProduct) => rest),
         wind_speed: r.windSpeed,
         temperature: r.temperature,
         spray_date: r.sprayDate,
@@ -468,11 +472,11 @@ export const mapRecipeToDb = (r: SprayRecipe) => {
         farm_id: r.farm_id,
         name: r.name,
         // Strip client-only keys (ui_id, id) before persisting to JSONB
-        products: r.products?.map(({ ui_id, id, ...rest }: SprayRecipeProduct) => rest),
+        products: (r.products || []).filter(Boolean).map(({ ui_id, id, ...rest }: SprayRecipeProduct) => rest),
         applicator_name: r.applicatorName,
         license_number: r.licenseNumber,
         target_pest: r.targetPest,
-        epa_reg_number: r.epaRegNumber,
+        epaRegNumber: r.epaRegNumber,
         crop_or_site_treated: r.cropOrSiteTreated,
         deleted_at: r.deleted_at
     };

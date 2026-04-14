@@ -28,6 +28,12 @@ const TABS: { key: ReportTab; icon: typeof Sprout; label: string; color: string 
 
 // ─── Pure helpers (module-level — not recreated on every render) ──────────────
 
+function safeNum(val: any, fallback = 0): number {
+  if (val === null || val === undefined) return fallback;
+  const n = Number(val);
+  return isNaN(n) ? fallback : n;
+}
+
 function fmt(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
@@ -77,38 +83,38 @@ export default function Reports() {
   // Season selector options — memoized across all record arrays
   const availableSeasons = useMemo(() => Array.from(new Set([
     activeSeason,
-    ...allPlant.map(r => r.seasonYear),
-    ...allSpray.map(r => r.seasonYear),
-    ...allHarvest.map(r => r.seasonYear),
-    ...allHay.map(r => r.seasonYear),
-    ...allGrain.map(r => r.seasonYear),
-    ...allFertilizer.map(r => r.seasonYear),
+    ...(allPlant || []).map(r => r?.seasonYear),
+    ...(allSpray || []).map(r => r?.seasonYear),
+    ...(allHarvest || []).map(r => r?.seasonYear),
+    ...(allHay || []).map(r => r?.seasonYear),
+    ...(allGrain || []).map(r => r?.seasonYear),
+    ...(allFertilizer || []).map(r => r?.seasonYear),
   ])).filter((y): y is number => !!y).sort((a, b) => b - a),
   [activeSeason, allPlant, allSpray, allHarvest, allHay, allGrain, allFertilizer]);
 
   // Season-filtered record sets — memoized, sorted, non-mutating
   const plantRecords = useMemo(() =>
-    [...allPlant.filter(r => r.seasonYear === viewingSeason)]
-      .sort((a, b) => a.timestamp - b.timestamp),
+    [...(allPlant || []).filter(r => r && r.seasonYear === viewingSeason)]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)),
   [allPlant, viewingSeason]);
 
   const sprayRecords = useMemo(() =>
-    [...allSpray.filter(r => r.seasonYear === viewingSeason)]
-      .sort((a, b) => a.timestamp - b.timestamp),
+    [...(allSpray || []).filter(r => r && r.seasonYear === viewingSeason)]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)),
   [allSpray, viewingSeason]);
 
   const harvestRecords = useMemo(() =>
-    [...allHarvest.filter(r => r.seasonYear === viewingSeason)]
-      .sort((a, b) => a.timestamp - b.timestamp),
+    [...(allHarvest || []).filter(r => r && r.seasonYear === viewingSeason)]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)),
   [allHarvest, viewingSeason]);
 
   const hayRecords = useMemo(() =>
-    allHay.filter(r => r.seasonYear === viewingSeason),
+    (allHay || []).filter(r => r && r.seasonYear === viewingSeason),
   [allHay, viewingSeason]);
 
   const fertilizerRecords = useMemo(() =>
-    [...allFertilizer.filter(r => r.seasonYear === viewingSeason)]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [...(allFertilizer || []).filter(r => r && r.seasonYear === viewingSeason)]
+      .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime()),
   [allFertilizer, viewingSeason]);
 
   // Expanded spray rows — memoized, keyed by index to avoid product-name collisions
@@ -117,15 +123,15 @@ export default function Reports() {
     const treatedArea = r.treatedAreaSize ?? field?.acreage ?? 0;
 
     if (r.products && r.products.length > 0) {
-      return r.products.map((p, i) => ({
+      return r.products.filter(Boolean).map((p, i) => ({
         ...r,
         _rowKey: `${r.id}-${i}`,                     // index-based key — no collision on duplicate product names
         product: p.product,
         epaRegNumber: p.epaRegNumber,
         applicationRate: p.rate,
         rateUnit: p.rateUnit,
-        amountDisplay: !isNaN(parseFloat(p.rate)) && treatedArea > 0
-          ? `${(parseFloat(p.rate) * treatedArea).toFixed(1)} ${p.rateUnit}`
+        amountDisplay: !isNaN(parseFloat(p.rate || '0')) && treatedArea > 0
+          ? `${(parseFloat(p.rate || '0') * treatedArea).toFixed(1)} ${p.rateUnit || ''}`
           : '—',
       }));
     }
@@ -202,7 +208,7 @@ export default function Reports() {
             r.fsaFieldNumber || field?.fsaFieldNumber || '—',
             r.intendedUse || '—',
             r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI',
-            `${(r.producerShare ?? field?.producerShare ?? 100).toFixed(0)}%`
+            `${(safeNum(r.producerShare ?? field?.producerShare, 100)).toFixed(0)}%`
           ];
         }),
         fileName: `FSA_Planting_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
@@ -425,7 +431,7 @@ export default function Reports() {
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.fsaFieldNumber || field?.fsaFieldNumber || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.intendedUse || '—'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{(r.producerShare ?? field?.producerShare ?? 100).toFixed(0)}%</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{(safeNum(r.producerShare ?? field?.producerShare, 100)).toFixed(0)}%</td>
                 </tr>
               );
             })}

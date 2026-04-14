@@ -42,7 +42,7 @@ const statusConfig = (planted: boolean, harvested: boolean) => {
   };
 };
 
-const fmtRain = (v: number) => v.toFixed(2);
+const fmtRain = (v: number | null | undefined) => (v != null ? v.toFixed(2) : '0.00');
 
 /**
  * Direct fetch to the rain API — no promise caching, no RainService.
@@ -172,7 +172,7 @@ export default function FieldCard({ field, index = 0 }: FieldCardProps) {
               {status === 'loading' ? (
                 <Loader2 size={11} className="animate-spin" />
               ) : (
-                `${fmtRain(rain24h!)}"`
+                `${fmtRain(rain24h)}"`
               )}
             </span>
           </button>
