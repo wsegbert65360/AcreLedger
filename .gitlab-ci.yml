@@ -1,0 +1,14 @@
+# GitLab CI configuration for AcreLedger (Node.js/Vite project)
+image: node:20
+
+stages:
+  - test
+
+test_job:
+  stage: test
+  script:
+    - npm ci
+    - npm test
+  only:
+    - main
+    - master

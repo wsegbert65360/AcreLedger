@@ -41,6 +41,29 @@ The following secrets must be set in your Supabase project for rainfall ingestio
 - `NOAA_MRMS_BASE_URL`: `https://vlab.noaa.gov/pub/tgmc/MRMS_Operational/`
 - `SUPABASE_SERVICE_ROLE_KEY`: Your project's service role key for automated sync.
 
-## Deployment
+## Deployment & Updates (GitLab)
 
-AcreLedger is designed for Vercel (frontend) and Supabase (backend). Continuous deployment is configured for the `master` and `main` branches.
+AcreLedger is deployed via **Vercel** (frontend) and **Supabase** (backend). 
+
+### Continuous Deployment
+Automatic deployments are triggered whenever changes are pushed to the `main` or `master` branches in **GitLab**. 
+
+> [!IMPORTANT]
+> Since transitioning from GitHub, ensure your Vercel project is re-linked to the GitLab repository to maintain automated deployments.
+
+### Developer Workflow
+To update the application, push your changes to GitLab:
+
+```bash
+# Stage your changes
+git add .
+
+# Commit your changes
+git commit -m "Your description of changes"
+
+# Push to GitLab
+git push origin main
+```
+
+GitLab CI is configured to automatically run the test suite on every push.
+
