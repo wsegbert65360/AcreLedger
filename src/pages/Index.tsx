@@ -61,9 +61,9 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-20 lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border print:hidden pb-0">
-        <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between">
+        <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between lg:max-w-5xl lg:px-8">
           <div className="flex items-center gap-3">
             <Logo />
             <div className="flex flex-col">
@@ -81,7 +81,7 @@ const Index = () => {
         </div>
         <div className="h-[2px] w-full bg-gradient-to-r from-plant/40 via-plant to-plant/40" />
       </header>
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-3">
+      <main className="max-w-lg mx-auto px-4 py-4 space-y-3 lg:max-w-5xl lg:px-8">
         <WeatherBar />
         {managing ? (
           <FieldManager />

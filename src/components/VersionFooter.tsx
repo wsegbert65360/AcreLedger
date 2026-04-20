@@ -81,7 +81,7 @@ export default function VersionFooter() {
   };
 
   return (
-    <div className="max-w-lg mx-auto w-full py-10 px-6 flex items-center justify-between gap-4 border-t border-border/10">
+    <div className="max-w-lg mx-auto w-full py-10 px-6 flex items-center justify-between gap-4 border-t border-border/10 lg:max-w-4xl">
       <div className="flex flex-col">
         <p className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-widest font-bold">
           AcreLedger

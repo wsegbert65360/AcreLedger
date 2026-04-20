@@ -184,9 +184,9 @@ export default function Activity() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-24 lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-5xl lg:px-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <ClipboardList size={20} className="text-primary" />
@@ -253,9 +253,9 @@ export default function Activity() {
         </div>
         <div className="h-[2px] w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
       </header>
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
+      <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs */}
-        <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-4 border-y border-border bg-card/50">
+        <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-4 border-y border-border bg-card/50 lg:flex-wrap">
           {TABS.map(t => {
             const count = t.key === 'all' ? unifiedRecords.length
               : t.key === 'plant' ? filteredPlant.length

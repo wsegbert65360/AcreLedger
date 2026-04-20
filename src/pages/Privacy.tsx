@@ -8,7 +8,7 @@ export default function Privacy() {
 
     return (
         <div className="min-h-screen bg-background pb-12">
-            <div className="max-w-2xl mx-auto p-4 space-y-6">
+            <div className="max-w-2xl mx-auto p-4 space-y-6 lg:max-w-4xl lg:px-8">
                 <header className="flex items-center gap-4 py-4">
                     <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground">
                         <ArrowLeft size={20} />
