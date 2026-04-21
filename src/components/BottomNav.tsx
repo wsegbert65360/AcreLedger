@@ -1,24 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Map, Wheat, ClipboardList, FileText, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-// v1.2.5 - Production Guard: Implement Animated Indicator Pill
-const tabs = [
-  { path: '/', icon: Map, label: 'Fields' },
-  { path: '/logistics', icon: Wheat, label: 'Storage' },
-  { path: '/activity', icon: ClipboardList, label: 'Activity' },
-  { path: '/reports', icon: FileText, label: 'Reports' },
-  { path: '/settings', icon: Settings, label: 'Setup' },
-];
+import { navTabs } from './navConfig';
 
 export default function BottomNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border print:hidden pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border print:hidden pb-[env(safe-area-inset-bottom)] lg:hidden">
       <div className="flex items-center justify-around max-w-lg mx-auto relative px-2">
-        {tabs.map(({ path, icon: Icon, label }) => {
+        {navTabs.map(({ path, icon: Icon, label }) => {
           const active = pathname === path;
           return (
             <button

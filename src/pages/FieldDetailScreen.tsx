@@ -169,10 +169,10 @@ export default function FieldDetailScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24 dark:bg-slate-950">
+    <div className="min-h-screen bg-slate-50 pb-24 lg:pb-8 dark:bg-slate-950">
       {/* Sticky Header */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200 p-4 dark:bg-slate-900/80 dark:border-slate-800">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+        <div className="max-w-lg mx-auto flex items-center justify-between lg:max-w-5xl lg:px-8">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             <ArrowLeft size={24} />
           </button>
@@ -181,7 +181,7 @@ export default function FieldDetailScreen() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-lg mx-auto px-4 py-6 space-y-6 lg:max-w-5xl lg:px-8">
 
         {/* 1. Dashboard Header */}
         <section className="space-y-1">
@@ -206,7 +206,7 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* 2. Today at a Glance - Grid of 4 Cards */}
-        <section className="grid grid-cols-2 gap-3 pb-2">
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
           {/* Rainfall Card */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">

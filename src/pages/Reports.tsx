@@ -309,9 +309,9 @@ export default function Reports() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-24 lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0 print:bg-background print:border-0">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between lg:max-w-6xl lg:px-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center print:hidden">
               <FileText size={20} className="text-primary" />
@@ -333,7 +333,7 @@ export default function Reports() {
         <div className="h-[2px] w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40 print:hidden" />
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4 lg:max-w-6xl lg:px-8">
         {/* Season Selector */}
         <div className="flex items-center justify-between gap-4 bg-muted/30 border border-border p-3 rounded-lg print:hidden">
           <div className="flex items-center gap-2">

@@ -28,9 +28,9 @@ export default function Logistics() {
   }, [bins, getBinTotal, grainMovements, viewingSeason]);
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-24 lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-5xl lg:px-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-harvest/10 flex items-center justify-center">
               <Wheat size={20} className="text-harvest" />
@@ -51,7 +51,7 @@ export default function Logistics() {
         </div>
         <div className="h-[2px] w-full bg-gradient-to-r from-harvest/40 via-harvest to-harvest/40" />
       </header>
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-4">
+      <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {managing ? (
           <BinManager />
         ) : (
@@ -64,7 +64,8 @@ export default function Logistics() {
               </p>
             </div>
           ) : (
-            binOverview.map(bin => (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {binOverview.map(bin => (
               <div key={bin.id} className="bg-card border border-border rounded-lg p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -111,7 +112,8 @@ export default function Logistics() {
                   </Button>
                 </div>
               </div>
-            ))
+            ))}
+            </div>
           )
         )}
       </main>
