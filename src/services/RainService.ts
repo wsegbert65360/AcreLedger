@@ -1,5 +1,3 @@
-import { supabase } from '@/lib/supabase';
-
 type RainfallResult = {
   '24h': number;
   '72h': number;
@@ -70,18 +68,17 @@ export const RainService = {
       const rain = mainData.rain ?? {};
       const periodEndUtc = mainData.periodEndUtc || new Date().toISOString();
 
-      // --- Custom range calls: Supabase RPC get_rainfall_stats ---
+      // --- Custom range calls via Rain API (server-side Supabase with service role) ---
       const fetchCustomRange = async (startDate: string): Promise<number> => {
         try {
           const today = new Date().toISOString().split('T')[0];
-          const { data, error } = await supabase.rpc('get_rainfall_stats', {
-            p_field_id: fieldId,
-            p_start_date: startDate,
-            p_end_date: today,
-          });
-          if (error || !data) return 0;
-          const row = Array.isArray(data) ? data[0] : data;
-          return Number(row?.total_inches || 0);
+          const r = await fetch(
+            `${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`,
+            { signal }
+          );
+          if (!r.ok) return 0;
+          const d = await r.json();
+          return Number(d.rainfall || 0);
         } catch { return 0; }
       };
 
