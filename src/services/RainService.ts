@@ -1,5 +1,3 @@
-import { supabase } from '@/lib/supabase';
-
 type RainfallResult = {
   '24h': number;
   '72h': number;

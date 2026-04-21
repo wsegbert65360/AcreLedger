@@ -78,7 +78,7 @@ describe('RainService', () => {
       sincePlantingDate: daysAgo(30), sinceLastSprayDate: daysAgo(14)
     });
 
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(result['24h']).toBe(0.4);
     expect(result.sincePlanting).toBe(2.5);
     expect(result.sinceLastSpray).toBe(0.75);
