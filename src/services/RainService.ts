@@ -78,7 +78,7 @@ export const RainService = {
           );
           if (!response.ok) return 0;
           const data = await response.json();
-          return Math.round(Number(data.rainfall || 0) * 1000) / 1000;
+          return Math.round(Number(data.rain?.total || data.rainfall || 0) * 1000) / 1000;
         } catch { return 0; }
       };
 

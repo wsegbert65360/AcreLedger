@@ -60,8 +60,8 @@ describe('RainService', () => {
       .mockResolvedValueOnce(buildApiResponse({
         '12h': 0.2, '24h': 0.4, '72h': 0.9, '168h': 1.0
       }))
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ rainfall: 2.5 }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ rainfall: 0.75 }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rain: { total: 2.5 } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rain: { total: 0.75 } }) });
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: 38.4627, lng: -93.5374,
