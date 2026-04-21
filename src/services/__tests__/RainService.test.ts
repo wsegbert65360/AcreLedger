@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RainService } from '../RainService';
 
+// Mock supabase module
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    rpc: vi.fn(),
+  },
+}));
+
+import { supabase } from '@/lib/supabase';
+
+const mockedRpc = vi.mocked(supabase.rpc);
+
 describe('RainService', () => {
   const mockFieldId = 'test-field-id';
   const mockApiUrl = 'https://api.example.com';
@@ -19,45 +30,45 @@ describe('RainService', () => {
     return d.toISOString().split('T')[0];
   };
 
-  // Build a mock response matching what RainAPI actually returns (IEM mode)
-  const buildIemResponse = (breakdown: Record<string, number>) => {
-    const dates = Object.keys(breakdown).sort();
-    const total = dates.reduce((sum, d) => sum + breakdown[d], 0);
-    return {
-      ok: true,
-      json: async () => ({
-        mode: 'iem',
-        location: { lat: 38.4627, lon: -93.5374 },
-        period: { start: dates[0], end: dates[dates.length - 1], days: dates.length },
-        rainfall: Math.round(total * 1000) / 1000,
-        breakdown: Object.fromEntries(dates.map(d => [d, Math.round(breakdown[d] * 1000) / 1000])),
-        units: 'inches',
-        source: 'IEM Stage IV',
-      }),
-    };
-  };
+  // Build a mock response matching the new Rain API schema
+  const buildApiResponse = (rain: { '12h': number; '24h': number; '72h': number; '168h': number }, opts?: { dataWarning?: string }) => ({
+    ok: true,
+    json: async () => ({
+      location: { type: 'point', lat: 38.4627, lon: -93.5374, fieldId: mockFieldId },
+      periodEndUtc: '2026-04-20T12:00:00.000Z',
+      units: 'in',
+      rain,
+      rainMm: {
+        '12h': rain['12h'] * 25.4,
+        '24h': rain['24h'] * 25.4,
+        '72h': rain['72h'] * 25.4,
+        '168h': rain['168h'] * 25.4,
+      },
+      ...(opts?.dataWarning ? { dataWarning: opts.dataWarning } : {}),
+    }),
+  });
 
-  it('computes 24h, 72h, 7d from breakdown', async () => {
-    // Day values: 0, 0, 0, 0.1, 0.3, 0.2, 0.4 (today=0.4, last 3 days=0.9, total=1.0)
-    const breakdown: Record<string, number> = {};
-    [0, 0, 0, 0.1, 0.3, 0.2, 0.4].forEach((v, i) => { breakdown[daysAgo(6 - i)] = v; });
+  it('reads 24h, 72h, 7d from rain object directly', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.2, '24h': 0.4, '72h': 0.9, '168h': 1.0
+    }));
 
-    (fetch as any)
-      .mockResolvedValueOnce(buildIemResponse(breakdown))
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ rainfall: 1.0 }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ rainfall: 0.5 }) });
+    mockedRpc.mockResolvedValue({
+      data: { total_inches: 1.0 },
+      error: null,
+    });
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: 38.4627, lng: -93.5374,
       sincePlantingDate: daysAgo(30), sinceLastSprayDate: daysAgo(14)
     });
 
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(result['24h']).toBe(0.4);
     expect(result['72h']).toBe(0.9);
     expect(result['7d']).toBe(1.0);
     expect(result.sincePlanting).toBe(1.0);
-    expect(result.sinceLastSpray).toBe(0.5);
+    expect(result.sinceLastSpray).toBe(1.0);
   });
 
   it('handles API errors', async () => {
@@ -70,9 +81,9 @@ describe('RainService', () => {
   });
 
   it('handles zero rainfall', async () => {
-    const breakdown: Record<string, number> = {};
-    for (let i = 6; i >= 0; i--) breakdown[daysAgo(i)] = 0;
-    (fetch as any).mockResolvedValue(buildIemResponse(breakdown));
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0, '72h': 0, '168h': 0
+    }));
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: 38.4627, lng: -93.5374
@@ -83,7 +94,9 @@ describe('RainService', () => {
   });
 
   it('extracts centroid from boundary when lat/lng missing', async () => {
-    (fetch as any).mockResolvedValue(buildIemResponse({ [today()]: 0.25 }));
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.1, '24h': 0.25, '72h': 0.5, '168h': 0.75
+    }));
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: null, lng: null,
@@ -98,7 +111,9 @@ describe('RainService', () => {
   });
 
   it('extracts centroid from GeoJSON boundary (real format)', async () => {
-    (fetch as any).mockResolvedValue(buildIemResponse({ [today()]: 0.25 }));
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.1, '24h': 0.25, '72h': 0.5, '168h': 0.75
+    }));
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: null, lng: null,
@@ -129,7 +144,7 @@ describe('RainService', () => {
   it('deduplicates concurrent requests', async () => {
     (fetch as any).mockImplementation(async () => {
       await new Promise(r => setTimeout(r, 50));
-      return buildIemResponse({ [today()]: 0.5 });
+      return buildApiResponse({ '12h': 0.3, '24h': 0.5, '72h': 0.7, '168h': 1.0 });
     });
     const [a, b] = await Promise.all([
       RainService.fetchComprehensiveRainfall({ fieldId: mockFieldId, lat: 38.46, lng: -93.53 }),
@@ -139,29 +154,83 @@ describe('RainService', () => {
     expect(a).toEqual(b);
   });
 
-  it('includes IEM data warning', async () => {
-    (fetch as any).mockResolvedValue(buildIemResponse({ [today()]: 0.1 }));
+  it('passes through API dataWarning', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse(
+      { '12h': 0.1, '24h': 0.1, '72h': 0.5, '168h': 0.8 },
+      { dataWarning: 'IEM Stage IV data — 1-2 hour lag from real-time' }
+    ));
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: 38.46, lng: -93.53
     });
-    expect(result.dataWarning).toContain('IEM Stage IV');
+    expect(result.dataWarning).toBe('IEM Stage IV data — 1-2 hour lag from real-time');
   });
 
+  it('no dataWarning when not provided by API', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.1, '24h': 0.1, '72h': 0.5, '168h': 0.8
+    }));
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: 38.46, lng: -93.53
+    });
+    expect(result.dataWarning).toBeUndefined();
+  });
 
-  it('handles custom range failures gracefully', async () => {
-    const breakdown: Record<string, number> = {};
-    for (let i = 6; i >= 0; i--) breakdown[daysAgo(i)] = 0;
-    (fetch as any)
-      .mockResolvedValueOnce(buildIemResponse(breakdown))
-      .mockResolvedValueOnce({ ok: false, status: 500 })
-      .mockResolvedValueOnce(new Promise((_, reject) => setTimeout(() => reject(new Error('fail')), 10)));
+  it('calls Supabase RPC for custom ranges', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0, '72h': 0, '168h': 0
+    }));
+
+    mockedRpc
+      .mockResolvedValueOnce({ data: { total_inches: 2.5 }, error: null })
+      .mockResolvedValueOnce({ data: { total_inches: 0.75 }, error: null });
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: 38.46, lng: -93.53,
       sincePlantingDate: daysAgo(30), sinceLastSprayDate: daysAgo(14)
     });
-    expect(result['24h']).toBe(0);
+
+    expect(mockedRpc).toHaveBeenCalledTimes(2);
+    expect(mockedRpc).toHaveBeenCalledWith('get_rainfall_stats', {
+      p_field_id: mockFieldId,
+      p_start_date: daysAgo(30),
+      p_end_date: today(),
+    });
+    expect(mockedRpc).toHaveBeenCalledWith('get_rainfall_stats', {
+      p_field_id: mockFieldId,
+      p_start_date: daysAgo(14),
+      p_end_date: today(),
+    });
+    expect(result.sincePlanting).toBe(2.5);
+    expect(result.sinceLastSpray).toBe(0.75);
+  });
+
+  it('handles RPC failures gracefully', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0, '72h': 0, '168h': 0
+    }));
+
+    mockedRpc
+      .mockResolvedValueOnce({ data: null, error: { message: 'RPC error' } })
+      .mockRejectedValueOnce(new Error('network fail'));
+
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: 38.46, lng: -93.53,
+      sincePlantingDate: daysAgo(30), sinceLastSprayDate: daysAgo(14)
+    });
     expect(result.sincePlanting).toBe(0);
     expect(result.sinceLastSpray).toBe(0);
+  });
+
+  it('includes field_id in the API request URL', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0, '72h': 0, '168h': 0
+    }));
+
+    await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: 38.46, lng: -93.53
+    });
+
+    const calledUrl = (fetch as any).mock.calls[0][0];
+    expect(calledUrl).toContain(`field_id=${mockFieldId}`);
   });
 });
