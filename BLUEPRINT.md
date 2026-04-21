@@ -170,7 +170,7 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 
 #### Rain API Core Logic
 - **Primary Source (Radar + DB merge)**: Rain API returns fixed windows (`rain.24h`, `rain.72h`, `rain.168h`) via `GET /rain?lat=X&lon=Y&field_id=Z`. The API merges IEM Stage IV (CONUS radar) with Supabase RPC server-side, taking the MAX of both sources per window.
-- **Custom Ranges**: Since-planting and since-spray rainfall are fetched via Rain API `GET /rain?field_id=X&start_date=Y&end_date=Z`. Returns `{ rainfall: number }`.
+- **Custom Ranges**: Since-planting and since-spray rainfall are fetched via Rain API `GET /rain?field_id=X&start_date=Y&end_date=Z`. Returns `{ rain: { total: number }, rainMm: { total: number } }`.
 - **Coordinate Precision**: Lat/Lng are rounded to **4 decimal places** for consistent matching with the 4km radar grid.
 - **Centroid Logic**: Polygon boundaries automatically fall back to centroids if explicit field coordinates are null or invalid.
 
