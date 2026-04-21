@@ -1,4 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const { mockRpc } = vi.hoisted(() => ({
+  mockRpc: vi.fn(),
+}));
+vi.mock('@/lib/supabase', () => ({
+  supabase: { rpc: mockRpc },
+}));
+
 import { RainService } from '../RainService';
 
 describe('RainService', () => {
@@ -10,6 +18,7 @@ describe('RainService', () => {
     RainService.__test_clearCache();
     vi.stubGlobal('fetch', vi.fn());
     vi.stubEnv('VITE_RAIN_API_URL', mockApiUrl);
+    mockRpc.mockResolvedValue({ data: null, error: null });
   });
 
   const today = () => new Date().toISOString().split('T')[0];
@@ -37,17 +46,6 @@ describe('RainService', () => {
     }),
   });
 
-  const buildCustomRangeResponse = (rainfall: number) => ({
-    ok: true,
-    json: async () => ({
-      location: { type: 'point', lat: 38.4627, lon: -93.5374, fieldId: mockFieldId },
-      periodEndUtc: '2026-04-20T12:00:00.000Z',
-      units: 'in',
-      rainfall,
-      rainMm: Number((rainfall * 25.4).toFixed(2)),
-    }),
-  });
-
   it('reads 24h, 72h, 7d from rain object directly', async () => {
     (fetch as any).mockResolvedValue(buildApiResponse({
       '12h': 0.2, '24h': 0.4, '72h': 0.9, '168h': 1.0
@@ -63,34 +61,41 @@ describe('RainService', () => {
     expect(result['7d']).toBe(1.0);
     expect(result.sincePlanting).toBe(0);
     expect(result.sinceLastSpray).toBe(0);
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
-  it('fetches custom ranges via Rain API', async () => {
-    (fetch as any)
-      .mockResolvedValueOnce(buildApiResponse({
-        '12h': 0.2, '24h': 0.4, '72h': 0.9, '168h': 1.0
-      }))
-      .mockResolvedValueOnce(buildCustomRangeResponse(2.5))
-      .mockResolvedValueOnce(buildCustomRangeResponse(0.75));
+  it('fetches custom ranges via Supabase RPC', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.2, '24h': 0.4, '72h': 0.9, '168h': 1.0
+    }));
+    mockRpc
+      .mockResolvedValueOnce({ data: [{ total_inches: 2.5 }], error: null })
+      .mockResolvedValueOnce({ data: [{ total_inches: 0.75 }], error: null });
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: 38.4627, lng: -93.5374,
       sincePlantingDate: daysAgo(30), sinceLastSprayDate: daysAgo(14)
     });
 
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledTimes(2);
     expect(result['24h']).toBe(0.4);
     expect(result.sincePlanting).toBe(2.5);
     expect(result.sinceLastSpray).toBe(0.75);
 
-    // Custom range URLs should include field_id, start_date, end_date
-    const customUrl1 = (fetch as any).mock.calls[1][0];
-    expect(customUrl1).toContain(`field_id=${mockFieldId}`);
-    expect(customUrl1).toContain(`start_date=${daysAgo(30)}`);
-    expect(customUrl1).toContain(`end_date=${today()}`);
+    // First RPC call: since planting
+    expect(mockRpc).toHaveBeenNthCalledWith(1, 'get_rainfall_stats', {
+      p_field_id: mockFieldId,
+      p_start_date: daysAgo(30),
+      p_end_date: today(),
+    });
 
-    const customUrl2 = (fetch as any).mock.calls[2][0];
-    expect(customUrl2).toContain(`start_date=${daysAgo(14)}`);
+    // Second RPC call: since spray
+    expect(mockRpc).toHaveBeenNthCalledWith(2, 'get_rainfall_stats', {
+      p_field_id: mockFieldId,
+      p_start_date: daysAgo(14),
+      p_end_date: today(),
+    });
   });
 
   it('handles API errors', async () => {
@@ -197,13 +202,13 @@ describe('RainService', () => {
     expect(result.dataWarning).toBeUndefined();
   });
 
-  it('handles custom range failures gracefully', async () => {
-    (fetch as any)
-      .mockResolvedValueOnce(buildApiResponse({
-        '12h': 0, '24h': 0, '72h': 0, '168h': 0
-      }))
-      .mockResolvedValueOnce({ ok: false, status: 500 })
-      .mockRejectedValueOnce(new Error('network fail'));
+  it('handles custom range RPC failures gracefully', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0, '72h': 0, '168h': 0
+    }));
+    mockRpc
+      .mockResolvedValueOnce({ data: null, error: { message: 'RPC failed' } })
+      .mockResolvedValueOnce({ data: [], error: null });
 
     const result = await RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId, lat: 38.46, lng: -93.53,

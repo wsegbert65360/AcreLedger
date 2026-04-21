@@ -3,12 +3,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore: Deno URL import
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { downloadAndDecompress, MRMS_CONFIG, extractRainfall } from '../shared/mrms.ts'
+import { downloadAndDecompress, MRMS_CONFIG, extractRainfall, validateGridConfig } from '../shared/mrms.ts'
+
+interface FieldCoord { lat: number; lng: number; id: string }
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 serve(async (req: Request) => {
@@ -24,8 +25,8 @@ serve(async (req: Request) => {
     )
 
     const now = new Date()
-    // Most recent valid hour is T-1 or T-2
-    const targetTs = new Date(now.getTime() - (1000 * 60 * 60 * 2))
+    const hourOffset = parseInt(Deno.env.get('MRMS_HOUR_OFFSET') || '2', 10)
+    const targetTs = new Date(now.getTime() - (1000 * 60 * 60 * hourOffset))
     targetTs.setMinutes(0, 0, 0)
     
     const tsStr = targetTs.toISOString().replace(/[:\-]/g, '').split('.')[0].replace('T', '-')
@@ -37,6 +38,7 @@ serve(async (req: Request) => {
     const pass1Filename = `MRMS_MultiSensor_QPE_01H_Pass1_00.00_${tsStr}.grib2.gz`
     const pass1Url = `${MRMS_CONFIG.baseUrl}MultiSensor_QPE_01H_Pass1/${pass1Filename}`
 
+    validateGridConfig()
     console.log(`Processing hour: ${targetTs.toISOString()}`)
 
     // 1. Fetch all fields
@@ -64,9 +66,9 @@ serve(async (req: Request) => {
     console.log(`Using ${source} data from ${source === 'Pass 2' ? pass2Url : pass1Url}`)
 
     // 3. Extract logic
-    const rainfallValues = extractRainfall(gribData, fields.map((f: any) => ({ lat: f.lat, lng: f.lng })))
+    const rainfallValues = extractRainfall(gribData, fields.map((f: FieldCoord) => ({ lat: f.lat, lng: f.lng })))
 
-    const records = fields.map((f: any, i: number) => ({
+    const records = fields.map((f: FieldCoord, i: number) => ({
       field_id: f.id,
       timestamp_utc: targetTs.toISOString(),
       rainfall_in: rainfallValues[i],
@@ -89,9 +91,10 @@ serve(async (req: Request) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
-  } catch (error: any) {
-    console.error(`Edge Function Error: ${error.message}`, error.stack);
-    return new Response(JSON.stringify({ error: error.message }), { 
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[MRMS-Hourly] Edge Function Error: ${msg}`);
+    return new Response(JSON.stringify({ error: msg }), { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

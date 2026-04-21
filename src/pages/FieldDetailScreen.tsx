@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { WeatherService } from '@/services/WeatherService';
-import { 
-  Sprout, Leaf, Tractor, ArrowLeft, 
-  Cloud, MapPin, Droplets, RefreshCw, 
-  AlertCircle, History, 
+import {
+  Sprout, Leaf, Tractor, ArrowLeft,
+  Cloud, MapPin, Droplets, RefreshCw,
+  AlertCircle, History,
   FileText, ExternalLink, Info, CheckCircle2
 } from 'lucide-react';
-import { RainService } from '@/services/RainService';
+import { RainService, type RainfallResult } from '@/services/RainService';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
@@ -45,15 +44,7 @@ export default function FieldDetailScreen() {
   } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
 
-  const [rainStats, setRainStats] = useState<{
-    '24h': number;
-    '72h': number;
-    '7d': number;
-    sincePlanting: number;
-    sinceLastSpray: number;
-    periodEndUtc: string;
-    dataWarning?: string;
-  } | null>(null);
+  const [rainStats, setRainStats] = useState<RainfallResult | null>(null);
 
   const [rainError, setRainError] = useState<string | null>(null);
   const [fetchingRain, setFetchingRain] = useState(false);
@@ -107,19 +98,6 @@ export default function FieldDetailScreen() {
   }, [latestSpray]);
 
   // Fetching Logic
-  useEffect(() => {
-    if (!field?.id || field.lat == null || field.lng == null) return;
-    const controller = new AbortController();
-    WeatherService.fetchFieldConditions(field.lat, field.lng, controller.signal)
-      .then(() => {
-        // Data fetched but unused presently in UI header - keeping side effect for now if needed elsewhere
-      }).catch((err) => {
-        if (err.name === 'AbortError') return;
-      });
-    return () => controller.abort();
-  }, [field?.id, field?.lat, field?.lng]);
-
-
   const handleFetchRain = useCallback(async (signal?: AbortSignal) => {
     if (!field || fetchingRainRef.current) return;
     fetchingRainRef.current = true;

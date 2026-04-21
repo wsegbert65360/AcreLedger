@@ -1,4 +1,6 @@
-type RainfallResult = {
+import { supabase } from '@/lib/supabase';
+
+export type RainfallResult = {
   '24h': number;
   '72h': number;
   '7d': number;
@@ -53,7 +55,7 @@ export const RainService = {
         throw new Error('Missing location data (lat/lng or boundary) for rainfall lookup.');
       }
 
-      // GET /rain?lat=X&lon=Y&field_id=Z — IEM Stage IV merged with Supabase server-side
+      // GET /rain?lat=X&lon=Y&field_id=Z — IEM Stage IV radar data
       const mainResponse = await fetch(
         `${baseUrl}/rain?lat=${tLat}&lon=${tLng}&field_id=${fieldId}`,
         { signal }
@@ -68,17 +70,17 @@ export const RainService = {
       const rain = mainData.rain ?? {};
       const periodEndUtc = mainData.periodEndUtc || new Date().toISOString();
 
-      // --- Custom range calls via Rain API (server-side Supabase with service role) ---
+      // --- Custom range via Supabase RPC (field_rainfall_hourly has historical data) ---
       const fetchCustomRange = async (startDate: string): Promise<number> => {
         try {
           const today = new Date().toISOString().split('T')[0];
-          const r = await fetch(
-            `${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`,
-            { signal }
-          );
-          if (!r.ok) return 0;
-          const d = await r.json();
-          return Number(d.rainfall || 0);
+          const { data, error } = await supabase.rpc('get_rainfall_stats', {
+            p_field_id: fieldId,
+            p_start_date: startDate,
+            p_end_date: today,
+          });
+          if (error || !data || data.length === 0) return 0;
+          return Math.round(Number(data[0].total_inches || 0) * 1000) / 1000;
         } catch { return 0; }
       };
 
@@ -91,8 +93,8 @@ export const RainService = {
         '24h': Math.round(Number(rain['24h'] || 0) * 1000) / 1000,
         '72h': Math.round(Number(rain['72h'] || 0) * 1000) / 1000,
         '7d': Math.round(Number(rain['168h'] || 0) * 1000) / 1000,
-        sincePlanting: Math.round(sincePlanting * 1000) / 1000,
-        sinceLastSpray: Math.round(sinceLastSpray * 1000) / 1000,
+        sincePlanting,
+        sinceLastSpray,
         periodEndUtc,
         dataWarning: mainData.dataWarning || undefined,
       };
