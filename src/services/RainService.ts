@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+
 type RainfallResult = {
   '24h': number;
   '72h': number;
@@ -8,15 +10,6 @@ type RainfallResult = {
   dataWarning?: string;
 };
 const promiseCache = new Map<string, Promise<RainfallResult>>();
-
-/**
- * Sum rainfall for the last N days from a { "YYYY-MM-DD": inches } breakdown.
- */
-function sumLastNDays(breakdown: Record<string, number>, n: number): number {
-  const dates = Object.keys(breakdown).sort();
-  if (dates.length === 0) return 0;
-  return dates.slice(-n).reduce((sum, d) => sum + (Number(breakdown[d]) || 0), 0);
-}
 
 export const RainService = {
   async fetchComprehensiveRainfall(args: {
@@ -45,7 +38,6 @@ export const RainService = {
         throw new Error('VITE_RAIN_API_URL is not configured');
       }
 
-      // Get lat/lng. If missing but boundary exists, compute centroid from boundary.
       let tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
       let tLng = lng != null ? Math.round(lng * 10000) / 10000 : null;
 
@@ -63,9 +55,11 @@ export const RainService = {
         throw new Error('Missing location data (lat/lng or boundary) for rainfall lookup.');
       }
 
-      // --- Main call: GET /rain?lat=X&lon=Y&days=7 (IEM Stage IV) ---
-      // Returns: { rainfall, breakdown: { "YYYY-MM-DD": inches }, period, mode }
-      const mainResponse = await fetch(`${baseUrl}/rain?lat=${tLat}&lon=${tLng}&days=7`, { signal });
+      // GET /rain?lat=X&lon=Y&field_id=Z — IEM Stage IV merged with Supabase server-side
+      const mainResponse = await fetch(
+        `${baseUrl}/rain?lat=${tLat}&lon=${tLng}&field_id=${fieldId}`,
+        { signal }
+      );
 
       if (!mainResponse.ok) {
         const err = await mainResponse.json().catch(() => ({}));
@@ -73,27 +67,21 @@ export const RainService = {
       }
 
       const mainData = await mainResponse.json();
-      const breakdown: Record<string, number> = mainData.breakdown || {};
+      const rain = mainData.rain ?? {};
+      const periodEndUtc = mainData.periodEndUtc || new Date().toISOString();
 
-      // Compute 24h, 72h, 7d from per-day breakdown
-      const inches24h = sumLastNDays(breakdown, 1);
-      const inches72h = sumLastNDays(breakdown, 3);
-      const inches7d = Number(mainData.rainfall) || sumLastNDays(breakdown, 7);
-
-      const periodEndUtc = mainData.period?.end
-        ? `${mainData.period.end}T23:59:59Z`
-        : new Date().toISOString();
-
-      const dataWarning = mainData.mode === 'iem' ? 'IEM Stage IV data — 1-2 hour lag from real-time' : undefined;
-
-      // --- Custom range calls: field_id + start_date/end_date (Supabase RPC) ---
+      // --- Custom range calls: Supabase RPC get_rainfall_stats ---
       const fetchCustomRange = async (startDate: string): Promise<number> => {
-        const today = new Date().toISOString().split('T')[0];
         try {
-          const r = await fetch(`${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`, { signal });
-          if (!r.ok) return 0;
-          const d = await r.json();
-          return Number(d.rainfall || 0);
+          const today = new Date().toISOString().split('T')[0];
+          const { data, error } = await supabase.rpc('get_rainfall_stats', {
+            p_field_id: fieldId,
+            p_start_date: startDate,
+            p_end_date: today,
+          });
+          if (error || !data) return 0;
+          const row = Array.isArray(data) ? data[0] : data;
+          return Number(row?.total_inches || 0);
         } catch { return 0; }
       };
 
@@ -103,13 +91,13 @@ export const RainService = {
       ]);
 
       return {
-        '24h': Math.round(inches24h * 1000) / 1000,
-        '72h': Math.round(inches72h * 1000) / 1000,
-        '7d': Math.round(inches7d * 1000) / 1000,
+        '24h': Math.round(Number(rain['24h'] || 0) * 1000) / 1000,
+        '72h': Math.round(Number(rain['72h'] || 0) * 1000) / 1000,
+        '7d': Math.round(Number(rain['168h'] || 0) * 1000) / 1000,
         sincePlanting: Math.round(sincePlanting * 1000) / 1000,
         sinceLastSpray: Math.round(sinceLastSpray * 1000) / 1000,
         periodEndUtc,
-        dataWarning
+        dataWarning: mainData.dataWarning || undefined,
       };
     })();
 

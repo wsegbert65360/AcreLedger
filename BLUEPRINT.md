@@ -169,16 +169,15 @@ High-resolution precipitation tracking using the **Rain API** (IEM Stage IV + Su
 The system uses a **Dual-Source Lookup** strategy to ensure data reliability and range coverage.
 
 #### Rain API Core Logic
-- **Primary Source (Radar)**: IEM Stage IV hourly dataset (CONUS only). Fetched via `GET /rain?lat=X&lon=Y&days=7`.
-- **Secondary Source (Database)**: AcreLedger Supabase `get_rainfall_stats` RPC. Fetched via `GET /rain?field_id=X&start_date=Y&end_date=Z`.
-- **Aggregation**: 24h, 72h, and 7d totals are computed on the client from the daily `breakdown` provided by the IEM response.
+- **Primary Source (Radar + DB merge)**: Rain API returns fixed windows (`rain.24h`, `rain.72h`, `rain.168h`) via `GET /rain?lat=X&lon=Y&field_id=Z`. The API merges IEM Stage IV (CONUS radar) with Supabase RPC server-side, taking the MAX of both sources per window.
+- **Custom Ranges**: Since-planting and since-spray rainfall are fetched by calling Supabase RPC `get_rainfall_stats(p_field_id, p_start_date, p_end_date)` directly from the client. Returns `total_inches`.
 - **Coordinate Precision**: Lat/Lng are rounded to **4 decimal places** for consistent matching with the 4km radar grid.
 - **Centroid Logic**: Polygon boundaries automatically fall back to centroids if explicit field coordinates are null or invalid.
 
 #### Service Reliability
 - **Service Cache**: `RainService` implements a 30-second `promiseCache` to deduplicate concurrent requests (e.g., when switching between tabs or fields rapidly).
-- **Data Warning**: IEM data reflects a 1-2 hour lag from real-time; UI shows an explicit warning card if the "iem" mode is active.
-- **RPC Fallback**: Custom range fetches (Planting/Spray dates) return `0` gracefully on failure to prevent UI crashes.
+- **Data Warning**: The API includes `dataWarning` when >10% of hourly data is missing or when Supabase merge adds rain beyond IEM. Passed through to UI.
+- **RPC Fallback**: Custom range RPC calls return `0` gracefully on failure to prevent UI crashes.
 
 ---
 
