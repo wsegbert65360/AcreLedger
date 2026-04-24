@@ -4,7 +4,7 @@ A modern, high-performance farm management platform for precision agriculture.
 
 ## Key Features
 
-- **Precision Rainfall (NOAA MRMS)**: Real-time rainfall data at 1km resolution, provided by NOAA Multi-Radar Multi-Sensor (MRMS) system.
+- **Precision Rainfall (Radar + DB)**: Hybrid rainfall data combining IEM Stage IV radar (CONUS) with NOAA MRMS historical archives for field-specific accuracy.
 - **PWA Update Logic**: Integrated manual and background service worker update checks for seamless versioning.
 - **Expo-Ready Architecture**: Clean, structured metadata for simplified cross-platform (Web/Native) expansion.
 - **Unit System**: All rainfall measurements are provided in **inches** for domestic agricultural standards.
@@ -32,6 +32,8 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # Weather API (Visual Crossing - for Wind & Temp)
 VITE_VISUALCROSSING_KEY=your_visual_crossing_api_key
+# Rain API (Vercel)
+VITE_RAIN_API_URL=https://rain-api.vercel.app
 ```
 
 ### Supabase Edge Functions

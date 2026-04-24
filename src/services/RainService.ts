@@ -1,7 +1,8 @@
 export type RainfallResult = {
   '24h': number;
   '72h': number;
-  '7d': number;
+  '168h': number;
+  '7d'?: number; // Alias for 168h used in UI
   sincePlanting: number;
   sinceLastSpray: number;
   periodEndUtc: string;
@@ -72,13 +73,14 @@ export const RainService = {
       const fetchCustomRange = async (startDate: string): Promise<number> => {
         try {
           const today = new Date().toISOString().split('T')[0];
+          // Use hybrid Mode D: includes coordinates for radar data merge
           const response = await fetch(
-            `${baseUrl}/rain?field_id=${fieldId}&start_date=${startDate}&end_date=${today}`,
+            `${baseUrl}/rain?field_id=${fieldId}&lat=${tLat}&lon=${tLng}&start_date=${startDate}&end_date=${today}`,
             { signal }
           );
           if (!response.ok) return 0;
           const data = await response.json();
-          return Math.round(Number(data.rain?.total || data.rainfall || 0) * 1000) / 1000;
+          return Math.round(Number(data.rain?.total || 0) * 1000) / 1000;
         } catch { return 0; }
       };
 
@@ -90,6 +92,7 @@ export const RainService = {
       return {
         '24h': Math.round(Number(rain['24h'] || 0) * 1000) / 1000,
         '72h': Math.round(Number(rain['72h'] || 0) * 1000) / 1000,
+        '168h': Math.round(Number(rain['168h'] || 0) * 1000) / 1000,
         '7d': Math.round(Number(rain['168h'] || 0) * 1000) / 1000,
         sincePlanting,
         sinceLastSpray,

@@ -76,8 +76,12 @@ describe('RainService', () => {
     // Verify custom range calls use field_id and date params
     const calls = (fetch as any).mock.calls;
     expect(calls[1][0]).toContain(`field_id=${mockFieldId}`);
+    expect(calls[1][0]).toContain(`lat=38.4627`);
+    expect(calls[1][0]).toContain(`lon=-93.5374`);
     expect(calls[1][0]).toContain(`start_date=${daysAgo(30)}`);
     expect(calls[2][0]).toContain(`field_id=${mockFieldId}`);
+    expect(calls[2][0]).toContain(`lat=38.4627`);
+    expect(calls[2][0]).toContain(`lon=-93.5374`);
     expect(calls[2][0]).toContain(`start_date=${daysAgo(14)}`);
   });
 
