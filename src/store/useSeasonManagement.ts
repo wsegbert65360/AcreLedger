@@ -164,32 +164,30 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => ({ ...mapFertilizerRecipeToDb(r), farm_id }));
       const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => ({ ...mapRecipeToDb(r),     farm_id }));
 
-      // 3. Upsert sequentially so a failure is caught before partial writes
-      //    compound beyond the first table. This is the safest approach without
-      //    DB-level transactions available on the client.
-      const tables: [string, unknown[]][] = [
-        ['fields',                  fieldsToDb],
-        ['bins',                    binsToDb],
-        ['plant_records',           plantsToDb],
-        ['spray_records',           spraysToDb],
-        ['harvest_records',         harvestsToDb],
-        ['hay_harvest_records',     hayToDb],
-        ['fertilizer_applications', fertilizerToDb],
-        ['tillage_records',         tillageToDb],
-        ['grain_movements',         grainToDb],
-        ['saved_seeds',             seedsToDb],
-        ['fertilizer_recipes',      fRecipesToDb],
-        ['spray_recipes',           recipesToDb],
-      ];
+      // 3. Restore through transactional RPC to avoid partial table writes.
+      const payload = {
+        fields: fieldsToDb,
+        bins: binsToDb,
+        plant_records: plantsToDb,
+        spray_records: spraysToDb,
+        harvest_records: harvestsToDb,
+        hay_harvest_records: hayToDb,
+        fertilizer_applications: fertilizerToDb,
+        tillage_records: tillageToDb,
+        grain_movements: grainToDb,
+        saved_seeds: seedsToDb,
+        fertilizer_recipes: fRecipesToDb,
+        spray_recipes: recipesToDb,
+      };
 
-      // 3. Upsert sequentially so a failure is caught before partial writes
-      for (const [table, data] of tables) {
-        if (data.length === 0) continue;
-        const { error } = await supabase.from(table).upsert(data);
-        if (error) {
-          console.error(`Restore failed on table "${table}":`, error);
-          throw new Error(`Failed to restore "${table}": ${error.message}`);
-        }
+      const { error } = await supabase.rpc('restore_farm_backup', {
+        p_payload: payload,
+        p_active_season: backupData.activeSeason ?? null,
+      });
+
+      if (error) {
+        console.error('Restore failed in restore_farm_backup RPC:', error);
+        throw new Error(`Failed to restore backup: ${error.message}`);
       }
 
       // 4. All DB writes succeeded — update local state in one pass.

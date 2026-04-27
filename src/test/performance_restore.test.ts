@@ -8,8 +8,10 @@ import { supabase } from '../lib/supabase';
 vi.mock('../lib/supabase', () => ({
     supabase: {
         from: vi.fn(() => ({
-            upsert: vi.fn()
-        }))
+            update: vi.fn(),
+            eq: vi.fn()
+        })),
+        rpc: vi.fn()
     }
 }));
 
@@ -50,6 +52,20 @@ describe('Restore Performance Benchmark', () => {
             setTillageRecords: vi.fn(),
             setActiveSeason: vi.fn(),
             setViewingSeason: vi.fn(),
+            setFarmId: vi.fn(),
+            fields: [],
+            bins: [],
+            plantRecords: [],
+            sprayRecords: [],
+            harvestRecords: [],
+            hayHarvestRecords: [],
+            fertilizerApplications: [],
+            grainMovements: [],
+            savedSeeds: [],
+            fertilizerRecipes: [],
+            sprayRecipes: [],
+            tillageRecords: [],
+            activeSeason: 2024,
         };
     });
 
@@ -68,14 +84,12 @@ describe('Restore Performance Benchmark', () => {
         sprayRecipes: [{ id: '12', name: 'Rec 2', farm_id: 'farm-123' }]
     };
 
-    it('should measure optimized performance (parallel)', async () => {
-        // Simulate 100ms latency per table
-        (supabase.from as any).mockImplementation(() => ({
-            upsert: async () => {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                return { error: null };
-            }
-        }));
+    it('should measure transactional restore performance', async () => {
+        // Simulate RPC latency
+        (supabase.rpc as any).mockImplementation(async () => {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            return { data: { ok: true }, error: null };
+        });
 
         const { result } = renderHook(() => useSeasonManagement(mockArgs));
         
@@ -85,19 +99,15 @@ describe('Restore Performance Benchmark', () => {
         
         console.log(`\n[PERFORMANCE] Optimized Duration: ${duration.toFixed(2)}ms`);
         expect(success).toBe(true);
-        // Expected ~100ms per table (12 tables in parallel) — allow generous headroom for CI
+        // Expected to complete under broad CI headroom.
         expect(duration).toBeLessThan(5000);
     });
 
-    it('should fail fast if any upsert fails', async () => {
-        (supabase.from as any).mockImplementation((table: string) => ({
-            upsert: async () => {
-                if (table === 'plant_records') {
-                    return { error: { message: 'DB Failure' } };
-                }
-                return { error: null };
-            }
-        }));
+    it('should fail when restore RPC returns error', async () => {
+        (supabase.rpc as any).mockResolvedValue({
+            data: null,
+            error: { message: 'DB Failure' }
+        });
 
         const { result } = renderHook(() => useSeasonManagement(mockArgs));
         const success = await result.current.restoreFromBackup(mockBackupData);

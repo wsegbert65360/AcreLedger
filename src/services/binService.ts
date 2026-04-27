@@ -27,6 +27,7 @@ export const binService = {
             .from('bins')
             .update({ deleted_at: new Date().toISOString() })
             .eq('id', id)
-            .eq('farm_id', farmId);
+            .eq('farm_id', farmId)
+            .select('id');
     }
 };

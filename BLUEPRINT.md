@@ -276,6 +276,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
 ```
 This prevents "search_path not set" security warnings and protects against search-path hijacking.
 
+### SECURITY DEFINER Tenant Guard
+Any `SECURITY DEFINER` function that reads/writes farm-scoped data must enforce tenant ownership
+inside the function body (typically via `auth.uid()` + `profiles.farm_id` join check). Do not rely
+on caller-provided IDs alone.
+
+### RLS + Grant Rule
+Never grant `SELECT`/`EXECUTE` to `authenticated` without matching tenant-scoped RLS policies (tables)
+or explicit ownership checks (functions).
+
 ---
 
 ## 6. Component Patterns
@@ -435,6 +444,24 @@ const { error } = await supabase...
 // previousRef.current is safe to read here
 ```
 
+For operations that can overlap, use operation-local rollback context (closure object or token-keyed
+Map) so concurrent updates/deletes cannot overwrite each other's rollback snapshot.
+
+### Affected-Row Verification
+Treat zero affected rows as failure on update/delete calls even when `error` is null:
+```ts
+const { data, error } = await supabase
+  .from('table')
+  .update(payload)
+  .eq('id', id)
+  .eq('farm_id', farm_id)
+  .select('id');
+
+if (error || !data || data.length === 0) {
+  // rollback optimistic state + toast
+}
+```
+
 ### Delete Rollback with Ordered Splice
 Sort snapshot **descending by index** before splicing — prevents index shift bugs:
 ```ts
@@ -498,6 +525,10 @@ useEffect(() => { setZip(loadZip(userId)); }, [userId]);
 ```
 Always wrap localStorage in `try/catch` — throws in private browsing and at storage quota.
 
+### Farm Bootstrap
+When a signed-in user has no `profiles.farm_id`, call transactional RPC `ensure_user_farm()`.
+Do not do client-side `insert farm` + `update profile` as separate operations.
+
 ---
 
 ## 9. Season System
@@ -551,17 +582,16 @@ setTimeout(() => URL.revokeObjectURL(url), 2000);
 return true;
 ```
 
-### Restore: Sequential Upserts Over Promise.all
+### Restore: Transactional RPC (Required)
 ```ts
-for (const [table, data] of tables) {
-  if (data.length === 0) continue;
-  const { error } = await supabase.from(table).upsert(data);
-  if (error) throw new Error(`Failed to restore "${table}": ${error.message}`);
-}
-// Only update local state AFTER all tables succeed
+const { error } = await supabase.rpc('restore_farm_backup', {
+  p_payload: payload,
+  p_active_season: backupData.activeSeason ?? null,
+});
+if (error) throw new Error(`Failed to restore backup: ${error.message}`);
 ```
-`Promise.all` allows partial writes with no rollback. Sequential stops at first failure.
-Note: no true DB-level transaction is available from the client.
+Backup restore must run server-side in one transaction via RPC; never run per-table client upserts.
+Only update local state after the RPC succeeds.
 
 ### Empty Array Restore Rule
 ```ts
@@ -622,6 +652,7 @@ Use `window.addEventListener('online'/'offline')` in parallel with channel statu
 
 - **No whole-store passthrough.** Destructure only the exact fields needed.
 - **No `upsert` for updates.** `.update().eq('id').eq('farm_id')` only — upsert silently inserts on miss.
+- **Backup restore uses RPC transaction.** `restore_farm_backup` only; never client table-by-table upsert loop.
 - **`farm_id` is a filter, never a payload field.** Never include in `.update({...})` body.
 - **`parseInt` always takes a radix.** `parseInt(v, 10)` — bare `parseInt` is ambiguous.
 - **`onOpenChange` always checks the boolean.** `(open) => { if (!open) onClose(); }` never `() => onClose()`.
@@ -638,6 +669,7 @@ Use `window.addEventListener('online'/'offline')` in parallel with channel statu
 - **`value > 0 ? value : '—'` not `value || '—'`.** Zero is a valid farm value.
 - **`!== undefined` for optional restore fields.** Falsy check skips `[]` and `0`.
 - **`previousRef`/`snapshotRef` for cross-await rollback.** Never read a `let` set inside a setter after `await`.
+- **Verify affected rows on all updates/deletes.** `.select('id')` then enforce non-zero (and exact counts for bulk).
 - **Remove unused imports at time of edit.** Never commit dead imports.
 - **No default `React` import.** Modern JSX transform — named imports only.
 - **Soft delete only.** Never call `.delete()` on user records — always set `deleted_at`.

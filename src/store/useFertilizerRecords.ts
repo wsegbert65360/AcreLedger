@@ -117,14 +117,19 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications 
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('fertilizer_applications')
       .update(payload)
       .eq('id', r.id)
-      .eq('farm_id', farm_id);
+      .eq('farm_id', farm_id)
+      .select('id');
 
-    if (error) {
-      console.error('Error updating fertilizer application:', error);
+    if (error || !data || data.length === 0) {
+      if (error) {
+        console.error('Error updating fertilizer application:', error);
+      } else {
+        console.warn('Fertilizer update affected zero rows:', r.id);
+      }
       
       const previous = previousRef.current;
       if (previous) {
@@ -164,14 +169,19 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications }: Pick<
       return prev.filter(r => !ids.includes(r.id));
     });
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('fertilizer_applications')
       .update({ deleted_at: new Date().toISOString() })
       .in('id', ids)
-      .eq('farm_id', farm_id);
+      .eq('farm_id', farm_id)
+      .select('id');
 
-    if (error) {
-      console.error('Error deleting fertilizer applications:', error);
+    if (error || !data || data.length !== ids.length) {
+      if (error) {
+        console.error('Error deleting fertilizer applications:', error);
+      } else {
+        console.warn('Fertilizer delete mismatch:', { requested: ids.length, affected: data?.length ?? 0 });
+      }
 
       // Restore records to their original positions. Sort descending by index.
       const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);

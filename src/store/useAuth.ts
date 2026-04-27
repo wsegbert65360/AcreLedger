@@ -76,16 +76,14 @@ export function useAuth() {
         if (profileData) {
           let currentFarmId = profileData.farm_id;
 
-          // Auto-create farm if missing
+          // Auto-create + link farm through transactional RPC if missing.
           if (!currentFarmId) {
-            const { data: nf } = await supabase.from('farms').insert([{ name: 'My Farm' }]).select().single();
-            if (nf) {
-              currentFarmId = nf.id;
-              const { error: updateError } = await supabase.from('profiles').update({ farm_id: currentFarmId }).eq('id', session.user.id);
-              if (updateError) {
-                console.error('Error updating profile with farm_id:', updateError);
-                toast.error('Failed to link farm to profile');
-              }
+            const { data: ensuredFarmId, error: ensureError } = await supabase.rpc('ensure_user_farm');
+            if (ensureError) {
+              console.error('Error ensuring user farm:', ensureError);
+              toast.error('Failed to initialize farm for this account');
+            } else if (ensuredFarmId) {
+              currentFarmId = ensuredFarmId;
             }
           }
 

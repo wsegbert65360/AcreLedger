@@ -161,15 +161,20 @@ export function useGrainMovements({ farm_id, activeSeason, setGrainMovements }: 
       return prev.filter(r => !ids.includes(r.id));
     });
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('grain_movements')
       .update({ deleted_at: new Date().toISOString() })
       .in('id', ids)
-      .eq('farm_id', farm_id);
+      .eq('farm_id', farm_id)
+      .select('id');
 
-    if (error) {
+    if (error || !data || data.length !== ids.length) {
       // Replace with Sentry.captureException(error) in production
-      console.error('Error deleting grain movements:', error);
+      if (error) {
+        console.error('Error deleting grain movements:', error);
+      } else {
+        console.warn('Grain delete mismatch:', { requested: ids.length, affected: data?.length ?? 0 });
+      }
 
       // Restore records to their original positions. Sort descending by index.
       const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
