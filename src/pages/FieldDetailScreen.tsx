@@ -482,7 +482,7 @@ export default function FieldDetailScreen() {
             </div>
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Location</label>
-              <div className="font-mono text-[10px] text-slate-700 dark:text-slate-300">{field.lat?.toFixed(4)}, {field.lng?.toFixed(4)}</div>
+              <div className="font-mono text-[10px] text-slate-700 dark:text-slate-300">{field.lat != null ? field.lat.toFixed(4) : '—'}, {field.lng != null ? field.lng.toFixed(4) : '—'}</div>
             </div>
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Irrigation</label>

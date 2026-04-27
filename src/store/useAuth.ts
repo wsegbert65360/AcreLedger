@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 // Storage utilities for session persistence
 
 export function useAuth() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [farm_id, setFarmId] = useState<string | null>(null);
   const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
@@ -21,8 +21,14 @@ export function useAuth() {
         if (initialSession?.user) {
           // Priority 1: Storage (Fastest persistent path)
           const prefix = initialSession.user.id;
-          const storedId = localStorage.getItem(`${prefix}_al_farm_id`);
-          const storedSeason = localStorage.getItem(`${prefix}_al_active_season`);
+          let storedId: string | null = null;
+          let storedSeason: string | null = null;
+          try {
+            storedId = localStorage.getItem(`${prefix}_al_farm_id`);
+            storedSeason = localStorage.getItem(`${prefix}_al_active_season`);
+          } catch (storageErr) {
+            console.error('Local storage read failed during session bootstrap:', storageErr);
+          }
           
           if (storedId) setFarmId(storedId);
           if (storedSeason) {

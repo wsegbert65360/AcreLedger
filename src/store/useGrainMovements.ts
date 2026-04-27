@@ -102,27 +102,39 @@ export function useGrainMovements({ farm_id, activeSeason, setGrainMovements }: 
       return prev.map(item => item.id === r.id ? r : item);
     });
 
-    const { farm_id: _f, id: _i, ...payload } = mapped;
+    const previous = previousRef.current;
+    if (!previous) {
+      console.warn('Grain update aborted: missing previous snapshot for optimistic rollback.', { id: r.id });
+      setGrainMovements(prev => prev.filter(item => item.id !== r.id));
+      toast.error('Could not update movement — record snapshot missing. Please refresh and try again.');
+      return false;
+    }
 
-    const { error } = await supabase
+    const { farm_id: _f, id: _i, ...payload } = mapped;
+    const previousTimestampIso = new Date(previous.timestamp).toISOString();
+
+    const { data, error } = await supabase
       .from('grain_movements')
       .update(payload)
       .eq('id', r.id)
-      .eq('farm_id', farm_id);
+      .eq('farm_id', farm_id)
+      .eq('timestamp', previousTimestampIso)
+      .select('id');
 
-    if (error) {
+    if (error || !data || data.length === 0) {
       // Replace with Sentry.captureException(error) in production
-      console.error('Error updating grain movement:', error);
-      
-      const previous = previousRef.current;
-      if (previous) {
-        setGrainMovements(prev => prev.map(item => item.id === r.id ? previous : item));
+      if (error) {
+        console.error('Error updating grain movement:', error);
       } else {
-        console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
-        setGrainMovements(prev => prev.filter(item => item.id !== r.id));
+        console.warn('Grain update concurrency conflict detected.', {
+          id: r.id,
+          expectedTimestamp: previousTimestampIso,
+        });
       }
       
-      toast.error('Failed to update grain movement.');
+      setGrainMovements(prev => prev.map(item => item.id === r.id ? previous : item));
+      
+      toast.error(error ? 'Failed to update grain movement.' : 'This movement changed elsewhere. Please refresh and try again.');
       return false;
     }
 

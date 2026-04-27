@@ -17,7 +17,7 @@ import { backupSchema } from '@/lib/backupSchema';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UseSeasonManagementArgs {
-  session: Session | null;
+  session: Session | null | undefined;
   farm_id: string | null;
   fields: Field[];
   bins: Bin[];

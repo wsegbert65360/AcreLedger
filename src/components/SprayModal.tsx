@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +8,7 @@ import { useFarm } from '@/store/farmStore';
 import { Field, SprayRecipeProduct, SprayRecord } from '@/types/farm';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
-import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus, FileDown } from 'lucide-react';
+import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus, FileDown, AlertTriangle } from 'lucide-react';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Textarea } from '@/components/ui/textarea';

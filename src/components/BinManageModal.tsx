@@ -159,7 +159,7 @@ export function BinManager() {
                 <BinManageModal open editBin={editBin} onClose={() => setEditBin(null)} />
             )}
 
-            <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+            <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
                 <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
                     <AlertDialogHeader>
                         <AlertDialogTitle className="text-foreground">Delete Bin</AlertDialogTitle>

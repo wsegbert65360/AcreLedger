@@ -26,7 +26,7 @@ import { useTillageRecords } from './useTillageRecords';
  */
 interface FarmState {
   /** Current user session from Supabase */
-  session: Session | null;
+  session: Session | null | undefined;
   /** Global loading state for data fetching */
   loading: boolean;
   /** Global error state for data fetching */
@@ -140,18 +140,37 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [farmName, setFarmName] = useState<string | null>(null);
 
   // --- Data State ---
-  const [fields, setFields] = useState<Field[]>(() => loadFromStorage('al_fields', [], auth.session?.user?.id));
-  const [bins, setBins] = useState<Bin[]>(() => loadFromStorage('al_bins', [], auth.session?.user?.id));
-  const [plantRecords, setPlantRecords] = useState<PlantRecord[]>(() => loadFromStorage('al_plant', [], auth.session?.user?.id));
-  const [sprayRecords, setSprayRecords] = useState<SprayRecord[]>(() => loadFromStorage('al_spray', [], auth.session?.user?.id));
-  const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>(() => loadFromStorage('al_harvest', [], auth.session?.user?.id));
-  const [hayHarvestRecords, setHayHarvestRecords] = useState<HayHarvestRecord[]>(() => loadFromStorage('al_hay', [], auth.session?.user?.id));
-  const [fertilizerApplications, setFertilizerApplications] = useState<FertilizerApplication[]>(() => loadFromStorage('al_fertilizer', [], auth.session?.user?.id));
-  const [tillageRecords, setTillageRecords] = useState<TillageRecord[]>(() => loadFromStorage('al_tillage', [], auth.session?.user?.id));
-  const [grainMovements, setGrainMovements] = useState<GrainMovement[]>(() => loadFromStorage('al_grain', [], auth.session?.user?.id));
-  const [savedSeeds, setSavedSeeds] = useState<SavedSeed[]>(() => loadFromStorage('al_seeds', [], auth.session?.user?.id));
-  const [fertilizerRecipes, setFertilizerRecipes] = useState<FertilizerRecipe[]>(() => loadFromStorage('al_f_recipes', [], auth.session?.user?.id));
-  const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>(() => loadFromStorage('al_recipes', [], auth.session?.user?.id));
+  const [fields, setFields] = useState<Field[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
+  const [plantRecords, setPlantRecords] = useState<PlantRecord[]>([]);
+  const [sprayRecords, setSprayRecords] = useState<SprayRecord[]>([]);
+  const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>([]);
+  const [hayHarvestRecords, setHayHarvestRecords] = useState<HayHarvestRecord[]>([]);
+  const [fertilizerApplications, setFertilizerApplications] = useState<FertilizerApplication[]>([]);
+  const [tillageRecords, setTillageRecords] = useState<TillageRecord[]>([]);
+  const [grainMovements, setGrainMovements] = useState<GrainMovement[]>([]);
+  const [savedSeeds, setSavedSeeds] = useState<SavedSeed[]>([]);
+  const [fertilizerRecipes, setFertilizerRecipes] = useState<FertilizerRecipe[]>([]);
+  const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>([]);
+
+  // Hydrate local cache only after auth state is resolved.
+  useEffect(() => {
+    if (session === undefined) return;
+
+    const userId = session?.user?.id ?? null;
+    setFields(loadFromStorage('al_fields', [], userId));
+    setBins(loadFromStorage('al_bins', [], userId));
+    setPlantRecords(loadFromStorage('al_plant', [], userId));
+    setSprayRecords(loadFromStorage('al_spray', [], userId));
+    setHarvestRecords(loadFromStorage('al_harvest', [], userId));
+    setHayHarvestRecords(loadFromStorage('al_hay', [], userId));
+    setFertilizerApplications(loadFromStorage('al_fertilizer', [], userId));
+    setTillageRecords(loadFromStorage('al_tillage', [], userId));
+    setGrainMovements(loadFromStorage('al_grain', [], userId));
+    setSavedSeeds(loadFromStorage('al_seeds', [], userId));
+    setFertilizerRecipes(loadFromStorage('al_f_recipes', [], userId));
+    setSprayRecipes(loadFromStorage('al_recipes', [], userId));
+  }, [session?.user?.id, session]);
 
   // --- Fetch data when farm_id is stable ---
   useEffect(() => {

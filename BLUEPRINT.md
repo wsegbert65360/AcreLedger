@@ -342,9 +342,10 @@ signals over static data. The hierarchy is strictly enforced:
 7. **Static Metadata**: Acreage, coordinates, and irrigation at the bottom.
 
 ### ActivityFeed Component
-Reusable component for displaying field-specific historical records. Filters records for the 
-`viewingSeason`. On the Field Dashboard, it is limited to the **latest 8 items** via the
-`limit` prop to maintain scanability. Supports a `hideHeader` prop for nested board use.
+Reusable presentational component for displaying field-specific historical records. **Season
+filtering and item limiting are caller responsibilities** (e.g., `FieldDetailScreen` provides
+only `viewingSeason` records and slices to the latest 8 for dashboard scanability). Supports a
+`hideHeader` prop for nested board use.
 
 ### FieldNotes Component (Auto-Save)
 Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange` 
