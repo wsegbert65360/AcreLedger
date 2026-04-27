@@ -35,6 +35,7 @@ export default function WeatherBar() {
   const [zipError, setZipError] = useState('');
   const [weather, setWeather] = useState<WeatherData>(initialWeather());
   const [locationName, setLocationName] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   // Sync zip from localStorage once userId is stable
@@ -61,6 +62,7 @@ export default function WeatherBar() {
       if (!controller.signal.aborted) {
         setWeather(result);
         setLocationName(result.locationName || '');
+        setLastUpdated(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -101,8 +103,8 @@ export default function WeatherBar() {
     weather.precip24h > 0;
 
   return (
-    <div className="bg-card border border-border rounded-lg p-2 px-4 flex items-center justify-between gap-4 min-h-[52px]">
-      <div className="flex items-center gap-3 flex-1 overflow-hidden">
+    <div className="bg-card border border-border rounded-lg p-3 px-4 flex flex-col gap-2 min-h-[52px] sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
         <MapPin size={16} className="text-muted-foreground shrink-0" />
         <form onSubmit={handleSubmit} className="flex-none">
           <input
@@ -111,19 +113,19 @@ export default function WeatherBar() {
             value={inputZip}
             onChange={e => { setInputZip(e.target.value); setZipError(''); }}
             placeholder="Zip..."
-            className="w-16 bg-muted/50 border border-border rounded px-2 py-1 text-foreground font-mono text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-foreground font-mono text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             maxLength={10}
             inputMode="numeric"
           />
         </form>
         {zip && !zipError && (
-          <span className="text-xs font-mono text-muted-foreground truncate hidden sm:block">
+          <span className="text-xs font-mono text-muted-foreground truncate">
             {locationName || zip}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-4 text-foreground font-mono text-sm shrink-0">
+      <div className="flex items-center justify-between gap-3 text-foreground font-mono text-sm w-full sm:w-auto sm:justify-end">
         {weather.isError ? (
           <span className="text-destructive text-xs">Offline</span>
         ) : (
@@ -146,6 +148,12 @@ export default function WeatherBar() {
         )}
         {loading && <Loader2 size={14} className="text-primary animate-spin" />}
       </div>
+
+      {zip && !zipError && lastUpdated && !weather.isError && (
+        <div className="text-xs text-muted-foreground font-mono sm:hidden">
+          Updated {lastUpdated}
+        </div>
+      )}
     </div>
   );
-}
+}

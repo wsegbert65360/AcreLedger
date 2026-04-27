@@ -8,7 +8,7 @@ import Logo from '@/components/Logo';
 import { Settings, Tractor } from 'lucide-react';
 
 const Index = () => {
-  const { fields: allFields } = useFarm();
+  const { fields: allFields, viewingSeason } = useFarm();
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
     let total = 0;
     const totals: Record<string, number> = {};
@@ -68,15 +68,17 @@ const Index = () => {
             <Logo />
             <div className="flex flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
-              <p className="text-[10px] font-mono text-muted-foreground uppercase">{allFields.length} Fields · Active</p>
+              <p className="text-xs font-mono text-muted-foreground uppercase">{allFields.length} Fields · {viewingSeason} Season</p>
             </div>
           </div>
           <button
-            onClick={() => setManaging(!managing)} // Re-using existing managing state for settings
-            className={`p-2.5 rounded-lg border transition-colors ${managing ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
-              }`}
+            onClick={() => setManaging(!managing)}
+            aria-label={managing ? 'Exit field management' : 'Manage fields'}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors font-mono text-xs font-bold uppercase tracking-wide ${managing ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+               }`}
           >
-            <Settings size={20} />
+            <Settings size={16} />
+            <span>{managing ? 'Done' : 'Manage Fields'}</span>
           </button>
         </div>
         <div className="h-[2px] w-full bg-gradient-to-r from-plant/40 via-plant to-plant/40" />
@@ -90,7 +92,7 @@ const Index = () => {
             {filteredRowCrops.length > 0 && (
               <div className="space-y-1">
                 {filteredPastureHay.length > 0 && (
-                  <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
+                  <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
                 )}
                 <FieldList fields={filteredRowCrops} />
               </div>
@@ -98,7 +100,7 @@ const Index = () => {
 
             {filteredPastureHay.length > 0 && (
               <div className="space-y-1 pt-1">
-                <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
+                <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
                 <FieldList fields={filteredPastureHay} />
               </div>
             )}
@@ -118,7 +120,7 @@ const Index = () => {
               <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
               
               <div className="flex flex-col items-center justify-center space-y-1.5">
-                  <div className="text-[10px] font-bold text-muted-foreground tracking-widest uppercase">
+                  <div className="text-xs font-bold text-muted-foreground tracking-widest uppercase">
                     Total Operation: {totalAcres} Acres
                   </div>
                   <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">

@@ -10,10 +10,23 @@ export default function FieldCard({ field }: FieldCardProps) {
   const navigate = useNavigate();
   const summary = field.activitySummary;
 
+  const openField = () => {
+    navigate(`/field/${field.id}`);
+  };
+
   return (
-    <div 
-      onClick={() => navigate(`/field/${field.id}`)}
-      className="bg-card/60 backdrop-blur-md border border-border rounded-lg p-2 px-3 flex items-center justify-between ring-1 ring-white/5 shadow-xl cursor-pointer hover:bg-card/80 transition-all active:scale-[0.98] relative"
+    <div
+      onClick={openField}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openField();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${field.name} details`}
+      className="bg-card/60 backdrop-blur-md border border-border rounded-lg p-2 px-3 flex items-center justify-between ring-1 ring-white/5 shadow-xl cursor-pointer hover:bg-card/80 transition-all active:scale-[0.98] relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">

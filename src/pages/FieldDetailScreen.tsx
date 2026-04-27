@@ -147,11 +147,11 @@ export default function FieldDetailScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24 lg:pb-8 dark:bg-slate-950">
+    <div className="min-h-screen bg-background pb-24 lg:pb-8">
       {/* Sticky Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200 p-4 dark:bg-slate-900/80 dark:border-slate-800">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4">
         <div className="max-w-lg mx-auto flex items-center justify-between lg:max-w-5xl lg:px-8">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors">
             <ArrowLeft size={24} />
           </button>
           <Logo className="h-8" />
@@ -164,21 +164,21 @@ export default function FieldDetailScreen() {
         {/* 1. Dashboard Header */}
         <section className="space-y-1">
           <div className="flex items-baseline justify-between">
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{field.name}</h1>
-            <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">{field.acreage} ac</span>
+            <h1 className="text-3xl font-black text-foreground tracking-tight">{field.name}</h1>
+            <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{field.acreage} ac</span>
           </div>
-          <div className="flex flex-wrap gap-2 items-center text-slate-600 dark:text-slate-400">
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-tight">
-              <Sprout size={12} className="text-emerald-500" />
+          <div className="flex flex-wrap gap-2 items-center text-muted-foreground">
+            <div className="flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded text-xs font-bold uppercase tracking-tight">
+              <Sprout size={12} className="text-primary" />
               {crop}
             </div>
             {(field.fsaFarmNumber || field.fsaTractNumber) && (
-              <div className="text-[10px] font-mono text-slate-400 uppercase">
+              <div className="text-xs font-mono text-muted-foreground uppercase">
                 FSA: {field.fsaFarmNumber || '—'} / {field.fsaTractNumber || '—'} / {field.fsaFieldNumber || '—'}
               </div>
             )}
           </div>
-          <p className="text-[10px] font-medium text-slate-400 italic">
+          <p className="text-xs font-medium text-muted-foreground italic">
             Rainfall updated daily at 8:00 AM
           </p>
         </section>
@@ -186,92 +186,92 @@ export default function FieldDetailScreen() {
         {/* 2. Today at a Glance - Grid of 4 Cards */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
           {/* Rainfall Card */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500">
+              <div className="p-1.5 rounded-lg bg-spray/10 text-spray">
                 <Droplets size={16} />
               </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Rainfall</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-tighter">Rainfall</span>
             </div>
             <div className="space-y-1">
-              <div className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+              <div className="text-2xl font-black text-foreground leading-none">
                 {fetchingRain && !rainStats ? (
-                  <span className="text-slate-300 animate-pulse">...</span>
+                  <span className="text-muted-foreground animate-pulse">...</span>
                 ) : (
                   `${fmtRain(rainStats?.['24h'])}"`
                 )}
               </div>
-              <div className="text-[10px] text-slate-500 font-medium">
-                7D: <span className="text-slate-900 dark:text-slate-300 font-bold">{fmtRain(rainStats?.['7d'])}"</span>
+              <div className="text-xs text-muted-foreground font-medium">
+                7D: <span className="text-foreground font-bold">{fmtRain(rainStats?.['7d'])}"</span>
               </div>
-              <div className="text-[10px] text-slate-500 font-medium truncate">
-                Plant: <span className="text-slate-900 dark:text-slate-300 font-bold">{fmtRain(rainStats?.sincePlanting)}"</span>
+              <div className="text-xs text-muted-foreground font-medium truncate">
+                Plant: <span className="text-foreground font-bold">{fmtRain(rainStats?.sincePlanting)}"</span>
               </div>
             </div>
           </div>
 
           {/* Spray Status Card */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-500">
+              <div className="p-1.5 rounded-lg bg-spray/10 text-spray">
                 <Cloud size={16} />
               </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Spray</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-tighter">Spray</span>
             </div>
             <div className="space-y-1">
-              <div className="text-xl font-black text-slate-900 dark:text-white leading-tight">
+              <div className="text-xl font-black text-foreground leading-tight">
                 {daysSinceSpray === null ? 'None' : daysSinceSpray === 0 ? 'Today' : `${daysSinceSpray}d ago`}
               </div>
-              <div className="text-[10px] text-slate-500 font-medium truncate">
-                Rain: <span className="text-slate-900 dark:text-slate-300 font-bold">{fmtRain(rainStats?.sinceLastSpray)}"</span>
+              <div className="text-xs text-muted-foreground font-medium truncate">
+                Rain: <span className="text-foreground font-bold">{fmtRain(rainStats?.sinceLastSpray)}"</span>
               </div>
-              <div className="text-[10px] text-slate-500 font-medium truncate italic h-4">
+              <div className="text-xs text-muted-foreground font-medium truncate italic h-4">
                 {latestSpray?.products?.[0]?.product || 'No product'}
               </div>
             </div>
           </div>
 
           {/* Latest Activity Card */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-500">
+              <div className="p-1.5 rounded-lg bg-harvest/10 text-harvest">
                 <History size={16} />
               </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Latest</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-tighter">Latest</span>
             </div>
             <div className="space-y-1">
-              <div className="text-lg font-black text-slate-900 dark:text-white capitalize leading-tight">
+              <div className="text-lg font-black text-foreground capitalize leading-tight">
                 {latestActivity?.type || 'No Activity'}
               </div>
-              <div className="text-[10px] text-slate-500 font-medium">
+              <div className="text-xs text-muted-foreground font-medium">
                 {latestActivity ? (() => {
                   const d = latestActivity.data as any;
                   const dateVal = d.date || d.plantDate || d.sprayDate || d.harvestDate || '';
                   return dateVal ? new Date(dateVal).toLocaleDateString() : '—';
                 })() : '—'}
               </div>
-              <div className="text-[10px] text-slate-500 font-medium truncate">
+              <div className="text-xs text-muted-foreground font-medium truncate">
                 {latestActivity ? (latestActivity.data as any).startTime ? `Started @ ${(latestActivity.data as any).startTime}` : '—' : '—'}
               </div>
             </div>
           </div>
 
           {/* Crop Status Card */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
                 <Leaf size={16} />
               </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Crop</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-tighter">Crop</span>
             </div>
             <div className="space-y-1">
-              <div className="text-lg font-black text-slate-900 dark:text-white leading-tight truncate">
+              <div className="text-lg font-black text-foreground leading-tight truncate">
                 {crop || 'Fallow'}
               </div>
-              <div className="text-[10px] text-slate-500 font-medium truncate">
+              <div className="text-xs text-muted-foreground font-medium truncate">
                 {latestPlanting?.plantDate ? `Set ${new Date(latestPlanting.plantDate).toLocaleDateString()}` : 'Not planted'}
               </div>
-              <div className="text-[10px] text-slate-500 font-medium truncate italic h-4">
+              <div className="text-xs text-muted-foreground font-medium truncate italic h-4">
                 {latestPlanting?.seedVariety || ''}
               </div>
             </div>
@@ -285,12 +285,12 @@ export default function FieldDetailScreen() {
               <button
                 key={action.id}
                 onClick={() => { setEditingRecord(null); setModal(action.id as ModalType); }}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm transition-transform active:scale-95"
+                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-card border border-border shadow-sm transition-transform active:scale-95"
               >
                 <div className={`p-2 rounded-xl ${action.bg} ${action.color}`}>
                   <action.icon size={20} />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-tighter text-slate-600 dark:text-slate-400">{action.label.split(' ')[1]}</span>
+                <span className="text-xs font-black uppercase tracking-tighter text-muted-foreground">{action.label.split(' ')[1]}</span>
               </button>
             ))}
           </div>
@@ -299,7 +299,7 @@ export default function FieldDetailScreen() {
               const el = document.getElementById('history-section');
               el?.scrollIntoView({ behavior: 'smooth' });
             }}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-widest hover:bg-slate-200 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-muted/80 transition-colors"
           >
             <History size={14} />
             View Full History
@@ -307,18 +307,18 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* 4. Rainfall Summary Section */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+        <section className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-              <Droplets size={16} className="text-blue-500" />
+            <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+              <Droplets size={16} className="text-spray" />
               Rainfall Summary
             </h3>
             <button
               onClick={() => handleFetchRain()}
               disabled={fetchingRain}
-              className="p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-30"
+              className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
             >
-              <RefreshCw size={16} className={`${fetchingRain ? 'animate-spin' : ''} text-slate-400`} />
+              <RefreshCw size={16} className={`${fetchingRain ? 'animate-spin' : ''} text-muted-foreground`} />
             </button>
           </div>
 
@@ -330,9 +330,9 @@ export default function FieldDetailScreen() {
               { label: 'Planted', value: fmtRain(rainStats?.sincePlanting), sub: 'Since' },
               { label: 'Sprayed', value: fmtRain(rainStats?.sinceLastSpray), sub: 'Since' },
             ].map((stat, i) => (
-              <div key={i} className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 ${stat.label === 'Planted' || stat.label === 'Sprayed' ? 'col-span-1' : ''}`}>
-                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
-                <div className="text-xl font-black text-slate-900 dark:text-white leading-none">{stat.value}"</div>
+              <div key={i} className={`p-3 rounded-2xl bg-muted/50 border border-border/60 ${stat.label === 'Planted' || stat.label === 'Sprayed' ? 'col-span-1' : ''}`}>
+                <div className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
+                <div className="text-xl font-black text-foreground leading-none">{stat.value}"</div>
               </div>
             ))}
           </div>
@@ -340,11 +340,11 @@ export default function FieldDetailScreen() {
           {rainError && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex gap-2">
               <AlertCircle size={14} className="text-red-500 shrink-0" />
-              <p className="text-[10px] text-red-600 dark:text-red-400 font-medium leading-tight">{rainError}</p>
+              <p className="text-xs text-red-600 dark:text-red-400 font-medium leading-tight">{rainError}</p>
             </div>
           )}
 
-          <div className="flex flex-col gap-2 text-[10px] text-slate-400 font-medium bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg">
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground font-medium bg-muted/50 p-2 rounded-lg">
             <div className="flex items-center gap-2">
               <Info size={12} />
               Data updated hourly. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
@@ -360,13 +360,13 @@ export default function FieldDetailScreen() {
 
         {/* 5. Spray Summary Card */}
         {latestSpray && (
-          <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+          <section className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-                <Cloud size={16} className="text-purple-500" />
+              <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+                <Cloud size={16} className="text-spray" />
                 Latest Spray
               </h3>
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
                 <CheckCircle2 size={12} />
                 {latestSpray.nonCompliant ? 'Attention Needed' : 'Compliant'}
               </div>
@@ -374,52 +374,52 @@ export default function FieldDetailScreen() {
 
             <div className="grid grid-cols-2 gap-y-4">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Application Date</label>
-                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Application Date</label>
+                <div className="text-sm font-bold text-foreground">
                   {new Date(latestSpray.sprayDate || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
-                <div className="text-[10px] text-slate-500">{latestSpray.startTime} - {latestSpray.endTime}</div>
+                <div className="text-xs text-muted-foreground">{latestSpray.startTime} - {latestSpray.endTime}</div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Rain Since Spray</label>
-                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Droplets size={14} className="text-blue-400" />
+                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Rain Since Spray</label>
+                <div className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <Droplets size={14} className="text-spray" />
                   {fmtRain(rainStats?.sinceLastSpray)}"
                 </div>
               </div>
               <div className="col-span-2">
                 <div className="flex flex-wrap gap-1.5">
                   {latestSpray.products?.map((p, idx) => (
-                    <div key={idx} className="flex flex-col gap-0.5 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <div key={idx} className="flex flex-col gap-0.5 px-2 py-1 rounded bg-muted">
+                      <span className="text-xs font-bold text-foreground">
                         {p.product} ({p.rate} {p.rateUnit})
                       </span>
                       {p.activeIngredients && (
-                        <span className="text-[9px] font-mono text-slate-400 italic leading-none pb-0.5">
+                        <span className="text-[9px] font-mono text-muted-foreground italic leading-none pb-0.5">
                           {p.activeIngredients}
                         </span>
                       )}
                     </div>
-                  )) || <span className="text-slate-400 text-xs">No products logged</span>}
+                  )) || <span className="text-muted-foreground text-xs">No products logged</span>}
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Target Pest</label>
-                <div className="text-sm font-bold text-slate-900 dark:text-white truncate">{latestSpray.targetPest || 'General'}</div>
+                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Target Pest</label>
+                <div className="text-sm font-bold text-foreground truncate">{latestSpray.targetPest || 'General'}</div>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex gap-2 pt-2 border-t border-border/70">
               <button
                 onClick={() => handleEdit('spray', latestSpray)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-100 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-muted/80 transition-colors"
               >
                 <FileText size={14} />
                 View Record
               </button>
               <button
                 onClick={() => generateSprayPDF([latestSpray], farmName)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase tracking-widest hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-spray/10 text-spray text-xs font-bold uppercase tracking-widest hover:bg-spray/20 transition-colors"
               >
                 <ExternalLink size={14} />
                 Export PDF
@@ -431,19 +431,19 @@ export default function FieldDetailScreen() {
         {/* 6. Field History Timeline */}
         <section id="history-section" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-              <History size={16} className="text-slate-400" />
+            <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+              <History size={16} className="text-muted-foreground" />
               Field History
             </h3>
             <button
               onClick={() => { /* Potential full history dialog/navigation */ }}
-              className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+              className="text-xs font-black text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
             >
               View Full
             </button>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-2 shadow-sm">
+          <div className="bg-card border border-border rounded-3xl p-2 shadow-sm">
             <ActivityFeed
               records={unifiedRecords.slice(0, 8)}
               year={viewingSeason}
@@ -452,53 +452,53 @@ export default function FieldDetailScreen() {
             />
             {unifiedRecords.length > 8 && (
               <button
-                className="w-full py-4 text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+                className="w-full py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
               >
                 + {unifiedRecords.length - 8} more activities
               </button>
             )}
             {unifiedRecords.length === 0 && (
               <div className="py-12 text-center space-y-2">
-                <div className="p-3 rounded-full bg-slate-50 dark:bg-slate-800 w-fit mx-auto text-slate-300">
+                <div className="p-3 rounded-full bg-muted w-fit mx-auto text-muted-foreground">
                   <History size={24} />
                 </div>
-                <p className="text-xs font-medium text-slate-400">No activity logged for this season</p>
+                <p className="text-xs font-medium text-muted-foreground">No activity logged for this season</p>
               </div>
             )}
           </div>
         </section>
 
         {/* 7. Field Details (Meta) */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
-          <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-            <MapPin size={16} className="text-emerald-500" />
+        <section className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+          <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+            <MapPin size={16} className="text-primary" />
             Field Details
           </h3>
 
           <div className="grid grid-cols-2 gap-y-4 text-xs">
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Acreage</label>
-              <div className="font-bold text-slate-700 dark:text-slate-300">{field.acreage} Calculated Acres</div>
+              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Acreage</label>
+              <div className="font-bold text-foreground">{field.acreage} Calculated Acres</div>
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Location</label>
-              <div className="font-mono text-[10px] text-slate-700 dark:text-slate-300">{field.lat != null ? field.lat.toFixed(4) : '—'}, {field.lng != null ? field.lng.toFixed(4) : '—'}</div>
+              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Location</label>
+              <div className="font-mono text-xs text-foreground">{field.lat != null ? field.lat.toFixed(4) : '—'}, {field.lng != null ? field.lng.toFixed(4) : '—'}</div>
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Irrigation</label>
-              <div className="font-bold text-slate-700 dark:text-slate-300">{field.irrigationPractice || 'Non-Irrigated'}</div>
+              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Irrigation</label>
+              <div className="font-bold text-foreground">{field.irrigationPractice || 'Non-Irrigated'}</div>
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Intended Use</label>
-              <div className="font-bold text-slate-700 dark:text-slate-300">{field.intendedUse || 'Cash Grain'}</div>
+              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Intended Use</label>
+              <div className="font-bold text-foreground">{field.intendedUse || 'Cash Grain'}</div>
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Share %</label>
-              <div className="font-bold text-slate-700 dark:text-slate-300">{field.producerShare || 100}% Producer</div>
+              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Share %</label>
+              <div className="font-bold text-foreground">{field.producerShare || 100}% Producer</div>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="pt-4 border-t border-border/70">
             <FieldNotes field={field} />
           </div>
         </section>

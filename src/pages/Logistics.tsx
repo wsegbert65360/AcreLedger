@@ -8,6 +8,10 @@ import AddGrainModal from '@/components/AddGrainModal';
 import { Button } from '@/components/ui/button';
 import type { Bin } from '@/types/farm';
 
+function formatMovementDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export default function Logistics() {
   const { bins, getBinTotal, grainMovements, viewingSeason } = useFarm();
   const [managing, setManaging] = useState(false);
@@ -37,16 +41,17 @@ export default function Logistics() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground tracking-tight">Grain Logistics</h1>
-              <p className="text-xs font-mono text-muted-foreground">{bins.length} BINS · INVENTORY</p>
+              <p className="text-xs font-mono text-muted-foreground">{bins.length} BINS · {viewingSeason} SEASON</p>
             </div>
           </div>
           <button
             onClick={() => setManaging(!managing)}
             aria-label={managing ? "Exit management" : "Manage bins"}
-            className={`p-2.5 rounded-lg border transition-colors ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
-              }`}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors font-mono text-xs font-bold uppercase tracking-wide ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
+               }`}
           >
-            <Settings size={20} />
+            <Settings size={16} />
+            <span>{managing ? 'Done' : 'Manage Bins'}</span>
           </button>
         </div>
         <div className="h-[2px] w-full bg-gradient-to-r from-harvest/40 via-harvest to-harvest/40" />
@@ -76,7 +81,7 @@ export default function Logistics() {
                     <div className="font-mono text-sm font-bold text-foreground">
                       {bin.total.toLocaleString()} bu
                     </div>
-                    <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+                    <div className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
                       OF {bin.capacity.toLocaleString()} BU
                     </div>
                   </div>
@@ -88,6 +93,37 @@ export default function Logistics() {
                     className="h-full bg-harvest rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(212,175,55,0.3)]"
                     style={{ width: `${bin.pct}%` }}
                   />
+                </div>
+
+                <div className="space-y-1 rounded-md border border-border/50 bg-muted/20 p-2">
+                  <p className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wide">Recent Activity</p>
+                  {bin.recentMovements.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No grain movement logged this season.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {bin.recentMovements.slice(0, 3).map((movement) => {
+                        const signedBushels = movement.type === 'out' ? -Math.abs(movement.bushels) : movement.bushels;
+                        const amountClass = signedBushels < 0 ? 'text-destructive' : 'text-primary';
+                        const locationLabel = movement.type === 'in'
+                          ? movement.sourceFieldName || 'Field transfer'
+                          : movement.destination || 'Destination not set';
+
+                        return (
+                          <div key={movement.id} className="flex items-center justify-between gap-3 text-xs">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-foreground truncate">
+                                {movement.type === 'in' ? 'Inbound' : 'Outbound'} · {locationLabel}
+                              </p>
+                              <p className="font-mono text-muted-foreground">{formatMovementDate(movement.timestamp)}</p>
+                            </div>
+                            <span className={`font-mono font-bold ${amountClass}`}>
+                              {signedBushels > 0 ? '+' : ''}{signedBushels.toLocaleString()} bu
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-1 border-t border-border/50">

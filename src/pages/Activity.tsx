@@ -198,12 +198,12 @@ export default function Activity() {
                   value={viewingSeason.toString()}
                   onValueChange={(v) => setViewingSeason(parseInt(v, 10))}
                 >
-                  <SelectTrigger className="h-7 min-w-[80px] bg-muted border-none font-mono text-[10px] font-bold py-0">
+                  <SelectTrigger className="h-7 min-w-[80px] bg-muted border-none font-mono text-xs font-bold py-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {[activeSeason, activeSeason - 1, activeSeason - 2].map(y => (
-                      <SelectItem key={y} value={y.toString()} className="font-mono text-[10px]">
+                      <SelectItem key={y} value={y.toString()} className="font-mono text-xs">
                         {y} SEASON
                       </SelectItem>
                     ))}
@@ -223,7 +223,7 @@ export default function Activity() {
                     : filteredSpray;
                   generateSprayPDF(toExport, farmName);
                 }}
-                className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
+                className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 font-mono text-xs font-bold"
                 title="Export Universal Spray Log PDF"
               >
                 <FileDown size={16} />
@@ -234,7 +234,7 @@ export default function Activity() {
           {(tab === 'plant' || tab === 'harvest') && (
             <button
               onClick={() => tab === 'plant' ? exportFsa578Data(filteredPlant, fields) : exportHarvestData(filteredHarvest, fields)}
-              className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
+              className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 font-mono text-xs font-bold"
               title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
             >
               <FileDown size={16} />
@@ -244,7 +244,7 @@ export default function Activity() {
           {tab === 'hay' && (
             <button
               onClick={() => navigate('/reports?tab=hay-summary')}
-              className="p-2.5 rounded-lg bg-harvest/10 text-harvest hover:bg-harvest/20 transition-colors flex items-center gap-2 font-mono text-[10px] font-bold"
+              className="p-2.5 rounded-lg bg-harvest/10 text-harvest hover:bg-harvest/20 transition-colors flex items-center gap-2 font-mono text-xs font-bold"
             >
               <FileDown size={16} />
               HAY SUMMARY
@@ -284,9 +284,9 @@ export default function Activity() {
                 <t.icon size={16} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
                 <span className="flex items-center gap-2">
                   {t.label}
-                  <span className="bg-muted px-2 py-0.5 rounded-full text-[10px] font-bold text-muted-foreground">
-                    {count}
-                  </span>
+                    <span className="bg-muted px-2 py-0.5 rounded-full text-xs font-bold text-muted-foreground">
+                      {count}
+                    </span>
                 </span>
               </button>
             );
