@@ -6,12 +6,12 @@ import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, Fertili
 interface ActivityFeedProps {
   records: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }[];
   year: number;
-  onEdit: (type: ModalType, data: any) => void;
+  onEdit: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord) => void;
   hideHeader?: boolean;
 }
 
 export default function ActivityFeed({ records, year, onEdit, hideHeader }: ActivityFeedProps) {
-  const getFeedInfo = (record: { type: string; data: any }) => {
+  const getFeedInfo = (record: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }) => {
     const { type, data } = record;
     
     switch (type) {
