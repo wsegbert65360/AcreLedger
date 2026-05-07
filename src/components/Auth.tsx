@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { Sprout } from 'lucide-react';
 
 type AuthMode = 'signin' | 'signup' | 'forgot';
 
@@ -72,98 +72,110 @@ export function Auth() {
             : 'Sign In';
 
     return (
-        <div className="flex items-center justify-center min-h-[80vh]">
-            <Card className="w-full max-w-md border-border/30 shadow-xl overflow-hidden">
-                <div className="bg-primary/5 p-8 flex justify-center border-b border-border/20">
-                    <img
-                        src="/icon-512.png"
-                        alt="AcreLedger Logo"
-                        className="w-24 h-24 rounded-2xl shadow-lg border-2 border-primary/20"
-                    />
+        <div className="flex items-center justify-center min-h-[80vh] bg-background">
+            <div className="w-full max-w-md mx-4">
+                {/* Logo area */}
+                <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
+                        <Sprout size={32} className="text-primary" />
+                    </div>
+                    <h1 className="text-2xl font-bold font-mono tracking-tight text-foreground">
+                        AcreLedger
+                    </h1>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Farm Record Keeping & Compliance
+                    </p>
                 </div>
-                <CardHeader className="pt-6">
-                    <CardTitle className="text-2xl font-bold font-mono tracking-tight text-center">
-                        {title}
-                    </CardTitle>
-                    <CardDescription className="text-center font-mono text-xs uppercase tracking-wider">
-                        {subtitle}
-                    </CardDescription>
-                </CardHeader>
-                <form onSubmit={handleAuth}>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <label htmlFor="authEmail" className="text-sm font-medium">Email</label>
-                            <Input
-                                id="authEmail"
-                                name="email"
-                                type="email"
-                                placeholder="farm@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-                        {mode !== 'forgot' && (
+
+                {/* Auth card */}
+                <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
+                    <div className="px-6 pt-6 pb-2">
+                        <h2 className="text-xl font-bold text-foreground text-center">
+                            {title}
+                        </h2>
+                        <p className="text-sm text-muted-foreground text-center mt-1">
+                            {subtitle}
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleAuth}>
+                        <div className="px-6 py-4 space-y-4">
                             <div className="space-y-2">
-                                <label htmlFor="authPassword" className="text-sm font-medium">Password</label>
+                                <label htmlFor="authEmail" className="text-sm font-medium">Email</label>
                                 <Input
-                                    id="authPassword"
-                                    name="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    id="authEmail"
+                                    name="email"
+                                    type="email"
+                                    placeholder="farm@example.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     required
+                                    className="bg-background"
                                 />
                             </div>
-                        )}
-                    </CardContent>
-                    <CardFooter className="flex flex-col space-y-2">
-                        <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? 'Processing...' : buttonLabel}
-                        </Button>
-                        {mode === 'signin' && (
-                            <>
+                            {mode !== 'forgot' && (
+                                <div className="space-y-2">
+                                    <label htmlFor="authPassword" className="text-sm font-medium">Password</label>
+                                    <Input
+                                        id="authPassword"
+                                        name="password"
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                        className="bg-background"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        <div className="px-6 pb-6 flex flex-col space-y-2">
+                            <Button type="submit" className="w-full" disabled={loading}>
+                                {loading ? 'Processing...' : buttonLabel}
+                            </Button>
+                            {mode === 'signin' && (
+                                <>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="w-full"
+                                        onClick={() => setMode('signup')}
+                                    >
+                                        Need an account? Sign Up
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="link"
+                                        className="text-xs text-muted-foreground hover:text-primary"
+                                        onClick={() => setMode('forgot')}
+                                    >
+                                        Forgot your password?
+                                    </Button>
+                                </>
+                            )}
+                            {mode === 'signup' && (
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     className="w-full"
-                                    onClick={() => setMode('signup')}
+                                    onClick={() => setMode('signin')}
                                 >
-                                    Need an account? Sign Up
+                                    Already have an account? Sign In
                                 </Button>
+                            )}
+                            {mode === 'forgot' && (
                                 <Button
                                     type="button"
-                                    variant="link"
-                                    className="text-xs text-muted-foreground hover:text-primary"
-                                    onClick={() => setMode('forgot')}
+                                    variant="ghost"
+                                    className="w-full"
+                                    onClick={() => setMode('signin')}
                                 >
-                                    Forgot your password?
+                                    Back to Sign In
                                 </Button>
-                            </>
-                        )}
-                        {mode === 'signup' && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                className="w-full"
-                                onClick={() => setMode('signin')}
-                            >
-                                Already have an account? Sign In
-                            </Button>
-                        )}
-                        {mode === 'forgot' && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                className="w-full"
-                                onClick={() => setMode('signin')}
-                            >
-                                Back to Sign In
-                            </Button>
-                        )}
-                    </CardFooter>
-                </form>
-            </Card>
+                            )}
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     );
 }

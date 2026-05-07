@@ -309,7 +309,7 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* 4. Rainfall Summary Section */}
-        <section className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+        <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
               <Droplets size={16} className="text-spray" />
@@ -362,7 +362,7 @@ export default function FieldDetailScreen() {
 
         {/* 5. Spray Summary Card */}
         {latestSpray && (
-          <section className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+          <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
                 <Cloud size={16} className="text-spray" />
@@ -445,7 +445,7 @@ export default function FieldDetailScreen() {
             </button>
           </div>
 
-          <div className="bg-card border border-border rounded-3xl p-2 shadow-sm">
+          <div className="bg-card border border-border rounded-2xl p-2 shadow-sm">
             <ActivityFeed
               records={unifiedRecords.slice(0, 8)}
               year={viewingSeason}
@@ -472,7 +472,7 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* 7. Field Details (Meta) */}
-        <section className="bg-card border border-border rounded-3xl p-6 shadow-sm space-y-4">
+        <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
           <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
             <MapPin size={16} className="text-primary" />
             Field Details
