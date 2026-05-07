@@ -13,7 +13,7 @@ export default function Privacy() {
                     <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground">
                         <ArrowLeft size={20} />
                     </Button>
-                    <h1 className="text-2xl font-bold font-mono tracking-tight text-foreground">Privacy Policy</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
                 </header>
 
                 <Card className="border-border/40 bg-card/50 backdrop-blur-sm shadow-xl">
@@ -23,11 +23,11 @@ export default function Privacy() {
                                 <ShieldCheck className="text-primary" size={24} />
                             </div>
                             <div>
-                                <CardTitle className="text-xl font-mono">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground font-mono mt-1 uppercase tracking-widest">Last Updated: March 4, 2026</p>
+                                <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
+                                <p className="text-xs text-muted-foreground mt-1">Last updated: March 4, 2026</p>
                             </div>
                         </div>
-                        <p className="text-sm text-muted-foreground font-mono leading-relaxed mt-4 italic">
+                        <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
                             At AcreLedger, we understand that your farm data is your most valuable asset.
                             This policy outlines how we collect, protect, and isolate your agricultural information.
                         </p>

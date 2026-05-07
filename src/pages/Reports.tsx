@@ -318,13 +318,13 @@ export default function Reports() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground tracking-tight">Reports</h1>
-              <p className="text-xs font-mono text-muted-foreground">FSA & COMPLIANCE</p>
+              <p className="text-xs text-muted-foreground">FSA & Compliance</p>
             </div>
           </div>
           {/* Single print button — header only, consistent across all tabs */}
           <button
             onClick={handlePrint}
-            className="touch-target flex items-center gap-2 px-4 py-2 bg-muted border border-border rounded-lg text-foreground font-mono text-sm hover:bg-muted/80 transition-colors print:hidden"
+            className="touch-target flex items-center gap-2 px-4 py-2 bg-muted border border-border rounded-lg text-foreground text-sm hover:bg-muted/80 transition-colors print:hidden"
           >
             <Printer size={16} />
             Print
@@ -338,7 +338,7 @@ export default function Reports() {
         <div className="flex items-center justify-between gap-4 bg-muted/30 border border-border p-3 rounded-lg print:hidden">
           <div className="flex items-center gap-2">
             <History size={16} className="text-muted-foreground" />
-            <span className="text-xs font-mono font-bold uppercase text-muted-foreground">Season View</span>
+            <span className="text-xs font-semibold text-muted-foreground">Season View</span>
           </div>
           <Select
             value={viewingSeason.toString()}
@@ -363,7 +363,7 @@ export default function Reports() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 font-mono text-sm font-semibold transition-all ${
+              className={`flex-1 touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 text-sm font-semibold transition-all ${
                 tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
               }`}
             >
@@ -408,7 +408,7 @@ export default function Reports() {
             })}
             {plantRecords.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-muted-foreground font-mono text-xs">
+                <td colSpan={10} className="py-12 text-center text-muted-foreground text-xs">
                   No planting records to report for this season
                 </td>
               </tr>
@@ -421,7 +421,7 @@ export default function Reports() {
           <div className="space-y-4">
             <div className="bg-card border border-border rounded-lg p-4 print:border-foreground/20">
               <h2 className="font-bold text-foreground text-base mb-1">Pesticide Application Record</h2>
-              <p className="text-xs font-mono text-muted-foreground mb-1">
+              <p className="text-xs text-muted-foreground mb-1">
                 Private applicator license compliance audit trail. Generated {reportDate}.
               </p>
 
@@ -447,7 +447,7 @@ export default function Reports() {
               </div>
 
               {sprayRows.length === 0 ? (
-                <p className="text-center text-muted-foreground font-mono text-sm py-8">
+                <p className="text-center text-muted-foreground text-sm py-8">
                   No spray records to report
                 </p>
               ) : (
@@ -527,7 +527,7 @@ export default function Reports() {
             ))}
             {fertilizerRecords.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-12 text-center text-muted-foreground font-mono text-xs">
+                <td colSpan={4} className="py-12 text-center text-muted-foreground text-xs">
                   No fertilizer records to report for this season
                 </td>
               </tr>
@@ -571,7 +571,7 @@ export default function Reports() {
             })}
             {harvestRecords.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-12 text-center text-muted-foreground font-mono text-xs">
+                <td colSpan={11} className="py-12 text-center text-muted-foreground text-xs">
                   No harvest records to report for this season
                 </td>
               </tr>
@@ -617,7 +617,7 @@ export default function Reports() {
               })}
             {hayRecords.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-muted-foreground font-mono text-xs">
+                <td colSpan={5} className="py-12 text-center text-muted-foreground text-xs">
                   No hay records to report for this season
                 </td>
               </tr>
@@ -632,7 +632,7 @@ export default function Reports() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 print:hidden">
                 <div>
                   <h2 className="font-bold text-foreground text-base mb-1">Landlord Crop Share Statement</h2>
-                  <p className="text-xs font-mono text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Per-landlord production summary. Generated {reportDate}.
                   </p>
                 </div>
@@ -652,7 +652,7 @@ export default function Reports() {
 
               {!selectedLandlord ? (
                 <div className="py-12 text-center border-2 border-dashed border-border rounded-lg bg-muted/20">
-                  <p className="text-muted-foreground font-mono text-sm">
+                  <p className="text-muted-foreground text-sm">
                     Select a landlord to generate their statement
                   </p>
                 </div>

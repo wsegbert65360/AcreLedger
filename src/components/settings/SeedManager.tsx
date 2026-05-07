@@ -41,7 +41,7 @@ export default function SeedManager() {
           </Button>
         </div>
         {savedSeeds.length === 0 && (
-          <p className="text-muted-foreground text-sm font-mono">No seeds saved yet. Add varieties above.</p>
+          <p className="text-muted-foreground text-sm">No seeds saved yet. Add varieties above.</p>
         )}
         <div className="space-y-1">
           {savedSeeds.map(seed => (

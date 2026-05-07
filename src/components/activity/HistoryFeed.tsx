@@ -97,7 +97,7 @@ function getRecordInfo(record: ActivityRecord) {
 export default function HistoryFeed({ records, selected, onToggle, onEdit }: HistoryFeedProps) {
   if (records.length === 0) {
     return (
-      <p className="text-center text-muted-foreground font-mono text-sm py-8">
+      <p className="text-center text-muted-foreground text-sm py-8">
         No records found
       </p>
     );

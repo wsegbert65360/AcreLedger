@@ -25,7 +25,7 @@ function buildDate(r: TillageRecord): string {
 export default function TillageTab({ records, selected, onToggle, onEdit }: TillageTabProps) {
   if (records.length === 0) {
     return (
-      <p className="text-center text-muted-foreground font-mono text-sm py-8">
+      <p className="text-center text-muted-foreground text-sm py-8">
         No tillage records
       </p>
     );

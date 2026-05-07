@@ -37,7 +37,7 @@ export default function RecipeManager() {
           />
         )}
         {sprayRecipes.length === 0 && !adding && (
-          <p className="text-muted-foreground text-sm font-mono">No recipes saved yet.</p>
+          <p className="text-muted-foreground text-sm">No recipes saved yet.</p>
         )}
         <div className="space-y-2">
           {sprayRecipes.map(recipe => (

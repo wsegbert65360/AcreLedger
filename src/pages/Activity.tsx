@@ -210,7 +210,7 @@ export default function Activity() {
                   </SelectContent>
                 </Select>
               </div>
-              <p className="text-xs font-mono text-muted-foreground">REVIEW & MANAGE</p>
+              <p className="text-xs text-muted-foreground">Review & manage</p>
             </div>
           </div>
 
@@ -223,7 +223,7 @@ export default function Activity() {
                     : filteredSpray;
                   generateSprayPDF(toExport, farmName);
                 }}
-                className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 font-mono text-xs font-bold"
+                className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 text-xs font-bold"
                 title="Export Universal Spray Log PDF"
               >
                 <FileDown size={16} />
@@ -234,7 +234,7 @@ export default function Activity() {
           {(tab === 'plant' || tab === 'harvest') && (
             <button
               onClick={() => tab === 'plant' ? exportFsa578Data(filteredPlant, fields) : exportHarvestData(filteredHarvest, fields)}
-              className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 font-mono text-xs font-bold"
+              className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 text-xs font-bold"
               title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
             >
               <FileDown size={16} />
@@ -244,7 +244,7 @@ export default function Activity() {
           {tab === 'hay' && (
             <button
               onClick={() => navigate('/reports?tab=hay-summary')}
-              className="p-2.5 rounded-lg bg-harvest/10 text-harvest hover:bg-harvest/20 transition-colors flex items-center gap-2 font-mono text-xs font-bold"
+              className="p-2.5 rounded-lg bg-harvest/10 text-harvest hover:bg-harvest/20 transition-colors flex items-center gap-2 text-xs font-bold"
             >
               <FileDown size={16} />
               HAY SUMMARY
@@ -303,7 +303,7 @@ export default function Activity() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search records..."
             aria-label="Search records"
-            className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
 
@@ -311,7 +311,7 @@ export default function Activity() {
         {selected.size > 0 && (
           <button
             onClick={() => setConfirmDelete(true)}
-            className="touch-target w-full flex items-center justify-center gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg py-3 font-mono text-sm font-bold active:scale-95 transition-transform"
+            className="touch-target w-full flex items-center justify-center gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg py-3 text-sm font-bold active:scale-95 transition-transform"
           >
             <Trash2 size={18} />
             Delete {selected.size} Record{selected.size > 1 ? 's' : ''}

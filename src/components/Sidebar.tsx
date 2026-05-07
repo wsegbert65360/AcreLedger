@@ -11,8 +11,8 @@ export default function Sidebar() {
         <div className="flex items-center gap-2">
           <img src="/icon-48.png" alt="AcreLedger" className="w-8 h-8 rounded-lg" />
           <div>
-            <h1 className="text-sm font-mono font-bold text-sidebar-primary uppercase tracking-wide">AcreLedger</h1>
-            <p className="text-[10px] font-mono text-sidebar-foreground/50">Farm Management</p>
+            <h1 className="text-sm font-bold text-sidebar-primary tracking-wide">AcreLedger</h1>
+            <p className="text-[10px] text-sidebar-foreground/50">Farm Management</p>
           </div>
         </div>
       </div>

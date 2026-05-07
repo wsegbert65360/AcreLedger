@@ -19,8 +19,8 @@ export default function ReportTable({
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-sm font-bold text-foreground font-mono uppercase tracking-wider">{title}</h2>
-          <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{subtitle}</p>
+          <h2 className="text-sm font-bold text-foreground">{title}</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
         <div className="flex gap-2 print:hidden">
           {onExport && (

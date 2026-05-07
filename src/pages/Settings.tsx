@@ -20,7 +20,7 @@ export default function Settings() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground tracking-tight">Settings</h1>
-            <p className="text-xs font-mono text-muted-foreground">APP CONFIGURATION</p>
+            <p className="text-xs text-muted-foreground">App configuration</p>
           </div>
         </div>
       </header>

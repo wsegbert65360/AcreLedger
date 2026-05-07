@@ -119,7 +119,7 @@ export default function WeatherBar() {
           />
         </form>
         {zip && !zipError && (
-          <span className="text-xs font-mono text-muted-foreground truncate">
+          <span className="text-xs text-muted-foreground truncate">
             {locationName || zip}
           </span>
         )}

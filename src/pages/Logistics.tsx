@@ -41,13 +41,13 @@ export default function Logistics() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground tracking-tight">Grain Logistics</h1>
-              <p className="text-xs font-mono text-muted-foreground">{bins.length} BINS · {viewingSeason} SEASON</p>
+              <p className="text-xs text-muted-foreground">{bins.length} bins · {viewingSeason} season</p>
             </div>
           </div>
           <button
             onClick={() => setManaging(!managing)}
             aria-label={managing ? "Exit management" : "Manage bins"}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors font-mono text-xs font-bold uppercase tracking-wide ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
                }`}
           >
             <Settings size={16} />
@@ -63,8 +63,8 @@ export default function Logistics() {
           binOverview.length === 0 ? (
             <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
               <Warehouse size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-              <h3 className="text-lg font-mono font-bold text-foreground mb-1 italic">No Storage Bins</h3>
-              <p className="text-xs text-muted-foreground font-mono leading-relaxed max-w-[200px] mx-auto uppercase">
+              <h3 className="text-lg font-bold text-foreground mb-1">No Storage Bins</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px] mx-auto">
                 Add bins using the <Settings size={12} className="inline mx-0.5" /> icon to start tracking inventory.
               </p>
             </div>
@@ -81,8 +81,8 @@ export default function Logistics() {
                     <div className="font-mono text-sm font-bold text-foreground">
                       {bin.total.toLocaleString()} bu
                     </div>
-                    <div className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
-                      OF {bin.capacity.toLocaleString()} BU
+                    <div className="text-xs text-muted-foreground">
+                      of {bin.capacity.toLocaleString()} bu
                     </div>
                   </div>
                 </div>
@@ -96,7 +96,7 @@ export default function Logistics() {
                 </div>
 
                 <div className="space-y-1 rounded-md border border-border/50 bg-muted/20 p-2">
-                  <p className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wide">Recent Activity</p>
+                  <p className="text-xs font-semibold text-muted-foreground">Recent Activity</p>
                   {bin.recentMovements.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No grain movement logged this season.</p>
                   ) : (

@@ -33,7 +33,7 @@ function buildDate(r: SprayRecord): string {
 export default function SprayTab({ records, selected, onToggle, onEdit }: SprayTabProps) {
   if (records.length === 0) {
     return (
-      <p className="text-center text-muted-foreground font-mono text-sm py-8">
+      <p className="text-center text-muted-foreground text-sm py-8">
         No spray records
       </p>
     );

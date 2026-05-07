@@ -86,7 +86,7 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
         {(!records || records.length === 0) && (
           <div className="p-12 text-center space-y-2">
             <div className="text-2xl opacity-20">🚜</div>
-            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">No activities for {year}</p>
+            <p className="text-[10px] text-muted-foreground">No activities for {year}</p>
           </div>
         )}
       </div>

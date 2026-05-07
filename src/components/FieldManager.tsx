@@ -85,7 +85,7 @@ export default function FieldManager() {
       <div className="space-y-2">
         <button
           onClick={() => setAddOpen(true)}
-          className="touch-target w-full flex items-center justify-center gap-2 bg-primary/10 border border-primary/30 text-primary rounded-lg py-3 font-mono text-sm font-bold active:scale-95 transition-transform"
+          className="touch-target w-full flex items-center justify-center gap-2 bg-primary/10 border border-primary/30 text-primary rounded-lg py-3 text-sm font-bold active:scale-95 transition-transform"
         >
           <Plus size={18} />
           Add New Field
@@ -96,15 +96,15 @@ export default function FieldManager() {
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-lg bg-muted/5">
             {fetchError ? (
               <>
-                <p className="text-xs font-mono text-destructive font-bold uppercase tracking-widest mb-1">
+                <p className="text-xs text-destructive font-bold mb-1">
                   Cloud Sync Failed
                 </p>
-                <p className="text-[10px] font-mono text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground">
                   Showing local cache. Check your connection.
                 </p>
               </>
             ) : (
-              <p className="text-xs font-mono text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 No fields added yet. Add your first field above.
               </p>
             )}

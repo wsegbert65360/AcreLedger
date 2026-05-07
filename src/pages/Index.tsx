@@ -69,13 +69,13 @@ const Index = () => {
             <Logo />
             <div className="flex flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
-              <p className="text-xs font-mono text-muted-foreground uppercase">{allFields.length} Fields · {viewingSeason} Season</p>
+              <p className="text-xs text-muted-foreground">{allFields.length} fields · {viewingSeason} season</p>
             </div>
           </div>
           <button
             onClick={() => setManaging(!managing)}
             aria-label={managing ? 'Exit field management' : 'Manage fields'}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors font-mono text-xs font-bold uppercase tracking-wide ${managing ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
                }`}
           >
             <Settings size={16} />
@@ -109,8 +109,8 @@ const Index = () => {
             {filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
                 <Tractor size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-mono font-bold text-foreground mb-1 italic">No Fields Detected</h3>
-                <p className="text-xs text-muted-foreground font-mono leading-relaxed max-w-[200px] mx-auto uppercase">
+                <h3 className="text-lg font-bold text-foreground mb-1">No Fields Detected</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px] mx-auto">
                   Use the <Settings size={12} className="inline mx-0.5" /> icon above to add your first field.
                 </p>
               </div>
@@ -122,7 +122,7 @@ const Index = () => {
               <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
               
               <div className="flex flex-col items-center justify-center space-y-1.5">
-                  <div className="text-xs font-bold text-muted-foreground tracking-widest uppercase">
+                  <div className="text-xs font-semibold text-muted-foreground">
                     Total Operation: {totalAcres} Acres
                   </div>
                   <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
@@ -132,7 +132,7 @@ const Index = () => {
                         <button
                           key={crop}
                           onClick={() => toggleCrop(crop)}
-                          className={`flex-none flex items-center justify-center h-10 px-3 rounded-xl border transition-all active:scale-95 text-xs font-bold uppercase tracking-widest ${isActive
+                          className={`flex-none flex items-center justify-center h-10 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
                             ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
                             : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
                             }`}

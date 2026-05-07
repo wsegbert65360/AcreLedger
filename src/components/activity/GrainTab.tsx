@@ -20,7 +20,7 @@ function buildDetails(m: GrainMovement): string {
 export default function GrainTab({ records, selected, onToggle, onEdit }: GrainTabProps) {
   if (records.length === 0) {
     return (
-      <p className="text-center text-muted-foreground font-mono text-sm py-8">
+      <p className="text-center text-muted-foreground text-sm py-8">
         No grain movement records
       </p>
     );

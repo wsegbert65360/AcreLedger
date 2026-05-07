@@ -141,7 +141,7 @@ export default function FieldDetailScreen() {
     if (location.hash === '#tillage') setModal('tillage');
   }, [location.hash]);
 
-  if (!field) return <div className="p-8 text-center text-muted-foreground uppercase font-mono">Field not found</div>;
+  if (!field) return <div className="p-8 text-center text-muted-foreground">Field not found</div>;
 
   const handleEdit = (type: ModalType, record: any) => {
     setEditingRecord(record);
@@ -175,7 +175,7 @@ export default function FieldDetailScreen() {
               {crop}
             </div>
             {(field.fsaFarmNumber || field.fsaTractNumber) && (
-              <div className="text-xs font-mono text-muted-foreground uppercase">
+              <div className="text-xs text-muted-foreground">
                 FSA: {field.fsaFarmNumber || '—'} / {field.fsaTractNumber || '—'} / {field.fsaFieldNumber || '—'}
               </div>
             )}
