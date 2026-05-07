@@ -216,19 +216,27 @@ RETURNS TABLE (
   max_hourly_in numeric,
   coverage_percent numeric
 ) AS $$
+DECLARE
+  v_is_service_role boolean;
 BEGIN
-  IF auth.uid() IS NULL THEN
-    RAISE EXCEPTION 'Authentication required.';
-  END IF;
+  -- Allow service_role callers (Rain API) to bypass tenant guard.
+  -- Service role uses SUPABASE_SERVICE_ROLE_KEY where auth.uid() is NULL.
+  v_is_service_role := (auth.jwt() ->> 'role') = 'service_role';
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM public.fields f
-    JOIN public.profiles p ON p.farm_id = f.farm_id
-    WHERE f.id = p_field_id
-      AND p.id = auth.uid()
-  ) THEN
-    RAISE EXCEPTION 'Field does not belong to current user farm.';
+  IF NOT v_is_service_role THEN
+    IF auth.uid() IS NULL THEN
+      RAISE EXCEPTION 'Authentication required.';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.fields f
+      JOIN public.profiles p ON p.farm_id = f.farm_id
+      WHERE f.id = p_field_id
+        AND p.id = auth.uid()
+    ) THEN
+      RAISE EXCEPTION 'Field does not belong to current user farm.';
+    END IF;
   END IF;
 
   RETURN QUERY

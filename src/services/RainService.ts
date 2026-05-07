@@ -2,7 +2,7 @@ export type RainfallResult = {
   '24h': number;
   '72h': number;
   '168h': number;
-  '7d'?: number; // Alias for 168h used in UI
+  '7d': number; // Alias for 168h, always provided by the service
   sincePlanting: number;
   sinceLastSpray: number;
   periodEndUtc: string;
