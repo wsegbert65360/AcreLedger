@@ -47,6 +47,75 @@ The target user is an individual farmer or small operation, not an enterprise.
 
 ---
 
+## 2b. Visual Design System
+
+### Typography Split
+- **Inter (sans-serif)** — default `font-sans`: all labels, headings, body text, subtitles, buttons, empty states, descriptions, navigation labels.
+- **JetBrains Mono (`font-mono`)** — data values only: numbers (bushels, acreage, percentages, prices), dates, timestamps, GPS coordinates, table cells, form field inputs, FSA/EPA/license numbers, scale ticket numbers, version strings.
+- **Brand logo** — `font-mono` + `tracking-tighter` on the AcreLedger text is an intentional identity element.
+- Form labels inside modals use `font-mono` — acceptable because they annotate data-entry fields.
+
+### Text Case & Tracking
+- **Default**: sentence-case ("Farm overview", "No fields detected").
+- **Avoid**: `uppercase` + `tracking-widest` on labels, buttons, or body text — fatiguing on mobile.
+- **Acceptable uppercase**: tiny badge pills, table column headers (report context only), legal/regulatory footers.
+
+### Dark Mode Palette
+Dark mode uses near-black with a subtle blue undertone — never pure `#000000`. This provides better surface hierarchy and reduces eye strain:
+```
+--background:  240 6% 4%    (not 0 0% 0%)
+--card:         240 5% 8%
+--popover:      240 5% 9%
+--muted:        240 5% 15%
+--border:       240 4% 16%
+--sidebar-bg:   240 6% 3%
+```
+
+### Border Radius Standard
+One consistent radius per element type — no mixing on the same page:
+| Element | Radius |
+|---|---|
+| Inline items, badges, small buttons | `rounded-lg` |
+| Cards, sections, containers | `rounded-2xl` |
+| Pills, avatar circles | `rounded-full` |
+| Progress bars | `rounded-full` |
+
+### Page Header Pattern
+Every page follows the same sticky header structure:
+```
+<header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
+  <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-5xl lg:px-8">
+    [icon + title + subtitle]  ...  [action button]
+  </div>
+</header>
+```
+No gradient accent lines under headers (removed — dated pattern). The `border-b` on the header is sufficient.
+
+### Dashboard Stats
+The Index page renders a `DashboardStats` component above the field list — a responsive 6-card grid (`2-col mobile → 3-col desktop`) showing at-a-glance farm metrics: Total Acreage, Planted (with progress bar), Harvest, Spray Apps, On-Farm Inventory, and Attention (unplanted field count). All data is computed from existing store state via `useMemo` — zero additional API calls. A `DashboardStatsSkeleton` renders during hydration.
+
+### Field Card Status Dots
+Field cards display a colored dot in the top-right corner:
+- 🟢 Green (`bg-plant`): field has a planting record
+- 🔵 Blue (`bg-spray`): field has activity but no planting record
+- ⚪ Gray (`bg-muted-foreground/30`): no activity this season
+
+### Bin Capacity Bar Colors
+Bin fill bars change color by percentage:
+- `bg-harvest` (gold): ≤ 60%
+- `bg-amber-500`: > 60%
+- `bg-destructive` (red): > 85%
+
+### Bottom Navigation
+- Active tab: `text-primary`, bold label, `strokeWidth={2.5}`, animated pill background via `layoutId="bottom-nav-pill"`, and a small dot indicator below the label.
+- Inactive tab: `text-muted-foreground`, normal weight, `strokeWidth={1.5}`.
+- Bar uses `bg-card/90 backdrop-blur-lg`.
+
+### Auth Screen
+Dark background matching the app's default theme. Uses a `Sprout` icon hero with the AcreLedger brand name and tagline. The auth card is `rounded-2xl` with `bg-card border border-border`. Inputs use `bg-background` to stand out from the card surface.
+
+---
+
 ## 3. Data Architecture
 
 All entities are strictly typed in `@/types/farm.ts`. Every season-specific record carries
@@ -342,13 +411,19 @@ professional log management. It is the primary export path for private applicato
 ### Field Dashboard (Mobile-First)
 The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time
 signals over static data. The hierarchy is strictly enforced:
-1. **Header**: Name, Crop, FSA Identity, and Last Sync timestamp.
-2. **Today at a Glance**: 4-card grid (Rainfall, Spray Status, Latest Activity, Crop).
-3. **Quick Actions**: Touch-friendly grid for the 4 most common field logs.
-4. **Rainfall Analysis**: Comparative breakdown (24h/72h/7d/Planting/Spray).
-5. **Latest Spray**: Detail card + dedicated PDF export button.
-6. **Recent History**: Scannable timeline of the last 8 events via `ActivityFeed`.
-7. **Static Metadata**: Acreage, coordinates, and irrigation at the bottom.
+1. **Header**: Back button + Logo.
+2. **Dashboard Header**: Field name, crop badge, FSA identity, sync note.
+3. **Today at a Glance**: 4-card grid (Rainfall, Spray Status, Latest Activity, Crop).
+4. **Quick Actions**: 3-col mobile / 6-col desktop grid for all 6 activity types
+   (Spray, Plant, Fertilizer, Tillage, Harvest, Hay). Each button opens its modal.
+5. **"View Full History" button**: navigates to `/activity` page.
+6. **Rainfall Analysis**: Comparative breakdown (24h/72h/7d/Planting/Spray).
+7. **Latest Spray**: Detail card + dedicated PDF export button.
+8. **Field History**: Last 8 events via `ActivityFeed`. "+N more" button navigates to `/activity`.
+   "View All Activity" header button also navigates to `/activity`.
+9. **Static Metadata**: Acreage, coordinates, and irrigation at the bottom.
+
+All section containers use `rounded-2xl` consistently.
 
 ### ActivityFeed Component
 Reusable presentational component for displaying field-specific historical records. **Season
@@ -371,6 +446,12 @@ const wind = r.windSpeed != null ? `${r.windSpeed} MPH ${r.windDirection || ''}`
 const temp = r.temperature != null ? `${r.temperature}°F` : null;
 const details = [wind, temp].filter(Boolean).join(' · ') || '—';
 ```
+
+### Font-Mono Usage Rule
+JetBrains Mono is reserved for **data values** — numbers, dates, coordinates, IDs, measurements.
+All other text (labels, headings, subtitles, buttons, empty states, descriptions, navigation)
+uses Inter sans-serif. When adding new UI text, default to sans-serif unless it represents a
+data measurement or technical identifier.
 
 ### Zero vs Falsy in Display
 `0` is a valid and meaningful farm value (zero bales, zero bushels, zero price).
