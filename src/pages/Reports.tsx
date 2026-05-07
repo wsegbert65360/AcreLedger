@@ -3,7 +3,7 @@ import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Leaf, CloudRain, Wheat, Printer, Download, History, Scissors } from 'lucide-react';
+import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History, Tractor } from 'lucide-react';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
@@ -20,9 +20,9 @@ const WIND_ALERT_MPH = 10;
 const TABS: { key: ReportTab; icon: typeof Sprout; label: string; color: string }[] = [
   { key: 'fsa-plant',          icon: Sprout,    label: 'FSA Plant',   color: 'text-plant' },
   { key: 'spray-audit',        icon: CloudRain, label: 'Spray Audit', color: 'text-spray' },
-  { key: 'fertilizer-summary', icon: Leaf,       label: 'Fertilizer',  color: 'text-lime-600 dark:text-lime-400' },
+  { key: 'fertilizer-summary', icon: Sprout,    label: 'Fertilizer',  color: 'text-lime-600 dark:text-lime-400' },
   { key: 'fsa-harvest',        icon: Wheat,     label: 'FSA Harvest', color: 'text-harvest' },
-  { key: 'hay-summary',        icon: Scissors,  label: 'Hay Summary', color: 'text-harvest' },
+  { key: 'hay-summary',        icon: Tractor,   label: 'Hay Summary', color: 'text-harvest' },
   { key: 'landlord-statement', icon: FileText,  label: 'Landlord',    color: 'text-blue-600' },
 ];
 

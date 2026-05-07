@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Sprout, Scissors, Disc3 } from 'lucide-react';
+import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout, Scissors, Disc3 } from 'lucide-react';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import type { 

@@ -1,4 +1,4 @@
-import { Check, Edit2, Tractor, CloudRain, Wheat, Beaker, FileText, AlertTriangle, Package } from 'lucide-react';
+import { Check, Edit2, Tractor, CloudRain, Wheat, Beaker, FileText, AlertTriangle } from 'lucide-react';
 
 interface RecordListItemProps {
   id: string;
@@ -19,7 +19,7 @@ export default function RecordListItem({
   const Icon = type === 'plant' ? Tractor
     : type === 'spray' ? CloudRain
     : type === 'harvest' ? Wheat
-    : type === 'grain' ? Package
+    : type === 'grain' ? Wheat
     : type === 'hay' ? FileText
     : type === 'tillage' ? Tractor
     : Beaker;
@@ -27,7 +27,7 @@ export default function RecordListItem({
   const colorClass = type === 'plant' ? 'text-plant'
     : type === 'spray' ? 'text-spray'
     : type === 'harvest' ? 'text-harvest'
-    : type === 'grain' ? 'text-orange-500'
+    : type === 'grain' ? 'text-harvest'
     : type === 'hay' ? 'text-harvest'
     : type === 'tillage' ? 'text-orange-600'
     : 'text-plant';
@@ -35,7 +35,7 @@ export default function RecordListItem({
   const bgClass = type === 'plant' ? 'bg-plant/10'
     : type === 'spray' ? 'bg-spray/10'
     : type === 'harvest' ? 'bg-harvest/10'
-    : type === 'grain' ? 'bg-orange-500/10'
+    : type === 'grain' ? 'bg-harvest/10'
     : type === 'hay' ? 'bg-harvest/10'
     : type === 'tillage' ? 'bg-orange-600/10'
     : 'bg-plant/10';
