@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node -e \"const fs=require('fs');const f='package.json';const d=fs.readFileSync(f,'utf8').replace(/^\\uFEFF/,'');fs.writeFileSync(f,d);\"",
-    "build": "npm run prebuild && vite build",
+    "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",

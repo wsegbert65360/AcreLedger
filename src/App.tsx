@@ -18,7 +18,6 @@ import Sidebar from "@/components/Sidebar";
 import OfflineBanner from "@/components/OfflineBanner";
 import { AnimatePresence, motion } from "framer-motion";
 import FieldDetailScreen from "./pages/FieldDetailScreen";
-import { Sprout } from "lucide-react";
 
 const queryClient = new QueryClient();
 
@@ -69,12 +68,14 @@ const AppContent = () => {
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-6">
         <div className="relative">
           <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full animate-pulse" />
-          <div className="relative w-24 h-24 rounded-2xl shadow-2xl border-2 border-primary/20 bg-primary/10 flex items-center justify-center animate-pulse">
-            <Sprout size={48} className="text-primary" />
-          </div>
+          <img
+            src="/icon-512.png"
+            alt="AcreLedger Logo"
+            className="relative w-24 h-24 rounded-2xl shadow-2xl border-2 border-primary/20 animate-pulse"
+          />
         </div>
         <div className="mt-8 flex flex-col items-center gap-1">
-          <h2 className="text-sm font-bold text-foreground tracking-tight">AcreLedger</h2>
+          <h2 className="text-sm font-mono font-bold text-foreground uppercase tracking-[0.2em]">AcreLedger</h2>
           <div className="flex gap-1">
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
@@ -91,9 +92,9 @@ const AppContent = () => {
 
   return (
     <>
+      <OfflineBanner />
       <Sidebar />
       <div className="lg:pl-60 print:pl-0">
-        <OfflineBanner />
         <AnimatedRoutes />
       </div>
       <SeasonRolloverModal />
