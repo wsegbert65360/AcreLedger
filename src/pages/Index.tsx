@@ -6,6 +6,7 @@ import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
 import Logo from '@/components/Logo';
 import DashboardStats, { DashboardStatsSkeleton } from '@/components/DashboardStats';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { Settings, Tractor } from 'lucide-react';
 
 const Index = () => {

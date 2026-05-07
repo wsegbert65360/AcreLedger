@@ -53,6 +53,8 @@ export default function FieldDetailScreen() {
   const [modal, setModal] = useState<ModalType>(null);
   const [editingRecord, setEditingRecord] = useState<any>(null);
   const fetchingRainRef = useRef(false);
+  const inFlightRainFetchKeyRef = useRef<string | null>(null);
+  const lastSuccessfulRainFetchKeyRef = useRef<string | null>(null);
 
   // Derived Values
   const unifiedRecords = useMemo(() => {
@@ -100,14 +102,21 @@ export default function FieldDetailScreen() {
   }, [latestSpray]);
 
   // Fetching Logic
-  const handleFetchRain = useCallback(async (signal?: AbortSignal) => {
+  const handleFetchRain = useCallback(async (signal?: AbortSignal, force = false) => {
     if (!field?.id || fetchingRainRef.current) return;
     
-    // Skip if we already have stats and the key parameters haven't changed
-    // This handles cases where other state changes cause a re-render
-    const fetchKey = `${field.id}-${latestPlanting?.plantDate || ''}-${latestSpray?.sprayDate || ''}`;
-    if (rainStats && (handleFetchRain as any).lastFetchKey === fetchKey) return;
-    (handleFetchRain as any).lastFetchKey = fetchKey;
+    // Skip if this exact field/activity combination is already loaded or loading.
+    const fetchKey = JSON.stringify({
+      fieldId: field.id,
+      lat: field.lat,
+      lng: field.lng,
+      boundary: field.boundary ?? null,
+      plantDate: latestPlanting?.plantDate || '',
+      sprayDate: latestSpray?.sprayDate || '',
+    });
+    if (!force && lastSuccessfulRainFetchKeyRef.current === fetchKey) return;
+    if (inFlightRainFetchKeyRef.current === fetchKey) return;
+    inFlightRainFetchKeyRef.current = fetchKey;
 
     fetchingRainRef.current = true;
     setFetchingRain(true);
@@ -124,14 +133,18 @@ export default function FieldDetailScreen() {
       });
       if (!signal?.aborted) {
         setRainStats(data);
+        lastSuccessfulRainFetchKeyRef.current = fetchKey;
       }
     } catch (err: any) {
       if (err.name === 'AbortError' || signal?.aborted) return;
       console.error('[FieldDetail] Rain fetch error:', err);
       setRainError(err.message || 'Could not load rainfall data.');
     } finally {
+      if (inFlightRainFetchKeyRef.current === fetchKey) {
+        inFlightRainFetchKeyRef.current = null;
+      }
+      fetchingRainRef.current = false;
       if (!signal?.aborted) {
-        fetchingRainRef.current = false;
         setFetchingRain(false);
       }
     }
@@ -141,8 +154,7 @@ export default function FieldDetailScreen() {
     field?.lng, 
     field?.boundary, 
     latestPlanting?.plantDate, 
-    latestSpray?.sprayDate,
-    rainStats // Need this to check if we already have data
+    latestSpray?.sprayDate
   ]);
 
   useEffect(() => {
@@ -339,7 +351,7 @@ export default function FieldDetailScreen() {
               Rainfall Summary
             </h3>
             <button
-              onClick={() => handleFetchRain()}
+              onClick={() => handleFetchRain(undefined, true)}
               disabled={fetchingRain}
               className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
             >
