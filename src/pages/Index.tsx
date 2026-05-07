@@ -5,10 +5,11 @@ import BottomNav from '@/components/BottomNav';
 import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
 import Logo from '@/components/Logo';
+import DashboardStats, { DashboardStatsSkeleton } from '@/components/DashboardStats';
 import { Settings, Tractor } from 'lucide-react';
 
 const Index = () => {
-  const { fields: allFields, viewingSeason } = useFarm();
+  const { fields: allFields, viewingSeason, loading } = useFarm();
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
     let total = 0;
     const totals: Record<string, number> = {};
@@ -84,6 +85,7 @@ const Index = () => {
         <div className="h-[2px] w-full bg-gradient-to-r from-plant/40 via-plant to-plant/40" />
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-3 lg:max-w-5xl lg:px-8">
+        {loading ? <DashboardStatsSkeleton /> : <DashboardStats />}
         <WeatherBar />
         {managing ? (
           <FieldManager />
