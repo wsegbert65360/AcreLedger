@@ -54,7 +54,7 @@ export default function Logistics() {
             <span>{managing ? 'Done' : 'Manage Bins'}</span>
           </button>
         </div>
-        <div className="h-[2px] w-full bg-gradient-to-r from-harvest/40 via-harvest to-harvest/40" />
+
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {managing ? (
@@ -90,7 +90,7 @@ export default function Logistics() {
                 {/* Capacity bar */}
                 <div className="h-4 bg-muted rounded-full overflow-hidden border border-border/50">
                   <div
-                    className="h-full bg-harvest rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(212,175,55,0.3)]"
+                    className={`h-full rounded-full transition-all duration-500 ${bin.pct > 85 ? 'bg-destructive shadow-[0_0_10px_rgba(239,68,68,0.3)]' : bin.pct > 60 ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-harvest shadow-[0_0_10px_rgba(212,175,55,0.3)]'}`}
                     style={{ width: `${bin.pct}%` }}
                   />
                 </div>

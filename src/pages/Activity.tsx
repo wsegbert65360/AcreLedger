@@ -251,7 +251,7 @@ export default function Activity() {
             </button>
           )}
         </div>
-        <div className="h-[2px] w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs */}

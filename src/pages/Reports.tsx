@@ -330,7 +330,7 @@ export default function Reports() {
             Print
           </button>
         </div>
-        <div className="h-[2px] w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40 print:hidden" />
+
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4 lg:max-w-6xl lg:px-8">

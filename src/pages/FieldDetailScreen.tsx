@@ -4,7 +4,7 @@ import { useFarm } from '@/store/farmStore';
 import {
   Sprout, Leaf, Tractor, ArrowLeft,
   Cloud, MapPin, Droplets, RefreshCw,
-  AlertCircle, History,
+  AlertCircle, History, Wheat, Package,
   FileText, ExternalLink, Info, CheckCircle2
 } from 'lucide-react';
 import { RainService, type RainfallResult } from '@/services/RainService';
@@ -25,7 +25,9 @@ const FIELD_ACTIONS = [
   { id: 'spray', label: 'Log Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
   { id: 'plant', label: 'Log Plant', icon: Leaf, color: 'text-plant', bg: 'bg-plant/10', border: 'border-plant/20' },
   { id: 'fertilizer', label: 'Log Fert', icon: Sprout, color: 'text-lime-500', bg: 'bg-lime-500/10', border: 'border-lime-500/20' },
-  { id: 'tillage', label: 'Log Till', icon: Tractor, color: 'text-orange-600', bg: 'bg-orange-600/10', border: 'border-orange-600/20' }
+  { id: 'tillage', label: 'Log Till', icon: Tractor, color: 'text-orange-600', bg: 'bg-orange-600/10', border: 'border-orange-600/20' },
+  { id: 'harvest', label: 'Log Harvest', icon: Wheat, color: 'text-harvest', bg: 'bg-harvest/10', border: 'border-harvest/20' },
+  { id: 'hay', label: 'Log Hay', icon: Package, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
 ] as const;
 
 export default function FieldDetailScreen() {
@@ -280,7 +282,7 @@ export default function FieldDetailScreen() {
 
         {/* 3. Quick Actions */}
         <section className="space-y-3">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
             {FIELD_ACTIONS.map((action) => (
               <button
                 key={action.id}
@@ -436,10 +438,10 @@ export default function FieldDetailScreen() {
               Field History
             </h3>
             <button
-              onClick={() => { /* Potential full history dialog/navigation */ }}
+              onClick={() => navigate('/activity')}
               className="text-xs font-black text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
             >
-              View Full
+              View All Activity
             </button>
           </div>
 
@@ -452,6 +454,7 @@ export default function FieldDetailScreen() {
             />
             {unifiedRecords.length > 8 && (
               <button
+                onClick={() => navigate('/activity')}
                 className="w-full py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
               >
                 + {unifiedRecords.length - 8} more activities
