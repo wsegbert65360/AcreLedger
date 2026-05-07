@@ -173,46 +173,45 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id, session]);
 
   // --- Fetch data when farm_id is stable ---
-  useEffect(() => {
-    if (session && farm_id) {
-      const fetchData = async () => {
-        setLoading(true);
-        setFetchError(false);
-        try {
-          const query = (table: string) => supabase.from(table).select('*').eq('farm_id', farm_id).is('deleted_at', null);
+  const fetchData = useCallback(async () => {
+    if (!session || !farm_id) return;
+    setLoading(true);
+    setFetchError(false);
+    try {
+      const query = (table: string) => supabase.from(table).select('*').eq('farm_id', farm_id).is('deleted_at', null);
 
-          const [
-            { data: fieldsData, error: fieldsErr },
-            { data: binsData, error: binsErr },
-            { data: plantData, error: plantErr },
-            { data: sprayData, error: sprayErr },
-            { data: harvestData, error: harvestErr },
-            { data: hayData, error: hayErr },
-            { data: fertilizerData, error: fertilizerErr },
-            { data: tillageData, error: tillageErr },
-            { data: grainData, error: grainErr },
-            { data: seedsData, error: seedsErr },
-            { data: fertilizerRecipesData, error: fertilizerRecipesErr },
-            { data: recipesData, error: recipesErr },
-            { data: farmData, error: farmErr }
-          ] = await Promise.all([
-            query('fields'),
-            query('bins'),
-            query('plant_records'),
-            query('spray_records'),
-            query('harvest_records'),
-            query('hay_harvest_records'),
-            supabase.from('fertilizer_applications')
-              .select('*, fields(name)')
-              .eq('farm_id', farm_id)
-              .is('deleted_at', null),
-            query('tillage_records'),
-            query('grain_movements'),
-            query('saved_seeds'),
-            query('fertilizer_recipes'),
-            query('spray_recipes'),
-            supabase.from('farms').select('name').eq('id', farm_id).single()
-          ]);
+      const [
+        { data: fieldsData, error: fieldsErr },
+        { data: binsData, error: binsErr },
+        { data: plantData, error: plantErr },
+        { data: sprayData, error: sprayErr },
+        { data: harvestData, error: harvestErr },
+        { data: hayData, error: hayErr },
+        { data: fertilizerData, error: fertilizerErr },
+        { data: tillageData, error: tillageErr },
+        { data: grainData, error: grainErr },
+        { data: seedsData, error: seedsErr },
+        { data: fertilizerRecipesData, error: fertilizerRecipesErr },
+        { data: recipesData, error: recipesErr },
+        { data: farmData, error: farmErr }
+      ] = await Promise.all([
+        query('fields'),
+        query('bins'),
+        query('plant_records'),
+        query('spray_records'),
+        query('harvest_records'),
+        query('hay_harvest_records'),
+        supabase.from('fertilizer_applications')
+          .select('*, fields(name)')
+          .eq('farm_id', farm_id)
+          .is('deleted_at', null),
+        query('tillage_records'),
+        query('grain_movements'),
+        query('saved_seeds'),
+        query('fertilizer_recipes'),
+        query('spray_recipes'),
+        supabase.from('farms').select('name').eq('id', farm_id).single()
+      ]);
 
           const fetchErrors = [
             fieldsErr, binsErr, plantErr, sprayErr, harvestErr,
@@ -249,10 +248,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         } finally {
           setLoading(false);
         }
-      };
-      fetchData();
-    }
-  }, [session?.user?.id, farm_id, setLoading]);
+  }, [session, farm_id, setLoading]);
+
+  useEffect(() => {
+    fetchData();
+  }, [session?.user?.id, farm_id]);
 
   // --- Local storage persistence ---
   useEffect(() => { saveToStorage('al_fields', fields, session?.user?.id); }, [fields, session?.user?.id]);
@@ -361,6 +361,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       farm_id,
       farmName,
       restoreFromBackup: seasonOps.restoreFromBackup,
+      refresh: fetchData,
     }}>
       {children}
     </FarmContext.Provider>

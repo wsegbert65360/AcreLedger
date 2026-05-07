@@ -74,12 +74,12 @@ export default function SeasonRolloverModal() {
                     <div className="bg-muted p-3 rounded-lg border border-border/50">
                         <div className="flex items-center justify-center gap-4 py-2">
                             <div className="text-center">
-                                <div className="text-[10px] text-muted-foreground uppercase font-mono">Current</div>
+                                <div className="text-[11px] text-muted-foreground uppercase font-mono">Current</div>
                                 <div className="text-xl font-bold font-mono opacity-50">{activeSeason}</div>
                             </div>
                             <ArrowRight className="text-muted-foreground" size={20} />
                             <div className="text-center">
-                                <div className="text-[10px] text-amber-500 uppercase font-mono">New Season</div>
+                                <div className="text-[11px] text-amber-500 uppercase font-mono">New Season</div>
                                 <div className="text-2xl font-bold font-mono text-amber-500">{currentYear}</div>
                             </div>
                         </div>
@@ -101,8 +101,8 @@ export default function SeasonRolloverModal() {
                     <div className="pt-2 border-t border-border/50">
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
-                                <h4 className="text-[10px] font-bold uppercase font-mono text-muted-foreground">Restore from Backup</h4>
-                                <p className="text-[9px] font-mono text-muted-foreground/70 italic">Have a previous JSON backup? Upload it here.</p>
+                                <h4 className="text-[11px] font-bold uppercase font-mono text-muted-foreground">Restore from Backup</h4>
+                                <p className="text-[11px] font-mono text-muted-foreground/70 italic">Have a previous JSON backup? Upload it here.</p>
                             </div>
                             <div className="relative">
                                 <input
@@ -117,7 +117,7 @@ export default function SeasonRolloverModal() {
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 text-[10px] font-mono gap-1.5 border-dashed"
+                                    className="h-7 text-[11px] font-mono gap-1.5 border-dashed"
                                     disabled={restoring}
                                 >
                                     {restoring ? (

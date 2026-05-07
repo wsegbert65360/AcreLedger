@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout } from 'lucide-react';
+import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout, Scissors, Disc3 } from 'lucide-react';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import type { 
@@ -42,16 +42,24 @@ import HistoryFeed from '@/components/activity/HistoryFeed';
 
 type Tab = 'all' | 'plant' | 'spray' | 'fertilizer' | 'tillage' | 'harvest' | 'hay' | 'grain';
 
-const TABS: { key: Tab; icon: React.ElementType; label: string; color: string }[] = [
-  { key: 'all', icon: ClipboardList, label: 'All', color: 'text-foreground' },
-  { key: 'plant', icon: Leaf, label: 'Planting', color: 'text-plant' },
-  { key: 'spray', icon: CloudRain, label: 'Spraying', color: 'text-spray' },
-  { key: 'fertilizer', icon: Sprout, label: 'Fertilizer', color: 'text-lime-600 dark:text-lime-400' },
-  { key: 'harvest', icon: Wheat, label: 'Harvesting', color: 'text-harvest' },
-  { key: 'hay', icon: Tractor, label: 'Hay/Forage', color: 'text-orange-700 dark:text-orange-400' },
-  { key: 'grain', icon: Warehouse, label: 'Grain', color: 'text-harvest' },
-  { key: 'tillage', icon: Tractor, label: 'Tillage', color: 'text-orange-600' },
+const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; label: string; color: string }[] }[] = [
+  { group: 'All', tabs: [{ key: 'all', icon: ClipboardList, label: 'All', color: 'text-foreground' }] },
+  { group: 'Crop', tabs: [
+    { key: 'plant', icon: Leaf, label: 'Planting', color: 'text-plant' },
+    { key: 'harvest', icon: Wheat, label: 'Harvesting', color: 'text-harvest' },
+    { key: 'hay', icon: Scissors, label: 'Hay', color: 'text-orange-700 dark:text-orange-400' },
+  ]},
+  { group: 'Inputs', tabs: [
+    { key: 'spray', icon: CloudRain, label: 'Spraying', color: 'text-spray' },
+    { key: 'fertilizer', icon: Sprout, label: 'Fertilizer', color: 'text-lime-600 dark:text-lime-400' },
+    { key: 'tillage', icon: Disc3, label: 'Tillage', color: 'text-orange-600' },
+  ]},
+  { group: 'Logistics', tabs: [
+    { key: 'grain', icon: Warehouse, label: 'Grain', color: 'text-harvest' },
+  ]},
 ];
+
+const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | GrainMovement | TillageRecord;
 
@@ -254,43 +262,50 @@ export default function Activity() {
 
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
-        {/* Tabs */}
-        <div className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2 px-4 border-y border-border bg-card/50 lg:flex-wrap">
-          {TABS.map(t => {
-            const count = t.key === 'all' ? unifiedRecords.length
-              : t.key === 'plant' ? filteredPlant.length
-              : t.key === 'spray' ? filteredSpray.length
-              : t.key === 'harvest' ? filteredHarvest.length
-              : t.key === 'grain' ? filteredGrain.length
-              : t.key === 'hay' ? filteredHay.length
-              : t.key === 'tillage' ? filteredTillage.length
-              : filteredFertilizer.length;
+        {/* Tabs — grouped pills */}
+        <div className="space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar lg:flex-wrap">
+            {TAB_GROUPS.map(group => (
+              <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
+                {group.tabs.map((t, i) => {
+                  const count = t.key === 'all' ? unifiedRecords.length
+                    : t.key === 'plant' ? filteredPlant.length
+                    : t.key === 'spray' ? filteredSpray.length
+                    : t.key === 'harvest' ? filteredHarvest.length
+                    : t.key === 'grain' ? filteredGrain.length
+                    : t.key === 'hay' ? filteredHay.length
+                    : t.key === 'tillage' ? filteredTillage.length
+                    : filteredFertilizer.length;
 
-            const isActive = tab === t.key;
+                  const isActive = tab === t.key;
 
-            return (
-              <button
-                key={t.key}
-                onClick={() => {
-                  if (isActive) setTab('all');
-                  else setTab(t.key);
-                  setSelected(new Set());
-                }}
-                className={`flex-shrink-0 h-[48px] flex items-center justify-center gap-2 px-4 rounded-xl transition-all text-xs uppercase tracking-widest ${isActive
-                  ? 'ring-2 ring-primary bg-primary/10 text-primary font-black shadow-sm'
-                  : 'text-muted-foreground font-bold hover:bg-muted/50'
-                  }`}
-              >
-                <t.icon size={16} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
-                <span className="flex items-center gap-2">
-                  {t.label}
-                    <span className="bg-muted px-2 py-0.5 rounded-full text-xs font-bold text-muted-foreground">
-                      {count}
-                    </span>
-                </span>
-              </button>
-            );
-          })}
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => {
+                        if (isActive) setTab('all');
+                        else setTab(t.key);
+                        setSelected(new Set());
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-xs font-bold ${isActive
+                        ? 'ring-2 ring-primary bg-primary/10 text-primary shadow-sm'
+                        : 'text-muted-foreground hover:bg-muted/50'
+                        }`}
+                    >
+                      <t.icon size={14} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
+                      <span>{t.label}</span>
+                      {count > 0 && (
+                        <span className="bg-muted px-1.5 py-0.5 rounded-full text-[11px] font-bold text-muted-foreground">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                {group.group !== 'Logistics' && <div className="w-px h-5 bg-border/60 mx-1 hidden sm:block" />}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Search */}

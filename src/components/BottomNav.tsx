@@ -29,7 +29,7 @@ export default function BottomNav() {
                 )}
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.5} />
               </div>
-              <span className={`text-[10px] ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
+              <span className={`text-[11px] ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
               {active && (
                 <motion.div
                   layoutId="bottom-nav-dot"

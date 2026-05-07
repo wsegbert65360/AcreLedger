@@ -31,7 +31,7 @@ function StatCard({
           <Icon size={16} />
         </div>
         {badge && (
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge.color}`}>
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${badge.color}`}>
             {badge.text}
           </span>
         )}

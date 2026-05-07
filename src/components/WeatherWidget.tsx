@@ -25,13 +25,14 @@ function saveZip(zip: string, userId?: string) {
 }
 
 export default function WeatherBar() {
-  const { session } = useFarm();
+  const { session, fields } = useFarm();
   const userId = session?.user?.id;
 
   // Don't seed from localStorage until userId is known — avoids reading the
   // wrong key during the async session hydration window.
   const [zip, setZip] = useState<string>('');
   const [inputZip, setInputZip] = useState('');
+  const [usingCoords, setUsingCoords] = useState(false);
   const [zipError, setZipError] = useState('');
   const [weather, setWeather] = useState<WeatherData>(initialWeather());
   const [locationName, setLocationName] = useState('');
@@ -41,9 +42,19 @@ export default function WeatherBar() {
   // Sync zip from localStorage once userId is stable
   useEffect(() => {
     const saved = loadZip(userId);
-    setZip(saved);
-    setInputZip(saved);
-  }, [userId]);
+    if (saved) {
+      setZip(saved);
+      setInputZip(saved);
+    } else {
+      // Auto-detect: use first field with valid coordinates
+      const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+      if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
+        setZip(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
+        setInputZip('');
+        setUsingCoords(true);
+      }
+    }
+  }, [userId, fields]);
 
   // Abort controller ref to cancel in-flight requests on new submission
   const abortRef = useRef<AbortController | null>(null);
@@ -85,7 +96,14 @@ export default function WeatherBar() {
     e.preventDefault();
     const z = inputZip.trim();
 
-    if (!ZIP_REGEX.test(z)) {
+    if (!z) {
+      setZipError('Enter a zip code or coordinates');
+      return;
+    }
+
+    // Allow lat,lng format directly
+    const coordsMatch = z.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+    if (!coordsMatch && !ZIP_REGEX.test(z)) {
       setZipError('Enter a valid 5 or 9-digit zip code');
       return;
     }
@@ -94,7 +112,8 @@ export default function WeatherBar() {
     setLocationName('');      // clear stale city name immediately
     setWeather(initialWeather());
     setZip(z);
-    saveZip(z, userId);
+    setUsingCoords(!!coordsMatch);
+    if (!coordsMatch) saveZip(z, userId);
   };
 
   const hasPrecip =
@@ -105,15 +124,15 @@ export default function WeatherBar() {
   return (
     <div className="bg-card border border-border rounded-lg p-3 px-4 flex flex-col gap-2 min-h-[52px] sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <MapPin size={16} className="text-muted-foreground shrink-0" />
+        <MapPin size={16} className={usingCoords ? 'text-primary shrink-0' : 'text-muted-foreground shrink-0'} />
         <form onSubmit={handleSubmit} className="flex-none">
           <input
             id="weatherZip"
             name="weatherZip"
-            value={inputZip}
+            value={usingCoords ? '' : inputZip}
             onChange={e => { setInputZip(e.target.value); setZipError(''); }}
-            placeholder="Zip..."
-            className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-foreground font-mono text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder={usingCoords ? 'Auto' : 'Zip...'}
+            className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-foreground font-mono text-[11px] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             maxLength={10}
             inputMode="numeric"
           />
@@ -136,7 +155,7 @@ export default function WeatherBar() {
             </span>
             <span className="flex items-center gap-1.5 bg-spray/5 px-2 py-1 rounded-md border border-spray/10">
               <Wind size={14} className="text-spray" />
-              <span className="font-bold">{weather.wind} <span className="text-[10px] opacity-70">MPH</span></span>
+              <span className="font-bold">{weather.wind} <span className="text-[11px] opacity-70">MPH</span></span>
             </span>
             {hasPrecip && (
               <span className="flex items-center gap-1.5 bg-spray/10 px-2 py-1 rounded-md border border-spray/20 text-spray font-black">

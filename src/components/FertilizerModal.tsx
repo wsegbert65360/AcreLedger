@@ -150,7 +150,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                         </div>
                         <div>
                             <DialogTitle className="text-lg font-bold text-foreground leading-tight">Fertilizer</DialogTitle>
-                            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
+                            <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
                 </header>
@@ -257,7 +257,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-0.5">
                                         <Label htmlFor="save-recipe" className="text-sm font-bold">Save as Recipe?</Label>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-mono tracking-wider">Add to your reusable templates</p>
+                                        <p className="text-[11px] text-muted-foreground uppercase font-mono tracking-wider">Add to your reusable templates</p>
                                     </div>
                                     <Switch
                                         id="save-recipe"
@@ -268,7 +268,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
 
                                 {saveAsRecipe && (
                                     <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                                        <Label htmlFor="recipe-name" className="text-[10px] font-mono font-bold text-muted-foreground uppercase ml-1">Recipe Name</Label>
+                                        <Label htmlFor="recipe-name" className="text-[11px] font-mono font-bold text-muted-foreground uppercase ml-1">Recipe Name</Label>
                                         <Input
                                             id="recipe-name"
                                             value={newRecipeName}

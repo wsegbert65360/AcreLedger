@@ -67,11 +67,11 @@ export default function RecipeManager() {
                 {recipe.products.map((p) => (
                   <div key={p.id ?? p.product} className="text-muted-foreground font-mono text-xs pl-2">
                     • {p.product} — {p.rate} {p.rateUnit}
-                    {p.epaRegNumber && <span className="ml-2 text-[10px] opacity-70">(EPA: {p.epaRegNumber})</span>}
+                    {p.epaRegNumber && <span className="ml-2 text-[11px] opacity-70">(EPA: {p.epaRegNumber})</span>}
                   </div>
                 ))}
                 {(recipe.applicatorName || recipe.licenseNumber || recipe.targetPest || recipe.epaRegNumber) && (
-                  <div className="text-muted-foreground font-mono text-[10px] pl-2 pt-1 border-t border-border/50 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  <div className="text-muted-foreground font-mono text-[11px] pl-2 pt-1 border-t border-border/50 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                     {recipe.applicatorName && <div>Applicator: <span className="text-foreground/70">{recipe.applicatorName}{recipe.licenseNumber ? ` (${recipe.licenseNumber})` : ''}</span></div>}
                     {recipe.epaRegNumber && <div>Gen EPA: <span className="text-foreground/70">{recipe.epaRegNumber}</span></div>}
                     {recipe.targetPest && <div>Target: <span className="text-foreground/70">{recipe.targetPest}</span></div>}

@@ -96,13 +96,13 @@ export default function Privacy() {
                                     <div>
                                         <p className="text-sm font-bold text-foreground">Visual Crossing Weather</p>
                                     </div>
-                                    <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">GPS Data only</span>
+                                    <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">GPS Data only</span>
                                 </div>
                                 <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-md">
                                     <div>
                                         <p className="text-sm font-bold text-foreground">Vercel</p>
                                     </div>
-                                    <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">Hosting/SSL</span>
+                                    <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">Hosting/SSL</span>
                                 </div>
                             </div>
                         </section>
@@ -146,7 +146,7 @@ export default function Privacy() {
                 </Card>
 
                 <footer className="text-center py-8">
-                    <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em]">
+                    <p className="text-[11px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em]">
                         &copy; 2026 AcreLedger Precision Agriculture. All Rights Isolated.
                     </p>
                 </footer>

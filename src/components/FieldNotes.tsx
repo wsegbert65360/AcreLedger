@@ -45,18 +45,18 @@ export default function FieldNotes({ field }: FieldNotesProps) {
   return (
     <section className="relative space-y-2">
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Field Notes</h2>
+        <h2 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Field Notes</h2>
         <div className="flex items-center gap-1.5 min-w-[60px] justify-end transition-opacity duration-300">
           {status === 'syncing' && (
             <div className="flex items-center gap-1 animate-pulse">
               <Loader2 size={10} className="animate-spin text-primary" />
-              <span className="text-[8px] font-bold text-primary uppercase tracking-tighter">Syncing</span>
+              <span className="text-[11px] font-bold text-primary uppercase tracking-tighter">Syncing</span>
             </div>
           )}
           {status === 'saved' && (
             <div className="flex items-center gap-1">
               <CheckCircle2 size={10} className="text-green-500" />
-              <span className="text-[8px] font-bold text-green-500 uppercase tracking-tighter">Saved</span>
+              <span className="text-[11px] font-bold text-green-500 uppercase tracking-tighter">Saved</span>
             </div>
           )}
         </div>

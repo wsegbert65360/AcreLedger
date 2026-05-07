@@ -111,7 +111,7 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
                 {initialData.type === 'in' ? 'Inventory In' : 'Sale / Out'}
               </span>
             </div>
-            <span className="text-[10px] font-mono opacity-70 italic">
+            <span className="text-[11px] font-mono opacity-70 italic">
               ID: {initialData.id?.slice(0, 8) ?? '—'}
             </span>
           </div>
@@ -152,7 +152,7 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
               {isNegativeBushels && !errors.bushels && (
                 <div className="flex items-center gap-1 mt-1 text-amber-500 dark:text-amber-400">
                   <AlertTriangle size={12} />
-                  <p className="text-[10px] font-mono">Negative — adjustment recorded</p>
+                  <p className="text-[11px] font-mono">Negative — adjustment recorded</p>
                 </div>
               )}
             </div>
@@ -229,7 +229,7 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
           <div className="pt-2 border-t border-border/50">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Calendar size={14} />
-              <span className="text-[10px] font-mono uppercase">
+              <span className="text-[11px] font-mono uppercase">
                 Recorded: {new Date(initialData.timestamp).toLocaleString()}
               </span>
             </div>

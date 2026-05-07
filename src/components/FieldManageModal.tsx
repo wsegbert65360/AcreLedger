@@ -246,7 +246,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
                 variant={isCapturing ? "secondary" : "outline"}
                 size="sm"
                 onClick={() => setIsCapturing(!isCapturing)}
-                className="flex-1 font-mono text-[10px]"
+                className="flex-1 font-mono text-[11px]"
               >
                 <MapIcon size={14} className="mr-2" />
                 {isCapturing ? 'TAP MAP TO DRAW' : 'ENABLE MAP DRAWING'}
@@ -278,7 +278,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             </div>
             <div>
               <Label htmlFor="acreage" className="text-muted-foreground font-mono text-xs flex items-center gap-1">
-                ACREAGE {points.length >= 3 && <span className="text-[10px] text-primary">(AUTO)</span>}
+                ACREAGE {points.length >= 3 && <span className="text-[11px] text-primary">(AUTO)</span>}
               </Label>
               <Input
                 id="acreage"
@@ -336,7 +336,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-primary font-mono text-[10px] font-bold">FSA COMPLIANCE DATA</Label>
+              <Label className="text-primary font-mono text-[11px] font-bold">FSA COMPLIANCE DATA</Label>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

@@ -1,18 +1,26 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useFarm } from '@/store/farmStore';
 import { navTabs } from './navConfig';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CalendarDays, Sprout } from 'lucide-react';
 
 export default function Sidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { activeSeason, viewingSeason, setViewingSeason } = useFarm();
+
+  const seasonOptions = [activeSeason, activeSeason - 1, activeSeason - 2];
 
   return (
     <nav className="fixed left-0 top-0 bottom-0 w-60 z-30 bg-sidebar border-r border-sidebar-border flex-col hidden lg:flex print:hidden">
       <div className="px-5 py-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <img src="/icon-48.png" alt="AcreLedger" className="w-8 h-8 rounded-lg" />
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Sprout size={18} className="text-sidebar-primary" />
+          </div>
           <div>
             <h1 className="text-sm font-bold text-sidebar-primary tracking-wide">AcreLedger</h1>
-            <p className="text-[10px] text-sidebar-foreground/50">Farm Management</p>
+            <p className="text-[11px] text-sidebar-foreground/50">Farm Management</p>
           </div>
         </div>
       </div>
@@ -37,8 +45,24 @@ export default function Sidebar() {
         })}
       </div>
 
-      <div className="px-5 py-3 border-t border-sidebar-border">
-        <p className="text-[10px] font-mono text-sidebar-foreground/40">v3.4.1</p>
+      <div className="px-5 py-3 border-t border-sidebar-border space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={14} className="text-sidebar-foreground/50" />
+          <span className="text-[11px] font-semibold text-sidebar-foreground/50">Season</span>
+        </div>
+        <Select value={viewingSeason.toString()} onValueChange={(v) => setViewingSeason(parseInt(v, 10))}>
+          <SelectTrigger className="w-full h-8 bg-sidebar-accent/50 border-sidebar-border text-sidebar-primary text-xs font-mono">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-card border-border">
+            {seasonOptions.map(y => (
+              <SelectItem key={y} value={y.toString()} className="font-mono text-xs">
+                {y}{y === activeSeason ? ' (Active)' : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] font-mono text-sidebar-foreground/40">v3.4.1</p>
       </div>
     </nav>
   );

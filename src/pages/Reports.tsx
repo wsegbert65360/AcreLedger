@@ -368,7 +368,7 @@ export default function Reports() {
               }`}
             >
               <t.icon size={16} />
-              <span className="hidden sm:inline">{t.label}</span>
+              <span className="hidden md:inline text-[11px]">{t.label}</span>
             </button>
           ))}
         </div>
@@ -429,7 +429,7 @@ export default function Reports() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 text-[10px] font-mono border-spray/30 text-spray hover:bg-spray/10"
+                  className="h-8 text-[11px] font-mono border-spray/30 text-spray hover:bg-spray/10"
                   onClick={() => safeExport(() => generateMissouriLog(sprayRecords, fields), 'spray log')}
                 >
                   <Download size={12} className="mr-1.5" />
@@ -438,7 +438,7 @@ export default function Reports() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 text-[10px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+                  className="h-8 text-[11px] font-mono border-primary/30 text-primary hover:bg-primary/10"
                   onClick={handleExportSprayAuditPdf}
                 >
                   <Download size={12} className="mr-1.5" />
@@ -456,37 +456,37 @@ export default function Reports() {
                     <div key={r._rowKey} className="border border-border/50 rounded-lg p-3 space-y-2 relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1 h-full bg-spray opacity-50" />
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-foreground text-sm uppercase font-mono tracking-tight">{r.fieldName}</span>
-                        <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                        <span className="font-bold text-foreground text-sm tracking-tight">{r.fieldName}</span>
+                        <span className="font-mono text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                           {fmtDate(r.sprayDate) || fmt(r.timestamp)}{r.startTime ? ` @ ${r.startTime}` : ''}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
-                        <div><span className="text-muted-foreground uppercase text-[9px]">Product:</span><div className="text-spray font-bold">{r.product}</div></div>
-                        <div><span className="text-muted-foreground uppercase text-[9px]">EPA Reg #:</span><div className="text-foreground">{r.epaRegNumber || '—'}</div></div>
-                        <div><span className="text-muted-foreground uppercase text-[9px]">Rate / Ac:</span><div className="text-foreground">{r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—'}</div></div>
-                        <div><span className="text-muted-foreground uppercase text-[9px]">Total Acres Treated:</span><div className="text-foreground font-bold">{r.treatedAreaSize || '—'}</div></div>
-                        <div><span className="text-muted-foreground uppercase text-[9px]">Total Product:</span><div className="text-foreground font-bold">{r.amountDisplay}</div></div>
-                        <div><span className="text-muted-foreground uppercase text-[9px]">Equipment:</span><div className="text-foreground">{r.equipmentId || '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[11px]">Product:</span><div className="text-spray font-bold">{r.product}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[11px]">EPA Reg #:</span><div className="text-foreground">{r.epaRegNumber || '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[11px]">Rate / Ac:</span><div className="text-foreground">{r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[11px]">Total Acres Treated:</span><div className="text-foreground font-bold">{r.treatedAreaSize || '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[11px]">Total Product:</span><div className="text-foreground font-bold">{r.amountDisplay}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[11px]">Equipment:</span><div className="text-foreground">{r.equipmentId || '—'}</div></div>
                         <div className="col-span-2 pt-1 border-t border-border/30 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                          <div><span className="text-muted-foreground uppercase text-[9px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || '—'}</span></div>
-                          <div><span className="text-muted-foreground uppercase text-[9px]">Applicator:</span> <span className="text-foreground/80">{r.applicatorName || '—'}</span></div>
-                          <div><span className="text-muted-foreground uppercase text-[9px]">License:</span> <span className="text-foreground/80">{r.licenseNumber || '—'}</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[11px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || '—'}</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[11px]">Applicator:</span> <span className="text-foreground/80">{r.applicatorName || '—'}</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[11px]">License:</span> <span className="text-foreground/80">{r.licenseNumber || '—'}</span></div>
                         </div>
-                        <div className="col-span-2 pt-1 flex flex-wrap gap-x-4 text-[10px] opacity-80">
-                          <div><span className="text-muted-foreground uppercase text-[9px]">Wind:</span> <span className="text-foreground">{r.windSpeed} mph {r.windDirection || ''}</span></div>
-                          <div><span className="text-muted-foreground uppercase text-[9px]">Temp:</span> <span className="text-foreground">{r.temperature}°F</span></div>
-                          <div><span className="text-muted-foreground uppercase text-[9px]">Hum:</span> <span className="text-foreground">{r.relativeHumidity != null ? `${r.relativeHumidity}%` : '—'}</span></div>
+                        <div className="col-span-2 pt-1 flex flex-wrap gap-x-4 text-[11px] opacity-80">
+                          <div><span className="text-muted-foreground uppercase text-[11px]">Wind:</span> <span className="text-foreground">{r.windSpeed} mph {r.windDirection || ''}</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[11px]">Temp:</span> <span className="text-foreground">{r.temperature}°F</span></div>
+                          <div><span className="text-muted-foreground uppercase text-[11px]">Hum:</span> <span className="text-foreground">{r.relativeHumidity != null ? `${r.relativeHumidity}%` : '—'}</span></div>
                         </div>
                       </div>
                       <div className="flex gap-2 flex-wrap pt-1">
                         {r.windSpeed > WIND_ALERT_MPH && (
-                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                          <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
                             ⚠ WIND ALERT
                           </span>
                         )}
                         {!r.epaRegNumber && (
-                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">
+                          <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">
                             NON-COMPLIANT: NO EPA #
                           </span>
                         )}
@@ -662,7 +662,7 @@ export default function Reports() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 text-[10px] font-mono border-blue-500/30 text-blue-600 hover:bg-blue-50"
+                      className="h-8 text-[11px] font-mono border-blue-500/30 text-blue-600 hover:bg-blue-50"
                       onClick={handleExportLandlordCSV}
                     >
                       <Download size={12} className="mr-1.5" />
@@ -671,7 +671,7 @@ export default function Reports() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 text-[10px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+                      className="h-8 text-[11px] font-mono border-primary/30 text-primary hover:bg-primary/10"
                       onClick={handleExportLandlordPdf}
                     >
                       <Download size={12} className="mr-1.5" />
@@ -683,12 +683,12 @@ export default function Reports() {
                     <table className="w-full border-collapse">
                       <thead className="bg-muted/50 border-b border-border">
                         <tr>
-                          <th className="px-4 py-3 text-left font-mono text-[10px] text-muted-foreground uppercase">Field</th>
-                          <th className="px-4 py-3 text-left font-mono text-[10px] text-muted-foreground uppercase">Crop</th>
-                          <th className="px-4 py-3 text-left font-mono text-[10px] text-muted-foreground uppercase">Date</th>
-                          <th className="px-4 py-3 text-right font-mono text-[10px] text-muted-foreground uppercase">Total Bu.</th>
-                          <th className="px-4 py-3 text-right font-mono text-[10px] text-muted-foreground uppercase">Split %</th>
-                          <th className="px-4 py-3 text-right font-mono text-[10px] text-muted-foreground uppercase">Your Share</th>
+                          <th className="px-4 py-3 text-left font-mono text-[11px] text-muted-foreground uppercase">Field</th>
+                          <th className="px-4 py-3 text-left font-mono text-[11px] text-muted-foreground uppercase">Crop</th>
+                          <th className="px-4 py-3 text-left font-mono text-[11px] text-muted-foreground uppercase">Date</th>
+                          <th className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground uppercase">Total Bu.</th>
+                          <th className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground uppercase">Split %</th>
+                          <th className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground uppercase">Your Share</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/50">

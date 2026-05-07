@@ -35,7 +35,7 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
   return (
     <section className="space-y-3 pb-8">
       {!hideHeader && (
-        <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">{year} Activity Feed</h2>
+        <h2 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] text-center">{year} Activity Feed</h2>
       )}
       <div className="bg-card/40 backdrop-blur-md border border-border rounded-2xl overflow-hidden divide-y divide-border/20 shadow-xl">
         {records?.map((record) => {
@@ -66,10 +66,10 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
               className="p-3.5 flex items-center justify-between group cursor-pointer hover:bg-muted/30 transition-all active:bg-muted/50"
             >
               <div className="flex items-center gap-4">
-                <span className="text-[10px] font-mono font-bold text-muted-foreground/60 w-8">{formattedDate}</span>
+                <span className="text-[11px] font-mono font-bold text-muted-foreground/60 w-8">{formattedDate}</span>
                 <span className="text-lg">{info.emoji}</span>
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">{info.label}</span>
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{info.label}</span>
                   <span className="text-xs font-semibold text-foreground line-clamp-1">{info.detail}</span>
                 </div>
               </div>
@@ -86,7 +86,7 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
         {(!records || records.length === 0) && (
           <div className="p-12 text-center space-y-2">
             <div className="text-2xl opacity-20">🚜</div>
-            <p className="text-[10px] text-muted-foreground">No activities for {year}</p>
+            <p className="text-[11px] text-muted-foreground">No activities for {year}</p>
           </div>
         )}
       </div>

@@ -105,7 +105,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                         </div>
                         <div>
                             <DialogTitle className="text-lg font-bold text-foreground leading-tight">Tillage</DialogTitle>
-                            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
+                            <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
                 </header>

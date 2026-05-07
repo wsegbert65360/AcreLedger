@@ -39,7 +39,7 @@ export default function SecurityManager() {
           <div className="pt-4 border-t border-border/10">
             <Button
               variant="link"
-              className="text-[10px] font-mono text-muted-foreground uppercase p-0 h-auto hover:text-primary tracking-widest"
+              className="text-[11px] font-mono text-muted-foreground uppercase p-0 h-auto hover:text-primary tracking-widest"
               onClick={() => navigate('/privacy')}
             >
               Review Full Privacy Policy & Compliance

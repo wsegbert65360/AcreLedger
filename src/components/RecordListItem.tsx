@@ -55,13 +55,13 @@ export default function RecordListItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-bold text-sm text-foreground truncate">{title}</h3>
-            <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">{date}</span>
+            <span className="text-[11px] font-mono text-muted-foreground whitespace-nowrap">{date}</span>
           </div>
           <div className="flex items-center gap-1.5 overflow-hidden">
             {warning && <AlertTriangle size={12} className="text-amber-500 shrink-0" />}
             <p className="text-[11px] font-medium text-muted-foreground truncate uppercase tracking-tight">{subtitle}</p>
           </div>
-          <p className="text-[10px] text-muted-foreground/70 mt-1 line-clamp-1">{details}</p>
+          <p className="text-[11px] text-muted-foreground/70 mt-1 line-clamp-1">{details}</p>
         </div>
         <div className="flex flex-col gap-2 items-center justify-center ml-2">
           <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border group-hover:border-muted-foreground'

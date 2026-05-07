@@ -15,6 +15,7 @@ import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Sidebar from "@/components/Sidebar";
+import OfflineBanner from "@/components/OfflineBanner";
 import { AnimatePresence, motion } from "framer-motion";
 import FieldDetailScreen from "./pages/FieldDetailScreen";
 
@@ -91,6 +92,7 @@ const AppContent = () => {
 
   return (
     <>
+      <OfflineBanner />
       <Sidebar />
       <div className="lg:pl-60 print:pl-0">
         <AnimatedRoutes />

@@ -77,7 +77,7 @@ export default function FieldCard({ field }: FieldCardProps) {
             >
               <div className="flex items-center">
                 <Cloud size={16} />
-                <span className="text-[10px] font-mono font-bold ml-0.5">x{summary?.sprayed}</span>
+                <span className="text-[11px] font-mono font-bold ml-0.5">x{summary?.sprayed}</span>
               </div>
             </button>
           )}

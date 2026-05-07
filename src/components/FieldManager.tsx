@@ -99,7 +99,7 @@ export default function FieldManager() {
                 <p className="text-xs text-destructive font-bold mb-1">
                   Cloud Sync Failed
                 </p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Showing local cache. Check your connection.
                 </p>
               </>
@@ -117,7 +117,7 @@ export default function FieldManager() {
               <div className="space-y-2">
                 {/* ✅ Fix: Show "Row Crops" header only when both categories are present */}
                 {bothCategories && (
-                  <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-tight px-1">
                     Row Crops
                   </h3>
                 )}
@@ -135,7 +135,7 @@ export default function FieldManager() {
             {pastureHay.length > 0 && (
               <div className="space-y-2">
                 {bothCategories && (
-                  <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-1">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-tight px-1">
                     Pasture & Hay
                   </h3>
                 )}

@@ -331,9 +331,14 @@ export default function FieldDetailScreen() {
               { label: '7 Days', value: fmtRain(rainStats?.['7d']) },
               { label: 'Planted', value: fmtRain(rainStats?.sincePlanting), sub: 'Since' },
               { label: 'Sprayed', value: fmtRain(rainStats?.sinceLastSpray), sub: 'Since' },
+              { label: 'Season', value: rainStats?.periodEndUtc ? (() => {
+                const start = latestPlanting?.plantDate ? new Date(latestPlanting.plantDate) : new Date(`${viewingSeason}-03-01`);
+                const end = new Date();
+                const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000);
+                return `${days}d`;})() : '—' },
             ].map((stat, i) => (
-              <div key={i} className={`p-3 rounded-2xl bg-muted/50 border border-border/60 ${stat.label === 'Planted' || stat.label === 'Sprayed' ? 'col-span-1' : ''}`}>
-                <div className="text-[8px] font-black text-muted-foreground uppercase tracking-widest mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
+              <div key={i} className="p-3 rounded-2xl bg-muted/50 border border-border/60">
+                <div className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
                 <div className="text-xl font-black text-foreground leading-none">{stat.value}"</div>
               </div>
             ))}
@@ -397,7 +402,7 @@ export default function FieldDetailScreen() {
                         {p.product} ({p.rate} {p.rateUnit})
                       </span>
                       {p.activeIngredients && (
-                        <span className="text-[9px] font-mono text-muted-foreground italic leading-none pb-0.5">
+                        <span className="text-[11px] font-mono text-muted-foreground italic leading-none pb-0.5">
                           {p.activeIngredients}
                         </span>
                       )}

@@ -313,7 +313,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-muted-foreground font-mono text-xs font-bold uppercase tracking-wider">Herbicide Mix (Granular Audit) *</Label>
-                <div className="text-[10px] font-mono text-muted-foreground">EPA REG # REQUIRED PER ITEM</div>
+                <div className="text-[11px] font-mono text-muted-foreground">EPA REG # REQUIRED PER ITEM</div>
               </div>
 
               {products.map((p, i) => (
@@ -326,7 +326,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="col-span-1">
-                        <Label htmlFor={`productName-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Trade Name *</Label>
+                        <Label htmlFor={`productName-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Trade Name *</Label>
                         <Input
                           id={`productName-${i}`}
                           value={p.product}
@@ -336,7 +336,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                         />
                       </div>
                       <div className="col-span-1">
-                        <Label htmlFor={`epaReg-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
+                        <Label htmlFor={`epaReg-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
                         <Input
                           id={`epaReg-${i}`}
                           value={p.epaRegNumber}
@@ -348,7 +348,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     </div>
                     
                     <div>
-                      <Label htmlFor={`activeIngredients-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Active Ingredients</Label>
+                      <Label htmlFor={`activeIngredients-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Active Ingredients</Label>
                       <Input
                         id={`activeIngredients-${i}`}
                         value={p.activeIngredients || ''}
@@ -360,7 +360,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label htmlFor={`appRate-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Rate / Ac *</Label>
+                        <Label htmlFor={`appRate-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Rate / Ac *</Label>
                         <div className="flex gap-1.5 mt-0.5">
                           <Input 
                             id={`appRate-${i}`} 
@@ -373,7 +373,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                             value={p.rateUnit} 
                             onValueChange={(val) => updateProduct(i, 'rateUnit', val)}
                           >
-                            <SelectTrigger className="bg-background border-border text-foreground text-[10px] h-8 px-2 flex-1">
+                            <SelectTrigger className="bg-background border-border text-foreground text-[11px] h-8 px-2 flex-1">
                               <SelectValue placeholder="Unit" />
                             </SelectTrigger>
                             <SelectContent>
@@ -388,7 +388,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor={`totalProduct-${i}`} className="text-[9px] font-mono text-muted-foreground uppercase">Total Product Amt</Label>
+                        <Label htmlFor={`totalProduct-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Total Product Amt</Label>
                         <div className="flex gap-1.5 mt-0.5">
                           <Input 
                             id={`totalProduct-${i}`} 
@@ -401,7 +401,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                             value={p.totalProductUnit || 'gal'} 
                             onValueChange={(val) => updateProduct(i, 'totalProductUnit', val)}
                           >
-                            <SelectTrigger className="bg-background border-border text-foreground text-[10px] h-8 px-2 flex-1">
+                            <SelectTrigger className="bg-background border-border text-foreground text-[11px] h-8 px-2 flex-1">
                               <SelectValue placeholder="Unit" />
                             </SelectTrigger>
                             <SelectContent>
@@ -420,7 +420,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 </div>
               ))}
 
-              <Button onClick={addProduct} variant="outline" size="sm" className="w-full border-dashed border-spray/30 text-spray text-[10px] h-8 font-bold">
+              <Button onClick={addProduct} variant="outline" size="sm" className="w-full border-dashed border-spray/30 text-spray text-[11px] h-8 font-bold">
                 <Plus size={12} className="mr-1" /> ADD ANOTHER PRODUCT
               </Button>
             </div>
@@ -443,14 +443,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="startTime" className="text-[10px] font-mono text-muted-foreground uppercase">Start Time *</Label>
+                      <Label htmlFor="startTime" className="text-[11px] font-mono text-muted-foreground uppercase">Start Time *</Label>
                       <Input id="startTime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !startTime.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                     <div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="endTime" className="text-[10px] font-mono text-muted-foreground uppercase">End Time *</Label>
+                        <Label htmlFor="endTime" className="text-[11px] font-mono text-muted-foreground uppercase">End Time *</Label>
                         <div className="flex items-center gap-1">
-                          <span className="text-[8px] font-mono text-muted-foreground">MANUAL</span>
+                          <span className="text-[11px] font-mono text-muted-foreground">MANUAL</span>
                           <Switch id="endTimeManual" checked={isEndTimeManual} onCheckedChange={setIsEndTimeManual} className="scale-75 h-4 w-7" />
                         </div>
                       </div>
@@ -465,11 +465,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-1">
-                      <Label htmlFor="cropTreated" className="text-[10px] font-mono text-muted-foreground uppercase">Crop / Site Treated *</Label>
+                      <Label htmlFor="cropTreated" className="text-[11px] font-mono text-muted-foreground uppercase">Crop / Site Treated *</Label>
                       <Input id="cropTreated" value={cropOrSiteTreated} onChange={e => setCropOrSiteTreated(e.target.value)} placeholder="e.g. Corn" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !cropOrSiteTreated.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                     <div>
-                      <Label htmlFor="appMethod" className="text-[10px] font-mono text-muted-foreground uppercase">App Method *</Label>
+                      <Label htmlFor="appMethod" className="text-[11px] font-mono text-muted-foreground uppercase">App Method *</Label>
                       <Select value={applicationMethod} onValueChange={setApplicationMethod}>
                         <SelectTrigger className={`mt-0.5 bg-muted border-border text-foreground h-9 text-xs ${showValidation && !applicationMethod.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
                           <SelectValue placeholder="Select method" />
@@ -483,7 +483,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="siteAddress" className="text-[10px] font-mono text-muted-foreground uppercase">Site Description / Address</Label>
+                    <Label htmlFor="siteAddress" className="text-[11px] font-mono text-muted-foreground uppercase">Site Description / Address</Label>
                     <Input id="siteAddress" value={siteAddress} onChange={e => setSiteAddress(e.target.value)} placeholder="Field name or location" className="mt-0.5 bg-muted border-border text-foreground h-9" />
                   </div>
                 </div>
@@ -494,7 +494,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="treatedArea" className="text-[10px] font-mono text-muted-foreground uppercase">Treated Area Size *</Label>
+                      <Label htmlFor="treatedArea" className="text-[11px] font-mono text-muted-foreground uppercase">Treated Area Size *</Label>
                       <div className="flex gap-1">
                         <Input id="treatedArea" value={treatedAreaSize} onChange={e => setTreatedAreaSize(e.target.value)} placeholder="80" className={`mt-0.5 bg-muted border-border text-foreground h-9 flex-1 ${showValidation && !treatedAreaSize.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                         <Select value={treatedAreaUnit} onValueChange={setTreatedAreaUnit}>
@@ -509,19 +509,19 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="targetPest" className="text-[10px] font-mono text-muted-foreground uppercase">Target Pest(s) *</Label>
+                      <Label htmlFor="targetPest" className="text-[11px] font-mono text-muted-foreground uppercase">Target Pest(s) *</Label>
                       <Input id="targetPest" value={targetPest} onChange={e => setTargetPest(e.target.value)} placeholder="e.g. Pigweed" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !targetPest.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="totalAmount" className="text-[10px] font-mono text-muted-foreground uppercase">Total Material Applied</Label>
+                      <Label htmlFor="totalAmount" className="text-[11px] font-mono text-muted-foreground uppercase">Total Material Applied</Label>
                       <Input id="totalAmount" value={totalAmountApplied} onChange={e => setTotalAmountApplied(e.target.value)} placeholder="Auto-sum" className="mt-0.5 bg-muted border-border text-foreground h-9 font-bold" />
                     </div>
                     <div className="flex items-center space-x-2 pt-5">
                       <Switch id="premixed" checked={isPremixed} onCheckedChange={setIsPremixed} />
-                      <Label htmlFor="premixed" className="text-[10px] font-mono text-muted-foreground uppercase">Premixed</Label>
+                      <Label htmlFor="premixed" className="text-[11px] font-mono text-muted-foreground uppercase">Premixed</Label>
                     </div>
                   </div>
                 </div>
@@ -532,30 +532,30 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="applicator" className="text-[10px] font-mono text-muted-foreground uppercase">Cert. Applicator *</Label>
+                      <Label htmlFor="applicator" className="text-[11px] font-mono text-muted-foreground uppercase">Cert. Applicator *</Label>
                       <Input id="applicator" value={applicatorName} onChange={e => setApplicatorName(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !applicatorName.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                     <div>
-                      <Label htmlFor="license" className="text-[10px] font-mono text-muted-foreground uppercase">License # *</Label>
+                      <Label htmlFor="license" className="text-[11px] font-mono text-muted-foreground uppercase">License # *</Label>
                       <Input id="license" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !licenseNumber.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="equipmentId" className="text-[10px] font-mono text-muted-foreground uppercase">Equipment ID *</Label>
+                      <Label htmlFor="equipmentId" className="text-[11px] font-mono text-muted-foreground uppercase">Equipment ID *</Label>
                       <Input id="equipmentId" value={equipmentId} onChange={e => setEquipmentId(e.target.value)} placeholder="e.g. Miller Nitro" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !equipmentId.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
                     </div>
                     <div>
-                      <Label htmlFor="rei" className="text-[10px] font-mono text-muted-foreground uppercase">REI (Re-entry)</Label>
+                      <Label htmlFor="rei" className="text-[11px] font-mono text-muted-foreground uppercase">REI (Re-entry)</Label>
                       <Input id="rei" value={rei} onChange={e => setRei(e.target.value)} placeholder="e.g. 12h" className="mt-0.5 bg-muted border-border text-foreground h-9" />
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="technicians" className="text-[10px] font-mono text-muted-foreground uppercase">Involved Technicians / Helpers (Optional)</Label>
+                    <Label htmlFor="technicians" className="text-[11px] font-mono text-muted-foreground uppercase">Involved Technicians / Helpers (Optional)</Label>
                     <Input id="technicians" value={involvedTechnicians} onChange={e => setInvolvedTechnicians(e.target.value)} placeholder="e.g. John Doe, Mike Smith" className="mt-0.5 bg-muted border-border text-foreground h-9" />
                   </div>
                   <div>
-                    <Label htmlFor="notes" className="text-[10px] font-mono text-muted-foreground uppercase">Notes / Additional Info</Label>
+                    <Label htmlFor="notes" className="text-[11px] font-mono text-muted-foreground uppercase">Notes / Additional Info</Label>
                     <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add any extra compliance or field notes here..." className="mt-0.5 bg-muted border-border text-foreground text-xs resize-none" rows={2} />
                   </div>
                 </div>
@@ -565,7 +565,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
           <div className={`rounded-lg border p-3 space-y-3 ${weather ? 'border-spray/20 bg-muted/30' : 'border-destructive/30 bg-destructive/5'}`}>
             <div className="flex items-center justify-between">
-              <span className={`font-mono text-[10px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
+              <span className={`font-mono text-[11px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
                 Environmental Conditions *
               </span>
               {loading && <Loader2 size={12} className="text-spray animate-spin" />}
@@ -573,7 +573,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-[9px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
+                <Label className="text-[11px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
                 <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
                   <SelectTrigger className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindDirection.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
                     <SelectValue placeholder="Dir" />
@@ -586,7 +586,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-[9px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
+                <Label className="text-[11px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
                 <div className="text-sm font-mono font-bold text-right pt-1">{weather?.wind || 0} mph</div>
               </div>
             </div>
@@ -594,11 +594,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             {weather && (
               <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
                 <div className="space-y-0.5">
-                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Temp (°F) *</div>
+                  <div className="text-[11px] font-mono text-muted-foreground uppercase">Temp (°F) *</div>
                   <div className="text-xs font-mono font-bold">{weather.temp}°F</div>
                 </div>
                 <div className="space-y-0.5 text-right">
-                  <div className="text-[9px] font-mono text-muted-foreground uppercase">Humidity (%)</div>
+                  <div className="text-[11px] font-mono text-muted-foreground uppercase">Humidity (%)</div>
                   <div className="text-xs font-mono font-bold">{weather.humidity}%</div>
                 </div>
               </div>
@@ -610,12 +610,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 <AlertTriangle size={14} />
                 Record will be saved as incomplete
               </div>
-              <p className="text-[10px] text-yellow-300/80 leading-relaxed">
+              <p className="text-[11px] text-yellow-300/80 leading-relaxed">
                 The following compliance fields are missing. You can complete them later by editing this record.
               </p>
               <ul className="mt-1 space-y-0.5">
                 {missingComplianceFields.map(f => (
-                  <li key={f} className="text-[10px] font-mono text-yellow-400/80">· {f}</li>
+                  <li key={f} className="text-[11px] font-mono text-yellow-400/80">· {f}</li>
                 ))}
               </ul>
             </div>
