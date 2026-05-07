@@ -94,7 +94,7 @@ const Index = () => {
             {filteredRowCrops.length > 0 && (
               <div className="space-y-1">
                 {filteredPastureHay.length > 0 && (
-                  <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
+                  <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-tight px-1">Row Crops</h2>
                 )}
                 <FieldList fields={filteredRowCrops} />
               </div>
@@ -102,7 +102,7 @@ const Index = () => {
 
             {filteredPastureHay.length > 0 && (
               <div className="space-y-1 pt-1">
-                <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
+                <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-tight px-1">Pasture & Hay</h2>
                 <FieldList fields={filteredPastureHay} />
               </div>
             )}
