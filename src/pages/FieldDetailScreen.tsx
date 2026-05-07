@@ -101,7 +101,14 @@ export default function FieldDetailScreen() {
 
   // Fetching Logic
   const handleFetchRain = useCallback(async (signal?: AbortSignal) => {
-    if (!field || fetchingRainRef.current) return;
+    if (!field?.id || fetchingRainRef.current) return;
+    
+    // Skip if we already have stats and the key parameters haven't changed
+    // This handles cases where other state changes cause a re-render
+    const fetchKey = `${field.id}-${latestPlanting?.plantDate || ''}-${latestSpray?.sprayDate || ''}`;
+    if (rainStats && (handleFetchRain as any).lastFetchKey === fetchKey) return;
+    (handleFetchRain as any).lastFetchKey = fetchKey;
+
     fetchingRainRef.current = true;
     setFetchingRain(true);
     setRainError(null);
@@ -115,22 +122,38 @@ export default function FieldDetailScreen() {
         sinceLastSprayDate: latestSpray?.sprayDate,
         signal
       });
-      setRainStats(data);
+      if (!signal?.aborted) {
+        setRainStats(data);
+      }
     } catch (err: any) {
-      if (err.name === 'AbortError') return;
+      if (err.name === 'AbortError' || signal?.aborted) return;
       console.error('[FieldDetail] Rain fetch error:', err);
       setRainError(err.message || 'Could not load rainfall data.');
     } finally {
-      fetchingRainRef.current = false;
-      setFetchingRain(false);
+      if (!signal?.aborted) {
+        fetchingRainRef.current = false;
+        setFetchingRain(false);
+      }
     }
-  }, [field, latestPlanting?.plantDate, latestSpray?.sprayDate]);
+  }, [
+    field?.id, 
+    field?.lat, 
+    field?.lng, 
+    field?.boundary, 
+    latestPlanting?.plantDate, 
+    latestSpray?.sprayDate,
+    rainStats // Need this to check if we already have data
+  ]);
 
   useEffect(() => {
     if (!field?.id) return;
     const controller = new AbortController();
     handleFetchRain(controller.signal);
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      // Ensure we clear the fetching ref on unmount
+      fetchingRainRef.current = false;
+    };
   }, [field?.id, handleFetchRain]);
 
   const location = useLocation();

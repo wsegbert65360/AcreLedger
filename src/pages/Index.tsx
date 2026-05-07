@@ -85,10 +85,16 @@ const Index = () => {
 
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-3 lg:max-w-5xl lg:px-8">
-        {loading ? <DashboardStatsSkeleton /> : <DashboardStats />}
-        <WeatherBar />
+        <ErrorBoundary>
+          {loading ? <DashboardStatsSkeleton /> : <DashboardStats />}
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <WeatherBar />
+        </ErrorBoundary>
         {managing ? (
-          <FieldManager />
+          <ErrorBoundary>
+            <FieldManager />
+          </ErrorBoundary>
         ) : (
           <>
             {filteredRowCrops.length > 0 && (
@@ -96,14 +102,18 @@ const Index = () => {
                 {filteredPastureHay.length > 0 && (
                   <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
                 )}
-                <FieldList fields={filteredRowCrops} />
+                <ErrorBoundary>
+                  <FieldList fields={filteredRowCrops} />
+                </ErrorBoundary>
               </div>
             )}
 
             {filteredPastureHay.length > 0 && (
               <div className="space-y-1 pt-1">
                 <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
-                <FieldList fields={filteredPastureHay} />
+                <ErrorBoundary>
+                  <FieldList fields={filteredPastureHay} />
+                </ErrorBoundary>
               </div>
             )}
             {filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (

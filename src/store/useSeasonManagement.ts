@@ -13,6 +13,7 @@ import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
+import { setStorageLock } from './storageUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,6 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
           .eq('id', session.user.id);
 
         if (error) {
-          // Replace with Sentry.captureException(error) in production
           console.error('Error updating active season:', error);
           toast.error('Failed to save new season to cloud. Season was NOT changed.');
           return false;
@@ -147,10 +147,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
     setLoading(true);
     try {
-      // 1. Validate schema
       const backupData = backupSchema.parse(rawData);
 
-      // 2. Map all records to DB format
       const fieldsToDb      = (backupData.fields               ?? []).map((f) => ({ ...mapFieldToDb(f),      farm_id }));
       const binsToDb        = (backupData.bins                 ?? []).map((b) => ({ ...mapBinToDb(b),        farm_id }));
       const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => ({ ...mapPlantToDb(r),      farm_id }));
@@ -164,7 +162,6 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => ({ ...mapFertilizerRecipeToDb(r), farm_id }));
       const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => ({ ...mapRecipeToDb(r),     farm_id }));
 
-      // 3. Restore through transactional RPC to avoid partial table writes.
       const payload = {
         fields: fieldsToDb,
         bins: binsToDb,
@@ -186,12 +183,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       });
 
       if (error) {
-        console.error('Restore failed in restore_farm_backup RPC:', error);
         throw new Error(`Failed to restore backup: ${error.message}`);
       }
 
-      // 4. All DB writes succeeded — update local state in one pass.
-      //    Use !== undefined (not falsy) so empty arrays are applied correctly.
       if (backupData.fields               !== undefined) setFields(backupData.fields);
       if (backupData.bins                 !== undefined) setBins(backupData.bins);
       if (backupData.plantRecords         !== undefined) setPlantRecords(backupData.plantRecords);
@@ -230,17 +224,15 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
   // ─── Clear Cache ─────────────────────────────────────────────────────────────
 
   const clearLocalCache = useCallback(() => {
-    // session is read at call time via args — not a stale closure risk
-    // because this function is recreated whenever session changes (it's in deps via args).
+    setStorageLock(true);
+    
     const userId = session?.user?.id;
     const userPrefix = userId ? `${userId}_al_` : null;
 
-    // Object.keys returns a snapshot — safe to remove keys while iterating
     const keysToRemove = Object.keys(localStorage).filter(key =>
       key.startsWith('al_') || (userPrefix && key.startsWith(userPrefix))
     );
 
-    // Batch the removal to avoid synchronous blocking of the main thread
     const batchRemove = (keys: string[], startIndex: number = 0) => {
       const BATCH_SIZE = 100;
       const endIndex = Math.min(startIndex + BATCH_SIZE, keys.length);
@@ -251,14 +243,17 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
       if (endIndex < keys.length) {
         requestAnimationFrame(() => batchRemove(keys, endIndex));
+      } else {
+        setStorageLock(false);
       }
     };
 
     if (keysToRemove.length > 0) {
       batchRemove(keysToRemove);
+    } else {
+      setStorageLock(false);
     }
 
-    // Reset all local state in one logical pass
     setFields([]);
     setBins([]);
     setPlantRecords([]);
