@@ -4,7 +4,7 @@ import { useFarm } from '@/store/farmStore';
 import {
   Sprout, Leaf, Tractor, ArrowLeft,
   Cloud, MapPin, Droplets, RefreshCw,
-  AlertCircle, History, Wheat, Package,
+  AlertCircle, History as HistoryIcon, Wheat, Package,
   FileText, ExternalLink, Info, CheckCircle2
 } from 'lucide-react';
 import { RainService, type RainfallResult } from '@/services/RainService';
@@ -272,7 +272,7 @@ export default function FieldDetailScreen() {
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="p-1.5 rounded-lg bg-harvest/10 text-harvest">
-                <History size={16} />
+                <HistoryIcon size={16} />
               </div>
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-tighter">Latest</span>
             </div>
@@ -338,7 +338,7 @@ export default function FieldDetailScreen() {
             }}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-muted/80 transition-colors"
           >
-            <History size={14} />
+            <HistoryIcon size={14} />
             View Full History
           </button>
         </section>
@@ -474,7 +474,7 @@ export default function FieldDetailScreen() {
         <section id="history-section" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
-              <History size={16} className="text-muted-foreground" />
+              <HistoryIcon size={16} className="text-muted-foreground" />
               Field History
             </h3>
             <button
@@ -503,7 +503,7 @@ export default function FieldDetailScreen() {
             {unifiedRecords.length === 0 && (
               <div className="py-12 text-center space-y-2">
                 <div className="p-3 rounded-full bg-muted w-fit mx-auto text-muted-foreground">
-                  <History size={24} />
+                  <HistoryIcon size={24} />
                 </div>
                 <p className="text-xs font-medium text-muted-foreground">No activity logged for this season</p>
               </div>

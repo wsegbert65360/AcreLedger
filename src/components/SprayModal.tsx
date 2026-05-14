@@ -8,7 +8,7 @@ import { useFarm } from '@/store/farmStore';
 import { Field, SprayRecipeProduct, SprayRecord } from '@/types/farm';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
-import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus, FileDown, AlertTriangle } from 'lucide-react';
+import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus, FileDown, AlertTriangle, History as HistoryIcon } from 'lucide-react';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Textarea } from '@/components/ui/textarea';
@@ -739,7 +739,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     disabled={isRecovering}
                     className="h-6 px-2 text-[10px] font-bold text-spray hover:bg-spray/10"
                   >
-                    {isRecovering ? <Loader2 size={10} className="animate-spin mr-1" /> : <History size={10} className="mr-1" />}
+                    {isRecovering ? <Loader2 size={10} className="animate-spin mr-1" /> : <HistoryIcon size={10} className="mr-1" />}
                     RECOVER PAST WEATHER
                   </Button>
                 )}

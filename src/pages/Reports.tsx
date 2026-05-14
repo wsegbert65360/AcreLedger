@@ -3,7 +3,7 @@ import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History, Tractor } from 'lucide-react';
+import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History as HistoryIcon, Tractor } from 'lucide-react';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
@@ -340,7 +340,7 @@ export default function Reports() {
         {/* Season Selector */}
         <div className="flex items-center justify-between gap-4 bg-muted/30 border border-border p-3 rounded-lg print:hidden">
           <div className="flex items-center gap-2">
-            <History size={16} className="text-muted-foreground" />
+            <HistoryIcon size={16} className="text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground">Season View</span>
           </div>
           <Select
