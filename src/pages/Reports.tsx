@@ -482,7 +482,7 @@ export default function Reports() {
                           <div><span className="text-muted-foreground uppercase text-[11px]">Hum:</span> <span className="text-foreground">{r.relativeHumidity != null ? `${r.relativeHumidity}%` : '—'}</span></div>
                         </div>
                       </div>
-                      <div className="flex gap-2 flex-wrap pt-1">
+                      <div className="flex gap-2 flex-wrap pt-1 print:hidden">
                         {r.windSpeed > WIND_ALERT_MPH && (
                           <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
                             ⚠ WIND ALERT
