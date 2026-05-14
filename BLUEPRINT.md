@@ -160,7 +160,8 @@ Supports multiple products per application (tank-mix) and advanced environmental
   siteAddress, involvedTechnicians, mixtureRate, totalMixtureVolume,
   rei, notes, complianceProfile: 'universal', isPremixed, nonCompliant, deleted_at }
 ```
-- **End Time Estimation**: Application duration is auto-calculated at a default rate of **54.5 acres/hour** with manual override.
+- **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph) with manual override.
+- **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
 - **Non-Compliant Flag**: Triggered if any product is missing an `epaRegNumber`.
 - **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
