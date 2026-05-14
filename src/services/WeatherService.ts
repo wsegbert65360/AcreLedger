@@ -185,5 +185,39 @@ export const WeatherService = {
         const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
         const idx = Math.round(deg / 22.5) % 16;
         return directions[idx];
+    },
+
+    /**
+     * Fetches historical conditions for a specific location and timestamp.
+     * Useful for recovering missing weather data in old records.
+     */
+    async fetchHistoricalConditions(lat: number, lng: number, dateStr: string, timeStr?: string): Promise<WeatherData | null> {
+        if (!API_KEY || API_KEY === 'undefined') return null;
+
+        try {
+            // Format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+            const dateTime = timeStr ? `${dateStr}T${timeStr}:00` : dateStr;
+            const url = `${VC_BASE_URL}/${lat},${lng}/${dateTime}?unitGroup=us&key=${API_KEY}&contentType=json&include=hours,current&elements=temp,humidity,windspeed,winddir`;
+
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Historical weather fetch failed');
+            
+            const data = await res.json();
+            
+            // If we provided a specific time, the 'currentConditions' in the response 
+            // will reflect that specific moment in the timeline API.
+            const target = data.currentConditions || data.days?.[0];
+            if (!target) return null;
+
+            return {
+                temp: Math.round(target.temp),
+                humidity: Math.round(target.humidity),
+                wind: Math.round(target.windspeed),
+                windDirection: this.degreesToDirection(target.winddir)
+            };
+        } catch (error) {
+            console.error('[WeatherService] Error fetching historical weather:', error);
+            return null;
+        }
     }
 };

@@ -85,6 +85,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [sensitiveAreaNotes, setSensitiveAreaNotes] = useState(initialData?.sensitiveAreaNotes || '');
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
 
   // Auto-calculate total amount for each product and the general summary
   useEffect(() => {
@@ -251,6 +252,36 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       if (recipe.applicatorName) setApplicatorName(recipe.applicatorName);
       if (recipe.licenseNumber) setLicenseNumber(recipe.licenseNumber);
       if (recipe.targetPest) setTargetPest(recipe.targetPest);
+    }
+  };
+
+  const handleRecoverWeather = async () => {
+    if (!field.lat || !field.lng || !sprayDate) {
+      toast.error('Need field location and spray date to recover weather.');
+      return;
+    }
+    
+    setIsRecovering(true);
+    try {
+      const hist = await WeatherService.fetchHistoricalConditions(
+        field.lat, 
+        field.lng, 
+        sprayDate, 
+        startTime || undefined
+      );
+      
+      if (hist) {
+        setWeather(hist);
+        setManualWindDirection(hist.windDirection);
+        setManualWindSpeed(hist.wind.toString());
+        toast.success(`Recovered weather for ${sprayDate}${startTime ? ' at ' + startTime : ''}`);
+      } else {
+        toast.error('Could not find historical weather for this time.');
+      }
+    } catch (err) {
+      toast.error('Weather recovery failed.');
+    } finally {
+      setIsRecovering(false);
     }
   };
 
@@ -699,7 +730,21 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               <span className={`font-mono text-[11px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
                 Environmental Conditions *
               </span>
-              {loading && <Loader2 size={12} className="text-spray animate-spin" />}
+              <div className="flex items-center gap-2">
+                {(!weather || weather.wind === 0 || manualWindSpeed === '0') && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleRecoverWeather}
+                    disabled={isRecovering}
+                    className="h-6 px-2 text-[10px] font-bold text-spray hover:bg-spray/10"
+                  >
+                    {isRecovering ? <Loader2 size={10} className="animate-spin mr-1" /> : <History size={10} className="mr-1" />}
+                    RECOVER PAST WEATHER
+                  </Button>
+                )}
+                {loading && <Loader2 size={12} className="text-spray animate-spin" />}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
