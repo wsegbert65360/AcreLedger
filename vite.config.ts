@@ -96,18 +96,7 @@ export default defineConfig(({ mode }) => ({
     })
   ].filter(Boolean),
   build: {
-    chunkSizeWarningLimit: 600,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-map': ['leaflet', 'react-leaflet'],
-          'vendor-charts': ['recharts'],
-          'vendor-ui': ['lucide-react', 'framer-motion', '@radix-ui/react-tooltip', '@radix-ui/react-dialog', '@radix-ui/react-label', '@radix-ui/react-select'],
-          'vendor-utils': ['jspdf', 'jspdf-autotable', 'date-fns', 'clsx', 'tailwind-merge'],
-          'vendor-query': ['@tanstack/react-query']
-        }
-      }
-    }
+    chunkSizeWarningLimit: 1000,
   },
   resolve: {
     alias: {
