@@ -61,8 +61,17 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
   const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
   const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
-  const [manualWindDirection, setManualWindDirection] = useState<string>(initialData?.windDirection || '');
+  const [manualWindDirection, setManualWindDirection] = useState<string>('');
+  const [manualWindSpeed, setManualWindSpeed] = useState<string>('');
   const [isPremixed, setIsPremixed] = useState(initialData?.isPremixed || false);
+
+  // Initialize weather related states from initialData if available
+  useEffect(() => {
+    if (initialData) {
+      setManualWindDirection(initialData.windDirection || '');
+      setManualWindSpeed(initialData.windSpeed?.toString() || '');
+    }
+  }, [initialData]);
 
   // New Universal Fields
   const [endTime, setEndTime] = useState(initialData?.endTime || '');
@@ -83,7 +92,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     if (isNaN(acres) || acres <= 0) return;
 
     let firstProductTotal = 0;
-    
+
     setProducts(prev => {
       let changed = false;
       const next = prev.map((p, i) => {
@@ -91,7 +100,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         if (isNaN(rate) || rate <= 0) return p;
 
         const { value, unit } = calculateTotalAmount(rate, acres, p.rateUnit);
-        
+
         if (i === 0) firstProductTotal = value;
 
         if (p.totalProductAmount !== value.toString() || p.totalProductUnit !== unit) {
@@ -111,21 +120,21 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   // Handle End Time Estimation
   useEffect(() => {
     if (isEndTimeManual || !startTime || !treatedAreaSize) return;
-    
+
     const acres = parseFloat(treatedAreaSize);
     if (isNaN(acres) || acres <= 0) return;
 
     const [hours, minutes] = startTime.split(':').map(Number);
     const startMins = hours * 60 + minutes;
-    
+
     // 100' sprayer @ 5mph = ~60.6 acres per hour
     // (100 * 5) / 8.25 = 60.6 (Approx 1 acre per minute)
     const durationMins = Math.round(acres / (60.6 / 60));
     const endTotalMins = (startMins + durationMins) % (24 * 60);
-    
+
     const endH = Math.floor(endTotalMins / 60).toString().padStart(2, '0');
     const endM = (endTotalMins % 60).toString().padStart(2, '0');
-    
+
     setEndTime(`${endH}:${endM}`);
   }, [startTime, treatedAreaSize, isEndTimeManual]);
 
@@ -149,7 +158,17 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setTotalMixtureVolume('');
     setIsPremixed(false);
     setManualWindDirection('');
-    setProducts([{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '', activeIngredients: '', totalProductAmount: '', totalProductUnit: 'gal' }]);
+    setManualWindSpeed('');
+    setProducts([{ 
+      ui_id: crypto.randomUUID(), 
+      product: '', 
+      rate: '', 
+      rateUnit: 'oz/ac', 
+      epaRegNumber: '',
+      activeIngredients: '',
+      totalProductAmount: '',
+      totalProductUnit: 'gal'
+    }]);
     setSelectedRecipeId('');
   };
 
@@ -189,6 +208,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setInvolvedTechnicians(initialData.involvedTechnicians || '');
       setEquipmentId(initialData.equipmentId || '');
       setManualWindDirection(initialData.windDirection || '');
+      setManualWindSpeed(initialData.windSpeed?.toString() || '');
       setIsPremixed(initialData.isPremixed || false);
       setCropOrSiteTreated(initialData.cropOrSiteTreated || '');
       setApplicationMethod(initialData.applicationMethod || 'Ground Broadcast');
@@ -206,8 +226,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     if (open && field.lat != null && field.lng != null) {
       setLoading(true);
       WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
+        if (!w || w.isError) {
+          setLoading(false);
+          return;
+        }
         setWeather(w);
-        if (w && !manualWindDirection) setManualWindDirection(w.windDirection);
+        // Only auto-populate manual fields if they are empty
+        if (!manualWindDirection) setManualWindDirection(w.windDirection);
+        if (!manualWindSpeed) setManualWindSpeed(w.wind.toString());
         setLoading(false);
       }).catch(() => {
         setLoading(false);
@@ -303,7 +329,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           totalProductAmount: p.totalProductAmount || undefined,
           totalProductUnit: p.totalProductUnit || 'gal'
         })),
-        windSpeed: weather?.wind || initialData?.windSpeed || 0,
+        windSpeed: parseFloat(manualWindSpeed) || weather?.wind || initialData?.windSpeed || 0,
         temperature: weather?.temp || initialData?.temperature || 0,
         applicatorName: applicatorName.trim(),
         licenseNumber: licenseNumber.trim(),
@@ -692,7 +718,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               </div>
               <div className="space-y-1">
                 <Label className="text-[11px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
-                <div className="text-sm font-mono font-bold text-right pt-1">{weather?.wind || 0} mph</div>
+                <Input 
+                  value={manualWindSpeed} 
+                  onChange={e => setManualWindSpeed(e.target.value)} 
+                  placeholder={weather?.wind?.toString() || "0"}
+                  className={`h-8 bg-background border-border text-xs font-mono text-right ${showValidation && !manualWindSpeed.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                />
               </div>
             </div>
 
