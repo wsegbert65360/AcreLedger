@@ -2,6 +2,7 @@ import BottomNav from '@/components/BottomNav';
 import { Settings as SettingsIcon } from 'lucide-react';
 import SeedManager from '@/components/settings/SeedManager';
 import RecipeManager from '@/components/settings/RecipeManager';
+import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManager';
 import DisplayManager from '@/components/settings/DisplayManager';
 import SyncStatus from '@/components/settings/SyncStatus';
 import BackupManager from '@/components/settings/BackupManager';
@@ -29,6 +30,7 @@ export default function Settings() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <SeedManager />
           <RecipeManager />
+          <FertilizerRecipeManager />
           <DisplayManager />
           <SyncStatus />
           <BackupManager />

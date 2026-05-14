@@ -233,6 +233,8 @@ Saved fertilizer formulas for reuse on fertilizer application records.
 ```ts
 { id, farm_id, name, npkRatio, deleted_at }
 ```
+- **Management**: Users can create, edit, and delete fertilizer recipes directly in the **Settings** page or save a new formula as a recipe while recording an application.
+- **Usage**: Saved recipes appear as a dropdown in the Fertilizer Modal for quick data entry.
 
 ### Rainfall
 High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar + field-based historical lookups).
