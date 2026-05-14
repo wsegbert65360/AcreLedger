@@ -97,6 +97,16 @@ export interface SprayRecordRow {
     compliance_profile?: string | null;
     is_premixed?: boolean | null;
     non_compliant?: boolean | null;
+    nozzle_type?: string | null;
+    nozzle_size?: string | null;
+    pressure_psi?: number | null;
+    boom_height?: number | null;
+    actual_speed?: number | null;
+    wind_speed_end?: number | null;
+    wind_direction_end?: string | null;
+    temp_end?: number | null;
+    sensitive_area_check?: boolean | null;
+    sensitive_area_notes?: string | null;
 }
 
 export interface HarvestRecordRow {

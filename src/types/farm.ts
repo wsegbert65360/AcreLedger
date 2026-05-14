@@ -79,6 +79,17 @@ export interface SprayRecord {
   notes?: string;
   complianceProfile?: string; // e.g. 'universal'
   nonCompliant?: boolean;
+  // Advanced Compliance (2026 Standards)
+  nozzleType?: string;
+  nozzleSize?: string;
+  pressurePsi?: number;
+  boomHeight?: number;
+  actualSpeed?: number;
+  windSpeedEnd?: number;
+  windDirectionEnd?: string;
+  tempEnd?: number;
+  sensitiveAreaCheck?: boolean;
+  sensitiveAreaNotes?: string;
   // Legacy support
   involvedTechnicians?: string;
   epaRegNumber?: string;

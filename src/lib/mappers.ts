@@ -98,7 +98,17 @@ export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
     notes: safeStr(db.notes),
     complianceProfile: (db.compliance_profile || 'universal') as SprayRecord['complianceProfile'],
     isPremixed: !!db.is_premixed,
-    nonCompliant: !!db.non_compliant
+    nonCompliant: !!db.non_compliant,
+    nozzleType: db.nozzle_type ?? undefined,
+    nozzleSize: db.nozzle_size ?? undefined,
+    pressurePsi: db.pressure_psi ?? undefined,
+    boomHeight: db.boom_height ?? undefined,
+    actualSpeed: db.actual_speed ?? undefined,
+    windSpeedEnd: db.wind_speed_end ?? undefined,
+    windDirectionEnd: db.wind_direction_end ?? undefined,
+    tempEnd: db.temp_end ?? undefined,
+    sensitiveAreaCheck: !!db.sensitive_area_check,
+    sensitiveAreaNotes: db.sensitive_area_notes ?? undefined
 });
 
 export const mapHarvestFromDb = (db: HarvestRecordRow): HarvestRecord => ({
@@ -315,6 +325,16 @@ export const mapSprayToDb = (r: SprayRecord) => {
         is_premixed: r.isPremixed,
         equipment_id: r.equipmentId,
         non_compliant: r.nonCompliant,
+        nozzle_type: r.nozzleType ?? null,
+        nozzle_size: r.nozzleSize ?? null,
+        pressure_psi: r.pressurePsi ?? null,
+        boom_height: r.boomHeight ?? null,
+        actual_speed: r.actualSpeed ?? null,
+        wind_speed_end: r.windSpeedEnd ?? null,
+        wind_direction_end: r.windDirectionEnd ?? null,
+        temp_end: r.tempEnd ?? null,
+        sensitive_area_check: r.sensitiveAreaCheck ?? false,
+        sensitive_area_notes: r.sensitiveAreaNotes ?? null,
         deleted_at: r.deleted_at
     };
 };
