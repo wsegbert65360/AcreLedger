@@ -159,11 +159,13 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                     <div className="space-y-4">
                         {/* Date Field */}
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                            <Label htmlFor="fertilizerDate" className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
                                 <Calendar size={12} />
                                 Application Date
-                            </label>
+                            </Label>
                             <input
+                                id="fertilizerDate"
+                                name="fertilizerDate"
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
@@ -175,15 +177,15 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                         {/* Recipe Selection */}
                         {!initialData && fertilizerRecipes.length > 0 && (
                             <div className="space-y-1.5">
-                                <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                                <Label htmlFor="recipeSelect" className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
                                     <ClipboardList size={12} />
                                     Use Recipe
-                                </label>
+                                </Label>
                                 <Select onValueChange={(val) => {
                                     const recipe = fertilizerRecipes.find(r => r.id === val);
                                     if (recipe) setFormula(recipe.npkRatio);
                                 }}>
-                                    <SelectTrigger className="w-full h-12 bg-muted/30 border-dashed border-border/60 rounded-xl focus:ring-1 focus:ring-primary/20">
+                                    <SelectTrigger id="recipeSelect" className="w-full h-12 bg-muted/30 border-dashed border-border/60 rounded-xl focus:ring-1 focus:ring-primary/20">
                                         <SelectValue placeholder="Select a saved recipe..." />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -217,12 +219,14 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
 
                         {/* Acres Field */}
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                            <Label htmlFor="acresApplied" className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
                                 <Gauge size={12} />
                                 Acres Applied
-                            </label>
+                            </Label>
                             <div className="relative">
                                 <input
+                                    id="acresApplied"
+                                    name="acresApplied"
                                     type="number"
                                     step="0.01"
                                     value={acres}
@@ -237,11 +241,13 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
 
                         {/* Formula Field */}
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                            <Label htmlFor="fertilizerFormula" className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
                                 <MapPin size={12} />
                                 Fertilizer Formula
-                            </label>
+                            </Label>
                             <input
+                                id="fertilizerFormula"
+                                name="fertilizerFormula"
                                 type="text"
                                 value={formula}
                                 onChange={(e) => setFormula(e.target.value)}

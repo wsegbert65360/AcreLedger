@@ -5,6 +5,7 @@ import { Tractor, Calendar, PenTool, Loader2, Info, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
@@ -114,11 +115,13 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                     <div className="space-y-4">
                         {/* Date Field */}
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                            <Label htmlFor="tillageDate" className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
                                 <Calendar size={12} />
                                 Date
-                            </label>
+                            </Label>
                             <input
+                                id="tillageDate"
+                                name="tillageDate"
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
@@ -129,12 +132,12 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
 
                         {/* Implement Type Field */}
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                            <Label htmlFor="implementType" className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
                                 <PenTool size={12} />
                                 Implement
-                            </label>
+                            </Label>
                             <Select value={implementType} onValueChange={setImplementType}>
-                                <SelectTrigger className="w-full h-14 bg-muted/50 border border-border rounded-xl text-lg font-medium focus:ring-2 focus:ring-primary/20 transition-all">
+                                <SelectTrigger id="implementType" className="w-full h-14 bg-muted/50 border border-border rounded-xl text-lg font-medium focus:ring-2 focus:ring-primary/20 transition-all">
                                     <SelectValue placeholder="Select implement..." />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -148,11 +151,13 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
 
                         {/* Notes Field */}
                         <div className="space-y-1.5">
-                            <label className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
+                            <Label htmlFor="tillageNotes" className="flex items-center gap-2 text-xs font-mono font-bold text-muted-foreground uppercase ml-1">
                                 <Info size={12} />
                                 Notes
-                            </label>
+                            </Label>
                             <Textarea
+                                id="tillageNotes"
+                                name="tillageNotes"
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
                                 className="w-full min-h-[100px] px-4 py-3 bg-muted/50 border border-border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"

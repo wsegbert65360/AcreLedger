@@ -749,9 +749,9 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-[11px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
+                <Label htmlFor="windDirection" className="text-[11px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
                 <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
-                  <SelectTrigger className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindDirection.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
+                  <SelectTrigger id="windDirection" className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindDirection.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
                     <SelectValue placeholder="Dir" />
                   </SelectTrigger>
                   <SelectContent>
@@ -762,8 +762,10 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-[11px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
+                <Label htmlFor="windSpeed" className="text-[11px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
                 <Input 
+                  id="windSpeed"
+                  name="windSpeed"
                   value={manualWindSpeed} 
                   onChange={e => setManualWindSpeed(e.target.value)} 
                   placeholder={weather?.wind?.toString() || "0"}
