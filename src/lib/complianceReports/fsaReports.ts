@@ -1,4 +1,5 @@
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
+import { formatTotalAmount } from '../../utils/unitConversion';
 
 function sanitizeCsvValue(val: string | number | null | undefined): string {
     if (val === null || val === undefined) return '""';
@@ -16,13 +17,10 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
         // If there are granular products, create a row for each herbicide in the mix
         if (r.products && r.products.length > 0) {
             return r.products.map((p: any) => {
-                // Calculate individual product total for the treated area
-                const rateNum = parseFloat(p.rate);
                 const areaNum = parseFloat(treatedArea.toString());
-                const productTotal = (!isNaN(rateNum) && !isNaN(areaNum))
-                    ? (rateNum * areaNum).toFixed(1)
-                    : '';
-                const productTotalDisplay = productTotal ? `${productTotal} ${p.rateUnit}` : '';
+                const productTotalDisplay = p.totalProductAmount 
+                    ? `${p.totalProductAmount} ${p.totalProductUnit || ''}`.trim()
+                    : formatTotalAmount(p.rate, areaNum, p.rateUnit);
 
                 return [
                     sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),

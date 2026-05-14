@@ -7,6 +7,7 @@ import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History, Tractor
 import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
+import { formatTotalAmount } from '@/utils/unitConversion';
 import ReportTable from '@/components/ReportTable';
 import { toast } from 'sonner';
 import { Field } from '@/types/farm';
@@ -124,9 +125,9 @@ export default function Reports() {
         epaRegNumber: p.epaRegNumber,
         applicationRate: p.rate,
         rateUnit: p.rateUnit,
-        amountDisplay: !isNaN(parseFloat(p.rate)) && treatedArea > 0
-          ? `${(parseFloat(p.rate) * treatedArea).toFixed(1)} ${p.rateUnit}`
-          : '—',
+        amountDisplay: p.totalProductAmount 
+          ? `${p.totalProductAmount} ${p.totalProductUnit || ''}`.trim()
+          : formatTotalAmount(p.rate, treatedArea, p.rateUnit),
       }));
     }
 
@@ -134,7 +135,9 @@ export default function Reports() {
       ...r,
       _rowKey: r.id,
       product: '—',
-      amountDisplay: r.totalAmountApplied ? `${r.totalAmountApplied} ${r.rateUnit || ''}` : '—',
+      amountDisplay: r.totalAmountApplied 
+        ? `${r.totalAmountApplied} ${r.rateUnit?.replace('/ac', '') || 'gal'}` 
+        : '—',
     }];
   }), [sprayRecords, fieldMap]);
 

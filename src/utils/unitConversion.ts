@@ -56,6 +56,17 @@ export function calculateTotalAmount(rate: number, acres: number, unit: string):
 }
 
 /**
+ * Formats a total amount calculation into a display string.
+ */
+export function formatTotalAmount(rate: string | number, acres: number, rateUnit: string): string {
+  const r = typeof rate === 'string' ? parseFloat(rate) : rate;
+  if (isNaN(r) || isNaN(acres) || r <= 0 || acres <= 0) return '—';
+  
+  const { value, unit } = calculateTotalAmount(r, acres, rateUnit);
+  return `${value} ${unit}`;
+}
+
+/**
  * Normalizes unit string for display in the UI.
  */
 export function getUnitLabel(unit: string): string {

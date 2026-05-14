@@ -56,17 +56,36 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Auto-calculate total amount based on first product or general rate if needed 
+  // Auto-calculate total amount for each product and the general summary
   useEffect(() => {
-    const rate = parseFloat(products[0]?.rate || '0');
     const acres = parseFloat(treatedAreaSize);
-    const unit = products[0]?.rateUnit || 'fl oz/ac';
+    if (isNaN(acres) || acres <= 0) return;
+
+    let firstProductTotal = 0;
     
-    if (!isNaN(rate) && !isNaN(acres)) {
-      const { value } = calculateTotalAmount(rate, acres, unit);
-      setTotalAmountApplied(value.toString());
+    setProducts(prev => {
+      let changed = false;
+      const next = prev.map((p, i) => {
+        const rate = parseFloat(p.rate || '0');
+        if (isNaN(rate) || rate <= 0) return p;
+
+        const { value, unit } = calculateTotalAmount(rate, acres, p.rateUnit);
+        
+        if (i === 0) firstProductTotal = value;
+
+        if (p.totalProductAmount !== value.toString() || p.totalProductUnit !== unit) {
+          changed = true;
+          return { ...p, totalProductAmount: value.toString(), totalProductUnit: unit };
+        }
+        return p;
+      });
+      return changed ? next : prev;
+    });
+
+    if (firstProductTotal > 0) {
+      setTotalAmountApplied(firstProductTotal.toString());
     }
-  }, [products, treatedAreaSize]);
+  }, [treatedAreaSize, products.map(p => `${p.rate}-${p.rateUnit}`).join(',')]);
 
   // Handle End Time Estimation
   useEffect(() => {
@@ -78,8 +97,9 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     const [hours, minutes] = startTime.split(':').map(Number);
     const startMins = hours * 60 + minutes;
     
-    // 54.5 acres per hour = 0.90833 acres per minute
-    const durationMins = Math.round(acres / (54.5 / 60));
+    // 100' sprayer @ 5mph = ~60.6 acres per hour
+    // (100 * 5) / 8.25 = 60.6 (Approx 1 acre per minute)
+    const durationMins = Math.round(acres / (60.6 / 60));
     const endTotalMins = (startMins + durationMins) % (24 * 60);
     
     const endH = Math.floor(endTotalMins / 60).toString().padStart(2, '0');
