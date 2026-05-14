@@ -290,6 +290,7 @@ every mutation function — before validation, mapping, or any state change.
 ### Table Names
 | Entity | Supabase Table |
 |---|---|
+| Farm | `farms` |
 | Field | `fields` |
 | Bin | `bins` |
 | PlantRecord | `plant_records` |
@@ -305,6 +306,18 @@ every mutation function — before validation, mapping, or any state change.
 | User profile / active season | `profiles` |
 
 Application state uses `camelCase`; DB columns use `snake_case`. Mappers handle all translation.
+
+### Data API Access (Mandatory)
+Starting May 2026, Supabase requires explicit `GRANT` statements for all tables exposed via the Data API (`supabase-js`). Every new table creation migration MUST include:
+```sql
+-- Grant access to standard roles
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.your_table TO authenticated;
+GRANT SELECT ON public.your_table TO anon;
+GRANT ALL ON public.your_table TO service_role;
+
+-- Always pair with RLS
+ALTER TABLE public.your_table ENABLE ROW LEVEL SECURITY;
+```
 
 ### Mapper Pattern
 Every entity has a dedicated mapper in `@/lib/mappers.ts`:
