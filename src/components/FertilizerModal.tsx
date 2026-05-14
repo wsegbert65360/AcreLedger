@@ -16,7 +16,7 @@ interface FertilizerModalProps {
     initialData?: FertilizerApplication;
 }
 
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
     const { 
@@ -143,7 +143,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
     return (
         <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
-                <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
+                <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between bg-muted/30 space-y-0">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-lime-500/10 flex items-center justify-center">
                             <Sprout className="text-lime-600 dark:text-lime-400" size={20} />
@@ -153,7 +153,10 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                             <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
-                </header>
+                    <DialogDescription className="sr-only">
+                        Log a new fertilizer application or edit an existing one.
+                    </DialogDescription>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div className="space-y-4">

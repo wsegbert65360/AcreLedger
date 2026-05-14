@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +58,9 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                         <Plus size={24} className="bg-harvest/20 rounded p-1" />
                         Add Grain — {bin.name}
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Add grain inventory to a specific bin.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 py-2">

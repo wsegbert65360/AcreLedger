@@ -209,6 +209,9 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             {isEdit ? <Pencil size={20} /> : <Plus size={20} />}
             {isEdit ? 'Edit Field' : 'Add Field'}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Add or edit field details and boundaries.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">

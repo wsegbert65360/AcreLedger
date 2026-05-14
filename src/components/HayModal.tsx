@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -114,6 +114,9 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
                         <Tractor size={20} />
                         Hay/Forage — {field.name}
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Log a new hay or forage harvest record.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 py-2">

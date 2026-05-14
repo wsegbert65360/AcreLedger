@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -180,6 +180,9 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
             <Wheat size={20} />
             {initialData ? 'Edit' : 'Harvest'} — {field.name}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Log a new harvest record or edit an existing one.
+          </DialogDescription>
         </DialogHeader>
 
         {!destination ? (

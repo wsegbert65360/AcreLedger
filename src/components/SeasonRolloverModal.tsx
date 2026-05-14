@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { useFarm } from '@/store/farmStore';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowRight, History, Upload, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, History as HistoryIcon, Upload, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function SeasonRolloverModal() {
     const { activeSeason, rolloverToNewSeason, restoreFromBackup, loading } = useFarm();
@@ -87,7 +87,7 @@ export default function SeasonRolloverModal() {
 
                     <div className="space-y-2">
                         <h4 className="text-xs font-bold uppercase font-mono flex items-center gap-1.5 text-foreground/80">
-                            <History size={14} />
+                            <HistoryIcon size={14} />
                             The Rollover Process
                         </h4>
                         <ul className="text-xs space-y-2 text-muted-foreground font-mono list-disc pl-4">

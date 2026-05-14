@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,6 +66,9 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
                         {isEdit ? <Pencil size={20} /> : <Warehouse size={20} />}
                         {isEdit ? 'Edit Bin' : 'Add Bin'}
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Add or edit storage bin details.
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
                     <div>

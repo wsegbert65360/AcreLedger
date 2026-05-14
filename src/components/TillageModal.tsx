@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface TillageModalProps {
     field: Field;
@@ -99,7 +99,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
     return (
         <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
-                <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/30">
+                <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between bg-muted/30 space-y-0">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
                             <Tractor className="text-orange-600 dark:text-orange-400" size={20} />
@@ -109,7 +109,10 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                             <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
-                </header>
+                    <DialogDescription className="sr-only">
+                        Log a new tillage record or edit an existing one.
+                    </DialogDescription>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div className="space-y-4">
