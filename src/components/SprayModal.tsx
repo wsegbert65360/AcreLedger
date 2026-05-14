@@ -29,7 +29,25 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [products, setProducts] = useState<SprayRecipeProduct[]>(initialData?.products?.map(p => ({ ...p, ui_id: p.ui_id || crypto.randomUUID() })) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+  const [products, setProducts] = useState<SprayRecipeProduct[]>(
+    initialData?.products?.map(p => ({ 
+      ...p, 
+      ui_id: p.ui_id || crypto.randomUUID(),
+      epaRegNumber: p.epaRegNumber || '',
+      activeIngredients: p.activeIngredients || '',
+      totalProductAmount: p.totalProductAmount || '',
+      totalProductUnit: p.totalProductUnit || 'gal'
+    })) || [{ 
+      ui_id: crypto.randomUUID(), 
+      product: '', 
+      rate: '', 
+      rateUnit: 'oz/ac', 
+      epaRegNumber: '',
+      activeIngredients: '',
+      totalProductAmount: '',
+      totalProductUnit: 'gal'
+    }]
+  );
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
   const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
@@ -85,10 +103,10 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       return changed ? next : prev;
     });
 
-    if (firstProductTotal > 0) {
-      setTotalAmountApplied(firstProductTotal.toString());
+    if (firstProductTotal > 0 || totalAmountApplied !== '') {
+      setTotalAmountApplied(firstProductTotal > 0 ? firstProductTotal.toString() : '');
     }
-  }, [treatedAreaSize, products.map(p => `${p.rate}-${p.rateUnit}`).join(',')]);
+  }, [treatedAreaSize, products.map(p => `${p.rate}-${p.rateUnit}`).join(','), totalAmountApplied]);
 
   // Handle End Time Estimation
   useEffect(() => {
@@ -138,7 +156,23 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   useEffect(() => {
     if (!open) return;
     if (initialData) {
-      setProducts(initialData.products?.map(p => ({ ...p, ui_id: p.ui_id || crypto.randomUUID() })) || [{ ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+      setProducts(initialData.products?.map(p => ({ 
+        ...p, 
+        ui_id: p.ui_id || crypto.randomUUID(),
+        epaRegNumber: p.epaRegNumber || '',
+        activeIngredients: p.activeIngredients || '',
+        totalProductAmount: p.totalProductAmount || '',
+        totalProductUnit: p.totalProductUnit || 'gal'
+      })) || [{ 
+        ui_id: crypto.randomUUID(), 
+        product: '', 
+        rate: '', 
+        rateUnit: 'oz/ac', 
+        epaRegNumber: '',
+        activeIngredients: '',
+        totalProductAmount: '',
+        totalProductUnit: 'gal'
+      }]);
       setApplicatorName(initialData.applicatorName || '');
       setLicenseNumber(initialData.licenseNumber || '');
       setTargetPest(initialData.targetPest || 'grass/broadleaves');
@@ -199,7 +233,16 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   };
 
   const addProduct = () => {
-    setProducts(prev => [...prev, { ui_id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac', epaRegNumber: '' }]);
+    setProducts(prev => [...prev, { 
+      ui_id: crypto.randomUUID(), 
+      product: '', 
+      rate: '', 
+      rateUnit: 'oz/ac', 
+      epaRegNumber: '',
+      activeIngredients: '',
+      totalProductAmount: '',
+      totalProductUnit: 'gal'
+    }]);
   };
 
   const removeProduct = (i: number) => {
