@@ -40,7 +40,9 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
                     sanitizeCsvValue(r.temperature),
                     sanitizeCsvValue(r.relativeHumidity),
                     sanitizeCsvValue(r.targetPest),
-                    sanitizeCsvValue(r.involvedTechnicians)
+                    sanitizeCsvValue(r.involvedTechnicians),
+                    sanitizeCsvValue(r.sensitiveAreaCheck ? 'YES' : 'NO'),
+                    sanitizeCsvValue(r.sensitiveAreaNotes)
                 ].join(',');
             });
         }
@@ -64,7 +66,9 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
             sanitizeCsvValue(r.temperature),
             sanitizeCsvValue(r.relativeHumidity),
             sanitizeCsvValue(r.targetPest),
-            sanitizeCsvValue(r.involvedTechnicians)
+            sanitizeCsvValue(r.involvedTechnicians),
+            sanitizeCsvValue(r.sensitiveAreaCheck ? 'YES' : 'NO'),
+            sanitizeCsvValue(r.sensitiveAreaNotes)
         ].join(',')];
     });
 }
@@ -74,7 +78,8 @@ export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
         'Date', 'Start Time', 'Applicator Name', 'License #', 'Trade Name', 'EPA Reg #',
         'Site/Field', 'Total Acres Treated', 'App Rate (per ac)', 'Total Product Applied',
         'Total Mixture Volume (Mix + Water)', 'Equipment ID', 'Wind Speed (mph)',
-        'Wind Direction', 'Temp (F)', 'Relative Humidity (%)', 'Target Pest(s)', 'Technicians'
+        'Wind Direction', 'Temp (F)', 'Relative Humidity (%)', 'Target Pest(s)', 'Technicians',
+        'Sensitive Area Check', 'Sensitive Area Notes'
     ].join(',');
 
     const rows = generateMissouriLogRows(records, fields);

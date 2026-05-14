@@ -119,7 +119,7 @@ export function generateSprayPDF(
     yPos += 25;
 
     // 2b. Mix & Personnel Details (NEW)
-    const hasMixDetails = record.mixtureRate || record.totalMixtureVolume || record.involvedTechnicians;
+    const hasMixDetails = record.mixtureRate || record.totalMixtureVolume || record.involvedTechnicians || record.sensitiveAreaCheck;
     if (hasMixDetails) {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
@@ -130,6 +130,11 @@ export function generateSprayPDF(
       if (record.mixtureRate) mixParts.push(`Rate: ${record.mixtureRate}`);
       if (record.totalMixtureVolume) mixParts.push(`Total Vol: ${record.totalMixtureVolume}`);
       if (record.involvedTechnicians) mixParts.push(`Personnel: ${record.involvedTechnicians}`);
+      if (record.sensitiveAreaCheck) {
+        let checkStr = 'Sensitive Area Check: PERFORMED';
+        if (record.sensitiveAreaNotes) checkStr += ` (${record.sensitiveAreaNotes})`;
+        mixParts.push(checkStr);
+      }
       
       doc.text(mixParts.join('  |  '), 55, yPos);
       yPos += 7;

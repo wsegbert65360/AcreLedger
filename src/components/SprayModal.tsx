@@ -13,6 +13,7 @@ import { generateSprayPDF } from '@/lib/sprayExport';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { calculateTotalAmount } from '@/utils/unitConversion';
 
@@ -53,6 +54,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [treatedAreaUnit, setTreatedAreaUnit] = useState(initialData?.treatedAreaUnit || 'ac');
   const [rei, setRei] = useState(initialData?.rei || '12h');
   const [notes, setNotes] = useState(initialData?.notes || '');
+  const [sensitiveAreaCheck, setSensitiveAreaCheck] = useState(initialData?.sensitiveAreaCheck || false);
+  const [sensitiveAreaNotes, setSensitiveAreaNotes] = useState(initialData?.sensitiveAreaNotes || '');
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -118,6 +121,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setTreatedAreaUnit('ac');
     setRei('12h');
     setNotes('');
+    setSensitiveAreaCheck(false);
+    setSensitiveAreaNotes('');
     setSiteAddress(field.name);
     setTreatedAreaSize(field.acreage.toString());
     setTargetPest('grass/broadleaves');
@@ -155,6 +160,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setApplicationMethod(initialData.applicationMethod || 'Ground Broadcast');
       setRei(initialData.rei || '12h');
       setNotes(initialData.notes || '');
+      setSensitiveAreaCheck(initialData.sensitiveAreaCheck || false);
+      setSensitiveAreaNotes(initialData.sensitiveAreaNotes || '');
       setSelectedRecipeId('');
     } else {
       resetComplianceFields();
@@ -276,6 +283,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         equipmentId: equipmentId.trim() || undefined,
         rei: rei.trim() || undefined,
         notes: notes.trim() || undefined,
+        sensitiveAreaCheck,
+        sensitiveAreaNotes: sensitiveAreaNotes.trim() || undefined,
         complianceProfile,
         isPremixed,
         nonCompliant: !isFullyCompliant,
@@ -574,6 +583,39 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     <Label htmlFor="technicians" className="text-[11px] font-mono text-muted-foreground uppercase">Involved Technicians / Helpers (Optional)</Label>
                     <Input id="technicians" value={involvedTechnicians} onChange={e => setInvolvedTechnicians(e.target.value)} placeholder="e.g. John Doe, Mike Smith" className="mt-0.5 bg-muted border-border text-foreground h-9" />
                   </div>
+                  <div className="pt-1">
+                    <div className="flex items-start space-x-2 bg-spray/5 p-2.5 rounded-lg border border-spray/10">
+                      <Checkbox 
+                        id="sensitiveAreaCheck" 
+                        checked={sensitiveAreaCheck} 
+                        onCheckedChange={(checked) => setSensitiveAreaCheck(!!checked)}
+                        className="mt-0.5 border-spray/50 data-[state=checked]:bg-spray data-[state=checked]:border-spray"
+                      />
+                      <div className="grid gap-1.5 leading-none">
+                        <Label 
+                          htmlFor="sensitiveAreaCheck" 
+                          className="text-[11px] font-bold text-spray uppercase leading-tight cursor-pointer"
+                        >
+                          Sensitive Area Check Performed
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground leading-tight">
+                          Verified nearby sensitive crops/bees via DriftWatch or visual check.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  {sensitiveAreaCheck && (
+                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                      <Label htmlFor="sensitiveAreaNotes" className="text-[11px] font-mono text-muted-foreground uppercase text-spray">Sensitive Area Notes</Label>
+                      <Input 
+                        id="sensitiveAreaNotes" 
+                        value={sensitiveAreaNotes} 
+                        onChange={e => setSensitiveAreaNotes(e.target.value)} 
+                        placeholder="e.g. Neighboring vineyard verified clear" 
+                        className="mt-0.5 bg-muted border-spray/20 text-foreground h-9 focus-visible:ring-spray" 
+                      />
+                    </div>
+                  )}
                   <div>
                     <Label htmlFor="notes" className="text-[11px] font-mono text-muted-foreground uppercase">Notes / Additional Info</Label>
                     <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add any extra compliance or field notes here..." className="mt-0.5 bg-muted border-border text-foreground text-xs resize-none" rows={2} />
