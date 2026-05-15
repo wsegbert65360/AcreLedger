@@ -122,6 +122,36 @@ const Index = () => {
                 </p>
               </div>
             )}
+
+            {allFields.length > 0 && (
+            <div className="bg-background/60 backdrop-blur-xl sticky bottom-[72px] mt-8 border-t border-border/50 px-4 py-2 pb-12 z-30">
+              {/* Glass Gradient Transition Overlay */}
+              <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
+              
+              <div className="flex flex-col items-center justify-center space-y-1.5">
+                  <div className="text-xs font-semibold text-muted-foreground">
+                    Total Operation: {totalAcres} Acres
+                  </div>
+                  <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
+                    {cropTotals.map(([crop, acres]) => {
+                      const isActive = selectedCrops.includes(crop);
+                      return (
+                        <button
+                          key={crop}
+                          onClick={() => toggleCrop(crop)}
+                          className={`flex-none flex items-center justify-center h-10 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
+                            ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
+                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
+                            }`}
+                        >
+                          {crop}: {acres} AC
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
