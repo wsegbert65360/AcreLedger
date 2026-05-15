@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFarm } from '@/store/farmStore';
 import { Bin } from '@/types/farm';
+import { parseLocalDate } from '@/utils/dates';
 import { Warehouse, Plus, Hash, Calendar } from 'lucide-react';
 
 interface AddGrainModalProps {
@@ -30,13 +31,18 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
 
         setIsSaving(true);
         try {
+            // Combine selected date with current local time to ensure correct registration time and avoid UTC shift
+            const localNow = new Date();
+            const selectedDate = parseLocalDate(date);
+            selectedDate.setHours(localNow.getHours(), localNow.getMinutes(), localNow.getSeconds(), localNow.getMilliseconds());
+
             const success = await addGrainMovement({
                 binId: bin.id,
                 binName: bin.name,
                 type: 'in',
                 bushels: amount,
                 moisturePercent: m,
-                timestamp: date ? new Date(date).getTime() : Date.now(),
+                timestamp: selectedDate.getTime(),
                 sourceFieldName: source.trim() || undefined,
             });
             if (success) {
