@@ -55,6 +55,11 @@ The target user is an individual farmer or small operation, not an enterprise.
 - **Brand logo** — `font-mono` + `tracking-tighter` on the AcreLedger text is an intentional identity element.
 - Form labels inside modals use `font-mono` — acceptable because they annotate data-entry fields.
 
+### Accessibility (Mandatory Standards)
+- **Modal Descriptions**: Every `DialogContent` MUST include a `DialogDescription` (can be `sr-only` for visual cleanliness) to satisfy Radix UI accessibility requirements.
+- **Label Association**: Every form input MUST have a unique `id` and `name`. The corresponding `Label` MUST use the `htmlFor` attribute to link to that ID.
+- **Touch Targets**: Buttons and interactive elements follow a 44px minimum height standard for mobile usability.
+
 ### Text Case & Tracking
 - **Default**: sentence-case ("Farm overview", "No fields detected").
 - **Avoid**: `uppercase` + `tracking-widest` on labels, buttons, or body text — fatiguing on mobile.
@@ -90,10 +95,25 @@ Every page follows the same sticky header structure:
 </header>
 ```
 
-### Accessibility (Mandatory Standards)
-- **Modal Descriptions**: Every `DialogContent` MUST include a `DialogDescription` (can be `sr-only` for visual cleanliness) to satisfy Radix UI accessibility requirements.
-- **Label Association**: Every form input MUST have a unique `id` and `name`. The corresponding `Label` MUST use the `htmlFor` attribute to link to that ID.
-- **Touch Targets**: Buttons and interactive elements follow a 44px minimum height standard for mobile usability.
+### Field Card Status Dots
+Field cards display a colored dot in the top-right corner:
+- 🟢 Green (`bg-plant`): field has a planting record
+- 🔵 Blue (`bg-spray`): field has activity but no planting record
+- ⚪ Gray (`bg-muted-foreground/30`): no activity this season
+
+### Bin Capacity Bar Colors
+Bin fill bars change color by percentage:
+- `bg-harvest` (gold): ≤ 60%
+- `bg-amber-500`: > 60%
+- `bg-destructive` (red): > 85%
+
+### Bottom Navigation
+- Active tab: `text-primary`, bold label, `strokeWidth={2.5}`, animated pill background via `layoutId="bottom-nav-pill"`, and a small dot indicator below the label.
+- Inactive tab: `text-muted-foreground`, normal weight, `strokeWidth={1.5}`.
+- Bar uses `bg-card/90 backdrop-blur-lg`.
+
+### Auth Screen
+Dark background matching the app's default theme. Uses a `Sprout` icon hero with the AcreLedger brand name and tagline. The auth card is `rounded-2xl` with `bg-card border border-border`. Inputs use `bg-background` to stand out from the card surface.
 
 ---
 
@@ -110,12 +130,16 @@ Physical farm field. Referenced by `fieldId` on all activity records.
 { id, name, acreage, lat, lng, intendedUse, fsaFarmNumber, fsaTractNumber,
   irrigationPractice, notes, deleted_at, boundary: { type, coordinates } }
 ```
+`notes` is a TEXT field used for informal scratchpad entries, persisted with auto-save.
+`lat`/`lng` may be null if geocoding was skipped — always guard before calling `.toFixed()`.
+`boundary` is a GeoJSON Polygon for field geometry.
 
 ### Bin
 Grain storage bin. Tracks capacity and identity.
 ```ts
 { id, farm_id, name, capacity, deleted_at }
 ```
+- **Inventory**: `currentBushels` is a derived value calculated via `getBinTotal()` in the store.
 
 ### PlantRecord
 Single planting event on a field. Core FSA 578 source record.
@@ -140,73 +164,212 @@ Supports multiple products per application (tank-mix) and advanced environmental
   windSpeedEnd, windDirectionEnd, tempEnd, sensitiveAreaCheck, sensitiveAreaNotes,
   deleted_at }
 ```
-- **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph).
-- **Total Product Auto-summing**: System automatically calculates `totalProductAmount` based on rate and treated acreage.
+- **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph) with manual override.
+- **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
+- **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
+- **Non-Compliant Flag**: Triggered if any product is missing an `epaRegNumber`.
+- **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
+- **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
 - **Weather Recovery**: "Recover Past Weather" feature pulls historical conditions from Visual Crossing based on field location and start time.
-- **Advanced Compliance**: Includes Nozzle type/size, Pressure (PSI), and Sensitive Area Check for high-tier regulatory audits.
 
-### HarvestRecord / HayHarvestRecord / TillageRecord / FertilizerApplication / GrainMovement
-Standard farm activities, all scoped to `farm_id` and `seasonYear`. 
+### HarvestRecord
+Grain harvest event.
+```ts
+{ id, farm_id, fieldId, fieldName, crop, bushels, moisturePercent, harvestDate,
+  timestamp, seasonYear, destination: 'bin' | 'town', landlordSplitPercent,
+  landlordName, scaleTicketNumber, deleted_at }
+```
+
+### HayHarvestRecord
+Hay cutting event. Tracked by cutting number per field per season.
+```ts
+{ id, farm_id, fieldId, fieldName, baleCount, baleType, cuttingNumber,
+  timestamp, seasonYear, deleted_at }
+```
+
+### TillageRecord
+Track tillage events (Disk, Cultivation, etc.) per field per season.
+```ts
+{ id, farm_id, fieldId, fieldName, date, implementType, notes,
+  timestamp, seasonYear, deleted_at }
+```
+
+### FertilizerApplication
+```ts
+{ id, farm_id, fieldId, fieldName, fertilizer_formula, acres, date,
+  timestamp, seasonYear, created_at, updated_at, deleted_at }
+```
+Note: `date` is an ISO date string; `timestamp` is Unix ms. Both exist on the same record.
+`created_at`/`updated_at` are managed by DB triggers.
+
+### GrainMovement
+Grain in/out of a bin, including sales and contracts.
+```ts
+{ id, farm_id, binId, binName, type: 'in' | 'out', bushels, moisturePercent,
+  price?, destination?, sourceFieldName?, timestamp, seasonYear, deleted_at }
+```
+**`bushels` may be negative.** Negative values represent an estimate-vs-actual correction
+(more grain removed than estimated). This is intentional business logic — do not block or clamp.
+Display with an amber `AlertTriangle` warning only.
+
+#### The "Ghost Row" Prevention Rule
+To prevent inventory drift if two sessions edit the same bin simultaneously, all Grain Movement edits must include a **Concurrency Guard**:
+- Use a `Last-Modified` or `version` stamp check in the `WHERE` clause of the update.
+- If the count of updated rows is 0, notify the user that the record has been modified by another session and trigger a state refresh.
+
+### SavedSeed
+Seed inventory reference. Not season-scoped.
+```ts
+{ id, farm_id, crop, variety, supplier, lotNumber, year, notes, deleted_at }
+```
+
+### SprayRecipe
+Saved tank-mix recipe for reuse on spray records. Not season-scoped.
+```ts
+{ id, farm_id, name, products: { product, epaRegNumber, activeIngredients, rate, rateUnit }[],
+  applicatorName, licenseNumber, targetPest, deleted_at }
+```
+
+#### Tank-Mix Product Identity
+For the `products` array in SprayRecords, generate a temporary `ui_id` (e.g., `crypto.randomUUID()`) when adding a row in the modal. Use this for React key props instead of array index to prevent input focus loss during reorders.
+
+### FertilizerRecipe
+Saved fertilizer formulas for reuse on fertilizer application records.
+```ts
+{ id, farm_id, name, npkRatio, deleted_at }
+```
+- **Management**: Users can create, edit, and delete fertilizer recipes directly in the **Settings** page or save a new formula as a recipe while recording an application.
+- **Usage**: Saved recipes appear as a dropdown in the Fertilizer Modal for quick data entry.
+
+### Rainfall
+High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar + field-based historical lookups).
+The system uses a **Dual-Source Lookup** strategy to ensure data reliability and range coverage.
+
+#### Rain API Core Logic
+- **Primary Source (Radar + DB merge)**: Rain API returns fixed windows (`rain.24h`, `rain.72h`, `rain.168h`) via `GET /rain?lat=X&lon=Y&field_id=Z`. The API merges IEM Stage IV (CONUS radar) with Supabase RPC server-side, taking the MAX of both sources per window.
+- **Custom Ranges**: Since-planting and since-spray rainfall are fetched via Rain API `GET /rain?lat=X&lon=Y&field_id=Z&start_date=A&end_date=B`. Returns `{ rain: { total: number }, rainMm: { total: number } }`. Including coordinates ensures the hybrid IEM radar merge is active for historical periods.
+- **Coordinate Precision**: Lat/Lng are rounded to **4 decimal places** for consistent matching with the 4km radar grid.
+- **Centroid Logic**: Polygon boundaries automatically fall back to centroids if explicit field coordinates are null or invalid.
+
+#### Service Reliability
+- **Service Cache**: `RainService` implements a 30-second `promiseCache` to deduplicate concurrent requests (e.g., when switching between tabs or fields rapidly).
+- **Data Warning**: The API includes `dataWarning` when >10% of hourly data is missing or when Supabase merge adds rain beyond IEM. Passed through to UI.
+- **API Fallback**: Custom range calls return `0` gracefully on failure to prevent UI crashes.
 
 ---
 
 ## 4. State Management Rules
 
 ### farmStore (React Context)
-Single global store in `farmStore.tsx`. Exposes all entity arrays, their setters, and CRUD actions. Accessed via `useFarm()`.
+Single global store in `farmStore.tsx`. Exposes all entity arrays, their setters, `session`,
+`farm_id`, `farmName`, `activeSeason`, `viewingSeason`, and all CRUD action methods. Accessed everywhere
+via `useFarm()`.
 
 ### Optimistic Update Pattern
-Every mutation follows this exact sequence:
-1. Guard: `if (!farm_id)`
-2. Validate inputs.
-3. Call mapper (`mapXToDb`) — **BEFORE** touching state. Ensuring all optional fields default to `null` (not `undefined`).
-4. Apply optimistic state update.
-5. Await Supabase operation.
-6. Success: toast.success | Error: Roll back state, toast.error (with detailed Postgres message).
+Every mutation follows this exact sequence — no exceptions:
+1. Guard: `if (!farm_id) → toast.error('No farm selected.'), return false`
+2. Validate inputs → return false on invalid
+3. Call mapper (`mapXToDb`) — **BEFORE** touching state. Ensuring all optional fields default to **`null`** (not `undefined`).
+   → mapper throws: toast.error, return false, do NOT touch state or DB
+4. Apply optimistic state update via functional setter
+5. Await Supabase operation
+6a. Success: toast.success, return true
+6b. Error: roll back state to pre-step-4 snapshot, toast.error (with detailed Postgres message), return false
+
+### OpResult Convention
+All add / update / delete operations on every hook return `Promise<boolean>`:
+- `true` = record committed to DB
+- `false` = blocked (validation, no farm) or rolled back (DB error)
+- **Never returns `undefined`.** Callers (e.g. modals deciding whether to close) rely on this.
+
+### farm_id Scoping
+Every Supabase write is scoped to `farm_id`. The null guard is always the **first line** of
+every mutation function — before validation, mapping, or any state change.
 
 ---
 
 ## 5. Database Conventions
 
 ### Migration Strategy (Mandatory)
-- **Unique Timestamps**: Every migration filename MUST start with a unique **14-digit timestamp** (`YYYYMMDDHHMMSS_name.sql`). This prevents collisions in the Supabase CLI when multiple developers create migrations on the same day.
-- **Naming**: `20260514100000_fix_security.sql`.
+- **Unique Timestamps**: Every migration filename MUST start with a unique **14-digit timestamp** (`YYYYMMDDHHMMSS_name.sql`). This prevents collisions in the Supabase CLI.
+- **Example**: `20260514100000_fix_security.sql`.
 
-### Security Hardening & RLS
-- **Explicit Grants**: Every table MUST have explicit `GRANT` statements for `authenticated`, `anon`, and `service_role`.
-- **Tenant Isolation**: Every table MUST have Row Level Security (RLS) enabled with a policy that restricts access to the user's `farm_id`.
-  ```sql
-  CREATE POLICY "Users can access their farm data" ON public.your_table
-    FOR ALL TO authenticated
-    USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()))
-    WITH CHECK (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()));
-  ```
-- **Search Path**: Every function MUST set a secure `search_path = public, extensions`.
+### Data API Access (Mandatory)
+Starting May 2026, Supabase requires explicit `GRANT` statements for all tables exposed via the Data API (`supabase-js`). Every new table creation migration MUST include:
+```sql
+-- Grant access to standard roles
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.your_table TO authenticated;
+GRANT SELECT ON public.your_table TO anon;
+GRANT ALL ON public.your_table TO service_role;
+
+-- Always pair with RLS
+ALTER TABLE public.your_table ENABLE ROW LEVEL SECURITY;
+```
+
+### Tenant Isolation (RLS)
+Every table MUST have Row Level Security (RLS) enabled with a policy that restricts access to the user's `farm_id`.
+```sql
+CREATE POLICY "Users can access their farm data" ON public.your_table
+  FOR ALL TO authenticated
+  USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()))
+  WITH CHECK (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()));
+```
 
 ### Mapper Pattern
-Mappers in `@/lib/mappers.ts` handle `camelCase` (app) ↔ `snake_case` (DB) translation.
-- **Defense**: Mappers MUST ensure optional fields are sent as `null` to the DB to prevent serialization issues.
+Every entity has a dedicated mapper in `@/lib/mappers.ts`.
+- **CamelCase to SnakeCase**: Mappers handle all translation.
+- **Payload Sanitization**: Mappers MUST ensure optional fields are sent as `null` to the DB to prevent serialization issues.
 - **Safety**: Use `safeNum` and `safeStr` helpers to prevent type errors.
+
+### farm_id Rule
+`farm_id` is a relational partition key. It belongs **only** in `.eq('farm_id', farm_id)`
+filter clauses. **Never** include it in the `.update()` payload.
+
+### Soft Delete
+`.update({ deleted_at: new Date().toISOString() }).in('id', ids).eq('farm_id', farm_id)`
+Never use Supabase `.delete()` on user records.
 
 ---
 
 ## 6. Component Patterns
 
-### Icon Shadowing Prevention
-**NEVER** import a Lucide icon with a name that conflicts with a global browser object (e.g., `Map`, `History`). 
+### Icon Shadowing Prevention (Critical)
+**NEVER** import a Lucide icon with a name that conflicts with a global browser object (e.g., `Map`, `History`).
 - **Always alias**: `import { Map as MapIcon, History as HistoryIcon } from 'lucide-react'`.
 - This prevents `TypeError: Illegal constructor` errors in production bundles.
 
+### useMemo Rules
+Wrap in `useMemo` any value derived from large arrays. Do **not** compute these inline in JSX.
+
+### fieldMap Pattern
+Never call `fields.find(f => f.id === r.fieldId)` per row inside a `.map()`. Build once via `useMemo` with `new Map()`.
+
+### Module-Level Pure Helpers
+Functions that don't depend on component state or props belong **outside** the component at
+module level.
+
+### Universal Spray Log Export
+The `generateSprayPDF` utility (`@/lib/sprayExport.ts`) provides a production-grade, state-neutral
+PDF export for spray records. It handles both single-record and multi-record exports.
+
+### Field Dashboard (Mobile-First)
+The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time
+signals over static data.
+
+### FieldNotes Component (Auto-Save)
+Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange`
+event to automatically sync content to Supabase.
+
 ### PWA & Bundling
 - **Vite Configuration**: `manualChunks` should be avoided for UI libraries (Lucide, Radix, Framer Motion) to prevent initialization order artifacts. Use Vite's default strategy for these.
-- **Service Worker**: `sw.js` handles navigation routing to `index.html` to support client-side SPA routing while offline.
+- **Service Worker**: `sw.js` handles navigation routing to `index.html`.
 
 ---
 
 ## 11. Error Handling Standards
 
 ### Detailed Error Logging
-`useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging of production issues.
+`useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging.
 
 ### Content Security Policy (CSP)
 The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, and Vercel.
@@ -220,6 +383,7 @@ The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required
 - **Radix Modals**: Always include `DialogDescription`.
 - **Form Inputs**: Always include `id`, `name`, and linked `Label`.
 - **Data Safety**: Optional fields default to `null` in mappers.
+- **Zero vs Falsy**: `0` is a valid farm value. Use `value != null ? value : '—'`.
 
 ### Verification
 See [TESTING.md](./TESTING.md) for detailed verification protocols and bot credentials.
