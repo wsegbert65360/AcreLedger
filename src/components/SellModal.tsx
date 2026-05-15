@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFarm } from '@/store/farmStore';
 import { Bin } from '@/types/farm';
-import { Banknote, Truck, Hash } from 'lucide-react';
+import { parseLocalDate } from '@/utils/dates';
+import { Banknote, Truck, Hash, Calendar } from 'lucide-react';
 
 interface SellModalProps {
     bin: Bin;
@@ -32,13 +33,18 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
 
         setIsSaving(true);
         try {
+            // Combine selected date with current local time to ensure correct registration time and avoid UTC shift
+            const localNow = new Date();
+            const selectedDate = parseLocalDate(date);
+            selectedDate.setHours(localNow.getHours(), localNow.getMinutes(), localNow.getSeconds(), localNow.getMilliseconds());
+
             const success = await addGrainMovement({
                 binId: bin.id,
                 binName: bin.name,
                 type: 'out',
                 bushels: amount,
                 moisturePercent: m,
-                timestamp: date ? new Date(date).getTime() : Date.now(),
+                timestamp: selectedDate.getTime(),
                 price: isNaN(p) ? undefined : p,
                 destination: destination.trim() || undefined,
             });
