@@ -97,10 +97,10 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     setProducts(prev => {
       let changed = false;
       const next = prev.map((p, i) => {
-        const rate = parseFloat(p.rate || '0');
-        if (isNaN(rate) || rate <= 0) return p;
+        const rateValue = parseFloat(p.rate || '0');
+        if (isNaN(rateValue) || rateValue <= 0) return p;
 
-        const { value, unit } = calculateTotalAmount(rate, acres, p.rateUnit);
+        const { value, unit } = calculateTotalAmount(rateValue, acres, p.rateUnit);
 
         if (i === 0) firstProductTotal = value;
 
@@ -113,10 +113,10 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       return changed ? next : prev;
     });
 
-    if (firstProductTotal > 0 || totalAmountApplied !== '') {
-      setTotalAmountApplied(firstProductTotal > 0 ? firstProductTotal.toString() : '');
+    if (firstProductTotal > 0 && totalAmountApplied !== firstProductTotal.toString()) {
+      setTotalAmountApplied(firstProductTotal.toString());
     }
-  }, [treatedAreaSize, products.map(p => `${p.rate}-${p.rateUnit}`).join(','), totalAmountApplied]);
+  }, [treatedAreaSize, products.map(p => `${p.rate}-${p.rateUnit}`).join(',')]);
 
   // Handle End Time Estimation
   useEffect(() => {
@@ -126,6 +126,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     if (isNaN(acres) || acres <= 0) return;
 
     const [hours, minutes] = startTime.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return;
     const startMins = hours * 60 + minutes;
 
     // 100' sprayer @ 5mph = ~60.6 acres per hour
@@ -136,8 +137,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     const endH = Math.floor(endTotalMins / 60).toString().padStart(2, '0');
     const endM = (endTotalMins % 60).toString().padStart(2, '0');
 
-    setEndTime(`${endH}:${endM}`);
-  }, [startTime, treatedAreaSize, isEndTimeManual]);
+    const newEndTime = `${endH}:${endM}`;
+    if (endTime !== newEndTime) {
+      setEndTime(newEndTime);
+    }
+  }, [startTime, treatedAreaSize, isEndTimeManual, open]);
 
   const resetComplianceFields = () => {
     const now = new Date();
