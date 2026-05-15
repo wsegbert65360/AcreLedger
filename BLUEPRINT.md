@@ -89,30 +89,11 @@ Every page follows the same sticky header structure:
   </div>
 </header>
 ```
-No gradient accent lines under headers (removed — dated pattern). The `border-b` on the header is sufficient.
 
-### Dashboard Stats
-The Index page renders a `DashboardStats` component above the field list — a responsive 6-card grid (`2-col mobile → 3-col desktop`) showing at-a-glance farm metrics: Total Acreage, Planted (with progress bar), Harvest, Spray Apps, On-Farm Inventory, and Attention (unplanted field count). All data is computed from existing store state via `useMemo` — zero additional API calls. A `DashboardStatsSkeleton` renders during hydration.
-
-### Field Card Status Dots
-Field cards display a colored dot in the top-right corner:
-- 🟢 Green (`bg-plant`): field has a planting record
-- 🔵 Blue (`bg-spray`): field has activity but no planting record
-- ⚪ Gray (`bg-muted-foreground/30`): no activity this season
-
-### Bin Capacity Bar Colors
-Bin fill bars change color by percentage:
-- `bg-harvest` (gold): ≤ 60%
-- `bg-amber-500`: > 60%
-- `bg-destructive` (red): > 85%
-
-### Bottom Navigation
-- Active tab: `text-primary`, bold label, `strokeWidth={2.5}`, animated pill background via `layoutId="bottom-nav-pill"`, and a small dot indicator below the label.
-- Inactive tab: `text-muted-foreground`, normal weight, `strokeWidth={1.5}`.
-- Bar uses `bg-card/90 backdrop-blur-lg`.
-
-### Auth Screen
-Dark background matching the app's default theme. Uses a `Sprout` icon hero with the AcreLedger brand name and tagline. The auth card is `rounded-2xl` with `bg-card border border-border`. Inputs use `bg-background` to stand out from the card surface.
+### Accessibility (Mandatory Standards)
+- **Modal Descriptions**: Every `DialogContent` MUST include a `DialogDescription` (can be `sr-only` for visual cleanliness) to satisfy Radix UI accessibility requirements.
+- **Label Association**: Every form input MUST have a unique `id` and `name`. The corresponding `Label` MUST use the `htmlFor` attribute to link to that ID.
+- **Touch Targets**: Buttons and interactive elements follow a 44px minimum height standard for mobile usability.
 
 ---
 
@@ -129,16 +110,12 @@ Physical farm field. Referenced by `fieldId` on all activity records.
 { id, name, acreage, lat, lng, intendedUse, fsaFarmNumber, fsaTractNumber,
   irrigationPractice, notes, deleted_at, boundary: { type, coordinates } }
 ```
-`notes` is a TEXT field used for informal scratchpad entries, persisted with auto-save.
-`lat`/`lng` may be null if geocoding was skipped — always guard before calling `.toFixed()`.
-`boundary` is a GeoJSON Polygon for field geometry.
 
 ### Bin
 Grain storage bin. Tracks capacity and identity.
 ```ts
 { id, farm_id, name, capacity, deleted_at }
 ```
-- **Inventory**: `currentBushels` is a derived value calculated via `getBinTotal()` in the store.
 
 ### PlantRecord
 Single planting event on a field. Core FSA 578 source record.
@@ -148,7 +125,7 @@ Single planting event on a field. Core FSA 578 source record.
   producerShare, fsaFarmNumber, fsaTractNumber, fsaFieldNumber, deleted_at }
 ```
 
-### SprayRecord
+### SprayRecord (2026 Standards)
 Pesticide/herbicide application. Refactored for universal private-applicator compliance (45+ states).
 Supports multiple products per application (tank-mix) and advanced environmental tracking.
 ```ts
@@ -158,624 +135,91 @@ Supports multiple products per application (tank-mix) and advanced environmental
   windSpeed, windDirection, temperature, relativeHumidity,
   targetPest, applicatorName, licenseNumber, equipmentId,
   siteAddress, involvedTechnicians, mixtureRate, totalMixtureVolume,
-  rei, notes, complianceProfile: 'universal', isPremixed, nonCompliant, deleted_at }
+  rei, notes, complianceProfile: 'universal', isPremixed, nonCompliant, 
+  nozzleType, nozzleSize, pressurePsi, boomHeight, actualSpeed, 
+  windSpeedEnd, windDirectionEnd, tempEnd, sensitiveAreaCheck, sensitiveAreaNotes,
+  deleted_at }
 ```
-- **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph) with manual override.
-- **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
-- **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
-- **Non-Compliant Flag**: Triggered if any product is missing an `epaRegNumber`.
-- **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
-- **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
+- **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph).
+- **Total Product Auto-summing**: System automatically calculates `totalProductAmount` based on rate and treated acreage.
+- **Weather Recovery**: "Recover Past Weather" feature pulls historical conditions from Visual Crossing based on field location and start time.
+- **Advanced Compliance**: Includes Nozzle type/size, Pressure (PSI), and Sensitive Area Check for high-tier regulatory audits.
 
-### HarvestRecord
-Grain harvest event.
-```ts
-{ id, farm_id, fieldId, fieldName, crop, bushels, moisturePercent, harvestDate,
-  timestamp, seasonYear, destination: 'bin' | 'town', landlordSplitPercent,
-  landlordName, scaleTicketNumber, deleted_at }
-```
-
-### HayHarvestRecord
-Hay cutting event. Tracked by cutting number per field per season.
-```ts
-{ id, farm_id, fieldId, fieldName, baleCount, baleType, cuttingNumber,
-  timestamp, seasonYear, deleted_at }
-```
-
-### TillageRecord
-Track tillage events (Disk, Cultivation, etc.) per field per season.
-```ts
-{ id, farm_id, fieldId, fieldName, date, implementType, notes,
-  timestamp, seasonYear, deleted_at }
-```
-
-### FertilizerApplication
-```ts
-{ id, farm_id, fieldId, fieldName, fertilizer_formula, acres, date,
-  timestamp, seasonYear, created_at, updated_at, deleted_at }
-```
-Note: `date` is an ISO date string; `timestamp` is Unix ms. Both exist on the same record.
-`created_at`/`updated_at` are managed by DB triggers.
-
-### GrainMovement
-Grain in/out of a bin, including sales and contracts.
-```ts
-{ id, farm_id, binId, binName, type: 'in' | 'out', bushels, moisturePercent,
-  price?, destination?, sourceFieldName?, timestamp, seasonYear, deleted_at }
-```
-**`bushels` may be negative.** Negative values represent an estimate-vs-actual correction
-(more grain removed than estimated). This is intentional business logic — do not block or clamp.
-Display with an amber `AlertTriangle` warning only.
-
-#### The "Ghost Row" Prevention Rule
-To prevent inventory drift if two sessions edit the same bin simultaneously, all Grain Movement edits must include a **Concurrency Guard**:
-- Use a `Last-Modified` or `version` stamp check in the `WHERE` clause of the update.
-- If the count of updated rows is 0, notify the user that the record has been modified by another session and trigger a state refresh.
-
-### SavedSeed
-Seed inventory reference. Not season-scoped.
-```ts
-{ id, farm_id, crop, variety, supplier, lotNumber, year, notes, deleted_at }
-```
-
-### SprayRecipe
-Saved tank-mix recipe for reuse on spray records. Not season-scoped.
-```ts
-{ id, farm_id, name, products: { product, epaRegNumber, activeIngredients, rate, rateUnit }[],
-  applicatorName, licenseNumber, targetPest, deleted_at }
-```
-
-#### Tank-Mix Product Identity
-For the `products` array in SprayRecords, generate a temporary `ui_id` (e.g., `crypto.randomUUID()`) when adding a row in the modal. Use this for React key props instead of array index to prevent input focus loss during reorders.
-
-### FertilizerRecipe
-Saved fertilizer formulas for reuse on fertilizer application records.
-```ts
-{ id, farm_id, name, npkRatio, deleted_at }
-```
-- **Management**: Users can create, edit, and delete fertilizer recipes directly in the **Settings** page or save a new formula as a recipe while recording an application.
-- **Usage**: Saved recipes appear as a dropdown in the Fertilizer Modal for quick data entry.
-
-### Rainfall
-High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar + field-based historical lookups).
-The system uses a **Dual-Source Lookup** strategy to ensure data reliability and range coverage.
-
-#### Rain API Core Logic
-- **Primary Source (Radar + DB merge)**: Rain API returns fixed windows (`rain.24h`, `rain.72h`, `rain.168h`) via `GET /rain?lat=X&lon=Y&field_id=Z`. The API merges IEM Stage IV (CONUS radar) with Supabase RPC server-side, taking the MAX of both sources per window.
-- **Custom Ranges**: Since-planting and since-spray rainfall are fetched via Rain API `GET /rain?lat=X&lon=Y&field_id=Z&start_date=A&end_date=B`. Returns `{ rain: { total: number }, rainMm: { total: number } }`. Including coordinates ensures the hybrid IEM radar merge is active for historical periods.
-- **Coordinate Precision**: Lat/Lng are rounded to **4 decimal places** for consistent matching with the 4km radar grid.
-- **Centroid Logic**: Polygon boundaries automatically fall back to centroids if explicit field coordinates are null or invalid.
-
-#### Service Reliability
-- **Service Cache**: `RainService` implements a 30-second `promiseCache` to deduplicate concurrent requests (e.g., when switching between tabs or fields rapidly).
-- **Data Warning**: The API includes `dataWarning` when >10% of hourly data is missing or when Supabase merge adds rain beyond IEM. Passed through to UI.
-- **API Fallback**: Custom range calls return `0` gracefully on failure to prevent UI crashes.
+### HarvestRecord / HayHarvestRecord / TillageRecord / FertilizerApplication / GrainMovement
+Standard farm activities, all scoped to `farm_id` and `seasonYear`. 
 
 ---
 
 ## 4. State Management Rules
 
 ### farmStore (React Context)
-Single global store in `farmStore.tsx`. Exposes all entity arrays, their setters, `session`,
-`farm_id`, `farmName`, `activeSeason`, `viewingSeason`, and all CRUD action methods. Accessed everywhere
-via `useFarm()`.
+Single global store in `farmStore.tsx`. Exposes all entity arrays, their setters, and CRUD actions. Accessed via `useFarm()`.
 
 ### Optimistic Update Pattern
-Every mutation follows this exact sequence — no exceptions:
-```
-1. Guard: if (!farm_id) → toast.error('No farm selected.'), return false
-2. Validate inputs → return false on invalid
-3. Call mapper (mapXToDb) — BEFORE touching state
-   → mapper throws: toast.error, return false, do NOT touch state or DB
-4. Apply optimistic state update via functional setter
-5. Await Supabase operation
-6a. Success: toast.success, return true
-6b. Error: roll back state to pre-step-4 snapshot, toast.error, return false
-```
-
-### OpResult Convention
-All add / update / delete operations on every hook return `Promise<boolean>`:
-- `true` = record committed to DB
-- `false` = blocked (validation, no farm) or rolled back (DB error)
-- **Never returns `undefined`.** Callers (e.g. modals deciding whether to close) rely on this.
-
-### farm_id Scoping
-Every Supabase write is scoped to `farm_id`. The null guard is always the **first line** of
-every mutation function — before validation, mapping, or any state change.
+Every mutation follows this exact sequence:
+1. Guard: `if (!farm_id)`
+2. Validate inputs.
+3. Call mapper (`mapXToDb`) — **BEFORE** touching state. Ensuring all optional fields default to `null` (not `undefined`).
+4. Apply optimistic state update.
+5. Await Supabase operation.
+6. Success: toast.success | Error: Roll back state, toast.error (with detailed Postgres message).
 
 ---
 
 ## 5. Database Conventions
 
-### Table Names
-| Entity | Supabase Table |
-|---|---|
-| Farm | `farms` |
-| Field | `fields` |
-| Bin | `bins` |
-| PlantRecord | `plant_records` |
-| SprayRecord | `spray_records` |
-| HarvestRecord | `harvest_records` |
-| HayHarvestRecord | `hay_harvest_records` |
-| FertilizerApplication | `fertilizer_applications` |
-| TillageRecord | `tillage_records` |
-| GrainMovement | `grain_movements` |
-| SavedSeed | `saved_seeds` |
-| FertilizerRecipe | `fertilizer_recipes` |
-| SprayRecipe | `spray_recipes` |
-| User profile / active season | `profiles` |
+### Migration Strategy (Mandatory)
+- **Unique Timestamps**: Every migration filename MUST start with a unique **14-digit timestamp** (`YYYYMMDDHHMMSS_name.sql`). This prevents collisions in the Supabase CLI when multiple developers create migrations on the same day.
+- **Naming**: `20260514100000_fix_security.sql`.
 
-Application state uses `camelCase`; DB columns use `snake_case`. Mappers handle all translation.
-
-### Data API Access (Mandatory)
-Starting May 2026, Supabase requires explicit `GRANT` statements for all tables exposed via the Data API (`supabase-js`). Every new table creation migration MUST include:
-```sql
--- Grant access to standard roles
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.your_table TO authenticated;
-GRANT SELECT ON public.your_table TO anon;
-GRANT ALL ON public.your_table TO service_role;
-
--- Always pair with RLS
-ALTER TABLE public.your_table ENABLE ROW LEVEL SECURITY;
-```
+### Security Hardening & RLS
+- **Explicit Grants**: Every table MUST have explicit `GRANT` statements for `authenticated`, `anon`, and `service_role`.
+- **Tenant Isolation**: Every table MUST have Row Level Security (RLS) enabled with a policy that restricts access to the user's `farm_id`.
+  ```sql
+  CREATE POLICY "Users can access their farm data" ON public.your_table
+    FOR ALL TO authenticated
+    USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()))
+    WITH CHECK (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()));
+  ```
+- **Search Path**: Every function MUST set a secure `search_path = public, extensions`.
 
 ### Mapper Pattern
-Every entity has a dedicated mapper in `@/lib/mappers.ts`:
-```ts
-mapFieldToDb(f: Field): DbField
-mapSprayToDb(r: SprayRecord): DbSprayRecord
-// one mapper per entity — no exceptions
-```
-Mappers are called **before** any optimistic state update. If a mapper throws, abort entirely.
-Never inline DB shape transformation in a hook or component.
-
-### farm_id Rule
-`farm_id` is a relational partition key. It belongs **only** in `.eq('farm_id', farm_id)`
-filter clauses. **Never** include it in the `.update()` payload:
-```ts
-// Wrong:
-.update({ ...mapped, farm_id })
-// Right:
-.update(mapped).eq('id', r.id).eq('farm_id', farm_id)
-```
-
-### Soft Delete
-```ts
-.update({ deleted_at: new Date().toISOString() }).in('id', ids).eq('farm_id', farm_id)
-```
-Never use Supabase `.delete()` on user records. Excluded server-side by RLS, client-side
-by filtering `!r.deleted_at` when loading state.
-
-### Update vs Upsert
-`.update().eq('id', r.id).eq('farm_id', farm_id)` for edits — always.
-**Never use `.upsert()` for edit operations.** Upsert silently inserts a ghost row if the
-record ID is absent from the DB, corrupting inventory and report totals.
-
-### Security Hardening
-All locally-managed functions, RPCs, and triggers MUST include a explicit search path:
-```sql
-CREATE OR REPLACE FUNCTION ...
-RETURNS ... AS $$
-...
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions;
-```
-This prevents "search_path not set" security warnings and protects against search-path hijacking.
-
-### SECURITY DEFINER Tenant Guard
-Any `SECURITY DEFINER` function that reads/writes farm-scoped data must enforce tenant ownership
-inside the function body (typically via `auth.uid()` + `profiles.farm_id` join check). Do not rely
-on caller-provided IDs alone.
-
-### RLS + Grant Rule
-Never grant `SELECT`/`EXECUTE` to `authenticated` without matching tenant-scoped RLS policies (tables)
-or explicit ownership checks (functions).
+Mappers in `@/lib/mappers.ts` handle `camelCase` (app) ↔ `snake_case` (DB) translation.
+- **Defense**: Mappers MUST ensure optional fields are sent as `null` to the DB to prevent serialization issues.
+- **Safety**: Use `safeNum` and `safeStr` helpers to prevent type errors.
 
 ---
 
 ## 6. Component Patterns
 
-### useMemo Rules
-Wrap in `useMemo` any value derived from large arrays:
-- Field lookup map (see below)
-- Filtered + sorted record lists for each tab/view
-- Season selector option arrays
-- Aggregate totals in report footers
-- Expanded row sets (e.g. spray `flatMap` over products)
+### Icon Shadowing Prevention
+**NEVER** import a Lucide icon with a name that conflicts with a global browser object (e.g., `Map`, `History`). 
+- **Always alias**: `import { Map as MapIcon, History as HistoryIcon } from 'lucide-react'`.
+- This prevents `TypeError: Illegal constructor` errors in production bundles.
 
-Do **not** compute these inline in JSX — they recalculate on every render.
-
-### fieldMap Pattern
-Never call `fields.find(f => f.id === r.fieldId)` per row inside a `.map()`. Build once:
-```ts
-const fieldMap = useMemo(() => new Map(fields.map(f => [f.id, f])), [fields]);
-// Per row — O(1):
-const field = fieldMap.get(r.fieldId);
-const farmNum = field?.fsaFarmNumber ?? '—';
-```
-
-### Module-Level Pure Helpers
-Functions that don't depend on component state or props belong **outside** the component at
-module level. Examples: date formatters (`fmtDate`, `fmt`), detail line builders (`buildDetails`,
-`buildSubtitle`), export wrappers. Not recreated on render and independently testable.
-
-### safeExport Wrapper
-All CSV/JSON export calls go through this wrapper — never called bare in `onExport` props:
-```ts
-function safeExport(fn: () => void, label: string): void {
-  try { fn(); }
-  catch (err) {
-    console.error(`Export failed (${label}):`, err); // → Sentry in production
-    toast.error(`Failed to export ${label}. Please try again.`);
-  }
-}
-```
-
-### ReportTable Component
-Standardized wrapper for all compliance report tabs. Props: `title`, `subtitle`, `headers[]`,
-`onExport`, `exportLabel`, `summary` (ReactNode), `children` (`<tr>` rows).
-All six report tabs use it for layout or data processing: FSA Plant, Spray Audit, Fertilizer, 
-FSA Harvest, Hay Summary, Landlord Statement. Supports both CSV and PDF direct exports.
-
-### Universal Spray Log Export
-The `generateSprayPDF` utility (`@/lib/sprayExport.ts`) provides a production-grade, state-neutral 
-PDF export for spray records. It handles both single-record (with field name) and multi-record 
-(with farm name and date range) exports, follows black-and-white friendly printing rules, and 
-automatically includes mandatory compliance fields (EPA Reg #, Active Ingredients, Wind, Temp, 
-Equipment, Mix Details, and Personnel). It generates dynamic, sanitized filenames for 
-professional log management. It is the primary export path for private applicators.
-
-### Field Dashboard (Mobile-First)
-The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time
-signals over static data. The hierarchy is strictly enforced:
-1. **Header**: Back button + Logo.
-2. **Dashboard Header**: Field name, crop badge, FSA identity, sync note.
-3. **Today at a Glance**: 4-card grid (Rainfall, Spray Status, Latest Activity, Crop).
-4. **Quick Actions**: 3-col mobile / 6-col desktop grid for all 6 activity types
-   (Spray, Plant, Fertilizer, Tillage, Harvest, Hay). Each button opens its modal.
-5. **"View Full History" button**: navigates to `/activity` page.
-6. **Rainfall Analysis**: Comparative breakdown (24h/72h/7d/Planting/Spray).
-7. **Latest Spray**: Detail card + dedicated PDF export button.
-8. **Field History**: Last 8 events via `ActivityFeed`. "+N more" button navigates to `/activity`.
-   "View All Activity" header button also navigates to `/activity`.
-9. **Static Metadata**: Acreage, coordinates, and irrigation at the bottom.
-
-All section containers use `rounded-2xl` consistently.
-
-### ActivityFeed Component
-Reusable presentational component for displaying field-specific historical records. **Season
-filtering and item limiting are caller responsibilities** (e.g., `FieldDetailScreen` provides
-only `viewingSeason` records and slices to the latest 8 for dashboard scanability). Supports a
-`hideHeader` prop for nested board use.
-
-### FieldNotes Component (Auto-Save)
-Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange` 
-event to automatically sync content to Supabase. Includes a visual "Syncing..." / "Saved" 
-status indicator to confirm persistence without blocking user input.
-
-### Null Safety in Display Strings
-Always guard optional numeric/string fields before interpolation:
-```ts
-// Wrong → "undefined MPH undefined":
-`${r.windSpeed} MPH ${r.windDirection}`
-// Right:
-const wind = r.windSpeed != null ? `${r.windSpeed} MPH ${r.windDirection || ''}`.trim() : null;
-const temp = r.temperature != null ? `${r.temperature}°F` : null;
-const details = [wind, temp].filter(Boolean).join(' · ') || '—';
-```
-
-### Font-Mono Usage Rule
-JetBrains Mono is reserved for **data values** — numbers, dates, coordinates, IDs, measurements.
-All other text (labels, headings, subtitles, buttons, empty states, descriptions, navigation)
-uses Inter sans-serif. When adding new UI text, default to sans-serif unless it represents a
-data measurement or technical identifier.
-
-### Zero vs Falsy in Display
-`0` is a valid and meaningful farm value (zero bales, zero bushels, zero price).
-```ts
-value || '—'              // Wrong — hides legitimate zero
-value > 0 ? value : '—'  // Right for counts/quantities
-value != null ? value : '—'  // Right for measurements where 0 is valid
-```
-
-### Sorting
-Never call `.sort()` directly on a state-derived array — `Array.sort` mutates in place.
-Always spread first inside `useMemo`: `[...arr].sort((a, b) => ...)`.
-
-### Z-Index Layering Standard
-To prevent overlap conflicts between the floating Farm Summary, Modals, and Navigation:
-- **layer-base**: `0` (Fields, Cards)
-- **layer-navigation**: `10` (Bottom Nav Bar)
-- **layer-summary**: `20` (Floating Farm Summary - must clear `pb-24`)
-- **layer-overlay**: `50` (Dialogs, Modals, Toasts)
-
-### Report Date Stability
-Capture report generation date at mount via `useRef`:
-```ts
-const reportDateRef = useRef(new Date().toLocaleDateString());
-```
-A subtitle date must not silently change if the component re-renders after midnight.
-
----
-
-## 7. Hook Patterns
-
-### Standard Data Hook Signature
-```ts
-interface UseXRecordsArgs {
-  farm_id: string | null;
-  activeSeason: number;
-  setXRecords: React.Dispatch<React.SetStateAction<XRecord[]>>;
-  // Never pass the records array — read state inside functional updaters instead
-}
-
-export function useXRecords({ farm_id, activeSeason, setXRecords }: UseXRecordsArgs) {
-  const isAdding    = useRef(false);
-  const previousRef = useRef<XRecord | undefined>(undefined);
-  const snapshotRef = useRef<{ record: XRecord; index: number }[]>([]);
-}
-```
-
-### In-Flight Guard (Add operations only)
-Single boolean ref — not a UUID Set. UUID collision guard never fires; a boolean actually
-prevents double-tap regardless of how many UUIDs are generated:
-```ts
-if (isAdding.current) return false;
-isAdding.current = true;
-try {
-  /* map → optimistic add → await insert */
-} finally {
-  isAdding.current = false; // always release — even on unexpected throw
-}
-```
-
-### Cross-Await State Capture
-Never read a `let` assigned inside a `setState` callback after an `await`. React 18 may
-batch or defer setter execution. Capture into a ref inside the setter:
-```ts
-previousRef.current = undefined;
-setXRecords(prev => {
-  previousRef.current = prev.find(item => item.id === r.id);
-  return prev.map(item => item.id === r.id ? r : item);
-});
-const { error } = await supabase...
-// previousRef.current is safe to read here
-```
-
-For operations that can overlap, use operation-local rollback context (closure object or token-keyed
-Map) so concurrent updates/deletes cannot overwrite each other's rollback snapshot.
-
-### Affected-Row Verification
-Treat zero affected rows as failure on update/delete calls even when `error` is null:
-```ts
-const { data, error } = await supabase
-  .from('table')
-  .update(payload)
-  .eq('id', id)
-  .eq('farm_id', farm_id)
-  .select('id');
-
-if (error || !data || data.length === 0) {
-  // rollback optimistic state + toast
-}
-```
-
-### Delete Rollback with Ordered Splice
-Sort snapshot **descending by index** before splicing — prevents index shift bugs:
-```ts
-snapshotRef.current = [];
-setXRecords(prev => {
-  snapshotRef.current = prev
-    .map((record, index) => ({ record, index }))
-    .filter(({ record }) => ids.includes(record.id));
-  return prev.filter(r => !ids.includes(r.id));
-});
-// On error:
-const sorted = [...snapshotRef.current].sort((a, b) => b.index - a.index);
-setXRecords(prev => {
-  const restored = [...prev];
-  for (const { record, index } of sorted)
-    restored.splice(Math.min(index, restored.length), 0, record);
-  return restored;
-});
-```
-
-### Records Array Not in Deps
-Never include the entity array (e.g. `sprayRecords`) in `useCallback` deps. The callback
-recreates on every optimistic update it triggers. Use functional updaters and refs instead.
-
-### Modal Submission Hardening
-All data-entry modals must use an `isSaving` state and `await` the result of store actions.
-```tsx
-const [isSaving, setIsSaving] = useState(false);
-const handleSubmit = async () => {
-  setIsSaving(true);
-  try {
-    const success = await addRecord(data);
-    if (success) onClose();
-  } finally {
-    setIsSaving(false);
-  }
-};
-```
-This prevents double-submissions and ensures the modal only closes when the data is safe.
-
----
-
-## 8. Auth & Session Rules
-
-- `session: Session | null | undefined` flows from Supabase Auth through `useFarm()`.
-- `session === undefined` → hydrating. **Show a loading skeleton. Do not return null.**
-- `session === null` → unauthenticated. Return null, redirect, or hide the component.
-- `session` truthy → authenticated. `session.user.id` is the scoping key.
-- `farm_id: string | null` stored in `profiles` — may be null even when session exists
-  (new user who hasn't completed onboarding).
-
-### localStorage Key Scoping
-- Anonymous / fallback: `al_<key>` (e.g. `al_zip`, `acreledger_last_backup`)
-- Per-user: `${userId}_al_<key>` (e.g. `abc123_al_zip`)
-
-Never seed `useState` from localStorage using `userId` in the initializer — session loads
-async and `userId` is undefined on first render. Use a `useEffect` on `userId`:
-```ts
-const [zip, setZip] = useState('');
-useEffect(() => { setZip(loadZip(userId)); }, [userId]);
-```
-Always wrap localStorage in `try/catch` — throws in private browsing and at storage quota.
-
-### Farm Bootstrap
-When a signed-in user has no `profiles.farm_id`, call transactional RPC `ensure_user_farm()`.
-Do not do client-side `insert farm` + `update profile` as separate operations.
-
----
-
-## 9. Season System
-
-The system **decouples data entry from data viewing**:
-
-- **`activeSeason: number`** — the current physical farming year (e.g. `2025`). Stored in
-  `profiles.active_season`. All new records stamp `seasonYear = activeSeason`.
-- **`viewingSeason: number`** — the year shown in UI. Controlled by a dropdown. Filters all
-  lists, grids, and reports. **Does not affect writes.** Can be set to any past season.
-
-Every season-specific record carries `seasonYear: number`. Always filter by `viewingSeason`
-in report and list views. Never render records from the wrong season in a scoped view.
-
-### Season Rollover (`rolloverToNewSeason`)
-Destructive — cannot be undone. Strict gated sequence, abort on any failure:
-```
-1. Validate year: integer, 2000 ≤ year ≤ currentYear + 1
-2. setLoading(true)
-3. Build backup payload, call downloadJson() → must return true
-   → false or throw: toast.error('Backup failed — season not changed'), STOP
-4. Write new year to profiles.active_season in Supabase
-   → error: toast.error, STOP, do not update local state
-5. setActiveSeason(year), setViewingSeason(year)
-6. toast.success, setLoading(false)
-```
-
----
-
-## 10. Backup & Restore Rules
-
-### Explicit Payload — No Whole-Store Passthrough
-```ts
-// Wrong — leaks auth tokens, setters, session:
-createBackupData(store)
-// Right:
-createBackupData({ fields, bins, plantRecords, sprayRecords,
-                   harvestRecords, hayHarvestRecords, fertilizerApplications,
-                   tillageRecords, grainMovements, savedSeeds, fertilizerRecipes,
-                   sprayRecipes, activeSeason })
-```
-
-### downloadJson Contract
-Returns `boolean` — `true` on success, `false` or thrown on failure.
-Revoke the object URL with a delay — synchronous revoke races the download:
-```ts
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-setTimeout(() => URL.revokeObjectURL(url), 2000);
-return true;
-```
-
-### Restore: Transactional RPC (Required)
-```ts
-const { error } = await supabase.rpc('restore_farm_backup', {
-  p_payload: payload,
-  p_active_season: backupData.activeSeason ?? null,
-});
-if (error) throw new Error(`Failed to restore backup: ${error.message}`);
-```
-Backup restore must run server-side in one transaction via RPC; never run per-table client upserts.
-Only update local state after the RPC succeeds.
-
-### Empty Array Restore Rule
-```ts
-// Wrong — skips restoring a legitimately empty array:
-if (backupData.fields) setFields(backupData.fields);
-// Right:
-if (backupData.fields !== undefined) setFields(backupData.fields);
-```
-
-### Last Backup Tracking
-Store last successful backup timestamp in localStorage: `acreledger_last_backup`.
-Show in BackupManager UI. Amber warning if > 7 days old or never taken.
+### PWA & Bundling
+- **Vite Configuration**: `manualChunks` should be avoided for UI libraries (Lucide, Radix, Framer Motion) to prevent initialization order artifacts. Use Vite's default strategy for these.
+- **Service Worker**: `sw.js` handles navigation routing to `index.html` to support client-side SPA routing while offline.
 
 ---
 
 ## 11. Error Handling Standards
 
-### Toast Usage
-| Situation | Call |
-|---|---|
-| DB write failed, state rolled back | `toast.error('...')` |
-| User input validation failed | `toast.error('...')` |
-| Offline / network issue detected | `toast.warning('...')` |
-| Operation committed successfully | `toast.success('...')` |
-| Informational, no action needed | `toast.info('...')` |
-| SW update available (user must act) | `toast('Title', { description, action: { label, onClick } })` |
+### Detailed Error Logging
+`useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging of production issues.
 
-### Rainfall Pipeline Error States
-- **RPC Failure**: Caught by `RainService`; indicates Supabase connection or permission issues. Returns 0 for custom ranges.
-- **Vercel 404 (NOT_FOUND)**: Usually malformed URL or invalid coordinates. Caught by RainService error handling.
-- **IEM Unreachable**: Main call returns `RAIN_API_ERROR`; surfaced to user via `rainError` state in `FieldDetailScreen`.
-- **NaN / Missing Coords**: Blocked by centroid fallback logic; throws a descriptive "Missing location data" error if both are absent.
-
-### Sentry Placeholder Pattern
-```ts
-// Replace with Sentry.captureException(err) in production
-console.error('Descriptive context label:', err);
-```
-
-### No Silent Failures
-- Data-entry modals (Plant, Spray, Fertilizer, Harvest) must `await` the save operation and
-  only close on success (`return true` from store).
-- Destructive operations (delete, rollover, cache clear) always show explicit feedback.
-- Export functions always wrapped in `safeExport` — never bare in `onExport` props.
-- PDF generation uses `jspdf` and `jspdf-autotable` for consistent tabular output.
-- Blocked operations (`farm_id` null, empty data) always return `false` and show a toast.
-- User-visible error messages never say "check the console" — surface the actual reason.
-
-### SyncStatus Connection Health
-Must use a real Supabase Realtime channel probe — not the store's `loading` flag.
-`loading` reflects initial hydration only. Map channel status to four states:
-`connecting` | `connected` | `disconnected` | `offline`.
-Use `window.addEventListener('online'/'offline')` in parallel with channel status.
+### Content Security Policy (CSP)
+The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, and Vercel.
 
 ---
 
 ## 12. Coding Rules & Conventions
 
-- **No whole-store passthrough.** Destructure only the exact fields needed.
-- **No `upsert` for updates.** `.update().eq('id').eq('farm_id')` only — upsert silently inserts on miss.
-- **Backup restore uses RPC transaction.** `restore_farm_backup` only; never client table-by-table upsert loop.
-- **`farm_id` is a filter, never a payload field.** Never include in `.update({...})` body.
-- **`parseInt` always takes a radix.** `parseInt(v, 10)` — bare `parseInt` is ambiguous.
-- **`onOpenChange` always checks the boolean.** `(open) => { if (!open) onClose(); }` never `() => onClose()`.
-- **Sort descending before splice rollback.** Ascending order causes insertion index drift.
-- **Named constants over magic numbers.** `WIND_ALERT_MPH`, `MIN_SEASON_YEAR`, `MAX_SEASON_YEAR`, `LAST_BACKUP_KEY`, `LAST_SYNC_KEY`.
-- **Defer `URL.revokeObjectURL`.** `setTimeout(..., 2000)` — synchronous revoke races the download.
-- **Backup gates rollover.** `downloadJson` returning `false` aborts the season change entirely.
-- **`isAdding` boolean ref, not UUID Set.** UUID Set does not prevent double-tap; boolean does.
-- **`try/finally` on in-flight guards.** Guard must release even on unexpected throw.
-- **Service Promise Caching.** Multi-call services (Rain, Weather) MUST implement a `promiseCache` (Map) to deduplicate concurrent requests for the same identity (fieldId, location).
-- **Module-level pure helpers only.** Functions with no component dependency go outside the component.
-- **Memoize all derived data.** `fieldMap`, filtered/sorted arrays, season lists, totals — all `useMemo`.
-- **`[...arr].sort()` never `arr.sort()`.** Sort mutates in place — spread first.
-- **`value > 0 ? value : '—'` not `value || '—'`.** Zero is a valid farm value.
-- **`!== undefined` for optional restore fields.** Falsy check skips `[]` and `0`.
-- **`previousRef`/`snapshotRef` for cross-await rollback.** Never read a `let` set inside a setter after `await`.
-- **Verify affected rows on all updates/deletes.** `.select('id')` then enforce non-zero (and exact counts for bulk).
-- **Remove unused imports at time of edit.** Never commit dead imports.
-- **No default `React` import.** Modern JSX transform — named imports only.
-- **Soft delete only.** Never call `.delete()` on user records — always set `deleted_at`.
-- **Validate year range before rollover.** Reject `NaN`, `0`, values outside `[2000, currentYear+1]`.
-- **`session === undefined` ≠ `session === null`.** Undefined = hydrating (skeleton). Null = logged out.
-- **`lat`/`lng` are nullable on Field.** Guard before `.toFixed()`: `field.lat != null ? field.lat.toFixed(3) : '—'`.
-- **GrainMovement `bushels` may be negative.** Intentional adjustment — warn in UI, never reject.
-- **Spray product row keys use index.** `` `${r.id}-${i}` `` not `` `${r.id}-${p.product}` `` — product names can duplicate.
-- **Callers never pass `farm_id` to `add` operations.** The store hook has `farm_id` in its closure and applies it automatically. Passing it from a component is dead code.
-- **One import statement per module path.** `import { a, b } from '@/utils/dates'` — never two lines from the same path.
+- **Icon Shadowing**: Use `MapIcon`, `HistoryIcon` aliasing.
+- **No `upsert` for updates**: Use `.update().eq('id').eq('farm_id')`.
+- **Radix Modals**: Always include `DialogDescription`.
+- **Form Inputs**: Always include `id`, `name`, and linked `Label`.
+- **Data Safety**: Optional fields default to `null` in mappers.
+
 ### Verification
 See [TESTING.md](./TESTING.md) for detailed verification protocols and bot credentials.
