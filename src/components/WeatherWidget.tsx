@@ -7,7 +7,7 @@ import { useFarm } from '@/store/farmStore';
 const ZIP_REGEX = /^\d{5}(-\d{4})?$/;
 
 function initialWeather(): WeatherData {
-  return { wind: 0, temp: 0, humidity: 0, windDirection: '—', precip24h: 0, precip72h: 0 };
+  return { wind: 0, temp: 0, humidity: 0, windDirection: '—', precip24h: 0, precip72h: 0, precipProb: 0 };
 }
 
 function loadZip(userId?: string): string {
@@ -28,8 +28,6 @@ export default function WeatherBar() {
   const { session, fields } = useFarm();
   const userId = session?.user?.id;
 
-  // Don't seed from localStorage until userId is known — avoids reading the
-  // wrong key during the async session hydration window.
   const [zip, setZip] = useState<string>('');
   const [inputZip, setInputZip] = useState('');
   const [usingCoords, setUsingCoords] = useState(false);
@@ -39,14 +37,12 @@ export default function WeatherBar() {
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
-  // Sync zip from localStorage once userId is stable
   useEffect(() => {
     const saved = loadZip(userId);
     if (saved) {
       setZip(saved);
       setInputZip(saved);
     } else {
-      // Auto-detect: use first field with valid coordinates
       const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
       if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
         setZip(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
@@ -56,13 +52,11 @@ export default function WeatherBar() {
     }
   }, [userId, fields]);
 
-  // Abort controller ref to cancel in-flight requests on new submission
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async (z: string) => {
     if (!z.trim()) return;
 
-    // Cancel any previous in-flight fetch
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -101,7 +95,6 @@ export default function WeatherBar() {
       return;
     }
 
-    // Allow lat,lng format directly
     const coordsMatch = z.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
     if (!coordsMatch && !ZIP_REGEX.test(z)) {
       setZipError('Enter a valid 5 or 9-digit zip code');
@@ -109,68 +102,75 @@ export default function WeatherBar() {
     }
 
     setZipError('');
-    setLocationName('');      // clear stale city name immediately
+    setLocationName('');
     setWeather(initialWeather());
     setZip(z);
     setUsingCoords(!!coordsMatch);
     if (!coordsMatch) saveZip(z, userId);
   };
 
-  const hasPrecip =
-    !weather.isError &&
-    weather.precip24h != null &&
-    weather.precip24h > 0;
-
   return (
-    <div className="bg-card border border-border rounded-lg p-3 px-4 flex flex-col gap-2 min-h-[52px] sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <MapPin size={16} className={usingCoords ? 'text-primary shrink-0' : 'text-muted-foreground shrink-0'} />
-        <form onSubmit={handleSubmit} className="flex-none">
-          <input
-            id="weatherZip"
-            name="weatherZip"
-            value={usingCoords ? '' : inputZip}
-            onChange={e => { setInputZip(e.target.value); setZipError(''); }}
-            placeholder={usingCoords ? 'Auto' : 'Zip...'}
-            className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-foreground font-mono text-[11px] placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            maxLength={10}
-            inputMode="numeric"
-          />
-        </form>
-        {zip && !zipError && (
-          <span className="text-xs text-muted-foreground truncate">
-            {locationName || zip}
-          </span>
-        )}
+    <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between min-h-[90px] relative overflow-hidden group">
+      {/* Left side: Main Temp & Location */}
+      <div className="flex flex-col justify-center">
+        <div className="flex items-center gap-2">
+          <Thermometer size={24} className="text-orange-500" />
+          <div className="flex flex-col">
+            <span className="text-3xl font-mono font-bold tracking-tight leading-none">
+              {weather.isError ? '—' : `${weather.temp}°F`}
+            </span>
+            {weather.isError && <span className="text-[10px] text-destructive font-bold uppercase tracking-wider">Offline</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 mt-1">
+          <MapPin size={12} className="text-emerald-500/60" />
+          <form onSubmit={handleSubmit} className="flex items-center">
+            <input
+              id="weatherZip"
+              name="weatherZip"
+              value={usingCoords ? (locationName || zip) : inputZip}
+              onChange={e => { setInputZip(e.target.value); setZipError(''); setUsingCoords(false); }}
+              placeholder={usingCoords ? 'Auto' : 'Zip...'}
+              className="bg-transparent border-none p-0 text-emerald-500/60 font-mono text-[11px] placeholder:text-muted-foreground focus:outline-none focus:ring-0 w-32 truncate"
+              maxLength={40}
+            />
+          </form>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 text-foreground font-mono text-sm w-full sm:w-auto sm:justify-end">
-        {weather.isError ? (
-          <span className="text-destructive text-xs">Offline</span>
-        ) : (
-          <>
-            <span className="flex items-center gap-1.5 bg-destructive/5 px-2 py-1 rounded-md border border-destructive/10">
-              <Thermometer size={14} className="text-destructive" />
-              <span className="font-bold">{weather.temp}°F</span>
-            </span>
-            <span className="flex items-center gap-1.5 bg-spray/5 px-2 py-1 rounded-md border border-spray/10">
-              <Wind size={14} className="text-spray" />
-              <span className="font-bold">{weather.wind} <span className="text-[11px] opacity-70">MPH</span></span>
-            </span>
-            {hasPrecip && (
-              <span className="flex items-center gap-1.5 bg-spray/10 px-2 py-1 rounded-md border border-spray/20 text-spray font-black">
-                <Droplets size={14} />
-                {weather.precip24h}"
-              </span>
-            )}
-          </>
-        )}
-        {loading && <Loader2 size={14} className="text-primary animate-spin" />}
+      {/* Right side: Secondary Stats */}
+      <div className="flex items-center gap-6 sm:gap-10">
+        {/* Wind */}
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-1.5">
+            <Wind size={16} className="text-foreground/80" />
+            <span className="text-lg font-mono font-bold">{weather.wind}</span>
+          </div>
+          <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">MPH</span>
+        </div>
+
+        {/* Humidity */}
+        <div className="flex flex-col items-center">
+          <span className="text-lg font-mono font-bold">{weather.humidity}%</span>
+          <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">HUMIDITY</span>
+        </div>
+
+        {/* Rain Prob */}
+        <div className="flex flex-col items-center">
+          <span className="text-lg font-mono font-bold">{weather.precipProb}%</span>
+          <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">RAIN</span>
+        </div>
       </div>
 
-      {zip && !zipError && lastUpdated && !weather.isError && (
-        <div className="text-xs text-muted-foreground font-mono sm:hidden">
-          Updated {lastUpdated}
+      {loading && (
+        <div className="absolute top-2 right-2">
+          <Loader2 size={12} className="text-primary animate-spin opacity-50" />
+        </div>
+      )}
+
+      {zipError && (
+        <div className="absolute bottom-1 left-4 text-[10px] text-destructive">
+          {zipError}
         </div>
       )}
     </div>

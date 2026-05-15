@@ -6,4 +6,5 @@ export interface WeatherData {
     isError?: boolean;
     precip24h?: number;
     precip72h?: number;
+    precipProb?: number;
 }

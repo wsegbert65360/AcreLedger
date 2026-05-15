@@ -97,9 +97,9 @@ export const WeatherService = {
      * Fetches current weather data for the Weather Bar via Visual Crossing.
      * Including precip data for the last 24 and 72 hours.
      */
-    async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number }> {
+    async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number, precipProb?: number }> {
         if (!API_KEY || API_KEY === 'undefined') {
-            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true, precip24h: 0, precip72h: 0 };
+            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
         }
 
         if (promiseCache.has(location)) {
@@ -107,7 +107,7 @@ export const WeatherService = {
                 const data = await promiseCache.get(location);
                 return this._mapCurrentWeather(data);
             } catch (error) {
-                return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0 };
+                return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
             }
         }
         
@@ -122,7 +122,7 @@ export const WeatherService = {
 
         try {
             // Fetch today + last 3 days to calculate accurate 24h/72h rainfall along with current conditions
-            const url = `${VC_BASE_URL}/${location}/last3days/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current,days&elements=datetime,temp,humidity,windspeed,winddir,precip`;
+            const url = `${VC_BASE_URL}/${location}/last3days/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current,days&elements=datetime,temp,humidity,windspeed,winddir,precip,precipprob`;
             
             const fetchPromise = fetch(url, { signal: controller.signal })
                 .then(res => {
@@ -141,7 +141,7 @@ export const WeatherService = {
                 console.error('[WeatherService] Error fetching current weather:', error);
             }
             return {
-                temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0
+                temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0
             };
         } finally {
             clearTimeout(timeoutId);
@@ -153,7 +153,7 @@ export const WeatherService = {
     _mapCurrentWeather(data: any) {
         const current = data.currentConditions;
         if (!current) {
-            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: data.address || 'Unknown', isError: true, precip24h: 0, precip72h: 0 };
+            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: data.address || 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
         }
         const days = data.days || [];
         
@@ -174,7 +174,8 @@ export const WeatherService = {
             locationName: data.address,
             isError: false,
             precip24h: Math.round(precip24h * 100) / 100,
-            precip72h: Math.round(precip72h * 100) / 100
+            precip72h: Math.round(precip72h * 100) / 100,
+            precipProb: Math.round(current.precipprob || 0)
         };
     },
 
