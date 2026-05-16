@@ -286,6 +286,18 @@ All add / update / delete operations on every hook return `Promise<boolean>`:
 Every Supabase write is scoped to `farm_id`. The null guard is always the **first line** of
 every mutation function — before validation, mapping, or any state change.
 
+### Backup / Restore Farm Ownership
+Backup files may contain stale, missing, or foreign `farm_id` values because users can restore
+older exports or pre-fix local cache data. Restore must always treat the currently selected
+`farm_id` as authoritative:
+- Before calling any `mapXToDb` mapper in `restoreFromBackup`, merge `{ ...record, farm_id }`
+  into every restored record.
+- The Supabase `restore_farm_backup` RPC payload and the React state hydrated after a successful
+  restore must use the same current `farm_id`.
+- Never hydrate React state directly from raw backup arrays after a restore. Normalize records
+  first so localStorage, in-memory state, and Supabase stay aligned.
+- Restore must fail without mutating state if the RPC returns an error.
+
 ---
 
 ## 5. Database Conventions
@@ -320,10 +332,14 @@ Every entity has a dedicated mapper in `@/lib/mappers.ts`.
 - **CamelCase to SnakeCase**: Mappers handle all translation.
 - **Payload Sanitization**: Mappers MUST ensure optional fields are sent as `null` to the DB to prevent serialization issues.
 - **Safety**: Use `safeNum` and `safeStr` helpers to prevent type errors.
+- **Identity Preservation**: Mappers for user-managed reference data, including `saved_seeds`, MUST preserve `id`, `farm_id`, and `deleted_at` so optimistic local IDs, backup restores, and persisted DB rows remain aligned.
 
 ### farm_id Rule
-`farm_id` is a relational partition key. It belongs **only** in `.eq('farm_id', farm_id)`
-filter clauses. **Never** include it in the `.update()` payload.
+`farm_id` is a relational partition key. Inserts and restore payloads MUST include the current
+`farm_id`. Update operations MUST use `farm_id` only in `.eq('farm_id', farm_id)` filter clauses;
+strip `farm_id` out of `.update()` payloads after mapping. Service-layer update helpers should
+inject the authoritative current `farmId` before mapper validation, then omit it from the update
+payload.
 
 ### Soft Delete
 `.update({ deleted_at: new Date().toISOString() }).in('id', ids).eq('farm_id', farm_id)`
