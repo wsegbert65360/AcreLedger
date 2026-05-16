@@ -182,6 +182,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         const updatedField: Field = {
           id: editField.id,
           ...fieldData,
+          farm_id: editField.farm_id,
           deleted_at: editField.deleted_at ?? null
         };
         success = await updateField(updatedField);

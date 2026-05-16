@@ -415,6 +415,7 @@ export const mapBinToDb = (b: Bin) => {
 export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
     validateRequired(s, ['farm_id', 'name'], 'mapSeedToDb');
     return {
+        id: s.id,
         name: s.name,
         crop: s.crop,
         variety: s.variety,
@@ -422,7 +423,8 @@ export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
         lot_number: s.lotNumber,
         year: s.year,
         notes: s.notes,
-        farm_id: s.farm_id
+        farm_id: s.farm_id,
+        deleted_at: s.deleted_at
     };
 };
 

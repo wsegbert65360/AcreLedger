@@ -44,7 +44,7 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
         try {
             let success = false;
             if (isEdit) {
-                success = await updateBin({ id: editBin.id, name: name.trim(), capacity: cap, deleted_at: editBin.deleted_at ?? null });
+                success = await updateBin({ id: editBin.id, name: name.trim(), capacity: cap, farm_id: editBin.farm_id, deleted_at: editBin.deleted_at ?? null });
             } else {
                 success = await addBin({ name: name.trim(), capacity: cap, deleted_at: null });
             }

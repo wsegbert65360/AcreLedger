@@ -77,6 +77,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setTillageRecords, setFarmId,
   } = args;
 
+  const withFarmId = <T extends { farm_id?: string | null }>(records: T[] | undefined): T[] | undefined =>
+    records?.map((record) => ({ ...record, farm_id }));
+
   // ─── Rollover ───────────────────────────────────────────────────────────────
 
   const rolloverToNewSeason = useCallback(async (year: number): Promise<boolean> => {
@@ -149,18 +152,18 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     try {
       const backupData = backupSchema.parse(rawData);
 
-      const fieldsToDb      = (backupData.fields               ?? []).map((f) => ({ ...mapFieldToDb(f),      farm_id }));
-      const binsToDb        = (backupData.bins                 ?? []).map((b) => ({ ...mapBinToDb(b),        farm_id }));
-      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => ({ ...mapPlantToDb(r),      farm_id }));
-      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => ({ ...mapSprayToDb(r),      farm_id }));
-      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => ({ ...mapHarvestToDb(r),    farm_id }));
-      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => ({ ...mapHayToDb(r),        farm_id }));
-      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => ({ ...mapFertilizerToDb(r), farm_id }));
-      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => ({ ...mapTillageToDb(r),    farm_id }));
-      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => ({ ...mapGrainToDb(m),      farm_id }));
-      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => ({ ...mapSeedToDb(s),       farm_id }));
-      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => ({ ...mapFertilizerRecipeToDb(r), farm_id }));
-      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => ({ ...mapRecipeToDb(r),     farm_id }));
+      const fieldsToDb      = (backupData.fields               ?? []).map((f) => mapFieldToDb({ ...f, farm_id }));
+      const binsToDb        = (backupData.bins                 ?? []).map((b) => mapBinToDb({ ...b, farm_id }));
+      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => mapPlantToDb({ ...r, farm_id }));
+      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => mapSprayToDb({ ...r, farm_id }));
+      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => mapHarvestToDb({ ...r, farm_id }));
+      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => mapHayToDb({ ...r, farm_id }));
+      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => mapFertilizerToDb({ ...r, farm_id }));
+      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => mapTillageToDb({ ...r, farm_id }));
+      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => mapGrainToDb({ ...m, farm_id }));
+      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => mapSeedToDb({ ...s, farm_id }));
+      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => mapFertilizerRecipeToDb({ ...r, farm_id }));
+      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDb({ ...r, farm_id }));
 
       const payload = {
         fields: fieldsToDb,
@@ -186,18 +189,31 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         throw new Error(`Failed to restore backup: ${error.message}`);
       }
 
-      if (backupData.fields               !== undefined) setFields(backupData.fields);
-      if (backupData.bins                 !== undefined) setBins(backupData.bins);
-      if (backupData.plantRecords         !== undefined) setPlantRecords(backupData.plantRecords);
-      if (backupData.sprayRecords         !== undefined) setSprayRecords(backupData.sprayRecords);
-      if (backupData.harvestRecords       !== undefined) setHarvestRecords(backupData.harvestRecords);
-      if (backupData.hayHarvestRecords    !== undefined) setHayHarvestRecords(backupData.hayHarvestRecords);
-      if (backupData.fertilizerApplications !== undefined) setFertilizerApplications(backupData.fertilizerApplications);
-      if (backupData.tillageRecords         !== undefined) setTillageRecords(backupData.tillageRecords);
-      if (backupData.grainMovements       !== undefined) setGrainMovements(backupData.grainMovements);
-      if (backupData.savedSeeds           !== undefined) setSavedSeeds(backupData.savedSeeds);
-      if (backupData.fertilizerRecipes    !== undefined) setFertilizerRecipes(backupData.fertilizerRecipes);
-      if (backupData.sprayRecipes         !== undefined) setSprayRecipes(backupData.sprayRecipes);
+      const restoredFields = withFarmId(backupData.fields);
+      const restoredBins = withFarmId(backupData.bins);
+      const restoredPlantRecords = withFarmId(backupData.plantRecords);
+      const restoredSprayRecords = withFarmId(backupData.sprayRecords);
+      const restoredHarvestRecords = withFarmId(backupData.harvestRecords);
+      const restoredHayHarvestRecords = withFarmId(backupData.hayHarvestRecords);
+      const restoredFertilizerApplications = withFarmId(backupData.fertilizerApplications);
+      const restoredTillageRecords = withFarmId(backupData.tillageRecords);
+      const restoredGrainMovements = withFarmId(backupData.grainMovements);
+      const restoredSavedSeeds = withFarmId(backupData.savedSeeds);
+      const restoredFertilizerRecipes = withFarmId(backupData.fertilizerRecipes);
+      const restoredSprayRecipes = withFarmId(backupData.sprayRecipes);
+
+      if (restoredFields               !== undefined) setFields(restoredFields);
+      if (restoredBins                 !== undefined) setBins(restoredBins);
+      if (restoredPlantRecords         !== undefined) setPlantRecords(restoredPlantRecords);
+      if (restoredSprayRecords         !== undefined) setSprayRecords(restoredSprayRecords);
+      if (restoredHarvestRecords       !== undefined) setHarvestRecords(restoredHarvestRecords);
+      if (restoredHayHarvestRecords    !== undefined) setHayHarvestRecords(restoredHayHarvestRecords);
+      if (restoredFertilizerApplications !== undefined) setFertilizerApplications(restoredFertilizerApplications);
+      if (restoredTillageRecords         !== undefined) setTillageRecords(restoredTillageRecords);
+      if (restoredGrainMovements       !== undefined) setGrainMovements(restoredGrainMovements);
+      if (restoredSavedSeeds           !== undefined) setSavedSeeds(restoredSavedSeeds);
+      if (restoredFertilizerRecipes    !== undefined) setFertilizerRecipes(restoredFertilizerRecipes);
+      if (restoredSprayRecipes         !== undefined) setSprayRecipes(restoredSprayRecipes);
       if (backupData.activeSeason !== undefined) {
         setActiveSeason(backupData.activeSeason);
         setViewingSeason(backupData.activeSeason);

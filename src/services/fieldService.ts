@@ -5,14 +5,14 @@ import { mapFieldToDb } from '@/lib/mappers';
 export const fieldService = {
     async createField(field: Omit<Field, 'id'>, id: string, farmId: string) {
         const fieldData = {
-            ...mapFieldToDb({ ...field, id }),
+            ...mapFieldToDb({ ...field, id, farm_id: farmId }),
             farm_id: farmId
         };
         return await supabase.from('fields').insert([fieldData]).select();
     },
 
     async updateField(field: Field, farmId: string) {
-        const mapped = mapFieldToDb(field);
+        const mapped = mapFieldToDb({ ...field, farm_id: farmId });
         const { farm_id: _f, id: _i, ...payload } = mapped;
         return await supabase
             .from('fields')

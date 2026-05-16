@@ -27,7 +27,7 @@ export function useFieldsAndBins({
       return false;
     }
     const id = crypto.randomUUID();
-    setFields(prev => [...prev, { ...f, id }]);
+    setFields(prev => [...prev, { ...f, id, farm_id }]);
 
     const { error } = await fieldService.createField(f, id, farm_id);
 
@@ -107,7 +107,7 @@ export function useFieldsAndBins({
       return false;
     }
     const id = crypto.randomUUID();
-    setBins(prev => [...prev, { ...b, id }]);
+    setBins(prev => [...prev, { ...b, id, farm_id }]);
     const { error } = await binService.createBin(b, id, farm_id);
     if (error) {
       console.error('Error adding bin:', error);
@@ -184,7 +184,7 @@ export function useFieldsAndBins({
     }
     const id = crypto.randomUUID();
     setSavedSeeds(prev => [...prev, { 
-      id, name, deleted_at: null, 
+      id, name, farm_id, deleted_at: null,
       crop: '—', variety: '—', supplier: '—', lotNumber: '—', 
       year: new Date().getFullYear(), notes: '' 
     }]);
