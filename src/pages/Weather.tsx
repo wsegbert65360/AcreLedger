@@ -43,15 +43,20 @@ function resolveCoords(
   fields: { lat: number | null; lng: number | null }[],
   savedZip: string,
 ): Promise<{ lat: number; lng: number; locationString: string }> {
-  // 1. Browser GPS
+  const fallback = fallbackToFields(fields, savedZip);
+  if ((fallback.lat !== 0 && fallback.lng !== 0) || savedZip.trim()) {
+    return Promise.resolve(fallback);
+  }
+
+  // Browser GPS is only requested when no saved location or field coords exist.
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
-      return resolve(fallbackToFields(fields, savedZip));
+      return resolve(fallback);
     }
 
     const timeoutId = setTimeout(() => {
       // GPS took too long — use fallback
-      resolve(fallbackToFields(fields, savedZip));
+      resolve(fallback);
     }, 5000);
 
     navigator.geolocation.getCurrentPosition(
@@ -63,7 +68,7 @@ function resolveCoords(
       },
       () => {
         clearTimeout(timeoutId);
-        resolve(fallbackToFields(fields, savedZip));
+        resolve(fallback);
       },
       { enableHighAccuracy: false, timeout: 4000 },
     );
@@ -162,6 +167,12 @@ export default function Weather() {
         setLoading(false);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
 
   // Auto-refresh every 5 min (re-resolve coords + fetch)

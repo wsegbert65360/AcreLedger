@@ -49,13 +49,14 @@ export default function RadarEmbed({ latitude, longitude }: RadarEmbedProps) {
   // Lock body scroll when expanded + ESC to close
   useEffect(() => {
     if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setExpanded(false);
     };
     window.addEventListener('keydown', handleKey);
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKey);
     };
   }, [expanded]);

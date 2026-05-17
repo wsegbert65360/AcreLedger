@@ -262,7 +262,7 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 #### Route & Navigation
 - **Path**: `/weather` — registered in `App.tsx` alongside other page routes.
 - **Entry**: WeatherBar (Index page) is wrapped as a clickable element with `useNavigate('/weather')`. The zip-code form inside uses `stopPropagation` so editing still works.
-- **Location sharing**: Reads from the same `localStorage` key (`${userId}_al_zip`) as WeatherBar. Falls back to first field with coordinates.
+- **Location sharing**: Reads from the same `localStorage` key (`${userId}_al_zip`) as WeatherBar. Uses saved coordinate strings or first field coordinates before requesting browser GPS; saved zip codes are used directly for weather without prompting for GPS.
 
 #### Data Flow
 - `WeatherService.fetchExtendedWeather(location)` — single Visual Crossing call requesting `last7days?forecastDays=10` with elements: `temp`, `feelslike`, `humidity`, `dew`, `windspeed`, `windgusts`, `winddir`, `precip`, `precipprob`, `cloudcover`. Returns current conditions, 7-day rainfall history, and 10-day forecast.
