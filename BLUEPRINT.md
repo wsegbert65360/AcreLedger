@@ -39,7 +39,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Icons | Lucide React | All iconography — no other icon lib |
 | Toasts | Sonner | User feedback — success / error / warning / info |
 | Validation | Zod (`@/lib/backupSchema`) | Backup file schema validation on restore |
-| Weather | Visual Crossing API | Current wind/temp conditions |
+| Weather | Visual Crossing API | Current conditions, extended data (gusts, dew point, feels-like), 10-day forecast |
 | Rainfall | IEM Stage IV + Supabase RPC | Dual-source precipitation tracking (Radar + DB) |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
@@ -256,6 +256,37 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 - **Data Warning**: The API includes `dataWarning` when >10% of hourly data is missing or when Supabase merge adds rain beyond IEM. Passed through to UI.
 - **API Fallback**: Custom range calls return `0` gracefully on failure to prevent UI crashes.
 
+### Weather Page (`/weather`)
+Full-page weather dashboard accessible by tapping the WeatherBar on the Index page. Provides agricultural weather intelligence beyond the summary bar.
+
+#### Route & Navigation
+- **Path**: `/weather` — registered in `App.tsx` alongside other page routes.
+- **Entry**: WeatherBar (Index page) is wrapped as a clickable element with `useNavigate('/weather')`. The zip-code form inside uses `stopPropagation` so editing still works.
+- **Location sharing**: Reads from the same `localStorage` key (`${userId}_al_zip`) as WeatherBar. Falls back to first field with coordinates.
+
+#### Data Flow
+- `WeatherService.fetchExtendedWeather(location)` — single Visual Crossing call requesting `last7days?forecastDays=10` with elements: `temp`, `feelslike`, `humidity`, `dew`, `windspeed`, `windgusts`, `winddir`, `precip`, `precipprob`, `cloudcover`. Returns current conditions, 7-day rainfall history, and 10-day forecast.
+- Auto-refreshes every 5 minutes (matches WeatherBar polling interval).
+- Uses its own `extendedCache` promise cache, separate from the WeatherBar's `promiseCache`.
+
+#### Weather Types (`@/types/weather.ts`)
+- **`ForecastDay`**: `{ date, tempHighF, tempLowF, rainChance, precipIn }` — one row in the 10-day forecast.
+- **`ExtendedWeatherData`**: Current conditions plus forecast array, rainfall history (24h/72h/168h), `latitude`/`longitude` (from Visual Crossing for radar positioning), `isRainingNow`, `gusts`, `dewPoint`, `feelsLike`.
+
+#### Weather Components (`@/components/weather/`)
+- **`RadarEmbed`**: Windy.com radar iframe with fullscreen expand via `createPortal` to document body. Includes loading spinner (15s timeout), error fallback, and body scroll lock when expanded.
+- **`ForecastGrid`**: 2×5 grid of `ForecastDay` cells with weather emojis, rain-chance progress bars, high/low temps. Today cell highlighted with blue border.
+
+#### Future Expansion (Planned)
+Additional agricultural decision-support cards are planned, ported from FarmCMD's feature set:
+- **Spray Decision** (GO/WAIT) — wind, delta-T, inversion risk, humidity thresholds
+- **Field Workability** — composite score (0–100) factoring soil temp, rainfall, wind, forecast
+- **Frost & Freeze** — 3-night outlook with advisory/warning thresholds
+- **Rain Window** — dry stretch analysis with soil saturation estimate
+- **Atmosphere** — humidity, dew point, sunrise/sunset, daylight hours
+
+All calculators will be pure functions in `@/lib/` (no config dependency) using named constants for thresholds.
+
 ---
 
 ## 4. State Management Rules
@@ -388,7 +419,7 @@ event to automatically sync content to Supabase.
 `useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging.
 
 ### Content Security Policy (CSP)
-The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, and Vercel.
+The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, Vercel, and Windy.com.
 
 ---
 
