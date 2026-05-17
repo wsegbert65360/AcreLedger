@@ -216,11 +216,10 @@ export const WeatherService = {
 
         try {
             const url = [
-                `${VC_BASE_URL}/${encodeURIComponent(location)}/last7days`,
+                `${VC_BASE_URL}/${encodeURIComponent(location)}/last7days/next10days`,
                 `?unitGroup=us&key=${API_KEY}&contentType=json`,
                 `&include=current,days`,
                 `&elements=temp,feelslike,humidity,dew,windspeed,windgusts,winddir,precip,precipprob,cloudcover`,
-                `&forecastDays=10`,
             ].join('');
 
             const fetchPromise = fetch(url, { signal: controller.signal })
