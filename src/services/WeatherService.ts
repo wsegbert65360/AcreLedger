@@ -230,7 +230,7 @@ export const WeatherService = {
 
             extendedCache.set(location, fetchPromise);
             const data = await fetchPromise;
-            return this._mapExtendedWeather(data);
+            return this._mapExtendedWeather(data, location);
         } catch (error: any) {
             if (error.name === 'AbortError') {
                 console.error('[WeatherService] Extended weather fetch timed out');
@@ -245,7 +245,7 @@ export const WeatherService = {
         }
     },
 
-    _mapExtendedWeather(data: any): ExtendedWeatherData {
+    _mapExtendedWeather(data: any, location: string): ExtendedWeatherData {
         const current = data.currentConditions;
         if (!current) {
             return {
