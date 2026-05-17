@@ -116,14 +116,6 @@ export default function Weather() {
     let cancelled = false;
     const saved = loadZip(userId);
 
-    // Don't bail early if fields haven't loaded yet — they may have coords
-    // Only bail if no zip AND fields are loaded but have no coords
-    const hasFieldCoords = fields.some(f => f.lat != null && f.lng != null);
-    if (!saved && fields.length > 0 && !hasFieldCoords) {
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     setUsingGps(true);
 
