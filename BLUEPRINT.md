@@ -265,16 +265,17 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 - **Location sharing**: Reads from the same `localStorage` key (`${userId}_al_zip`) as WeatherBar. Uses saved coordinate strings or first field coordinates before requesting browser GPS; saved zip codes are used directly for weather without prompting for GPS.
 
 #### Data Flow
-- `WeatherService.fetchExtendedWeather(location)` — single Visual Crossing call requesting `last7days?forecastDays=10` with elements: `temp`, `feelslike`, `humidity`, `dew`, `windspeed`, `windgusts`, `winddir`, `precip`, `precipprob`, `cloudcover`. Returns current conditions, 7-day rainfall history, and 10-day forecast.
+- `WeatherService.fetchExtendedWeather(location)` - single Visual Crossing call requesting `/last7days/next10days` with elements: `datetime`, `tempmax`, `tempmin`, `temp`, `feelslike`, `humidity`, `dew`, `windspeed`, `windgusts`, `winddir`, `precip`, `precipprob`, `cloudcover`. Returns current conditions, 7-day rainfall history, and 10-day forecast.
 - Auto-refreshes every 5 minutes (matches WeatherBar polling interval).
 - Uses its own `extendedCache` promise cache, separate from the WeatherBar's `promiseCache`.
+- Aborts in-flight weather requests on unmount so leaving `/weather` does not update state after navigation.
 
 #### Weather Types (`@/types/weather.ts`)
 - **`ForecastDay`**: `{ date, tempHighF, tempLowF, rainChance, precipIn }` — one row in the 10-day forecast.
-- **`ExtendedWeatherData`**: Current conditions plus forecast array, rainfall history (24h/72h/168h), `latitude`/`longitude` (from Visual Crossing for radar positioning), `isRainingNow`, `gusts`, `dewPoint`, `feelsLike`.
+- **`ExtendedWeatherData`**: Current conditions plus forecast array, rainfall history (24h/72h/168h), `isRainingNow`, `gusts`, `dewPoint`, `feelsLike`. Radar coordinates are resolved separately from saved coordinates, field coordinates, or browser GPS.
 
 #### Weather Components (`@/components/weather/`)
-- **`RadarEmbed`**: Windy.com radar iframe with fullscreen expand via `createPortal` to document body. Includes loading spinner (15s timeout), error fallback, body scroll lock when expanded, and a single AcreLedger close bar above the interactive map.
+- **`RadarEmbed`**: Windy.com radar iframe with fullscreen expand via `createPortal` to document body. Includes loading spinner (15s timeout), error fallback, body scroll lock when expanded, restoration of the prior body overflow value on close, and a single AcreLedger close bar above the interactive map.
 - **CSP requirement**: Windy radar embeds require `https://www.windy.com` in both `child-src` and `frame-src` in `index.html`. Without this, the browser blocks the iframe even though the React component renders correctly.
 - **`ForecastGrid`**: 2×5 grid of `ForecastDay` cells with weather emojis, rain-chance progress bars, high/low temps. Today cell highlighted with blue border.
 
