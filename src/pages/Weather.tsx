@@ -106,13 +106,15 @@ export default function Weather() {
   const [usingGps, setUsingGps] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Resolve location on mount
+  // Resolve location when fields load (fields start as [] then populate from Supabase)
   useEffect(() => {
     let cancelled = false;
     const saved = loadZip(userId);
 
-    // If no saved zip and no fields with coords, show "no location" immediately
-    if (!saved && !fields.some(f => f.lat != null && f.lng != null)) {
+    // Don't bail early if fields haven't loaded yet — they may have coords
+    // Only bail if no zip AND fields are loaded but have no coords
+    const hasFieldCoords = fields.some(f => f.lat != null && f.lng != null);
+    if (!saved && fields.length > 0 && !hasFieldCoords) {
       setLoading(false);
       return;
     }
@@ -123,9 +125,9 @@ export default function Weather() {
     resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
       if (cancelled) return;
 
-      // Check if we got real GPS (not field coords or parsed zip)
-      const gotGps = lat !== 0 && lng !== 0;
-      setCoords(gotGps ? { lat, lng } : null);
+      // Accept any valid coords — GPS, field coords, or parsed lat,lng string
+      const hasCoords = lat !== 0 && lng !== 0;
+      setCoords(hasCoords ? { lat, lng } : null);
 
       if (locationString) {
         loadWeather(locationString);
@@ -167,8 +169,8 @@ export default function Weather() {
     const interval = setInterval(() => {
       const saved = loadZip(userId);
       resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
-        const gotGps = lat !== 0 && lng !== 0;
-        setCoords(gotGps ? { lat, lng } : null);
+        const hasCoords = lat !== 0 && lng !== 0;
+        setCoords(hasCoords ? { lat, lng } : null);
         if (locationString) loadWeather(locationString);
       });
     }, 300_000);
