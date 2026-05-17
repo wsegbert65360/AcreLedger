@@ -3,45 +3,33 @@ import { createPortal } from 'react-dom';
 import { Maximize2, X, ChevronDown } from 'lucide-react';
 
 interface RadarEmbedProps {
-  location: string;
+  latitude: number;
+  longitude: number;
 }
 
-/**
- * Parse coordinates from a location string.
- * Accepts "lat,lng" or "lat, lng" (with optional space after comma).
- * Falls back to null for zip codes or unparseable strings.
- */
-function parseCoords(location: string): { lat: number; lng: number } | null {
-  const match = location.trim().match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
-  if (!match) return null;
-  return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+function buildRadarUrl(lat: number, lon: number): string {
+  return [
+    'https://www.windy.com/embed2.html',
+    `?lat=${lat}`,
+    `&lon=${lon}`,
+    '&zoom=12',
+    '&level=surface',
+    '&overlay=radar',
+    '&menu=&message=&marker=&calendar=now',
+    '&location=coordinates',
+    '&type=map',
+    '&actualGrid=&wmMode=&patch=&ice=',
+    '&forecast=12&color=0',
+  ].join('');
 }
 
-export default function RadarEmbed({ location }: RadarEmbedProps) {
+export default function RadarEmbed({ latitude, longitude }: RadarEmbedProps) {
   const [iframeError, setIframeError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const coords = parseCoords(location);
-
-  const url = coords
-    ? [
-        'https://www.windy.com/embed2.html',
-        `?lat=${coords.lat}`,
-        `&lon=${coords.lng}`,
-        '&zoom=12',
-        '&level=surface',
-        '&overlay=radar',
-        '&menu=&message=&marker=&calendar=now',
-        '&location=coordinates',
-        '&type=map',
-        '&actualGrid=&wmMode=&patch=&ice=',
-        '&forecast=12&color=0',
-      ].join('')
-    : '';
-
-  const hasCoords = coords !== null;
+  const url = buildRadarUrl(latitude, longitude);
 
   useEffect(() => {
     setIsLoading(true);
@@ -77,29 +65,10 @@ export default function RadarEmbed({ location }: RadarEmbedProps) {
   const handleCollapse = useCallback(() => setExpanded(false), []);
 
   // When expanded, put iframe behind an overlay so touch events reach our close button.
-  // The user taps "Show Map" on the overlay to interact with the iframe.
   const [iframeUnlocked, setIframeUnlocked] = useState(false);
 
   const unlockIframe = useCallback(() => setIframeUnlocked(true), []);
   const lockIframe = useCallback(() => setIframeUnlocked(false), []);
-
-  if (!hasCoords) {
-    return (
-      <div className="bg-card border border-border rounded-2xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
-          </div>
-          <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-wider">Needs Coords</span>
-        </div>
-        <div className="h-48 flex flex-col items-center justify-center gap-2">
-          <p className="text-xs font-semibold text-muted-foreground">Radar requires coordinates</p>
-          <p className="text-[10px] text-muted-foreground/60">Set coordinates in the weather bar (e.g. 38.4627,-93.5374) instead of a zip code</p>
-        </div>
-      </div>
-    );
-  }
 
   if (iframeError) {
     return (
@@ -172,8 +141,7 @@ export default function RadarEmbed({ location }: RadarEmbedProps) {
       {/* ── Fullscreen overlay via portal ── */}
       {expanded && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
-          {/* Close bar — always on top, never blocked by iframe.
-              pt-safe accounts for phone status bar / notch. */}
+          {/* Close bar — pt-safe accounts for phone status bar / notch. */}
           <button
             onClick={handleCollapse}
             className="shrink-0 relative z-50 flex items-center justify-between px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))] bg-black/90 active:bg-black w-full border-b border-white/10 cursor-pointer"
@@ -188,7 +156,7 @@ export default function RadarEmbed({ location }: RadarEmbedProps) {
             </div>
           </button>
 
-          {/* Iframe container — relative so the unlock overlay positions correctly */}
+          {/* Iframe container */}
           <div className="relative flex-1">
             <iframe
               ref={iframeRef}
@@ -198,9 +166,8 @@ export default function RadarEmbed({ location }: RadarEmbedProps) {
               allow="geolocation"
             />
 
-            {/* Overlay that blocks iframe touch events and provides a "Show Map" button.
-                On mobile, once the user interacts with the iframe, they can't tap out of it.
-                This overlay prevents that by sitting on top until the user explicitly taps to interact. */}
+            {/* Overlay prevents iframe from capturing touch events on mobile.
+                User taps "Show Map" to explicitly interact. */}
             {!iframeUnlocked && (
               <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
                 <button
@@ -214,7 +181,7 @@ export default function RadarEmbed({ location }: RadarEmbedProps) {
               </div>
             )}
 
-            {/* When iframe is unlocked, show a small "Close" tab at top of iframe area */}
+            {/* When iframe is unlocked, show "Exit Map" button */}
             {iframeUnlocked && (
               <button
                 onClick={lockIframe}

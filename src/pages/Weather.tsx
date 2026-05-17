@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WeatherService } from '@/services/WeatherService';
 import { ExtendedWeatherData } from '@/types/weather';
@@ -8,13 +8,12 @@ import RadarEmbed from '@/components/weather/RadarEmbed';
 import ForecastGrid from '@/components/weather/ForecastGrid';
 import {
   ArrowLeft,
-  Thermometer,
   Wind,
-  Droplets,
   RefreshCw,
   Loader2,
   CloudRain,
   MapPin,
+  Crosshair,
 } from 'lucide-react';
 
 // ── Helpers ──
@@ -32,6 +31,67 @@ function formatTime(): string {
   return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+/**
+ * Resolve coordinates for weather + radar.
+ * Priority:
+ *   1. Browser GPS (navigator.geolocation)
+ *   2. First field with lat/lng
+ *   3. Parse from saved zip (if it's already coords like "38.46,-93.53")
+ * Falls back to zip string for weather API only (no radar).
+ */
+function resolveCoords(
+  fields: { lat: number | null; lng: number | null }[],
+  savedZip: string,
+): Promise<{ lat: number; lng: number; locationString: string }> {
+  // 1. Browser GPS
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      return resolve(fallbackToFields(fields, savedZip));
+    }
+
+    const timeoutId = setTimeout(() => {
+      // GPS took too long — use fallback
+      resolve(fallbackToFields(fields, savedZip));
+    }, 5000);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timeoutId);
+        const lat = Math.round(pos.coords.latitude * 10000) / 10000;
+        const lng = Math.round(pos.coords.longitude * 10000) / 10000;
+        resolve({ lat, lng, locationString: `${lat},${lng}` });
+      },
+      () => {
+        clearTimeout(timeoutId);
+        resolve(fallbackToFields(fields, savedZip));
+      },
+      { enableHighAccuracy: false, timeout: 4000 },
+    );
+  });
+}
+
+function fallbackToFields(
+  fields: { lat: number | null; lng: number | null }[],
+  savedZip: string,
+): { lat: number; lng: number; locationString: string } {
+  // 2. First field with coords
+  const field = fields.find(f => f.lat != null && f.lng != null);
+  if (field && field.lat != null && field.lng != null) {
+    const lat = Math.round(field.lat * 10000) / 10000;
+    const lng = Math.round(field.lng * 10000) / 10000;
+    return { lat, lng, locationString: `${lat},${lng}` };
+  }
+
+  // 3. Parse saved zip if it's already coords
+  const match = savedZip.trim().match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
+  if (match) {
+    return { lat: parseFloat(match[1]), lng: parseFloat(match[2]), locationString: savedZip.trim() };
+  }
+
+  // No coords available — return 0s, locationString will be the zip for weather API
+  return { lat: 0, lng: 0, locationString: savedZip || '' };
+}
+
 // ── Page ──
 
 export default function Weather() {
@@ -42,20 +102,42 @@ export default function Weather() {
   const [weather, setWeather] = useState<ExtendedWeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [usingGps, setUsingGps] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Resolve location from localStorage (same key as WeatherBar) or field coords
-  const location = useMemo(() => {
+  // Resolve location on mount
+  useEffect(() => {
+    let cancelled = false;
     const saved = loadZip(userId);
-    if (saved) return saved;
-    const field = fields.find(f => f.lat != null && f.lng != null);
-    if (field && field.lat != null && field.lng != null) {
-      return `${field.lat.toFixed(4)},${field.lng.toFixed(4)}`;
+
+    // If no saved zip and no fields with coords, show "no location" immediately
+    if (!saved && !fields.some(f => f.lat != null && f.lng != null)) {
+      setLoading(false);
+      return;
     }
-    return '';
+
+    setLoading(true);
+    setUsingGps(true);
+
+    resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
+      if (cancelled) return;
+
+      // Check if we got real GPS (not field coords or parsed zip)
+      const gotGps = lat !== 0 && lng !== 0;
+      setCoords(gotGps ? { lat, lng } : null);
+
+      if (locationString) {
+        loadWeather(locationString);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => { cancelled = true; };
   }, [userId, fields]);
 
-  const load = useCallback(async (loc: string) => {
+  const loadWeather = useCallback(async (loc: string) => {
     if (!loc.trim()) return;
 
     abortRef.current?.abort();
@@ -80,17 +162,29 @@ export default function Weather() {
     }
   }, []);
 
+  // Auto-refresh every 5 min (re-resolve coords + fetch)
   useEffect(() => {
-    if (!location) return;
-    load(location);
-    const interval = setInterval(() => load(location), 300_000);
-    return () => {
-      clearInterval(interval);
-      abortRef.current?.abort();
-    };
-  }, [location, load]);
+    const interval = setInterval(() => {
+      const saved = loadZip(userId);
+      resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
+        const gotGps = lat !== 0 && lng !== 0;
+        setCoords(gotGps ? { lat, lng } : null);
+        if (locationString) loadWeather(locationString);
+      });
+    }, 300_000);
+    return () => clearInterval(interval);
+  }, [userId, fields, loadWeather]);
 
-  const handleRefresh = useCallback(() => load(location), [load, location]);
+  const handleRefresh = useCallback(() => {
+    setLoading(true);
+    const saved = loadZip(userId);
+    resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
+      const gotGps = lat !== 0 && lng !== 0;
+      setCoords(gotGps ? { lat, lng } : null);
+      if (locationString) loadWeather(locationString);
+      else setLoading(false);
+    });
+  }, [userId, fields, loadWeather]);
 
   return (
     <div className="min-h-screen bg-background pb-20 lg:pb-8">
@@ -109,7 +203,7 @@ export default function Weather() {
               <h1 className="text-sm font-bold text-foreground tracking-tight">Weather</h1>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <MapPin size={10} className="text-emerald-500/60" />
-                {weather?.locationName || (loading ? 'Loading...' : 'No location set')}
+                {weather?.locationName || (loading ? 'Locating…' : 'No location')}
               </p>
             </div>
           </div>
@@ -129,17 +223,19 @@ export default function Weather() {
         {loading && !weather && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <Loader2 size={32} className="text-muted-foreground/40 animate-spin" />
-            <p className="text-xs text-muted-foreground">Loading weather data…</p>
+            <p className="text-xs text-muted-foreground">
+              {usingGps ? 'Getting your location…' : 'Loading weather data…'}
+            </p>
           </div>
         )}
 
         {/* ── No Location ── */}
-        {!loading && !location && (
+        {!loading && !weather && (
           <div className="text-center py-16 px-4 border-2 border-dashed border-border rounded-2xl bg-muted/20">
             <MapPin size={40} className="mx-auto text-muted-foreground/20 mb-3" />
-            <h3 className="text-sm font-bold text-foreground mb-1">No Location Set</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px] mx-auto">
-              Enter a zip code in the weather bar on the home screen to see weather data.
+            <h3 className="text-sm font-bold text-foreground mb-1">No Location</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-[260px] mx-auto">
+              Enter a zip code in the weather bar on the home screen, or add field coordinates.
             </p>
           </div>
         )}
@@ -147,11 +243,38 @@ export default function Weather() {
         {/* ── Weather Content ── */}
         {weather && (
           <>
+            {/* GPS indicator */}
+            {coords && (
+              <div className="flex items-center justify-center gap-1.5 py-1">
+                <Crosshair size={10} className="text-emerald-500/60" />
+                <span className="text-[10px] font-semibold text-emerald-500/60 uppercase tracking-wider">
+                  GPS · {coords.lat}, {coords.lng}
+                </span>
+              </div>
+            )}
+
             {/* Current Conditions */}
             <CurrentConditionsCard weather={weather} lastUpdated={lastUpdated} />
 
-            {/* Radar */}
-            <RadarEmbed location={weather.resolvedLocation} />
+            {/* Radar — requires GPS or field coords */}
+            {coords ? (
+              <RadarEmbed latitude={coords.lat} longitude={coords.lng} />
+            ) : (
+              <div className="bg-card border border-border rounded-2xl">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-wider">Needs GPS</span>
+                </div>
+                <div className="h-48 flex flex-col items-center justify-center gap-2">
+                  <Crosshair size={24} className="text-muted-foreground/20" />
+                  <p className="text-xs font-semibold text-muted-foreground">Radar requires GPS coordinates</p>
+                  <p className="text-[10px] text-muted-foreground/60">Allow location access or add field coordinates</p>
+                </div>
+              </div>
+            )}
 
             {/* 10-Day Forecast */}
             <ForecastGrid days={weather.forecastDays} />
