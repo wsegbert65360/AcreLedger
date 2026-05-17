@@ -31,8 +31,7 @@ export interface ExtendedWeatherData {
     precip168h: number;
     isRainingNow: boolean;
     locationName: string;
-    latitude: number | null;
-    longitude: number | null;
+    resolvedLocation: string;
     isError?: boolean;
     forecastDays: ForecastDay[];
 }

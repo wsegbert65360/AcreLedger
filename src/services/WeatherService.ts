@@ -190,7 +190,7 @@ export const WeatherService = {
             windDirection: '—', dewPoint: 0, precipProb: 0,
             precip24h: 0, precip72h: 0, precip168h: 0,
             isRainingNow: false, locationName: 'Unknown',
-            latitude: null, longitude: null, isError: true, forecastDays: [],
+            resolvedLocation: location, isError: true, forecastDays: [],
         };
 
         if (!API_KEY || API_KEY === 'undefined') {
@@ -253,13 +253,14 @@ export const WeatherService = {
                 windDirection: '—', dewPoint: 0, precipProb: 0,
                 precip24h: 0, precip72h: 0, precip168h: 0,
                 isRainingNow: false, locationName: data.address || 'Unknown',
-                latitude: data.latitude ?? null, longitude: data.longitude ?? null,
-                isError: true, forecastDays: [],
+                resolvedLocation: location, isError: true, forecastDays: [],
             };
         }
 
         const days: any[] = data.days || [];
-        const todayStr = new Date().toISOString().split('T')[0];
+        // Use local date, not UTC — avoids filtering out forecast at night (e.g. 8pm CDT = 1am UTC next day)
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
         // Historical days for rainfall (up to and including today)
         const pastDays = [...days]
@@ -296,8 +297,7 @@ export const WeatherService = {
             precip168h: Math.round(precip168h * 100) / 100,
             isRainingNow: (current.precip || 0) > 0,
             locationName: data.address || 'Unknown',
-            latitude: data.latitude ?? null,
-            longitude: data.longitude ?? null,
+            resolvedLocation: location,
             isError: false,
             forecastDays,
         };

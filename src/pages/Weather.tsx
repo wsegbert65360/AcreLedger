@@ -151,7 +151,7 @@ export default function Weather() {
             <CurrentConditionsCard weather={weather} lastUpdated={lastUpdated} />
 
             {/* Radar */}
-            <RadarEmbed latitude={weather.latitude} longitude={weather.longitude} />
+            <RadarEmbed location={weather.resolvedLocation} />
 
             {/* 10-Day Forecast */}
             <ForecastGrid days={weather.forecastDays} />
