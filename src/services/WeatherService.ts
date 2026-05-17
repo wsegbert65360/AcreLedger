@@ -1,10 +1,11 @@
-import { WeatherData } from '../types/weather';
+import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
 
 const API_KEY = import.meta.env.VITE_VISUALCROSSING_KEY;
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
 const promiseCache = new Map<string, Promise<any>>();
+const extendedCache = new Map<string, Promise<any>>();
 
 /**
  * Hardened Weather Service.
@@ -176,6 +177,130 @@ export const WeatherService = {
             precip24h: Math.round(precip24h * 100) / 100,
             precip72h: Math.round(precip72h * 100) / 100,
             precipProb: Math.round(current.precipprob || 0)
+        };
+    },
+
+    /**
+     * Fetches extended weather data for the Weather Detail page.
+     * Includes current conditions, 7-day rainfall history, and 10-day forecast.
+     */
+    async fetchExtendedWeather(location: string, signal?: AbortSignal): Promise<ExtendedWeatherData> {
+        const defaults: ExtendedWeatherData = {
+            temp: 0, feelsLike: 0, humidity: 0, wind: 0, gusts: 0,
+            windDirection: '—', dewPoint: 0, precipProb: 0,
+            precip24h: 0, precip72h: 0, precip168h: 0,
+            isRainingNow: false, locationName: 'Unknown',
+            latitude: null, longitude: null, isError: true, forecastDays: [],
+        };
+
+        if (!API_KEY || API_KEY === 'undefined') {
+            return { ...defaults, locationName: 'Config Error' };
+        }
+
+        if (extendedCache.has(location)) {
+            try {
+                return await extendedCache.get(location);
+            } catch {
+                // fall through and retry
+            }
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        let abortListener: (() => void) | undefined;
+
+        if (signal) {
+            abortListener = () => controller.abort();
+            signal.addEventListener('abort', abortListener);
+        }
+
+        try {
+            const url = [
+                `${VC_BASE_URL}/${encodeURIComponent(location)}/last7days`,
+                `?unitGroup=us&key=${API_KEY}&contentType=json`,
+                `&include=current,days`,
+                `&elements=temp,feelslike,humidity,dew,windspeed,windgusts,winddir,precip,precipprob,cloudcover`,
+                `&forecastDays=10`,
+            ].join('');
+
+            const fetchPromise = fetch(url, { signal: controller.signal })
+                .then(res => {
+                    if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
+                    return res.json();
+                });
+
+            extendedCache.set(location, fetchPromise);
+            const data = await fetchPromise;
+            return this._mapExtendedWeather(data);
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.error('[WeatherService] Extended weather fetch timed out');
+            } else {
+                console.error('[WeatherService] Error fetching extended weather:', error);
+            }
+            return defaults;
+        } finally {
+            clearTimeout(timeoutId);
+            if (abortListener && signal) signal.removeEventListener('abort', abortListener);
+            extendedCache.delete(location);
+        }
+    },
+
+    _mapExtendedWeather(data: any): ExtendedWeatherData {
+        const current = data.currentConditions;
+        if (!current) {
+            return {
+                temp: 0, feelsLike: 0, humidity: 0, wind: 0, gusts: 0,
+                windDirection: '—', dewPoint: 0, precipProb: 0,
+                precip24h: 0, precip72h: 0, precip168h: 0,
+                isRainingNow: false, locationName: data.address || 'Unknown',
+                latitude: data.latitude ?? null, longitude: data.longitude ?? null,
+                isError: true, forecastDays: [],
+            };
+        }
+
+        const days: any[] = data.days || [];
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Historical days for rainfall (up to and including today)
+        const pastDays = [...days]
+            .filter(d => d.datetime <= todayStr)
+            .sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime());
+
+        const precip24h = pastDays[0]?.precip || 0;
+        const precip72h = pastDays.slice(0, 3).reduce((sum, d) => sum + (d.precip || 0), 0);
+        const precip168h = pastDays.slice(0, 7).reduce((sum, d) => sum + (d.precip || 0), 0);
+
+        // Forecast days (today + future, up to 10)
+        const forecastDays: ForecastDay[] = days
+            .filter(d => d.datetime >= todayStr)
+            .slice(0, 10)
+            .map(d => ({
+                date: d.datetime,
+                tempHighF: d.tempmax != null ? Math.round(d.tempmax) : null,
+                tempLowF: d.tempmin != null ? Math.round(d.tempmin) : null,
+                rainChance: d.precipprob != null ? Math.round(d.precipprob) : null,
+                precipIn: d.precip != null ? Math.round(d.precip * 100) / 100 : null,
+            }));
+
+        return {
+            temp: Math.round(current.temp),
+            feelsLike: Math.round(current.feelslike ?? current.temp),
+            humidity: Math.round(current.humidity),
+            wind: Math.round(current.windspeed),
+            gusts: Math.round(current.windgusts ?? current.windspeed),
+            windDirection: current.winddir != null ? this.degreesToDirection(current.winddir) : '—',
+            dewPoint: Math.round(current.dew ?? 0),
+            precipProb: Math.round(current.precipprob || 0),
+            precip24h: Math.round(precip24h * 100) / 100,
+            precip72h: Math.round(precip72h * 100) / 100,
+            precip168h: Math.round(precip168h * 100) / 100,
+            isRainingNow: (current.precip || 0) > 0,
+            locationName: data.address || 'Unknown',
+            latitude: data.latitude ?? null,
+            longitude: data.longitude ?? null,
+            isError: false,
+            forecastDays,
         };
     },
 

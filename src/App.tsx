@@ -18,6 +18,7 @@ import Sidebar from "@/components/Sidebar";
 import OfflineBanner from "@/components/OfflineBanner";
 import { AnimatePresence, motion } from "framer-motion";
 import FieldDetailScreen from "./pages/FieldDetailScreen";
+import Weather from "./pages/Weather";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const AnimatedRoutes = () => {
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
+          <Route path="/weather" element={<ErrorBoundary><Weather /></ErrorBoundary>} />
           <Route path="/field/:id" element={<ErrorBoundary><FieldDetailScreen /></ErrorBoundary>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

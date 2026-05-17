@@ -8,3 +8,31 @@ export interface WeatherData {
     precip72h?: number;
     precipProb?: number;
 }
+
+export interface ForecastDay {
+    date: string;
+    tempHighF: number | null;
+    tempLowF: number | null;
+    rainChance: number | null;
+    precipIn: number | null;
+}
+
+export interface ExtendedWeatherData {
+    temp: number;
+    feelsLike: number;
+    humidity: number;
+    wind: number;
+    gusts: number;
+    windDirection: string;
+    dewPoint: number;
+    precipProb: number;
+    precip24h: number;
+    precip72h: number;
+    precip168h: number;
+    isRainingNow: boolean;
+    locationName: string;
+    latitude: number | null;
+    longitude: number | null;
+    isError?: boolean;
+    forecastDays: ForecastDay[];
+}

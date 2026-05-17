@@ -1,5 +1,6 @@
-import { Wind, Thermometer, Droplets, MapPin, Loader2 } from 'lucide-react';
+import { Wind, Thermometer, Droplets, MapPin, Loader2, ChevronRight } from 'lucide-react';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
 import { useFarm } from '@/store/farmStore';
@@ -27,6 +28,7 @@ function saveZip(zip: string, userId?: string) {
 export default function WeatherBar() {
   const { session, fields } = useFarm();
   const userId = session?.user?.id;
+  const navigate = useNavigate();
 
   const [zip, setZip] = useState<string>('');
   const [inputZip, setInputZip] = useState('');
@@ -110,7 +112,13 @@ export default function WeatherBar() {
   };
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between min-h-[90px] relative overflow-hidden group">
+    <div
+      className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between min-h-[90px] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-transform"
+      onClick={() => navigate('/weather')}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter') navigate('/weather'); }}
+    >
       {/* Left side: Main Temp & Location */}
       <div className="flex flex-col justify-center">
         <div className="flex items-center gap-2">
@@ -124,7 +132,7 @@ export default function WeatherBar() {
         </div>
         <div className="flex items-center gap-1.5 mt-1">
           <MapPin size={12} className="text-emerald-500/60" />
-          <form onSubmit={handleSubmit} className="flex items-center">
+          <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className="flex items-center">
             <input
               id="weatherZip"
               name="weatherZip"
@@ -160,6 +168,9 @@ export default function WeatherBar() {
           <span className="text-lg font-mono font-bold">{weather.precipProb}%</span>
           <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">RAIN</span>
         </div>
+
+        {/* Navigate hint */}
+        <ChevronRight size={16} className="text-muted-foreground/20 group-hover:text-muted-foreground/40 transition-colors hidden sm:block" />
       </div>
 
       {loading && (
