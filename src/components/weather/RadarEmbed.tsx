@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Maximize2, X, ChevronDown } from 'lucide-react';
+import { Maximize2, X } from 'lucide-react';
 
 interface RadarEmbedProps {
   latitude: number;
@@ -27,7 +27,6 @@ export default function RadarEmbed({ latitude, longitude }: RadarEmbedProps) {
   const [iframeError, setIframeError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const url = buildRadarUrl(latitude, longitude);
 
@@ -63,12 +62,6 @@ export default function RadarEmbed({ latitude, longitude }: RadarEmbedProps) {
 
   const handleExpand = useCallback(() => setExpanded(true), []);
   const handleCollapse = useCallback(() => setExpanded(false), []);
-
-  // When expanded, put iframe behind an overlay so touch events reach our close button.
-  const [iframeUnlocked, setIframeUnlocked] = useState(false);
-
-  const unlockIframe = useCallback(() => setIframeUnlocked(true), []);
-  const lockIframe = useCallback(() => setIframeUnlocked(false), []);
 
   if (iframeError) {
     return (
@@ -156,42 +149,12 @@ export default function RadarEmbed({ latitude, longitude }: RadarEmbedProps) {
             </div>
           </button>
 
-          {/* Iframe container */}
-          <div className="relative flex-1">
-            <iframe
-              ref={iframeRef}
-              src={url}
-              className="w-full h-full border-0"
-              title="Full-Screen Weather Radar"
-              allow="geolocation"
-            />
-
-            {/* Overlay prevents iframe from capturing touch events on mobile.
-                User taps "Show Map" to explicitly interact. */}
-            {!iframeUnlocked && (
-              <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
-                <button
-                  onClick={unlockIframe}
-                  className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-white/20 active:bg-white/30 text-white transition-colors"
-                >
-                  <Maximize2 size={20} />
-                  <span className="text-base font-bold uppercase tracking-wider">Show Map</span>
-                </button>
-                <p className="text-xs text-white/60 mt-3">Tap to interact with the radar</p>
-              </div>
-            )}
-
-            {/* When iframe is unlocked, show "Exit Map" button */}
-            {iframeUnlocked && (
-              <button
-                onClick={lockIframe}
-                className="absolute top-2 right-2 z-40 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-black/70 text-white/80 active:bg-black/90 backdrop-blur-sm"
-              >
-                <ChevronDown size={14} />
-                <span className="text-[11px] font-bold uppercase tracking-wider">Exit Map</span>
-              </button>
-            )}
-          </div>
+          <iframe
+            src={url}
+            className="flex-1 w-full border-0"
+            title="Full-Screen Weather Radar"
+            allow="geolocation"
+          />
         </div>,
         document.body
       )}

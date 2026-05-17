@@ -62,7 +62,7 @@ export default function Sidebar() {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[11px] font-mono text-sidebar-foreground/40">v3.4.1</p>
+        <p className="text-[11px] font-mono text-sidebar-foreground/40">v3.5.0</p>
       </div>
     </nav>
   );

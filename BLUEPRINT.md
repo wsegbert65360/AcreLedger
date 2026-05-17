@@ -274,7 +274,7 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 - **`ExtendedWeatherData`**: Current conditions plus forecast array, rainfall history (24h/72h/168h), `latitude`/`longitude` (from Visual Crossing for radar positioning), `isRainingNow`, `gusts`, `dewPoint`, `feelsLike`.
 
 #### Weather Components (`@/components/weather/`)
-- **`RadarEmbed`**: Windy.com radar iframe with fullscreen expand via `createPortal` to document body. Includes loading spinner (15s timeout), error fallback, and body scroll lock when expanded.
+- **`RadarEmbed`**: Windy.com radar iframe with fullscreen expand via `createPortal` to document body. Includes loading spinner (15s timeout), error fallback, body scroll lock when expanded, and a single AcreLedger close bar above the interactive map.
 - **CSP requirement**: Windy radar embeds require `https://www.windy.com` in both `child-src` and `frame-src` in `index.html`. Without this, the browser blocks the iframe even though the React component renders correctly.
 - **`ForecastGrid`**: 2×5 grid of `ForecastDay` cells with weather emojis, rain-chance progress bars, high/low temps. Today cell highlighted with blue border.
 
