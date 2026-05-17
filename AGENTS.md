@@ -1,0 +1,230 @@
+# AGENTS.md — AcreLedger
+
+## Purpose
+
+This file is the cross-agent operating guide for AcreLedger. It is written for Codex, Gemini CLI, Pi/local agents, and any other AI coding assistant working in this repository.
+
+Use this file as the first-read instruction layer. Use `BLUEPRINT.md` as the full architecture reference, but do not load the entire blueprint unless the task truly needs broad architectural context.
+
+## Project Summary
+
+AcreLedger is a mobile-first, PWA-ready agricultural record keeping and compliance reporting app for row-crop farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports.
+
+The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Postgres/Auth/RLS, React Context state, shadcn/ui, Tailwind CSS, Lucide React, Sonner, Zod, Visual Crossing weather, and IEM Stage IV rainfall integration.
+
+## Context Loading Rules
+
+1. Read this file first.
+2. Identify the task area before editing.
+3. Read only the relevant source files and relevant sections of `BLUEPRINT.md`.
+4. Use `TESTING.md` only when credentials, verification flows, or test protocols are needed.
+5. Do not stuff the working context with unrelated architecture details.
+6. Prefer focused source inspection over guessing.
+7. Do not make broad refactors while solving a narrow issue.
+
+## Important Reference Files
+
+- `BLUEPRINT.md` — full authoritative architecture, data model, conventions, and domain rules.
+- `TESTING.md` — verification protocols and test credentials.
+- `@/types/farm.ts` — canonical TypeScript entity definitions.
+- `@/lib/mappers.ts` — entity to database row translation.
+- `farmStore.tsx` — global React Context store and CRUD actions.
+- `@/lib/complianceReports` — report generation.
+- `@/lib/sprayExport.ts` — universal spray log PDF export.
+- `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
+
+## Non-Negotiable Rules
+
+### Data Safety
+
+- Never hard-delete user farm records.
+- Use soft delete by setting `deleted_at` to an ISO timestamp.
+- Active records always have `deleted_at === null`.
+- Client logic must exclude soft-deleted records.
+- Supabase RLS must also exclude or protect soft-deleted records where applicable.
+
+### Farm Scoping
+
+- Every Supabase write must be scoped to the current `farm_id`.
+- The null farm guard must be the first line of every mutation function:
+
+```ts
+if (!farm_id) {
+  toast.error('No farm selected.');
+  return false;
+}
+```
+
+- Inserts and restore payloads must include the authoritative current `farm_id`.
+- Updates must filter by `.eq('farm_id', farm_id)`.
+- Do not send `farm_id` inside `.update()` payloads after mapping unless the existing pattern explicitly requires it.
+
+### Mapper Discipline
+
+- Always call the relevant mapper before touching React state.
+- Mappers must convert camelCase app objects to snake_case database rows.
+- Optional fields must be sent as `null`, not `undefined`.
+- Use mapper safety helpers such as `safeNum` and `safeStr` where appropriate.
+- Mappers for user-managed reference data must preserve `id`, `farm_id`, and `deleted_at`.
+
+### Optimistic Update Pattern
+
+Every add, update, and delete mutation must follow this sequence:
+
+1. Guard `farm_id` and return `false` if missing.
+2. Validate inputs and return `false` on invalid data.
+3. Call mapper before state changes.
+4. Apply optimistic React state update with a functional setter.
+5. Await the Supabase operation.
+6. On success, show success feedback and return `true`.
+7. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
+
+All add, update, and delete operations return `Promise<boolean>`. Never return `undefined`.
+
+### Supabase and Database
+
+- Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
+- New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
+- Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
+- Every farm-owned table must have RLS enabled.
+- RLS policies must restrict access by the user's farm through `public.profiles`.
+- Do not bypass RLS assumptions in client code.
+
+### Grain Movement
+
+- `bushels` may be negative.
+- Negative bushels represent estimate-vs-actual corrections.
+- Do not clamp negative grain movement values.
+- Display negative bushels with a warning, not as a validation error.
+- Grain movement edits need a concurrency guard to prevent ghost rows and inventory drift.
+
+### Spray Compliance
+
+- Spray records support multiple products per application.
+- Product identity in tank-mix UI rows must use a temporary `ui_id`, not the array index.
+- Missing `epaRegNumber` marks the record non-compliant.
+- Active ingredients are tracked per product.
+- Keep spray terminology state-neutral unless a specific legal report requires state wording.
+- `WIND_ALERT_MPH = 10` is the named wind alert threshold.
+- Past weather recovery uses Visual Crossing based on field location and start time.
+
+### Backup and Restore
+
+- Backup restore must treat the current selected `farm_id` as authoritative.
+- Before mapping restored records, merge `{ ...record, farm_id }` into each restored record.
+- Do not hydrate React state directly from raw backup arrays.
+- Normalize restored records first.
+- If the restore RPC fails, do not mutate React state.
+
+## UI and Component Rules
+
+### Accessibility
+
+- Every `DialogContent` must include a `DialogDescription`.
+- Visually hidden descriptions are acceptable with `sr-only`.
+- Every form input must have a unique `id` and `name`.
+- Every `Label` must use `htmlFor` linked to the input ID.
+- Interactive touch targets should be at least 44px high.
+
+### Typography
+
+- Use Inter through `font-sans` for normal labels, headings, body text, buttons, navigation, empty states, and descriptions.
+- Use JetBrains Mono through `font-mono` for data values such as numbers, dates, timestamps, coordinates, table cells, IDs, registration numbers, ticket numbers, and version strings.
+- The AcreLedger brand text intentionally uses `font-mono` and `tracking-tighter`.
+
+### Text Case
+
+- Prefer sentence case.
+- Avoid `uppercase` with `tracking-widest` for normal labels, buttons, and body text.
+- Uppercase is acceptable for tiny badges, report table headers, and legal/regulatory footers.
+
+### Layout
+
+- Preserve the mobile-first design.
+- Page headers should follow the sticky header pattern from `BLUEPRINT.md`.
+- Use consistent radius rules:
+  - Inline items, badges, small buttons: `rounded-lg`
+  - Cards, sections, containers: `rounded-2xl`
+  - Pills and avatars: `rounded-full`
+  - Progress bars: `rounded-full`
+
+### Icons
+
+- Lucide React is the only icon library.
+- Never import a Lucide icon using a name that conflicts with a browser global object.
+- Always alias risky icons:
+
+```ts
+import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
+```
+
+## React and Performance Rules
+
+- Use `useFarm()` for global farm state.
+- Wrap expensive derived values from large arrays in `useMemo`.
+- Do not call `fields.find(...)` inside row-level `.map()` loops.
+- Build lookup maps once with `useMemo`, for example `new Map()`.
+- Pure helpers that do not depend on component state or props belong outside the component.
+- Avoid manual chunks for UI libraries in Vite config unless there is a confirmed reason.
+
+## Weather and Rainfall Rules
+
+- Weather uses Visual Crossing.
+- Rainfall uses the Rain API with IEM Stage IV radar plus Supabase RPC merge.
+- Rainfall lookups should use coordinates when available so the radar merge remains active.
+- Lat/lng should be rounded to 4 decimals for radar grid consistency.
+- Polygon field boundaries should fall back to centroids when explicit coordinates are missing.
+- Weather and rainfall request failures should degrade gracefully without crashing the UI.
+- Windy radar embeds require CSP entries in both `child-src` and `frame-src`.
+
+## Coding Style
+
+- TypeScript strict mode is expected.
+- Prefer explicit types for exported functions and public helpers.
+- Keep logic local and boring unless a shared helper already exists.
+- Do not introduce new libraries without a strong reason.
+- Reuse existing shadcn/ui, Tailwind, Lucide, Sonner, Zod, mapper, and utility patterns.
+- Use existing naming conventions rather than inventing new ones.
+- Treat `0` as a valid value. Use `value != null ? value : '—'`, not simple truthiness.
+
+## Change Workflow
+
+Before editing:
+
+1. State the likely files involved.
+2. Inspect existing implementations and adjacent patterns.
+3. Check relevant data types and mappers.
+4. Check whether the change touches RLS, migrations, reports, exports, or backup/restore.
+
+While editing:
+
+1. Keep changes minimal and task-scoped.
+2. Preserve existing behavior unless the task explicitly asks to change it.
+3. Update types, mappers, database logic, UI, and reports together when the data model changes.
+4. Do not leave TODOs in production code unless the user explicitly asks for scaffolding.
+
+After editing:
+
+1. Run the most relevant available checks from `package.json`.
+2. If tests are unavailable, run TypeScript/build checks when possible.
+3. Summarize changed files, behavior changes, and verification results.
+4. Mention any unchecked risk clearly.
+
+## When to Use `BLUEPRINT.md`
+
+Use targeted sections of `BLUEPRINT.md` when working on:
+
+- Data models or farm entity behavior.
+- Supabase writes, RLS, migrations, or restore flows.
+- UI design system or accessibility patterns.
+- Spray compliance, weather, rainfall, FSA reports, or grain movement.
+- Any bug involving optimistic updates, local state, or mapper output.
+
+Do not read the full blueprint for small isolated edits such as text copy, minor styling, or a local bug fix unless the code path is unclear.
+
+## Cross-Agent Consistency
+
+- `AGENTS.md` is the canonical shared instruction file.
+- `GEMINI.md` may add Gemini CLI behavior but must not contradict this file.
+- Other agent-specific files may point back here.
+- If instructions conflict, follow the more specific project safety rule first, especially data safety, farm scoping, RLS, mapper discipline, and soft delete rules.

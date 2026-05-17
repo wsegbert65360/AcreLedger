@@ -1,94 +1,91 @@
-# CLAUDE.md
+# CLAUDE.md — AcreLedger Claude Instructions
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Primary Rule
 
-## Commands
+Follow `AGENTS.md` first. It is the canonical shared instruction file for AcreLedger across Claude, Codex, Gemini CLI, Pi/local agents, and other AI coding assistants.
 
-```bash
-npm run dev        # Vite dev server on port 8080
-npm run build      # Production build (Vite + PWA)
-npm run lint       # ESLint
-npm test           # Vitest (single run)
-npm run test:watch # Vitest in watch mode
-```
+This file is intentionally short. It only gives Claude-specific workflow guidance and should not duplicate or override the project rules in `AGENTS.md` or the detailed architecture reference in `BLUEPRINT.md`.
 
-Run a single test file: `npm test src/services/__tests__/RainService.test.ts`
+## Context Strategy
 
-## Architecture
+Use progressive context loading.
 
-AcreLedger is a mobile-first PWA for row-crop farm record-keeping and compliance reporting (FSA 578, MP693 spray logs). React 18 + TypeScript (strict) + Vite, deployed to Vercel. Backend is Supabase (Postgres + RLS + Auth + Edge Functions).
+1. Read `AGENTS.md` first.
+2. Identify the task area before editing.
+3. Inspect the directly relevant source files.
+4. Read only the relevant section of `BLUEPRINT.md` when architecture, domain rules, or project conventions are needed.
+5. Use `TESTING.md` only for verification protocols, credentials, or test flows.
+6. Do not load the full blueprint or unrelated files for narrow tasks.
 
-### Key Layers
+Good examples:
 
-- **Pages** (`src/pages/`): Index (dashboard), Activity, Logistics, Reports, Settings, FieldDetailScreen
-- **Store** (`src/store/farmStore.tsx`): Single React Context providing all entity arrays and CRUD actions. Accessed via `useFarm()`. Entity-specific logic lives in dedicated hooks (`usePlantRecords`, `useSprayRecords`, etc.)
-- **Mappers** (`src/lib/mappers.ts`): camelCase ↔ snake_case transformation between app types and DB rows. One mapper per entity — never inline DB shape in hooks or components.
-- **Services** (`src/services/`): RainService (dual-source precipitation with 30s promise cache), WeatherService (Visual Crossing), fieldService, binService
-- **Compliance reports** (`src/lib/complianceReports.ts`, `src/lib/sprayExport.ts`): CSV and PDF generation for FSA, spray audit, harvest, landlord statements
-- **Types** (`src/types/farm.ts`): All entity interfaces. Every season record has `seasonYear: number` and `deleted_at: string | null`.
+- UI/modal work: read `AGENTS.md`, the target component, nearby shadcn/ui patterns, and the UI/accessibility sections of `BLUEPRINT.md`.
+- Supabase mutation work: read `AGENTS.md`, the relevant hook or `farmStore.tsx`, `@/lib/mappers.ts`, `@/types/farm.ts`, and the state/database sections of `BLUEPRINT.md`.
+- Spray/compliance work: read `AGENTS.md`, spray types, spray mappers, spray UI, report/export code if relevant, and the spray sections of `BLUEPRINT.md`.
+- Weather/rainfall work: read `AGENTS.md`, the relevant services/components, weather/rainfall types, and the weather/rainfall sections of `BLUEPRINT.md`.
 
-### Critical Patterns (enforced by BLUEPRINT.md)
+## Claude Operating Style
 
-**Optimistic update sequence** — every mutation follows this exactly:
-1. Guard `farm_id` → validate → call mapper → optimistic state update → await Supabase → success toast / rollback + error toast
-2. All mutations return `Promise<boolean>` (OpResult convention) — never `undefined`
+Before changing code:
 
-**Never use `.upsert()` for edits** — always `.update().eq('id').eq('farm_id')`. Upsert silently inserts ghost rows on miss.
+- Briefly identify the files and systems likely involved.
+- Inspect existing patterns before writing new code.
+- Prefer targeted reads and searches over broad context dumps.
+- Check types, mappers, and store actions before changing entity behavior.
 
-**Never use `.delete()` on user records** — soft delete only: `.update({ deleted_at: new Date().toISOString() })`.
+While changing code:
 
-**`farm_id` is a filter, never a payload field** — never include in `.update({...})` body.
+- Keep edits narrow and task-scoped.
+- Preserve existing behavior unless the task explicitly asks to change it.
+- Do not rewrite unrelated code.
+- Do not introduce new libraries or abstractions unless the existing architecture clearly calls for it.
+- Preserve mobile-first UI, Supabase RLS, farm scoping, soft delete, mapper, and optimistic update rules.
 
-**Cross-await state capture** — use `previousRef`/`snapshotRef` inside `setState` callbacks, never read a `let` assigned inside a setter after `await`.
+After changing code:
 
-**In-flight guard** — boolean `isAdding` ref with `try/finally`, not a UUID Set.
+- Run the most relevant available package script.
+- Prefer TypeScript/build checks when full tests are unavailable.
+- Summarize changed files, behavior changes, verification results, and any remaining risks.
 
-**`session === undefined`** means hydrating (show skeleton). **`session === null`** means logged out. These are different.
+## High-Priority Project Rules
 
-**`lat`/`lng` are nullable** on Field — guard before `.toFixed()`.
+Always preserve these rules from `AGENTS.md`:
 
-**GrainMovement `bushels` may be negative** — intentional business logic, warn in UI but never reject.
+- Never hard-delete user farm records.
+- Every Supabase write is scoped by `farm_id`.
+- Mutation functions return `Promise<boolean>`.
+- Mappers run before optimistic state updates.
+- Optional database fields use `null`, not `undefined`.
+- Do not use `upsert` for updates.
+- Radix dialogs include `DialogDescription`.
+- Inputs have `id`, `name`, and linked labels.
+- Lucide icons that conflict with browser globals are aliased.
+- Negative grain movement bushels are valid correction values.
+- Backup restore uses the current selected `farm_id` as authoritative.
 
-### Season System
+## Blueprint Usage
 
-- `activeSeason` — current farming year, all new records stamp this
-- `viewingSeason` — year shown in UI, controlled by dropdown, filters all lists/reports, does not affect writes
+`BLUEPRINT.md` is the full architecture reference. Treat it as a reference library, not as context to paste wholesale into every task.
 
-### Rainfall System
+Use targeted sections when the task touches:
 
-Dual-source: IEM Stage IV radar (primary) + Supabase RPC (secondary). Coordinates rounded to 4 decimal places. Promise caching prevents duplicate concurrent requests per field.
+- Data architecture
+- Supabase or RLS
+- State mutations
+- Backup and restore
+- Spray compliance
+- Weather or rainfall
+- FSA/compliance reports
+- Visual design system
+- Accessibility patterns
 
-## Conventions
+For small local changes, rely on `AGENTS.md` plus source inspection.
 
-- Path alias: `@/*` → `./src/*`
-- No default `React` import (modern JSX transform)
-- `[...arr].sort()` never `arr.sort()` — sort mutates in place
-- `value > 0 ? value : '—'` not `value || '—'` — zero is a valid farm value
-- `parseInt(v, 10)` always with radix
-- `onOpenChange` must check boolean: `(open) => { if (!open) onClose(); }`
-- Named constants over magic numbers (e.g. `WIND_ALERT_MPH`)
-- Module-level pure helpers outside components; all derived data in `useMemo`
-- `fieldMap` pattern (Map for O(1) lookups) instead of `.find()` per row
-- `safeExport` wrapper on all CSV/PDF export calls
-- All exports wrapped in `try/catch` with user-facing toast, never "check the console"
-- `lovable-tagger` plugin active in dev mode only
-- Tailwind CSS v3 with custom plant/spray/harvest color tokens
-- Icons: Lucide React only — no other icon library
-- Toasts: Sonner only
-- DB functions: always include `SET search_path = public, extensions`
+## Output Expectations
 
-## Environment Variables
+When completing a coding task, report:
 
-```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_VISUALCROSSING_KEY=
-```
-
-Supabase Edge Function secrets (set in Supabase dashboard, not env):
-- `NOAA_MRMS_BASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-
-## Authoritative References
-
-- **BLUEPRINT.md** — canonical architecture and rules document. Read before making any change.
-- **TESTING.md** — verification protocols, bot credentials for E2E smoke testing.
+1. What changed.
+2. Which files changed.
+3. What checks were run.
+4. Anything that still needs manual verification.
