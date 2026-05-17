@@ -275,6 +275,7 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 
 #### Weather Components (`@/components/weather/`)
 - **`RadarEmbed`**: Windy.com radar iframe with fullscreen expand via `createPortal` to document body. Includes loading spinner (15s timeout), error fallback, and body scroll lock when expanded.
+- **CSP requirement**: Windy radar embeds require `https://www.windy.com` in both `child-src` and `frame-src` in `index.html`. Without this, the browser blocks the iframe even though the React component renders correctly.
 - **`ForecastGrid`**: 2×5 grid of `ForecastDay` cells with weather emojis, rain-chance progress bars, high/low temps. Today cell highlighted with blue border.
 
 #### Future Expansion (Planned)
@@ -420,6 +421,7 @@ event to automatically sync content to Supabase.
 
 ### Content Security Policy (CSP)
 The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, Vercel, and Windy.com.
+Windy.com must be allowed through both `child-src` and `frame-src` because the weather radar is an external iframe.
 
 ---
 
