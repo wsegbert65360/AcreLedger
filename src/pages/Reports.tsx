@@ -8,6 +8,7 @@ import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertili
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatTotalAmount } from '@/utils/unitConversion';
+import { generateSprayPDF } from '@/lib/sprayExport';
 import ReportTable from '@/components/ReportTable';
 import { toast } from 'sonner';
 import { Field } from '@/types/farm';
@@ -61,6 +62,7 @@ export default function Reports() {
     grainMovements:       allGrain,
     fertilizerApplications: allFertilizer,
     fields,
+    farmName,
     activeSeason,
     viewingSeason,
     setViewingSeason,
@@ -202,22 +204,7 @@ export default function Reports() {
 
   const handleExportSprayAuditPdf = () => {
     safeExport(() => {
-      exportToPdf({
-        title: 'Pesticide Application Record',
-        subtitle: `Compliance audit trail. Generated ${reportDate}.`,
-        headers: ['DATE', 'FIELD', 'PRODUCT', 'EPA #', 'RATE', 'ACRES', 'TOTAL', 'WIND'],
-        rows: sprayRows.map(r => [
-          fmtDate(r.sprayDate) || fmt(r.timestamp),
-          r.fieldName,
-          r.product,
-          r.epaRegNumber || '—',
-          r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—',
-          r.treatedAreaSize || '—',
-          r.amountDisplay,
-          `${r.windSpeed} mph ${r.windDirection || ''}`
-        ]),
-        fileName: `Spray_Log_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`
-      });
+      generateSprayPDF(sprayRecords, farmName);
     }, 'spray audit PDF');
   };
 
@@ -461,10 +448,12 @@ export default function Reports() {
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-foreground text-sm tracking-tight">{r.fieldName}</span>
                         <span className="font-mono text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {fmtDate(r.sprayDate) || fmt(r.timestamp)}{r.startTime ? ` @ ${r.startTime}` : ''}
+                          {fmtDate(r.sprayDate) || fmt(r.timestamp)}{r.startTime ? ` @ ${r.startTime}${r.endTime ? '-' + r.endTime : ''}` : ''}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
+                        <div><span className="text-muted-foreground uppercase text-[11px]">Crop / Site:</span><div className="text-harvest font-bold">{r.cropOrSiteTreated || '—'}</div></div>
+                        <div><span className="text-muted-foreground uppercase text-[11px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || '—'}</span></div>
                         <div><span className="text-muted-foreground uppercase text-[11px]">Product:</span><div className="text-spray font-bold">{r.product}</div></div>
                         <div><span className="text-muted-foreground uppercase text-[11px]">EPA Reg #:</span><div className="text-foreground">{r.epaRegNumber || '—'}</div></div>
                         <div><span className="text-muted-foreground uppercase text-[11px]">Rate / Ac:</span><div className="text-foreground">{r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—'}</div></div>
@@ -472,7 +461,6 @@ export default function Reports() {
                         <div><span className="text-muted-foreground uppercase text-[11px]">Total Product:</span><div className="text-foreground font-bold">{r.amountDisplay}</div></div>
                         <div><span className="text-muted-foreground uppercase text-[11px]">Equipment:</span><div className="text-foreground">{r.equipmentId || '—'}</div></div>
                         <div className="col-span-2 pt-1 border-t border-border/30 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                          <div><span className="text-muted-foreground uppercase text-[11px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || '—'}</span></div>
                           <div><span className="text-muted-foreground uppercase text-[11px]">Applicator:</span> <span className="text-foreground/80">{r.applicatorName || '—'}</span></div>
                           <div><span className="text-muted-foreground uppercase text-[11px]">License:</span> <span className="text-foreground/80">{r.licenseNumber || '—'}</span></div>
                         </div>

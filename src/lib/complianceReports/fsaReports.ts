@@ -25,8 +25,10 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
                 return [
                     sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
                     sanitizeCsvValue(r.startTime),
+                    sanitizeCsvValue(r.endTime),
                     sanitizeCsvValue(r.applicatorName),
                     sanitizeCsvValue(r.licenseNumber),
+                    sanitizeCsvValue(r.cropOrSiteTreated),
                     sanitizeCsvValue(p.product),
                     sanitizeCsvValue(p.epaRegNumber || 'N/A'),
                     sanitizeCsvValue(r.fieldName),
@@ -51,8 +53,10 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
         return [[
             sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),
             sanitizeCsvValue(r.startTime),
+            sanitizeCsvValue(r.endTime),
             sanitizeCsvValue(r.applicatorName),
             sanitizeCsvValue(r.licenseNumber),
+            sanitizeCsvValue(r.cropOrSiteTreated),
             '',
             sanitizeCsvValue(r.epaRegNumber),
             sanitizeCsvValue(r.fieldName),
@@ -75,7 +79,7 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
 
 export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
     const header = [
-        'Date', 'Start Time', 'Applicator Name', 'License #', 'Trade Name', 'EPA Reg #',
+        'Date', 'Start Time', 'End Time', 'Applicator Name', 'License #', 'Crop/Site Treated', 'Trade Name', 'EPA Reg #',
         'Site/Field', 'Total Acres Treated', 'App Rate (per ac)', 'Total Product Applied',
         'Total Mixture Volume (Mix + Water)', 'Equipment ID', 'Wind Speed (mph)',
         'Wind Direction', 'Temp (F)', 'Relative Humidity (%)', 'Target Pest(s)', 'Technicians',
