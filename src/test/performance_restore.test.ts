@@ -66,6 +66,7 @@ describe('Restore Performance Benchmark', () => {
             sprayRecipes: [],
             tillageRecords: [],
             activeSeason: 2024,
+            refetchFarmData: vi.fn().mockResolvedValue(true),
         };
     });
 
@@ -99,6 +100,8 @@ describe('Restore Performance Benchmark', () => {
         
         console.log(`\n[PERFORMANCE] Optimized Duration: ${duration.toFixed(2)}ms`);
         expect(success).toBe(true);
+        expect(mockArgs.refetchFarmData).toHaveBeenCalledTimes(1);
+        expect(mockArgs.setFields).not.toHaveBeenCalled();
         // Expected to complete under broad CI headroom.
         expect(duration).toBeLessThan(5000);
     });
@@ -113,7 +116,19 @@ describe('Restore Performance Benchmark', () => {
         const success = await result.current.restoreFromBackup(mockBackupData);
         
         expect(success).toBe(false);
-        // Ensure state updates were NOT called (since it should throw before them)
+        expect(mockArgs.refetchFarmData).not.toHaveBeenCalled();
+        expect(mockArgs.setFields).not.toHaveBeenCalled();
+    });
+
+    it('should fail when cloud reload fails after successful restore RPC', async () => {
+        (supabase.rpc as any).mockResolvedValue({ data: { ok: true }, error: null });
+        mockArgs.refetchFarmData = vi.fn().mockResolvedValue(false);
+
+        const { result } = renderHook(() => useSeasonManagement(mockArgs));
+        const success = await result.current.restoreFromBackup(mockBackupData);
+
+        expect(success).toBe(false);
+        expect(mockArgs.refetchFarmData).toHaveBeenCalledTimes(1);
         expect(mockArgs.setFields).not.toHaveBeenCalled();
     });
 });

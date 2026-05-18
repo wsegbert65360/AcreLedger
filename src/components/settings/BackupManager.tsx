@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Database, Download, Clock, AlertCircle } from 'lucide-react';
+import { Database, Download, Clock, AlertCircle, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
+import { openSeasonRolloverModal } from '@/utils/seasonRollover';
 
 const LAST_BACKUP_KEY = 'acreledger_last_backup';
 
@@ -202,6 +203,16 @@ export default function BackupManager() {
               Download Backup JSON
             </>
           )}
+        </Button>
+
+        <Button
+          type="button"
+          onClick={openSeasonRolloverModal}
+          variant="outline"
+          className="w-full min-h-[44px]"
+        >
+          <CalendarDays size={16} className="mr-2" />
+          Season rollover and restore
         </Button>
       </CardContent>
     </Card>

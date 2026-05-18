@@ -49,6 +49,8 @@ interface UseSeasonManagementArgs {
   setSprayRecipes: React.Dispatch<React.SetStateAction<SprayRecipe[]>>;
   setTillageRecords: React.Dispatch<React.SetStateAction<TillageRecord[]>>;
   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
+  /** Reload all farm entities from Supabase after restore (source of truth). */
+  refetchFarmData: () => Promise<boolean>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,10 +77,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setTillageRecords, setFarmId,
+    refetchFarmData,
   } = args;
-
-  const withFarmId = <T extends { farm_id?: string | null }>(records: T[] | undefined): T[] | undefined =>
-    records?.map((record) => ({ ...record, farm_id }));
 
   // ─── Rollover ───────────────────────────────────────────────────────────────
 
@@ -189,34 +189,17 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         throw new Error(`Failed to restore backup: ${error.message}`);
       }
 
-      const restoredFields = withFarmId(backupData.fields);
-      const restoredBins = withFarmId(backupData.bins);
-      const restoredPlantRecords = withFarmId(backupData.plantRecords);
-      const restoredSprayRecords = withFarmId(backupData.sprayRecords);
-      const restoredHarvestRecords = withFarmId(backupData.harvestRecords);
-      const restoredHayHarvestRecords = withFarmId(backupData.hayHarvestRecords);
-      const restoredFertilizerApplications = withFarmId(backupData.fertilizerApplications);
-      const restoredTillageRecords = withFarmId(backupData.tillageRecords);
-      const restoredGrainMovements = withFarmId(backupData.grainMovements);
-      const restoredSavedSeeds = withFarmId(backupData.savedSeeds);
-      const restoredFertilizerRecipes = withFarmId(backupData.fertilizerRecipes);
-      const restoredSprayRecipes = withFarmId(backupData.sprayRecipes);
-
-      if (restoredFields               !== undefined) setFields(restoredFields);
-      if (restoredBins                 !== undefined) setBins(restoredBins);
-      if (restoredPlantRecords         !== undefined) setPlantRecords(restoredPlantRecords);
-      if (restoredSprayRecords         !== undefined) setSprayRecords(restoredSprayRecords);
-      if (restoredHarvestRecords       !== undefined) setHarvestRecords(restoredHarvestRecords);
-      if (restoredHayHarvestRecords    !== undefined) setHayHarvestRecords(restoredHayHarvestRecords);
-      if (restoredFertilizerApplications !== undefined) setFertilizerApplications(restoredFertilizerApplications);
-      if (restoredTillageRecords         !== undefined) setTillageRecords(restoredTillageRecords);
-      if (restoredGrainMovements       !== undefined) setGrainMovements(restoredGrainMovements);
-      if (restoredSavedSeeds           !== undefined) setSavedSeeds(restoredSavedSeeds);
-      if (restoredFertilizerRecipes    !== undefined) setFertilizerRecipes(restoredFertilizerRecipes);
-      if (restoredSprayRecipes         !== undefined) setSprayRecipes(restoredSprayRecipes);
       if (backupData.activeSeason !== undefined) {
         setActiveSeason(backupData.activeSeason);
         setViewingSeason(backupData.activeSeason);
+      }
+
+      // Hydrate from Supabase (not raw backup) so UI, localStorage, and DB stay aligned.
+      const reloaded = await refetchFarmData();
+      if (!reloaded) {
+        throw new Error(
+          'Backup was saved to the cloud, but reload failed. Refresh the page to sync your data.'
+        );
       }
 
       toast.success('Backup restored successfully.');
@@ -230,10 +213,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       setLoading(false);
     }
   }, [
-    farm_id, setLoading,
-    setFields, setBins, setPlantRecords, setSprayRecords,
-    setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
-    setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
+    farm_id, setLoading, refetchFarmData,
     setActiveSeason, setViewingSeason,
   ]);
 

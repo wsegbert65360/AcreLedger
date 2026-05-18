@@ -173,8 +173,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id, session]);
 
   // --- Fetch data when farm_id is stable ---
-  const fetchData = useCallback(async () => {
-    if (!session || !farm_id) return;
+  const fetchData = useCallback(async (): Promise<boolean> => {
+    if (!session || !farm_id) return false;
     setLoading(true);
     setFetchError(false);
     try {
@@ -223,6 +223,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             console.error('Data fetch errors:', fetchErrors);
             setFetchError(true);
             toast.error('Some data failed to load from cloud. Showing local cache.');
+            return false;
           }
 
           if (fieldsData) setFields(fieldsData.map(mapFieldFromDb));
@@ -242,9 +243,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             setFarmName(farmData.name);
           }
 
+          return true;
         } catch (error) {
           console.error('Error fetching data:', error);
           setFetchError(true);
+          return false;
         } finally {
           setLoading(false);
         }
@@ -295,6 +298,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
+    refetchFarmData: fetchData,
   });
 
   // --- Composed signOut (auth + cache clear) ---
