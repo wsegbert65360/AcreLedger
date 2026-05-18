@@ -228,7 +228,9 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   }, [open, initialData, field]);
 
   useEffect(() => {
-    if (open && field.lat != null && field.lng != null) {
+    // Only auto-fetch current weather for NEW records.
+    // For existing records, we rely on stored data or the manual "Recover" button.
+    if (open && !initialData && field.lat != null && field.lng != null) {
       setLoading(true);
       WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
         if (!w || w.isError) {
@@ -246,7 +248,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     } else if (open) {
       setLoading(false);
     }
-  }, [open, field.lat, field.lng]);
+  }, [open, initialData, field.lat, field.lng]);
 
   const handleRecipeSelect = (recipeId: string) => {
     setSelectedRecipeId(recipeId);
