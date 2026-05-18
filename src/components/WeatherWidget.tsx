@@ -152,7 +152,7 @@ export default function WeatherBar() {
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1.5">
             <Wind size={16} className="text-foreground/80" />
-            <span className="text-lg font-mono font-bold">{weather.wind}</span>
+            <span className="text-lg font-mono font-bold">{weather.wind} {weather.windDirection}</span>
           </div>
           <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">MPH</span>
         </div>

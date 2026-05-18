@@ -738,7 +738,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 Environmental Conditions *
               </span>
               <div className="flex items-center gap-2">
-                {(!weather || weather.wind === 0 || manualWindSpeed === '0') && (
+                {(!weather || weather.wind === 0 || manualWindSpeed === '0' || !manualWindDirection.trim()) && (
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -762,7 +762,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     <SelectValue placeholder="Dir" />
                   </SelectTrigger>
                   <SelectContent>
-                    {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW', 'CALM'].map(dir => (
+                    {['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW', 'CALM'].map(dir => (
                       <SelectItem key={dir} value={dir} className="font-mono text-xs">{dir}</SelectItem>
                     ))}
                   </SelectContent>
