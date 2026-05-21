@@ -6,14 +6,14 @@ import { mapTillageToDb } from '@/lib/mappers';
 
 interface UseTillageRecordsArgs {
   farm_id: string | null;
-  activeSeason: number;
+  viewingSeason: number;
   setTillageRecords: React.Dispatch<React.SetStateAction<TillageRecord[]>>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useTillageRecords({ farm_id, activeSeason, setTillageRecords }: UseTillageRecordsArgs) {
+export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }: UseTillageRecordsArgs) {
   const isAdding = useRef(false);
   const previousRef = useRef<TillageRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: TillageRecord; index: number }[]>([]);
@@ -33,7 +33,7 @@ export function useTillageRecords({ farm_id, activeSeason, setTillageRecords }: 
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: TillageRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
+    const newRecord: TillageRecord = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
 
     let mapped: ReturnType<typeof mapTillageToDb>;
     try {
@@ -68,7 +68,7 @@ export function useTillageRecords({ farm_id, activeSeason, setTillageRecords }: 
     } finally {
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, setTillageRecords]);
+  }, [viewingSeason, farm_id, setTillageRecords]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
 

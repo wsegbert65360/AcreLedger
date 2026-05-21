@@ -17,7 +17,7 @@ interface HarvestModalProps {
 }
 
 export default function HarvestModal({ field, open, onClose, initialData }: HarvestModalProps) {
-  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, bins } = useFarm();
+  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, bins, viewingSeason } = useFarm();
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -176,9 +176,14 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { reset(); onClose(); } }}>
       <DialogContent className="bg-card border-harvest/30 max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-harvest">
-            <Wheat size={20} />
-            {initialData ? 'Edit' : 'Harvest'} — {field.name}
+          <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest">
+            <div className="flex items-center gap-2">
+              <Wheat size={20} />
+              <span>{initialData ? 'Edit' : 'Harvest'} — {field.name}</span>
+            </div>
+            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+              {initialData ? initialData.seasonYear : viewingSeason} Season
+            </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
             Log a new harvest record or edit an existing one.

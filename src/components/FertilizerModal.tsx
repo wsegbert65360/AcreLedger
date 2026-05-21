@@ -25,7 +25,8 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
         deleteFertilizerApplications,
         addFertilizerRecipe,
         deleteFertilizerRecipe,
-        fertilizerRecipes
+        fertilizerRecipes,
+        viewingSeason
     } = useFarm();
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -149,7 +150,12 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                             <Sprout className="text-lime-600 dark:text-lime-400" size={20} />
                         </div>
                         <div>
-                            <DialogTitle className="text-lg font-bold text-foreground leading-tight">Fertilizer</DialogTitle>
+                            <div className="flex items-center gap-2">
+                                <DialogTitle className="text-lg font-bold text-foreground leading-tight">Fertilizer</DialogTitle>
+                                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-lime-600/10 text-lime-600 dark:text-lime-400 border border-lime-600/20">
+                                    {initialData ? initialData.seasonYear : viewingSeason} Season
+                                </span>
+                            </div>
                             <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>

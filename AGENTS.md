@@ -59,6 +59,15 @@ if (!farm_id) {
 - Updates must filter by `.eq('farm_id', farm_id)`.
 - Do not send `farm_id` inside `.update()` payloads after mapping unless the existing pattern explicitly requires it.
 
+### Season Scoping
+
+- Always stamp new records (both inside CRUD hooks and client components like `SprayModal.tsx`) with the user's currently selected `viewingSeason` (retrieved from `useFarm()`), not `activeSeason`.
+- `activeSeason` represents the farm's currently active/current crop year. `viewingSeason` represents the season the user is currently viewing in the sidebar/UI.
+- All record-creation and record-editing forms or modals must indicate their target season year in the title, and write actions must scope to `viewingSeason`.
+- The local storage key `al_viewing_season` (with a user-scoped prefix) stores the current viewing season.
+- On loading or syncing, `viewingSeason` must be validated and clamped to a window of `[activeSeason - 10, activeSeason + 1]`.
+- Dropdown selectors (e.g. sidebar, activity, reports) must fetch dynamic options (`seasonOptions`) computed from `farmStore.tsx` rather than hardcoding options.
+
 ### Mapper Discipline
 
 - Always call the relevant mapper before touching React state.

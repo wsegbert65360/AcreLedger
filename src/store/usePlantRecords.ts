@@ -6,14 +6,14 @@ import { mapPlantToDb } from '@/lib/mappers';
 
 interface UsePlantRecordsArgs {
   farm_id: string | null;
-  activeSeason: number;
+  viewingSeason: number;
   setPlantRecords: React.Dispatch<React.SetStateAction<PlantRecord[]>>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UsePlantRecordsArgs) {
+export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords }: UsePlantRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -36,7 +36,7 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
+    const newRecord: PlantRecord = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapPlantToDb>;
@@ -75,7 +75,7 @@ export function usePlantRecords({ farm_id, activeSeason, setPlantRecords }: UseP
       // Always release the guard
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, setPlantRecords]);
+  }, [viewingSeason, farm_id, setPlantRecords]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
 

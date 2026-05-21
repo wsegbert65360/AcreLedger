@@ -17,7 +17,7 @@ interface PlantModalProps {
 }
 
 export default function PlantModal({ field, open, onClose, initialData }: PlantModalProps) {
-  const { addPlantRecord, updatePlantRecord, savedSeeds } = useFarm();
+  const { addPlantRecord, updatePlantRecord, savedSeeds, viewingSeason } = useFarm();
   const [seedVariety, setSeedVariety] = useState(initialData?.seedVariety || '');
   const [crop, setCrop] = useState(initialData?.crop || '');
   const [intendedUse, setIntendedUse] = useState(initialData?.intendedUse || field.intendedUse || '');
@@ -95,9 +95,14 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
     <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="bg-card border-plant/30 max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-plant">
-            <Sprout size={20} />
-            {initialData ? 'Edit' : 'Plant'} — {field.name}
+          <DialogTitle className="flex items-center flex-wrap gap-2 text-plant">
+            <div className="flex items-center gap-2">
+              <Sprout size={20} />
+              <span>{initialData ? 'Edit' : 'Plant'} — {field.name}</span>
+            </div>
+            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-plant/10 text-plant border border-plant/20">
+              {initialData ? initialData.seasonYear : viewingSeason} Season
+            </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
             Log a new planting record or edit an existing one.

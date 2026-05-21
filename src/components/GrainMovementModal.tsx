@@ -16,7 +16,7 @@ interface GrainMovementModalProps {
 }
 
 export default function GrainMovementModal({ open, onClose, initialData }: GrainMovementModalProps) {
-  const { updateGrainMovement, bins, fields } = useFarm();
+  const { updateGrainMovement, bins, fields, viewingSeason } = useFarm();
   const [binId, setBinId] = useState(initialData.binId);
   const [bushels, setBushels] = useState(initialData.bushels.toString());
   const [moisture, setMoisture] = useState(initialData.moisturePercent.toString());
@@ -92,9 +92,14 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
     <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="bg-card border-harvest/30 max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-harvest font-bold">
-            <Warehouse size={20} />
-            Edit Grain Movement
+          <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest font-bold">
+            <div className="flex items-center gap-2">
+              <Warehouse size={20} />
+              <span>Edit Grain Movement</span>
+            </div>
+            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+              {initialData ? initialData.seasonYear : viewingSeason} Season
+            </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
             Edit grain movement record details.

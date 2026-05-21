@@ -17,7 +17,7 @@ interface TillageModalProps {
 }
 
 export default function TillageModal({ field, open, onClose, initialData }: TillageModalProps) {
-    const { addTillageRecord, updateTillageRecord, deleteTillageRecords } = useFarm();
+    const { addTillageRecord, updateTillageRecord, deleteTillageRecords, viewingSeason } = useFarm();
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [implementType, setImplementType] = useState('Disk');
     const [notes, setNotes] = useState('');
@@ -105,7 +105,12 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                             <Tractor className="text-orange-600 dark:text-orange-400" size={20} />
                         </div>
                         <div>
-                            <DialogTitle className="text-lg font-bold text-foreground leading-tight">Tillage</DialogTitle>
+                            <div className="flex items-center gap-2">
+                                <DialogTitle className="text-lg font-bold text-foreground leading-tight">Tillage</DialogTitle>
+                                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-orange-600/10 text-orange-600 dark:text-orange-400 border border-orange-600/20">
+                                    {initialData ? initialData.seasonYear : viewingSeason} Season
+                                </span>
+                            </div>
                             <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>

@@ -58,7 +58,7 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     intendedUse: safeStr(db.intended_use),
     producerShare: db.producer_share ?? undefined,
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
-    seasonYear: safeNum(db.season_year, 2024),
+    seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
@@ -78,7 +78,7 @@ export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
     applicatorName: safeStr(db.applicator_name),
     licenseNumber: safeStr(db.license_number),
     epaRegNumber: safeStr(db.epa_reg_number),
-    seasonYear: safeNum(db.season_year, 2024),
+    seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null,
@@ -123,7 +123,7 @@ export const mapHarvestFromDb = (db: HarvestRecordRow): HarvestRecord => ({
     harvestDate: safeStr(db.harvest_date),
     fsaFarmNumber: safeStr(db.fsa_farm_number),
     fsaTractNumber: safeStr(db.fsa_tract_number),
-    seasonYear: safeNum(db.season_year, 2024),
+    seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     crop: safeStr(db.crop),
     landlordName: safeStr(db.landlord_name),
@@ -142,7 +142,7 @@ export const mapHayFromDb = (db: HayHarvestRow): HayHarvestRecord => ({
     baleType: (db.bale_type || 'Round') as 'Round' | 'Square',
     temperature: db.temperature || undefined,
     conditions: db.conditions || undefined,
-    seasonYear: safeNum(db.season_year, 2024),
+    seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
@@ -159,7 +159,7 @@ export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
     sourceFieldName: db.source_field_name || undefined,
     destination: db.destination || undefined,
     price: db.price != null ? safeNum(db.price) : undefined,
-    seasonYear: safeNum(db.season_year, 2024),
+    seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
 });
@@ -179,7 +179,7 @@ export const mapSeedFromDb = (db: SavedSeedRow): SavedSeed => ({
     variety: safeStr(db.variety),
     supplier: safeStr(db.supplier),
     lotNumber: safeStr(db.lot_number),
-    year: safeNum(db.year, 2024),
+    year: safeNum(db.year, new Date().getFullYear()),
     notes: safeStr(db.notes),
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
@@ -217,7 +217,7 @@ export const mapFertilizerFromDb = (db: FertilizerApplicationRow): FertilizerApp
     created_at: safeStr(db.created_at),
     updated_at: safeStr(db.updated_at),
     deleted_at: db.deleted_at ?? null,
-    seasonYear: safeNum(db.season_year, 2024)
+    seasonYear: safeNum(db.season_year, new Date().getFullYear())
 });
 
 export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
@@ -228,7 +228,7 @@ export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
     date: safeStr(db.date),
     implementType: safeStr(db.implement_type, 'Disk'),
     notes: safeStr(db.notes),
-    seasonYear: safeNum(db.season_year, 2024),
+    seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
 });
@@ -305,7 +305,7 @@ export const mapSprayToDb = (r: SprayRecord) => {
         applicator_name: safeStr(r.applicatorName),
         license_number: safeStr(r.licenseNumber),
         epa_reg_number: safeStr(r.epaRegNumber),
-        season_year: safeNum(r.seasonYear, 2024),
+        season_year: safeNum(r.seasonYear, new Date().getFullYear()),
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
         wind_direction: safeStr(r.windDirection),
         relative_humidity: r.relativeHumidity != null ? safeNum(r.relativeHumidity) : null,

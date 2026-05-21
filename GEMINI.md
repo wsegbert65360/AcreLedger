@@ -61,6 +61,7 @@ Always preserve these rules from `AGENTS.md`:
 - Inputs have `id`, `name`, and linked labels.
 - Lucide icons that conflict with browser globals are aliased.
 - Negative grain movement bushels are valid correction values.
+- New records are stamped with `viewingSeason` (from `useFarm()`), not `activeSeason`.
 - Backup restore uses the current selected `farm_id` as authoritative.
 
 ## Blueprint Usage

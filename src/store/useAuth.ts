@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
-// Storage utilities for session persistence
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -23,17 +22,27 @@ export function useAuth() {
           const prefix = initialSession.user.id;
           let storedId: string | null = null;
           let storedSeason: string | null = null;
+          let storedViewingSeason: string | null = null;
           try {
             storedId = localStorage.getItem(`${prefix}_al_farm_id`);
             storedSeason = localStorage.getItem(`${prefix}_al_active_season`);
+            storedViewingSeason = localStorage.getItem(`${prefix}_al_viewing_season`);
           } catch (storageErr) {
             console.error('Local storage read failed during session bootstrap:', storageErr);
           }
           
           if (storedId) setFarmId(storedId);
           if (storedSeason) {
-            setActiveSeason(parseInt(storedSeason, 10));
-            setViewingSeason(parseInt(storedSeason, 10));
+            const active = parseInt(storedSeason, 10);
+            setActiveSeason(active);
+            let viewing = active;
+            if (storedViewingSeason) {
+              const parsedViewing = parseInt(storedViewingSeason, 10);
+              if (!isNaN(parsedViewing) && parsedViewing >= active - 10 && parsedViewing <= active + 1) {
+                viewing = parsedViewing;
+              }
+            }
+            setViewingSeason(viewing);
           }
 
           // Priority 2: JWT (Authoritative cloud path)
@@ -95,8 +104,25 @@ export function useAuth() {
               await supabase.auth.refreshSession();
             }
             if (profileData.active_season) {
-              setActiveSeason(profileData.active_season);
-              setViewingSeason(profileData.active_season);
+              const active = profileData.active_season;
+              setActiveSeason(active);
+
+              const prefix = session.user.id;
+              let storedViewingSeason: string | null = null;
+              try {
+                storedViewingSeason = localStorage.getItem(`${prefix}_al_viewing_season`);
+              } catch (storageErr) {
+                console.error('Local storage read failed during session sync:', storageErr);
+              }
+
+              let viewing = active;
+              if (storedViewingSeason) {
+                const parsedViewing = parseInt(storedViewingSeason, 10);
+                if (!isNaN(parsedViewing) && parsedViewing >= active - 10 && parsedViewing <= active + 1) {
+                  viewing = parsedViewing;
+                }
+              }
+              setViewingSeason(viewing);
             }
           }
         }

@@ -7,9 +7,7 @@ import { CalendarDays, Sprout } from 'lucide-react';
 export default function Sidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { activeSeason, viewingSeason, setViewingSeason } = useFarm();
-
-  const seasonOptions = [activeSeason, activeSeason - 1, activeSeason - 2];
+  const { activeSeason, viewingSeason, setViewingSeason, seasonOptions } = useFarm();
 
   return (
     <nav className="fixed left-0 top-0 bottom-0 w-60 z-30 bg-sidebar border-r border-sidebar-border flex-col hidden lg:flex print:hidden">

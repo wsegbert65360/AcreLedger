@@ -57,10 +57,10 @@ interface UseSeasonManagementArgs {
 
 const getCurrentYear = () => new Date().getFullYear();
 const MIN_SEASON_YEAR = 2000;
-const MAX_SEASON_YEAR = getCurrentYear() + 1;
 
 function isValidYear(year: number): boolean {
-  return Number.isInteger(year) && year >= MIN_SEASON_YEAR && year <= MAX_SEASON_YEAR;
+  const maxSeasonYear = new Date().getFullYear() + 1;
+  return Number.isInteger(year) && year >= MIN_SEASON_YEAR && year <= maxSeasonYear;
 }
 
 
@@ -83,8 +83,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
   // ─── Rollover ───────────────────────────────────────────────────────────────
 
   const rolloverToNewSeason = useCallback(async (year: number): Promise<boolean> => {
+    const maxSeasonYear = new Date().getFullYear() + 1;
     if (!isValidYear(year)) {
-      toast.error(`Invalid season year: ${year}. Must be between ${MIN_SEASON_YEAR} and ${MAX_SEASON_YEAR}.`);
+      toast.error(`Invalid season year: ${year}. Must be between ${MIN_SEASON_YEAR} and ${maxSeasonYear}.`);
       return false;
     }
 

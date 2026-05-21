@@ -66,6 +66,7 @@ export default function Reports() {
     activeSeason,
     viewingSeason,
     setViewingSeason,
+    seasonOptions,
   } = useFarm();
 
   const [tab, setTab] = useState<ReportTab>('fsa-plant');
@@ -77,17 +78,8 @@ export default function Reports() {
   // O(1) field lookup — built once per fields change, not per row
   const fieldMap = useMemo(() => buildFieldMap(fields), [fields]);
 
-  // Season selector options — memoized across all record arrays
-  const availableSeasons = useMemo(() => Array.from(new Set([
-    activeSeason,
-    ...allPlant.map(r => r.seasonYear),
-    ...allSpray.map(r => r.seasonYear),
-    ...allHarvest.map(r => r.seasonYear),
-    ...allHay.map(r => r.seasonYear),
-    ...allGrain.map(r => r.seasonYear),
-    ...allFertilizer.map(r => r.seasonYear),
-  ])).filter((y): y is number => !!y).sort((a, b) => b - a),
-  [activeSeason, allPlant, allSpray, allHarvest, allHay, allGrain, allFertilizer]);
+  // Season selector options — read directly from global farmStore context
+  const availableSeasons = seasonOptions;
 
   // Season-filtered record sets — memoized, sorted, non-mutating
   const plantRecords = useMemo(() =>

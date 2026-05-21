@@ -6,14 +6,14 @@ import { mapHarvestToDb } from '@/lib/mappers';
 
 interface UseHarvestRecordsArgs {
   farm_id: string | null;
-  activeSeason: number;
+  viewingSeason: number;
   setHarvestRecords: React.Dispatch<React.SetStateAction<HarvestRecord[]>>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useHarvestRecords({ farm_id, activeSeason, setHarvestRecords }: UseHarvestRecordsArgs) {
+export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords }: UseHarvestRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -36,7 +36,7 @@ export function useHarvestRecords({ farm_id, activeSeason, setHarvestRecords }: 
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: HarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
+    const newRecord: HarvestRecord = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapHarvestToDb>;
@@ -75,7 +75,7 @@ export function useHarvestRecords({ farm_id, activeSeason, setHarvestRecords }: 
       // Always release the guard
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, setHarvestRecords]);
+  }, [viewingSeason, farm_id, setHarvestRecords]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
 

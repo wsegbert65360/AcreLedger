@@ -6,7 +6,7 @@ import { mapFertilizerToDb } from '@/lib/mappers';
 
 interface UseFertilizerRecordsArgs {
   farm_id: string | null;
-  activeSeason: number;
+  viewingSeason: number;
   fields: Field[];
   setFertilizerApplications: React.Dispatch<React.SetStateAction<FertilizerApplication[]>>;
 }
@@ -16,7 +16,7 @@ type OpResult = boolean;
 
 // ─── Internal Helper Hooks ──────────────────────────────────────────────────
 
-function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerApplications }: UseFertilizerRecordsArgs) {
+function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerApplications }: UseFertilizerRecordsArgs) {
   const isAdding = useRef(false);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
@@ -43,7 +43,7 @@ function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerAp
       updated_at: now.toISOString(),
       deleted_at: null,
       fieldName: fieldsRef.current.find(f => f.id === r.fieldId)?.name || 'Unknown Field',
-      seasonYear: activeSeason
+      seasonYear: viewingSeason
     };
 
     let mapped: ReturnType<typeof mapFertilizerToDb>;
@@ -78,12 +78,12 @@ function useAddFertilizerRecord({ farm_id, activeSeason, fields, setFertilizerAp
     } finally {
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, setFertilizerApplications]);
+  }, [viewingSeason, farm_id, setFertilizerApplications]);
 
   return { addFertilizerApplication };
 }
 
-function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications }: Omit<UseFertilizerRecordsArgs, 'activeSeason'>) {
+function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications }: Omit<UseFertilizerRecordsArgs, 'viewingSeason'>) {
   const previousRef = useRef<FertilizerApplication | undefined>(undefined);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;

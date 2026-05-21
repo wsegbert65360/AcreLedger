@@ -83,6 +83,7 @@ export default function Activity() {
     activeSeason,
     viewingSeason,
     setViewingSeason,
+    seasonOptions,
     deleteGrainMovements,
     farmName
   } = useFarm();
@@ -210,7 +211,7 @@ export default function Activity() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[activeSeason, activeSeason - 1, activeSeason - 2].map(y => (
+                    {seasonOptions.map(y => (
                       <SelectItem key={y} value={y.toString()} className="font-mono text-xs">
                         {y} SEASON
                       </SelectItem>

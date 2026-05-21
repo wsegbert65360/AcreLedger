@@ -6,14 +6,14 @@ import { mapHayToDb } from '@/lib/mappers';
 
 interface UseHayRecordsArgs {
   farm_id: string | null;
-  activeSeason: number;
+  viewingSeason: number;
   setHayHarvestRecords: React.Dispatch<React.SetStateAction<HayHarvestRecord[]>>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: UseHayRecordsArgs) {
+export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords }: UseHayRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -36,7 +36,7 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: HayHarvestRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
+    const newRecord: HayHarvestRecord = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapHayToDb>;
@@ -75,7 +75,7 @@ export function useHayRecords({ farm_id, activeSeason, setHayHarvestRecords }: U
       // Always release the guard
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, setHayHarvestRecords]);
+  }, [viewingSeason, farm_id, setHayHarvestRecords]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
 

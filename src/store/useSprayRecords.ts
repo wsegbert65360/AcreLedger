@@ -8,7 +8,7 @@ import { mapSprayToDb } from '@/lib/mappers';
 
 interface UseSprayRecordsArgs {
   farm_id: string | null;
-  activeSeason: number;
+  viewingSeason: number;
   setSprayRecords: React.Dispatch<React.SetStateAction<SprayRecord[]>>;
 }
 
@@ -17,7 +17,7 @@ type OpResult = boolean;
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseSprayRecordsArgs) {
+export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords }: UseSprayRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -40,7 +40,7 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const newRecord: SprayRecord = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
+    const newRecord: SprayRecord = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapSprayToDb>;
@@ -76,7 +76,7 @@ export function useSprayRecords({ farm_id, activeSeason, setSprayRecords }: UseS
       // Always release the guard — even if supabase throws unexpectedly
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, setSprayRecords]);
+  }, [viewingSeason, farm_id, setSprayRecords]);
 
   // ─── Update ─────────────────────────────────────────────────────────────────
 

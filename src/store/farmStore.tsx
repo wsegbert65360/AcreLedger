@@ -59,6 +59,8 @@ interface FarmState {
   activeSeason: number;
   /** The season year currently being viewed/edited */
   viewingSeason: number;
+  /** Dynamically computed list of seasons for filtering/selection */
+  seasonOptions: number[];
   /** Method to change the currently viewed season */
   setViewingSeason: (year: number) => void;
   /** Method to transition the entire farm state to a new season */
@@ -179,6 +181,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setFetchError(false);
     try {
       const query = (table: string) => supabase.from(table).select('*').eq('farm_id', farm_id).is('deleted_at', null);
+      const orderedQuery = (table: string) => query(table).order('season_year', { ascending: false });
 
       const [
         { data: fieldsData, error: fieldsErr },
@@ -197,15 +200,16 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       ] = await Promise.all([
         query('fields'),
         query('bins'),
-        query('plant_records'),
-        query('spray_records'),
-        query('harvest_records'),
-        query('hay_harvest_records'),
+        orderedQuery('plant_records'),
+        orderedQuery('spray_records'),
+        orderedQuery('harvest_records'),
+        orderedQuery('hay_harvest_records'),
         supabase.from('fertilizer_applications')
           .select('*, fields(name)')
           .eq('farm_id', farm_id)
-          .is('deleted_at', null),
-        query('tillage_records'),
+          .is('deleted_at', null)
+          .order('season_year', { ascending: false }),
+        orderedQuery('tillage_records'),
         query('grain_movements'),
         query('saved_seeds'),
         query('fertilizer_recipes'),
@@ -271,16 +275,17 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveToStorage('al_f_recipes', fertilizerRecipes, session?.user?.id); }, [fertilizerRecipes, session?.user?.id]);
   useEffect(() => { saveToStorage('al_recipes', sprayRecipes, session?.user?.id); }, [sprayRecipes, session?.user?.id]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
+  useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
 
   // --- Compose CRUD hooks ---
-  const plantOps = usePlantRecords({ farm_id, activeSeason, setPlantRecords });
-  const sprayOps = useSprayRecords({ farm_id, activeSeason, setSprayRecords });
-  const harvestOps = useHarvestRecords({ farm_id, activeSeason, setHarvestRecords });
-  const hayOps = useHayRecords({ farm_id, activeSeason, setHayHarvestRecords });
-  const fertilizerOps = useFertilizerRecords({ farm_id, activeSeason, fields, setFertilizerApplications });
-  const tillageOps = useTillageRecords({ farm_id, activeSeason, setTillageRecords });
-  const grainOps = useGrainMovements({ farm_id, activeSeason, setGrainMovements });
+  const plantOps = usePlantRecords({ farm_id, viewingSeason, setPlantRecords });
+  const sprayOps = useSprayRecords({ farm_id, viewingSeason, setSprayRecords });
+  const harvestOps = useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords });
+  const hayOps = useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords });
+  const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, setFertilizerApplications });
+  const tillageOps = useTillageRecords({ farm_id, viewingSeason, setTillageRecords });
+  const grainOps = useGrainMovements({ farm_id, viewingSeason, setGrainMovements });
 
   const entityOps = useFieldsAndBins({
     farm_id, setFields, setBins,
@@ -308,6 +313,32 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [auth, seasonOps.clearLocalCache]);
 
   // --- Derived data ---
+  const seasonOptions = useMemo(() => {
+    const seasons = new Set<number>();
+    seasons.add(activeSeason);
+    seasons.add(activeSeason - 1);
+    seasons.add(activeSeason - 2);
+
+    plantRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+    sprayRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+    harvestRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+    hayHarvestRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+    fertilizerApplications.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+    tillageRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+    grainMovements.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+
+    return Array.from(seasons).sort((a, b) => b - a);
+  }, [
+    activeSeason,
+    plantRecords,
+    sprayRecords,
+    harvestRecords,
+    hayHarvestRecords,
+    fertilizerApplications,
+    tillageRecords,
+    grainMovements,
+  ]);
+
   const sortedFields = useMemo(() =>
     [...fields]
       .filter(f => !f.deleted_at)
@@ -349,7 +380,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       savedSeeds,
       fertilizerRecipes,
       sprayRecipes,
-      activeSeason, viewingSeason, setViewingSeason,
+      activeSeason, viewingSeason, seasonOptions, setViewingSeason,
       rolloverToNewSeason: seasonOps.rolloverToNewSeason,
       ...plantOps,
       ...sprayOps,

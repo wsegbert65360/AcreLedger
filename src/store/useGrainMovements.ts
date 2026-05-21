@@ -6,14 +6,14 @@ import { mapGrainToDb } from '@/lib/mappers';
 
 interface UseGrainMovementsArgs {
   farm_id: string | null;
-  activeSeason: number;
+  viewingSeason: number;
   setGrainMovements: React.Dispatch<React.SetStateAction<GrainMovement[]>>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useGrainMovements({ farm_id, activeSeason, setGrainMovements }: UseGrainMovementsArgs) {
+export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }: UseGrainMovementsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -36,7 +36,7 @@ export function useGrainMovements({ farm_id, activeSeason, setGrainMovements }: 
 
     const id = crypto.randomUUID();
     const timestamp = r.timestamp || Date.now();
-    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: activeSeason, deleted_at: null, farm_id };
+    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
 
     // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapGrainToDb>;
@@ -75,7 +75,7 @@ export function useGrainMovements({ farm_id, activeSeason, setGrainMovements }: 
       // Always release the guard
       isAdding.current = false;
     }
-  }, [activeSeason, farm_id, setGrainMovements]);
+  }, [viewingSeason, farm_id, setGrainMovements]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
 

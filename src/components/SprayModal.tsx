@@ -25,7 +25,7 @@ interface SprayModalProps {
 }
 
 export default function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
-  const { addSprayRecord, updateSprayRecord, sprayRecipes, session, activeSeason, farmName } = useFarm();
+  const { addSprayRecord, updateSprayRecord, sprayRecipes, session, viewingSeason, farmName } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -395,7 +395,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         isPremixed,
         nonCompliant: !isFullyCompliant,
         deleted_at: null,
-        seasonYear: activeSeason,
+        seasonYear: viewingSeason,
       };
 
       let success = false;
@@ -420,9 +420,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-spray font-bold">
-            <CloudRain size={20} />
-            {initialData ? 'Edit' : 'Spray Application'} — {field.name}
+          <DialogTitle className="flex items-center flex-wrap gap-2 text-spray font-bold">
+            <div className="flex items-center gap-2">
+              <CloudRain size={20} />
+              <span>{initialData ? 'Edit' : 'Spray Application'} — {field.name}</span>
+            </div>
+            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
+              {initialData ? initialData.seasonYear : viewingSeason} Season
+            </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
             {initialData ? 'Update the details of this spray application.' : 'Log a new pesticide or fertilizer spray application for this field.'}

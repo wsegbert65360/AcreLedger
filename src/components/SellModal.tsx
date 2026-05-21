@@ -65,9 +65,14 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
         <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-harvest/30 max-w-sm">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-harvest font-bold text-lg">
-                        <Banknote size={24} />
-                        Sell Harvest — {bin.name}
+                    <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest font-bold text-lg">
+                        <div className="flex items-center gap-2">
+                            <Banknote size={24} />
+                            <span>Sell Harvest — {bin.name}</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+                            {viewingSeason} Season
+                        </span>
                     </DialogTitle>
                     <DialogDescription className="sr-only">
                         Record a grain sale from a specific bin.

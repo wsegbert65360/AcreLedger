@@ -18,7 +18,7 @@ interface HayModalProps {
 }
 
 export default function HayModal({ field, open, onClose, initialData }: HayModalProps) {
-    const { addHayHarvestRecord, updateHayHarvestRecord } = useFarm();
+    const { addHayHarvestRecord, updateHayHarvestRecord, viewingSeason } = useFarm();
     const [baleCount, setBaleCount] = useState(initialData?.baleCount.toString() || '');
     const [cuttingNumber, setCuttingNumber] = useState(initialData?.cuttingNumber.toString() || '1');
     const [baleType, setBaleType] = useState<'Round' | 'Square'>(initialData?.baleType || 'Round');
@@ -110,9 +110,14 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
         <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-harvest/30 max-w-sm max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-harvest font-bold uppercase tracking-tight">
-                        <Tractor size={20} />
-                        Hay/Forage — {field.name}
+                    <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest font-bold uppercase tracking-tight">
+                        <div className="flex items-center gap-2">
+                            <Tractor size={20} />
+                            <span>Hay/Forage — {field.name}</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20 normal-case tracking-normal">
+                            {initialData ? initialData.seasonYear : viewingSeason} Season
+                        </span>
                     </DialogTitle>
                     <DialogDescription className="sr-only">
                         Log a new hay or forage harvest record.

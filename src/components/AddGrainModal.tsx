@@ -15,7 +15,7 @@ interface AddGrainModalProps {
 }
 
 export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps) {
-    const { addGrainMovement } = useFarm();
+    const { addGrainMovement, viewingSeason } = useFarm();
     const [bushels, setBushels] = useState('');
     const [moisture, setMoisture] = useState('15.0');
     const [source, setSource] = useState('');
@@ -60,9 +60,14 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
         <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-harvest/30 max-w-sm">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-harvest font-bold text-lg">
-                        <Plus size={24} className="bg-harvest/20 rounded p-1" />
-                        Add Grain — {bin.name}
+                    <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest font-bold text-lg">
+                        <div className="flex items-center gap-2">
+                            <Plus size={24} className="bg-harvest/20 rounded p-1" />
+                            <span>Add Grain — {bin.name}</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+                            {viewingSeason} Season
+                        </span>
                     </DialogTitle>
                     <DialogDescription className="sr-only">
                         Add grain inventory to a specific bin.
