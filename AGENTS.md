@@ -10,7 +10,7 @@ Use this file as the first-read instruction layer. Use `BLUEPRINT.md` as the ful
 
 AcreLedger is a mobile-first, PWA-ready agricultural record keeping and compliance reporting app for row-crop farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports.
 
-The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Postgres/Auth/RLS, React Context state, shadcn/ui, Tailwind CSS, Lucide React, Sonner, Zod, Visual Crossing weather, and IEM Stage IV rainfall integration.
+The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Postgres/Auth/RLS, React Context state, shadcn/ui, Tailwind CSS, Lucide React, Sonner, Zod, Visual Crossing weather, IEM Stage IV rainfall integration, and **Capacitor 6 for native iOS wrapper and device capabilities**.
 
 ## Context Loading Rules
 
@@ -29,6 +29,10 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/types/farm.ts` — canonical TypeScript entity definitions.
 - `@/lib/mappers.ts` — entity to database row translation.
 - `farmStore.tsx` — global React Context store and CRUD actions.
+- `@/lib/native.ts` — centralized native capabilities (haptics, status bar, geolocation).
+- `@/lib/syncQueue.ts` — local sync queue and transaction retry engine for offline operation.
+- `@/lib/offlineStorage.ts` — offline persistent key-value store.
+- `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
 - `@/lib/complianceReports` — report generation.
 - `@/lib/sprayExport.ts` — universal spray log PDF export.
 - `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
@@ -124,6 +128,16 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Do not hydrate React state directly from raw backup arrays.
 - Normalize restored records first.
 - If the restore RPC fails, do not mutate React state.
+
+### Native & Offline Capability
+
+- **Web Compatibility**: The codebase is a shared web/native hybrid. Never call Capacitor plugins unconditionally. All native device APIs must check `Capacitor.isNativePlatform()` or use `@/lib/native.ts` wrappers.
+- **Offline Operations**: Mutations must support offline caching. The app automatically pushes sync actions to a local queue when offline (`@/lib/syncQueue.ts`), saving them locally (`@/lib/offlineStorage.ts`) and auto-replaying them upon connection restoration or app foreground resume.
+- **Haptic Feedback**: Trigger native haptic feedback on major user interactions:
+  - Navigation tab taps: light haptic feedback.
+  - Record save/validation success: success notification haptic.
+  - Form validation failure: error notification haptic.
+- **Layout Insets**: Use CSS env safe-area variables for header and bottom navigation spacing to prevent content overlaps on notched screens (e.g. Dynamic Island).
 
 ## UI and Component Rules
 
