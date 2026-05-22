@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { Field, HarvestRecord } from '@/types/farm';
+import { native } from '@/lib/native';
 import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -71,8 +72,14 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
     const m = parseFloat(moisture);
     const ls = parseFloat(landlordSplit);
     const bu = parseFloat(bushels);
-    if (isNaN(m) || isNaN(ls) || isNaN(bu) || !destination) return;
-    if (destination === 'bin' && !binId) return;
+    if (isNaN(m) || isNaN(ls) || isNaN(bu) || !destination) {
+      native.haptic.error();
+      return;
+    }
+    if (destination === 'bin' && !binId) {
+      native.haptic.error();
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -95,6 +102,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
         success = await updateHarvestRecord({ ...initialData, ...harvestData });
         if (!success) {
           toast.error('Failed to update harvest record.');
+          native.haptic.error();
           return;
         }
 
@@ -116,6 +124,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
             });
             if (!gmSuccess) {
               toast.error('Harvest saved but grain movement update failed.');
+              native.haptic.error();
               return;
             }
           }
@@ -132,6 +141,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
           });
           if (!gmSuccess) {
             toast.error('Harvest saved but grain movement addition failed.');
+            native.haptic.error();
             return;
           }
         }
@@ -139,6 +149,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
         success = await addHarvestRecord(harvestData);
         if (!success) {
           toast.error('Failed to save harvest record.');
+          native.haptic.error();
           return;
         }
 
@@ -155,16 +166,19 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
           });
           if (!gmSuccess) {
             toast.error('Harvest saved but grain movement addition failed.');
+            native.haptic.error();
             return;
           }
         }
       }
 
+      native.haptic.success();
       reset();
       onClose();
     } catch (err) {
       console.error('Submission error:', err);
       toast.error('An unexpected error occurred while saving.');
+      native.haptic.error();
     } finally {
       setIsSaving(false);
     }

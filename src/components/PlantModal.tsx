@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+
+import { native } from '@/lib/native';
+
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,7 +49,10 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   }, [initialData, field, open]);
 
   const handleSubmit = async () => {
-    if (!seedVariety.trim()) return;
+    if (!seedVariety.trim()) {
+      native.haptic.error();
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -76,16 +82,20 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       }
 
       if (success) {
+        native.haptic.success();
         if (!initialData) {
           setSeedVariety('');
           setCrop('');
           setIntendedUse('');
         }
         onClose();
+      } else {
+        native.haptic.error();
       }
     } catch (err) {
       console.error('Submission error:', err);
       toast.error('An unexpected error occurred while saving.');
+      native.haptic.error();
     } finally {
       setIsSaving(false);
     }

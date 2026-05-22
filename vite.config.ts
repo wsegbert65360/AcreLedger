@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
+      disable: mode === "capacitor",
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.js',

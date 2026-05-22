@@ -67,6 +67,7 @@ describe('Restore Performance Benchmark', () => {
             tillageRecords: [],
             activeSeason: 2024,
             refetchFarmData: vi.fn().mockResolvedValue(true),
+            isOnline: true,
         };
     });
 

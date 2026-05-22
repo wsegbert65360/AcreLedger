@@ -1,16 +1,20 @@
 import { useState, useCallback, useEffect } from 'react';
+
+import { MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useFarm } from '@/store/farmStore';
-import { Field } from '@/types/farm';
-import { MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
 
 // Leaflet & GIS
 import { MapContainer, TileLayer, Marker, Polygon, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
+
+import { native } from '@/lib/native';
+import { useFarm } from '@/store/farmStore';
+import { Field } from '@/types/farm';
 import { calculateAcreage } from '@/lib/gisService';
 
 // Fix for default marker icon in Vite
@@ -103,16 +107,14 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
   // Attempt Geolocation on Mount if no field is being edited
   useEffect(() => {
-    if (!editField && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
+    if (!editField) {
+      native.geolocation.getCurrentPosition({ enableHighAccuracy: true })
+        .then((pos) => {
           const newCenter: [number, number] = [pos.coords.latitude, pos.coords.longitude];
           setMapCenter(newCenter);
           setMapZoom(15);
-        },
-        (err) => console.warn('Geolocation error:', err),
-        { enableHighAccuracy: true }
-      );
+        })
+        .catch((err) => console.warn('Geolocation error:', err));
     }
   }, [editField]);
 
@@ -145,12 +147,21 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
   const handleSubmit = async () => {
     const ac = parseFloat(acreage);
-    if (!name.trim() || isNaN(ac) || ac <= 0) return;
+    if (!name.trim() || isNaN(ac) || ac <= 0) {
+      native.haptic.error();
+      return;
+    }
     // lat/lng may be null if geocoding skipped (BLUEPRINT)
     const la = lat.trim() === '' ? null : parseFloat(lat);
     const ln = lng.trim() === '' ? null : parseFloat(lng);
-    if (la !== null && (isNaN(la) || la < -90 || la > 90)) return;
-    if (ln !== null && (isNaN(ln) || ln < -180 || ln > 180)) return;
+    if (la !== null && (isNaN(la) || la < -90 || la > 90)) {
+      native.haptic.error();
+      return;
+    }
+    if (ln !== null && (isNaN(ln) || ln < -180 || ln > 180)) {
+      native.haptic.error();
+      return;
+    }
 
     let boundary: { type: 'Polygon'; coordinates: number[][][] } | null = null;
     if (points.length >= 3) {
@@ -193,8 +204,13 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         success = await addField(newField);
       }
       if (success) {
+        native.haptic.success();
         onClose();
+      } else {
+        native.haptic.error();
       }
+    } catch (e) {
+      native.haptic.error();
     } finally {
       setIsSaving(false);
     }

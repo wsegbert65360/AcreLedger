@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { GrainMovement } from '@/types/farm';
+import { native } from '@/lib/native';
 import { Warehouse, ArrowUpRight, ArrowDownLeft, Calendar, AlertTriangle } from 'lucide-react';
 
 interface GrainMovementModalProps {
@@ -56,11 +57,15 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
   };
 
   const handleSubmit = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      native.haptic.error();
+      return;
+    }
 
     const bin = bins.find(b => b.id === binId);
     if (!bin) {
       setErrors({ binId: 'Selected bin no longer exists. Please choose another.' });
+      native.haptic.error();
       return;
     }
 
@@ -78,8 +83,14 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
       });
 
       if (success) {
+        native.haptic.success();
         onClose();
+      } else {
+        native.haptic.error();
       }
+    } catch (err) {
+      console.error('Update error:', err);
+      native.haptic.error();
     } finally {
       setIsSaving(false);
     }

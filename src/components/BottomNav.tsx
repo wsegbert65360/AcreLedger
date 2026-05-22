@@ -1,5 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+
+import { native } from '@/lib/native';
+
 import { navTabs } from './navConfig';
 
 export default function BottomNav() {
@@ -14,7 +17,10 @@ export default function BottomNav() {
           return (
             <button
               key={path}
-              onClick={() => navigate(path)}
+              onClick={() => {
+                native.haptic.light();
+                navigate(path);
+              }}
               className={`relative touch-target flex flex-col items-center justify-center gap-0.5 py-3 px-3 transition-colors ${active ? 'text-primary' : 'text-muted-foreground'
                 }`}
               aria-label={label}

@@ -1,23 +1,30 @@
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+
+import { App as CapApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+
+import { Auth } from "@/components/Auth";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import OfflineBanner from "@/components/OfflineBanner";
+import SeasonRolloverModal from "@/components/SeasonRolloverModal";
+import Sidebar from "@/components/Sidebar";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { syncQueue } from "@/lib/syncQueue";
 import { FarmProvider, useFarm } from "@/store/farmStore";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import { Auth } from "@/components/Auth";
-import SeasonRolloverModal from "@/components/SeasonRolloverModal";
+
+import Activity from "./pages/Activity";
+import FieldDetailScreen from "./pages/FieldDetailScreen";
 import Index from "./pages/Index";
 import Logistics from "./pages/Logistics";
-import Activity from "./pages/Activity";
+import NotFound from "./pages/NotFound";
+import Privacy from "./pages/Privacy";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
-import Privacy from "./pages/Privacy";
-import NotFound from "./pages/NotFound";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import Sidebar from "@/components/Sidebar";
-import OfflineBanner from "@/components/OfflineBanner";
-import { AnimatePresence, motion } from "framer-motion";
-import FieldDetailScreen from "./pages/FieldDetailScreen";
 import Weather from "./pages/Weather";
 
 const queryClient = new QueryClient();
@@ -63,7 +70,26 @@ const AnimatedRoutes = () => {
 };
 
 const AppContent = () => {
-  const { session, loading } = useFarm();
+  const { session, loading, isOnline, farm_id } = useFarm();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let active = true;
+    const listenerPromise = CapApp.addListener('appStateChange', (state) => {
+      if (!active) return;
+      console.log('App state changed:', state.isActive ? 'active' : 'inactive');
+      if (state.isActive && isOnline && farm_id) {
+        console.log('App active, triggering sync queue replay.');
+        syncQueue.replayQueue(farm_id);
+      }
+    });
+
+    return () => {
+      active = false;
+      listenerPromise.then((handle) => handle.remove());
+    };
+  }, [isOnline, farm_id]);
 
   if (loading) {
     return (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { TillageRecord, Field } from '@/types/farm';
+import { native } from '@/lib/native';
 import { Tractor, Calendar, PenTool, Loader2, Info, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -68,11 +69,15 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
             }
 
             if (success) {
+                native.haptic.success();
                 onClose();
+            } else {
+                native.haptic.error();
             }
         } catch (err) {
             console.error('Submission error:', err);
             toast.error('An unexpected error occurred while saving.');
+            native.haptic.error();
         } finally {
             setIsSaving(false);
         }

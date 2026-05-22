@@ -3,17 +3,20 @@ import { HayHarvestRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapHayToDb } from '@/lib/mappers';
+import { syncQueue } from '@/lib/syncQueue';
 
 interface UseHayRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
   setHayHarvestRecords: React.Dispatch<React.SetStateAction<HayHarvestRecord[]>>;
+  isOnline: boolean;
+  onMutation: () => void | Promise<void>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords }: UseHayRecordsArgs) {
+export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, isOnline, onMutation }: UseHayRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -52,6 +55,22 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords }: 
 
     // Optimistic add
     setHayHarvestRecords(prev => [...prev, newRecord]);
+
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('hay_harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Hay harvest recorded offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue hay harvest record offline:', err);
+        setHayHarvestRecords(prev => prev.filter(rec => rec.id !== id));
+        toast.error('Failed to save record offline.');
+        return false;
+      } finally {
+        isAdding.current = false;
+      }
+    }
 
     try {
       const { error } = await supabase
@@ -101,6 +120,25 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords }: 
       previousRef.current = prev.find(item => item.id === r.id);
       return prev.map(item => item.id === r.id ? r : item);
     });
+
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('hay_harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Hay record updated offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue hay harvest record update offline:', err);
+        const previous = previousRef.current;
+        if (previous) {
+          setHayHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
+        } else {
+          setHayHarvestRecords(prev => prev.filter(item => item.id !== r.id));
+        }
+        toast.error('Failed to update record offline.');
+        return false;
+      }
+    }
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
@@ -153,6 +191,32 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords }: 
         .filter(({ record }) => ids.includes(record.id));
       return prev.filter(r => !ids.includes(r.id));
     });
+
+    if (!isOnline) {
+      try {
+        const deletedAt = new Date().toISOString();
+        for (const id of ids) {
+          await syncQueue.enqueueMutation('hay_harvest_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+        }
+        if (onMutation) await onMutation();
+        const count = ids.length;
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue hay harvest record delete offline:', err);
+        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        setHayHarvestRecords(prev => {
+          const restored = [...prev];
+          for (const { record, index } of snapshot) {
+            const insertAt = Math.min(index, restored.length);
+            restored.splice(insertAt, 0, record);
+          }
+          return restored;
+        });
+        toast.error('Failed to delete records offline.');
+        return false;
+      }
+    }
 
     const { data, error } = await supabase
       .from('hay_harvest_records')

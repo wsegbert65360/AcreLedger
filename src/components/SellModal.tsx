@@ -1,12 +1,16 @@
 import { useState } from 'react';
+
+import { Banknote, Truck, Hash, Calendar } from 'lucide-react';
+
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
 import { Bin } from '@/types/farm';
 import { parseLocalDate } from '@/utils/dates';
-import { Banknote, Truck, Hash, Calendar } from 'lucide-react';
 
 interface SellModalProps {
     bin: Bin;
@@ -29,7 +33,10 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
         const amount = parseFloat(bushels);
         const p = parseFloat(price);
         const m = parseFloat(moisture) || 15.0;
-        if (isNaN(amount) || amount <= 0) return;
+        if (isNaN(amount) || amount <= 0 || amount > currentInventory) {
+            native.haptic.error();
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -50,12 +57,17 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
             });
 
             if (success) {
+                native.haptic.success();
                 setBushels('');
                 setPrice('');
                 setMoisture('');
                 setDestination('');
                 onClose();
+            } else {
+                native.haptic.error();
             }
+        } catch (error) {
+            native.haptic.error();
         } finally {
             setIsSaving(false);
         }

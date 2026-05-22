@@ -3,17 +3,20 @@ import { GrainMovement } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapGrainToDb } from '@/lib/mappers';
+import { syncQueue } from '@/lib/syncQueue';
 
 interface UseGrainMovementsArgs {
   farm_id: string | null;
   viewingSeason: number;
   setGrainMovements: React.Dispatch<React.SetStateAction<GrainMovement[]>>;
+  isOnline: boolean;
+  onMutation: () => void | Promise<void>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }: UseGrainMovementsArgs) {
+export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, isOnline, onMutation }: UseGrainMovementsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -53,6 +56,22 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }:
     // Optimistic add
     setGrainMovements(prev => [...prev, newRecord]);
 
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('grain_movements', 'insert', { ...mapped, farm_id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Grain movement recorded offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue grain movement offline:', err);
+        setGrainMovements(prev => prev.filter(rec => rec.id !== id));
+        toast.error('Failed to record movement offline.');
+        return false;
+      } finally {
+        isAdding.current = false;
+      }
+    }
+
     try {
       const { error } = await supabase
         .from('grain_movements')
@@ -75,7 +94,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }:
       // Always release the guard
       isAdding.current = false;
     }
-  }, [viewingSeason, farm_id, setGrainMovements]);
+  }, [viewingSeason, farm_id, setGrainMovements, isOnline, onMutation]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
 
@@ -113,6 +132,20 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }:
     const { farm_id: _f, id: _i, ...payload } = mapped;
     const previousTimestampIso = new Date(previous.timestamp).toISOString();
 
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('grain_movements', 'update', { ...mapped, id: r.id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Grain movement updated offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue grain movement update offline:', err);
+        setGrainMovements(prev => prev.map(item => item.id === r.id ? previous : item));
+        toast.error('Failed to update record offline.');
+        return false;
+      }
+    }
+
     const { data, error } = await supabase
       .from('grain_movements')
       .update(payload)
@@ -140,7 +173,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }:
 
     toast.success('Grain movement updated.');
     return true;
-  }, [farm_id, setGrainMovements]);
+  }, [farm_id, setGrainMovements, isOnline, onMutation]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
 
@@ -160,6 +193,32 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }:
         .filter(({ record }) => ids.includes(record.id));
       return prev.filter(r => !ids.includes(r.id));
     });
+
+    if (!isOnline) {
+      try {
+        const deletedAt = new Date().toISOString();
+        for (const id of ids) {
+          await syncQueue.enqueueMutation('grain_movements', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+        }
+        if (onMutation) await onMutation();
+        const count = ids.length;
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue grain movements delete offline:', err);
+        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        setGrainMovements(prev => {
+          const restored = [...prev];
+          for (const { record, index } of snapshot) {
+            const insertAt = Math.min(index, restored.length);
+            restored.splice(insertAt, 0, record);
+          }
+          return restored;
+        });
+        toast.error('Failed to delete records offline.');
+        return false;
+      }
+    }
 
     const { data, error } = await supabase
       .from('grain_movements')
@@ -195,7 +254,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements }:
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
-  }, [farm_id, setGrainMovements]);
+  }, [farm_id, setGrainMovements, isOnline, onMutation]);
 
   return { addGrainMovement, updateGrainMovement, deleteGrainMovements };
 }

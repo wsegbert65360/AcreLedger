@@ -20,6 +20,9 @@ import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
 import { useSeasonManagement } from './useSeasonManagement';
 import { useTillageRecords } from './useTillageRecords';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { offlineStorage } from '../lib/offlineStorage';
+import { syncQueue } from '../lib/syncQueue';
 
 /**
  * Represents the global state and operations for the AcreLedger application.
@@ -27,6 +30,10 @@ import { useTillageRecords } from './useTillageRecords';
 interface FarmState {
   /** Current user session from Supabase */
   session: Session | null | undefined;
+  /** Whether the device is online */
+  isOnline: boolean;
+  /** Number of pending operations in the sync queue */
+  pendingSyncCount: number;
   /** Global loading state for data fetching */
   loading: boolean;
   /** Global error state for data fetching */
@@ -155,28 +162,72 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [fertilizerRecipes, setFertilizerRecipes] = useState<FertilizerRecipe[]>([]);
   const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>([]);
 
+  // --- Network & Offline State ---
+  const { isOnline } = useNetworkStatus();
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  const updatePendingSyncCount = useCallback(async () => {
+    if (farm_id) {
+      const count = await syncQueue.getPendingCount(farm_id);
+      setPendingSyncCount(count);
+    } else {
+      setPendingSyncCount(0);
+    }
+  }, [farm_id]);
+
+  useEffect(() => {
+    updatePendingSyncCount();
+  }, [farm_id, updatePendingSyncCount]);
+
   // Hydrate local cache only after auth state is resolved.
   useEffect(() => {
     if (session === undefined) return;
 
     const userId = session?.user?.id ?? null;
-    setFields(loadFromStorage('al_fields', [], userId));
-    setBins(loadFromStorage('al_bins', [], userId));
-    setPlantRecords(loadFromStorage('al_plant', [], userId));
-    setSprayRecords(loadFromStorage('al_spray', [], userId));
-    setHarvestRecords(loadFromStorage('al_harvest', [], userId));
-    setHayHarvestRecords(loadFromStorage('al_hay', [], userId));
-    setFertilizerApplications(loadFromStorage('al_fertilizer', [], userId));
-    setTillageRecords(loadFromStorage('al_tillage', [], userId));
-    setGrainMovements(loadFromStorage('al_grain', [], userId));
-    setSavedSeeds(loadFromStorage('al_seeds', [], userId));
-    setFertilizerRecipes(loadFromStorage('al_f_recipes', [], userId));
-    setSprayRecipes(loadFromStorage('al_recipes', [], userId));
-  }, [session?.user?.id, session]);
+    const hydrateCache = async () => {
+      try {
+        const [
+          fieldsData, binsData, plantData, sprayData, harvestData, hayData,
+          fertilizerData, tillageData, grainData, seedsData, fertilizerRecipesData, recipesData
+        ] = await Promise.all([
+          offlineStorage.loadCache('fields', userId),
+          offlineStorage.loadCache('bins', userId),
+          offlineStorage.loadCache('plant_records', userId),
+          offlineStorage.loadCache('spray_records', userId),
+          offlineStorage.loadCache('harvest_records', userId),
+          offlineStorage.loadCache('hay_harvest_records', userId),
+          offlineStorage.loadCache('fertilizer_applications', userId),
+          offlineStorage.loadCache('tillage_records', userId),
+          offlineStorage.loadCache('grain_movements', userId),
+          offlineStorage.loadCache('saved_seeds', userId),
+          offlineStorage.loadCache('fertilizer_recipes', userId),
+          offlineStorage.loadCache('spray_recipes', userId)
+        ]);
+
+        if (fieldsData) setFields(fieldsData);
+        if (binsData) setBins(binsData);
+        if (plantData) setPlantRecords(plantData);
+        if (sprayData) setSprayRecords(sprayData);
+        if (harvestData) setHarvestRecords(harvestData);
+        if (hayData) setHayHarvestRecords(hayData);
+        if (fertilizerData) setFertilizerApplications(fertilizerData);
+        if (tillageData) setTillageRecords(tillageData);
+        if (grainData) setGrainMovements(grainData);
+        if (seedsData) setSavedSeeds(seedsData);
+        if (fertilizerRecipesData) setFertilizerRecipes(fertilizerRecipesData);
+        if (recipesData) setSprayRecipes(recipesData);
+      } catch (err) {
+        console.error('Failed to hydrate store from offline cache:', err);
+      }
+    };
+    hydrateCache();
+    updatePendingSyncCount();
+  }, [session?.user?.id, session, updatePendingSyncCount]);
 
   // --- Fetch data when farm_id is stable ---
   const fetchData = useCallback(async (): Promise<boolean> => {
     if (!session || !farm_id) return false;
+    if (!isOnline) return true;
     setLoading(true);
     setFetchError(false);
     try {
@@ -262,36 +313,52 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id, farm_id]);
 
   // --- Local storage persistence ---
-  useEffect(() => { saveToStorage('al_fields', fields, session?.user?.id); }, [fields, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_bins', bins, session?.user?.id); }, [bins, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_plant', plantRecords, session?.user?.id); }, [plantRecords, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_spray', sprayRecords, session?.user?.id); }, [sprayRecords, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_harvest', harvestRecords, session?.user?.id); }, [harvestRecords, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_hay', hayHarvestRecords, session?.user?.id); }, [hayHarvestRecords, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_fertilizer', fertilizerApplications, session?.user?.id); }, [fertilizerApplications, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_tillage', tillageRecords, session?.user?.id); }, [tillageRecords, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_grain', grainMovements, session?.user?.id); }, [grainMovements, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_seeds', savedSeeds, session?.user?.id); }, [savedSeeds, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_f_recipes', fertilizerRecipes, session?.user?.id); }, [fertilizerRecipes, session?.user?.id]);
-  useEffect(() => { saveToStorage('al_recipes', sprayRecipes, session?.user?.id); }, [sprayRecipes, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('fields', session.user.id, fields); } }, [fields, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('bins', session.user.id, bins); } }, [bins, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('plant_records', session.user.id, plantRecords); } }, [plantRecords, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('spray_records', session.user.id, sprayRecords); } }, [sprayRecords, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('harvest_records', session.user.id, harvestRecords); } }, [harvestRecords, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('hay_harvest_records', session.user.id, hayHarvestRecords); } }, [hayHarvestRecords, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('fertilizer_applications', session.user.id, fertilizerApplications); } }, [fertilizerApplications, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('tillage_records', session.user.id, tillageRecords); } }, [tillageRecords, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('grain_movements', session.user.id, grainMovements); } }, [grainMovements, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('saved_seeds', session.user.id, savedSeeds); } }, [savedSeeds, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('fertilizer_recipes', session.user.id, fertilizerRecipes); } }, [fertilizerRecipes, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('spray_recipes', session.user.id, sprayRecipes); } }, [sprayRecipes, session?.user?.id]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
 
+  // --- Reconnect Queue Replay ---
+  useEffect(() => {
+    if (isOnline && farm_id) {
+      const runReplay = async () => {
+        const success = await syncQueue.replayQueue(farm_id);
+        if (success) {
+          fetchData();
+        }
+        updatePendingSyncCount();
+      };
+      runReplay();
+    }
+  }, [isOnline, farm_id, fetchData, updatePendingSyncCount]);
+
   // --- Compose CRUD hooks ---
-  const plantOps = usePlantRecords({ farm_id, viewingSeason, setPlantRecords });
-  const sprayOps = useSprayRecords({ farm_id, viewingSeason, setSprayRecords });
-  const harvestOps = useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords });
-  const hayOps = useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords });
-  const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, setFertilizerApplications });
-  const tillageOps = useTillageRecords({ farm_id, viewingSeason, setTillageRecords });
-  const grainOps = useGrainMovements({ farm_id, viewingSeason, setGrainMovements });
+  const plantOps = usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnline, onMutation: updatePendingSyncCount });
+  const sprayOps = useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnline, onMutation: updatePendingSyncCount });
+  const harvestOps = useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
+  const hayOps = useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
+  const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, setFertilizerApplications, isOnline, onMutation: updatePendingSyncCount });
+  const tillageOps = useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
+  const grainOps = useGrainMovements({ farm_id, viewingSeason, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
 
   const entityOps = useFieldsAndBins({
     farm_id, setFields, setBins,
     setSavedSeeds, 
     setFertilizerRecipes,
-    setSprayRecipes
+    setSprayRecipes,
+    isOnline,
+    onMutation: updatePendingSyncCount
   });
 
   const seasonOps = useSeasonManagement({
@@ -304,12 +371,13 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
     refetchFarmData: fetchData,
+    isOnline,
   });
 
   // --- Composed signOut (auth + cache clear) ---
   const signOut = useCallback(async () => {
     await auth.signOut();
-    seasonOps.clearLocalCache();
+    await seasonOps.clearLocalCache();
   }, [auth, seasonOps.clearLocalCache]);
 
   // --- Derived data ---
@@ -370,7 +438,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   return (
     <FarmContext.Provider value={{
-      session, loading, fetchError,
+      session, isOnline, pendingSyncCount, loading, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords,

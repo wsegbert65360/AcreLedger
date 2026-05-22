@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
 import { setStorageLock } from './storageUtils';
+import { offlineStorage } from '@/lib/offlineStorage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ interface UseSeasonManagementArgs {
   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
   /** Reload all farm entities from Supabase after restore (source of truth). */
   refetchFarmData: () => Promise<boolean>;
+  isOnline: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -78,11 +80,17 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setTillageRecords, setFarmId,
     refetchFarmData,
+    isOnline,
   } = args;
 
   // ─── Rollover ───────────────────────────────────────────────────────────────
 
   const rolloverToNewSeason = useCallback(async (year: number): Promise<boolean> => {
+    if (!isOnline) {
+      toast.error('Season rollover is not available offline. Please connect to the internet.');
+      return false;
+    }
+
     const maxSeasonYear = new Date().getFullYear() + 1;
     if (!isValidYear(year)) {
       toast.error(`Invalid season year: ${year}. Must be between ${MIN_SEASON_YEAR} and ${maxSeasonYear}.`);
@@ -139,6 +147,11 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
   // ─── Restore ────────────────────────────────────────────────────────────────
 
   const restoreFromBackup = useCallback(async (rawData: unknown): Promise<boolean> => {
+    if (!isOnline) {
+      toast.error('Backup restore is not available offline. Please connect to the internet.');
+      return false;
+    }
+
     if (!farm_id) {
       toast.error('Cannot restore: no farm selected.');
       return false;
@@ -220,11 +233,17 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
   // ─── Clear Cache ─────────────────────────────────────────────────────────────
 
-  const clearLocalCache = useCallback(() => {
+  const clearLocalCache = useCallback(async () => {
     setStorageLock(true);
     
     const userId = session?.user?.id;
     const userPrefix = userId ? `${userId}_al_` : null;
+
+    try {
+      await offlineStorage.clearCache(userId);
+    } catch (err) {
+      console.error('Failed to clear SQLite cache:', err);
+    }
 
     const keysToRemove = Object.keys(localStorage).filter(key =>
       key.startsWith('al_') || (userPrefix && key.startsWith(userPrefix))

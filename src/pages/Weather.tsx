@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+import { native } from '@/lib/native';
+import { useFarm } from '@/store/farmStore';
 import { WeatherService } from '@/services/WeatherService';
 import { ExtendedWeatherData } from '@/types/weather';
-import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import RadarEmbed from '@/components/weather/RadarEmbed';
 import ForecastGrid from '@/components/weather/ForecastGrid';
@@ -34,7 +36,7 @@ function formatTime(): string {
 /**
  * Resolve coordinates for weather + radar.
  * Priority:
- *   1. Browser GPS (navigator.geolocation)
+ *   1. Browser GPS (native.geolocation)
  *   2. First field with lat/lng
  *   3. Parse from saved zip (if it's already coords like "38.46,-93.53")
  * Falls back to zip string for weather API only (no radar).
@@ -50,28 +52,22 @@ function resolveCoords(
 
   // Browser GPS is only requested when no saved location or field coords exist.
   return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      return resolve(fallback);
-    }
-
     const timeoutId = setTimeout(() => {
       // GPS took too long — use fallback
       resolve(fallback);
     }, 5000);
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
+    native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000 })
+      .then((pos) => {
         clearTimeout(timeoutId);
         const lat = Math.round(pos.coords.latitude * 10000) / 10000;
         const lng = Math.round(pos.coords.longitude * 10000) / 10000;
         resolve({ lat, lng, locationString: `${lat},${lng}` });
-      },
-      () => {
+      })
+      .catch(() => {
         clearTimeout(timeoutId);
         resolve(fallback);
-      },
-      { enableHighAccuracy: false, timeout: 4000 },
-    );
+      });
   });
 }
 

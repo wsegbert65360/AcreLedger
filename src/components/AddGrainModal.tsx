@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFarm } from '@/store/farmStore';
 import { Bin } from '@/types/farm';
+import { native } from '@/lib/native';
 import { parseLocalDate } from '@/utils/dates';
 import { Warehouse, Plus, Hash, Calendar } from 'lucide-react';
 
@@ -26,8 +27,14 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
     const handleSubmit = async () => {
         const amount = parseFloat(bushels);
         const m = parseFloat(moisture);
-        if (isNaN(amount) || amount <= 0) return;
-        if (isNaN(m)) return;
+        if (isNaN(amount) || amount <= 0) {
+            native.haptic.error();
+            return;
+        }
+        if (isNaN(m)) {
+            native.haptic.error();
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -46,11 +53,16 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                 sourceFieldName: source.trim() || undefined,
             });
             if (success) {
+                native.haptic.success();
                 setBushels('');
                 setMoisture('15.0');
                 setSource('');
                 onClose();
+            } else {
+                native.haptic.error();
             }
+        } catch (error) {
+            native.haptic.error();
         } finally {
             setIsSaving(false);
         }

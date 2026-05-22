@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+
+import { AlertTriangle, ArrowRight, History as HistoryIcon, Upload, CheckCircle2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -11,9 +15,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+
+import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
-import { toast } from 'sonner';
-import { AlertTriangle, ArrowRight, History as HistoryIcon, Upload, CheckCircle2, Loader2 } from 'lucide-react';
 import {
   clearRolloverDismiss,
   dismissRolloverPrompt,
@@ -58,8 +62,11 @@ export default function SeasonRolloverModal() {
   const handleRollover = async () => {
     const success = await rolloverToNewSeason(currentYear);
     if (success) {
+      native.haptic.success();
       clearRolloverDismiss(userId, currentYear);
       setOpen(false);
+    } else {
+      native.haptic.error();
     }
   };
 
@@ -79,13 +86,17 @@ export default function SeasonRolloverModal() {
       const data = JSON.parse(text);
       const success = await restoreFromBackup(data);
       if (success) {
+        native.haptic.success();
         setRestoreSuccess(true);
         setTimeout(() => {
           setRestoreSuccess(false);
           setOpen(false);
         }, 2000);
+      } else {
+        native.haptic.error();
       }
     } catch (err) {
+      native.haptic.error();
       console.error('Failed to restore:', err);
       if (err instanceof SyntaxError) {
         toast.error('Invalid backup file — could not parse JSON.');

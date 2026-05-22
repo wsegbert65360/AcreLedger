@@ -8,6 +8,7 @@ import { useFarm } from '@/store/farmStore';
 import { Field, SprayRecipeProduct, SprayRecord } from '@/types/farm';
 import { WeatherService } from '@/services/WeatherService';
 import { WeatherData } from '@/types/weather';
+import { native } from '@/lib/native';
 import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus, FileDown, AlertTriangle, History as HistoryIcon } from 'lucide-react';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -346,6 +347,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     if (!isMinimumValid) {
       setShowValidation(true);
       toast.error('Enter at least one product name and an application date to save.');
+      native.haptic.error();
       return;
     }
     if (!isFullyCompliant) {
@@ -406,11 +408,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       }
 
       if (success) {
+        native.haptic.success();
         onClose();
+      } else {
+        native.haptic.error();
       }
     } catch (err) {
       console.error('Submission error:', err);
       toast.error('An unexpected error occurred while saving.');
+      native.haptic.error();
     } finally {
       setIsSaving(false);
     }

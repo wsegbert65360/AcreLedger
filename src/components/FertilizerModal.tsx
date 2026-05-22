@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
+import { native } from '@/lib/native';
 import { Sprout, Calendar, MapPin, Gauge, Loader2, ClipboardList, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -60,11 +61,13 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
 
         if (isNaN(data.acres) || data.acres <= 0) {
             toast.error('Please enter a valid acreage');
+            native.haptic.error();
             return;
         }
 
         if (!formula.trim()) {
             toast.error('Please enter a fertilizer formula');
+            native.haptic.error();
             return;
         }
 
@@ -80,6 +83,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                     if (!newRecipeName.trim()) {
                         toast.error('Please enter a recipe name to save');
                         setIsSaving(false);
+                        native.haptic.error();
                         return;
                     }
                     try {
@@ -96,11 +100,15 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
             }
 
             if (success) {
+                native.haptic.success();
                 onClose();
+            } else {
+                native.haptic.error();
             }
         } catch (err) {
             console.error('Submission error:', err);
             toast.error('An unexpected error occurred while saving.');
+            native.haptic.error();
         } finally {
             setIsSaving(false);
         }

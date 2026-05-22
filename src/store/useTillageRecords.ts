@@ -3,17 +3,20 @@ import { TillageRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapTillageToDb } from '@/lib/mappers';
+import { syncQueue } from '@/lib/syncQueue';
 
 interface UseTillageRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
   setTillageRecords: React.Dispatch<React.SetStateAction<TillageRecord[]>>;
+  isOnline: boolean;
+  onMutation: () => void | Promise<void>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }: UseTillageRecordsArgs) {
+export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation }: UseTillageRecordsArgs) {
   const isAdding = useRef(false);
   const previousRef = useRef<TillageRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: TillageRecord; index: number }[]>([]);
@@ -48,6 +51,22 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }:
     // Optimistic add
     setTillageRecords(prev => [...prev, newRecord]);
 
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('tillage_records', 'insert', { ...mapped, farm_id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Tillage record saved offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue tillage record offline:', err);
+        setTillageRecords(prev => prev.filter(rec => rec.id !== id));
+        toast.error('Failed to save record offline.');
+        return false;
+      } finally {
+        isAdding.current = false;
+      }
+    }
+
     try {
       const { error } = await supabase
         .from('tillage_records')
@@ -68,7 +87,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }:
     } finally {
       isAdding.current = false;
     }
-  }, [viewingSeason, farm_id, setTillageRecords]);
+  }, [viewingSeason, farm_id, setTillageRecords, isOnline, onMutation]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
 
@@ -92,6 +111,25 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }:
       previousRef.current = prev.find(item => item.id === r.id);
       return prev.map(item => item.id === r.id ? r : item);
     });
+
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('tillage_records', 'update', { ...mapped, id: r.id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Record updated offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue tillage record update offline:', err);
+        const previous = previousRef.current;
+        if (previous) {
+          setTillageRecords(prev => prev.map(item => item.id === r.id ? previous : item));
+        } else {
+          setTillageRecords(prev => prev.filter(item => item.id !== r.id));
+        }
+        toast.error('Failed to update record offline.');
+        return false;
+      }
+    }
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
@@ -120,7 +158,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }:
 
     toast.success('Record updated.');
     return true;
-  }, [farm_id, setTillageRecords]);
+  }, [farm_id, setTillageRecords, isOnline, onMutation]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
 
@@ -139,6 +177,32 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }:
         .filter(({ record }) => ids.includes(record.id));
       return prev.filter(r => !ids.includes(r.id));
     });
+
+    if (!isOnline) {
+      try {
+        const deletedAt = new Date().toISOString();
+        for (const id of ids) {
+          await syncQueue.enqueueMutation('tillage_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+        }
+        if (onMutation) await onMutation();
+        const count = ids.length;
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue tillage records delete offline:', err);
+        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        setTillageRecords(prev => {
+          const restored = [...prev];
+          for (const { record, index } of snapshot) {
+            const insertAt = Math.min(index, restored.length);
+            restored.splice(insertAt, 0, record);
+          }
+          return restored;
+        });
+        toast.error('Failed to delete records offline.');
+        return false;
+      }
+    }
 
     const { data, error } = await supabase
       .from('tillage_records')
@@ -170,7 +234,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords }:
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
-  }, [farm_id, setTillageRecords]);
+  }, [farm_id, setTillageRecords, isOnline, onMutation]);
 
   return { addTillageRecord, updateTillageRecord, deleteTillageRecords };
 }

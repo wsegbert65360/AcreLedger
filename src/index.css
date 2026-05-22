@@ -57,8 +57,8 @@
     --sidebar-border: 214 30% 70%;
     --sidebar-ring: 142 80% 28%;
 
-    --safe-area-top: env(safe-area-inset-top);
-    --safe-area-bottom: env(safe-area-inset-bottom);
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .dark {

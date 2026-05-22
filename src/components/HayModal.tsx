@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { Field, HayHarvestRecord } from '@/types/farm';
+import { native } from '@/lib/native';
 import { Tractor, Thermometer, Cloud, Hash, Layers, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { WeatherService } from '@/services/WeatherService';
@@ -67,7 +68,10 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
     const handleSubmit = async () => {
         const count = parseInt(baleCount, 10);
         const cutting = parseInt(cuttingNumber, 10);
-        if (isNaN(count) || isNaN(cutting)) return;
+        if (isNaN(count) || isNaN(cutting)) {
+            native.haptic.error();
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -96,11 +100,15 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
             }
 
             if (success) {
+                native.haptic.success();
                 onClose();
+            } else {
+                native.haptic.error();
             }
         } catch (err) {
             console.error('Submission error:', err);
             toast.error('An unexpected error occurred while saving.');
+            native.haptic.error();
         } finally {
             setIsSaving(false);
         }

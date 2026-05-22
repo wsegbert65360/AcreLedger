@@ -57,7 +57,7 @@ if (!farm_id) {
 
 - Inserts and restore payloads must include the authoritative current `farm_id`.
 - Updates must filter by `.eq('farm_id', farm_id)`.
-- Do not send `farm_id` inside `.update()` payloads after mapping unless the existing pattern explicitly requires it.
+- Do not send `farm_id` inside `.update()` payloads. Always filter by `.eq('farm_id', farm_id)` instead.
 
 ### Season Scoping
 
@@ -88,7 +88,7 @@ Every add, update, and delete mutation must follow this sequence:
 6. On success, show success feedback and return `true`.
 7. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
 
-All add, update, and delete operations return `Promise<boolean>`. Never return `undefined`.
+All add, update, and delete operations return `Promise<boolean>` — `true` on success, `false` on failure. Never return `undefined`.
 
 ### Supabase and Database
 
@@ -167,6 +167,13 @@ All add, update, and delete operations return `Promise<boolean>`. Never return `
 import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 ```
 
+## Error Handling
+
+- Every page route is wrapped in `ErrorBoundary` (`src/components/ErrorBoundary.tsx`), a class component that catches render-time crashes and shows a retry UI.
+- When adding new top-level routes, wrap the element in `<ErrorBoundary>`.
+- Do not remove or bypass the error boundary; it prevents full-app blank-screen crashes.
+- For non-fatal async errors (Supabase failures, weather/rainfall lookups), use `toast.error(...)` and degrade gracefully rather than throwing.
+
 ## React and Performance Rules
 
 - Use `useFarm()` for global farm state.
@@ -194,7 +201,29 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 - Do not introduce new libraries without a strong reason.
 - Reuse existing shadcn/ui, Tailwind, Lucide, Sonner, Zod, mapper, and utility patterns.
 - Use existing naming conventions rather than inventing new ones.
-- Treat `0` as a valid value. Use `value != null ? value : '—'`, not simple truthiness.
+
+### File Naming
+
+- **Components**: PascalCase — e.g. `FieldCard.tsx`, `SprayModal.tsx`.
+- **Pages**: PascalCase — e.g. `Index.tsx`, `Settings.tsx`, `FieldDetailScreen.tsx`.
+- **Hooks**: camelCase with `use` prefix — e.g. `usePlantRecords.ts`, `useAuth.ts`.
+- **Services and utilities**: camelCase — e.g. `binService.ts`, `sprayExport.ts`, `dates.ts`.
+- **Type definitions**: camelCase — e.g. `farm.ts`, `database.ts`, `weather.ts`.
+- **shadcn/ui primitives**: kebab-case in `src/components/ui/` — e.g. `alert-dialog.tsx`, `input-otp.tsx`.
+- **Tests**: colocated, appended `.test` — e.g. `mappers.test.ts`, `WeatherService.test.ts`.
+
+### Import Order
+
+Group imports in this order, separated by blank lines:
+
+1. React and React addons (e.g. `react`, `react-router-dom`).
+2. External libraries (e.g. `@supabase/supabase-js`, `sonner`, `lucide-react`, `framer-motion`).
+3. Internal `@/` imports — components, store, types, services, utils.
+4. Relative imports (`../lib/`, `./`).
+
+Within each group, order alphabetically by module path. This matches the existing codebase and keeps diffs clean.
+
+- Treat `0` as a valid value. Use `value != null ? value : '—'`, not simple truthiness. The loose `!=` is intentional here: it catches both `null` and `undefined` in a single check. Do not "fix" this to `!==`.
 
 ## Change Workflow
 

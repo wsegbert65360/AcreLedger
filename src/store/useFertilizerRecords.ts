@@ -3,12 +3,15 @@ import { FertilizerApplication, Field } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapFertilizerToDb } from '@/lib/mappers';
+import { syncQueue } from '@/lib/syncQueue';
 
 interface UseFertilizerRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
   fields: Field[];
   setFertilizerApplications: React.Dispatch<React.SetStateAction<FertilizerApplication[]>>;
+  isOnline: boolean;
+  onMutation: () => void | Promise<void>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
@@ -16,7 +19,7 @@ type OpResult = boolean;
 
 // ─── Internal Helper Hooks ──────────────────────────────────────────────────
 
-function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerApplications }: UseFertilizerRecordsArgs) {
+function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerApplications, isOnline, onMutation }: UseFertilizerRecordsArgs) {
   const isAdding = useRef(false);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
@@ -58,6 +61,22 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
 
     setFertilizerApplications(prev => [...prev, newRecord]);
 
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('fertilizer_applications', 'insert', { ...mapped, farm_id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Fertilizer application recorded offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue fertilizer record offline:', err);
+        setFertilizerApplications(prev => prev.filter(rec => rec.id !== id));
+        toast.error('Failed to save record offline.');
+        return false;
+      } finally {
+        isAdding.current = false;
+      }
+    }
+
     try {
       const { error } = await supabase
         .from('fertilizer_applications')
@@ -83,7 +102,7 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
   return { addFertilizerApplication };
 }
 
-function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications }: Omit<UseFertilizerRecordsArgs, 'viewingSeason'>) {
+function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications, isOnline, onMutation }: Omit<UseFertilizerRecordsArgs, 'viewingSeason'>) {
   const previousRef = useRef<FertilizerApplication | undefined>(undefined);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
@@ -114,6 +133,25 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications 
       };
       return prev.map(item => item.id === r.id ? updatedRecord : item);
     });
+
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('fertilizer_applications', 'update', { ...mapped, id: r.id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Fertilizer application updated offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue fertilizer record update offline:', err);
+        const previous = previousRef.current;
+        if (previous) {
+          setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
+        } else {
+          setFertilizerApplications(prev => prev.filter(item => item.id !== r.id));
+        }
+        toast.error('Failed to update record offline.');
+        return false;
+      }
+    }
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
@@ -150,7 +188,7 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications 
   return { updateFertilizerApplication };
 }
 
-function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications }: Pick<UseFertilizerRecordsArgs, 'farm_id' | 'setFertilizerApplications'>) {
+function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnline, onMutation }: Pick<UseFertilizerRecordsArgs, 'farm_id' | 'setFertilizerApplications' | 'isOnline' | 'onMutation'>) {
   const snapshotRef = useRef<{ record: FertilizerApplication; index: number }[]>([]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]): Promise<OpResult> => {
@@ -168,6 +206,32 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications }: Pick<
         .filter(({ record }) => ids.includes(record.id));
       return prev.filter(r => !ids.includes(r.id));
     });
+
+    if (!isOnline) {
+      try {
+        const deletedAt = new Date().toISOString();
+        for (const id of ids) {
+          await syncQueue.enqueueMutation('fertilizer_applications', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+        }
+        if (onMutation) await onMutation();
+        const count = ids.length;
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue fertilizer record delete offline:', err);
+        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        setFertilizerApplications(prev => {
+          const restored = [...prev];
+          for (const { record, index } of snapshot) {
+            const insertAt = Math.min(index, restored.length);
+            restored.splice(insertAt, 0, record);
+          }
+          return restored;
+        });
+        toast.error('Failed to delete records offline.');
+        return false;
+      }
+    }
 
     const { data, error } = await supabase
       .from('fertilizer_applications')

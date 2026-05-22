@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
+
+import { Warehouse, Plus, Pencil, Trash2 } from 'lucide-react';
+
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useFarm } from '@/store/farmStore';
-import { Bin } from '@/types/farm';
-import { Warehouse, Plus, Pencil, Trash2 } from 'lucide-react';
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+
+import { native } from '@/lib/native';
+import { useFarm } from '@/store/farmStore';
+import { Bin } from '@/types/farm';
 
 interface BinManageModalProps {
     open: boolean;
@@ -38,7 +42,10 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
 
     const handleSubmit = async () => {
         const cap = parseInt(capacity, 10);
-        if (!name.trim() || isNaN(cap)) return;
+        if (!name.trim() || isNaN(cap)) {
+            native.haptic.error();
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -49,8 +56,13 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
                 success = await addBin({ name: name.trim(), capacity: cap, deleted_at: null });
             }
             if (success) {
+                native.haptic.success();
                 onClose();
+            } else {
+                native.haptic.error();
             }
+        } catch (error) {
+            native.haptic.error();
         } finally {
             setIsSaving(false);
         }
@@ -173,7 +185,17 @@ export function BinManager() {
                     <AlertDialogFooter>
                         <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={async () => { if (deleteConfirm) await deleteBin(deleteConfirm); setDeleteConfirm(null); }}
+                            onClick={async () => {
+                                if (deleteConfirm) {
+                                    const success = await deleteBin(deleteConfirm);
+                                    if (success) {
+                                        native.haptic.success();
+                                    } else {
+                                        native.haptic.error();
+                                    }
+                                }
+                                setDeleteConfirm(null);
+                            }}
                             className="touch-target bg-destructive text-destructive-foreground glow-destructive"
                         >
                             Delete

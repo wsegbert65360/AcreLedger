@@ -3,17 +3,20 @@ import { HarvestRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapHarvestToDb } from '@/lib/mappers';
+import { syncQueue } from '@/lib/syncQueue';
 
 interface UseHarvestRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
   setHarvestRecords: React.Dispatch<React.SetStateAction<HarvestRecord[]>>;
+  isOnline: boolean;
+  onMutation: () => void | Promise<void>;
 }
 
 /** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
-export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords }: UseHarvestRecordsArgs) {
+export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, isOnline, onMutation }: UseHarvestRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isAdding = useRef(false);
 
@@ -52,6 +55,22 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords }:
 
     // Optimistic add
     setHarvestRecords(prev => [...prev, newRecord]);
+
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Harvest recorded offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue harvest record offline:', err);
+        setHarvestRecords(prev => prev.filter(rec => rec.id !== id));
+        toast.error('Failed to save record offline.');
+        return false;
+      } finally {
+        isAdding.current = false;
+      }
+    }
 
     try {
       const { error } = await supabase
@@ -101,6 +120,25 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords }:
       previousRef.current = prev.find(item => item.id === r.id);
       return prev.map(item => item.id === r.id ? r : item);
     });
+
+    if (!isOnline) {
+      try {
+        await syncQueue.enqueueMutation('harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
+        if (onMutation) await onMutation();
+        toast.success('Harvest record updated offline.');
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue harvest record update offline:', err);
+        const previous = previousRef.current;
+        if (previous) {
+          setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
+        } else {
+          setHarvestRecords(prev => prev.filter(item => item.id !== r.id));
+        }
+        toast.error('Failed to update record offline.');
+        return false;
+      }
+    }
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
@@ -153,6 +191,32 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords }:
         .filter(({ record }) => ids.includes(record.id));
       return prev.filter(r => !ids.includes(r.id));
     });
+
+    if (!isOnline) {
+      try {
+        const deletedAt = new Date().toISOString();
+        for (const id of ids) {
+          await syncQueue.enqueueMutation('harvest_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+        }
+        if (onMutation) await onMutation();
+        const count = ids.length;
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue harvest record delete offline:', err);
+        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        setHarvestRecords(prev => {
+          const restored = [...prev];
+          for (const { record, index } of snapshot) {
+            const insertAt = Math.min(index, restored.length);
+            restored.splice(insertAt, 0, record);
+          }
+          return restored;
+        });
+        toast.error('Failed to delete records offline.');
+        return false;
+      }
+    }
 
     const { data, error } = await supabase
       .from('harvest_records')
