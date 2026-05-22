@@ -18,8 +18,11 @@ build/
 *.mobileprovision
 
 # native build folders
-ios/
 android/
+ios/App/build/
+ios/DerivedData/
+ios/**/xcuserdata/
+ios/**/DerivedData/
 
 # misc
 .DS_Store
