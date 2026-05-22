@@ -1,5 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Capacitor } from '@capacitor/core';
+import { native } from '@/lib/native';
 
 interface ExportPdfOptions {
   title: string;
@@ -82,5 +84,9 @@ export function exportToPdf({
     doc.text(summaryValue, pageWidth - valueWidth - 14, finalY);
   }
 
-  doc.save(fileName);
+  if (Capacitor.isNativePlatform()) {
+    native.sharePdf(fileName, doc);
+  } else {
+    doc.save(fileName);
+  }
 }

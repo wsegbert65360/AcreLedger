@@ -5,6 +5,7 @@ const isNative = Capacitor.isNativePlatform();
 
 let dbConnection: any = null;
 let sqliteConnection: any = null;
+let initPromise: Promise<any> | null = null;
 
 /**
  * Retrieves or initializes the SQLite database connection on native platforms.
@@ -13,45 +14,60 @@ let sqliteConnection: any = null;
 export async function getDatabase() {
   if (!isNative) return null;
   if (dbConnection) return dbConnection;
+  if (initPromise) return initPromise;
 
-  try {
-    sqliteConnection = new SQLiteConnection(CapacitorSQLite);
-    dbConnection = await sqliteConnection.createConnection(
-      'acreledger_db',
-      false, // encrypted
-      'no-encryption', // mode
-      1, // version
-      false // readonly
-    );
-    await dbConnection.open();
+  initPromise = (async () => {
+    try {
+      if (!sqliteConnection) {
+        sqliteConnection = new SQLiteConnection(CapacitorSQLite);
+      }
 
-    // Create the offline cache table
-    await dbConnection.execute(`
-      CREATE TABLE IF NOT EXISTS offline_cache (
-        key TEXT PRIMARY KEY,
-        value TEXT,
-        updated_at TEXT
-      );
-    `);
+      const isConn = (await sqliteConnection.isConnection('acreledger_db')).result;
+      if (isConn) {
+        dbConnection = await sqliteConnection.retrieveConnection('acreledger_db');
+      } else {
+        dbConnection = await sqliteConnection.createConnection(
+          'acreledger_db',
+          false, // encrypted
+          'no-encryption', // mode
+          1, // version
+          false // readonly
+        );
+      }
 
-    // Create the sync queue table
-    await dbConnection.execute(`
-      CREATE TABLE IF NOT EXISTS sync_queue (
-        id TEXT PRIMARY KEY,
-        table_name TEXT,
-        operation TEXT,
-        payload TEXT,
-        farm_id TEXT,
-        created_at TEXT,
-        retry_count INTEGER DEFAULT 0
-      );
-    `);
+      await dbConnection.open();
 
-    return dbConnection;
-  } catch (err) {
-    console.error('Failed to initialize SQLite database:', err);
-    return null;
-  }
+      // Create the offline cache table
+      await dbConnection.execute(`
+        CREATE TABLE IF NOT EXISTS offline_cache (
+          key TEXT PRIMARY KEY,
+          value TEXT,
+          updated_at TEXT
+        );
+      `);
+
+      // Create the sync queue table
+      await dbConnection.execute(`
+        CREATE TABLE IF NOT EXISTS sync_queue (
+          id TEXT PRIMARY KEY,
+          table_name TEXT,
+          operation TEXT,
+          payload TEXT,
+          farm_id TEXT,
+          created_at TEXT,
+          retry_count INTEGER DEFAULT 0
+        );
+      `);
+
+      return dbConnection;
+    } catch (err) {
+      console.error('Failed to initialize SQLite database:', err);
+      initPromise = null; // Reset so that we can retry if needed
+      return null;
+    }
+  })();
+
+  return initPromise;
 }
 
 export const offlineStorage = {

@@ -30,11 +30,17 @@ export const RainService = {
     }
 
     const fetchPromise = (async () => {
-      const baseUrl = import.meta.env?.VITE_RAIN_API_URL ||
-                     (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
+      let baseUrl = import.meta.env?.VITE_RAIN_API_URL ||
+                    (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
 
       if (!baseUrl) {
         throw new Error('VITE_RAIN_API_URL is not configured');
+      }
+
+      // Sanitize URL: trim whitespace/newlines, strip trailing slashes, and strip duplicate /rain suffix
+      baseUrl = baseUrl.trim().replace(/\/+$/, '');
+      if (baseUrl.endsWith('/rain')) {
+        baseUrl = baseUrl.slice(0, -5);
       }
 
       let tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;

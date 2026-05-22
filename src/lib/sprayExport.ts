@@ -11,6 +11,8 @@ import {
   sanitizeFilename 
 } from './sprayExportFormatters';
 import { cleanName } from '@/utils/text';
+import { Capacitor } from '@capacitor/core';
+import { native } from '@/lib/native';
 
 interface ExportOptions {
   filename?: string;
@@ -228,5 +230,9 @@ export function generateSprayPDF(
   }
   if (!finalFilename.endsWith('.pdf')) finalFilename += '.pdf';
 
-  doc.save(finalFilename);
+  if (Capacitor.isNativePlatform()) {
+    native.sharePdf(finalFilename, doc);
+  } else {
+    doc.save(finalFilename);
+  }
 }
