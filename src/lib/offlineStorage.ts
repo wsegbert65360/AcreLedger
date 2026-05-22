@@ -22,9 +22,9 @@ export async function getDatabase() {
         sqliteConnection = new SQLiteConnection(CapacitorSQLite);
       }
 
-      const isConn = (await sqliteConnection.isConnection('acreledger_db')).result;
+      const isConn = (await sqliteConnection.isConnection('acreledger_db', false)).result;
       if (isConn) {
-        dbConnection = await sqliteConnection.retrieveConnection('acreledger_db');
+        dbConnection = await sqliteConnection.retrieveConnection('acreledger_db', false);
       } else {
         dbConnection = await sqliteConnection.createConnection(
           'acreledger_db',

@@ -2,11 +2,28 @@ import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Geolocation } from '@capacitor/geolocation';
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { toast } from 'sonner';
 
 const isNative = Capacitor.isNativePlatform();
+
+export function sanitizeNativeFileName(fileName: string): string {
+  const cleanName = fileName
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/^\.+/, '')
+    .trim();
+
+  return cleanName || 'acreledger-export';
+}
+
+type ShareFileOptions = {
+  fileName: string;
+  data: string;
+  title?: string;
+  encoding?: Encoding;
+};
 
 export const native = {
   haptic: {
@@ -51,38 +68,44 @@ export const native = {
       }
     }
   },
+  shareFile: async ({ fileName, data, title, encoding }: ShareFileOptions): Promise<boolean> => {
+    if (!isNative) return false;
+
+    const safeFileName = sanitizeNativeFileName(fileName);
+
+    try {
+      const writeResult = await Filesystem.writeFile({
+        path: safeFileName,
+        data,
+        directory: Directory.Cache,
+        ...(encoding ? { encoding } : {})
+      });
+
+      await Share.share({
+        title: title || safeFileName,
+        files: [writeResult.uri]
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error sharing file:', error);
+      toast.error('Failed to share file: ' + (error instanceof Error ? error.message : String(error)));
+      return false;
+    }
+  },
   sharePdf: async (fileName: string, pdfDoc: any): Promise<boolean> => {
     if (!isNative) {
       pdfDoc.save(fileName);
       return true;
     }
-    
-    try {
-      // 1. Get jsPDF output as Data URI
-      const dataUri = pdfDoc.output('datauristring');
-      
-      // 2. Strip base64 prefix
-      const base64Data = dataUri.substring(dataUri.indexOf(',') + 1);
-      
-      // 3. Write binary data to cache directory
-      const writeResult = await Filesystem.writeFile({
-        path: fileName,
-        data: base64Data,
-        directory: Directory.Cache
-      });
-      
-      // 4. Invoke system share sheet
-      await Share.share({
-        title: `AcreLedger Report: ${fileName}`,
-        url: writeResult.uri,
-        dialogTitle: 'Share PDF Report'
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error sharing PDF:', error);
-      toast.error('Failed to share PDF: ' + (error instanceof Error ? error.message : String(error)));
-      return false;
-    }
+
+    const dataUri = pdfDoc.output('datauristring');
+    const base64Data = dataUri.substring(dataUri.indexOf(',') + 1);
+
+    return native.shareFile({
+      fileName,
+      data: base64Data,
+      title: `AcreLedger Report: ${sanitizeNativeFileName(fileName)}`
+    });
   }
 };

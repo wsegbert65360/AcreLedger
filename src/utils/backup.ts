@@ -1,10 +1,26 @@
+import { Capacitor } from '@capacitor/core';
+import { Encoding } from '@capacitor/filesystem';
+
+import { native } from '@/lib/native';
+
 /**
  * Exports data as a JSON file and triggers a download in the browser.
  * Returns true on success, false on failure.
  */
-export function exportDataAsJson(data: unknown, filename: string): boolean {
+export async function exportDataAsJson(data: unknown, filename: string): Promise<boolean> {
   try {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const json = JSON.stringify(data, null, 2);
+
+    if (Capacitor.isNativePlatform()) {
+      return native.shareFile({
+        fileName: filename,
+        data: json,
+        title: `AcreLedger Backup: ${filename}`,
+        encoding: Encoding.UTF8
+      });
+    }
+
+    const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

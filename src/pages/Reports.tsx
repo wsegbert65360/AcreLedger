@@ -1,16 +1,20 @@
 import { useState, useMemo, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Encoding } from '@capacitor/filesystem';
+import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History as HistoryIcon, Tractor } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History as HistoryIcon, Tractor } from 'lucide-react';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
+import { native, sanitizeNativeFileName } from '@/lib/native';
+import { generateSprayPDF } from '@/lib/sprayExport';
+import ReportTable from '@/components/ReportTable';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatTotalAmount } from '@/utils/unitConversion';
-import { generateSprayPDF } from '@/lib/sprayExport';
-import ReportTable from '@/components/ReportTable';
-import { toast } from 'sonner';
 import { Field } from '@/types/farm';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -42,9 +46,12 @@ function buildFieldMap(fields: Field[]): Map<string, Field> {
   return new Map(fields.map(f => [f.id, f]));
 }
 
-function safeExport(fn: () => void, label: string): void {
+function safeExport(fn: () => void | Promise<void>, label: string): void {
   try {
-    fn();
+    Promise.resolve(fn()).catch((err) => {
+      console.error(`Export failed (${label}):`, err);
+      toast.error(`Failed to export ${label}. Please try again.`);
+    });
   } catch (err) {
     console.error(`Export failed (${label}):`, err);
     toast.error(`Failed to export ${label}. Please try again.`);
@@ -154,14 +161,28 @@ export default function Reports() {
 
   const handleExportLandlordCSV = () => {
     if (!landlordStatement) return;
-    safeExport(() => {
+    safeExport(async () => {
       const csv = generateLandlordStatementCSV(landlordStatement);
+      const fileName = sanitizeNativeFileName(`${selectedLandlord}_CropShare.csv`);
+
+      if (Capacitor.isNativePlatform()) {
+        await native.shareFile({
+          fileName,
+          data: csv,
+          title: `AcreLedger Export: ${fileName}`,
+          encoding: Encoding.UTF8
+        });
+        return;
+      }
+
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `${selectedLandlord.replace(/\s+/g, '_')}_CropShare.csv`);
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 2000); // Wait 2s to ensure browser starts download
     }, 'landlord statement');
   };
@@ -283,7 +304,7 @@ export default function Reports() {
           `${r.landlordSplitPercent}%`,
           r.landlordBushels.toLocaleString()
         ]),
-        fileName: `${selectedLandlord.replace(/\s+/g, '_')}_CropShare_${viewingSeason}.pdf`,
+        fileName: sanitizeNativeFileName(`${selectedLandlord}_CropShare_${viewingSeason}.pdf`),
         summaryText: 'Total Landlord Share',
         summaryValue: `${landlordStatement.totalLandlordBushels.toLocaleString()} BU`
       });

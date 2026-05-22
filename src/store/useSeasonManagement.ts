@@ -108,7 +108,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       };
 
       const filename = `Pre_Season_Reset_${new Date().toISOString().split('T')[0]}.json`;
-      const downloaded = exportDataAsJson(backupData, filename);
+      const downloaded = await exportDataAsJson(backupData, filename);
 
       if (!downloaded) {
         toast.error('Could not create pre-rollover backup. Season was NOT changed.');

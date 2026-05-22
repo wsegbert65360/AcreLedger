@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
 import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout, Scissors, Disc3 } from 'lucide-react';
+import { toast } from 'sonner';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import type { 
@@ -242,7 +243,16 @@ export default function Activity() {
           )}
           {(tab === 'plant' || tab === 'harvest') && (
             <button
-              onClick={() => tab === 'plant' ? exportFsa578Data(filteredPlant, fields) : exportHarvestData(filteredHarvest, fields)}
+              onClick={() => {
+                const exportPromise = tab === 'plant'
+                  ? exportFsa578Data(filteredPlant, fields)
+                  : exportHarvestData(filteredHarvest, fields);
+
+                exportPromise.catch((error) => {
+                  console.error('FSA export failed:', error);
+                  toast.error('Failed to export FSA data. Please try again.');
+                });
+              }}
               className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 text-xs font-bold"
               title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
             >

@@ -1,3 +1,7 @@
+import { Capacitor } from '@capacitor/core';
+import { Encoding } from '@capacitor/filesystem';
+
+import { native } from '@/lib/native';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
 import { formatTotalAmount } from '../../utils/unitConversion';
 
@@ -77,7 +81,7 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
     });
 }
 
-export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
+export async function generateMissouriLog(records: SprayRecord[], fields: Field[]): Promise<void> {
     const header = [
         'Date', 'Start Time', 'End Time', 'Applicator Name', 'License #', 'Crop/Site Treated', 'Trade Name', 'EPA Reg #',
         'Site/Field', 'Total Acres Treated', 'App Rate (per ac)', 'Total Product Applied',
@@ -88,10 +92,10 @@ export function generateMissouriLog(records: SprayRecord[], fields: Field[]) {
 
     const rows = generateMissouriLogRows(records, fields);
     const csvContent = [header, ...rows].join('\n');
-    downloadFile(csvContent, `Missouri_Spray_Log_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `Missouri_Spray_Log_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
 }
 
-export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
+export async function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]): Promise<void> {
     const header = [
         'Farm #',
         'Tract #',
@@ -128,10 +132,10 @@ export function exportFsa578Data(plantRecords: PlantRecord[], fields: Field[]) {
     });
 
     const csvContent = [header, ...rows].join('\n');
-    downloadFile(csvContent, `FSA_578_Summary_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `FSA_578_Summary_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
 }
 
-export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]) {
+export async function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]): Promise<void> {
     const header = [
         'Date',
         'Field',
@@ -164,10 +168,10 @@ export function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field
     });
 
     const csvContent = [header, ...rows].join('\n');
-    downloadFile(csvContent, `FSA_Harvest_Report_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `FSA_Harvest_Report_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
 }
 
-export function exportFertilizerData(records: FertilizerApplication[], fields: Field[]) {
+export async function exportFertilizerData(records: FertilizerApplication[], fields: Field[]): Promise<void> {
     const header = [
         'Date',
         'Field',
@@ -188,10 +192,20 @@ export function exportFertilizerData(records: FertilizerApplication[], fields: F
     });
 
     const csvContent = [header, ...rows].join('\n');
-    downloadFile(csvContent, `Fertilizer_Report_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `Fertilizer_Report_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
 }
 
-function downloadFile(content: string, fileName: string, contentType: string) {
+async function downloadFile(content: string, fileName: string, contentType: string): Promise<void> {
+    if (Capacitor.isNativePlatform()) {
+        await native.shareFile({
+            fileName,
+            data: content,
+            title: `AcreLedger Export: ${fileName}`,
+            encoding: Encoding.UTF8
+        });
+        return;
+    }
+
     const blob = new Blob([content], { type: contentType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
