@@ -1,97 +1,25 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { native } from '@/lib/native';
-import { useFarm } from '@/store/farmStore';
-import { WeatherService } from '@/services/WeatherService';
-import { ExtendedWeatherData } from '@/types/weather';
-import BottomNav from '@/components/BottomNav';
-import RadarEmbed from '@/components/weather/RadarEmbed';
-import ForecastGrid from '@/components/weather/ForecastGrid';
 import {
   ArrowLeft,
-  Wind,
-  RefreshCw,
-  Loader2,
   CloudRain,
-  MapPin,
   Crosshair,
+  Droplets,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Thermometer,
+  Wind,
 } from 'lucide-react';
 
-// ── Helpers ──
-
-function loadZip(userId?: string): string {
-  try {
-    const key = userId ? `${userId}_al_zip` : 'al_zip';
-    return localStorage.getItem(key) || '';
-  } catch {
-    return '';
-  }
-}
-
-function formatTime(): string {
-  return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
-
-/**
- * Resolve coordinates for weather + radar.
- * Priority:
- *   1. Browser GPS (native.geolocation)
- *   2. First field with lat/lng
- *   3. Parse from saved zip (if it's already coords like "38.46,-93.53")
- * Falls back to zip string for weather API only (no radar).
- */
-function resolveCoords(
-  fields: { lat: number | null; lng: number | null }[],
-  savedZip: string,
-): Promise<{ lat: number; lng: number; locationString: string }> {
-  const fallback = fallbackToFields(fields, savedZip);
-  if ((fallback.lat !== 0 && fallback.lng !== 0) || savedZip.trim()) {
-    return Promise.resolve(fallback);
-  }
-
-  // Browser GPS is only requested when no saved location or field coords exist.
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      // GPS took too long — use fallback
-      resolve(fallback);
-    }, 5000);
-
-    native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000 })
-      .then((pos) => {
-        clearTimeout(timeoutId);
-        const lat = Math.round(pos.coords.latitude * 10000) / 10000;
-        const lng = Math.round(pos.coords.longitude * 10000) / 10000;
-        resolve({ lat, lng, locationString: `${lat},${lng}` });
-      })
-      .catch(() => {
-        clearTimeout(timeoutId);
-        resolve(fallback);
-      });
-  });
-}
-
-function fallbackToFields(
-  fields: { lat: number | null; lng: number | null }[],
-  savedZip: string,
-): { lat: number; lng: number; locationString: string } {
-  // 2. First field with coords
-  const field = fields.find(f => f.lat != null && f.lng != null);
-  if (field && field.lat != null && field.lng != null) {
-    const lat = Math.round(field.lat * 10000) / 10000;
-    const lng = Math.round(field.lng * 10000) / 10000;
-    return { lat, lng, locationString: `${lat},${lng}` };
-  }
-
-  // 3. Parse saved zip if it's already coords
-  const match = savedZip.trim().match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
-  if (match) {
-    return { lat: parseFloat(match[1]), lng: parseFloat(match[2]), locationString: savedZip.trim() };
-  }
-
-  // No coords available — return 0s, locationString will be the zip for weather API
-  return { lat: 0, lng: 0, locationString: savedZip || '' };
-}
+import BottomNav from '@/components/BottomNav';
+import ForecastGrid from '@/components/weather/ForecastGrid';
+import RadarEmbed from '@/components/weather/RadarEmbed';
+import { formatTime, getConditionGradient, getWeatherLucideIcon, loadZip, resolveCoords } from '@/lib/weatherHelpers';
+import { WeatherService } from '@/services/WeatherService';
+import { useFarm } from '@/store/farmStore';
+import { ExtendedWeatherData } from '@/types/weather';
 
 // ── Page ──
 
@@ -187,8 +115,13 @@ export default function Weather() {
     });
   }, [userId, fields, loadWeather]);
 
+  // Condition-aware gradient
+  const bgGradient = weather
+    ? getConditionGradient(weather.icon, weather.isRainingNow)
+    : '';
+
   return (
-    <div className="min-h-screen bg-background pb-20 lg:pb-8">
+    <div className={`min-h-screen bg-background pb-20 lg:pb-8 ${bgGradient ? `bg-gradient-to-b ${bgGradient}` : ''}`}>
       {/* ── Sticky Header ── */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-5xl lg:px-8">
@@ -254,12 +187,9 @@ export default function Weather() {
               </div>
             )}
 
-            {/* Current Conditions */}
-            <CurrentConditionsCard weather={weather} lastUpdated={lastUpdated} />
-
-            {/* Radar — requires GPS or field coords */}
+            {/* ── HERO: Live Radar ── */}
             {coords ? (
-              <RadarEmbed latitude={coords.lat} longitude={coords.lng} />
+              <RadarEmbed latitude={coords.lat} longitude={coords.lng} lastUpdated={lastUpdated} />
             ) : (
               <div className="bg-card border border-border rounded-2xl">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
@@ -277,7 +207,10 @@ export default function Weather() {
               </div>
             )}
 
-            {/* 10-Day Forecast */}
+            {/* ── Current Conditions ── */}
+            <CurrentConditionsCard weather={weather} lastUpdated={lastUpdated} />
+
+            {/* ── 10-Day Forecast ── */}
             <ForecastGrid days={weather.forecastDays} />
 
             {/* Last Updated */}
@@ -301,9 +234,10 @@ export default function Weather() {
 
 function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeatherData; lastUpdated: string }) {
   const isRain = weather.isRainingNow;
+  const ConditionIcon = getWeatherLucideIcon(weather.icon, weather.precipProb, weather.isRainingNow);
 
   return (
-    <div className="bg-card border border-border rounded-2xl">
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
@@ -317,29 +251,62 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
         )}
       </div>
 
-      {/* Main conditions row */}
-      <div className="px-4 py-3 flex items-center gap-3">
-        {/* Temperature */}
-        <div className="flex flex-col shrink-0">
-          <span className="text-4xl font-mono font-bold text-foreground tracking-tight leading-none">
-            {weather.isError ? '—' : `${weather.temp}°`}
-          </span>
-          {weather.feelsLike !== weather.temp && (
-            <span className="text-[10px] text-muted-foreground mt-1">Feels {weather.feelsLike}°</span>
-          )}
+      {/* Main conditions — icon + temp + stats */}
+      <div className="px-4 py-4 flex items-center gap-4">
+        {/* Condition icon + Temperature */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className={`p-2.5 rounded-xl ${isRain ? 'bg-blue-500/10' : 'bg-amber-500/10'}`}>
+            <ConditionIcon size={28} className={isRain ? 'text-blue-400' : 'text-amber-500'} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-4xl font-mono font-bold text-foreground tracking-tight leading-none">
+              {weather.isError ? '—' : `${weather.temp}°`}
+            </span>
+            {weather.feelsLike !== weather.temp && (
+              <span className="text-[10px] text-muted-foreground mt-1">Feels {weather.feelsLike}°</span>
+            )}
+            {weather.conditions && (
+              <span className="text-[10px] text-muted-foreground/80 font-medium mt-0.5 capitalize">
+                {weather.conditions}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="w-px h-10 bg-border/50 shrink-0" />
+        <div className="w-px h-12 bg-border/50 shrink-0" />
 
-        {/* Stats */}
-        <div className="flex-1 flex items-center justify-around">
-          <MiniStat icon={<Wind size={12} className="text-foreground/50" />} label="Wind" value={`${weather.wind} ${weather.windDirection}`} />
-          <MiniStat icon={<Wind size={12} className="text-foreground/50" />} label="Gust" value={`${weather.gusts}`} />
+        {/* Stats grid */}
+        <div className="flex-1 grid grid-cols-3 gap-1">
+          <MiniStat
+            icon={<Wind size={12} className="text-foreground/50" />}
+            label="Wind"
+            value={`${weather.wind} ${weather.windDirection}`}
+          />
+          <MiniStat
+            icon={<Wind size={12} className="text-foreground/50" />}
+            label="Gust"
+            value={`${weather.gusts}`}
+          />
           <MiniStat
             icon={<CloudRain size={12} className={isRain ? 'text-blue-400' : 'text-foreground/50'} />}
             label="Rain"
             value={isRain ? 'Active' : 'None'}
             highlight={isRain}
+          />
+          <MiniStat
+            icon={<Droplets size={12} className="text-foreground/50" />}
+            label="Humid"
+            value={`${weather.humidity}%`}
+          />
+          <MiniStat
+            icon={<Thermometer size={12} className="text-foreground/50" />}
+            label="Dew"
+            value={`${weather.dewPoint}°`}
+          />
+          <MiniStat
+            icon={<CloudRain size={12} className="text-foreground/50" />}
+            label="Chance"
+            value={`${weather.precipProb}%`}
           />
         </div>
       </div>
@@ -349,8 +316,16 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
         <RainCell label="24h" value={weather.precip24h} />
         <RainCell label="72h" value={weather.precip72h} />
         <RainCell label="7d" value={weather.precip168h} />
-        <RainCell label="Chance" value={weather.precipProb} suffix="%" />
       </div>
+
+      {/* Sunrise / Sunset strip */}
+      {(weather.sunrise || weather.sunset) && (
+        <div className="mx-4 mb-3 flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 text-[10px] font-mono text-muted-foreground">
+          <span>☀️ {weather.sunrise || '—'}</span>
+          <span className="text-muted-foreground/40">|</span>
+          <span>🌙 {weather.sunset || '—'}</span>
+        </div>
+      )}
     </div>
   );
 }

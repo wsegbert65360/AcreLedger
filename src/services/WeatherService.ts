@@ -190,6 +190,8 @@ export const WeatherService = {
             windDirection: '—', dewPoint: 0, precipProb: 0,
             precip24h: 0, precip72h: 0, precip168h: 0,
             isRainingNow: false, locationName: 'Unknown',
+            cloudCover: 0, conditions: '', icon: 'clear-day',
+            sunrise: '', sunset: '',
             isError: true, forecastDays: [],
         };
 
@@ -199,7 +201,8 @@ export const WeatherService = {
 
         if (extendedCache.has(location)) {
             try {
-                return await extendedCache.get(location);
+                const data = await extendedCache.get(location);
+                return this._mapExtendedWeather(data, location);
             } catch {
                 // fall through and retry
             }
@@ -219,7 +222,7 @@ export const WeatherService = {
                 `${VC_BASE_URL}/${encodeURIComponent(location)}/last7days/next10days`,
                 `?unitGroup=us&key=${API_KEY}&contentType=json`,
                 `&include=current,days`,
-                `&elements=datetime,tempmax,tempmin,temp,feelslike,humidity,dew,windspeed,windgusts,winddir,precip,precipprob,cloudcover`,
+                `&elements=datetime,tempmax,tempmin,temp,feelslike,humidity,dew,windspeed,windgusts,winddir,precip,precipprob,cloudcover,conditions,icon,sunrise,sunset`,
             ].join('');
 
             const fetchPromise = fetch(url, { signal: controller.signal })
@@ -253,6 +256,8 @@ export const WeatherService = {
                 windDirection: '—', dewPoint: 0, precipProb: 0,
                 precip24h: 0, precip72h: 0, precip168h: 0,
                 isRainingNow: false, locationName: data.address || location || 'Unknown',
+                cloudCover: 0, conditions: '', icon: 'clear-day',
+                sunrise: '', sunset: '',
                 isError: true, forecastDays: [],
             };
         }
@@ -281,6 +286,10 @@ export const WeatherService = {
                 tempLowF: d.tempmin != null ? Math.round(d.tempmin) : null,
                 rainChance: d.precipprob != null ? Math.round(d.precipprob) : null,
                 precipIn: d.precip != null ? Math.round(d.precip * 100) / 100 : null,
+                conditions: d.conditions || undefined,
+                icon: d.icon || undefined,
+                cloudCover: d.cloudcover != null ? Math.round(d.cloudcover) : undefined,
+                windSpeed: d.windspeed != null ? Math.round(d.windspeed) : undefined,
             }));
 
         return {
@@ -297,6 +306,11 @@ export const WeatherService = {
             precip168h: Math.round(precip168h * 100) / 100,
             isRainingNow: (current.precip || 0) > 0,
             locationName: data.address || 'Unknown',
+            cloudCover: Math.round(current.cloudcover ?? 0),
+            conditions: current.conditions || '',
+            icon: current.icon || 'clear-day',
+            sunrise: current.sunrise ? (current.sunrise as string).slice(0, 5) : '',
+            sunset: current.sunset ? (current.sunset as string).slice(0, 5) : '',
             isError: false,
             forecastDays,
         };
@@ -318,12 +332,15 @@ export const WeatherService = {
     async fetchHistoricalConditions(lat: number, lng: number, dateStr: string, timeStr?: string): Promise<WeatherData | null> {
         if (!API_KEY || API_KEY === 'undefined') return null;
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         try {
             // Format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
             const dateTime = timeStr ? `${dateStr}T${timeStr}:00` : dateStr;
             const url = `${VC_BASE_URL}/${lat},${lng}/${dateTime}?unitGroup=us&key=${API_KEY}&contentType=json&include=hours,current&elements=temp,humidity,windspeed,winddir`;
 
-            const res = await fetch(url);
+            const res = await fetch(url, { signal: controller.signal });
             if (!res.ok) throw new Error('Historical weather fetch failed');
             
             const data = await res.json();
@@ -339,9 +356,15 @@ export const WeatherService = {
                 wind: Math.round(target.windspeed),
                 windDirection: this.degreesToDirection(target.winddir)
             };
-        } catch (error) {
-            console.error('[WeatherService] Error fetching historical weather:', error);
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.error('[WeatherService] Historical weather fetch timed out');
+            } else {
+                console.error('[WeatherService] Error fetching historical weather:', error);
+            }
             return null;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 };

@@ -1,14 +1,10 @@
+import { Cloud } from 'lucide-react';
+
+import { getWeatherLucideIcon } from '@/lib/weatherHelpers';
 import { ForecastDay } from '@/types/weather';
-import { Cloud, Droplets } from 'lucide-react';
 
 interface ForecastGridProps {
   days: ForecastDay[];
-}
-
-function getWeatherEmoji(chance: number, precip: number): string {
-  if (precip > 0.5 || chance > 70) return '🌧️';
-  if (precip > 0 || chance > 20) return '🌦️';
-  return '☀️';
 }
 
 function getDayLabel(dateStr: string, index: number): string {
@@ -22,7 +18,7 @@ function ForecastDayCell({ day, index }: { day: ForecastDay; index: number }) {
   const rainChance = day.rainChance ?? 0;
   const precipIn = day.precipIn ?? 0;
   const rainActive = rainChance > 30 || precipIn > 0;
-  const emoji = getWeatherEmoji(rainChance, precipIn);
+  const WeatherIcon = getWeatherLucideIcon(day.icon, day.rainChance ?? 0, false);
   const rainFill = Math.min(rainChance, 100);
 
   return (
@@ -40,7 +36,9 @@ function ForecastDayCell({ day, index }: { day: ForecastDay; index: number }) {
       }`}>
         {label}
       </span>
-      <span className="text-base leading-none mb-1">{emoji}</span>
+      <WeatherIcon size={18} className={`mb-1 ${
+        rainActive ? 'text-blue-400' : 'text-muted-foreground'
+      }`} />
       <span className={`text-[11px] font-bold font-mono leading-none mb-1 ${
         rainActive ? 'text-blue-400' : 'text-muted-foreground'
       }`}>
@@ -102,4 +100,3 @@ export default function ForecastGrid({ days }: ForecastGridProps) {
   );
 }
 
-export { getWeatherEmoji };

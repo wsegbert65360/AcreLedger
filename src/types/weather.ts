@@ -15,6 +15,10 @@ export interface ForecastDay {
     tempLowF: number | null;
     rainChance: number | null;
     precipIn: number | null;
+    conditions?: string;    // 'Partly Cloudy', etc.
+    icon?: string;          // 'partly-cloudy-day', etc.
+    cloudCover?: number;    // 0-100
+    windSpeed?: number;     // mph
 }
 
 export interface ExtendedWeatherData {
@@ -31,6 +35,11 @@ export interface ExtendedWeatherData {
     precip168h: number;
     isRainingNow: boolean;
     locationName: string;
+    cloudCover: number;       // 0-100
+    conditions: string;       // e.g., 'Partly Cloudy'
+    icon: string;             // e.g., 'partly-cloudy-day'
+    sunrise: string;          // HH:mm
+    sunset: string;           // HH:mm
     isError?: boolean;
     forecastDays: ForecastDay[];
 }

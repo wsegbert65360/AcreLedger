@@ -1,28 +1,15 @@
-import { Wind, Thermometer, Droplets, MapPin, Loader2, ChevronRight } from 'lucide-react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { WeatherService } from '@/services/WeatherService';
-import { WeatherData } from '@/types/weather';
-import { useFarm } from '@/store/farmStore';
 
-const ZIP_REGEX = /^\d{5}(-\d{4})?$/;
+import { ChevronRight, Droplets, Loader2, MapPin, Thermometer, Wind } from 'lucide-react';
+
+import { loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
+import { WeatherService } from '@/services/WeatherService';
+import { useFarm } from '@/store/farmStore';
+import { WeatherData } from '@/types/weather';
 
 function initialWeather(): WeatherData {
   return { wind: 0, temp: 0, humidity: 0, windDirection: '—', precip24h: 0, precip72h: 0, precipProb: 0 };
-}
-
-function loadZip(userId?: string): string {
-  try {
-    const key = userId ? `${userId}_al_zip` : 'al_zip';
-    return localStorage.getItem(key) || '';
-  } catch { return ''; }
-}
-
-function saveZip(zip: string, userId?: string) {
-  try {
-    const key = userId ? `${userId}_al_zip` : 'al_zip';
-    localStorage.setItem(key, zip);
-  } catch { /* ignore */ }
 }
 
 export default function WeatherBar() {
