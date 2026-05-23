@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 describe('WeatherService', () => {
-    const mockLocation = '40.7128,-74.0060';
     const mockApiKey = 'test-api-key';
 
     beforeEach(() => {
@@ -64,7 +63,7 @@ describe('WeatherService', () => {
             
             // First call to populate cache
             let resolver: any;
-            const slowPromise = new Promise((resolve, reject) => {
+            const slowPromise = new Promise((_, reject) => {
                 resolver = reject;
             });
             (global.fetch as any).mockReturnValue(slowPromise);

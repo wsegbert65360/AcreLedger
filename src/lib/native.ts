@@ -22,7 +22,7 @@ type ShareFileOptions = {
   fileName: string;
   data: string;
   title?: string;
-  encoding?: Encoding;
+  encoding?: Encoding | 'utf8' | 'base64' | 'ascii';
 };
 
 export const native = {
@@ -78,7 +78,7 @@ export const native = {
         path: safeFileName,
         data,
         directory: Directory.Cache,
-        ...(encoding ? { encoding } : {})
+        ...(encoding ? { encoding: encoding as Encoding } : {})
       });
 
       await Share.share({
@@ -91,6 +91,15 @@ export const native = {
       console.error('Error sharing file:', error);
       toast.error('Failed to share file: ' + (error instanceof Error ? error.message : String(error)));
       return false;
+    } finally {
+      try {
+        await Filesystem.deleteFile({
+          path: safeFileName,
+          directory: Directory.Cache
+        });
+      } catch (cleanupError) {
+        console.warn('Failed to clean up shared file:', cleanupError);
+      }
     }
   },
   sharePdf: async (fileName: string, pdfDoc: any): Promise<boolean> => {
@@ -105,7 +114,8 @@ export const native = {
     return native.shareFile({
       fileName,
       data: base64Data,
-      title: `AcreLedger Report: ${sanitizeNativeFileName(fileName)}`
+      title: `AcreLedger Report: ${sanitizeNativeFileName(fileName)}`,
+      encoding: Encoding.Base64
     });
   }
 };

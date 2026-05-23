@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
@@ -9,7 +9,7 @@ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
-import { loadFromStorage, saveToStorage } from './storageUtils';
+import { saveToStorage } from './storageUtils';
 import { useAuth } from './useAuth';
 import { usePlantRecords } from './usePlantRecords';
 import { useSprayRecords } from './useSprayRecords';
@@ -131,6 +131,8 @@ interface FarmState {
   farmName: string | null;
   /** Restores the entire farm state from a JSON backup */
   restoreFromBackup: (data: any) => Promise<boolean>;
+  /** Refresh/refetch all farm data from Supabase */
+  refresh: () => Promise<boolean>;
 }
 
 const FarmContext = createContext<FarmState | null>(null);
@@ -306,7 +308,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         } finally {
           setLoading(false);
         }
-  }, [session, farm_id, setLoading]);
+  }, [session, farm_id, isOnline, setLoading]);
+
+  const fetchDataRef = useRef(fetchData);
+  useEffect(() => {
+    fetchDataRef.current = fetchData;
+  });
 
   useEffect(() => {
     fetchData();
@@ -335,13 +342,13 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       const runReplay = async () => {
         const success = await syncQueue.replayQueue(farm_id);
         if (success) {
-          fetchData();
+          fetchDataRef.current();
         }
         updatePendingSyncCount();
       };
       runReplay();
     }
-  }, [isOnline, farm_id, fetchData, updatePendingSyncCount]);
+  }, [isOnline, farm_id, updatePendingSyncCount]);
 
   // --- Compose CRUD hooks ---
   const plantOps = usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnline, onMutation: updatePendingSyncCount });

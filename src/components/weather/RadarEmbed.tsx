@@ -193,7 +193,7 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
 
       {/* ── Fullscreen overlay via portal ── */}
       {expanded && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+        <div className="fixed inset-0 z-[9999] bg-black flex flex-col pb-[env(safe-area-inset-bottom)]">
           {/* Close bar — pt-safe accounts for phone status bar / notch. */}
           <button
             onClick={handleCollapse}

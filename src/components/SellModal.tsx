@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Banknote, Truck, Hash, Calendar } from 'lucide-react';
+import { Banknote, Truck, Hash } from 'lucide-react';
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';

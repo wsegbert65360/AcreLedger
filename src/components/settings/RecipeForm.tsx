@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { X, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getUnitLabel } from '@/utils/unitConversion';
+
 import type { SprayRecipeProduct } from '@/types/farm';
 
 export default function RecipeForm({
@@ -27,7 +27,7 @@ export default function RecipeForm({
   );
   const [applicatorName, setApplicatorName] = useState(initial?.applicatorName ?? localStorage.getItem(`al_applicator_name_${userPrefix}`) ?? '');
   const [licenseNumber, setLicenseNumber] = useState(initial?.licenseNumber ?? localStorage.getItem(`al_license_number_${userPrefix}`) ?? '');
-  const [epaRegNumber, setEpaRegNumber] = useState(initial?.epaRegNumber ?? '');
+  const epaRegNumber = initial?.epaRegNumber ?? '';
   const [targetPest, setTargetPest] = useState(initial?.targetPest ?? '');
 
   const updateProduct = (i: number, field: keyof SprayRecipeProduct, value: string) => {

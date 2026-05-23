@@ -9,7 +9,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { Settings, Tractor } from 'lucide-react';
 
 const Index = () => {
-  const { fields: allFields, viewingSeason, loading } = useFarm();
+  const { fields: allFields, viewingSeason } = useFarm();
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
     let total = 0;
     const totals: Record<string, number> = {};
@@ -124,7 +124,7 @@ const Index = () => {
             )}
 
             {allFields.length > 0 && (
-            <div className="bg-background/60 backdrop-blur-xl sticky bottom-[72px] mt-8 border-t border-border/50 px-4 py-2 pb-12 z-30">
+            <div className="bg-background/60 backdrop-blur-xl sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] mt-8 border-t border-border/50 px-4 py-2 pb-12 z-30">
               {/* Glass Gradient Transition Overlay */}
               <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
               

@@ -1,5 +1,4 @@
 import { Capacitor } from '@capacitor/core';
-import { Encoding } from '@capacitor/filesystem';
 
 import { native } from '@/lib/native';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
@@ -201,7 +200,7 @@ async function downloadFile(content: string, fileName: string, contentType: stri
             fileName,
             data: content,
             title: `AcreLedger Export: ${fileName}`,
-            encoding: Encoding.UTF8
+            encoding: 'utf8'
         });
         return;
     }

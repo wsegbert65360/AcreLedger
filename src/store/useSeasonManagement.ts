@@ -166,18 +166,18 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     try {
       const backupData = backupSchema.parse(rawData);
 
-      const fieldsToDb      = (backupData.fields               ?? []).map((f) => mapFieldToDb({ ...f, farm_id }));
-      const binsToDb        = (backupData.bins                 ?? []).map((b) => mapBinToDb({ ...b, farm_id }));
-      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => mapPlantToDb({ ...r, farm_id }));
-      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => mapSprayToDb({ ...r, farm_id }));
-      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => mapHarvestToDb({ ...r, farm_id }));
-      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => mapHayToDb({ ...r, farm_id }));
-      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => mapFertilizerToDb({ ...r, farm_id }));
-      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => mapTillageToDb({ ...r, farm_id }));
-      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => mapGrainToDb({ ...m, farm_id }));
-      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => mapSeedToDb({ ...s, farm_id }));
-      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => mapFertilizerRecipeToDb({ ...r, farm_id }));
-      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDb({ ...r, farm_id }));
+      const fieldsToDb      = (backupData.fields               ?? []).map((f) => mapFieldToDb({ ...f, farm_id } as unknown as Field));
+      const binsToDb        = (backupData.bins                 ?? []).map((b) => mapBinToDb({ ...b, farm_id } as unknown as Bin));
+      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => mapPlantToDb({ ...r, farm_id } as unknown as PlantRecord));
+      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => mapSprayToDb({ ...r, farm_id } as unknown as SprayRecord));
+      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => mapHarvestToDb({ ...r, farm_id } as unknown as HarvestRecord));
+      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => mapHayToDb({ ...r, farm_id } as unknown as HayHarvestRecord));
+      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => mapFertilizerToDb({ ...r, farm_id } as unknown as FertilizerApplication));
+      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => mapTillageToDb({ ...r, farm_id } as unknown as TillageRecord));
+      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => mapGrainToDb({ ...m, farm_id } as unknown as GrainMovement));
+      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => mapSeedToDb({ ...s, farm_id } as unknown as SavedSeed));
+      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => mapFertilizerRecipeToDb({ ...r, farm_id } as unknown as FertilizerRecipe));
+      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDb({ ...r, farm_id } as unknown as SprayRecipe));
 
       const payload = {
         fields: fieldsToDb,
@@ -240,7 +240,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     const userPrefix = userId ? `${userId}_al_` : null;
 
     try {
-      await offlineStorage.clearCache(userId);
+      await offlineStorage.clearCache(userId ?? null);
     } catch (err) {
       console.error('Failed to clear SQLite cache:', err);
     }

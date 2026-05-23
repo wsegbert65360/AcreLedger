@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { 
-    mapFieldFromDb, mapFieldToDb,
-    mapPlantFromDb, mapPlantToDb,
+    mapFieldToDb,
+    mapPlantToDb,
     mapSprayFromDb, mapSprayToDb,
-    mapHarvestFromDb, mapHarvestToDb,
     mapSeedFromDb, mapSeedToDb
 } from '../mappers';
 import { SprayRecord, SavedSeed } from '../../types/farm';

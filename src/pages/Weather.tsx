@@ -39,9 +39,10 @@ export default function Weather() {
   useEffect(() => {
     let cancelled = false;
     const saved = loadZip(userId);
+    const hasSavedOrFields = saved.trim() !== '' || fields.some(f => f.lat != null && f.lng != null);
 
     setLoading(true);
-    setUsingGps(true);
+    setUsingGps(!hasSavedOrFields);
 
     resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
       if (cancelled) return;
@@ -49,6 +50,7 @@ export default function Weather() {
       // Accept any valid coords — GPS, field coords, or parsed lat,lng string
       const hasCoords = lat !== 0 && lng !== 0;
       setCoords(hasCoords ? { lat, lng } : null);
+      setUsingGps(false);
 
       if (locationString) {
         loadWeather(locationString);
@@ -107,9 +109,13 @@ export default function Weather() {
   const handleRefresh = useCallback(() => {
     setLoading(true);
     const saved = loadZip(userId);
+    const hasSavedOrFields = saved.trim() !== '' || fields.some(f => f.lat != null && f.lng != null);
+    setUsingGps(!hasSavedOrFields);
+
     resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
       const gotGps = lat !== 0 && lng !== 0;
       setCoords(gotGps ? { lat, lng } : null);
+      setUsingGps(false);
       if (locationString) loadWeather(locationString);
       else setLoading(false);
     });

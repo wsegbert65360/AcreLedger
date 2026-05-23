@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
+import { native } from "@/lib/native";
+
 type Theme = "dark" | "light" | "system";
 
 interface ThemeProviderState {
@@ -39,6 +41,11 @@ export function ThemeProvider({
                 // Background colors from index.css translated to hex/rgb for meta tag
                 const color = isDark ? "#000000" : "#d9e1e8"; // #d9e1e8 approx hsl(210 20% 88%)
                 metaThemeColor.setAttribute("content", color);
+            }
+            if (isDark) {
+                native.statusBar.setLight();
+            } else {
+                native.statusBar.setDark();
             }
         };
 

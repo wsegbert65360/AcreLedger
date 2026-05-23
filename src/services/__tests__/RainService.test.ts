@@ -12,7 +12,6 @@ describe('RainService', () => {
     vi.stubEnv('VITE_RAIN_API_URL', mockApiUrl);
   });
 
-  const today = () => new Date().toISOString().split('T')[0];
   const daysAgo = (n: number) => {
     const d = new Date();
     d.setUTCDate(d.getUTCDate() - n);

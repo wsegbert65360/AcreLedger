@@ -58,7 +58,6 @@
     --sidebar-ring: 142 80% 28%;
 
     --safe-area-top: env(safe-area-inset-top, 0px);
-    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .dark {
@@ -122,7 +121,7 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     padding-top: var(--safe-area-top);
-    padding-bottom: var(--safe-area-bottom);
+    overscroll-behavior-y: contain;
   }
 
   /* Scrollbar styling for OLED */

@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Encoding } from '@capacitor/filesystem';
 import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History as HistoryIcon, Tractor } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -66,7 +65,7 @@ export default function Reports() {
     sprayRecords:         allSpray,
     harvestRecords:       allHarvest,
     hayHarvestRecords:    allHay,
-    grainMovements:       allGrain,
+
     fertilizerApplications: allFertilizer,
     fields,
     farmName,
@@ -157,7 +156,13 @@ export default function Reports() {
     return generateLandlordStatement(harvestRecords, selectedLandlord);
   }, [harvestRecords, selectedLandlord]);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    if (Capacitor.isNativePlatform()) {
+      toast.info('Printing is not supported directly in the mobile app. Please export to PDF and print/share from there.');
+      return;
+    }
+    window.print();
+  };
 
   const handleExportLandlordCSV = () => {
     if (!landlordStatement) return;
@@ -170,7 +175,7 @@ export default function Reports() {
           fileName,
           data: csv,
           title: `AcreLedger Export: ${fileName}`,
-          encoding: Encoding.UTF8
+          encoding: 'utf8'
         });
         return;
       }

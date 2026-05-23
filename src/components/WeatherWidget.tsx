@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ChevronRight, Droplets, Loader2, MapPin, Thermometer, Wind } from 'lucide-react';
+import { ChevronRight, Loader2, MapPin, Thermometer, Wind } from 'lucide-react';
 
 import { loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
 import { WeatherService } from '@/services/WeatherService';
@@ -23,7 +23,7 @@ export default function WeatherBar() {
   const [zipError, setZipError] = useState('');
   const [weather, setWeather] = useState<WeatherData>(initialWeather());
   const [locationName, setLocationName] = useState('');
-  const [lastUpdated, setLastUpdated] = useState<string>('');
+
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function WeatherBar() {
       if (!controller.signal.aborted) {
         setWeather(result);
         setLocationName(result.locationName || '');
-        setLastUpdated(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -120,6 +120,7 @@ export default function WeatherBar() {
         <div className="flex items-center gap-1.5 mt-1">
           <MapPin size={12} className="text-emerald-500/60" />
           <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className="flex items-center">
+            <label htmlFor="weatherZip" className="sr-only">Zip code or coordinates</label>
             <input
               id="weatherZip"
               name="weatherZip"

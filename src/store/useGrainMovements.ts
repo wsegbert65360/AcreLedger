@@ -121,7 +121,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       return prev.map(item => item.id === r.id ? r : item);
     });
 
-    const previous = previousRef.current;
+    const previous = previousRef.current as GrainMovement | undefined;
     if (!previous) {
       console.warn('Grain update aborted: missing previous snapshot for optimistic rollback.', { id: r.id });
       setGrainMovements(prev => prev.filter(item => item.id !== r.id));

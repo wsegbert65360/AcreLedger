@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import FieldCard from './FieldCard';

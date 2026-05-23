@@ -1,5 +1,4 @@
 import { Capacitor } from '@capacitor/core';
-import { Encoding } from '@capacitor/filesystem';
 
 import { native } from '@/lib/native';
 
@@ -16,7 +15,7 @@ export async function exportDataAsJson(data: unknown, filename: string): Promise
         fileName: filename,
         data: json,
         title: `AcreLedger Backup: ${filename}`,
-        encoding: Encoding.UTF8
+        encoding: 'utf8'
       });
     }
 

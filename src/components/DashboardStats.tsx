@@ -27,8 +27,11 @@ function StatCard({
   return (
     <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
       <div className="flex items-center justify-between">
-        <div className={`p-1.5 rounded-lg bg-muted ${iconColor}`}>
-          <Icon size={16} />
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 rounded-lg bg-muted ${iconColor}`}>
+            <Icon size={16} />
+          </div>
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
         </div>
         {badge && (
           <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${badge.color}`}>

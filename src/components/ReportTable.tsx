@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { FileDown, Printer } from 'lucide-react';
+import { FileDown } from 'lucide-react';
 
 interface ReportTableProps {
   title: string;

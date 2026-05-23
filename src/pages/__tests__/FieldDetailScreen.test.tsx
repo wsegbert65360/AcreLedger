@@ -1,6 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
-import { useMemo } from 'react';
 
 // Mocking useFarm to simulate the data flow in FieldDetailScreen
 const mockUseFarm = vi.fn();

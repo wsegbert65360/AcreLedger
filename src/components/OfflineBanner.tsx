@@ -57,8 +57,8 @@ export default function OfflineBanner() {
 
   return (
     <>
-      <div className="h-9 flex-shrink-0" />
-      <div className={`fixed top-0 left-0 right-0 z-[100] ${bgClass} flex items-center justify-center gap-2 py-2 px-4 text-xs font-bold lg:pl-60 transition-colors duration-300`}>
+      <div className="h-[calc(2.25rem+env(safe-area-inset-top,0px))] flex-shrink-0" />
+      <div className={`fixed top-0 left-0 right-0 z-[100] ${bgClass} flex items-center justify-center gap-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] pb-2 px-4 text-xs font-bold lg:pl-60 transition-colors duration-300`}>
         {icon}
         <span>{text}</span>
       </div>

@@ -29,7 +29,7 @@ export function usePullToRefresh({
 
   const startY = useRef(0);
   const currentY = useRef(0);
-  const containerRef = useRef<HTMLElement | null>(null);
+
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (disabled || refreshing) return;
@@ -82,7 +82,7 @@ export function usePullToRefresh({
     }
   }, [disabled]);
 
-  const progress = Math.min(pullDistance / threshold, 1);
+
   const translateY = pulling ? pullDistance : 0;
 
   return {

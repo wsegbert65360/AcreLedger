@@ -91,6 +91,22 @@ const AppContent = () => {
     };
   }, [isOnline, farm_id]);
 
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const backListenerPromise = CapApp.addListener('backButton', () => {
+      if (window.location.pathname === '/') {
+        CapApp.minimizeApp();
+      } else {
+        window.history.back();
+      }
+    });
+
+    return () => {
+      backListenerPromise.then((handle) => handle.remove());
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-6">

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import BottomNav from '@/components/BottomNav';
-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Tractor, Sprout, Scissors, Disc3 } from 'lucide-react';
+import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Sprout, Scissors, Disc3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
@@ -60,7 +60,7 @@ const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; la
   ]},
 ];
 
-const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
+
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | GrainMovement | TillageRecord;
 
@@ -81,7 +81,6 @@ export default function Activity() {
     deleteHayHarvestRecords,
     deleteFertilizerApplications,
     deleteTillageRecords,
-    activeSeason,
     viewingSeason,
     setViewingSeason,
     seasonOptions,
@@ -278,7 +277,7 @@ export default function Activity() {
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar lg:flex-wrap">
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
-                {group.tabs.map((t, i) => {
+                {group.tabs.map((t) => {
                   const count = t.key === 'all' ? unifiedRecords.length
                     : t.key === 'plant' ? filteredPlant.length
                     : t.key === 'spray' ? filteredSpray.length

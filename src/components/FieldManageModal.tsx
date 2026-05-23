@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 
 import { MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
