@@ -62,7 +62,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 lg:pb-8">
+    <div className="min-h-screen bg-background pb-[calc(10rem+env(safe-area-inset-bottom,0px))] lg:pb-28">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border print:hidden pb-0">
         <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between lg:max-w-5xl lg:px-8">
           <div className="flex items-center gap-3">
@@ -124,7 +124,7 @@ const Index = () => {
             )}
 
             {allFields.length > 0 && (
-            <div className="bg-background/60 backdrop-blur-xl sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] mt-8 border-t border-border/50 px-4 py-2 pb-12 z-30">
+            <div className="bg-background/60 backdrop-blur-xl fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 border-t border-border/50 px-4 py-2 z-30 max-w-lg mx-auto lg:max-w-5xl w-full">
               {/* Glass Gradient Transition Overlay */}
               <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
               
