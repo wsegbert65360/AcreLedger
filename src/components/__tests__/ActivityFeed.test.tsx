@@ -49,7 +49,7 @@ describe('ActivityFeed', () => {
     
     expect(screen.queryAllByText('🌱').length).toBeGreaterThan(0);
     expect(screen.getByText('Corn')).toBeDefined();
-    expect(screen.queryAllByText('🚜').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('📦').length).toBeGreaterThan(0);
     expect(screen.getByText('50 Bales (1 Cut)')).toBeDefined();
   });
 });

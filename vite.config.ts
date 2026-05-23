@@ -99,6 +99,11 @@ export default defineConfig(({ mode }) => ({
   build: {
     chunkSizeWarningLimit: 1000,
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
