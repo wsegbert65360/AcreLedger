@@ -27,7 +27,7 @@ workflows:
         XCODE_SCHEME: "App"
 
       groups:
-        - acreledger-env
+        - appstore
 
     cache:
       cache_paths:
