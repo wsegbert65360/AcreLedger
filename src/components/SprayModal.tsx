@@ -461,12 +461,12 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-muted-foreground font-mono text-xs font-bold uppercase tracking-wider">Herbicide Mix (Granular Audit) *</Label>
+                <span className="text-muted-foreground font-mono text-xs font-bold uppercase tracking-wider block">Herbicide Mix (Granular Audit) *</span>
                 <div className="text-[11px] font-mono text-muted-foreground">EPA REG # REQUIRED PER ITEM</div>
               </div>
 
               {products.map((p, i) => (
-                <div key={p.ui_id || i} className="bg-muted p-2.5 rounded-md border border-border/50 relative">
+                <div key={p.ui_id || i} className="bg-muted p-2.5 rounded-lg border border-border/50 relative">
                   {products.length > 1 && (
                     <button onClick={() => removeProduct(i)} className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 shadow-md hover:bg-destructive/80 transition-colors">
                       <X size={12} />

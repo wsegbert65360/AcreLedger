@@ -356,7 +356,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-primary font-mono text-[11px] font-bold">FSA COMPLIANCE DATA</Label>
+              <span className="text-primary font-mono text-[11px] font-bold block">FSA COMPLIANCE DATA</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

@@ -9,6 +9,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface TillageModalProps {
     field: Field;
@@ -23,6 +33,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
     const [implementType, setImplementType] = useState('Disk');
     const [notes, setNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -83,26 +94,31 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = () => {
         if (!initialData) return;
-        if (window.confirm('Are you sure you want to delete this tillage record?')) {
-            setIsSaving(true);
-            try {
-                const success = await deleteTillageRecords([initialData.id]);
-                if (success) {
-                    onClose();
-                }
-            } catch (err) {
-                console.error('Delete error:', err);
-                toast.error('Failed to delete record.');
-            } finally {
-                setIsSaving(false);
+        setShowDeleteConfirm(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!initialData) return;
+        setIsSaving(true);
+        try {
+            const success = await deleteTillageRecords([initialData.id]);
+            if (success) {
+                onClose();
             }
+        } catch (err) {
+            console.error('Delete error:', err);
+            toast.error('Failed to delete record.');
+        } finally {
+            setIsSaving(false);
+            setShowDeleteConfirm(false);
         }
     };
 
     return (
-        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <>
+            <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
                 <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between bg-muted/30 space-y-0">
                     <div className="flex items-center gap-3">
@@ -210,5 +226,26 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                 </form>
             </DialogContent>
         </Dialog>
+
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="text-foreground">Delete Tillage Record</AlertDialogTitle>
+                    <AlertDialogDescription className="text-muted-foreground">
+                        Are you sure you want to delete this tillage record? This action cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={confirmDelete}
+                        className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+                    >
+                        Delete
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    </>
     );
 }

@@ -137,9 +137,9 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
 
           {/* Storage Bin */}
           <div>
-            <Label className="text-muted-foreground font-mono text-xs font-bold">STORAGE BIN *</Label>
+            <Label htmlFor="grainStorageBinSelect" className="text-muted-foreground font-mono text-xs font-bold">STORAGE BIN *</Label>
             <Select value={binId} onValueChange={(val) => { setBinId(val); setErrors(e => ({ ...e, binId: '' })); }}>
-              <SelectTrigger className={`mt-1 bg-muted border-border font-mono text-xs ${errors.binId ? 'border-destructive' : ''}`}>
+              <SelectTrigger id="grainStorageBinSelect" className={`mt-1 bg-muted border-border font-mono text-xs ${errors.binId ? 'border-destructive' : ''}`}>
                 <SelectValue placeholder="Choose bin..." />
               </SelectTrigger>
               <SelectContent>
@@ -194,11 +194,11 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
           {/* Type-specific fields */}
           {initialData.type === 'in' ? (
             <div>
-              <Label className="text-muted-foreground font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              <Label htmlFor="grainSourceFieldSelect" className="text-muted-foreground font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
                 SOURCE FIELD
               </Label>
               <Select value={sourceField} onValueChange={(val) => setSourceField(val)}>
-                <SelectTrigger className="mt-1 bg-muted border-border font-mono text-sm">
+                <SelectTrigger id="grainSourceFieldSelect" className="mt-1 bg-muted border-border font-mono text-sm">
                   <SelectValue placeholder="Select field name..." />
                 </SelectTrigger>
                 <SelectContent>

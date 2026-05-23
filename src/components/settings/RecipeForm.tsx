@@ -58,7 +58,7 @@ export default function RecipeForm({
           autoFocus
         />
       </div>
-      <Label className="text-muted-foreground font-mono text-xs">PRODUCTS</Label>
+      <span className="text-muted-foreground font-mono text-xs block">PRODUCTS</span>
       {products.map((p, i) => (
         <div key={p.id} className="flex gap-2 items-start border-b border-border/30 pb-3 last:border-0 last:pb-0">
           <div className="flex-1 space-y-2">

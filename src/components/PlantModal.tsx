@@ -179,8 +179,8 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
               />
             </div>
             <div>
-              <Label className="text-muted-foreground font-mono text-xs text-right block">ACREAGE</Label>
-              <div className="mt-1 px-3 py-2 bg-muted/50 border border-border/30 rounded-md font-mono text-foreground text-center text-sm">
+              <span className="text-muted-foreground font-mono text-xs text-right block">ACREAGE</span>
+              <div className="mt-1 px-3 py-2 bg-muted/50 border border-border/30 rounded-lg font-mono text-foreground text-center text-sm">
                 {field.acreage} ac
               </div>
             </div>
@@ -188,9 +188,9 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
 
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/20">
             <div>
-              <Label className="text-muted-foreground font-mono text-xs">IRRIGATION Practice *</Label>
+              <Label htmlFor="irrigationPracticeSelect" className="text-muted-foreground font-mono text-xs">IRRIGATION Practice *</Label>
               <Select value={irrigationPractice} onValueChange={(v: any) => setIrrigationPractice(v)}>
-                <SelectTrigger className="mt-1 bg-muted border-border text-foreground">
+                <SelectTrigger id="irrigationPracticeSelect" className="mt-1 bg-muted border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

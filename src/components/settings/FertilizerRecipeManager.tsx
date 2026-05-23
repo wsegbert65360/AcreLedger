@@ -6,6 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sprout, Plus, Trash2, Loader2, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function FertilizerRecipeManager() {
   const { fertilizerRecipes, addFertilizerRecipe, updateFertilizerRecipe, deleteFertilizerRecipe } = useFarm();
@@ -15,6 +25,7 @@ export default function FertilizerRecipeManager() {
   const [name, setName] = useState('');
   const [formula, setFormula] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [recipeToDelete, setRecipeToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const resetForm = () => {
     setName('');
@@ -72,7 +83,8 @@ export default function FertilizerRecipeManager() {
   };
 
   return (
-    <Card className="border-lime-500/30">
+    <>
+      <Card className="border-lime-500/30">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lime-600 dark:text-lime-400 text-lg">
           <Sprout size={18} />
@@ -184,11 +196,7 @@ export default function FertilizerRecipeManager() {
                       variant="ghost" 
                       size="icon" 
                       className="h-8 w-8 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
-                      onClick={async () => {
-                        if (confirm(`Delete recipe "${recipe.name}"?`)) {
-                          await deleteFertilizerRecipe(recipe.id);
-                        }
-                      }}
+                      onClick={() => setRecipeToDelete({ id: recipe.id, name: recipe.name })}
                     >
                       <Trash2 size={14} />
                     </Button>
@@ -200,5 +208,36 @@ export default function FertilizerRecipeManager() {
         </div>
       </CardContent>
     </Card>
+
+    <AlertDialog open={!!recipeToDelete} onOpenChange={(open) => { if (!open) setRecipeToDelete(null); }}>
+      <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-foreground">Delete Recipe</AlertDialogTitle>
+          <AlertDialogDescription className="text-muted-foreground">
+            Are you sure you want to delete recipe &ldquo;{recipeToDelete?.name}&rdquo;?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={async () => {
+              if (recipeToDelete) {
+                try {
+                  await deleteFertilizerRecipe(recipeToDelete.id);
+                } catch (err) {
+                  console.error('Delete failed:', err);
+                  toast.error('Failed to delete recipe');
+                }
+              }
+              setRecipeToDelete(null);
+            }}
+            className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 }

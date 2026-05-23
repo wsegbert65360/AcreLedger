@@ -26,7 +26,7 @@ export default function ReportTable({
           {onExport && (
             <button
               onClick={onExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-xs font-mono font-bold hover:bg-muted transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-lg text-xs font-mono font-bold hover:bg-muted transition-colors"
               aria-label={`Export ${exportLabel}`}
             >
               <FileDown size={14} className="text-muted-foreground" />
@@ -36,7 +36,7 @@ export default function ReportTable({
           {onExportPdf && (
             <button
               onClick={onExportPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-xs font-mono font-bold hover:bg-muted transition-colors text-primary"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-lg text-xs font-mono font-bold hover:bg-muted transition-colors text-primary"
               aria-label="Export PDF"
             >
               <FileDown size={14} />

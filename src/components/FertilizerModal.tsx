@@ -18,6 +18,16 @@ interface FertilizerModalProps {
 }
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
     const { 
@@ -36,6 +46,8 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
     const [saveAsRecipe, setSaveAsRecipe] = useState(false);
     const [newRecipeName, setNewRecipeName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [showDeleteAppConfirm, setShowDeleteAppConfirm] = useState(false);
+    const [recipeToDelete, setRecipeToDelete] = useState<{ id: string; name: string } | null>(null);
 
     useEffect(() => {
         if (initialData) {
@@ -114,43 +126,51 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = () => {
         if (!initialData) return;
-        if (window.confirm('Are you sure you want to delete this fertilizer application?')) {
-            setIsSaving(true);
-            try {
-                const success = await deleteFertilizerApplications([initialData.id]);
-                if (success) {
-                    onClose();
-                }
-            } catch (err) {
-                console.error('Delete error:', err);
-                toast.error('Failed to delete application.');
-            } finally {
-                setIsSaving(false);
+        setShowDeleteAppConfirm(true);
+    };
+
+    const confirmDeleteApp = async () => {
+        if (!initialData) return;
+        setIsSaving(true);
+        try {
+            const success = await deleteFertilizerApplications([initialData.id]);
+            if (success) {
+                onClose();
             }
+        } catch (err) {
+            console.error('Delete error:', err);
+            toast.error('Failed to delete application.');
+        } finally {
+            setIsSaving(false);
+            setShowDeleteAppConfirm(false);
         }
     };
 
-    const handleDeleteRecipe = async (e: React.MouseEvent, id: string, name: string) => {
+    const handleDeleteRecipe = (e: React.MouseEvent, id: string, name: string) => {
         e.stopPropagation();
         e.preventDefault();
-        
-        if (window.confirm(`Delete recipe "${name}"?`)) {
-            setIsDeleting(id);
-            try {
-                await deleteFertilizerRecipe(id);
-            } catch (err) {
-                console.error('Delete failed:', err);
-                toast.error('Failed to delete recipe');
-            } finally {
-                setIsDeleting(null);
-            }
+        setRecipeToDelete({ id, name });
+    };
+
+    const confirmDeleteRecipe = async () => {
+        if (!recipeToDelete) return;
+        setIsDeleting(recipeToDelete.id);
+        try {
+            await deleteFertilizerRecipe(recipeToDelete.id);
+        } catch (err) {
+            console.error('Delete failed:', err);
+            toast.error('Failed to delete recipe');
+        } finally {
+            setIsDeleting(null);
+            setRecipeToDelete(null);
         }
     };
 
     return (
-        <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <>
+            <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
                 <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between bg-muted/30 space-y-0">
                     <div className="flex items-center gap-3">
@@ -336,5 +356,46 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                 </form>
             </DialogContent>
         </Dialog>
+
+        <AlertDialog open={showDeleteAppConfirm} onOpenChange={setShowDeleteAppConfirm}>
+            <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="text-foreground">Delete Application</AlertDialogTitle>
+                    <AlertDialogDescription className="text-muted-foreground">
+                        Are you sure you want to delete this fertilizer application? This action cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={confirmDeleteApp}
+                        className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+                    >
+                        Delete
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={!!recipeToDelete} onOpenChange={(open) => { if (!open) setRecipeToDelete(null); }}>
+            <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="text-foreground">Delete Recipe</AlertDialogTitle>
+                    <AlertDialogDescription className="text-muted-foreground">
+                        Are you sure you want to delete recipe &ldquo;{recipeToDelete?.name}&rdquo;?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={confirmDeleteRecipe}
+                        className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+                    >
+                        Delete
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    </>
     );
 }

@@ -150,14 +150,14 @@ export function BinManager() {
                         <div className="flex gap-1">
                             <button
                                 onClick={() => setEditBin(bin)}
-                                className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                                 aria-label="Edit bin"
                             >
                                 <Pencil size={16} />
                             </button>
                             <button
                                 onClick={() => setDeleteConfirm(bin.id)}
-                                className="p-2 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                                 aria-label="Delete bin"
                             >
                                 <Trash2 size={16} />

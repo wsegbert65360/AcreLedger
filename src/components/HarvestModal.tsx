@@ -230,9 +230,9 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
           <div className="space-y-4 py-2">
             {destination === 'bin' && (
               <div>
-                <Label className="text-muted-foreground font-mono text-xs">SELECT BIN</Label>
+                <Label htmlFor="harvestBinSelect" className="text-muted-foreground font-mono text-xs">SELECT BIN</Label>
                 <Select value={binId} onValueChange={setBinId}>
-                  <SelectTrigger className="mt-1 bg-muted border-border">
+                  <SelectTrigger id="harvestBinSelect" className="mt-1 bg-muted border-border">
                     <SelectValue placeholder="Choose bin..." />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
