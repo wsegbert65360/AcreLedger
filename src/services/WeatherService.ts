@@ -35,7 +35,7 @@ export const WeatherService = {
             try {
                 const data = await promiseCache.get(location);
                 return this._mapFieldConditions(data);
-            } catch (error) {
+            } catch (_error) {
                 // If the cached promise fails, we fall through and try again or return defaults
                 return defaults;
             }
@@ -107,7 +107,7 @@ export const WeatherService = {
             try {
                 const data = await promiseCache.get(location);
                 return this._mapCurrentWeather(data);
-            } catch (error) {
+            } catch (_error) {
                 return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
             }
         }

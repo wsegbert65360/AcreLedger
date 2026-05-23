@@ -285,7 +285,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       } else {
         toast.error('Could not find historical weather for this time.');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Weather recovery failed.');
     } finally {
       setIsRecovering(false);

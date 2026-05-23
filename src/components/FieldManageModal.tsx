@@ -209,7 +209,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       } else {
         native.haptic.error();
       }
-    } catch (e) {
+    } catch (_e) {
       native.haptic.error();
     } finally {
       setIsSaving(false);

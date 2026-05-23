@@ -61,7 +61,7 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
             } else {
                 native.haptic.error();
             }
-        } catch (error) {
+        } catch (_error) {
             native.haptic.error();
         } finally {
             setIsSaving(false);

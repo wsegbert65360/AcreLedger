@@ -64,13 +64,13 @@ export default function RecordListItem({
           <p className="text-[11px] text-muted-foreground/70 mt-1 line-clamp-1">{details}</p>
         </div>
         <div className="flex flex-col gap-2 items-center justify-center ml-2">
-          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border group-hover:border-muted-foreground'
+          <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border group-hover:border-muted-foreground'
             }`}>
             {isSelected && <Check size={12} strokeWidth={3} />}
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <Edit2 size={14} />
           </button>

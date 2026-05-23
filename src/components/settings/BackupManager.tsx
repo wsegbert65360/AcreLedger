@@ -128,7 +128,7 @@ export default function BackupManager() {
 
         {/* Record summary */}
         {hasData ? (
-          <div className="rounded-md bg-muted border border-border px-3 py-2 font-mono text-xs text-muted-foreground space-y-1">
+          <div className="rounded-lg bg-muted border border-border px-3 py-2 font-mono text-xs text-muted-foreground space-y-1">
             <div className="flex justify-between">
               <span>Fields</span><span className="text-foreground">{fields?.length ?? 0}</span>
             </div>
@@ -170,7 +170,7 @@ export default function BackupManager() {
             </div>
           </div>
         ) : (
-          <div className="rounded-md bg-muted border border-border px-3 py-2 font-mono text-xs text-muted-foreground text-center">
+          <div className="rounded-lg bg-muted border border-border px-3 py-2 font-mono text-xs text-muted-foreground text-center">
             No records yet — nothing to back up.
           </div>
         )}

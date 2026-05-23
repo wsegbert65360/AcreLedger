@@ -78,9 +78,9 @@ const AppContent = () => {
     let active = true;
     const listenerPromise = CapApp.addListener('appStateChange', (state) => {
       if (!active) return;
-      console.log('App state changed:', state.isActive ? 'active' : 'inactive');
+      if (import.meta.env.DEV) console.log('App state changed:', state.isActive ? 'active' : 'inactive');
       if (state.isActive && isOnline && farm_id) {
-        console.log('App active, triggering sync queue replay.');
+        if (import.meta.env.DEV) console.log('App active, triggering sync queue replay.');
         syncQueue.replayQueue(farm_id);
       }
     });

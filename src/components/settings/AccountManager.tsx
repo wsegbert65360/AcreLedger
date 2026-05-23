@@ -13,7 +13,7 @@ export default function AccountManager() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="text-sm font-mono text-muted-foreground p-3 bg-muted rounded-md break-all">
+        <div className="text-sm font-mono text-muted-foreground p-3 bg-muted rounded-lg break-all">
           {session?.user.email}
         </div>
         <Button

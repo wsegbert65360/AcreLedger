@@ -11,7 +11,7 @@ describe('ActivityFeed', () => {
     expect(screen.getByText(/2026 Activity Feed/i)).toBeDefined();
     expect(screen.getByText(/No activities for 2026/i)).toBeDefined();
 
-    // @ts-ignore - testing null handling
+    // @ts-expect-error - testing null handling
     rerender(<ActivityFeed records={null} year={2026} onEdit={vi.fn()} />);
     expect(screen.getByText(/2026 Activity Feed/i)).toBeDefined();
     expect(screen.getByText(/No activities for 2026/i)).toBeDefined();

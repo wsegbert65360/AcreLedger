@@ -132,7 +132,7 @@ export default function SyncStatus() {
     return (
       <Card className="border-border/30">
         <CardContent className="p-6">
-          <div className="h-14 rounded-md bg-muted animate-pulse" />
+          <div className="h-14 rounded-lg bg-muted animate-pulse" />
         </CardContent>
       </Card>
     );
@@ -152,7 +152,7 @@ export default function SyncStatus() {
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Status row */}
-        <div className="flex items-center justify-between p-3 bg-muted rounded-md border border-border">
+        <div className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${config.dot} ${config.pulse ? 'animate-pulse' : ''}`} />
             <span className="text-sm font-mono text-foreground font-bold uppercase tracking-tight">

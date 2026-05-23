@@ -113,7 +113,7 @@ export function generateSprayPDF(
       `Temp: ${record.temperature ? record.temperature + '°F' : '—'} / RH: ${record.relativeHumidity ? record.relativeHumidity + '%' : '—'}`,
     ];
 
-    let detailY = yPos;
+    const detailY = yPos;
     detailsLeft.forEach((text, i) => doc.text(text, 14, detailY + i * 5));
     detailsRight.forEach((text, i) => doc.text(text, 75, detailY + i * 5));
     detailsFarRight.forEach((text, i) => doc.text(text, 140, detailY + i * 5));
@@ -167,7 +167,7 @@ export function generateSprayPDF(
           yPos = data.cursor?.y || yPos;
         }
       });
-      // @ts-ignore - autoTable adds lastAutoTable to doc
+      // @ts-expect-error - autoTable adds lastAutoTable to doc
       yPos = doc.lastAutoTable.finalY + 8;
     } else {
       doc.text('No products recorded for this application.', 14, yPos);

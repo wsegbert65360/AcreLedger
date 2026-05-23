@@ -65,12 +65,12 @@ export async function seedDatabase(
 
   // Order matters: fields & bins first (they're referenced by records)
   await batchProcess('Fields', data.fields, (f) => {
-    const { id, ...rest } = f;
+    const { id: _id, ...rest } = f;
     store.addField(rest);
   });
 
   await batchProcess('Bins', data.bins, (b) => {
-    const { id, ...rest } = b;
+    const { id: _id, ...rest } = b;
     store.addBin(rest);
   });
 

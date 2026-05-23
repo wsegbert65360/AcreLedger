@@ -47,7 +47,7 @@ export default function FertilizerRecipeManager() {
         deleted_at: null
       });
       resetForm();
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to add recipe');
     } finally {
       setIsSaving(false);
@@ -68,7 +68,7 @@ export default function FertilizerRecipeManager() {
         deleted_at: null
       });
       resetForm();
-    } catch (err) {
+    } catch (_err) {
       toast.error('Failed to update recipe');
     } finally {
       setIsSaving(false);

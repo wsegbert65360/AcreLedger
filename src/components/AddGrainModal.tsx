@@ -61,7 +61,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
             } else {
                 native.haptic.error();
             }
-        } catch (error) {
+        } catch (_error) {
             native.haptic.error();
         } finally {
             setIsSaving(false);

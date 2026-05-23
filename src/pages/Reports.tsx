@@ -371,7 +371,7 @@ export default function Reports() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 touch-target flex items-center justify-center gap-1.5 rounded-md py-2.5 text-sm font-semibold transition-all ${
+              className={`flex-1 touch-target flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-semibold transition-all ${
                 tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
               }`}
             >

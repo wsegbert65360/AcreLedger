@@ -95,7 +95,7 @@ export default function Logistics() {
                   />
                 </div>
 
-                <div className="space-y-1 rounded-md border border-border/50 bg-muted/20 p-2">
+                <div className="space-y-1 rounded-lg border border-border/50 bg-muted/20 p-2">
                   <p className="text-xs font-semibold text-muted-foreground">Recent Activity</p>
                   {bin.recentMovements.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No grain movement logged this season.</p>

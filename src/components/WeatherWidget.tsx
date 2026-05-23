@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer, Wind } from 'lucide-react';
+import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer } from 'lucide-react';
 
 import { loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
 import { WeatherService } from '@/services/WeatherService';

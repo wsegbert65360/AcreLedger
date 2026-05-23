@@ -49,7 +49,7 @@ export function formatTime(timeStr?: string | null): string {
     if (!isNaN(d.getTime())) {
       return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
-  } catch (e) {
+  } catch (_e) {
     // fallback
   }
 

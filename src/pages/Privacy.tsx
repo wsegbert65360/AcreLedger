@@ -92,13 +92,13 @@ export default function Privacy() {
                                 AcreLedger connects to the following services to provide essential functionality:
                             </p>
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-md">
+                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
                                     <div>
                                         <p className="text-sm font-bold text-foreground">Visual Crossing Weather</p>
                                     </div>
                                     <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">GPS Data only</span>
                                 </div>
-                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-md">
+                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
                                     <div>
                                         <p className="text-sm font-bold text-foreground">Vercel</p>
                                     </div>

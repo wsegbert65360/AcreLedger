@@ -66,7 +66,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
             } else {
                 native.haptic.error();
             }
-        } catch (error) {
+        } catch (_error) {
             native.haptic.error();
         } finally {
             setIsSaving(false);
