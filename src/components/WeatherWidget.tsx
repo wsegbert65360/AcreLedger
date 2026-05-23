@@ -143,20 +143,20 @@ export default function WeatherBar() {
       </div>
 
       {/* Right side: Secondary Stats */}
-      <div className="flex items-center gap-6 sm:gap-10">
+      <div className="flex items-center gap-3 sm:gap-8">
         {/* Wind */}
         <div className="flex flex-col items-center">
-          <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <div className="flex items-center gap-1 whitespace-nowrap">
             <span className="text-lg font-mono font-bold">{weather.wind}</span>
-            <span className="text-xs text-muted-foreground/60 font-sans ml-0.5">mph</span>
+            <span className="text-xs text-muted-foreground/60 font-sans">mph</span>
             {weather.windDirection && weather.windDirection !== '—' && (
-              <span className="flex items-center gap-0.5 text-xs text-foreground/80 ml-1">
+              <span className="flex items-center gap-0.5 text-xs text-foreground/80 ml-0.5">
                 <ArrowUp
-                  size={12}
+                  size={11}
                   className="text-emerald-500/80 transition-transform duration-500"
                   style={{ transform: `rotate(${getWindRotation(weather.windDirection)}deg)` }}
                 />
-                <span className="font-mono font-semibold">{weather.windDirection}</span>
+                <span className="font-mono font-semibold text-[11px]">{weather.windDirection}</span>
               </span>
             )}
           </div>
