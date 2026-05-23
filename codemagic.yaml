@@ -1,0 +1,153 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# CodeMagic CI/CD — AcreLedger (Capacitor 6 / iOS)
+# ──────────────────────────────────────────────────────────────────────────────
+# Based on the CodeMagic React Native quick start guide, adapted for Capacitor:
+# https://docs.codemagic.io/yaml-quick-start/building-a-react-native-app/
+#
+# This workflow:
+#   1. Installs npm dependencies
+#   2. Lints and runs unit tests
+#   3. Builds the Vite web bundle and syncs into the iOS project (Capacitor)
+#   4. Installs CocoaPods dependencies
+#   5. Sets up code signing from uploaded profiles
+#   6. Increments the build number from App Store Connect
+#   7. Builds the IPA for distribution
+#   8. Uploads to App Store Connect / TestFlight
+# ──────────────────────────────────────────────────────────────────────────────
+
+workflows:
+  acreledger-ios:
+    name: AcreLedger iOS
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    # ── Apple integration ─────────────────────────────────────────────────────
+    # Reference the App Store Connect API key added in the CodeMagic UI under
+    # Settings > Developer Portal integrations.
+    integrations:
+      app_store_connect: AcreLedger_ASC  # ← name of your ASC API key in CodeMagic
+
+    # ── Trigger ───────────────────────────────────────────────────────────────
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+      cancel_previous_builds: true
+
+    # ── Environment ───────────────────────────────────────────────────────────
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.wsegbert.acreledger
+      node: 20
+      xcode: 16
+      cocoapods: default
+      vars:
+        BUNDLE_ID: "com.wsegbert.acreledger"
+        # Path to the Xcode workspace inside the ios/ directory
+        XCODE_WORKSPACE: "App.xcworkspace"
+        XCODE_SCHEME: "App"
+        # Your app's Apple ID from App Store Connect (General > App Information > Apple ID)
+        APP_STORE_APPLE_ID: 1555555551  # ← replace with your actual Apple ID
+      groups:
+        # Create a variable group called "acreledger-env" in the CodeMagic UI
+        # containing your Vite build-time secrets:
+        #   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
+        #   VITE_VISUALCROSSING_KEY, VITE_RAIN_API_URL
+        - acreledger-env
+
+    # ── Caching ───────────────────────────────────────────────────────────────
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - node_modules
+        - ios/App/Pods
+
+    # ── Build scripts ─────────────────────────────────────────────────────────
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          npm ci --prefer-offline
+
+      - name: Lint
+        script: |
+          npm run lint
+
+      - name: Unit tests
+        script: |
+          npm run test
+
+      - name: Build web bundle and sync to iOS
+        script: |
+          # Reads version from package.json, builds Vite bundle in Capacitor mode,
+          # then runs "npx cap sync ios" to copy assets into the Xcode project.
+          npm run cap:build
+
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios/App && pod install
+
+      - name: Set up provisioning profiles settings on Xcode project
+        script: |
+          xcode-project use-profiles
+
+      - name: Set marketing version from package.json
+        script: |
+          # Strip the "-AcreLedger" suffix for a clean semver (e.g. "3.5.0")
+          cd ios/App
+          PKG_VERSION=$(node -p "require('../../package.json').version.split('-')[0]")
+          agvtool new-marketing-version "$PKG_VERSION"
+
+      - name: Increment build number
+        script: |
+          #!/bin/sh
+          cd $CM_BUILD_DIR/ios/App
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID")
+          if [ -z "$LATEST_BUILD_NUMBER" ]; then
+            # Fallback for first build — use CodeMagic's built-in counter
+            UPDATED_BUILD_NUMBER=$BUILD_NUMBER
+          else
+            UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
+          fi
+          agvtool new-version -all $UPDATED_BUILD_NUMBER
+
+      - name: Build IPA for distribution
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/ios/App/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    # ── Artifacts ─────────────────────────────────────────────────────────────
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    # ── Publishing ────────────────────────────────────────────────────────────
+    publishing:
+      email:
+        recipients:
+          - wsegbert@gmail.com  # ← update with your email
+        notify:
+          success: true
+          failure: true
+
+      app_store_connect:
+        # Use the ASC API key referenced in the integrations section above
+        auth: integration
+
+        # Upload to TestFlight
+        submit_to_testflight: true
+
+        # Expire previous builds waiting for beta review when a new one is uploaded
+        expire_build_submitted_for_review: true
+
+        # Uncomment and add your TestFlight beta group names when ready:
+        # beta_groups:
+        #   - "Internal Testers"
+
+        # Set to true when you're ready to submit to App Store review:
+        submit_to_app_store: false
