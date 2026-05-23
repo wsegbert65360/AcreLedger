@@ -17,7 +17,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.wsegbert.acreledger
 
-      node: 20
+      node: 22
       xcode: 16
       cocoapods: default
 
