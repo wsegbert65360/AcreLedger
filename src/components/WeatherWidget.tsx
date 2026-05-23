@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ChevronRight, Loader2, MapPin, Thermometer, Wind } from 'lucide-react';
+import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer, Wind } from 'lucide-react';
 
 import { loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
 import { WeatherService } from '@/services/WeatherService';
@@ -11,6 +11,14 @@ import { WeatherData } from '@/types/weather';
 function initialWeather(): WeatherData {
   return { wind: 0, temp: 0, humidity: 0, windDirection: '—', precip24h: 0, precip72h: 0, precipProb: 0 };
 }
+
+const getWindRotation = (dir: string): number => {
+  const angles: Record<string, number> = {
+    N: 0, NNE: 22.5, NE: 45, ENE: 67.5, E: 90, ESE: 112.5, SE: 135, SSE: 157.5,
+    S: 180, SSW: 202.5, SW: 225, WSW: 247.5, W: 270, WNW: 292.5, NW: 315, NNW: 337.5
+  };
+  return angles[dir] ?? 0;
+};
 
 export default function WeatherBar() {
   const { session, fields } = useFarm();
@@ -138,11 +146,21 @@ export default function WeatherBar() {
       <div className="flex items-center gap-6 sm:gap-10">
         {/* Wind */}
         <div className="flex flex-col items-center">
-          <div className="flex items-center gap-1.5">
-            <Wind size={16} className="text-foreground/80" />
-            <span className="text-lg font-mono font-bold">{weather.wind} {weather.windDirection}</span>
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-lg font-mono font-bold">{weather.wind}</span>
+            <span className="text-xs text-muted-foreground/60 font-sans ml-0.5">mph</span>
+            {weather.windDirection && weather.windDirection !== '—' && (
+              <span className="flex items-center gap-0.5 text-xs text-foreground/80 ml-1">
+                <ArrowUp
+                  size={12}
+                  className="text-emerald-500/80 transition-transform duration-500"
+                  style={{ transform: `rotate(${getWindRotation(weather.windDirection)}deg)` }}
+                />
+                <span className="font-mono font-semibold">{weather.windDirection}</span>
+              </span>
+            )}
           </div>
-          <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">MPH</span>
+          <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">WIND</span>
         </div>
 
         {/* Humidity */}
