@@ -43,3 +43,8 @@ yarn-error.log*
 
 # AI assistant files
 .gemini/
+
+# CodeMagic
+build/
+*.ipa
+*.xcarchive

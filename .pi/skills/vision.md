@@ -1,6 +1,6 @@
 ---
 name: vision
-description: Analyze screenshots, UI images, diagrams, and photos using a vision model. Use when images are attached to understand visual content, describe UI, extract text, diagnose errors, and suggest fixes.
+description: Analyze screenshots, UI images, diagrams, and photos using a vision model via OpenRouter. Use when images are attached to understand visual content, describe UI, extract text, diagnose errors, and suggest fixes.
 ---
 
 # Vision — Image Understanding Skill
@@ -18,7 +18,20 @@ When screenshots, UI images, diagrams, or photos are attached, use the vision mo
 ## Usage
 
 ```bash
-node .pi/skills/vision.js "<image_path>" "<prompt>"
+node .pi/skills/vision.js "<image_path>" "<prompt>" [model]
+```
+
+### Default model
+
+`openrouter/free` — automatic routing to a free vision-capable model.
+
+### Other free vision models on OpenRouter
+
+```
+google/gemma-4-31b-it:free
+google/gemma-4-26b-a4b-it:free
+nvidia/nemotron-nano-12b-v2-vl:free
+nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
 ```
 
 ## Prompts
@@ -51,10 +64,11 @@ Identify any problems in this image and suggest specific fixes. For UI issues, d
 ## How it works
 
 1. Reads the image file and encodes it as base64
-2. Sends it to OpenAI's vision model (`gpt-4o`) with the provided prompt
+2. Sends it to a vision model via OpenRouter with the provided prompt
 3. Returns the model's description as plain text
 
 ## Requirements
 
-- `OPENAI_API_KEY` environment variable must be set
+- `OPENROUTER_API_KEY` environment variable must be set
+- Falls back to `OPENAI_API_KEY` if `OPENROUTER_API_KEY` is not set
 - Supported formats: JPG, PNG, GIF, WebP
