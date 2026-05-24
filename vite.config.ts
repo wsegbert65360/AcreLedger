@@ -104,7 +104,7 @@ export default defineConfig(({ mode }) => ({
     })
   ].filter(Boolean),
   build: {
-    target: mode === "capacitor" ? ["es2020", "safari15"] : "modules",
+    target: mode === "capacitor" ? ["es2020", "safari15"] : undefined,
     cssTarget: mode === "capacitor" ? "safari15" : undefined,
     chunkSizeWarningLimit: 1000,
   },
