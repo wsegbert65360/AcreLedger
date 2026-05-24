@@ -36,6 +36,8 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/complianceReports` — report generation.
 - `@/lib/sprayExport.ts` — universal spray log PDF export.
 - `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
+- `codemagic.yaml` — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
+- `CODEMAGIC.md` — CodeMagic setup guide, credentials, and troubleshooting.
 
 ## Non-Negotiable Rules
 
@@ -128,6 +130,18 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Do not hydrate React state directly from raw backup arrays.
 - Normalize restored records first.
 - If the restore RPC fails, do not mutate React state.
+
+### CI/CD (CodeMagic)
+
+- `codemagic.yaml` defines the iOS build workflow for CodeMagic.
+- The workflow triggers on push to `main` and builds an IPA for App Store distribution.
+- Code signing uses uploaded certificates and provisioning profiles via `ios_signing`.
+- TestFlight publishing uses `auth: integration` with the `appstore` integration.
+- Environment variable group `appstore` contains `VITE_*` build secrets and ASC API credentials.
+- **Marketing version** is read from `package.json` at build time. **Build number** uses CodeMagic's `$BUILD_NUMBER`.
+- **Do not** add `app_store_connect` publishing blocks without verifying the integration name exists in CodeMagic.
+- The working integration name is `appstore`. Do not rename it without updating the yaml.
+- All three remotes (GitHub, Codeberg, GitLab) must be synced when pushing CI/CD changes.
 
 ### Native & Offline Capability
 
