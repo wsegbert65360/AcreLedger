@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: appstore
+      app_store_connect: AcreLedger_ASC
 
     triggering:
       events:
