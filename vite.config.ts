@@ -17,6 +17,12 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    mode === "capacitor" && {
+      name: "capacitor-local-assets",
+      transformIndexHtml(html: string) {
+        return html.replace(/\s+crossorigin(?=[\s>])/g, "");
+      },
+    },
     VitePWA({
       disable: mode === "capacitor",
       strategies: 'injectManifest',

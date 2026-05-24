@@ -41,6 +41,7 @@
       var target = event.target || {};
       var source = target.src || target.href || '';
       var tagName = target.tagName ? target.tagName.toLowerCase() : '';
+      if (tagName === 'link' || tagName === 'img') return;
       var message = event.message || (source ? 'failed to load ' + tagName + ': ' + source : 'failed to load app bundle');
       window.__acreledgerBootError(message);
     }, true);
