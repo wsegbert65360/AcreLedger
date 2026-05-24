@@ -42,7 +42,8 @@ In the CodeMagic UI, go to **Settings → Developer Portal integrations**:
 
 1. Click **Add → App Store Connect**.
 2. Enter your **Issuer ID**, **Key ID**, and paste the **private key** (`.p8` file contents).
-3. Give it a name and save.
+3. Name it **`appstore`** — this must match the `integrations.app_store_connect` value in `codemagic.yaml`.
+4. Save.
 
 The yaml uses `auth: integration` which automatically references this integration.
 
@@ -58,8 +59,11 @@ In **Settings → Environment variable groups**, create a group called **`appsto
 | `VITE_SUPABASE_ANON_KEY` | `eyJhbGciOi...` | Yes |
 | `VITE_VISUALCROSSING_KEY` | `your-key` | Yes |
 | `VITE_RAIN_API_URL` | `https://rain-api.vercel.app` | No |
+| `APP_STORE_CONNECT_KEY_ID` | `2F8X4G5J3K` | No |
+| `APP_STORE_CONNECT_ISSUER_ID` | `12345678-1234-...` | No |
+| `APP_STORE_CONNECT_PRIVATE_KEY` | `-----BEGIN PRIVATE KEY-----...` | Yes |
 
-These are injected at build time by Vite (the `VITE_` prefix makes them available in the web bundle). **Without these, the app will show "load failed" on launch** because Supabase credentials are missing.
+The `VITE_*` variables are injected at build time by Vite. The `APP_STORE_CONNECT_*` variables are used for TestFlight publishing via `auth: integration`.
 
 ---
 
