@@ -23,7 +23,7 @@ node .pi/skills/vision.js "<image_path>" "<prompt>" [model]
 
 ### Default model
 
-`openrouter/free` — automatic routing to a free vision-capable model.
+`google/gemma-4-31b-it:free` — 31B params, 262K context, best quality among free vision models.
 
 ### Other free vision models on OpenRouter
 

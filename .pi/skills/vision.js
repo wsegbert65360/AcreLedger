@@ -37,7 +37,7 @@ const baseUrl = process.env.OPENROUTER_API_KEY
   ? "https://openrouter.ai/api/v1"
   : "https://api.openai.com/v1";
 
-const selectedModel = model || "openrouter/free";
+const selectedModel = model || "google/gemma-4-31b-it:free";
 
 // Read and base64-encode the image
 const imageBuffer = readFileSync(imagePath);
