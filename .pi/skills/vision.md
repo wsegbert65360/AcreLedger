@@ -64,8 +64,10 @@ Identify any problems in this image and suggest specific fixes. For UI issues, d
 ## How it works
 
 1. Reads the image file and encodes it as base64
-2. Sends it to a vision model via OpenRouter with the provided prompt
+2. Tries each free vision model in order until one succeeds (auto-fallback on 429/503)
 3. Returns the model's description as plain text
+
+If a specific model is passed as the 3rd argument, no fallback occurs.
 
 ## Requirements
 
