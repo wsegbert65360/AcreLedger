@@ -1,4 +1,5 @@
 import UIKit
+import Capacitor
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -33,13 +34,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        // Handle custom URL schemes here if needed. Returning false indicates the URL wasn't handled.
-        return false
+        return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        // Handle Universal Links or other user activities here if needed. Returning false indicates it wasn't handled.
-        return false
+        return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
 }
