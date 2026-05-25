@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -15,6 +15,12 @@ export function Auth() {
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!isSupabaseConfigured) {
+            toast.error('Supabase is not configured for this build. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Codemagic.');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -46,7 +52,10 @@ export function Auth() {
                 toast.success('Logged in successfully!');
             }
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Authentication error';
+            const rawMessage = error instanceof Error ? error.message : 'Authentication error';
+            const message = rawMessage === 'Load failed'
+                ? 'Could not reach Supabase. Check VITE_SUPABASE_URL and network access.'
+                : rawMessage;
             toast.error(message);
         } finally {
             setLoading(false);
