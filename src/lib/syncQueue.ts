@@ -2,9 +2,17 @@ import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { getDatabase } from './offlineStorage';
 import { toast } from 'sonner';
+import { encryptData, decryptData } from '@/utils/crypto';
 
 const isNative = Capacitor.isNativePlatform();
 const WEB_QUEUE_KEY = 'al_sync_queue';
+
+const ALLOWED_TABLES = new Set([
+  'fields', 'bins', 'plant_records', 'spray_records',
+  'harvest_records', 'hay_harvest_records', 'fertilizer_applications',
+  'tillage_records', 'grain_movements', 'saved_seeds',
+  'fertilizer_recipes', 'spray_recipes'
+]);
 
 export interface QueuedMutation {
   id: string;
@@ -16,11 +24,19 @@ export interface QueuedMutation {
   retry_count: number;
 }
 
+async function getSessionSecret(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || '';
+}
+
 // Helper: load web queue from localStorage
-function getWebQueue(): QueuedMutation[] {
+async function getWebQueue(): Promise<QueuedMutation[]> {
   try {
     const raw = localStorage.getItem(WEB_QUEUE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const secret = await getSessionSecret();
+    const decrypted = await decryptData(raw, secret);
+    return JSON.parse(decrypted);
   } catch (err) {
     console.error('Failed to parse web sync queue:', err);
     return [];
@@ -28,9 +44,11 @@ function getWebQueue(): QueuedMutation[] {
 }
 
 // Helper: save web queue to localStorage
-function saveWebQueue(queue: QueuedMutation[]) {
+async function saveWebQueue(queue: QueuedMutation[]) {
   try {
-    localStorage.setItem(WEB_QUEUE_KEY, JSON.stringify(queue));
+    const secret = await getSessionSecret();
+    const encrypted = await encryptData(JSON.stringify(queue), secret);
+    localStorage.setItem(WEB_QUEUE_KEY, encrypted);
   } catch (err) {
     console.error('Failed to save web sync queue:', err);
   }
@@ -74,7 +92,7 @@ export const syncQueue = {
         console.error('Failed to enqueue native mutation:', err);
       }
     } else {
-      const queue = getWebQueue();
+      const queue = await getWebQueue();
       queue.push({
         id,
         table_name: tableName,
@@ -84,7 +102,7 @@ export const syncQueue = {
         created_at: now,
         retry_count: 0
       });
-      saveWebQueue(queue);
+      await saveWebQueue(queue);
     }
   },
 
@@ -112,7 +130,8 @@ export const syncQueue = {
       }
       return [];
     } else {
-      return getWebQueue().filter(item => item.farm_id === farmId);
+      const queue = await getWebQueue();
+      return queue.filter(item => item.farm_id === farmId);
     }
   },
 
@@ -130,9 +149,9 @@ export const syncQueue = {
         console.error('Failed to dequeue native mutation:', err);
       }
     } else {
-      const queue = getWebQueue();
+      const queue = await getWebQueue();
       const updated = queue.filter(item => item.id !== id);
-      saveWebQueue(updated);
+      await saveWebQueue(updated);
     }
   },
 
@@ -150,11 +169,11 @@ export const syncQueue = {
         console.error('Failed to update native retry count:', err);
       }
     } else {
-      const queue = getWebQueue();
+      const queue = await getWebQueue();
       const idx = queue.findIndex(item => item.id === id);
       if (idx !== -1) {
         queue[idx].retry_count += 1;
-        saveWebQueue(queue);
+        await saveWebQueue(queue);
       }
     }
   },
@@ -177,7 +196,8 @@ export const syncQueue = {
       }
       return 0;
     } else {
-      return getWebQueue().filter(item => item.farm_id === farmId).length;
+      const queue = await getWebQueue();
+      return queue.filter(item => item.farm_id === farmId).length;
     }
   },
 
@@ -192,6 +212,12 @@ export const syncQueue = {
     console.log(`Replaying sync queue: ${queue.length} mutations pending.`);
     
     for (const mutation of queue) {
+      if (!ALLOWED_TABLES.has(mutation.table_name)) {
+        console.warn(`Discarding sync mutation: invalid table name ${mutation.table_name}`);
+        await syncQueue.dequeueMutation(mutation.id);
+        continue;
+      }
+      
       let error = null;
 
       try {

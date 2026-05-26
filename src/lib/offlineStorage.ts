@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { SQLiteConnection, CapacitorSQLite } from '@capacitor-community/sqlite';
+import { Preferences } from '@capacitor/preferences';
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -26,10 +27,16 @@ export async function getDatabase() {
       if (isConn) {
         dbConnection = await sqliteConnection.retrieveConnection('acreledger_db', false);
       } else {
+        let { value: encKey } = await Preferences.get({ key: 'db_enc_key' });
+        if (!encKey) {
+          encKey = crypto.randomUUID();
+          await Preferences.set({ key: 'db_enc_key', value: encKey });
+        }
+
         dbConnection = await sqliteConnection.createConnection(
           'acreledger_db',
           false, // encrypted
-          'no-encryption', // mode
+          encKey, // mode
           1, // version
           false // readonly
         );
@@ -93,7 +100,9 @@ export const offlineStorage = {
       }
     } else {
       try {
-        localStorage.setItem(key, JSON.stringify(data));
+        const secret = await getSessionSecret();
+        const encrypted = await encryptData(JSON.stringify(data), secret);
+        localStorage.setItem(key, encrypted);
       } catch (err) {
         console.error(`Failed to save localStorage cache for ${table}:`, err);
       }
@@ -122,7 +131,11 @@ export const offlineStorage = {
     } else {
       try {
         const val = localStorage.getItem(key);
-        return val ? JSON.parse(val) : null;
+        if (!val) return null;
+        // Attempt to decrypt
+        const secret = await getSessionSecret();
+        const decrypted = await decryptData(val, secret);
+        return JSON.parse(decrypted);
       } catch (err) {
         console.error(`Failed to load localStorage cache for ${table}:`, err);
         return null;
@@ -156,6 +169,12 @@ export const offlineStorage = {
         }
         keysToRemove.forEach(k => localStorage.removeItem(k));
       } catch (err) {
+        console.error('Failed to clear localStorage cache:', err);
+      }
+    }
+  }
+};
+h (err) {
         console.error('Failed to clear localStorage cache:', err);
       }
     }

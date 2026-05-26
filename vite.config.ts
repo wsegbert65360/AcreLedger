@@ -101,12 +101,22 @@ export default defineConfig(({ mode }) => ({
           }
         ]
       }
-    })
+    }),
+    {
+      name: "csp-strip-unsafe-script",
+      transformIndexHtml(html: string) {
+        if (mode === "development") return html;
+        return html.replace(/script-src [^;]+;/, match => 
+          match.replace(/'unsafe-inline'/g, "").replace(/'unsafe-eval'/g, "")
+        );
+      },
+    }
   ].filter(Boolean),
   build: {
     target: mode === "capacitor" ? ["es2020", "safari15"] : undefined,
     cssTarget: mode === "capacitor" ? "safari15" : undefined,
     chunkSizeWarningLimit: 1000,
+    sourcemap: false,
   },
   test: {
     environment: "jsdom",

@@ -247,23 +247,25 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 
 export const mapFieldToDb = (f: Field) => {
     validateRequired(f, ['id', 'farm_id', 'name'], 'mapFieldToDb');
-    return {
+    const mapped = {
         id: f.id,
         farm_id: f.farm_id,
         name: f.name,
         acreage: f.acreage,
         lat: f.lat,
         lng: f.lng,
-        fsa_farm_number: f.fsaFarmNumber,
-        fsa_tract_number: f.fsaTractNumber,
-        fsa_field_number: f.fsaFieldNumber,
-        producer_share: f.producerShare,
-        irrigation_practice: f.irrigationPractice,
-        intended_use: f.intendedUse,
+        fsaFarmNumber: f.fsaFarmNumber,
+        fsaTractNumber: f.fsaTractNumber,
+        fsaFieldNumber: f.fsaFieldNumber,
+        producerShare: f.producerShare,
+        irrigationPractice: f.irrigationPractice,
+        intendedUse: f.intendedUse,
         boundary: f.boundary,
         deleted_at: f.deleted_at,
         notes: f.notes
     };
+    fieldSchema.parse(mapped);
+    return mapped;
 };
 
 export const mapPlantToDb = (r: PlantRecord) => {
@@ -291,7 +293,8 @@ export const mapPlantToDb = (r: PlantRecord) => {
 
 export const mapSprayToDb = (r: SprayRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapSprayToDb');
-    return {
+    sprayRecordSchema.parse(r);
+    const mapped = {
         id: r.id,
         farm_id: r.farm_id,
         field_id: r.fieldId,
@@ -478,6 +481,13 @@ export const mapTillageToDb = (r: TillageRecord) => {
         field_name: r.fieldName,
         date: r.date,
         implement_type: r.implementType,
+        notes: r.notes,
+        season_year: r.seasonYear,
+        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
+        deleted_at: r.deleted_at
+    };
+};
+   implement_type: r.implementType,
         notes: r.notes,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),

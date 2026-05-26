@@ -7,15 +7,27 @@ const isProd = import.meta.env.PROD;
 
 export const logger = {
   info: (message: string, data?: any) => {
-    console.log(`[INFO] ${message}`, data || '');
+    if (isProd) {
+      console.log(`[INFO] ${message}`);
+    } else {
+      console.log(`[INFO] ${message}`, data || '');
+    }
   },
   
   warn: (message: string, data?: any) => {
-    console.warn(`[WARN] ${message}`, data || '');
+    if (isProd) {
+      console.warn(`[WARN] ${message}`);
+    } else {
+      console.warn(`[WARN] ${message}`, data || '');
+    }
   },
   
   error: (message: string, error?: any) => {
-    console.error(`[ERROR] ${message}`, error || '');
+    if (isProd) {
+      console.error(`[ERROR] ${message}`, error?.message || 'An error occurred');
+    } else {
+      console.error(`[ERROR] ${message}`, error || '');
+    }
     // Replace with Sentry.captureException(error) in the future
   },
   

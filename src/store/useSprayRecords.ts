@@ -83,7 +83,11 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
 
       if (error) {
         // Surface specific error details in dev console
-        console.error('Error adding spray record:', error.message, error.details, error.hint, error);
+        if (import.meta.env.DEV) {
+          console.error('Error adding spray record:', error.message, error.details, error.hint, error);
+        } else {
+          console.error('Error adding spray record:', error.message);
+        }
         setSprayRecords(prev => prev.filter(rec => rec.id !== id));
         toast.error(`Failed to save record: ${error.message || 'Database error'}`);
         return false;
@@ -154,7 +158,11 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
     if (error || !data || data.length === 0) {
       // Replace with Sentry.captureException(error) in production
       if (error) {
-        console.error('Error updating spray record:', error.message, error.details, error.hint, error);
+        if (import.meta.env.DEV) {
+          console.error('Error updating spray record:', error.message, error.details, error.hint, error);
+        } else {
+          console.error('Error updating spray record:', error.message);
+        }
       } else {
         console.warn('Spray update affected zero rows:', r.id);
       }

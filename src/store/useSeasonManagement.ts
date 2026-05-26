@@ -204,6 +204,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       }
 
       if (backupData.activeSeason !== undefined) {
+        if (!isValidYear(backupData.activeSeason)) {
+          throw new Error(`Invalid season year in backup: ${backupData.activeSeason}`);
+        }
         setActiveSeason(backupData.activeSeason);
         setViewingSeason(backupData.activeSeason);
       }

@@ -37,6 +37,11 @@ export const RainService = {
         throw new Error('VITE_RAIN_API_URL is not configured');
       }
 
+      const parsedUrl = new URL(baseUrl);
+      if (parsedUrl.protocol !== 'https:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+        throw new Error('VITE_RAIN_API_URL must use HTTPS');
+      }
+
       // Sanitize URL: trim whitespace/newlines, strip trailing slashes, and strip duplicate /rain suffix
       baseUrl = baseUrl.trim().replace(/\/+$/, '');
       if (baseUrl.endsWith('/rain')) {
@@ -62,7 +67,7 @@ export const RainService = {
 
       // GET /rain?lat=X&lon=Y&field_id=Z — IEM Stage IV radar data
       const mainResponse = await fetch(
-        `${baseUrl}/rain?lat=${tLat}&lon=${tLng}&field_id=${fieldId}`,
+        `${baseUrl}/rain?lat=${tLat}&lon=${tLng}&field_id=${encodeURIComponent(fieldId)}`,
         { signal }
       );
 
@@ -81,7 +86,7 @@ export const RainService = {
           const today = new Date().toISOString().split('T')[0];
           // Use hybrid Mode D: includes coordinates for radar data merge
           const response = await fetch(
-            `${baseUrl}/rain?field_id=${fieldId}&lat=${tLat}&lon=${tLng}&start_date=${startDate}&end_date=${today}`,
+            `${baseUrl}/rain?field_id=${encodeURIComponent(fieldId)}&lat=${tLat}&lon=${tLng}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(today)}`,
             { signal }
           );
           if (!response.ok) return 0;

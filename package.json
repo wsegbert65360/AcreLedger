@@ -15,6 +15,10 @@
     "cap:open": "npx cap open ios",
     "cap:build": "vite build --mode capacitor && npx cap sync ios"
   },
+  "overrides": {
+    "tar": "^7.5.11",
+    "picomatch": "^2.3.2"
+  },
   "dependencies": {
     "@capacitor-community/sqlite": "^6.0.0",
     "@capacitor/app": "^6.0.0",

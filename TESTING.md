@@ -20,8 +20,7 @@ npm test src/utils/utils.test.ts
 For end-to-end verification and UI smoke testing, use the following bot credentials:
 
 **Bot Credentials:**
-- **Email**: `acreledger_bot@yahoo.com`
-- **Password**: `Acre-Bot-2026-Secure!`
+Credentials are in `.env.test.local` — see `.env.example` for required keys.
 
 ### Verification Checklist (v3.2.0+)
 1. **Login**: Verify successful authentication with bot credentials.

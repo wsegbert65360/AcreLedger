@@ -1,7 +1,8 @@
 import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
+import { supabase } from '@/lib/supabase';
 
-const API_KEY = import.meta.env.VITE_VISUALCROSSING_KEY;
-const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
+// Use Supabase Edge Function for weather proxy
+const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/weather-proxy`;
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
 const promiseCache = new Map<string, Promise<any>>();
@@ -9,7 +10,7 @@ const extendedCache = new Map<string, Promise<any>>();
 
 /**
  * Hardened Weather Service.
- * Fetches real-time conditions and historical rainfall via Visual Crossing.
+ * Fetches real-time conditions and historical rainfall via Supabase Proxy.
  */
 export const WeatherService = {
     /**
@@ -24,11 +25,9 @@ export const WeatherService = {
         humidity: number | null;
         isError?: boolean;
     }> {
-        const location = `${lat},${lng}`;
+        const location = encodeURIComponent(`${lat},${lng}`);
         // Default values for safety/error cases
         const defaults = { windspeed: null, winddir: null, windcardinal: '—', temp: null, humidity: null, isError: true };
-        
-        if (!API_KEY || API_KEY === 'undefined') return defaults;
 
         // If a request for this location is already in-flight, return the shared promise
         if (promiseCache.has(location)) {
@@ -51,13 +50,17 @@ export const WeatherService = {
         }
 
         try {
-            const url = `${VC_BASE_URL}/${location}/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
+            const url = `${PROXY_URL}?location=${location}&endpoint=today&unitGroup=us&contentType=json&include=current&elements=windspeed,winddir,temp,humidity`;
             
-            const fetchPromise = fetch(url, { signal: controller.signal })
-                .then(res => {
-                    if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
-                    return res.json();
-                });
+            const fetchPromise = supabase.auth.getSession().then(({ data: { session } }) => 
+                fetch(url, { 
+                    signal: controller.signal,
+                    headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                })
+            ).then(res => {
+                if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
+                return res.json();
+            });
 
             // Store the promise in the cache
             promiseCache.set(location, fetchPromise);
@@ -99,13 +102,10 @@ export const WeatherService = {
      * Including precip data for the last 24 and 72 hours.
      */
     async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number, precipProb?: number }> {
-        if (!API_KEY || API_KEY === 'undefined') {
-            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Config Error', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
-        }
-
-        if (promiseCache.has(location)) {
+        const encLocation = encodeURIComponent(location);
+        if (promiseCache.has(encLocation)) {
             try {
-                const data = await promiseCache.get(location);
+                const data = await promiseCache.get(encLocation);
                 return this._mapCurrentWeather(data);
             } catch (_error) {
                 return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
@@ -123,15 +123,19 @@ export const WeatherService = {
 
         try {
             // Fetch today + last 3 days to calculate accurate 24h/72h rainfall along with current conditions
-            const url = `${VC_BASE_URL}/${location}/last3days/today?unitGroup=us&key=${API_KEY}&contentType=json&include=current,days&elements=datetime,temp,humidity,windspeed,winddir,precip,precipprob`;
+            const url = `${PROXY_URL}?location=${encLocation}&endpoint=last3days/today&unitGroup=us&contentType=json&include=current,days&elements=datetime,temp,humidity,windspeed,winddir,precip,precipprob`;
             
-            const fetchPromise = fetch(url, { signal: controller.signal })
-                .then(res => {
-                    if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
-                    return res.json();
-                });
+            const fetchPromise = supabase.auth.getSession().then(({ data: { session } }) =>
+                fetch(url, { 
+                    signal: controller.signal,
+                    headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                })
+            ).then(res => {
+                if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
+                return res.json();
+            });
                 
-            promiseCache.set(location, fetchPromise);
+            promiseCache.set(encLocation, fetchPromise);
             
             const data = await fetchPromise;
             return this._mapCurrentWeather(data);
@@ -147,7 +151,7 @@ export const WeatherService = {
         } finally {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
-            promiseCache.delete(location);
+            promiseCache.delete(encLocation);
         }
     },
 
@@ -195,13 +199,10 @@ export const WeatherService = {
             isError: true, forecastDays: [],
         };
 
-        if (!API_KEY || API_KEY === 'undefined') {
-            return { ...defaults, locationName: 'Config Error' };
-        }
-
-        if (extendedCache.has(location)) {
+        const encLocation = encodeURIComponent(location);
+        if (extendedCache.has(encLocation)) {
             try {
-                const data = await extendedCache.get(location);
+                const data = await extendedCache.get(encLocation);
                 return this._mapExtendedWeather(data, location);
             } catch {
                 // fall through and retry
@@ -219,19 +220,23 @@ export const WeatherService = {
 
         try {
             const url = [
-                `${VC_BASE_URL}/${encodeURIComponent(location)}/last7days/next10days`,
-                `?unitGroup=us&key=${API_KEY}&contentType=json`,
+                `${PROXY_URL}?location=${encLocation}&endpoint=last7days/next10days`,
+                `&unitGroup=us&contentType=json`,
                 `&include=current,days`,
                 `&elements=datetime,tempmax,tempmin,temp,feelslike,humidity,dew,windspeed,windgusts,winddir,precip,precipprob,cloudcover,conditions,icon,sunrise,sunset`,
             ].join('');
 
-            const fetchPromise = fetch(url, { signal: controller.signal })
-                .then(res => {
-                    if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
-                    return res.json();
-                });
+            const fetchPromise = supabase.auth.getSession().then(({ data: { session } }) =>
+                fetch(url, { 
+                    signal: controller.signal,
+                    headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                })
+            ).then(res => {
+                if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
+                return res.json();
+            });
 
-            extendedCache.set(location, fetchPromise);
+            extendedCache.set(encLocation, fetchPromise);
             const data = await fetchPromise;
             return this._mapExtendedWeather(data, location);
         } catch (error: any) {
@@ -244,7 +249,7 @@ export const WeatherService = {
         } finally {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
-            extendedCache.delete(location);
+            extendedCache.delete(encLocation);
         }
     },
 
@@ -330,17 +335,21 @@ export const WeatherService = {
      * Useful for recovering missing weather data in old records.
      */
     async fetchHistoricalConditions(lat: number, lng: number, dateStr: string, timeStr?: string): Promise<WeatherData | null> {
-        if (!API_KEY || API_KEY === 'undefined') return null;
-
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         try {
             // Format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
             const dateTime = timeStr ? `${dateStr}T${timeStr}:00` : dateStr;
-            const url = `${VC_BASE_URL}/${lat},${lng}/${dateTime}?unitGroup=us&key=${API_KEY}&contentType=json&include=hours,current&elements=temp,humidity,windspeed,winddir`;
+            const location = encodeURIComponent(`${lat},${lng}`);
+            const url = `${PROXY_URL}?location=${location}&endpoint=${dateTime}&unitGroup=us&contentType=json&include=hours,current&elements=temp,humidity,windspeed,winddir`;
 
-            const res = await fetch(url, { signal: controller.signal });
+            const res = await supabase.auth.getSession().then(({ data: { session } }) =>
+                fetch(url, { 
+                    signal: controller.signal,
+                    headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                })
+            );
             if (!res.ok) throw new Error('Historical weather fetch failed');
             
             const data = await res.json();

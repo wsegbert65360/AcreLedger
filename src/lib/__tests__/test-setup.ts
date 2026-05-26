@@ -2,10 +2,13 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { supabase } from '../supabase';
 
 describe('QA Bot Auth Verification', () => {
-    const botEmail = 'acreledger_bot@yahoo.com';
-    const botPassword = 'Acre-Bot-2026-Secure!';
+    const botEmail = process.env.VITE_BOT_EMAIL || '';
+    const botPassword = process.env.VITE_BOT_PASSWORD || '';
 
     beforeAll(async () => {
+        if (!botEmail || !botPassword) {
+            throw new Error('Bot credentials missing from environment (VITE_BOT_EMAIL, VITE_BOT_PASSWORD)');
+        }
         const { data, error } = await supabase.auth.signInWithPassword({
             email: botEmail,
             password: botPassword,
