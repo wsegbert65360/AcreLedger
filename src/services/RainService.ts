@@ -30,8 +30,7 @@ export const RainService = {
     }
 
     const fetchPromise = (async () => {
-      let baseUrl = import.meta.env?.VITE_RAIN_API_URL ||
-                    (typeof process !== 'undefined' ? process.env?.VITE_RAIN_API_URL : undefined);
+      let baseUrl = import.meta.env.VITE_RAIN_API_URL;
 
       if (!baseUrl) {
         throw new Error('VITE_RAIN_API_URL is not configured');
