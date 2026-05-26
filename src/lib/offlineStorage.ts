@@ -1,12 +1,17 @@
 import { Capacitor } from '@capacitor/core';
 import { SQLiteConnection, CapacitorSQLite } from '@capacitor-community/sqlite';
 import { Preferences } from '@capacitor/preferences';
+import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 
 const isNative = Capacitor.isNativePlatform();
 
 let dbConnection: any = null;
 let sqliteConnection: any = null;
 let initPromise: Promise<any> | null = null;
+
+async function getEncryptionSecret(): Promise<string> {
+  return getLocalEncryptionKey();
+}
 
 /**
  * Retrieves or initializes the SQLite database connection on native platforms.
@@ -100,7 +105,7 @@ export const offlineStorage = {
       }
     } else {
       try {
-        const secret = await getSessionSecret();
+        const secret = await getEncryptionSecret();
         const encrypted = await encryptData(JSON.stringify(data), secret);
         localStorage.setItem(key, encrypted);
       } catch (err) {
@@ -133,7 +138,7 @@ export const offlineStorage = {
         const val = localStorage.getItem(key);
         if (!val) return null;
         // Attempt to decrypt
-        const secret = await getSessionSecret();
+        const secret = await getEncryptionSecret();
         const decrypted = await decryptData(val, secret);
         return JSON.parse(decrypted);
       } catch (err) {

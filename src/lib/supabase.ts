@@ -48,7 +48,7 @@ const isNative = Capacitor.isNativePlatform();
 // Custom storage adapter for Native (iOS/Android) to use Keychain/Preferences instead of localStorage
 const nativeStorageAdapter = {
     getItem: (key: string) => {
-        return Preferences.get({ key }).then(res => res.value);
+        return Preferences.get({ key }).then(res => res.value).catch(() => null);
     },
     setItem: (key: string, value: string) => {
         return Preferences.set({ key, value });

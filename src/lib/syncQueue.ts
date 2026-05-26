@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 import { getDatabase } from './offlineStorage';
 import { toast } from 'sonner';
-import { encryptData, decryptData } from '@/utils/crypto';
+import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 
 const isNative = Capacitor.isNativePlatform();
 const WEB_QUEUE_KEY = 'al_sync_queue';
@@ -24,9 +24,8 @@ export interface QueuedMutation {
   retry_count: number;
 }
 
-async function getSessionSecret(): Promise<string> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token || '';
+async function getEncryptionSecret(): Promise<string> {
+  return getLocalEncryptionKey();
 }
 
 // Helper: load web queue from localStorage
@@ -34,7 +33,7 @@ async function getWebQueue(): Promise<QueuedMutation[]> {
   try {
     const raw = localStorage.getItem(WEB_QUEUE_KEY);
     if (!raw) return [];
-    const secret = await getSessionSecret();
+    const secret = await getEncryptionSecret();
     const decrypted = await decryptData(raw, secret);
     return JSON.parse(decrypted);
   } catch (err) {
@@ -46,7 +45,7 @@ async function getWebQueue(): Promise<QueuedMutation[]> {
 // Helper: save web queue to localStorage
 async function saveWebQueue(queue: QueuedMutation[]) {
   try {
-    const secret = await getSessionSecret();
+    const secret = await getEncryptionSecret();
     const encrypted = await encryptData(JSON.stringify(queue), secret);
     localStorage.setItem(WEB_QUEUE_KEY, encrypted);
   } catch (err) {

@@ -1,3 +1,23 @@
+import { Preferences } from '@capacitor/preferences';
+
+const PERSISTENT_KEY_STORAGE = 'al_local_encryption_key';
+
+/**
+ * Retrieves or generates a persistent local encryption key.
+ * This ensures data remains readable even if the user is offline or the session expires.
+ */
+export async function getLocalEncryptionKey(): Promise<string> {
+  // Try Preferences (Keychain on iOS/Android, localStorage on Web)
+  let { value: key } = await Preferences.get({ key: PERSISTENT_KEY_STORAGE });
+  
+  if (!key) {
+    key = crypto.randomUUID();
+    await Preferences.set({ key: PERSISTENT_KEY_STORAGE, value: key });
+  }
+  
+  return key;
+}
+
 export async function generateKey(secret: string): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(

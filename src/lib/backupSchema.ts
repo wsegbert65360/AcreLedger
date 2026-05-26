@@ -18,7 +18,7 @@ export const fieldSchema = z.object({
   notes: z.string().optional(),
 }).strict();
 
-const binSchema = z.object({
+export const binSchema = z.object({
   id: z.string(),
   name: z.string(),
   capacity: z.number(),
@@ -26,7 +26,7 @@ const binSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
-const plantRecordSchema = z.object({
+export const plantRecordSchema = z.object({
   id: z.string(),
   fieldId: z.string(),
   fieldName: z.string().optional(),
@@ -93,7 +93,7 @@ export const sprayRecordSchema = z.object({
   sensitiveAreaNotes: z.string().optional(),
 }).strict();
 
-const harvestRecordSchema = z.object({
+export const harvestRecordSchema = z.object({
   id: z.string(),
   fieldId: z.string(),
   fieldName: z.string().optional(),
@@ -114,7 +114,7 @@ const harvestRecordSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
-const hayHarvestRecordSchema = z.object({
+export const hayHarvestRecordSchema = z.object({
   id: z.string(),
   fieldId: z.string(),
   fieldName: z.string().optional(),
@@ -130,7 +130,7 @@ const hayHarvestRecordSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
-const grainMovementSchema = z.object({
+export const grainMovementSchema = z.object({
   id: z.string(),
   farm_id: z.string(),
   binId: z.string(),
@@ -146,7 +146,7 @@ const grainMovementSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
-const savedSeedSchema = z.object({
+export const savedSeedSchema = z.object({
   id: z.string(),
   name: z.string(),
   crop: z.string().optional(),
@@ -159,7 +159,7 @@ const savedSeedSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
-const fertilizerRecipeSchema = z.object({
+export const fertilizerRecipeSchema = z.object({
   id: z.string(),
   name: z.string(),
   npkRatio: z.string().optional(),
@@ -167,7 +167,7 @@ const fertilizerRecipeSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
-const sprayRecipeSchema = z.object({
+export const sprayRecipeSchema = z.object({
   id: z.string(),
   name: z.string(),
   products: z.array(z.any()).optional(),
@@ -179,7 +179,7 @@ const sprayRecipeSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
-const fertilizerApplicationSchema = z.object({
+export const fertilizerApplicationSchema = z.object({
   id: z.string(),
   farm_id: z.string(),
   fieldId: z.string(),
@@ -194,7 +194,7 @@ const fertilizerApplicationSchema = z.object({
   seasonYear: z.number(),
 }).strict();
 
-const tillageRecordSchema = z.object({
+export const tillageRecordSchema = z.object({
   id: z.string(),
   farm_id: z.string(),
   fieldId: z.string(),

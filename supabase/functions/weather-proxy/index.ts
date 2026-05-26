@@ -2,13 +2,22 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const ALLOWED_ORIGINS = [
+  'https://acre-ledger.vercel.app',
+  'http://localhost:8080',
+  'http://localhost:5173',
+  'capacitor://localhost',
+  'http://localhost'
+];
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

@@ -270,12 +270,21 @@ export const mapFieldToDb = (f: Field) => {
         deleted_at: f.deleted_at,
         notes: f.notes
     };
-    fieldSchema.parse(mapped);
+    try {
+        fieldSchema.parse(mapped);
+    } catch (err) {
+        console.error('[Mapper Validation Error] fieldSchema mismatch:', err);
+    }
     return mapped;
 };
 
 export const mapPlantToDb = (r: PlantRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapPlantToDb');
+    try {
+        plantRecordSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] plantRecordSchema mismatch:', err);
+    }
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -299,7 +308,11 @@ export const mapPlantToDb = (r: PlantRecord) => {
 
 export const mapSprayToDb = (r: SprayRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapSprayToDb');
-    sprayRecordSchema.parse(r);
+    try {
+        sprayRecordSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] sprayRecordSchema mismatch:', err);
+    }
     const mapped = {
         id: r.id,
         farm_id: r.farm_id,
@@ -351,6 +364,11 @@ export const mapSprayToDb = (r: SprayRecord) => {
 
 export const mapHarvestToDb = (r: HarvestRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapHarvestToDb');
+    try {
+        harvestRecordSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] harvestRecordSchema mismatch:', err);
+    }
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -375,6 +393,11 @@ export const mapHarvestToDb = (r: HarvestRecord) => {
 
 export const mapHayToDb = (r: HayHarvestRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapHayToDb');
+    try {
+        hayHarvestRecordSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] hayHarvestRecordSchema mismatch:', err);
+    }
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -394,6 +417,11 @@ export const mapHayToDb = (r: HayHarvestRecord) => {
 
 export const mapGrainToDb = (m: GrainMovement) => {
     validateRequired(m, ['id', 'farm_id', 'binId', 'seasonYear'], 'mapGrainToDb');
+    try {
+        grainMovementSchema.parse(m);
+    } catch (err) {
+        console.error('[Mapper Validation Error] grainMovementSchema mismatch:', err);
+    }
     return {
         id: m.id,
         farm_id: m.farm_id,
@@ -413,6 +441,11 @@ export const mapGrainToDb = (m: GrainMovement) => {
 
 export const mapBinToDb = (b: Bin) => {
     validateRequired(b, ['id', 'farm_id', 'name'], 'mapBinToDb');
+    try {
+        binSchema.parse(b);
+    } catch (err) {
+        console.error('[Mapper Validation Error] binSchema mismatch:', err);
+    }
     return {
         id: b.id,
         farm_id: b.farm_id,
@@ -424,6 +457,11 @@ export const mapBinToDb = (b: Bin) => {
 
 export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
     validateRequired(s, ['farm_id', 'name'], 'mapSeedToDb');
+    try {
+        savedSeedSchema.parse(s);
+    } catch (err) {
+        console.error('[Mapper Validation Error] savedSeedSchema mismatch:', err);
+    }
     return {
         id: s.id,
         name: s.name,
@@ -440,6 +478,11 @@ export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
 
 export const mapRecipeToDb = (r: SprayRecipe) => {
     validateRequired(r, ['id', 'farm_id', 'name'], 'mapRecipeToDb');
+    try {
+        sprayRecipeSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] sprayRecipeSchema mismatch:', err);
+    }
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -455,6 +498,11 @@ export const mapRecipeToDb = (r: SprayRecipe) => {
 
 export const mapFertilizerRecipeToDb = (r: FertilizerRecipe) => {
     validateRequired(r, ['id', 'farm_id', 'name'], 'mapFertilizerRecipeToDb');
+    try {
+        fertilizerRecipeSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] fertilizerRecipeSchema mismatch:', err);
+    }
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -466,6 +514,11 @@ export const mapFertilizerRecipeToDb = (r: FertilizerRecipe) => {
 
 export const mapFertilizerToDb = (r: FertilizerApplication) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapFertilizerToDb');
+    try {
+        fertilizerApplicationSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] fertilizerApplicationSchema mismatch:', err);
+    }
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -481,6 +534,11 @@ export const mapFertilizerToDb = (r: FertilizerApplication) => {
 
 export const mapTillageToDb = (r: TillageRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapTillageToDb');
+    try {
+        tillageRecordSchema.parse(r);
+    } catch (err) {
+        console.error('[Mapper Validation Error] tillageRecordSchema mismatch:', err);
+    }
     return {
         id: r.id,
         farm_id: r.farm_id,
