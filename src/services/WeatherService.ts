@@ -1,8 +1,8 @@
 import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
 import { supabase } from '@/lib/supabase';
 
-// Use Supabase Edge Function for weather proxy
-const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/weather-proxy`;
+// Use Vercel Serverless Function for weather proxy
+const PROXY_URL = '/api/weather-proxy';
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
 const promiseCache = new Map<string, Promise<any>>();
