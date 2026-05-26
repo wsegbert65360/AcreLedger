@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 const PLACEHOLDER_SUPABASE_URL = 'https://placeholder-url.supabase.co';
 const PLACEHOLDER_SUPABASE_ANON_KEY = 'placeholder-key';
@@ -41,8 +43,24 @@ const supabaseAnonKey = configuredSupabaseAnonKey || PLACEHOLDER_SUPABASE_ANON_K
 
 export const isSupabaseConfigured = hasValidSupabaseUrl && Boolean(configuredSupabaseAnonKey);
 
+const isNative = Capacitor.isNativePlatform();
+
+// Custom storage adapter for Native (iOS/Android) to use Keychain/Preferences instead of localStorage
+const nativeStorageAdapter = {
+    getItem: (key: string) => {
+        return Preferences.get({ key }).then(res => res.value);
+    },
+    setItem: (key: string, value: string) => {
+        return Preferences.set({ key, value });
+    },
+    removeItem: (key: string) => {
+        return Preferences.remove({ key });
+    },
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
+        storage: isNative ? nativeStorageAdapter : undefined,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
