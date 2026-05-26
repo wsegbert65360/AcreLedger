@@ -1,5 +1,4 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 
 import { native } from '@/lib/native';
 
@@ -27,21 +26,15 @@ export default function BottomNav() {
             >
               <div className="relative">
                 {active && (
-                  <motion.div
-                    layoutId="bottom-nav-pill"
-                    className="absolute -inset-x-3 -inset-y-1.5 bg-primary/10 border border-primary/20 rounded-xl -z-10"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  <div
+                    className="absolute -inset-x-3 -inset-y-1.5 bg-primary/10 border border-primary/20 rounded-xl -z-10 animate-in fade-in duration-200"
                   />
                 )}
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.5} />
               </div>
               <span className={`text-[11px] ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
               {active && (
-                <motion.div
-                  layoutId="bottom-nav-dot"
-                  className="w-1 h-1 rounded-full bg-primary"
-                  transition={{ type: "spring", bounce: 0.3, duration: 0.5 }}
-                />
+                <div className="w-1 h-1 rounded-full bg-primary animate-in fade-in zoom-in duration-200" />
               )}
             </button>
           );
