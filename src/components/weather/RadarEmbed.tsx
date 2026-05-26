@@ -8,30 +8,14 @@ interface RadarEmbedProps {
   lastUpdated?: string;
 }
 
-type Overlay = 'radar' | 'temp' | 'wind' | 'clouds';
-
-const OVERLAY_OPTIONS: { value: Overlay; label: string }[] = [
-  { value: 'radar', label: 'Radar' },
-  { value: 'temp', label: 'Temp' },
-  { value: 'wind', label: 'Wind' },
-  { value: 'clouds', label: 'Clouds' },
-];
-
-const ZOOM_PRESETS: { value: number; label: string }[] = [
-  { value: 14, label: 'Close' },
-  { value: 12, label: 'County' },
-  { value: 8, label: 'Region' },
-  { value: 6, label: 'State' },
-];
-
-function buildRadarUrl(lat: number, lon: number, overlay: Overlay, zoom: number): string {
+function buildRadarUrl(lat: number, lon: number): string {
   return [
     'https://www.windy.com/embed2.html',
     `?lat=${lat}`,
     `&lon=${lon}`,
-    `&zoom=${zoom}`,
+    '&zoom=12',
     '&level=surface',
-    `&overlay=${overlay}`,
+    '&overlay=radar',
     '&menu=&message=&marker=&calendar=now',
     '&location=coordinates',
     '&type=map',
@@ -44,10 +28,8 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
   const [iframeError, setIframeError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const [overlay, setOverlay] = useState<Overlay>('radar');
-  const [zoom, setZoom] = useState(12);
 
-  const url = buildRadarUrl(latitude, longitude, overlay, zoom);
+  const url = buildRadarUrl(latitude, longitude);
 
   useEffect(() => {
     setIsLoading(true);
@@ -105,65 +87,29 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
     <>
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
           </div>
-          {lastUpdated ? (
-            <span className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider font-mono">
-              Loaded {lastUpdated}
-            </span>
-          ) : (
-            <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Interactive</span>
-          )}
-        </div>
-
-        {/* Expand bar */}
-        <button
-          onClick={handleExpand}
-          className="w-full flex items-center justify-center gap-2 py-2 bg-blue-500/10 hover:bg-blue-500/20 active:bg-blue-500/25 border-b border-blue-500/15 transition-colors"
-        >
-          <Maximize2 size={14} className="text-blue-400" />
-          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Tap for Full-Screen Radar</span>
-        </button>
-
-        {/* Overlay selector + Zoom controls */}
-        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-border/30 overflow-x-auto">
-          {OVERLAY_OPTIONS.map((opt) => (
+          <div className="flex items-center gap-2">
+            {lastUpdated ? (
+              <span className="hidden min-[380px]:inline text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider font-mono">
+                Loaded {lastUpdated}
+              </span>
+            ) : null}
             <button
-              key={opt.value}
-              onClick={() => setOverlay(opt.value)}
-              className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap font-sans ${
-                overlay === opt.value
-                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                  : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/50'
-              }`}
+              onClick={handleExpand}
+              aria-label="Open full-screen radar"
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400 transition-colors hover:bg-blue-500/20 active:bg-blue-500/25"
             >
-              {opt.label}
+              <Maximize2 size={14} />
             </button>
-          ))}
-
-          {/* Divider */}
-          <div className="w-px h-4 bg-border/40 shrink-0 mx-1" />
-
-          {ZOOM_PRESETS.map((preset) => (
-            <button
-              key={preset.value}
-              onClick={() => setZoom(preset.value)}
-              className={`text-[9px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg border transition-colors whitespace-nowrap font-sans ${
-                zoom === preset.value
-                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                  : 'bg-muted/30 text-muted-foreground/80 border-border/50 hover:bg-muted/50'
-              }`}
-            >
-              {preset.label}
-            </button>
-          ))}
+          </div>
         </div>
 
         {/* Inline iframe */}
-        <div className="relative h-64 sm:h-80">
+        <div className="relative h-56 sm:h-72">
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <div className="w-6 h-6 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />

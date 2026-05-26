@@ -129,7 +129,7 @@ export default function Weather() {
     <div className={`min-h-screen bg-background pb-20 lg:pb-8 ${bgGradient ? `bg-gradient-to-b ${bgGradient}` : ''}`}>
       {/* ── Sticky Header ── */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-5xl lg:px-8">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between lg:max-w-5xl lg:px-8">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/')}
@@ -157,7 +157,7 @@ export default function Weather() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
+      <main className="max-w-lg mx-auto px-4 py-3 space-y-3 lg:max-w-5xl lg:px-8">
         {/* ── Loading State ── */}
         {loading && !weather && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -182,22 +182,12 @@ export default function Weather() {
         {/* ── Weather Content ── */}
         {weather && (
           <>
-            {/* GPS indicator */}
-            {coords && (
-              <div className="flex items-center justify-center gap-1.5 py-1">
-                <Crosshair size={10} className="text-emerald-500/60" />
-                <span className="text-[10px] font-semibold text-emerald-500/60 uppercase tracking-wider">
-                  GPS · {coords.lat}, {coords.lng}
-                </span>
-              </div>
-            )}
-
             {/* ── HERO: Live Radar ── */}
             {coords ? (
               <RadarEmbed latitude={coords.lat} longitude={coords.lng} lastUpdated={lastUpdated} />
             ) : (
               <div className="bg-card border border-border rounded-2xl">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
                   <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
                     <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
@@ -243,7 +233,7 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current</h2>
@@ -256,14 +246,14 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
       </div>
 
       {/* Main conditions — icon + temp + stats */}
-      <div className="px-4 py-4 flex items-center gap-4">
+      <div className="px-4 py-3 flex items-center gap-3">
         {/* Condition icon + Temperature */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className={`p-2.5 rounded-xl ${isRain ? 'bg-blue-500/10' : 'bg-amber-500/10'}`}>
-            <ConditionIcon size={28} className={isRain ? 'text-blue-400' : 'text-amber-500'} />
+          <div className={`p-2 rounded-xl ${isRain ? 'bg-blue-500/10' : 'bg-amber-500/10'}`}>
+            <ConditionIcon size={26} className={isRain ? 'text-blue-400' : 'text-amber-500'} />
           </div>
           <div className="flex flex-col">
-            <span className="text-4xl font-mono font-bold text-foreground tracking-tight leading-none">
+            <span className="text-3xl font-mono font-bold text-foreground tracking-tight leading-none">
               {weather.isError ? '—' : `${weather.temp}°`}
             </span>
             {weather.feelsLike !== weather.temp && (
@@ -277,7 +267,7 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
           </div>
         </div>
 
-        <div className="w-px h-12 bg-border/50 shrink-0" />
+        <div className="w-px h-10 bg-border/50 shrink-0" />
 
         {/* Stats grid */}
         <div className="flex-1 grid grid-cols-3 gap-1">
@@ -316,7 +306,7 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
       </div>
 
       {/* Rainfall strip */}
-      <div className="mx-4 mb-3 flex items-center divide-x divide-border/50 rounded-lg bg-muted/30">
+      <div className="mx-4 mb-2.5 flex items-center divide-x divide-border/50 rounded-lg bg-muted/30">
         <RainCell label="24h" value={weather.precip24h} />
         <RainCell label="72h" value={weather.precip72h} />
         <RainCell label="7d" value={weather.precip168h} />
@@ -324,7 +314,7 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
 
       {/* Sunrise / Sunset strip */}
       {(weather.sunrise || weather.sunset) && (
-        <div className="mx-4 mb-3 flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 text-[10px] font-mono text-muted-foreground">
+        <div className="mx-4 mb-2.5 flex items-center justify-between px-3 py-1.5 rounded-lg bg-muted/20 text-[10px] font-mono text-muted-foreground">
           <span>☀️ {weather.sunrise || '—'}</span>
           <span className="text-muted-foreground/40">|</span>
           <span>🌙 {weather.sunset || '—'}</span>
