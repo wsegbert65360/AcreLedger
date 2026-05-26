@@ -1,4 +1,3 @@
-import BottomNav from '@/components/BottomNav';
 import { Settings as SettingsIcon } from 'lucide-react';
 import SeedManager from '@/components/settings/SeedManager';
 import RecipeManager from '@/components/settings/RecipeManager';
@@ -41,7 +40,6 @@ export default function Settings() {
 
         <VersionFooter />
       </div>
-      <BottomNav />
     </div>
   );
 }

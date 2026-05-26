@@ -13,7 +13,6 @@ import {
   Wind,
 } from 'lucide-react';
 
-import BottomNav from '@/components/BottomNav';
 import ForecastGrid from '@/components/weather/ForecastGrid';
 import RadarEmbed from '@/components/weather/RadarEmbed';
 import { formatTime, getConditionGradient, getWeatherLucideIcon, loadZip, resolveCoords } from '@/lib/weatherHelpers';
@@ -231,7 +230,6 @@ export default function Weather() {
         )}
       </main>
 
-      <BottomNav />
     </div>
   );
 }

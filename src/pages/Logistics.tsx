@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useFarm } from '@/store/farmStore';
-import BottomNav from '@/components/BottomNav';
 import { Warehouse, Wheat, Settings, Banknote, Plus } from 'lucide-react';
 import { BinManager } from '@/components/BinManageModal';
 import SellModal from '@/components/SellModal';
@@ -171,7 +170,6 @@ export default function Logistics() {
       )}
 
 
-      <BottomNav />
     </div>
   );
 }

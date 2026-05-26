@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useFarm } from '@/store/farmStore';
 import FieldList from '@/components/FieldList';
-import BottomNav from '@/components/BottomNav';
 import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
 import Logo from '@/components/Logo';
@@ -155,7 +154,6 @@ const Index = () => {
           </>
         )}
       </main>
-      <BottomNav />
     </div>
   );
 };

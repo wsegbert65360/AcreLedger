@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { Auth } from "@/components/Auth";
+import BottomNav from "@/components/BottomNav";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import OfflineBanner from "@/components/OfflineBanner";
 import SeasonRolloverModal from "@/components/SeasonRolloverModal";
@@ -141,6 +142,7 @@ const AppContent = () => {
       <div className="lg:pl-60 print:pl-0">
         <AnimatedRoutes />
       </div>
+      <BottomNav />
       <SeasonRolloverModal />
     </>
   );

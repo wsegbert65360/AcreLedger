@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import BottomNav from '@/components/BottomNav';
 import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Sprout, Scissors, Disc3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
@@ -381,7 +380,6 @@ export default function Activity() {
           initialData={editingRecord as GrainMovement}
         />
       )}
-      <BottomNav />
 
       {tab === 'plant' && editingRecord && (() => {
         const editField = getEditField((editingRecord as PlantRecord).fieldId);

@@ -4,7 +4,6 @@ import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History as Histo
 import { toast } from 'sonner';
 
 import { useFarm } from '@/store/farmStore';
-import BottomNav from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
@@ -731,7 +730,6 @@ export default function Reports() {
         )}
       </main>
 
-      <BottomNav />
     </div>
   );
 }
