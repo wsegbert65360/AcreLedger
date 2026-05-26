@@ -32,6 +32,10 @@ ios/**/DerivedData/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+vite-dev.log
+vite-dev.err.log
+*.png
+SECURITY_AUDIT_*.md
 
 # local env files
 .env

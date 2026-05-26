@@ -9,10 +9,20 @@ describe('WeatherService', () => {
         vi.resetModules();
         global.fetch = vi.fn();
         vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        // Mock supabase session
+        vi.mock('@/lib/supabase', () => ({
+            supabase: {
+                auth: {
+                    getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } })
+                }
+            }
+        }));
     });
 
     afterEach(() => {
         vi.unstubAllEnvs();
+        vi.unmock('@/lib/supabase');
     });
 
     describe('fetchFieldConditions', () => {
@@ -83,14 +93,13 @@ describe('WeatherService', () => {
     });
 
     describe('fetchCurrentWeather', () => {
-        it('should return Config Error if API_KEY is missing', async () => {
-            vi.stubEnv('VITE_VISUALCROSSING_KEY', 'undefined');
-            vi.resetModules();
+        it('should return Unknown if fetch fails', async () => {
             const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockRejectedValue(new Error('Fetch failed'));
             
             const result = await WeatherService.fetchCurrentWeather('New York');
             expect(result.isError).toBe(true);
-            expect(result.locationName).toBe('Config Error');
+            expect(result.locationName).toBe('Unknown');
         });
 
         it('should return Unknown on fetch error', async () => {

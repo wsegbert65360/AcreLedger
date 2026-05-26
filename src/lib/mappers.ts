@@ -8,6 +8,12 @@ import {
     GrainMovementRow, FieldRow, BinRow, SavedSeedRow, SprayRecipeRow,
     FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow
 } from '../types/database';
+import {
+    fieldSchema, binSchema, plantRecordSchema, sprayRecordSchema,
+    harvestRecordSchema, hayHarvestRecordSchema, grainMovementSchema,
+    savedSeedSchema, fertilizerRecipeSchema, sprayRecipeSchema,
+    fertilizerApplicationSchema, tillageRecordSchema
+} from './backupSchema';
 
 // --- Safe Mapping Helpers (Runtime Validation) ---
 
@@ -340,6 +346,7 @@ export const mapSprayToDb = (r: SprayRecord) => {
         sensitive_area_notes: r.sensitiveAreaNotes || null,
         deleted_at: r.deleted_at || null
     };
+    return mapped;
 };
 
 export const mapHarvestToDb = (r: HarvestRecord) => {
@@ -481,13 +488,6 @@ export const mapTillageToDb = (r: TillageRecord) => {
         field_name: r.fieldName,
         date: r.date,
         implement_type: r.implementType,
-        notes: r.notes,
-        season_year: r.seasonYear,
-        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
-    };
-};
-   implement_type: r.implementType,
         notes: r.notes,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),

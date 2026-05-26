@@ -174,9 +174,3 @@ export const offlineStorage = {
     }
   }
 };
-h (err) {
-        console.error('Failed to clear localStorage cache:', err);
-      }
-    }
-  }
-};
