@@ -72,18 +72,19 @@ describe('Restore Performance Benchmark', () => {
     });
 
     const mockBackupData = {
-        fields: [{ id: '1', name: 'Field 1', farm_id: 'farm-123' }],
-        bins: [{ id: '2', name: 'Bin 1', farm_id: 'farm-123' }],
-        plantRecords: [{ id: '3', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
+        fields: [{ id: '1', name: 'Field 1', farm_id: 'farm-123', acreage: 100 }],
+        bins: [{ id: '2', name: 'Bin 1', farm_id: 'farm-123', capacity: 5000 }],
+        plantRecords: [{ id: '3', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123', acreage: 100 }],
         sprayRecords: [{ id: '4', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
-        harvestRecords: [{ id: '5', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
-        hayHarvestRecords: [{ id: '6', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
-        fertilizerApplications: [{ id: '7', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
+        harvestRecords: [{ id: '5', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123', bushels: 200 }],
+        hayHarvestRecords: [{ id: '6', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123', baleCount: 50 }],
+        fertilizerApplications: [{ id: '7', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123', acres: 100 }],
         tillageRecords: [{ id: '8', fieldId: '1', seasonYear: 2024, farm_id: 'farm-123' }],
-        grainMovements: [{ id: '9', binId: '2', seasonYear: 2024, farm_id: 'farm-123' }],
+        grainMovements: [{ id: '9', binId: '2', seasonYear: 2024, farm_id: 'farm-123', bushels: 200 }],
         savedSeeds: [{ id: '10', name: 'Seed 1', farm_id: 'farm-123' }],
         fertilizerRecipes: [{ id: '11', name: 'Rec 1', farm_id: 'farm-123' }],
-        sprayRecipes: [{ id: '12', name: 'Rec 2', farm_id: 'farm-123' }]
+        sprayRecipes: [{ id: '12', name: 'Rec 2', farm_id: 'farm-123' }],
+        activeSeason: 2024
     };
 
     it('should measure transactional restore performance', async () => {

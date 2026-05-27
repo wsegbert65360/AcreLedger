@@ -30,8 +30,8 @@ export const RainService = {
     }
 
     const fetchPromise = (async () => {
-      // Use the environment variable, or fallback to the production URL
-      let baseUrl = import.meta.env.VITE_RAIN_API_URL || 'https://rain-api.vercel.app';
+      // Use the environment variable
+      let baseUrl = import.meta.env.VITE_RAIN_API_URL;
 
       if (!baseUrl) {
         throw new Error('VITE_RAIN_API_URL is not configured');
