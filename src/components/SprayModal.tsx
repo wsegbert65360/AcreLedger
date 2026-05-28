@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -87,6 +91,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
   const [isSaving, setIsSaving] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [productIndexToDelete, setProductIndexToDelete] = useState<number | null>(null);
 
   // Auto-calculate total amount for each product and the general summary
   useEffect(() => {
@@ -311,6 +316,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
 
   const removeProduct = (i: number) => {
     setProducts(prev => prev.filter((_, idx) => idx !== i));
+    setProductIndexToDelete(null);
   };
 
   const [showValidation, setShowValidation] = useState(false);
@@ -342,6 +348,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   if (!applicationMethod.trim()) missingComplianceFields.push('Application method');
   if (!equipmentId.trim()) missingComplianceFields.push('Equipment ID');
   if (!products.every(p => p.epaRegNumber?.trim())) missingComplianceFields.push('EPA Reg # (one or more products)');
+  const productToDelete = productIndexToDelete != null ? products[productIndexToDelete] : null;
 
   const handleSubmit = async () => {
     if (!isMinimumValid) {
@@ -423,6 +430,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -468,7 +476,11 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
               {products.map((p, i) => (
                 <div key={p.ui_id || i} className="bg-muted p-2.5 rounded-lg border border-border/50 relative">
                   {products.length > 1 && (
-                    <button onClick={() => removeProduct(i)} className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 shadow-md hover:bg-destructive/80 transition-colors">
+                    <button
+                      onClick={() => setProductIndexToDelete(i)}
+                      className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 shadow-md hover:bg-destructive/80 transition-colors"
+                      aria-label={`Remove ${p.product || 'product'} from spray mix`}
+                    >
                       <X size={12} />
                     </button>
                   )}
@@ -863,5 +875,25 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={productIndexToDelete != null} onOpenChange={(open) => { if (!open) setProductIndexToDelete(null); }}>
+      <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-foreground">Remove Product?</AlertDialogTitle>
+          <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
+            Remove &ldquo;{productToDelete?.product || 'this product'}&rdquo; from this spray mix?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => { if (productIndexToDelete != null) removeProduct(productIndexToDelete); }}
+            className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+          >
+            Remove
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

@@ -1,9 +1,15 @@
 import { useState } from 'react';
+
+import { X, Plus } from 'lucide-react';
+
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { X, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import type { SprayRecipeProduct } from '@/types/farm';
@@ -29,6 +35,7 @@ export default function RecipeForm({
   const [licenseNumber, setLicenseNumber] = useState(initial?.licenseNumber ?? localStorage.getItem(`al_license_number_${userPrefix}`) ?? '');
   const epaRegNumber = initial?.epaRegNumber ?? '';
   const [targetPest, setTargetPest] = useState(initial?.targetPest ?? '');
+  const [productIndexToDelete, setProductIndexToDelete] = useState<number | null>(null);
 
   const updateProduct = (i: number, field: keyof SprayRecipeProduct, value: string) => {
     setProducts(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
@@ -40,11 +47,14 @@ export default function RecipeForm({
 
   const removeProduct = (i: number) => {
     setProducts(prev => prev.filter((_, idx) => idx !== i));
+    setProductIndexToDelete(null);
   };
 
   const valid = name.trim() && products.some(p => p.product.trim());
+  const productToDelete = productIndexToDelete != null ? products[productIndexToDelete] : null;
 
   return (
+    <>
     <div className="border border-spray/30 rounded-lg p-3 space-y-3 bg-spray/5">
       <div>
         <Label htmlFor="recipeName" className="text-muted-foreground font-mono text-xs">RECIPE NAME *</Label>
@@ -125,7 +135,11 @@ export default function RecipeForm({
             </div>
           </div>
           {products.length > 1 && (
-            <button onClick={() => removeProduct(i)} className="text-destructive hover:text-destructive/80 mt-1">
+            <button
+              onClick={() => setProductIndexToDelete(i)}
+              className="text-destructive hover:text-destructive/80 mt-1"
+              aria-label={`Remove ${p.product || 'product'} from recipe`}
+            >
               <X size={16} />
             </button>
           )}
@@ -186,5 +200,26 @@ export default function RecipeForm({
         <Button onClick={onCancel} variant="ghost" size="sm">Cancel</Button>
       </div>
     </div>
+
+      <AlertDialog open={productIndexToDelete != null} onOpenChange={(open) => { if (!open) setProductIndexToDelete(null); }}>
+        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Remove Product?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
+              Remove &ldquo;{productToDelete?.product || 'this product'}&rdquo; from this spray recipe?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (productIndexToDelete != null) removeProduct(productIndexToDelete); }}
+              className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

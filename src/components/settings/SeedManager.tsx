@@ -1,14 +1,21 @@
 import { useState } from 'react';
-import { useFarm } from '@/store/farmStore';
+
+import { Sprout, Plus, Trash2 } from 'lucide-react';
+
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sprout, Plus, Trash2 } from 'lucide-react';
+import { useFarm } from '@/store/farmStore';
 
 export default function SeedManager() {
   const { savedSeeds, addSeed, deleteSeed } = useFarm();
   const [newSeed, setNewSeed] = useState('');
+  const [seedToDelete, setSeedToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const handleAdd = async () => {
     if (!newSeed.trim()) return;
@@ -17,43 +24,72 @@ export default function SeedManager() {
   };
 
   return (
-    <Card className="border-plant/30">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-plant text-lg">
-          <Sprout size={18} />
-          Seed Varieties
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <Label htmlFor="seedVariety" className="sr-only">New Seed Variety</Label>
-        <div className="flex gap-2">
-          <Input
-            id="seedVariety"
-            name="seedVariety"
-            value={newSeed}
-            onChange={e => setNewSeed(e.target.value)}
-            placeholder="e.g. DKC 64-35"
-            className="bg-muted border-border text-foreground"
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          />
-          <Button onClick={handleAdd} disabled={!newSeed.trim()} size="sm" className="bg-plant text-plant-foreground hover:bg-plant/90">
-            <Plus size={16} />
-          </Button>
-        </div>
-        {savedSeeds.length === 0 && (
-          <p className="text-muted-foreground text-sm">No seeds saved yet. Add varieties above.</p>
-        )}
-        <div className="space-y-1">
-          {savedSeeds.map(seed => (
-            <div key={seed.id} className="flex items-center justify-between px-3 py-2 bg-muted rounded-lg">
-              <span className="text-foreground font-mono text-sm">{seed.name}</span>
-              <button onClick={async () => { await deleteSeed(seed.id); }} className="text-destructive hover:text-destructive/80">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <>
+      <Card className="border-plant/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-plant text-lg">
+            <Sprout size={18} />
+            Seed Varieties
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Label htmlFor="seedVariety" className="sr-only">New Seed Variety</Label>
+          <div className="flex gap-2">
+            <Input
+              id="seedVariety"
+              name="seedVariety"
+              value={newSeed}
+              onChange={e => setNewSeed(e.target.value)}
+              placeholder="e.g. DKC 64-35"
+              className="bg-muted border-border text-foreground"
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            />
+            <Button onClick={handleAdd} disabled={!newSeed.trim()} size="sm" className="bg-plant text-plant-foreground hover:bg-plant/90">
+              <Plus size={16} />
+            </Button>
+          </div>
+          {savedSeeds.length === 0 && (
+            <p className="text-muted-foreground text-sm">No seeds saved yet. Add varieties above.</p>
+          )}
+          <div className="space-y-1">
+            {savedSeeds.map(seed => (
+              <div key={seed.id} className="flex items-center justify-between px-3 py-2 bg-muted rounded-lg">
+                <span className="text-foreground font-mono text-sm">{seed.name}</span>
+                <button
+                  onClick={() => setSeedToDelete({ id: seed.id, name: seed.name })}
+                  className="text-destructive hover:text-destructive/80"
+                  aria-label={`Delete ${seed.name}`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={!!seedToDelete} onOpenChange={(open) => { if (!open) setSeedToDelete(null); }}>
+        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Delete Seed Variety?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
+              Delete &ldquo;{seedToDelete?.name ?? 'this seed variety'}&rdquo; from your saved seed varieties?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (seedToDelete) await deleteSeed(seedToDelete.id);
+                setSeedToDelete(null);
+              }}
+              className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

@@ -1,8 +1,15 @@
 import { useState } from 'react';
-import { useFarm } from '@/store/farmStore';
+
+import { Droplets, Plus, Trash2 } from 'lucide-react';
+
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Droplets, Plus, Trash2 } from 'lucide-react';
+import { useFarm } from '@/store/farmStore';
+
 import RecipeForm from './RecipeForm';
 
 export default function RecipeManager() {
@@ -10,8 +17,10 @@ export default function RecipeManager() {
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [recipeToDelete, setRecipeToDelete] = useState<{ id: string; name: string } | null>(null);
 
   return (
+    <>
     <Card className="border-spray/30">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-spray text-lg">
@@ -59,7 +68,11 @@ export default function RecipeManager() {
                   <span className="text-foreground font-mono font-bold text-sm">{recipe.name}</span>
                   <div className="flex gap-2">
                     <button onClick={() => setEditingId(recipe.id)} className="text-muted-foreground hover:text-foreground text-xs font-mono underline">Edit</button>
-                    <button onClick={async () => { await deleteSprayRecipe(recipe.id); }} className="text-destructive hover:text-destructive/80">
+                    <button
+                      onClick={() => setRecipeToDelete({ id: recipe.id, name: recipe.name })}
+                      className="text-destructive hover:text-destructive/80"
+                      aria-label={`Delete ${recipe.name}`}
+                    >
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -83,5 +96,29 @@ export default function RecipeManager() {
         </div>
       </CardContent>
     </Card>
+
+      <AlertDialog open={!!recipeToDelete} onOpenChange={(open) => { if (!open) setRecipeToDelete(null); }}>
+        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Delete Spray Recipe?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
+              Delete &ldquo;{recipeToDelete?.name ?? 'this recipe'}&rdquo;? This removes the premix from your saved spray recipes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (recipeToDelete) await deleteSprayRecipe(recipeToDelete.id);
+                setRecipeToDelete(null);
+              }}
+              className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
