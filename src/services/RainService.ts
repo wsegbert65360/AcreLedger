@@ -9,6 +9,33 @@ export type RainfallResult = {
   dataWarning?: string;
 };
 const promiseCache = new Map<string, Promise<RainfallResult>>();
+const DEFAULT_RAIN_API_URL = 'https://rain-api.vercel.app';
+
+function resolveRainApiBaseUrl(): string {
+  const configuredUrl = import.meta.env.VITE_RAIN_API_URL;
+
+  if (configuredUrl === '') {
+    throw new Error('VITE_RAIN_API_URL is not configured');
+  }
+
+  let baseUrl = (configuredUrl ?? DEFAULT_RAIN_API_URL).trim().replace(/^['"]|['"]$/g, '');
+
+  if (!baseUrl) {
+    throw new Error('VITE_RAIN_API_URL is not configured');
+  }
+
+  baseUrl = baseUrl.replace(/\/+$/, '');
+  if (baseUrl.endsWith('/rain')) {
+    baseUrl = baseUrl.slice(0, -5);
+  }
+
+  const parsedUrl = new URL(baseUrl);
+  if (parsedUrl.protocol !== 'https:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+    throw new Error('VITE_RAIN_API_URL must use HTTPS');
+  }
+
+  return baseUrl;
+}
 
 export const RainService = {
   async fetchComprehensiveRainfall(args: {
@@ -30,23 +57,7 @@ export const RainService = {
     }
 
     const fetchPromise = (async () => {
-      // Use the environment variable
-      let baseUrl = import.meta.env.VITE_RAIN_API_URL;
-
-      if (!baseUrl) {
-        throw new Error('VITE_RAIN_API_URL is not configured');
-      }
-
-      const parsedUrl = new URL(baseUrl);
-      if (parsedUrl.protocol !== 'https:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
-        throw new Error('VITE_RAIN_API_URL must use HTTPS');
-      }
-
-      // Sanitize URL: trim whitespace/newlines, strip trailing slashes, and strip duplicate /rain suffix
-      baseUrl = baseUrl.trim().replace(/\/+$/, '');
-      if (baseUrl.endsWith('/rain')) {
-        baseUrl = baseUrl.slice(0, -5);
-      }
+      const baseUrl = resolveRainApiBaseUrl();
 
       let tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
       let tLng = lng != null ? Math.round(lng * 10000) / 10000 : null;

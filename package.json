@@ -16,7 +16,6 @@
     "cap:build": "vite build --mode capacitor && npx cap sync ios"
   },
   "overrides": {
-    "tar": "^7.5.11",
     "picomatch": "^2.3.2"
   },
   "dependencies": {

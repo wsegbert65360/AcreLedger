@@ -154,6 +154,32 @@ describe('RainService', () => {
     })).rejects.toThrow('VITE_RAIN_API_URL is not configured');
   });
 
+  it('falls back to production Rain API when VITE_RAIN_API_URL is missing', async () => {
+    vi.stubEnv('VITE_RAIN_API_URL', undefined);
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0.4, '72h': 0.9, '168h': 1.2
+    }));
+
+    await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: 38.46, lng: -93.53
+    });
+
+    expect((fetch as any).mock.calls[0][0]).toContain('https://rain-api.vercel.app/rain?');
+  });
+
+  it('sanitizes quoted Rain API URLs with duplicate rain path before fetching', async () => {
+    vi.stubEnv('VITE_RAIN_API_URL', '"https://api.example.com/rain/"');
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0.4, '72h': 0.9, '168h': 1.2
+    }));
+
+    await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: 38.46, lng: -93.53
+    });
+
+    expect((fetch as any).mock.calls[0][0]).toContain('https://api.example.com/rain?');
+  });
+
   it('deduplicates concurrent requests', async () => {
     (fetch as any).mockImplementation(async () => {
       await new Promise(r => setTimeout(r, 50));
