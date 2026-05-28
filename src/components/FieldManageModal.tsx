@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
+import { FileUp, MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import { calculateAcreage } from '@/lib/gisService';
+import { FsaImportCandidate, parseFsaGeoJson } from '@/lib/fsaImport';
 
 // Fix for default marker icon in Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -53,6 +55,7 @@ interface FieldManageModalProps {
 
 export default function FieldManageModal({ open, onClose, editField }: FieldManageModalProps) {
   const { addField, updateField } = useFarm();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState(editField?.name || '');
   const [acreage, setAcreage] = useState(editField?.acreage?.toString() || '');
   const [lat, setLat] = useState(editField?.lat?.toString() || '');
@@ -63,13 +66,17 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [producerShare, setProducerShare] = useState(editField?.producerShare?.toString() || '100');
   const [irrigation, setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
   const [intendedUse, setIntendedUse] = useState(editField?.intendedUse || 'Grain');
+  const [notes, setNotes] = useState(editField?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
 
   // GIS State
   const [points, setPoints] = useState<[number, number][]>(editField?.boundary?.coordinates?.[0]?.slice(0, -1).map((c: any) => [c[1], c[0]]) || []);
+  const [boundary, setBoundary] = useState<Field['boundary']>(editField?.boundary ?? null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>(points.length > 0 ? points[0] : [38.5, -92.5]);
   const [mapZoom, setMapZoom] = useState(points.length > 0 ? 15 : 4);
+  const [importCandidates, setImportCandidates] = useState<FsaImportCandidate[]>([]);
+  const [selectedImportId, setSelectedImportId] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -84,8 +91,10 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       setProducerShare(editField.producerShare?.toString() || '100');
       setIrrigation(editField.irrigationPractice || 'Non-Irrigated');
       setIntendedUse(editField.intendedUse || 'Grain');
+      setNotes(editField.notes || '');
       const newPoints: [number, number][] = (editField?.boundary?.coordinates?.[0]?.slice(0, -1).map((c: any) => [c[1], c[0]]) as [number, number][]) || [];
       setPoints(newPoints);
+      setBoundary(editField.boundary ?? null);
       setMapCenter(newPoints.length > 0 ? newPoints[0] : [38.5, -92.5]);
       setMapZoom(newPoints.length > 0 ? 15 : 4);
     } else {
@@ -99,10 +108,14 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       setProducerShare('100');
       setIrrigation('Non-Irrigated');
       setIntendedUse('Grain');
+      setNotes('');
       setPoints([]);
+      setBoundary(null);
       setMapCenter([38.5, -92.5]);
       setMapZoom(4);
     }
+    setImportCandidates([]);
+    setSelectedImportId('');
   }, [editField, open]);
 
   // Attempt Geolocation on Mount if no field is being edited
@@ -120,9 +133,70 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
   const isEdit = !!editField;
 
+  const polygonPositions = useMemo(() => {
+    if (boundary?.coordinates?.length) {
+      return boundary.coordinates.map(ring => ring.map(point => [point[1], point[0]] as [number, number]));
+    }
+    return points.length >= 3 ? [[...points, points[0]]] : points;
+  }, [boundary, points]);
+
+  const applyImportCandidate = useCallback((candidate: FsaImportCandidate) => {
+    setName(candidate.name);
+    setAcreage(candidate.acreage.toString());
+    setLat(candidate.lat != null ? candidate.lat.toString() : '');
+    setLng(candidate.lng != null ? candidate.lng.toString() : '');
+    setFsaFarm(candidate.fsaFarmNumber || '');
+    setFsaTract(candidate.fsaTractNumber || '');
+    setFsaField(candidate.fsaFieldNumber || '');
+    setIntendedUse(candidate.intendedUse || 'Grain');
+    setNotes(candidate.notes || '');
+    setBoundary(candidate.boundary);
+
+    const importedPoints: [number, number][] = candidate.boundary?.coordinates?.[0]?.slice(0, -1).map(point => [point[1], point[0]]) || [];
+    setPoints(importedPoints);
+    if (candidate.lat != null && candidate.lng != null) {
+      setMapCenter([candidate.lat, candidate.lng]);
+      setMapZoom(16);
+    } else if (importedPoints.length > 0) {
+      setMapCenter(importedPoints[0]);
+      setMapZoom(16);
+    }
+    setIsCapturing(false);
+  }, []);
+
+  const handleImportSelection = useCallback((candidateId: string) => {
+    setSelectedImportId(candidateId);
+    const candidate = importCandidates.find(item => item.id === candidateId);
+    if (candidate) {
+      applyImportCandidate(candidate);
+    }
+  }, [applyImportCandidate, importCandidates]);
+
+  const handleImportFile = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const candidates = parseFsaGeoJson(text, file.name);
+      setImportCandidates(candidates);
+      setSelectedImportId(candidates[0].id);
+      applyImportCandidate(candidates[0]);
+      toast.success(candidates.length === 1 ? 'Imported FSA field.' : `Imported ${candidates.length} FSA fields. Select the one to use.`);
+      native.haptic.success();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not import this FSA file.';
+      toast.error(message);
+      native.haptic.error();
+    }
+  }, [applyImportCandidate]);
+
   const handlePointAdd = useCallback(async (latlng: [number, number]) => {
     const newPoints = [...points, latlng];
     setPoints(newPoints);
+    setImportCandidates([]);
+    setSelectedImportId('');
 
     if (newPoints.length === 1) {
       setLat(latlng[0].toFixed(6));
@@ -136,11 +210,17 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       };
       const area = calculateAcreage(geojson);
       setAcreage(area.toString());
+      setBoundary(geojson);
+    } else {
+      setBoundary(null);
     }
   }, [points]);
 
   const clearPoints = () => {
     setPoints([]);
+    setBoundary(null);
+    setImportCandidates([]);
+    setSelectedImportId('');
     setAcreage('');
     setIsCapturing(true);
   };
@@ -163,9 +243,9 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       return;
     }
 
-    let boundary: { type: 'Polygon'; coordinates: number[][][] } | null = null;
-    if (points.length >= 3) {
-      boundary = {
+    let fieldBoundary: Field['boundary'] = boundary;
+    if (!fieldBoundary && points.length >= 3) {
+      fieldBoundary = {
         type: 'Polygon',
         coordinates: [[...points, points[0]].map(p => [p[1], p[0]])]
       };
@@ -176,13 +256,14 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       acreage: ac,
       lat: la,
       lng: ln,
-      boundary,
+      boundary: fieldBoundary,
       fsaFarmNumber: fsaFarm.trim() || undefined,
       fsaTractNumber: fsaTract.trim() || undefined,
       fsaFieldNumber: fsaField.trim() || undefined,
       producerShare: parseFloat(producerShare) || undefined,
       irrigationPractice: irrigation,
       intendedUse: intendedUse.trim() || undefined,
+      notes: notes.trim() || undefined,
       deleted_at: null as string | null
     };
 
@@ -232,6 +313,43 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json,application/geo+json,.geojson"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full justify-center font-mono text-[11px]"
+            >
+              <FileUp size={14} className="mr-2" />
+              IMPORT FSA GEOJSON
+            </Button>
+            {importCandidates.length > 1 && (
+              <div>
+                <Label htmlFor="fsaImportCandidate" className="text-muted-foreground font-mono text-xs uppercase">Imported polygon</Label>
+                <Select value={selectedImportId} onValueChange={handleImportSelection}>
+                  <SelectTrigger id="fsaImportCandidate" className="h-9 mt-1 bg-background border-border font-mono text-xs">
+                    <SelectValue placeholder="Select FSA polygon" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {importCandidates.map(candidate => (
+                      <SelectItem key={candidate.id} value={candidate.id}>
+                        {candidate.name} · {candidate.acreage} AC
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
           {/* Map Preview / Drawing Area */}
           <div className="relative group">
             <div className="h-48 w-full rounded-lg overflow-hidden border border-border bg-muted mb-2 z-0">
@@ -255,8 +373,8 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
                 {points.map((p, i) => (
                   <Marker key={i} position={p} />
                 ))}
-                {points.length >= 2 && (
-                  <Polygon positions={points.length >= 3 ? [...points, points[0]] : points} pathOptions={{ color: 'var(--primary)' }} />
+                {polygonPositions.length >= 2 && (
+                  <Polygon positions={polygonPositions} pathOptions={{ color: 'var(--primary)' }} />
                 )}
               </MapContainer>
             </div>

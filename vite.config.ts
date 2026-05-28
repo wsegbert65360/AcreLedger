@@ -118,6 +118,9 @@ export default defineConfig(({ mode }) => ({
     chunkSizeWarningLimit: 1000,
     sourcemap: false,
   },
+  optimizeDeps: {
+    entries: ["index.html"],
+  },
   test: {
     environment: "jsdom",
     globals: true,

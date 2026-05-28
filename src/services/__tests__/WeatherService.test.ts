@@ -159,6 +159,8 @@ describe('WeatherService', () => {
             expect(result.temp).toBe(72);
             expect(result.precip24h).toBe(0.1);
             expect(result.precip72h).toBe(0.6);
+            expect((global.fetch as any).mock.calls[0][0]).toContain('weather.visualcrossing.com');
+            expect((global.fetch as any).mock.calls[0][0]).toContain('key=test-api-key');
         });
     });
 });
