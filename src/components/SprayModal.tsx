@@ -407,14 +407,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
           totalProductAmount: p.totalProductAmount || undefined,
           totalProductUnit: p.totalProductUnit || 'gal'
         })),
-        windSpeed: parseFloat(manualWindSpeed) || weather?.wind || initialData?.windSpeed || 0,
-        temperature: weather?.temp || initialData?.temperature || 0,
+        windSpeed: !isNaN(parseFloat(manualWindSpeed)) ? parseFloat(manualWindSpeed) : (weather ? weather.wind : (initialData?.windSpeed ?? 0)),
+        temperature: weather ? weather.temp : (initialData?.temperature ?? 0),
         applicatorName: applicatorName.trim(),
         licenseNumber: licenseNumber.trim(),
         epaRegNumber: products[0]?.epaRegNumber,
         targetPest: targetPest.trim() || undefined,
         windDirection: manualWindDirection || weather?.windDirection || initialData?.windDirection,
-        relativeHumidity: weather?.humidity || initialData?.relativeHumidity || 0,
+        relativeHumidity: weather ? weather.humidity : (initialData?.relativeHumidity ?? 0),
         sprayDate: sprayDate || undefined,
         startTime: startTime || undefined,
         endTime: endTime || undefined,
@@ -436,7 +436,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
         isPremixed,
         nonCompliant: !isFullyCompliant,
         deleted_at: null,
-        seasonYear: viewingSeason,
+        seasonYear: initialData ? initialData.seasonYear : viewingSeason,
       };
 
       let success = false;
