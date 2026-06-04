@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -92,6 +92,8 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
   const [isSaving, setIsSaving] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   const [productIndexToDelete, setProductIndexToDelete] = useState<number | null>(null);
+  const [accordionValue, setAccordionValue] = useState<string>("compliance");
+  const hasSeenIncompleteWarning = useRef(false);
 
   // Auto-calculate total amount for each product and the general summary
   useEffect(() => {
@@ -181,10 +183,15 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       totalProductUnit: 'gal'
     }]);
     setSelectedRecipeId('');
+    setWeather(null);
   };
 
   useEffect(() => {
     if (!open) return;
+    setShowValidation(false);
+    hasSeenIncompleteWarning.current = false;
+    setAccordionValue("compliance");
+
     if (initialData) {
       setProducts(initialData.products?.map(p => ({ 
         ...p, 
@@ -228,6 +235,23 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setSensitiveAreaCheck(initialData.sensitiveAreaCheck || false);
       setSensitiveAreaNotes(initialData.sensitiveAreaNotes || '');
       setSelectedRecipeId('');
+
+      if (
+        initialData.windSpeed !== undefined ||
+        initialData.temperature !== undefined ||
+        initialData.relativeHumidity !== undefined ||
+        initialData.windDirection
+      ) {
+        setWeather({
+          wind: initialData.windSpeed ?? 0,
+          temp: initialData.temperature ?? 0,
+          humidity: initialData.relativeHumidity ?? 0,
+          windDirection: initialData.windDirection ?? '',
+          isError: false
+        });
+      } else {
+        setWeather(null);
+      }
     } else {
       resetComplianceFields();
     }
@@ -355,6 +379,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
       setShowValidation(true);
       toast.error('Enter at least one product name and an application date to save.');
       native.haptic.error();
+      return;
+    }
+    if (!isFullyCompliant && !hasSeenIncompleteWarning.current) {
+      setShowValidation(true);
+      setAccordionValue("compliance");
+      hasSeenIncompleteWarning.current = true;
+      toast.warning('Compliance fields are incomplete. Click Save again to save anyway.');
+      native.haptic.light();
       return;
     }
     if (!isFullyCompliant) {
@@ -592,7 +624,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
             </div>
           </div>
 
-          <Accordion type="single" collapsible className="w-full" defaultValue="compliance">
+          <Accordion type="single" collapsible className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
             <AccordionItem value="compliance" className="border-spray/20">
               <AccordionTrigger className="text-spray font-mono text-xs font-bold hover:no-underline py-2">
                 APPLICATION & COMPLIANCE DETAILS
@@ -763,7 +795,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                 Environmental Conditions *
               </span>
               <div className="flex items-center gap-2">
-                {(!weather || weather.wind === 0 || manualWindSpeed === '0' || !manualWindDirection.trim()) && (
+                {(!!initialData || !weather || weather.wind === 0 || manualWindSpeed === '0' || !manualWindDirection.trim()) && (
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -772,7 +804,7 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
                     className="h-6 px-2 text-[10px] font-bold text-spray hover:bg-spray/10"
                   >
                     {isRecovering ? <Loader2 size={10} className="animate-spin mr-1" /> : <HistoryIcon size={10} className="mr-1" />}
-                    RECOVER PAST WEATHER
+                    {initialData ? 'PULL WEATHER' : 'RECOVER PAST WEATHER'}
                   </Button>
                 )}
                 {loading && <Loader2 size={12} className="text-spray animate-spin" />}
