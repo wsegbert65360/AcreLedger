@@ -44,6 +44,7 @@ export const plantRecordSchema = z.object({
   timestamp: z.number().optional(),
   farm_id: z.string(),
   deleted_at: z.string().nullable().optional(),
+  memo: z.string().optional(),
 }).strict();
 
 export const sprayRecordSchema = z.object({

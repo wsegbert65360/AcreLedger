@@ -60,6 +60,7 @@ export interface PlantRecordRow {
     season_year: number;
     timestamp: string;
     deleted_at?: string | null;
+    memo?: string | null;
 }
 
 export interface SprayRecordRow {

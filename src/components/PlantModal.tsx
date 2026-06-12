@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
@@ -27,6 +28,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   const [producerShare, setProducerShare] = useState(initialData?.producerShare?.toString() || field.producerShare?.toString() || '100');
   const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
+  const [memo, setMemo] = useState(initialData?.memo || '');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setProducerShare(initialData.producerShare?.toString() || field.producerShare?.toString() || '100');
       setIrrigationPractice(initialData.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
       setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
+      setMemo(initialData.memo || '');
     } else {
       setSeedVariety('');
       setCrop('');
@@ -45,6 +48,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setProducerShare(field.producerShare?.toString() || '100');
       setIrrigationPractice(field.irrigationPractice || 'Non-Irrigated');
       setPlantDate(new Date().toISOString().split('T')[0]);
+      setMemo('');
     }
   }, [initialData, field, open]);
 
@@ -66,6 +70,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
           plantDate: plantDate || undefined,
           producerShare: parseFloat(producerShare) || 100,
           irrigationPractice,
+          memo: memo.trim() || undefined,
         });
       } else {
         success = await addPlantRecord({
@@ -78,6 +83,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
           plantDate: plantDate || undefined,
           producerShare: parseFloat(producerShare) || 100,
           irrigationPractice,
+          memo: memo.trim() || undefined,
         });
       }
 
@@ -213,6 +219,19 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
                 className="mt-1 bg-muted border-border text-foreground font-mono"
               />
             </div>
+          </div>
+
+          <div className="pt-2 border-t border-border/20">
+            <Label htmlFor="plantMemo" className="text-muted-foreground font-mono text-xs">MEMO</Label>
+            <Textarea
+              id="plantMemo"
+              name="plantMemo"
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              placeholder="Optional notes about this planting..."
+              className="mt-1 bg-muted border-border text-foreground resize-none"
+              rows={2}
+            />
           </div>
         </div>
         <DialogFooter>

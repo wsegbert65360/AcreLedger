@@ -43,6 +43,7 @@ export interface PlantRecord {
   seasonYear: number;
   farm_id?: string;
   deleted_at: string | null;
+  memo?: string;
 }
 
 export interface SprayRecord {

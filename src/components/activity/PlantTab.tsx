@@ -14,7 +14,9 @@ function buildSubtitle(r: PlantRecord): string {
 }
 
 function buildDetails(r: PlantRecord): string {
-  return `${r.acreage} AC · PLANTED`;
+  const parts = [`${r.acreage} AC · PLANTED`];
+  if (r.memo) parts.push(r.memo);
+  return parts.join(' · ');
 }
 
 function buildDate(r: PlantRecord): string {

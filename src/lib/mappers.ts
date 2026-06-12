@@ -67,7 +67,8 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
-    deleted_at: db.deleted_at ?? null
+    deleted_at: db.deleted_at ?? null,
+    memo: safeStr(db.memo) || undefined
 });
 
 export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
@@ -302,7 +303,8 @@ export const mapPlantToDb = (r: PlantRecord) => {
         irrigation_practice: r.irrigationPractice,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
+        deleted_at: r.deleted_at,
+        memo: r.memo || null
     };
 };
 
