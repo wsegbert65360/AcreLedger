@@ -55,43 +55,31 @@ export default function FieldCard({ field }: FieldCardProps) {
         {/* Seasonal Activity Icons */}
         <div className="flex items-center -mr-2">
           {summary?.planted && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/field/${field.id}#planting`);
-              }}
-              className="h-8 w-8 flex items-center justify-center text-primary/40 hover:text-primary/80 transition-colors"
+            <div
+              className="h-8 w-8 flex items-center justify-center text-primary/40"
               title="Planting Activity"
             >
               <Sprout size={16} />
-            </button>
+            </div>
           )}
           {(summary?.sprayed ?? 0) > 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/field/${field.id}#spraying`);
-              }}
-              className="h-8 w-8 flex items-center justify-center text-primary/40 hover:text-primary/80 transition-colors"
+            <div
+              className="h-8 w-8 flex items-center justify-center text-primary/40"
               title="Spraying Activity"
             >
               <div className="flex items-center">
                 <Cloud size={16} />
                 <span className="text-[11px] font-mono font-bold ml-0.5">x{summary?.sprayed}</span>
               </div>
-            </button>
+            </div>
           )}
           {(summary?.fertilized ?? 0) > 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/field/${field.id}#fertilizer`);
-              }}
-              className="h-8 w-8 flex items-center justify-center text-primary/40 hover:text-primary/80 transition-colors"
+            <div
+              className="h-8 w-8 flex items-center justify-center text-primary/40"
               title="Fertilizer Activity"
             >
               <Flask size={16} />
-            </button>
+            </div>
           )}
         </div>
         <ChevronRight size={20} className="text-muted-foreground/50" />

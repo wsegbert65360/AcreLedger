@@ -82,6 +82,12 @@ export default function SeasonRolloverModal() {
 
     setRestoring(true);
     try {
+      const MAX_BACKUP_SIZE = 50 * 1024 * 1024; // 50 MB
+      if (pendingRestoreFile.size > MAX_BACKUP_SIZE) {
+        toast.error('Backup file is too large. Maximum size is 50 MB.');
+        return;
+      }
+
       const text = await pendingRestoreFile.text();
       const data = JSON.parse(text);
       const success = await restoreFromBackup(data);

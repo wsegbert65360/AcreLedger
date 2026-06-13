@@ -10,7 +10,7 @@ interface FertilizerTabProps {
   onEdit: (record: FertilizerApplication) => void;
 }
 function buildDate(r: FertilizerApplication): string {
-  return formatIsoDate(r.date) || formatDate(new Date(r.created_at).getTime());
+  return formatIsoDate(r.date) || formatDate(r.timestamp);
 }
 
 export default function FertilizerTab({ records, selected, onToggle, onEdit }: FertilizerTabProps) {

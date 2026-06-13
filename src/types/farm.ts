@@ -1,3 +1,13 @@
+/** Minimal shared fields used by ActivityFeed to render any record type without `any` casts. */
+export interface ActivityRecordBase {
+  id: string;
+  timestamp?: number;
+  date?: string;
+  plantDate?: string;
+  sprayDate?: string;
+  harvestDate?: string;
+}
+
 export interface Field {
   id: string;
   name: string;
@@ -219,8 +229,6 @@ export interface FertilizerApplication {
   fertilizer_formula: string;
   /** Unix ms timestamp representing when this application record was created */
   timestamp: number;
-  created_at: string;
-  updated_at: string;
   deleted_at: string | null;
   seasonYear: number;
 }

@@ -104,6 +104,9 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       return false;
     }
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     let mapped: ReturnType<typeof mapPlantToDb>;
     try {
       mapped = mapPlantToDb(r);
@@ -121,6 +124,7 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       return prev.map(item => item.id === r.id ? r : item);
     });
 
+    try {
     if (!isOnline) {
       try {
         await syncQueue.enqueueMutation('plant_records', 'update', { ...mapped, id: r.id }, farm_id);
@@ -150,13 +154,12 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       .select('id');
 
     if (error || !data || data.length === 0) {
-      // Replace with Sentry.captureException(error) in production
       if (error) {
         console.error('Error updating plant record:', error);
       } else {
         console.warn('Plant update affected zero rows:', r.id);
       }
-      
+
       const previous = previousRef.current;
       if (previous) {
         setPlantRecords(prev => prev.map(item => item.id === r.id ? previous : item));
@@ -164,13 +167,16 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
         console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
         setPlantRecords(prev => prev.filter(item => item.id !== r.id));
       }
-      
+
       toast.error('Failed to update record.');
       return false;
     }
 
     toast.success('Record updated.');
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setPlantRecords]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
@@ -183,6 +189,9 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
 
     if (ids.length === 0) return true;
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     // Capture snapshot into a ref inside the setter
     snapshotRef.current = [];
     setPlantRecords(prev => {
@@ -192,6 +201,7 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       return prev.filter(r => !ids.includes(r.id));
     });
 
+    try {
     if (!isOnline) {
       try {
         const deletedAt = new Date().toISOString();
@@ -252,6 +262,9 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setPlantRecords]);
 
   return { addPlantRecord, updatePlantRecord, deletePlantRecords };

@@ -41,6 +41,14 @@ const pageTransition = {
   ease: [0.4, 0, 0.2, 1] as const, // Cast to constant for Framer Motion types
 };
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 const AnimatedRoutes = () => {
   const location = useLocation();
 
@@ -150,6 +158,7 @@ const AppContent = () => {
 
 const App = () => (
   <BrowserRouter>
+    <ScrollToTop />
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="al-ui-theme">
         <TooltipProvider>

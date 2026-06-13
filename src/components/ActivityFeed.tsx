@@ -1,19 +1,19 @@
 import { Edit2 } from 'lucide-react';
 import { ModalType } from '@/pages/FieldDetailScreen';
 
-import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
+import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, TillageRecord, ActivityRecordBase } from '@/types/farm';
 
 interface ActivityFeedProps {
   records: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }[];
   year: number;
-  onEdit: (type: ModalType, data: any) => void;
+  onEdit: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord) => void;
   hideHeader?: boolean;
 }
 
 export default function ActivityFeed({ records, year, onEdit, hideHeader }: ActivityFeedProps) {
-  const getFeedInfo = (record: { type: string; data: any }) => {
+  const getFeedInfo = (record: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }) => {
     const { type, data } = record;
-    
+
     switch (type) {
       case 'plant':
         return { emoji: '🌱', label: 'Plant', detail: data.crop || data.seedVariety };
@@ -32,6 +32,23 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
     }
   };
 
+  const getRecordDate = (r: ActivityRecordBase): string => {
+    const dateRaw = r.date || r.plantDate || r.sprayDate || r.harvestDate;
+    if (dateRaw) {
+      const parsed = new Date(dateRaw);
+      return !isNaN(parsed.getTime())
+        ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+        : '—';
+    }
+    if (r.timestamp) {
+      const parsed = new Date(r.timestamp);
+      return !isNaN(parsed.getTime())
+        ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+        : '—';
+    }
+    return '—';
+  };
+
   return (
     <section className="space-y-3 pb-8">
       {!hideHeader && (
@@ -41,23 +58,11 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
         {records?.map((record) => {
           const info = getFeedInfo(record);
           const r = record.data;
-          const dateRaw = (r as any).date || (r as any).plantDate || (r as any).sprayDate || (r as any).harvestDate;
-          let formattedDate = '—';
-          if (dateRaw) {
-            const parsed = new Date(dateRaw);
-            formattedDate = !isNaN(parsed.getTime())
-              ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
-              : '—';
-          } else if ((r as any).timestamp) {
-            const parsed = new Date((r as any).timestamp);
-            formattedDate = !isNaN(parsed.getTime())
-              ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
-              : '—';
-          }
+          const formattedDate = getRecordDate(r);
 
           return (
-            <div 
-              key={(r as any).id}
+            <div
+              key={r.id}
               onClick={() => onEdit(record.type as ModalType, record.data)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(record.type as ModalType, record.data); }}}
               role="button"
@@ -74,10 +79,10 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Edit2 
-                  size={12} 
+                <Edit2
+                  size={12}
                   data-testid={`edit-icon-${record.type}-${r.id}`}
-                  className="text-muted-foreground opacity-20 group-hover:opacity-100 transition-opacity" 
+                  className="text-muted-foreground opacity-20 group-hover:opacity-100 transition-opacity"
                 />
               </div>
             </div>

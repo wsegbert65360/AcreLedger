@@ -257,6 +257,7 @@ export const syncQueue = {
             const nextRetries = mutation.retry_count + 1;
             if (nextRetries >= 3) {
               console.warn(`Discarding sync mutation ${mutation.id} after 3 failed attempts.`);
+              toast.error(`Offline ${mutation.operation} to ${mutation.table_name} failed after 3 tries and was discarded.`);
               await syncQueue.dequeueMutation(mutation.id);
             } else {
               await syncQueue.incrementRetry(mutation.id, mutation.retry_count);

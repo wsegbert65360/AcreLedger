@@ -221,8 +221,6 @@ export const mapFertilizerFromDb = (db: FertilizerApplicationRow): FertilizerApp
     acres: safeNum(db.acres),
     fertilizer_formula: safeStr(db.fertilizer_formula),
     timestamp: safeTimestamp(db.created_at || db.date),
-    created_at: safeStr(db.created_at),
-    updated_at: safeStr(db.updated_at),
     deleted_at: db.deleted_at ?? null,
     seasonYear: safeNum(db.season_year, new Date().getFullYear())
 });
