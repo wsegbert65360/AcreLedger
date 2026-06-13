@@ -19,11 +19,9 @@ describe('Crypto Utility', () => {
     expect(result).toBe(plainText);
   });
 
-  it('should return empty string on decryption failure with wrong secret', async () => {
+  it('should throw on decryption failure with wrong secret', async () => {
     const encrypted = await encryptData(plainText, secret);
-    const decrypted = await decryptData(encrypted, 'wrong-secret');
-    // WebCrypto throws on mismatch, our helper returns ''
-    expect(decrypted).toBe('');
+    await expect(decryptData(encrypted, 'wrong-secret')).rejects.toThrow('Decryption failed');
   });
 
   it('should handle non-encrypted strings in decrypt gracefully', async () => {

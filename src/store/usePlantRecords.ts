@@ -18,7 +18,7 @@ type OpResult = boolean;
 
 export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnline, onMutation }: UsePlantRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
-  const isAdding = useRef(false);
+  const isMutating = useRef(false);
 
   // Refs for passing values out of state updaters safely across await boundaries
   const previousRef = useRef<PlantRecord | undefined>(undefined);
@@ -34,8 +34,8 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       return false;
     }
 
-    if (isAdding.current) return false;
-    isAdding.current = true;
+    if (isMutating.current) return false;
+    isMutating.current = true;
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
@@ -48,7 +48,7 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
     } catch (err) {
       // Replace with Sentry.captureException(err) in production
       console.error('mapPlantToDb failed:', err);
-      isAdding.current = false;
+      isMutating.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
     }
@@ -68,7 +68,7 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
         toast.error('Failed to save record offline.');
         return false;
       } finally {
-        isAdding.current = false;
+        isMutating.current = false;
       }
     }
 
@@ -92,7 +92,7 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       return true;
     } finally {
       // Always release the guard
-      isAdding.current = false;
+      isMutating.current = false;
     }
   }, [viewingSeason, farm_id, setPlantRecords]);
 

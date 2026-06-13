@@ -18,7 +18,7 @@ type OpResult = boolean;
 
 export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, isOnline, onMutation }: UseHarvestRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
-  const isAdding = useRef(false);
+  const isMutating = useRef(false);
 
   // Refs for passing values out of state updaters safely across await boundaries
   const previousRef = useRef<HarvestRecord | undefined>(undefined);
@@ -34,8 +34,8 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       return false;
     }
 
-    if (isAdding.current) return false;
-    isAdding.current = true;
+    if (isMutating.current) return false;
+    isMutating.current = true;
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
@@ -48,7 +48,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
     } catch (err) {
       // Replace with Sentry.captureException(err) in production
       console.error('mapHarvestToDb failed:', err);
-      isAdding.current = false;
+      isMutating.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
     }
@@ -68,7 +68,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
         toast.error('Failed to save record offline.');
         return false;
       } finally {
-        isAdding.current = false;
+        isMutating.current = false;
       }
     }
 
@@ -92,7 +92,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       return true;
     } finally {
       // Always release the guard
-      isAdding.current = false;
+      isMutating.current = false;
     }
   }, [viewingSeason, farm_id, setHarvestRecords]);
 
@@ -104,6 +104,9 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       return false;
     }
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     let mapped: ReturnType<typeof mapHarvestToDb>;
     try {
       mapped = mapHarvestToDb(r);
@@ -111,6 +114,8 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       console.error('mapHarvestToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');
       return false;
+    } finally {
+      isMutating.current = false;
     }
 
     // Capture previous record into a ref INSIDE the setter so it's guaranteed
@@ -156,7 +161,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       } else {
         console.warn('Harvest update affected zero rows:', r.id);
       }
-      
+
       const previous = previousRef.current;
       if (previous) {
         setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
@@ -164,7 +169,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
         console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
         setHarvestRecords(prev => prev.filter(item => item.id !== r.id));
       }
-      
+
       toast.error('Failed to update harvest record.');
       return false;
     }
@@ -183,6 +188,9 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
 
     if (ids.length === 0) return true;
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     // Capture snapshot into a ref inside the setter
     snapshotRef.current = [];
     setHarvestRecords(prev => {
@@ -192,6 +200,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       return prev.filter(r => !ids.includes(r.id));
     });
 
+    try {
     if (!isOnline) {
       try {
         const deletedAt = new Date().toISOString();
@@ -252,6 +261,9 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setHarvestRecords]);
 
   return { addHarvestRecord, updateHarvestRecord, deleteHarvestRecords };

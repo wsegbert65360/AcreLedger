@@ -56,8 +56,7 @@ export async function encryptData(data: string, secret: string): Promise<string>
     const encB64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
     return `enc:${ivB64}:${encB64}`;
   } catch (err) {
-    console.error('Encryption failed', err);
-    return data;
+    throw new Error(`Encryption failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -78,7 +77,6 @@ export async function decryptData(encryptedStr: string, secret: string): Promise
     const dec = new TextDecoder();
     return dec.decode(decrypted);
   } catch (err) {
-    console.error('Decryption failed', err);
-    return '';
+    throw new Error(`Decryption failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

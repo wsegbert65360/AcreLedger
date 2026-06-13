@@ -194,6 +194,12 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         spray_recipes: recipesToDb,
       };
 
+      if (backupData.activeSeason !== undefined) {
+        if (!isValidYear(backupData.activeSeason)) {
+          throw new Error(`Invalid season year in backup: ${backupData.activeSeason}`);
+        }
+      }
+
       const { error } = await supabase.rpc('restore_farm_backup', {
         p_payload: payload,
         p_active_season: backupData.activeSeason ?? null,
@@ -204,9 +210,6 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       }
 
       if (backupData.activeSeason !== undefined) {
-        if (!isValidYear(backupData.activeSeason)) {
-          throw new Error(`Invalid season year in backup: ${backupData.activeSeason}`);
-        }
         setActiveSeason(backupData.activeSeason);
         setViewingSeason(backupData.activeSeason);
       }

@@ -1,5 +1,22 @@
 import { z } from 'zod';
 
+const geoJsonPolygonSchema = z.object({
+  type: z.literal('Polygon'),
+  coordinates: z.array(z.array(z.array(z.number()))),
+});
+
+const sprayProductSchema = z.object({
+  id: z.string().optional(),
+  ui_id: z.string().optional(),
+  product: z.string(),
+  rate: z.string(),
+  rateUnit: z.string(),
+  epaRegNumber: z.string().optional(),
+  activeIngredients: z.string().optional(),
+  totalProductAmount: z.string().optional(),
+  totalProductUnit: z.string().optional(),
+});
+
 export const fieldSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -12,7 +29,7 @@ export const fieldSchema = z.object({
   producerShare: z.number().optional(),
   irrigationPractice: z.string().optional(),
   intendedUse: z.string().optional(),
-  boundary: z.any().optional(),
+  boundary: geoJsonPolygonSchema.nullable().optional(),
   farm_id: z.string(),
   deleted_at: z.string().nullable().optional(),
   notes: z.string().optional(),
@@ -51,7 +68,7 @@ export const sprayRecordSchema = z.object({
   id: z.string(),
   fieldId: z.string(),
   fieldName: z.string().optional(),
-  products: z.array(z.any()).optional(),
+  products: z.array(sprayProductSchema).optional(),
   windSpeed: z.number().optional(),
   temperature: z.number().optional(),
   sprayDate: z.string().optional(),
@@ -171,7 +188,7 @@ export const fertilizerRecipeSchema = z.object({
 export const sprayRecipeSchema = z.object({
   id: z.string(),
   name: z.string(),
-  products: z.array(z.any()).optional(),
+  products: z.array(sprayProductSchema).optional(),
   applicatorName: z.string().optional(),
   licenseNumber: z.string().optional(),
   targetPest: z.string().optional(),

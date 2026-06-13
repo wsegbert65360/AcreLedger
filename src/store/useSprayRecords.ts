@@ -21,8 +21,8 @@ type OpResult = boolean;
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnline, onMutation }: UseSprayRecordsArgs) {
-  // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
-  const isAdding = useRef(false);
+  // Single boolean guard — prevents double-tap duplicates on any mutation
+  const isMutating = useRef(false);
 
   // Refs for passing values out of state updaters safely across await boundaries
   const previousRef = useRef<SprayRecord | undefined>(undefined);
@@ -38,8 +38,8 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       return false;
     }
 
-    if (isAdding.current) return false;
-    isAdding.current = true;
+    if (isMutating.current) return false;
+    isMutating.current = true;
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
@@ -52,7 +52,7 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
     } catch (err) {
       // Replace with Sentry.captureException(err) in production
       console.error('mapSprayToDb failed:', err);
-      isAdding.current = false;
+      isMutating.current = false;
       toast.error('Failed to prepare spray record — check your inputs.');
       return false;
     }
@@ -72,7 +72,7 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
         toast.error('Failed to save record offline.');
         return false;
       } finally {
-        isAdding.current = false;
+        isMutating.current = false;
       }
     }
 
@@ -97,7 +97,7 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       return true;
     } finally {
       // Always release the guard — even if supabase throws unexpectedly
-      isAdding.current = false;
+      isMutating.current = false;
     }
   }, [viewingSeason, farm_id, setSprayRecords]);
 
@@ -109,6 +109,9 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       return false;
     }
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     let mapped: ReturnType<typeof mapSprayToDb>;
     try {
       mapped = mapSprayToDb({ ...r, farm_id });
@@ -116,6 +119,8 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       console.error('mapSprayToDb failed:', err);
       toast.error('Failed to prepare spray record — check your inputs.');
       return false;
+    } finally {
+      isMutating.current = false;
     }
 
     // Capture previous record into a ref INSIDE the setter so it's guaranteed
@@ -194,6 +199,9 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
 
     if (ids.length === 0) return true;
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     // Capture snapshot into a ref inside the setter so it's guaranteed to be
     // populated by the time we read it after the await.
     snapshotRef.current = [];
@@ -204,6 +212,7 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       return prev.filter(r => !ids.includes(r.id));
     });
 
+    try {
     if (!isOnline) {
       try {
         const deletedAt = new Date().toISOString();
@@ -265,6 +274,9 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setSprayRecords]);
 
   return { addSprayRecord, updateSprayRecord, deleteSprayRecords };

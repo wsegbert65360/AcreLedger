@@ -17,7 +17,7 @@ interface UseTillageRecordsArgs {
 type OpResult = boolean;
 
 export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation }: UseTillageRecordsArgs) {
-  const isAdding = useRef(false);
+  const isMutating = useRef(false);
   const previousRef = useRef<TillageRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: TillageRecord; index: number }[]>([]);
 
@@ -31,8 +31,8 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       return false;
     }
 
-    if (isAdding.current) return false;
-    isAdding.current = true;
+    if (isMutating.current) return false;
+    isMutating.current = true;
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
@@ -43,7 +43,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       mapped = mapTillageToDb(newRecord);
     } catch (err) {
       console.error('mapTillageToDb failed:', err);
-      isAdding.current = false;
+      isMutating.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
     }
@@ -63,7 +63,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
         toast.error('Failed to save record offline.');
         return false;
       } finally {
-        isAdding.current = false;
+        isMutating.current = false;
       }
     }
 
@@ -85,7 +85,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       toast.success('Tillage record saved.');
       return true;
     } finally {
-      isAdding.current = false;
+      isMutating.current = false;
     }
   }, [viewingSeason, farm_id, setTillageRecords, isOnline, onMutation]);
 
@@ -97,6 +97,9 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       return false;
     }
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     let mapped: ReturnType<typeof mapTillageToDb>;
     try {
       mapped = mapTillageToDb(r);
@@ -104,6 +107,8 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       console.error('mapTillageToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');
       return false;
+    } finally {
+      isMutating.current = false;
     }
 
     previousRef.current = undefined;
@@ -170,6 +175,9 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
 
     if (ids.length === 0) return true;
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     snapshotRef.current = [];
     setTillageRecords(prev => {
       snapshotRef.current = prev
@@ -178,6 +186,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       return prev.filter(r => !ids.includes(r.id));
     });
 
+    try {
     if (!isOnline) {
       try {
         const deletedAt = new Date().toISOString();
@@ -234,6 +243,9 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setTillageRecords, isOnline, onMutation]);
 
   return { addTillageRecord, updateTillageRecord, deleteTillageRecords };

@@ -18,7 +18,7 @@ type OpResult = boolean;
 
 export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, isOnline, onMutation }: UseGrainMovementsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
-  const isAdding = useRef(false);
+  const isMutating = useRef(false);
 
   // Refs for passing values out of state updaters safely across await boundaries
   const previousRef = useRef<GrainMovement | undefined>(undefined);
@@ -34,8 +34,8 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       return false;
     }
 
-    if (isAdding.current) return false;
-    isAdding.current = true;
+    if (isMutating.current) return false;
+    isMutating.current = true;
 
     const id = crypto.randomUUID();
     const timestamp = r.timestamp || Date.now();
@@ -48,7 +48,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
     } catch (err) {
       // Replace with Sentry.captureException(err) in production
       console.error('mapGrainToDb failed:', err);
-      isAdding.current = false;
+      isMutating.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
     }
@@ -68,7 +68,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
         toast.error('Failed to record movement offline.');
         return false;
       } finally {
-        isAdding.current = false;
+        isMutating.current = false;
       }
     }
 
@@ -92,7 +92,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       return true;
     } finally {
       // Always release the guard
-      isAdding.current = false;
+      isMutating.current = false;
     }
   }, [viewingSeason, farm_id, setGrainMovements, isOnline, onMutation]);
 
@@ -104,6 +104,9 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       return false;
     }
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     let mapped: ReturnType<typeof mapGrainToDb>;
     try {
       mapped = mapGrainToDb(r);
@@ -111,6 +114,8 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       console.error('mapGrainToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');
       return false;
+    } finally {
+      isMutating.current = false;
     }
 
     // Capture previous record into a ref INSIDE the setter so it's guaranteed
@@ -185,6 +190,9 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
 
     if (ids.length === 0) return true;
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     // Capture snapshot into a ref inside the setter
     snapshotRef.current = [];
     setGrainMovements(prev => {
@@ -194,6 +202,7 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       return prev.filter(r => !ids.includes(r.id));
     });
 
+    try {
     if (!isOnline) {
       try {
         const deletedAt = new Date().toISOString();
@@ -254,6 +263,9 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setGrainMovements, isOnline, onMutation]);
 
   return { addGrainMovement, updateGrainMovement, deleteGrainMovements };

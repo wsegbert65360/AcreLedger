@@ -20,7 +20,7 @@ type OpResult = boolean;
 // ─── Internal Helper Hooks ──────────────────────────────────────────────────
 
 function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerApplications, isOnline, onMutation }: UseFertilizerRecordsArgs) {
-  const isAdding = useRef(false);
+  const isMutating = useRef(false);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
@@ -32,8 +32,8 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
       return false;
     }
 
-    if (isAdding.current) return false;
-    isAdding.current = true;
+    if (isMutating.current) return false;
+    isMutating.current = true;
 
     const id = crypto.randomUUID();
     const now = new Date();
@@ -54,7 +54,7 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
       mapped = mapFertilizerToDb(newRecord);
     } catch (err) {
       console.error('mapFertilizerToDb failed:', err);
-      isAdding.current = false;
+      isMutating.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
     }
@@ -73,7 +73,7 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
         toast.error('Failed to save record offline.');
         return false;
       } finally {
-        isAdding.current = false;
+        isMutating.current = false;
       }
     }
 
@@ -95,7 +95,7 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
       toast.success('Fertilizer application recorded.');
       return true;
     } finally {
-      isAdding.current = false;
+      isMutating.current = false;
     }
   }, [viewingSeason, farm_id, setFertilizerApplications]);
 
@@ -103,6 +103,7 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
 }
 
 function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications, isOnline, onMutation }: Omit<UseFertilizerRecordsArgs, 'viewingSeason'>) {
+  const isMutating = useRef(false);
   const previousRef = useRef<FertilizerApplication | undefined>(undefined);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
@@ -113,6 +114,9 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
       return false;
     }
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     let mapped: ReturnType<typeof mapFertilizerToDb>;
     try {
       mapped = mapFertilizerToDb(r);
@@ -120,6 +124,8 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
       console.error('mapFertilizerToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');
       return false;
+    } finally {
+      isMutating.current = false;
     }
 
     previousRef.current = undefined;
@@ -189,6 +195,7 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
 }
 
 function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnline, onMutation }: Pick<UseFertilizerRecordsArgs, 'farm_id' | 'setFertilizerApplications' | 'isOnline' | 'onMutation'>) {
+  const isMutating = useRef(false);
   const snapshotRef = useRef<{ record: FertilizerApplication; index: number }[]>([]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]): Promise<OpResult> => {
@@ -199,6 +206,9 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
 
     if (ids.length === 0) return true;
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     snapshotRef.current = [];
     setFertilizerApplications(prev => {
       snapshotRef.current = prev
@@ -207,6 +217,7 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
       return prev.filter(r => !ids.includes(r.id));
     });
 
+    try {
     if (!isOnline) {
       try {
         const deletedAt = new Date().toISOString();
@@ -266,6 +277,9 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setFertilizerApplications]);
 
   return { deleteFertilizerApplications };

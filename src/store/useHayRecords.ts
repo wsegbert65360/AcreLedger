@@ -18,7 +18,7 @@ type OpResult = boolean;
 
 export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, isOnline, onMutation }: UseHayRecordsArgs) {
   // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
-  const isAdding = useRef(false);
+  const isMutating = useRef(false);
 
   // Refs for passing values out of state updaters safely across await boundaries
   const previousRef = useRef<HayHarvestRecord | undefined>(undefined);
@@ -34,8 +34,8 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
       return false;
     }
 
-    if (isAdding.current) return false;
-    isAdding.current = true;
+    if (isMutating.current) return false;
+    isMutating.current = true;
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
@@ -48,7 +48,7 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
     } catch (err) {
       // Replace with Sentry.captureException(err) in production
       console.error('mapHayToDb failed:', err);
-      isAdding.current = false;
+      isMutating.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
     }
@@ -68,7 +68,7 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
         toast.error('Failed to save record offline.');
         return false;
       } finally {
-        isAdding.current = false;
+        isMutating.current = false;
       }
     }
 
@@ -92,7 +92,7 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
       return true;
     } finally {
       // Always release the guard
-      isAdding.current = false;
+      isMutating.current = false;
     }
   }, [viewingSeason, farm_id, setHayHarvestRecords]);
 
@@ -104,6 +104,9 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
       return false;
     }
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     let mapped: ReturnType<typeof mapHayToDb>;
     try {
       mapped = mapHayToDb(r);
@@ -111,6 +114,8 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
       console.error('mapHayToDb failed:', err);
       toast.error('Failed to prepare record — check your inputs.');
       return false;
+    } finally {
+      isMutating.current = false;
     }
 
     // Capture previous record into a ref INSIDE the setter so it's guaranteed
@@ -183,6 +188,9 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
 
     if (ids.length === 0) return true;
 
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
     // Capture snapshot into a ref inside the setter
     snapshotRef.current = [];
     setHayHarvestRecords(prev => {
@@ -192,6 +200,7 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
       return prev.filter(r => !ids.includes(r.id));
     });
 
+    try {
     if (!isOnline) {
       try {
         const deletedAt = new Date().toISOString();
@@ -252,6 +261,9 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
     const count = ids.length;
     toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
     return true;
+    } finally {
+      isMutating.current = false;
+    }
   }, [farm_id, setHayHarvestRecords]);
 
   return { addHayHarvestRecord, updateHayHarvestRecord, deleteHayHarvestRecords };
