@@ -11,21 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 // Leaflet & GIS
 import { MapContainer, TileLayer, Marker, Polygon, useMapEvents, useMap } from 'react-leaflet';
-import L from 'leaflet';
+
+import '@/lib/leafletSetup';
 
 import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import { calculateAcreage } from '@/lib/gisService';
 import { FsaImportCandidate, parseFsaGeoJson } from '@/lib/fsaImport';
-
-// Fix for default marker icon in Vite
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
 
 function MapInteraction({ onPointAdd, isCapturing }: { onPointAdd: (latlng: [number, number]) => void; isCapturing: boolean }) {
   useMapEvents({

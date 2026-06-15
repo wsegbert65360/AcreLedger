@@ -17,6 +17,7 @@ import TillageModal from '@/components/TillageModal';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
+import FieldBoundaryMap from '@/components/FieldBoundaryMap';
 import { generateSprayPDF } from '@/lib/sprayExport';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
@@ -219,6 +220,13 @@ export default function FieldDetailScreen() {
             Rainfall updated daily at 8:00 AM
           </p>
         </section>
+
+        {/* Field Boundary Map */}
+        {field.fsaFarmNumber && field.lat != null && field.lng != null && (
+          <section>
+            <FieldBoundaryMap fieldId={field.id} />
+          </section>
+        )}
 
         {/* 2. Today at a Glance - Grid of 4 Cards */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
