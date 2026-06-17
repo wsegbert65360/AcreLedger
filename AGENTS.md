@@ -216,6 +216,8 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 - Build lookup maps once with `useMemo`, for example `new Map()`.
 - Pure helpers that do not depend on component state or props belong outside the component.
 - Avoid manual chunks for UI libraries in Vite config unless there is a confirmed reason.
+- `useEffect` dependency arrays must not depend on store entity object references (e.g. `field`, `plantRecords`) that `farmStore.tsx` recreates on every `fetchData()` call (app mount + each network reconnect). Depend only on primitives (e.g. `field.id`, `field.lat`, `field.lng`) or stable flags (e.g. `open`, `initialData`). Mismatched deps between sibling effects cause one effect to wipe async-fetched data (such as spray-log weather) while the effect that re-fetches it never re-runs, silently leaving the data missing. This caused the spray modal weather-not-loading bug; `HayModal` already follows the correct pattern.
+- When an effect both initializes form state and an async fetch populates some of that state, the initialize/reset effect and the fetch effect must share the same stable trigger set (typically `open` and `initialData`), so a store refresh cannot clear already-fetched data without re-triggering the fetch.
 
 ## Weather and Rainfall Rules
 

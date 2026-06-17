@@ -30,6 +30,7 @@ export const fieldSchema = z.object({
   irrigationPractice: z.string().optional(),
   intendedUse: z.string().optional(),
   boundary: geoJsonPolygonSchema.nullable().optional(),
+  cluNumbers: z.array(z.string()).optional(),
   farm_id: z.string(),
   deleted_at: z.string().nullable().optional(),
   notes: z.string().optional(),

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -26,6 +26,7 @@ import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Onboarding from "./pages/Onboarding";
 import Weather from "./pages/Weather";
 
 const queryClient = new QueryClient();
@@ -68,6 +69,7 @@ const AnimatedRoutes = () => {
           <Route path="/activity" element={<ErrorBoundary><Activity /></ErrorBoundary>} />
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+          <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
           <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
           <Route path="/weather" element={<ErrorBoundary><Weather /></ErrorBoundary>} />
           <Route path="/field/:id" element={<ErrorBoundary><FieldDetailScreen /></ErrorBoundary>} />
@@ -79,7 +81,7 @@ const AnimatedRoutes = () => {
 };
 
 const AppContent = () => {
-  const { session, loading, isOnline, farm_id } = useFarm();
+  const { session, loading, isOnline, farm_id, fields } = useFarm();
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -141,6 +143,12 @@ const AppContent = () => {
 
   if (!session) {
     return <Auth />;
+  }
+
+  const onboardingKey = `${session.user.id}_al_onboarding_complete`;
+  const needsOnboarding = !localStorage.getItem(onboardingKey) && fields.length === 0;
+  if (needsOnboarding && window.location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return (

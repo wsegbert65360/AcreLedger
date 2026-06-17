@@ -59,12 +59,16 @@ export async function loadTractData(keys: string[]): Promise<TractFeatureCollect
   return results;
 }
 
-export function polygonCentroid(ring: number[][]): [number, number] {
-  let lat = 0, lng = 0;
-  const n = ring.length;
-  for (const c of ring) {
-    lat += c[1];
-    lng += c[0];
+export function loadTractDataFromStore(
+  tractKeys: string[],
+  importedTracts: { tractKey: string; geojson: TractFeatureCollection }[],
+): TractFeatureCollection[] {
+  const results: TractFeatureCollection[] = [];
+  for (const key of tractKeys) {
+    const tract = importedTracts.find(t => t.tractKey === key);
+    if (tract) {
+      results.push(tract.geojson);
+    }
   }
-  return [lat / n, lng / n];
+  return results;
 }

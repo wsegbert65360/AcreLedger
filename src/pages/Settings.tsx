@@ -1,4 +1,5 @@
 import { Settings as SettingsIcon } from 'lucide-react';
+import FsaTractManager from '@/components/settings/FsaTractManager';
 import SeedManager from '@/components/settings/SeedManager';
 import RecipeManager from '@/components/settings/RecipeManager';
 import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManager';
@@ -27,6 +28,7 @@ export default function Settings() {
       <div className="max-w-lg mx-auto p-4 space-y-6 lg:max-w-4xl lg:px-8">
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <FsaTractManager />
           <SeedManager />
           <RecipeManager />
           <FertilizerRecipeManager />

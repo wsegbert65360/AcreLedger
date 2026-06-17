@@ -20,6 +20,7 @@ export interface FieldRow {
     irrigation_practice?: string | null;
     intended_use?: string | null;
     boundary?: { type: string; coordinates: number[][][] } | null;
+    clu_numbers?: string[] | null;
     deleted_at?: string | null;
     notes?: string | null;
 }

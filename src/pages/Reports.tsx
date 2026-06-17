@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
+import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
+import { buildFsa578Rows, generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import ReportTable from '@/components/ReportTable';
@@ -67,6 +68,8 @@ export default function Reports() {
 
     fertilizerApplications: allFertilizer,
     fields,
+    cluAssignments,
+    fsaTracts,
     farmName,
     activeSeason,
     viewingSeason,
@@ -141,7 +144,14 @@ export default function Reports() {
   }), [sprayRecords, fieldMap]);
 
   // Summary totals
-  const totalPlantAcres  = useMemo(() => roundTo(plantRecords.reduce((s, r) => s + r.acreage,  0), 2), [plantRecords]);
+  const fsaPlantRows = useMemo(
+    () => buildFsa578Rows(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts)),
+    [plantRecords, fields, cluAssignments, fsaTracts],
+  );
+  const totalPlantAcres  = useMemo(
+    () => roundTo(fsaPlantRows.filter(row => row.crop).reduce((s, row) => s + row.acreage, 0), 2),
+    [fsaPlantRows],
+  );
   const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
@@ -196,22 +206,21 @@ export default function Reports() {
       exportToPdf({
         title: 'FSA Planting Report',
         subtitle: `Acreage report for Farm Service Agency certification. Generated ${reportDate}.`,
-        headers: ['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %'],
-        rows: plantRecords.map(r => {
-          const field = fieldMap.get(r.fieldId);
-          return [
-            fmtDate(r.plantDate) || fmt(r.timestamp),
-            r.fieldName,
-            r.crop || '—',
-            r.seedVariety,
-            r.acreage,
-            field?.fsaFarmNumber || '—',
-            field?.fsaTractNumber || '—',
-            r.intendedUse || '—',
-            r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI',
-            `${(r.producerShare ?? 100).toFixed(0)}%`
-          ];
-        }),
+        headers: ['DATE', 'FIELD', 'CLU/FIELD #', 'LAND USE', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %'],
+        rows: fsaPlantRows.map(row => [
+          row.date ? fmtDate(row.date) : '—',
+          row.fieldName,
+          row.fieldNumber || '—',
+          row.landUse,
+          row.crop || '—',
+          row.seedVariety || '—',
+          row.acreage,
+          row.farmNumber || '—',
+          row.tractNumber || '—',
+          row.intendedUse || '—',
+          row.irrigationCode,
+          row.producerShare
+        ]),
         fileName: `FSA_Planting_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
         summaryText: 'Total Planted Acreage',
         summaryValue: `${totalPlantAcres} AC`
@@ -385,8 +394,8 @@ export default function Reports() {
           <ReportTable
             title="FSA Planting Report"
             subtitle={`Acreage report for Farm Service Agency certification. Generated ${reportDate}.`}
-            headers={['DATE', 'FIELD', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %']}
-            onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields), 'FSA planting data')}
+            headers={['DATE', 'FIELD', 'CLU/FIELD #', 'LAND USE', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %']}
+            onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts)), 'FSA planting data')}
             onExportPdf={handleExportFsaPlantPdf}
             exportLabel="CSV"
             summary={(
@@ -396,27 +405,28 @@ export default function Reports() {
               </div>
             )}
           >
-            {plantRecords.map(r => {
-              const field = fieldMap.get(r.fieldId);
+            {fsaPlantRows.map(row => {
               return (
-                <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(r.plantDate) || fmt(r.timestamp)}</td>
-                  <td className="px-4 py-3 text-xs font-bold text-foreground">{r.fieldName}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{r.crop || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.seedVariety}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acreage}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaFarmNumber  || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaTractNumber || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.intendedUse || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.irrigationPractice === 'Irrigated' ? 'IR' : 'NI'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{(r.producerShare ?? 100).toFixed(0)}%</td>
+                <tr key={row.id} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.date ? fmtDate(row.date) : '—'}</td>
+                  <td className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.fieldNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.landUse}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.seedVariety || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.acreage}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.intendedUse || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.irrigationCode}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.producerShare}</td>
                 </tr>
               );
             })}
-            {plantRecords.length === 0 && (
+            {fsaPlantRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-muted-foreground text-xs">
-                  No planting records to report for this season
+                <td colSpan={12} className="py-12 text-center text-muted-foreground text-xs">
+                  No planting or non-cropland CLU records to report for this season
                 </td>
               </tr>
             )}

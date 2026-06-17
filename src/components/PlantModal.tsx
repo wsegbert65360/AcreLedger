@@ -22,11 +22,14 @@ interface PlantModalProps {
 
 export default function PlantModal({ field, open, onClose, initialData }: PlantModalProps) {
   const { addPlantRecord, updatePlantRecord, savedSeeds, viewingSeason } = useFarm();
+  const fieldIntendedUse = field.intendedUse || '';
+  const fieldProducerShare = field.producerShare?.toString() || '100';
+  const fieldIrrigationPractice = field.irrigationPractice || 'Non-Irrigated';
   const [seedVariety, setSeedVariety] = useState(initialData?.seedVariety || '');
   const [crop, setCrop] = useState(initialData?.crop || '');
-  const [intendedUse, setIntendedUse] = useState(initialData?.intendedUse || field.intendedUse || '');
-  const [producerShare, setProducerShare] = useState(initialData?.producerShare?.toString() || field.producerShare?.toString() || '100');
-  const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
+  const [intendedUse, setIntendedUse] = useState(initialData?.intendedUse || fieldIntendedUse);
+  const [producerShare, setProducerShare] = useState(initialData?.producerShare?.toString() || fieldProducerShare);
+  const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || fieldIrrigationPractice);
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
   const [memo, setMemo] = useState(initialData?.memo || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -36,21 +39,21 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
     if (initialData) {
       setSeedVariety(initialData.seedVariety || '');
       setCrop(initialData.crop || '');
-      setIntendedUse(initialData.intendedUse || field.intendedUse || '');
-      setProducerShare(initialData.producerShare?.toString() || field.producerShare?.toString() || '100');
-      setIrrigationPractice(initialData.irrigationPractice || field.irrigationPractice || 'Non-Irrigated');
+      setIntendedUse(initialData.intendedUse || fieldIntendedUse);
+      setProducerShare(initialData.producerShare?.toString() || fieldProducerShare);
+      setIrrigationPractice(initialData.irrigationPractice || fieldIrrigationPractice);
       setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
       setMemo(initialData.memo || '');
     } else {
       setSeedVariety('');
       setCrop('');
-      setIntendedUse(field.intendedUse || '');
-      setProducerShare(field.producerShare?.toString() || '100');
-      setIrrigationPractice(field.irrigationPractice || 'Non-Irrigated');
+      setIntendedUse(fieldIntendedUse);
+      setProducerShare(fieldProducerShare);
+      setIrrigationPractice(fieldIrrigationPractice);
       setPlantDate(new Date().toISOString().split('T')[0]);
       setMemo('');
     }
-  }, [initialData, field, open]);
+  }, [initialData, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open]);
 
   const handleSubmit = async () => {
     if (!seedVariety.trim()) {

@@ -45,6 +45,7 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
     intendedUse: safeStr(db.intended_use),
     boundary: db.boundary as Field['boundary'],
+    cluNumbers: (db.clu_numbers as string[] | undefined) ?? undefined,
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null,
     notes: safeStr(db.notes)
@@ -252,7 +253,7 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 
 export const mapFieldToDb = (f: Field) => {
     validateRequired(f, ['id', 'farm_id', 'name'], 'mapFieldToDb');
-    const mapped = {
+    const appShape = {
         id: f.id,
         farm_id: f.farm_id,
         name: f.name,
@@ -266,11 +267,29 @@ export const mapFieldToDb = (f: Field) => {
         irrigationPractice: f.irrigationPractice,
         intendedUse: f.intendedUse,
         boundary: f.boundary,
+        cluNumbers: f.cluNumbers,
         deleted_at: f.deleted_at,
         notes: f.notes
     };
-    fieldSchema.parse(mapped);
-    return mapped;
+    fieldSchema.parse(appShape);
+    return {
+        id: f.id,
+        farm_id: f.farm_id,
+        name: f.name,
+        acreage: f.acreage,
+        lat: f.lat ?? null,
+        lng: f.lng ?? null,
+        fsa_farm_number: f.fsaFarmNumber ?? null,
+        fsa_tract_number: f.fsaTractNumber ?? null,
+        fsa_field_number: f.fsaFieldNumber ?? null,
+        producer_share: f.producerShare ?? null,
+        irrigation_practice: f.irrigationPractice ?? null,
+        intended_use: f.intendedUse ?? null,
+        boundary: f.boundary ?? null,
+        clu_numbers: f.cluNumbers ?? null,
+        deleted_at: f.deleted_at ?? null,
+        notes: f.notes ?? null
+    };
 };
 
 export const mapPlantToDb = (r: PlantRecord) => {

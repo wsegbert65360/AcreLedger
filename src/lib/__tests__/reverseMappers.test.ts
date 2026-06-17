@@ -210,16 +210,24 @@ describe('Reverse mapper Zod schema validation', () => {
   });
 });
 
-// ─── Camel Case Output (reverse mappers send camelCase to DB) ───────────────────
+// ─── Database Output Keys ──────────────────────────────────────────────────────
 
 describe('Reverse mapper output keys', () => {
-  it('mapFieldToDb outputs camelCase keys matching Field type', () => {
-    const result = mapFieldToDb(makeField({ fsaFarmNumber: '123', irrigationPractice: 'Irrigated' }));
+  it('mapFieldToDb outputs snake_case database keys', () => {
+    const result = mapFieldToDb(makeField({
+      fsaFarmNumber: '123',
+      irrigationPractice: 'Irrigated',
+      cluNumbers: ['11', '14'],
+    }));
     const keys = Object.keys(result);
-    expect(keys).toContain('fsaFarmNumber');
-    expect(keys).toContain('irrigationPractice');
+    expect(keys).toContain('fsa_farm_number');
+    expect(keys).toContain('irrigation_practice');
+    expect(keys).toContain('clu_numbers');
     expect(keys).toContain('farm_id');
     expect(keys).toContain('deleted_at');
+    expect(keys).not.toContain('fsaFarmNumber');
+    expect(keys).not.toContain('cluNumbers');
+    expect(result.clu_numbers).toEqual(['11', '14']);
   });
 
   it('mapPlantToDb outputs snake_case keys', () => {
@@ -280,9 +288,9 @@ describe('Reverse mapper optional fields', () => {
     expect(result.boundary).toBeNull();
   });
 
-  it('mapFieldToDb handles undefined boundary', () => {
+  it('mapFieldToDb converts undefined boundary to null', () => {
     const result = mapFieldToDb(makeField({ boundary: undefined }));
-    expect(result.boundary).toBeUndefined();
+    expect(result.boundary).toBeNull();
   });
 
   it('mapSprayToDb converts undefined optional fields to null or defaults', () => {

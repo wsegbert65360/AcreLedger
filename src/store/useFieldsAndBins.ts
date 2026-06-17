@@ -25,12 +25,12 @@ export function useFieldsAndBins({
   isOnline, onMutation
 }: UseFieldsAndBinsArgs) {
   // --- Fields ---
-  const addField = useCallback(async (f: Omit<Field, 'id'>): Promise<boolean> => {
+  const addField = useCallback(async (f: Omit<Field, 'id'>, requestedId?: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
       return false;
     }
-    const id = crypto.randomUUID();
+    const id = requestedId ?? crypto.randomUUID();
     const newField: Field = { ...f, id, farm_id };
     
     let mapped: ReturnType<typeof mapFieldToDb>;

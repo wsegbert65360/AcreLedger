@@ -6,7 +6,7 @@ import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet';
 import '@/lib/leafletSetup';
 
 import { useFarm } from '@/store/farmStore';
-import { loadTractData, parseTractKeys, type TractFeature } from '@/lib/tractLookup';
+import { loadTractData, loadTractDataFromStore, parseTractKeys, type TractFeature } from '@/lib/tractLookup';
 
 interface FieldBoundaryMapProps {
   fieldId: string;
@@ -94,7 +94,7 @@ function TractPolygons({ features }: { features: TractFeature[] }) {
 }
 
 export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
-  const { fields } = useFarm();
+  const { fields, fsaTracts, cluAssignments } = useFarm();
   const field = fields.find(f => f.id === fieldId);
 
   const [features, setFeatures] = useState<TractFeature[]>([]);
@@ -106,6 +106,19 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
   }, [field?.lat, field?.lng]);
 
   useEffect(() => {
+    // If field has CLU assignments from imported tracts, use those
+    const fieldAssignments = cluAssignments.filter(a => a.fieldId === fieldId);
+    if (fieldAssignments.length > 0 && fsaTracts.length > 0) {
+      const tractKeys = [...new Set(fieldAssignments.map(a => a.tractKey))];
+      const collections = loadTractDataFromStore(tractKeys, fsaTracts);
+      const cluNums = new Set(fieldAssignments.map(a => a.cluNumber));
+      const feats = collections.flatMap(c => c.features.filter(f => cluNums.has(f.properties.cluNumber)));
+      setFeatures(feats);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback: load from bundled JSON files
     if (!field?.fsaFarmNumber) { setLoading(false); return; }
     const keys = parseTractKeys(field.fsaFarmNumber, field.fsaTractNumber);
     if (keys.length === 0) { setLoading(false); return; }
@@ -119,7 +132,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
       setLoading(false);
     }).catch((err) => { console.error('[FieldBoundaryMap] Load error:', err); setLoading(false); });
     return () => { cancelled = true; };
-  }, [field?.fsaFarmNumber, field?.fsaTractNumber]);
+  }, [fieldId, field?.fsaFarmNumber, field?.fsaTractNumber, cluAssignments, fsaTracts]);
 
   if (field?.lat == null || field.lng == null) return null;
 

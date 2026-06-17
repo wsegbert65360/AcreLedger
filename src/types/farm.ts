@@ -21,6 +21,7 @@ export interface Field {
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated';
   intendedUse?: string; // e.g. Grain, Forage, Seed
   farm_id?: string;
+  cluNumbers?: string[];
   boundary?: {
     type: 'Polygon';
     coordinates: number[][][];

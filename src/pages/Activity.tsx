@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Sprout, Scissors, Disc3 } from 'lucide-react';
 import { toast } from 'sonner';
+import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import type { 
   PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, 
   FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord 
 } from '@/types/farm';
+
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
@@ -67,6 +69,8 @@ export default function Activity() {
   const navigate = useNavigate();
   const {
     fields,
+    cluAssignments,
+    fsaTracts,
     plantRecords,
     sprayRecords,
     harvestRecords,
@@ -243,7 +247,7 @@ export default function Activity() {
             <button
               onClick={() => {
                 const exportPromise = tab === 'plant'
-                  ? exportFsa578Data(filteredPlant, fields)
+                  ? exportFsa578Data(filteredPlant, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts))
                   : exportHarvestData(filteredHarvest, fields);
 
                 exportPromise.catch((error) => {

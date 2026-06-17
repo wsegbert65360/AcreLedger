@@ -29,7 +29,7 @@ interface SprayModalProps {
   initialData?: SprayRecord;
 }
 
-export default function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
+function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
   const { addSprayRecord, updateSprayRecord, sprayRecipes, session, viewingSeason, farmName } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -255,7 +255,14 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     } else {
       resetComplianceFields();
     }
-  }, [open, initialData, field]);
+    // Depend on open/initialData only — NOT the `field` object reference.
+    // The store recreates field objects on every fetchData() (mount + network
+    // reconnect), which would otherwise re-trigger this effect, call
+    // resetComplianceFields(), and clear `weather` to null. Because the weather
+    // effect below keys on field.lat/field.lng primitives (unchanged), the
+    // weather would never be re-fetched, leaving the spray log without weather.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData]);
 
   useEffect(() => {
     // Only auto-fetch current weather for NEW records.
@@ -929,3 +936,5 @@ export default function SprayModal({ field, open, onClose, initialData }: SprayM
     </>
   );
 }
+
+export default SprayModal;

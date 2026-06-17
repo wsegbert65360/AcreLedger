@@ -11,7 +11,8 @@ const ALLOWED_TABLES = new Set([
   'fields', 'bins', 'plant_records', 'spray_records',
   'harvest_records', 'hay_harvest_records', 'fertilizer_applications',
   'tillage_records', 'grain_movements', 'saved_seeds',
-  'fertilizer_recipes', 'spray_recipes'
+  'fertilizer_recipes', 'spray_recipes',
+  'fsa_tract_imports', 'field_clu_assignments',
 ]);
 
 export interface QueuedMutation {
@@ -221,10 +222,18 @@ export const syncQueue = {
 
       try {
         if (mutation.operation === 'insert') {
-          // Perform insert
-          const { error: err } = await supabase
-            .from(mutation.table_name)
-            .insert([{ ...mutation.payload, farm_id: farmId }]);
+          const conflictColumns = mutation.table_name === 'fsa_tract_imports'
+            ? 'farm_id,tract_key'
+            : mutation.table_name === 'field_clu_assignments'
+              ? 'farm_id,tract_key,clu_number'
+              : null;
+          const query = supabase.from(mutation.table_name);
+          const { error: err } = conflictColumns
+            ? await query.upsert(
+              [{ ...mutation.payload, farm_id: farmId }],
+              { onConflict: conflictColumns },
+            )
+            : await query.insert([{ ...mutation.payload, farm_id: farmId }]);
           error = err;
         } else if (mutation.operation === 'update') {
           // Perform update, strip id/farm_id from set payload

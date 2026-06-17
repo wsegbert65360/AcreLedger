@@ -8,6 +8,7 @@ import {
   FileText, ExternalLink, Info, CheckCircle2
 } from 'lucide-react';
 import { RainService, type RainfallResult } from '@/services/RainService';
+
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
@@ -222,7 +223,7 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* Field Boundary Map */}
-        {field.fsaFarmNumber && field.lat != null && field.lng != null && (
+        {(field.fsaFarmNumber || field.cluNumbers?.length) && field.lat != null && field.lng != null && (
           <section>
             <FieldBoundaryMap fieldId={field.id} />
           </section>
