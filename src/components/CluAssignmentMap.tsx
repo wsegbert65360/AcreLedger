@@ -25,18 +25,27 @@ function MapResizeHandler() {
 
 const COLORS = {
   selectedCropland: { color: '#4ade80', fillColor: '#22c55e', weight: 3, opacity: 0.95, fillOpacity: 0.26 },
-  selectedNonCropland: { color: '#f59e0b', fillColor: '#f97316', weight: 3, opacity: 0.95, fillOpacity: 0.28 },
+  selectedNonCropland: { color: '#c084fc', fillColor: '#a855f7', weight: 3, opacity: 0.95, fillOpacity: 0.32 },
   assignedCropland: { color: '#60a5fa', fillColor: '#3b82f6', weight: 2.5, opacity: 0.9, fillOpacity: 0.18 },
-  assignedNonCropland: { color: '#fb923c', fillColor: '#f97316', weight: 2.5, opacity: 0.9, fillOpacity: 0.2 },
+  assignedNonCropland: { color: '#c084fc', fillColor: '#9333ea', weight: 2.5, opacity: 0.9, fillOpacity: 0.24 },
   unassigned: { color: '#dc2626', fillColor: '#ef4444', weight: 4, opacity: 1, fillOpacity: 0.38, dashArray: '9 5' },
   unassignedHalo: { color: '#ffffff', weight: 8, opacity: 0.95, fillOpacity: 0 },
+};
+
+const HIT_TARGET_STYLE: L.PathOptions = {
+  color: '#ffffff',
+  fillColor: '#ffffff',
+  weight: 28,
+  opacity: 0.001,
+  fillOpacity: 0.001,
+  lineCap: 'round',
+  lineJoin: 'round',
 };
 
 interface CluAssignmentMapProps {
   tracts: FsaTractImport[];
   assignments: FieldCluAssignment[];
   selectedFieldId: string | null;
-  selectedLandUse: CluLandUse;
   showUnassignedOnly?: boolean;
   focusCluKey?: string | null;
   onToggleClu: (tractKey: string, cluNumber: string, acres: number) => void;
@@ -51,7 +60,6 @@ export default function CluAssignmentMap({
   tracts,
   assignments,
   selectedFieldId,
-  selectedLandUse,
   showUnassignedOnly = false,
   focusCluKey = null,
   onToggleClu,
@@ -109,6 +117,7 @@ export default function CluAssignmentMap({
       style={{ height: '100%', width: '100%' }}
       zoomControl={false}
       attributionControl={false}
+      tapTolerance={24}
     >
       <MapResizeHandler />
       <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
@@ -118,7 +127,6 @@ export default function CluAssignmentMap({
         features={visibleFeatures}
         assignmentMap={assignmentMap}
         selectedFieldId={selectedFieldId}
-        selectedLandUse={selectedLandUse}
         focusCluKey={focusCluKey}
         onToggleClu={onToggleClu}
       />
@@ -130,20 +138,23 @@ function CluPolygons({
   features,
   assignmentMap,
   selectedFieldId,
-  selectedLandUse,
   focusCluKey,
   onToggleClu,
 }: {
   features: (TractFeature & { tractKey: string })[];
   assignmentMap: Map<string, CluStatus>;
   selectedFieldId: string | null;
-  selectedLandUse: CluLandUse;
   focusCluKey: string | null;
   onToggleClu: (tractKey: string, cluNumber: string, acres: number) => void;
 }) {
   const map = useMap();
   const groupRef = useRef<L.FeatureGroup | null>(null);
   const initialized = useRef(false);
+  const onToggleCluRef = useRef(onToggleClu);
+
+  useEffect(() => {
+    onToggleCluRef.current = onToggleClu;
+  }, [onToggleClu]);
 
   useEffect(() => {
     if (groupRef.current) {
@@ -215,13 +226,19 @@ function CluPolygons({
         });
       }
 
-      poly.on('click', () => {
+      const handleCluSelect = () => {
         if (!selectedFieldId) {
           toast('Select a field first');
           return;
         }
-        onToggleClu(feat.tractKey, feat.properties.cluNumber, feat.properties.acres);
-      });
+        onToggleCluRef.current(feat.tractKey, feat.properties.cluNumber, feat.properties.acres);
+      };
+
+      poly.on('click', handleCluSelect);
+      L.polygon(latlngs, {
+        ...HIT_TARGET_STYLE,
+        bubblingMouseEvents: false,
+      }).on('click', handleCluSelect).addTo(group);
     }
 
     group.addTo(map);
@@ -241,7 +258,7 @@ function CluPolygons({
         groupRef.current = null;
       }
     };
-  }, [features, assignmentMap, selectedFieldId, selectedLandUse, focusCluKey, map, onToggleClu]);
+  }, [features, assignmentMap, selectedFieldId, focusCluKey, map]);
 
   return null;
 }

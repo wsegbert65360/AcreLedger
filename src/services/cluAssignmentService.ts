@@ -37,13 +37,11 @@ export const cluAssignmentService = {
       .single();
   },
 
-  async removeAssignment(fieldId: string, tractKey: string, cluNumber: string, farmId: string) {
+  async removeAssignment(id: string, farmId: string) {
     return await supabase
       .from('field_clu_assignments')
       .update({ deleted_at: new Date().toISOString() })
-      .eq('field_id', fieldId)
-      .eq('tract_key', tractKey)
-      .eq('clu_number', cluNumber)
+      .eq('id', id)
       .eq('farm_id', farmId)
       .select('id');
   },

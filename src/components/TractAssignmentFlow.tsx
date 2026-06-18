@@ -26,6 +26,7 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
   const [selectedLandUse, setSelectedLandUse] = useState<CluLandUse>('cropland');
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false);
   const [focusedUnassignedIndex, setFocusedUnassignedIndex] = useState(0);
+  const [focusedUnassignedKey, setFocusedUnassignedKey] = useState<string | null>(null);
   const [bundledTracts, setBundledTracts] = useState<FsaTractImport[]>([]);
   const [showTractList, setShowTractList] = useState(false);
   const reimportRef = useRef<HTMLInputElement>(null);
@@ -141,10 +142,6 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
       .sort(),
     [featureAcresByClu, displayAssignmentKeys],
   );
-  const focusedUnassignedKey = unassignedCluKeys.length > 0
-    ? unassignedCluKeys[focusedUnassignedIndex % unassignedCluKeys.length]
-    : null;
-
   useEffect(() => {
     if (focusedUnassignedIndex >= unassignedCluKeys.length) {
       setFocusedUnassignedIndex(0);
@@ -157,9 +154,22 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
     }
   }, [showUnassignedOnly, unassignedCluKeys.length]);
 
+  useEffect(() => {
+    if (focusedUnassignedKey && !unassignedCluKeys.includes(focusedUnassignedKey)) {
+      setFocusedUnassignedKey(null);
+    }
+  }, [focusedUnassignedKey, unassignedCluKeys]);
+
   const handleToggleClu = useCallback(async (tractKey: string, cluNumber: string, acres: number) => {
     if (!selectedFieldId) return;
     touchedFieldIdsRef.current.add(selectedFieldId);
+
+    const existingAnywhere = cluAssignments.find(
+      a => a.tractKey === tractKey && a.cluNumber === cluNumber,
+    );
+    if (existingAnywhere && existingAnywhere.fieldId !== selectedFieldId) {
+      touchedFieldIdsRef.current.add(existingAnywhere.fieldId);
+    }
 
     const existing = cluAssignments.find(
       a => a.fieldId === selectedFieldId && a.tractKey === tractKey && a.cluNumber === cluNumber,
@@ -316,7 +326,10 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
               variant={!showUnassignedOnly ? 'secondary' : 'ghost'}
               size="sm"
               className="h-8 px-3 text-xs"
-              onClick={() => setShowUnassignedOnly(false)}
+              onClick={() => {
+                setShowUnassignedOnly(false);
+                setFocusedUnassignedKey(null);
+              }}
             >
               All CLUs
             </Button>
@@ -325,7 +338,10 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
               variant={showUnassignedOnly ? 'secondary' : 'ghost'}
               size="sm"
               className="h-8 px-3 text-xs text-red-600 dark:text-red-400"
-              onClick={() => setShowUnassignedOnly(true)}
+              onClick={() => {
+                setShowUnassignedOnly(true);
+                setFocusedUnassignedKey(null);
+              }}
             >
               Unassigned only
             </Button>
@@ -338,7 +354,10 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
             disabled={unassignedCluKeys.length === 0}
             onClick={() => {
               setShowUnassignedOnly(true);
-              setFocusedUnassignedIndex(prev => (prev + 1) % Math.max(1, unassignedCluKeys.length));
+              setFocusedUnassignedIndex(prev => {
+                setFocusedUnassignedKey(unassignedCluKeys[prev] ?? null);
+                return (prev + 1) % Math.max(1, unassignedCluKeys.length);
+              });
             }}
           >
             Next unassigned
@@ -357,7 +376,10 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
               variant="ghost"
               size="sm"
               className="h-7 shrink-0 px-2 text-xs text-red-700 hover:bg-red-500/15 dark:text-red-200"
-              onClick={() => setShowUnassignedOnly(false)}
+              onClick={() => {
+                setShowUnassignedOnly(false);
+                setFocusedUnassignedKey(null);
+              }}
             >
               Show all
             </Button>
@@ -440,14 +462,16 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
           tracts={editableTracts}
           assignments={displayAssignments}
           selectedFieldId={selectedFieldId}
-          selectedLandUse={selectedLandUse}
           showUnassignedOnly={showUnassignedOnly}
           focusCluKey={focusedUnassignedKey}
           onToggleClu={handleToggleClu}
         />
         <CluFieldSelector
           selectedFieldId={selectedFieldId}
-          onSelectField={setSelectedFieldId}
+          onSelectField={fieldId => {
+            setSelectedFieldId(fieldId);
+            setFocusedUnassignedKey(null);
+          }}
           selectedLandUse={selectedLandUse}
           onSelectLandUse={setSelectedLandUse}
           onCreateField={handleCreateField}

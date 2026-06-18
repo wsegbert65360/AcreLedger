@@ -384,7 +384,7 @@ export function useFsaTracts({
       }
     }
 
-    const { error } = await cluAssignmentService.removeAssignment(fieldId, tractKey, cluNumber, farm_id);
+    const { error } = await cluAssignmentService.removeAssignment(assignment.id, farm_id);
     if (error) {
       console.error('Failed to unassign CLU:', error);
       setCluAssignments(previousAssignments);
