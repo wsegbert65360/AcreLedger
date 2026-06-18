@@ -220,21 +220,19 @@ export default function Reports() {
       exportToPdf({
         title: 'FSA-578 Acreage Certification Worksheet',
         subtitle: `Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`,
-        headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS'],
+        headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'ACRES', 'PLANT DATE', 'SHARE %', 'USE', 'IRR', 'FIELD'],
         rows: fsaPlantRows.map(row => [
           row.farmNumber || '-',
           row.tractNumber || '-',
           row.fieldNumber || '-',
-          row.fieldName,
           row.landUse,
           row.crop || '-',
-          row.seedVariety || '-',
           row.acreage,
           row.date ? fmtDate(row.date) : '-',
+          row.producerShare,
           row.intendedUse || '-',
           row.irrigationCode,
-          row.producerShare,
-          row.cropStatus || '-',
+          row.fieldName,
         ]),
         fileName: `FSA_578_Worksheet_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
         summaryText: 'Total Planted Acreage',
@@ -253,7 +251,7 @@ export default function Reports() {
         ],
         orientation: 'landscape',
         tableCellPadding: 1.4,
-        tableFontSize: 8.5,
+        tableFontSize: 9,
       });
     }, 'FSA planting PDF');
   };
