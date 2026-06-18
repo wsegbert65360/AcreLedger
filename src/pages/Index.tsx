@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
+import { Settings, Tractor } from 'lucide-react';
+
 import { useFarm } from '@/store/farmStore';
 import FieldList from '@/components/FieldList';
 import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
 import Logo from '@/components/Logo';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import { Settings, Tractor } from 'lucide-react';
+import { formatMeasurement, roundTo } from '@/utils/numbers';
 
 const Index = () => {
   const { fields: allFields, viewingSeason } = useFarm();
@@ -36,8 +38,8 @@ const Index = () => {
     return {
       rowCrops: rc,
       pastureHay: ph,
-      totalAcres: total,
-      cropTotals: sortedCropTotals
+      totalAcres: roundTo(total, 2),
+      cropTotals: sortedCropTotals.map(([crop, acres]) => [crop, roundTo(acres, 2)] as [string, number])
     };
   }, [allFields]);
 
@@ -129,7 +131,7 @@ const Index = () => {
               
               <div className="flex flex-col items-center justify-center space-y-1.5">
                   <div className="text-xs font-semibold text-muted-foreground">
-                    Total Operation: {totalAcres} Acres
+                    Total Operation: {formatMeasurement(totalAcres, 'Acres')}
                   </div>
                   <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
                     {cropTotals.map(([crop, acres]) => {
@@ -143,7 +145,7 @@ const Index = () => {
                             : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
                             }`}
                         >
-                          {crop}: {acres} AC
+                          {crop}: {formatMeasurement(acres, 'AC')}
                         </button>
                       );
                     })}

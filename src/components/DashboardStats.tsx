@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
-import { useFarm } from '@/store/farmStore';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   MapPin, Sprout, Wheat, CloudRain, Warehouse, AlertCircle,
 } from 'lucide-react';
+
+import { useFarm } from '@/store/farmStore';
+import { Skeleton } from '@/components/ui/skeleton';
+import { roundTo } from '@/utils/numbers';
 
 // ── Shared card shell ────────────────────────────────────────────────────────
 
@@ -89,7 +91,7 @@ export default function DashboardStats() {
     // Planted acreage & field count
     const seasonPlants = plantRecords.filter(r => r.seasonYear === season);
     const plantedFieldIds = new Set(seasonPlants.map(r => r.fieldId));
-    const plantedAcres = seasonPlants.reduce((s, r) => s + r.acreage, 0);
+    const plantedAcres = roundTo(seasonPlants.reduce((s, r) => s + r.acreage, 0), 2);
 
     // Harvest
     const seasonHarvests = harvestRecords.filter(r => r.seasonYear === season);
@@ -123,7 +125,7 @@ export default function DashboardStats() {
       .reduce((s, r) => s + r.baleCount, 0);
 
     return {
-      totalAcres: fields.reduce((s, f) => s + f.acreage, 0),
+      totalAcres: roundTo(fields.reduce((s, f) => s + f.acreage, 0), 2),
       fieldCount: fields.length,
       plantedAcres,
       plantedFieldCount: plantedFieldIds.size,

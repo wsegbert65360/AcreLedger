@@ -35,6 +35,12 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
 - `@/lib/complianceReports` — report generation.
 - `@/lib/sprayExport.ts` — universal spray log PDF export.
+- `@/types/fsaTract.ts` — canonical FSA tract import and CLU assignment types.
+- `@/lib/cluImport.ts` — CLU/FSA GeoJSON parsing and validation.
+- `@/lib/tractLookup.ts` and `@/lib/bundledFsaTracts.ts` — bundled FSA tract lookup and merge helpers.
+- `@/store/useFsaTracts.ts` — FSA tract import and CLU assignment CRUD actions.
+- `@/services/fsaTractService.ts` and `@/services/cluAssignmentService.ts` — Supabase persistence for FSA tract imports and CLU assignments.
+- `@/components/TractAssignmentFlow.tsx`, `@/components/CluAssignmentMap.tsx`, `@/components/CluFieldSelector.tsx`, `@/components/FsaTractImporter.tsx` — FSA tract management UI.
 - `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
 - `codemagic.yaml` — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
 - `CODEMAGIC.md` — CodeMagic setup guide, credentials, and troubleshooting.
@@ -123,6 +129,19 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - `WIND_ALERT_MPH = 10` is the named wind alert threshold.
 - Past weather recovery uses Visual Crossing based on field location and start time.
 
+### FSA Tracts and CLU Assignments
+
+- FSA tract imports and field CLU assignments are farm-owned records and must follow farm scoping, mapper discipline, optimistic updates, and soft delete rules.
+- FSA tract and CLU assignment changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup/restore schema, bundled tract helpers, assignment UI, and FSA report generation/tests.
+- `field_clu_assignments` stores one active assignment per farm/tract/CLU. Assignment actions must preserve the authoritative current `farm_id`, restore soft-deleted rows when reassigning, and never hard-delete assignments.
+- `fsa_tract_imports` stores parsed GeoJSON per farm/tract key. Imported tracts may replace bundled tract data with the same tract key in assignment flows.
+- When showing CLU totals, assigned counts, or unassigned counts, compare assignments against the same CLU universe being displayed. Do not subtract bundled or legacy assignment keys from imported-only tract totals.
+- Active CLU assignment counts must exclude soft-deleted assignments (`deletedAt` / `deleted_at`).
+- Bundled FSA tract data may be used for display and assignment flows, but imported tract counts should be labeled and calculated as imported-only unless the UI explicitly says it includes bundled tracts.
+- Persisting assignments back to fields should round computed field acreage for display/state, but not mutate the source CLU feature acres.
+- FSA-578 and fall production worksheets are farmer worksheets, not official USDA forms. Preserve the disclaimer wording and keep CSV/PDF exports aligned when changing columns, summaries, footers, or readiness checks.
+- FSA report readiness checks should surface missing farm/tract/CLU/crop/acreage issues without blocking export unless the user explicitly asks for blocking validation.
+
 ### Backup and Restore
 
 - Backup restore must treat the current selected `farm_id` as authoritative.
@@ -147,7 +166,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - **Marketing version** is read from `package.json` at build time. **Build number** uses CodeMagic's `$BUILD_NUMBER`.
 - **Do not** add `app_store_connect` publishing blocks without verifying the integration name exists in CodeMagic.
 - The working integration name is `appstore`. Do not rename it without updating the yaml.
-- All three remotes (GitHub, Codeberg, GitLab) must be synced when pushing CI/CD changes.
+- All three remotes (GitHub, Codeberg, GitLab) must be synced when pushing CI/CD changes. For normal mainline pushes, verify remote heads after pushing because `origin` has multiple push URLs.
 
 ### Native & Offline Capability
 
@@ -174,6 +193,13 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Use Inter through `font-sans` for normal labels, headings, body text, buttons, navigation, empty states, and descriptions.
 - Use JetBrains Mono through `font-mono` for data values such as numbers, dates, timestamps, coordinates, table cells, IDs, registration numbers, ticket numbers, and version strings.
 - The AcreLedger brand text intentionally uses `font-mono` and `tracking-tighter`.
+
+### Numeric Display
+
+- Do not render raw summed floating-point values for acreage, bushels, rainfall, percentages, or report totals.
+- Use `roundTo` and `formatMeasurement` from `@/utils/numbers` for displayed measurements unless a more specific formatter already exists.
+- Keep stored numeric precision intact; round for display/export summaries, not by mutating source records.
+- Treat `0` as a valid display value. Use `value != null ? value : '—'`, not simple truthiness.
 
 ### Text Case
 
@@ -258,8 +284,6 @@ Group imports in this order, separated by blank lines:
 4. Relative imports (`../lib/`, `./`).
 
 Within each group, order alphabetically by module path. This matches the existing codebase and keeps diffs clean.
-
-- Treat `0` as a valid value. Use `value != null ? value : '—'`, not simple truthiness. The loose `!=` is intentional here: it catches both `null` and `undefined` in a single check. Do not "fix" this to `!==`.
 
 ## Change Workflow
 

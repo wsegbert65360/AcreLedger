@@ -6,10 +6,63 @@ import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet';
 import '@/lib/leafletSetup';
 
 import { useFarm } from '@/store/farmStore';
-import { loadTractData, loadTractDataFromStore, parseTractKeys, type TractFeature } from '@/lib/tractLookup';
+import { loadTractData, parseTractKeys, type TractFeature, type TractFeatureCollection } from '@/lib/tractLookup';
+import type { CluLandUse, FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
+import type { Field } from '@/types/farm';
 
 interface FieldBoundaryMapProps {
   fieldId: string;
+}
+
+type DisplayFeature = TractFeature & {
+  tractKey: string;
+  landUse: CluLandUse | null;
+  isAssigned: boolean;
+};
+
+interface KeyedCollection {
+  tractKey: string;
+  collection: TractFeatureCollection;
+}
+
+const CLU_STYLES = {
+  assignedCropland: { color: '#86efac', fillColor: '#22c55e', weight: 3, opacity: 1, fillOpacity: 0.32 },
+  assignedNonCropland: { color: '#fbbf24', fillColor: '#f97316', weight: 3, opacity: 1, fillOpacity: 0.3 },
+  legacy: { color: '#93c5fd', fillColor: '#3b82f6', weight: 3, opacity: 0.92, fillOpacity: 0.22 },
+  context: { color: '#cbd5e1', fillColor: '#64748b', weight: 2, opacity: 0.65, fillOpacity: 0.08 },
+};
+
+async function loadKeyedCollections(
+  tractKeys: string[],
+  importedTracts: FsaTractImport[],
+): Promise<KeyedCollection[]> {
+  const importedByKey = new Map(
+    importedTracts
+      .filter(tract => !tract.deletedAt)
+      .map(tract => [tract.tractKey, tract.geojson] as const),
+  );
+  const collections: KeyedCollection[] = [];
+
+  for (const tractKey of tractKeys) {
+    const imported = importedByKey.get(tractKey);
+    if (imported) {
+      collections.push({ tractKey, collection: imported });
+      continue;
+    }
+
+    const [bundled] = await loadTractData([tractKey]);
+    if (bundled) {
+      collections.push({ tractKey, collection: bundled });
+    }
+  }
+
+  return collections;
+}
+
+function boundaryRings(field: Field | undefined): L.LatLngExpression[][] {
+  return (field?.boundary?.coordinates ?? [])
+    .map(ring => ring.map(point => [point[1], point[0]] as L.LatLngExpression))
+    .filter(ring => ring.length >= 3);
 }
 
 function MapResizeHandler() {
@@ -30,10 +83,9 @@ function MapResizeHandler() {
   return null;
 }
 
-function TractPolygons({ features }: { features: TractFeature[] }) {
+function TractPolygons({ features, field }: { features: DisplayFeature[]; field: Field | undefined }) {
   const map = useMap();
   const groupRef = useRef<L.FeatureGroup | null>(null);
-  const initialized = useRef(false);
 
   useEffect(() => {
     // Always remove old layers first
@@ -52,19 +104,20 @@ function TractPolygons({ features }: { features: TractFeature[] }) {
       if (!ring || ring.length < 3) continue;
 
       const latlngs: L.LatLngExpression[] = ring.map(c => [c[1], c[0]]);
+      const style = feat.isAssigned
+        ? feat.landUse === 'non_cropland' ? CLU_STYLES.assignedNonCropland : CLU_STYLES.assignedCropland
+        : feat.landUse ? CLU_STYLES.legacy : CLU_STYLES.context;
       const poly = L.polygon(latlngs, {
-        color: '#4ade80',
-        fillColor: '#22c55e',
-        weight: 3,
-        opacity: 0.95,
-        fillOpacity: 0.18,
+        ...style,
+        lineJoin: 'round',
       });
 
       poly.addTo(group);
       polyCount++;
 
       if (feat.properties.cluNumber) {
-        poly.bindTooltip(feat.properties.cluNumber, {
+        const landUseLabel = feat.landUse === 'non_cropland' ? 'Non-crop' : 'Crop';
+        poly.bindTooltip(feat.landUse ? `${feat.properties.cluNumber} · ${landUseLabel}` : feat.properties.cluNumber, {
           permanent: true,
           direction: 'center',
           className: 'tract-clu-tooltip',
@@ -72,12 +125,41 @@ function TractPolygons({ features }: { features: TractFeature[] }) {
       }
     }
 
+    const rings = boundaryRings(field);
+    for (const ring of rings) {
+      L.polygon(ring, {
+        color: '#020617',
+        weight: 6,
+        opacity: 0.55,
+        fillOpacity: 0,
+        interactive: false,
+        lineJoin: 'round',
+      }).addTo(group);
+      L.polygon(ring, {
+        color: '#f8fafc',
+        weight: 3,
+        opacity: 0.95,
+        fillOpacity: 0,
+        interactive: false,
+        lineJoin: 'round',
+      }).addTo(group);
+      L.polygon(ring, {
+        color: '#4ade80',
+        weight: 1.5,
+        opacity: 0.9,
+        dashArray: '6 5',
+        fillOpacity: 0,
+        interactive: false,
+        lineJoin: 'round',
+      }).addTo(group);
+      polyCount++;
+    }
+
     group.addTo(map);
 
-    if (!initialized.current && polyCount > 0) {
+    if (polyCount > 0) {
       const bounds = group.getBounds();
-      map.fitBounds(bounds, { padding: [10, 10], maxZoom: 16 });
-      initialized.current = true;
+      map.fitBounds(bounds, { padding: [18, 18], maxZoom: 17 });
     }
 
     groupRef.current = group;
@@ -88,7 +170,7 @@ function TractPolygons({ features }: { features: TractFeature[] }) {
         groupRef.current = null;
       }
     };
-  }, [features, map]);
+  }, [features, field, map]);
 
   return null;
 }
@@ -97,7 +179,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
   const { fields, fsaTracts, cluAssignments } = useFarm();
   const field = fields.find(f => f.id === fieldId);
 
-  const [features, setFeatures] = useState<TractFeature[]>([]);
+  const [features, setFeatures] = useState<DisplayFeature[]>([]);
   const [loading, setLoading] = useState(true);
 
   const center: [number, number] = useMemo(() => {
@@ -106,33 +188,77 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
   }, [field?.lat, field?.lng]);
 
   useEffect(() => {
-    // If field has CLU assignments from imported tracts, use those
-    const fieldAssignments = cluAssignments.filter(a => a.fieldId === fieldId);
-    if (fieldAssignments.length > 0 && fsaTracts.length > 0) {
-      const tractKeys = [...new Set(fieldAssignments.map(a => a.tractKey))];
-      const collections = loadTractDataFromStore(tractKeys, fsaTracts);
-      const cluNums = new Set(fieldAssignments.map(a => a.cluNumber));
-      const feats = collections.flatMap(c => c.features.filter(f => cluNums.has(f.properties.cluNumber)));
-      setFeatures(feats);
+    let cancelled = false;
+
+    async function loadFeatures() {
+      setLoading(true);
+      const fieldAssignments = cluAssignments.filter(a => a.fieldId === fieldId && !a.deletedAt);
+
+      if (fieldAssignments.length > 0) {
+        const tractKeys = [...new Set(fieldAssignments.map(a => a.tractKey))];
+        const assignmentByKey = new Map<string, FieldCluAssignment>();
+        for (const assignment of fieldAssignments) {
+          assignmentByKey.set(`${assignment.tractKey}:${assignment.cluNumber}`, assignment);
+        }
+
+        const collections = await loadKeyedCollections(tractKeys, fsaTracts);
+        if (cancelled) return;
+
+        const assignedFeatures = collections.flatMap(({ tractKey, collection }) =>
+          collection.features
+            .filter(feature => assignmentByKey.has(`${tractKey}:${feature.properties.cluNumber}`))
+            .map(feature => {
+              const assignment = assignmentByKey.get(`${tractKey}:${feature.properties.cluNumber}`);
+              return {
+                ...feature,
+                tractKey,
+                landUse: assignment?.landUse ?? 'cropland',
+                isAssigned: true,
+              };
+            }),
+        );
+
+        setFeatures(assignedFeatures);
+        setLoading(false);
+        return;
+      }
+
+      const keys = parseTractKeys(field?.fsaFarmNumber, field?.fsaTractNumber);
+      if (keys.length === 0) {
+        setFeatures([]);
+        setLoading(false);
+        return;
+      }
+
+      const legacyClus = new Set(field?.cluNumbers?.filter(Boolean) ?? []);
+      const collections = await loadKeyedCollections(keys, fsaTracts);
+      if (cancelled) return;
+
+      const fallbackFeatures = collections.flatMap(({ tractKey, collection }) =>
+        collection.features
+          .filter(feature => legacyClus.size === 0 || legacyClus.has(feature.properties.cluNumber))
+          .map(feature => ({
+            ...feature,
+            tractKey,
+            landUse: legacyClus.size > 0 ? 'cropland' as CluLandUse : null,
+            isAssigned: false,
+          })),
+      );
+
+      setFeatures(fallbackFeatures);
       setLoading(false);
-      return;
     }
 
-    // Fallback: load from bundled JSON files
-    if (!field?.fsaFarmNumber) { setLoading(false); return; }
-    const keys = parseTractKeys(field.fsaFarmNumber, field.fsaTractNumber);
-    if (keys.length === 0) { setLoading(false); return; }
+    loadFeatures().catch((err) => {
+      console.error('[FieldBoundaryMap] Load error:', err);
+      if (!cancelled) {
+        setFeatures([]);
+        setLoading(false);
+      }
+    });
 
-    let cancelled = false;
-    setLoading(true);
-    loadTractData(keys).then(collections => {
-      if (cancelled) return;
-      const feats = collections.flatMap(c => c.features);
-      setFeatures(feats);
-      setLoading(false);
-    }).catch((err) => { console.error('[FieldBoundaryMap] Load error:', err); setLoading(false); });
     return () => { cancelled = true; };
-  }, [fieldId, field?.fsaFarmNumber, field?.fsaTractNumber, cluAssignments, fsaTracts]);
+  }, [fieldId, field?.fsaFarmNumber, field?.fsaTractNumber, field?.cluNumbers, cluAssignments, fsaTracts]);
 
   if (field?.lat == null || field.lng == null) return null;
 
@@ -154,8 +280,8 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}" />
-        <TractPolygons features={features} />
-        <Marker position={center} />
+        <TractPolygons features={features} field={field} />
+        {features.length === 0 && boundaryRings(field).length === 0 && <Marker position={center} />}
       </MapContainer>
 
       {features.length === 0 && !loading && (
