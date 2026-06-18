@@ -24,11 +24,12 @@ function MapResizeHandler() {
 }
 
 const COLORS = {
-  selectedCropland: { color: '#4ade80', fillColor: '#22c55e', weight: 3, opacity: 0.95, fillOpacity: 0.28 },
-  selectedNonCropland: { color: '#f59e0b', fillColor: '#f97316', weight: 3, opacity: 0.95, fillOpacity: 0.3 },
-  otherCropland: { color: '#60a5fa', fillColor: '#3b82f6', weight: 2, opacity: 0.7, fillOpacity: 0.15 },
-  otherNonCropland: { color: '#fb923c', fillColor: '#f97316', weight: 2, opacity: 0.75, fillOpacity: 0.16 },
-  unassigned: { color: '#f87171', fillColor: '#ef4444', weight: 2.5, opacity: 0.9, fillOpacity: 0.18 },
+  selectedCropland: { color: '#4ade80', fillColor: '#22c55e', weight: 3, opacity: 0.95, fillOpacity: 0.26 },
+  selectedNonCropland: { color: '#f59e0b', fillColor: '#f97316', weight: 3, opacity: 0.95, fillOpacity: 0.28 },
+  otherCropland: { color: '#93c5fd', fillColor: '#3b82f6', weight: 1.5, opacity: 0.42, fillOpacity: 0.06 },
+  otherNonCropland: { color: '#fdba74', fillColor: '#f97316', weight: 1.5, opacity: 0.45, fillOpacity: 0.07 },
+  unassigned: { color: '#dc2626', fillColor: '#ef4444', weight: 4, opacity: 1, fillOpacity: 0.38, dashArray: '9 5' },
+  unassignedHalo: { color: '#ffffff', weight: 8, opacity: 0.95, fillOpacity: 0 },
 };
 
 interface CluAssignmentMapProps {
@@ -36,6 +37,8 @@ interface CluAssignmentMapProps {
   assignments: FieldCluAssignment[];
   selectedFieldId: string | null;
   selectedLandUse: CluLandUse;
+  showUnassignedOnly?: boolean;
+  focusCluKey?: string | null;
   onToggleClu: (tractKey: string, cluNumber: string, acres: number) => void;
 }
 
@@ -45,7 +48,13 @@ interface CluStatus {
 }
 
 export default function CluAssignmentMap({
-  tracts, assignments, selectedFieldId, selectedLandUse, onToggleClu,
+  tracts,
+  assignments,
+  selectedFieldId,
+  selectedLandUse,
+  showUnassignedOnly = false,
+  focusCluKey = null,
+  onToggleClu,
 }: CluAssignmentMapProps) {
   const allFeatures = useMemo(() => {
     const feats: (TractFeature & { tractKey: string })[] = [];
@@ -60,11 +69,19 @@ export default function CluAssignmentMap({
   const assignmentMap = useMemo(() => {
     const map = new Map<string, CluStatus>();
     for (const a of assignments) {
+      if (a.deletedAt) continue;
       const key = `${a.tractKey}:${a.cluNumber}`;
       map.set(key, { fieldId: a.fieldId, landUse: a.landUse });
     }
     return map;
   }, [assignments]);
+
+  const visibleFeatures = useMemo(
+    () => showUnassignedOnly
+      ? allFeatures.filter(feature => !assignmentMap.has(`${feature.tractKey}:${feature.properties.cluNumber}`))
+      : allFeatures,
+    [allFeatures, assignmentMap, showUnassignedOnly],
+  );
 
   const center = useMemo<[number, number]>(() => {
     if (allFeatures.length === 0) return [38.47, -93.54];
@@ -98,10 +115,11 @@ export default function CluAssignmentMap({
       <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
       <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}" />
       <CluPolygons
-        features={allFeatures}
+        features={visibleFeatures}
         assignmentMap={assignmentMap}
         selectedFieldId={selectedFieldId}
         selectedLandUse={selectedLandUse}
+        focusCluKey={focusCluKey}
         onToggleClu={onToggleClu}
       />
     </MapContainer>
@@ -113,12 +131,14 @@ function CluPolygons({
   assignmentMap,
   selectedFieldId,
   selectedLandUse,
+  focusCluKey,
   onToggleClu,
 }: {
   features: (TractFeature & { tractKey: string })[];
   assignmentMap: Map<string, CluStatus>;
   selectedFieldId: string | null;
   selectedLandUse: CluLandUse;
+  focusCluKey: string | null;
   onToggleClu: (tractKey: string, cluNumber: string, acres: number) => void;
 }) {
   const map = useMap();
@@ -135,6 +155,7 @@ function CluPolygons({
 
     const group = L.featureGroup();
     let polyCount = 0;
+    let focusBounds: L.LatLngBounds | null = null;
 
     for (const feat of features) {
       if (!feat.properties.cluNumber) continue;
@@ -144,25 +165,54 @@ function CluPolygons({
 
       const key = `${feat.tractKey}:${feat.properties.cluNumber}`;
       const status = assignmentMap.get(key);
+      const isUnassigned = !status;
       const isSelected = selectedFieldId && status?.fieldId === selectedFieldId;
       const isOther = status && status.fieldId && status.fieldId !== selectedFieldId;
 
       const style = isSelected
         ? status?.landUse === 'non_cropland' ? COLORS.selectedNonCropland : COLORS.selectedCropland
         : isOther
-          ? status?.landUse === 'non_cropland' ? COLORS.otherNonCropland : COLORS.otherCropland
-          : COLORS.unassigned;
+            ? status?.landUse === 'non_cropland' ? COLORS.otherNonCropland : COLORS.otherCropland
+            : COLORS.unassigned;
       const latlngs: L.LatLngExpression[] = ring.map(c => [c[1], c[0]]);
+      if (isUnassigned) {
+        L.polygon(latlngs, {
+          ...COLORS.unassignedHalo,
+          interactive: false,
+          lineJoin: 'round',
+        }).addTo(group);
+      }
       const poly = L.polygon(latlngs, style);
       poly.addTo(group);
       polyCount++;
 
+      if (key === focusCluKey) {
+        focusBounds = poly.getBounds();
+        L.polygon(latlngs, {
+          color: '#ffffff',
+          weight: 12,
+          opacity: 0.98,
+          fillOpacity: 0,
+          interactive: false,
+          lineJoin: 'round',
+        }).addTo(group);
+        L.polygon(latlngs, {
+          color: '#facc15',
+          weight: 6,
+          opacity: 1,
+          fillOpacity: 0,
+          interactive: false,
+          dashArray: '2 8',
+          lineJoin: 'round',
+        }).addTo(group);
+      }
+
       if (feat.properties.cluNumber) {
         const landUseLabel = status?.landUse === 'non_cropland' ? 'Non-cropland' : 'Cropland';
-        poly.bindTooltip(status ? `${feat.properties.cluNumber} · ${landUseLabel}` : feat.properties.cluNumber, {
+        poly.bindTooltip(status ? `${feat.properties.cluNumber} · ${landUseLabel}` : `UNASSIGNED ${feat.properties.cluNumber}`, {
           permanent: true,
           direction: 'center',
-          className: 'tract-clu-tooltip',
+          className: isUnassigned ? 'tract-clu-tooltip tract-clu-tooltip-unassigned' : 'tract-clu-tooltip',
         });
       }
 
@@ -178,8 +228,10 @@ function CluPolygons({
     group.addTo(map);
 
     if (!initialized.current && polyCount > 0) {
-      map.fitBounds(group.getBounds(), { padding: [10, 10], maxZoom: 16 });
+      map.fitBounds(focusBounds ?? group.getBounds(), { padding: [12, 12], maxZoom: 17 });
       initialized.current = true;
+    } else if (focusBounds) {
+      map.fitBounds(focusBounds, { padding: [28, 28], maxZoom: 18 });
     }
 
     groupRef.current = group;
@@ -190,7 +242,7 @@ function CluPolygons({
         groupRef.current = null;
       }
     };
-  }, [features, assignmentMap, selectedFieldId, selectedLandUse, map, onToggleClu]);
+  }, [features, assignmentMap, selectedFieldId, selectedLandUse, focusCluKey, map, onToggleClu]);
 
   return null;
 }
