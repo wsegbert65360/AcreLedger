@@ -388,6 +388,7 @@ export function buildFsa578WorksheetCsv({
     const header = [
         'Crop Year',
         'Farm Name',
+        'Field Name',
         'Farm #',
         'Tract #',
         'CLU / Field #',
@@ -406,6 +407,7 @@ export function buildFsa578WorksheetCsv({
     const dataRows = rows.map(row => [
         metadata.cropYear,
         metadata.farmName,
+        row.fieldName,
         row.farmNumber,
         row.tractNumber,
         row.fieldNumber,

@@ -10,11 +10,10 @@ interface ReportTableProps {
   onExportPdf?: () => void;
   exportLabel?: string;
   summary?: ReactNode;
-  screenOnlyColumnIndexes?: number[];
 }
 
 export default function ReportTable({
-  title, subtitle, headers, children, onExport, onExportPdf, exportLabel = "Export", summary, screenOnlyColumnIndexes = []
+  title, subtitle, headers, children, onExport, onExportPdf, exportLabel = "Export", summary
 }: ReportTableProps) {
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
@@ -52,10 +51,7 @@ export default function ReportTable({
           <thead>
             <tr className="bg-muted/50 border-b border-border">
               {headers.map((h, i) => (
-                <th
-                  key={i}
-                  className={`px-4 py-3 text-xs font-bold text-muted-foreground font-mono uppercase tracking-tighter ${screenOnlyColumnIndexes.includes(i) ? 'print:hidden' : ''}`}
-                >
+                <th key={i} className="px-4 py-3 text-xs font-bold text-muted-foreground font-mono uppercase tracking-tighter print:px-1 print:py-1 print:text-[9px]">
                   {h}
                 </th>
               ))}

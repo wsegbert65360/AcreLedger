@@ -562,8 +562,9 @@ describe('FSA 578 report rows', () => {
         expect(csv).toContain('"2026"');
         expect(csv).toContain('"AcreLedger Test Farm"');
         expect(csv).not.toContain('"AcreLedger Field"');
+        expect(csv).toContain('"Field Name"');
         expect(csv).toContain('"Type / Variety"');
-        expect(csv).not.toContain('"Ready Field"');
+        expect(csv).toContain('"Ready Field"');
         expect(csv).toContain('"Planted"');
     });
 });

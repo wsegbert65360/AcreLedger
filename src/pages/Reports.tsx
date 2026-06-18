@@ -152,6 +152,18 @@ export default function Reports() {
     () => roundTo(fsaPlantRows.filter(row => row.crop).reduce((s, row) => s + row.acreage, 0), 2),
     [fsaPlantRows],
   );
+  const plantedAcresByField = useMemo(() => {
+    const totals = new Map<string, number>();
+    fsaPlantRows
+      .filter(row => row.crop)
+      .forEach(row => {
+        totals.set(row.fieldName, (totals.get(row.fieldName) || 0) + row.acreage);
+      });
+
+    return [...totals.entries()]
+      .map(([fieldName, acres]) => ({ fieldName, acres: roundTo(acres, 2) }))
+      .sort((a, b) => a.fieldName.localeCompare(b.fieldName));
+  }, [fsaPlantRows]);
   const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
   const fsaReadinessErrors = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'error'), [fsaReadinessIssues]);
   const fsaReadinessWarnings = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'warning'), [fsaReadinessIssues]);
@@ -221,11 +233,12 @@ export default function Reports() {
       exportToPdf({
         title: 'FSA-578 Acreage Certification Worksheet',
         subtitle: `Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`,
-        headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS'],
+        headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS'],
         rows: fsaPlantRows.map(row => [
           row.farmNumber || '-',
           row.tractNumber || '-',
           row.fieldNumber || '-',
+          row.fieldName,
           row.landUse,
           row.crop || '-',
           row.seedVariety || '-',
@@ -240,6 +253,9 @@ export default function Reports() {
         summaryText: 'Total Planted Acreage',
         summaryValue: `${totalPlantAcres} AC`,
         footerText: [
+          'Planted Acres by Field:',
+          ...plantedAcresByField.map(row => `${row.fieldName}: ${row.acres} AC`),
+          '',
           'Farmer Review Worksheet',
           'Review acreage, crop/use, shares, and maps with your county FSA office before certification.',
           'Producer Notes: _______________________________',
@@ -247,7 +263,10 @@ export default function Reports() {
           'Notes / FSA Office Corrections:',
           '__________________________________________________',
           '__________________________________________________',
-        ]
+        ],
+        orientation: 'landscape',
+        tableCellPadding: 1.4,
+        tableFontSize: 8.5,
       });
     }, 'FSA planting PDF');
   };
@@ -430,7 +449,7 @@ export default function Reports() {
           <ReportTable
             title="FSA-578 Acreage Certification Worksheet"
             subtitle={`Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`}
-            headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS', 'ACRELEDGER FIELD']}
+            headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
             onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
               farmName,
               cropYear: viewingSeason,
@@ -438,11 +457,27 @@ export default function Reports() {
             }), 'FSA-578 worksheet data')}
             onExportPdf={handleExportFsaPlantPdf}
             exportLabel="CSV"
-            screenOnlyColumnIndexes={[12]}
             summary={(
-              <div className="flex justify-between items-center font-mono text-sm">
-                <span className="font-bold text-muted-foreground uppercase">TOTAL PLANTED ACREAGE</span>
-                <span className="font-bold text-plant">{totalPlantAcres} AC</span>
+              <div className="space-y-3 font-mono text-sm print:space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-muted-foreground uppercase">Total planted acreage</span>
+                  <span className="font-bold text-plant">{totalPlantAcres} AC</span>
+                </div>
+                {plantedAcresByField.length > 0 && (
+                  <div className="border-t border-border pt-3 print:pt-2">
+                    <div className="text-[10px] font-bold uppercase text-muted-foreground mb-2 print:mb-1">
+                      Planted acres by field
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1 print:grid-cols-3 print:gap-x-4">
+                      {plantedAcresByField.map(row => (
+                        <div key={row.fieldName} className="flex justify-between gap-3 text-xs">
+                          <span className="text-foreground font-semibold truncate">{row.fieldName}</span>
+                          <span className="text-plant font-bold whitespace-nowrap">{row.acres} AC</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           >
@@ -466,19 +501,19 @@ export default function Reports() {
             {fsaPlantRows.map(row => {
               return (
                 <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '-'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '-'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.fieldNumber || '-'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.landUse}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '-'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.seedVariety || '-'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.acreage}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.date ? fmtDate(row.date) : '-'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.intendedUse || '-'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.irrigationCode}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.producerShare}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.cropStatus || '-'}</td>
-                  <td className="px-4 py-3 text-xs font-bold text-foreground print:hidden">{row.fieldName}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.farmNumber || '-'}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.tractNumber || '-'}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.fieldNumber || '-'}</td>
+                  <td className="px-2 py-2 text-[11px] font-bold text-foreground print:px-1 print:py-1">{row.fieldName}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.landUse}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-harvest font-bold print:px-1 print:py-1">{row.crop || '-'}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.seedVariety || '-'}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.acreage}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.date ? fmtDate(row.date) : '-'}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.intendedUse || '-'}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.irrigationCode}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.producerShare}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropStatus || '-'}</td>
                 </tr>
               );
             })}

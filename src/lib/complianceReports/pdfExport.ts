@@ -12,6 +12,9 @@ interface ExportPdfOptions {
   summaryText?: string;
   summaryValue?: string;
   footerText?: string[];
+  orientation?: 'portrait' | 'landscape';
+  tableCellPadding?: number;
+  tableFontSize?: number;
 }
 
 export function exportToPdf({
@@ -22,9 +25,12 @@ export function exportToPdf({
   fileName,
   summaryText,
   summaryValue,
-  footerText
+  footerText,
+  orientation = 'portrait',
+  tableCellPadding = 3,
+  tableFontSize = 8
 }: ExportPdfOptions) {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ orientation });
 
   // Add Title
   doc.setFontSize(18);
@@ -42,8 +48,8 @@ export function exportToPdf({
     body: rows,
     startY: 35,
     styles: {
-      fontSize: 8,
-      cellPadding: 3,
+      fontSize: tableFontSize,
+      cellPadding: tableCellPadding,
     },
     headStyles: {
       fillColor: [45, 90, 27], // bg-primary equivalent (#2D5A1B)
@@ -98,6 +104,10 @@ export function exportToPdf({
     doc.setFontSize(9);
     doc.setTextColor(40);
     footerText.forEach((line) => {
+      if (finalY + 6 > pageHeight - 20) {
+        doc.addPage();
+        finalY = 20;
+      }
       doc.text(line, 14, finalY);
       finalY += 6;
     });
