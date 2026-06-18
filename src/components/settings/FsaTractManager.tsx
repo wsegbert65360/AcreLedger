@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Map } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,29 @@ import TractAssignmentFlow from '@/components/TractAssignmentFlow';
 export default function FsaTractManager() {
   const { fsaTracts, cluAssignments } = useFarm();
   const [open, setOpen] = useState(false);
+  const activeAssignmentKeys = useMemo(
+    () => new Set(cluAssignments.filter(a => !a.deletedAt).map(a => `${a.tractKey}:${a.cluNumber}`)),
+    [cluAssignments],
+  );
+  const importedCluKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const tract of fsaTracts) {
+      for (const feature of tract.geojson?.features ?? []) {
+        if (!feature.properties.cluNumber) continue;
+        keys.add(`${tract.tractKey}:${feature.properties.cluNumber}`);
+      }
+    }
+    return keys;
+  }, [fsaTracts]);
+  const totalClus = useMemo(
+    () => importedCluKeys.size,
+    [importedCluKeys],
+  );
+  const assignedImportedClus = useMemo(
+    () => Array.from(activeAssignmentKeys).filter(key => importedCluKeys.has(key)).length,
+    [activeAssignmentKeys, importedCluKeys],
+  );
+  const unassignedClus = Math.max(0, totalClus - assignedImportedClus);
 
   return (
     <>
@@ -27,6 +50,14 @@ export default function FsaTractManager() {
             </span>
             <span className="text-muted-foreground">
               {cluAssignments.length} CLU{cluAssignments.length !== 1 ? 's' : ''} assigned
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              {totalClus} CLU{totalClus !== 1 ? 's' : ''} available
+            </span>
+            <span className="font-mono text-foreground">
+              {unassignedClus} unassigned
             </span>
           </div>
           <Button onClick={() => setOpen(true)} variant="outline" className="w-full">

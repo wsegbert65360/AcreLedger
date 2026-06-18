@@ -247,7 +247,11 @@ export default function Activity() {
             <button
               onClick={() => {
                 const exportPromise = tab === 'plant'
-                  ? exportFsa578Data(filteredPlant, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts))
+                  ? exportFsa578Data(filteredPlant, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
+                    farmName,
+                    cropYear: viewingSeason,
+                    reportDate: new Date().toISOString().split('T')[0],
+                  })
                   : exportHarvestData(filteredHarvest, fields);
 
                 exportPromise.catch((error) => {

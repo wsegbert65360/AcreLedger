@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { buildFsa578Rows, generateMissouriLogRows } from '../fsaReports';
-import { SprayRecord, Field } from '../../../types/farm';
+import {
+    buildFsa578Rows,
+    buildFsa578WorksheetCsv,
+    buildFsaFallProductionCsv,
+    buildFsaFallProductionRows,
+    generateMissouriLogRows,
+    validateFsa578Rows,
+    validateFsaFallProductionRows
+} from '../fsaReports';
+import { SprayRecord, Field, HarvestRecord, HayHarvestRecord } from '../../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../../types/fsaTract';
 
 describe('Missouri Log Generation', () => {
@@ -343,5 +351,412 @@ describe('FSA 578 report rows', () => {
             tractNumber: '456',
             fieldNumber: '25'
         });
+    });
+
+    it('labels pasture and hay ground as the crop on non-cropland FSA worksheet rows', () => {
+        const pastureField: Field = {
+            id: 'pasture-1',
+            name: 'South Pasture',
+            acreage: 20,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '123',
+            fsaTractNumber: '456',
+            intendedUse: 'Pasture',
+            deleted_at: null
+        };
+
+        const hayField: Field = {
+            id: 'hay-1',
+            name: 'East Hay Ground',
+            acreage: 15,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '123',
+            fsaTractNumber: '456',
+            intendedUse: 'Hay Ground',
+            deleted_at: null
+        };
+
+        const assignments: FieldCluAssignment[] = [
+            {
+                id: 'pasture-assignment',
+                farmId: 'farm-1',
+                fieldId: 'pasture-1',
+                tractKey: '123-456',
+                cluNumber: '30',
+                acres: 20,
+                landUse: 'non_cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            },
+            {
+                id: 'hay-assignment',
+                farmId: 'farm-1',
+                fieldId: 'hay-1',
+                tractKey: '123-456',
+                cluNumber: '31',
+                acres: 15,
+                landUse: 'non_cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            }
+        ];
+
+        const rows = buildFsa578Rows([], [pastureField, hayField], assignments);
+
+        expect(rows).toHaveLength(2);
+        expect(rows.map(row => row.crop)).toEqual(['Pasture', 'Hay Ground']);
+        expect(rows.map(row => row.intendedUse)).toEqual(['Pasture', 'Hay Ground']);
+        expect(rows.every(row => row.landUse === 'Non-cropland')).toBe(true);
+    });
+
+    it('defaults new worksheet status fields for planted rows', () => {
+        const field: Field = {
+            id: 'field-1',
+            name: 'Bottom Field',
+            acreage: 40,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '918',
+            fsaTractNumber: '1327',
+            fsaFieldNumber: '1',
+            producerShare: 100,
+            deleted_at: null
+        };
+
+        const plantRecord = {
+            id: 'plant-1',
+            fieldId: 'field-1',
+            fieldName: 'Bottom Field',
+            crop: 'Corn',
+            seedVariety: 'Pioneer 1185',
+            acreage: 40,
+            plantDate: '2026-04-20',
+            timestamp: new Date('2026-04-20T12:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            deleted_at: null
+        };
+
+        const rows = buildFsa578Rows([plantRecord], [field]);
+
+        expect(rows[0]).toMatchObject({
+            cropStatus: 'Planted',
+            cropSequence: 'Initial',
+            organicStatus: 'Conventional',
+            notes: ''
+        });
+    });
+
+    it('validates missing FSA worksheet data with error and warning severity', () => {
+        const issues = validateFsa578Rows([
+            {
+                id: 'row-1',
+                date: '2026-05-01',
+                fieldName: 'Problem Field',
+                farmNumber: '',
+                tractNumber: '',
+                fieldNumber: '',
+                acreage: 0,
+                crop: '',
+                seedVariety: '',
+                intendedUse: '',
+                irrigationCode: 'NI',
+                producerShare: '100%',
+                landUse: 'Cropland',
+            }
+        ]);
+
+        expect(issues).toEqual(expect.arrayContaining([
+            expect.objectContaining({ severity: 'error', field: 'farmNumber' }),
+            expect.objectContaining({ severity: 'error', field: 'tractNumber' }),
+            expect.objectContaining({ severity: 'warning', field: 'fieldNumber' }),
+            expect.objectContaining({ severity: 'error', field: 'crop' }),
+            expect.objectContaining({ severity: 'error', field: 'acreage' }),
+        ]));
+    });
+
+    it('treats whitespace-only FSA worksheet fields as missing', () => {
+        const issues = validateFsa578Rows([
+            {
+                id: 'row-1',
+                date: '2026-05-01',
+                fieldName: 'Whitespace Field',
+                farmNumber: '   ',
+                tractNumber: '\t',
+                fieldNumber: '  ',
+                acreage: 12,
+                crop: '   ',
+                seedVariety: '',
+                intendedUse: '',
+                irrigationCode: 'NI',
+                producerShare: '100%',
+                landUse: 'Cropland',
+            }
+        ]);
+
+        expect(issues).toEqual(expect.arrayContaining([
+            expect.objectContaining({ severity: 'error', field: 'farmNumber' }),
+            expect.objectContaining({ severity: 'error', field: 'tractNumber' }),
+            expect.objectContaining({ severity: 'warning', field: 'fieldNumber' }),
+            expect.objectContaining({ severity: 'error', field: 'crop' }),
+        ]));
+    });
+
+    it('returns no validation issues for a complete FSA worksheet row', () => {
+        const issues = validateFsa578Rows([
+            {
+                id: 'row-1',
+                date: '2026-05-01',
+                fieldName: 'Ready Field',
+                farmNumber: '918',
+                tractNumber: '1327',
+                fieldNumber: '1',
+                acreage: 32.41,
+                crop: 'Soybeans',
+                seedVariety: 'AG38XF3',
+                intendedUse: 'Grain',
+                irrigationCode: 'NI',
+                producerShare: '100%',
+                landUse: 'Cropland',
+            }
+        ]);
+
+        expect(issues).toEqual([]);
+    });
+
+    it('builds farmer-facing FSA-578 worksheet CSV with crop year and disclaimer columns', () => {
+        const csv = buildFsa578WorksheetCsv({
+            metadata: {
+                farmName: 'AcreLedger Test Farm',
+                producerName: 'Jane Farmer',
+                county: 'Lafayette',
+                state: 'MO',
+                cropYear: 2026,
+                reportDate: '2026-06-17',
+            },
+            rows: [{
+                id: 'row-1',
+                date: '2026-05-01',
+                fieldName: 'Ready Field',
+                farmNumber: '918',
+                tractNumber: '1327',
+                fieldNumber: '1',
+                acreage: 32.41,
+                crop: 'Soybeans',
+                seedVariety: 'AG38XF3',
+                intendedUse: 'Grain',
+                irrigationCode: 'NI',
+                producerShare: '100%',
+                landUse: 'Cropland',
+                cropStatus: 'Planted',
+                cropSequence: 'Initial',
+                organicStatus: 'Conventional',
+                notes: 'Review with county office',
+            }]
+        });
+
+        expect(csv).toContain('FSA-578 Acreage Certification Worksheet');
+        expect(csv).toContain('Not an official USDA form');
+        expect(csv).toContain('Crop Year');
+        expect(csv).toContain('"2026"');
+        expect(csv).toContain('"AcreLedger Test Farm"');
+        expect(csv).toContain('"Ready Field"');
+        expect(csv).toContain('"Planted"');
+    });
+});
+
+describe('FSA fall harvest production report rows', () => {
+    it('builds corn soybean wheat production rows with FSA identifiers and evidence fields', () => {
+        const field: Field = {
+            id: 'field-1',
+            name: 'Bottom Field',
+            acreage: 40,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '918',
+            fsaTractNumber: '1327',
+            deleted_at: null,
+        };
+
+        const harvestRecord: HarvestRecord = {
+            id: 'harvest-1',
+            fieldId: 'field-1',
+            fieldName: 'Bottom Field',
+            crop: 'Corn',
+            destination: 'town',
+            moisturePercent: 16.2,
+            landlordSplitPercent: 0,
+            bushels: 7200,
+            harvestDate: '2026-10-12',
+            timestamp: new Date('2026-10-12T00:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            scaleTicketNumber: 'TCK-1001',
+            deleted_at: null,
+        };
+
+        const rows = buildFsaFallProductionRows({
+            harvestRecords: [harvestRecord],
+            hayRecords: [],
+            fields: [field],
+        });
+
+        expect(rows.grainRows[0]).toMatchObject({
+            recordType: 'grain',
+            fieldName: 'Bottom Field',
+            crop: 'Corn',
+            farmNumber: '918',
+            tractNumber: '1327',
+            production: 7200,
+            productionUnit: 'bu',
+            moisturePercent: 16.2,
+            destination: 'Elevator/Sale',
+            evidenceReference: 'TCK-1001',
+        });
+    });
+
+    it('builds hay production rows with bale count and FSA identifiers', () => {
+        const field: Field = {
+            id: 'hay-field',
+            name: 'East Hay Ground',
+            acreage: 15,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '123',
+            fsaTractNumber: '456',
+            intendedUse: 'Hay Ground',
+            deleted_at: null,
+        };
+
+        const hayRecord: HayHarvestRecord = {
+            id: 'hay-1',
+            fieldId: 'hay-field',
+            fieldName: 'East Hay Ground',
+            date: '2026-07-01',
+            baleCount: 38,
+            cuttingNumber: 1,
+            baleType: 'Round',
+            timestamp: new Date('2026-07-01T00:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            deleted_at: null,
+        };
+
+        const rows = buildFsaFallProductionRows({
+            harvestRecords: [],
+            hayRecords: [hayRecord],
+            fields: [field],
+        });
+
+        expect(rows.hayRows[0]).toMatchObject({
+            recordType: 'hay',
+            fieldName: 'East Hay Ground',
+            crop: 'Hay Ground',
+            farmNumber: '123',
+            tractNumber: '456',
+            production: 38,
+            productionUnit: 'bales',
+            destination: 'On-Farm / Hay Storage',
+            evidenceReference: 'Cutting 1',
+            notes: 'Cutting 1, Round bales',
+        });
+    });
+
+    it('warns when fall production rows are missing FSA or evidence fields', () => {
+        const issues = validateFsaFallProductionRows([{
+            id: 'row-1',
+            recordType: 'grain',
+            fieldName: 'Problem Corn',
+            crop: 'Corn',
+            farmNumber: '',
+            tractNumber: '',
+            harvestDate: '',
+            production: 0,
+            productionUnit: 'bu',
+            destination: '',
+            evidenceReference: '',
+            notes: '',
+        }]);
+
+        expect(issues).toEqual(expect.arrayContaining([
+            expect.objectContaining({ severity: 'error', field: 'farmNumber' }),
+            expect.objectContaining({ severity: 'error', field: 'tractNumber' }),
+            expect.objectContaining({ severity: 'error', field: 'harvestDate' }),
+            expect.objectContaining({ severity: 'error', field: 'production' }),
+            expect.objectContaining({ severity: 'warning', field: 'destination' }),
+            expect.objectContaining({ severity: 'warning', field: 'evidenceReference' }),
+        ]));
+    });
+
+    it('builds fall production CSV with grain and hay rows', () => {
+        const csv = buildFsaFallProductionCsv({
+            metadata: {
+                farmName: 'AcreLedger Test Farm',
+                cropYear: 2026,
+                reportDate: '2026-11-01',
+            },
+            rows: [
+                {
+                    id: 'grain-1',
+                    recordType: 'grain',
+                    fieldName: 'Bottom Field',
+                    crop: 'Corn',
+                    farmNumber: '918',
+                    tractNumber: '1327',
+                    harvestDate: '2026-10-12',
+                    production: 7200,
+                    productionUnit: 'bu',
+                    moisturePercent: 16.2,
+                    destination: 'Elevator/Sale',
+                    evidenceReference: 'TCK-1001',
+                    landlordSplitPercent: 0,
+                    notes: '',
+                },
+                {
+                    id: 'hay-1',
+                    recordType: 'hay',
+                    fieldName: 'East Hay Ground',
+                    crop: 'Hay Ground',
+                    farmNumber: '123',
+                    tractNumber: '456',
+                    harvestDate: '2026-07-01',
+                    production: 38,
+                    productionUnit: 'bales',
+                    destination: 'On-Farm / Hay Storage',
+                    evidenceReference: 'Cutting 1',
+                    notes: 'Cutting 1, Round bales',
+                },
+            ],
+        });
+
+        expect(csv).toContain('FSA Fall Harvest / Production Evidence Worksheet');
+        expect(csv).toContain('Not an official USDA form');
+        expect(csv).toContain('"Corn"');
+        expect(csv).toContain('"7200"');
+        expect(csv).toContain('"TCK-1001"');
+        expect(csv).toContain('"Hay Ground"');
+        expect(csv).toContain('"38"');
+    });
+
+    it('does not create fall production rows for pasture without a production record', () => {
+        const pastureField: Field = {
+            id: 'pasture-1',
+            name: 'South Pasture',
+            acreage: 20,
+            lat: 39,
+            lng: -94,
+            intendedUse: 'Pasture',
+            fsaFarmNumber: '123',
+            fsaTractNumber: '456',
+            deleted_at: null,
+        };
+
+        const rows = buildFsaFallProductionRows({
+            harvestRecords: [],
+            hayRecords: [],
+            fields: [pastureField],
+        });
+
+        expect(rows.grainRows).toEqual([]);
+        expect(rows.hayRows).toEqual([]);
     });
 });

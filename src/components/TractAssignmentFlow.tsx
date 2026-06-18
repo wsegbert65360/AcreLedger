@@ -89,8 +89,12 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
     return acres;
   }, [editableTracts]);
 
+  const persistedAssignmentKeys = useMemo(
+    () => new Set(cluAssignments.filter(a => !a.deletedAt).map(a => `${a.tractKey}:${a.cluNumber}`)),
+    [cluAssignments],
+  );
+
   const displayAssignments = useMemo<FieldCluAssignment[]>(() => {
-    const persistedKeys = new Set(cluAssignments.map(a => `${a.tractKey}:${a.cluNumber}`));
     const legacyAssignments: FieldCluAssignment[] = [];
 
     for (const field of fields) {
@@ -99,7 +103,7 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
       for (const tractKey of parseTractKeys(field.fsaFarmNumber, field.fsaTractNumber)) {
         for (const cluNumber of field.cluNumbers) {
           const key = `${tractKey}:${cluNumber}`;
-          if (persistedKeys.has(key) || !featureAcresByClu.has(key)) continue;
+          if (persistedAssignmentKeys.has(key) || !featureAcresByClu.has(key)) continue;
 
           legacyAssignments.push({
             id: `legacy-${field.id}-${tractKey}-${cluNumber}`,
@@ -117,7 +121,15 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
     }
 
     return [...cluAssignments, ...legacyAssignments];
-  }, [cluAssignments, featureAcresByClu, fields]);
+  }, [persistedAssignmentKeys, cluAssignments, featureAcresByClu, fields]);
+
+  const displayAssignmentKeys = useMemo(
+    () => new Set(displayAssignments.filter(a => !a.deletedAt).map(a => `${a.tractKey}:${a.cluNumber}`)),
+    [displayAssignments],
+  );
+
+  const availableCluCount = featureAcresByClu.size;
+  const unassignedCluCount = Math.max(0, availableCluCount - displayAssignmentKeys.size);
 
   const handleToggleClu = useCallback(async (tractKey: string, cluNumber: string, acres: number) => {
     if (!selectedFieldId) return;
@@ -246,18 +258,19 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
 
   const tractAssignmentCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const a of cluAssignments) {
+    for (const a of displayAssignments) {
+      if (a.deletedAt) continue;
       counts.set(a.tractKey, (counts.get(a.tractKey) || 0) + 1);
     }
     return counts;
-  }, [cluAssignments]);
+  }, [displayAssignments]);
 
   return (
     <div className="flex flex-col h-full">
       <div className="shrink-0 p-3 border-b border-border flex items-center justify-between bg-background">
         <FsaTractImporter />
         <div className="text-xs text-muted-foreground">
-          {editableTracts.length} tract{editableTracts.length !== 1 ? 's' : ''} available, {displayAssignments.length} CLU{displayAssignments.length !== 1 ? 's' : ''} assigned
+          {editableTracts.length} tract{editableTracts.length !== 1 ? 's' : ''} available, {displayAssignments.length} CLU{displayAssignments.length !== 1 ? 's' : ''} assigned, {unassignedCluCount} unassigned
         </div>
       </div>
 
@@ -282,6 +295,9 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
                       {tractAssignmentCounts.has(tract.tractKey) && (
                         <span className="ml-2">({tractAssignmentCounts.get(tract.tractKey)} assigned)</span>
                       )}
+                      <span className="ml-2">
+                        {Math.max(0, tract.geojson.features.length - (tractAssignmentCounts.get(tract.tractKey) || 0))} unassigned
+                      </span>
                       <span className="ml-2">{tract.filename}</span>
                     </div>
                   </div>

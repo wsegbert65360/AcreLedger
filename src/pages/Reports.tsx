@@ -7,7 +7,7 @@ import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { buildFsa578Rows, generateMissouriLog, exportFsa578Data, exportHarvestData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf } from '@/lib/complianceReports';
+import { buildFsa578Rows, buildFsaFallProductionRows, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import ReportTable from '@/components/ReportTable';
@@ -23,10 +23,10 @@ type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harve
 const WIND_ALERT_MPH = 10;
 
 const TABS: { key: ReportTab; icon: typeof Sprout; label: string; color: string }[] = [
-  { key: 'fsa-plant',          icon: Sprout,    label: 'FSA Plant',   color: 'text-plant' },
+  { key: 'fsa-plant',          icon: Sprout,    label: 'FSA-578',     color: 'text-plant' },
   { key: 'spray-audit',        icon: CloudRain, label: 'Spray Audit', color: 'text-spray' },
   { key: 'fertilizer-summary', icon: Sprout,    label: 'Fertilizer',  color: 'text-lime-600 dark:text-lime-400' },
-  { key: 'fsa-harvest',        icon: Wheat,     label: 'FSA Harvest', color: 'text-harvest' },
+  { key: 'fsa-harvest',        icon: Wheat,     label: 'Fall FSA',    color: 'text-harvest' },
   { key: 'hay-summary',        icon: Tractor,   label: 'Hay Summary', color: 'text-harvest' },
   { key: 'landlord-statement', icon: FileText,  label: 'Landlord',    color: 'text-blue-600' },
 ];
@@ -152,7 +152,22 @@ export default function Reports() {
     () => roundTo(fsaPlantRows.filter(row => row.crop).reduce((s, row) => s + row.acreage, 0), 2),
     [fsaPlantRows],
   );
+  const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
+  const fsaReadinessErrors = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'error'), [fsaReadinessIssues]);
+  const fsaReadinessWarnings = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'warning'), [fsaReadinessIssues]);
   const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
+  const fsaFallReport = useMemo(
+    () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields }),
+    [harvestRecords, hayRecords, fields],
+  );
+  const fsaFallRows = useMemo(
+    () => [...fsaFallReport.grainRows, ...fsaFallReport.hayRows],
+    [fsaFallReport],
+  );
+  const fsaFallIssues = useMemo(() => validateFsaFallProductionRows(fsaFallRows), [fsaFallRows]);
+  const fsaFallErrors = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'error'), [fsaFallIssues]);
+  const fsaFallWarnings = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'warning'), [fsaFallIssues]);
+  const totalFallHayBales = useMemo(() => fsaFallReport.hayRows.reduce((s, row) => s + row.production, 0), [fsaFallReport]);
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
 
@@ -204,8 +219,8 @@ export default function Reports() {
   const handleExportFsaPlantPdf = () => {
     safeExport(() => {
       exportToPdf({
-        title: 'FSA Planting Report',
-        subtitle: `Acreage report for Farm Service Agency certification. Generated ${reportDate}.`,
+        title: 'FSA-578 Acreage Certification Worksheet',
+        subtitle: `Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`,
         headers: ['DATE', 'FIELD', 'CLU/FIELD #', 'LAND USE', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %'],
         rows: fsaPlantRows.map(row => [
           row.date ? fmtDate(row.date) : '—',
@@ -221,9 +236,18 @@ export default function Reports() {
           row.irrigationCode,
           row.producerShare
         ]),
-        fileName: `FSA_Planting_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        fileName: `FSA_578_Worksheet_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
         summaryText: 'Total Planted Acreage',
-        summaryValue: `${totalPlantAcres} AC`
+        summaryValue: `${totalPlantAcres} AC`,
+        footerText: [
+          'Farmer Certification Worksheet',
+          'I certify that the acreage and crop information shown above is accurate to the best of my knowledge.',
+          'Producer Signature: _______________________________',
+          'Date: ___________________',
+          'Notes / FSA Office Corrections:',
+          '__________________________________________________',
+          '__________________________________________________',
+        ]
       });
     }, 'FSA planting PDF');
   };
@@ -256,25 +280,37 @@ export default function Reports() {
   const handleExportHarvestPdf = () => {
     safeExport(() => {
       exportToPdf({
-        title: 'FSA Harvest Report',
-        subtitle: `Grain production report for FSA certification. Generated ${reportDate}.`,
-        headers: ['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'LL NAME', 'TICKET #'],
-        rows: harvestRecords.map(r => [
-          fmtDate(r.harvestDate) || fmt(r.timestamp),
-          r.fieldName,
-          r.crop || '—',
-          r.bushels.toLocaleString(),
-          `${r.moisturePercent}%`,
-          r.destination === 'bin' ? 'Bin' : 'Town',
-          `${r.landlordSplitPercent}%`,
-          r.landlordName || '—',
-          r.scaleTicketNumber || '—'
+        title: 'FSA Fall Harvest / Production Evidence Worksheet',
+        subtitle: `Production support report for FSA/crop-program review. Not an official USDA form. Generated ${reportDate}.`,
+        headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #'],
+        rows: fsaFallRows.map(row => [
+          fmtDate(row.harvestDate) || '—',
+          row.fieldName,
+          row.crop || '—',
+          row.production.toLocaleString(),
+          row.productionUnit,
+          row.moisturePercent != null ? `${row.moisturePercent}%` : '—',
+          row.destination || '—',
+          row.evidenceReference || '—',
+          row.farmNumber || '—',
+          row.tractNumber || '—',
         ]),
-        fileName: `FSA_Harvest_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
-        summaryText: 'Total Harvest Production',
-        summaryValue: `${totalHarvestBu.toLocaleString()} BU`
+        fileName: `FSA_Fall_Production_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        summaryText: totalFallHayBales > 0 ? 'Total Production' : 'Total Grain Production',
+        summaryValue: totalFallHayBales > 0
+          ? `${totalHarvestBu.toLocaleString()} BU / ${totalFallHayBales.toLocaleString()} BALES`
+          : `${totalHarvestBu.toLocaleString()} BU`,
+        footerText: [
+          'Production Evidence Worksheet',
+          'I certify that the production information shown above is accurate to the best of my knowledge.',
+          'Producer Signature: _______________________________',
+          'Date: ___________________',
+          'FSA Office Notes / Corrections:',
+          '__________________________________________________',
+          '__________________________________________________',
+        ]
       });
-    }, 'harvest PDF');
+    }, 'fall production PDF');
   };
 
   const handleExportHayPdf = () => {
@@ -392,10 +428,14 @@ export default function Reports() {
         {/* ── FSA Planting Report ─────────────────────────────────────────────── */}
         {tab === 'fsa-plant' && (
           <ReportTable
-            title="FSA Planting Report"
-            subtitle={`Acreage report for Farm Service Agency certification. Generated ${reportDate}.`}
+            title="FSA-578 Acreage Certification Worksheet"
+            subtitle={`Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'CLU/FIELD #', 'LAND USE', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %']}
-            onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts)), 'FSA planting data')}
+            onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
+              farmName,
+              cropYear: viewingSeason,
+              reportDate: new Date().toISOString().split('T')[0],
+            }), 'FSA-578 worksheet data')}
             onExportPdf={handleExportFsaPlantPdf}
             exportLabel="CSV"
             summary={(
@@ -405,6 +445,23 @@ export default function Reports() {
               </div>
             )}
           >
+            {fsaReadinessIssues.length > 0 && (
+              <tr className="print:hidden">
+                <td colSpan={12} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+                  <div className="font-bold uppercase tracking-wide mb-1">
+                    FSA-578 readiness check: {fsaReadinessErrors.length} errors, {fsaReadinessWarnings.length} warnings
+                  </div>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {fsaReadinessIssues.slice(0, 6).map(issue => (
+                      <li key={`${issue.rowId}-${issue.field}-${issue.severity}`}>{issue.message}</li>
+                    ))}
+                    {fsaReadinessIssues.length > 6 && (
+                      <li>{fsaReadinessIssues.length - 6} more issue(s)</li>
+                    )}
+                  </ul>
+                </td>
+              </tr>
+            )}
             {fsaPlantRows.map(row => {
               return (
                 <tr key={row.id} className="hover:bg-muted/30 transition-colors">
@@ -553,44 +610,71 @@ export default function Reports() {
           </ReportTable>
         )}
 
-        {/* ── FSA Harvest Report ──────────────────────────────────────────────── */}
+        {/* ── FSA Fall Harvest / Production Report ───────────────────────────── */}
         {tab === 'fsa-harvest' && (
           <ReportTable
-            title="FSA Harvest Report"
-            subtitle={`Grain production report for FSA certification. Generated ${reportDate}.`}
-            headers={['DATE', 'FIELD', 'CROP', 'BUSHELS', 'MOIST %', 'DEST.', 'LL %', 'LL NAME', 'TICKET #', 'FARM #', 'TRACT #']}
-            onExport={() => safeExport(() => exportHarvestData(harvestRecords, fields), 'harvest data')}
+            title="FSA Fall Harvest / Production Evidence Worksheet"
+            subtitle={`Production support report for FSA/crop-program review. Not an official USDA form. Generated ${reportDate}.`}
+            headers={['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #']}
+            onExport={() => safeExport(() => exportFsaFallProductionData({
+              harvestRecords,
+              hayRecords,
+              fields,
+              metadata: {
+                farmName,
+                cropYear: viewingSeason,
+                reportDate: new Date().toISOString().split('T')[0],
+              },
+            }), 'fall production data')}
             onExportPdf={handleExportHarvestPdf}
             exportLabel="CSV"
             summary={(
-              <div className="flex justify-between items-center font-mono text-sm">
-                <span className="font-bold text-muted-foreground uppercase">TOTAL HARVEST PRODUCTION</span>
-                <span className="font-bold text-harvest">{totalHarvestBu.toLocaleString()} BU</span>
+              <div className="flex flex-col gap-1 font-mono text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-muted-foreground uppercase">TOTAL GRAIN PRODUCTION</span>
+                  <span className="font-bold text-harvest">{totalHarvestBu.toLocaleString()} BU</span>
+                </div>
+                {totalFallHayBales > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-muted-foreground uppercase">TOTAL HAY PRODUCTION</span>
+                    <span className="font-bold text-harvest">{totalFallHayBales.toLocaleString()} BALES</span>
+                  </div>
+                )}
               </div>
             )}
           >
-            {harvestRecords.map(r => {
-              const field = fieldMap.get(r.fieldId);
-              return (
-                <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(r.harvestDate) || fmt(r.timestamp)}</td>
-                  <td className="px-4 py-3 text-xs font-bold text-foreground">{r.fieldName}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{r.crop || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.bushels.toLocaleString()}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.moisturePercent}%</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.destination === 'bin' ? 'Bin' : 'Town'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.landlordSplitPercent}%</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{r.landlordName || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{r.scaleTicketNumber || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaFarmNumber  || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{field?.fsaTractNumber || '—'}</td>
-                </tr>
-              );
-            })}
-            {harvestRecords.length === 0 && (
+            {fsaFallRows.map(row => (
+              <tr key={`${row.recordType}-${row.id}`} className="hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(row.harvestDate) || '—'}</td>
+                <td className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '—'}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.production.toLocaleString()}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-muted-foreground">{row.productionUnit}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.moisturePercent != null ? `${row.moisturePercent}%` : '—'}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.destination || '—'}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.evidenceReference || '—'}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '—'}</td>
+                <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '—'}</td>
+              </tr>
+            ))}
+            {fsaFallRows.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-12 text-center text-muted-foreground text-xs">
-                  No harvest records to report for this season
+                <td colSpan={10} className="py-12 text-center text-muted-foreground text-xs">
+                  No harvest or hay production records to report for this season
+                </td>
+              </tr>
+            )}
+            {fsaFallRows.length > 0 && fsaFallErrors.length > 0 && (
+              <tr className="print:hidden">
+                <td colSpan={10} className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 text-xs text-red-600 dark:text-red-400 font-semibold">
+                  ⚠ {fsaFallErrors.length} error(s) — {fsaFallErrors.map(e => e.message).join('; ')}
+                </td>
+              </tr>
+            )}
+            {fsaFallRows.length > 0 && fsaFallWarnings.length > 0 && (
+              <tr className="print:hidden">
+                <td colSpan={10} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                  ⚠ {fsaFallWarnings.length} warning(s) — missing destination or evidence references will show as gaps
                 </td>
               </tr>
             )}

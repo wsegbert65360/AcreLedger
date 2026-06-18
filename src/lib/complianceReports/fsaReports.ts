@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 
 import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
-import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
+import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { formatTotalAmount } from '../../utils/unitConversion';
 
@@ -28,6 +28,62 @@ export interface Fsa578ReportRow {
     irrigationCode: string;
     producerShare: string;
     landUse: 'Cropland' | 'Non-cropland';
+    cropStatus?: 'Planted' | 'Prevented Planting' | 'Failed' | 'Volunteer' | 'Cover Crop';
+    cropSequence?: 'Initial' | 'Double Crop' | 'Subsequent Crop';
+    organicStatus?: 'Conventional' | 'Organic' | 'Transitioning';
+    notes?: string;
+}
+
+export interface Fsa578WorksheetMetadata {
+    farmName: string;
+    producerName?: string;
+    county?: string;
+    state?: string;
+    cropYear: number;
+    reportDate: string;
+}
+
+export interface Fsa578ValidationIssue {
+    rowId: string;
+    severity: 'warning' | 'error';
+    field: string;
+    message: string;
+}
+
+export interface FsaFallProductionRow {
+    id: string;
+    recordType: 'grain' | 'hay';
+    fieldName: string;
+    crop: string;
+    farmNumber: string;
+    tractNumber: string;
+    harvestDate: string;
+    production: number;
+    productionUnit: 'bu' | 'bales' | 'tons';
+    moisturePercent?: number;
+    destination: string;
+    evidenceReference: string;
+    landlordSplitPercent?: number;
+    landlordName?: string;
+    notes: string;
+}
+
+export interface FsaFallProductionReport {
+    grainRows: FsaFallProductionRow[];
+    hayRows: FsaFallProductionRow[];
+}
+
+export interface FsaFallProductionMetadata {
+    farmName: string;
+    cropYear: number;
+    reportDate: string;
+}
+
+export interface FsaFallValidationIssue {
+    rowId: string;
+    severity: 'warning' | 'error';
+    field: string;
+    message: string;
 }
 
 function parseTractKey(tractKey: string): { farmNumber: string; tractNumber: string } {
@@ -158,6 +214,10 @@ export function buildFsa578Rows(
             irrigationCode,
             producerShare: `${shareDisplay}%`,
             landUse: 'Cropland' as const,
+            cropStatus: 'Planted' as const,
+            cropSequence: 'Initial' as const,
+            organicStatus: 'Conventional' as const,
+            notes: '',
         };
 
         if (croplandAssignments.length === 0) {
@@ -222,6 +282,7 @@ export function buildFsa578Rows(
             const field = fieldMap.get(a.fieldId);
             const tract = parseTractKey(a.tractKey);
             const share = field?.producerShare ?? 100;
+            const nonCropUse = field?.intendedUse?.trim() || 'Non-cropland';
 
             return {
                 id: `non-cropland-${a.id}`,
@@ -231,9 +292,9 @@ export function buildFsa578Rows(
                 tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                 fieldNumber: a.cluNumber,
                 acreage: a.acres,
-                crop: '',
+                crop: field?.intendedUse?.trim() || '',
                 seedVariety: '',
-                intendedUse: 'Non-cropland',
+                intendedUse: nonCropUse,
                 irrigationCode: 'NI',
                 producerShare: `${share.toFixed(0)}%`,
                 landUse: 'Non-cropland' as const,
@@ -241,6 +302,294 @@ export function buildFsa578Rows(
         });
 
     return [...plantedRows, ...nonCroplandRows];
+}
+
+export function validateFsa578Rows(rows: Fsa578ReportRow[]): Fsa578ValidationIssue[] {
+    const issues: Fsa578ValidationIssue[] = [];
+    const isBlank = (value: string | null | undefined) => !value || value.trim().length === 0;
+
+    for (const row of rows) {
+        if (isBlank(row.farmNumber)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'error',
+                field: 'farmNumber',
+                message: `${row.fieldName} is missing FSA farm number.`,
+            });
+        }
+
+        if (isBlank(row.tractNumber)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'error',
+                field: 'tractNumber',
+                message: `${row.fieldName} is missing FSA tract number.`,
+            });
+        }
+
+        if (isBlank(row.fieldNumber)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'warning',
+                field: 'fieldNumber',
+                message: `${row.fieldName} is missing CLU/field number.`,
+            });
+        }
+
+        if (row.landUse === 'Cropland' && isBlank(row.crop)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'error',
+                field: 'crop',
+                message: `${row.fieldName} is cropland but has no crop.`,
+            });
+        }
+
+        if (!row.acreage || row.acreage <= 0) {
+            issues.push({
+                rowId: row.id,
+                severity: 'error',
+                field: 'acreage',
+                message: `${row.fieldName} has invalid acreage.`,
+            });
+        }
+    }
+
+    return issues;
+}
+
+export function buildFsa578WorksheetCsv({
+    metadata,
+    rows,
+}: {
+    metadata: Fsa578WorksheetMetadata;
+    rows: Fsa578ReportRow[];
+}): string {
+    const titleRows = [
+        [sanitizeCsvValue('FSA-578 Acreage Certification Worksheet')],
+        [sanitizeCsvValue('Not an official USDA form. Verify final acreage certification with your county FSA office.')],
+        [],
+        [sanitizeCsvValue('Farm Name'), sanitizeCsvValue(metadata.farmName)],
+        [sanitizeCsvValue('Producer Name'), sanitizeCsvValue(metadata.producerName || '')],
+        [sanitizeCsvValue('County'), sanitizeCsvValue(metadata.county || '')],
+        [sanitizeCsvValue('State'), sanitizeCsvValue(metadata.state || '')],
+        [sanitizeCsvValue('Crop Year'), sanitizeCsvValue(metadata.cropYear)],
+        [sanitizeCsvValue('Report Date'), sanitizeCsvValue(metadata.reportDate)],
+        [],
+    ].map(row => row.join(','));
+
+    const header = [
+        'Crop Year',
+        'Farm Name',
+        'Field Name',
+        'Farm #',
+        'Tract #',
+        'CLU / Field #',
+        'Land Use',
+        'Crop',
+        'Variety',
+        'Plant Date',
+        'Acres',
+        'Intended Use',
+        'Irrigation',
+        'Producer Share',
+        'Crop Status',
+        'Crop Sequence',
+        'Organic Status',
+        'Notes',
+    ].map(sanitizeCsvValue).join(',');
+
+    const dataRows = rows.map(row => [
+        metadata.cropYear,
+        metadata.farmName,
+        row.fieldName,
+        row.farmNumber,
+        row.tractNumber,
+        row.fieldNumber,
+        row.landUse,
+        row.crop,
+        row.seedVariety,
+        row.date,
+        row.acreage,
+        row.intendedUse,
+        row.irrigationCode,
+        row.producerShare,
+        row.cropStatus || '',
+        row.cropSequence || '',
+        row.organicStatus || '',
+        row.notes || '',
+    ].map(sanitizeCsvValue).join(','));
+
+    return [...titleRows, header, ...dataRows].join('\n');
+}
+
+export function buildFsaFallProductionRows({
+    harvestRecords,
+    hayRecords,
+    fields,
+}: {
+    harvestRecords: HarvestRecord[];
+    hayRecords: HayHarvestRecord[];
+    fields: Field[];
+}): FsaFallProductionReport {
+    const fieldMap = new Map(fields.map(field => [field.id, field]));
+
+    const grainRows: FsaFallProductionRow[] = harvestRecords.map(record => {
+        const field = fieldMap.get(record.fieldId);
+        return {
+            id: record.id,
+            recordType: 'grain',
+            fieldName: record.fieldName || field?.name || '',
+            crop: record.crop || '',
+            farmNumber: record.fsaFarmNumber || field?.fsaFarmNumber || '',
+            tractNumber: record.fsaTractNumber || field?.fsaTractNumber || '',
+            harvestDate: record.harvestDate || new Date(record.timestamp).toISOString().split('T')[0],
+            production: record.bushels || 0,
+            productionUnit: 'bu',
+            moisturePercent: record.moisturePercent,
+            destination: record.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale',
+            evidenceReference: record.scaleTicketNumber || '',
+            landlordSplitPercent: record.landlordSplitPercent,
+            landlordName: record.landlordName,
+            notes: '',
+        };
+    });
+
+    const hayRows: FsaFallProductionRow[] = hayRecords.map(record => {
+        const field = fieldMap.get(record.fieldId);
+        const cutting = `Cutting ${record.cuttingNumber}`;
+        return {
+            id: record.id,
+            recordType: 'hay',
+            fieldName: record.fieldName || field?.name || '',
+            crop: field?.intendedUse?.trim() || 'Hay Ground',
+            farmNumber: field?.fsaFarmNumber || '',
+            tractNumber: field?.fsaTractNumber || '',
+            harvestDate: record.date || new Date(record.timestamp).toISOString().split('T')[0],
+            production: record.baleCount || 0,
+            productionUnit: 'bales',
+            destination: 'On-Farm / Hay Storage',
+            evidenceReference: cutting,
+            notes: `${cutting}, ${record.baleType} bales`,
+        };
+    });
+
+    return { grainRows, hayRows };
+}
+
+export function validateFsaFallProductionRows(rows: FsaFallProductionRow[]): FsaFallValidationIssue[] {
+    const issues: FsaFallValidationIssue[] = [];
+    const isBlank = (value: string | null | undefined) => !value || value.trim().length === 0;
+
+    for (const row of rows) {
+        if (isBlank(row.crop)) {
+            issues.push({ rowId: row.id, severity: 'error', field: 'crop', message: `${row.fieldName} is missing crop/use.` });
+        }
+        if (isBlank(row.farmNumber)) {
+            issues.push({ rowId: row.id, severity: 'error', field: 'farmNumber', message: `${row.fieldName} is missing FSA farm number.` });
+        }
+        if (isBlank(row.tractNumber)) {
+            issues.push({ rowId: row.id, severity: 'error', field: 'tractNumber', message: `${row.fieldName} is missing FSA tract number.` });
+        }
+        if (isBlank(row.harvestDate)) {
+            issues.push({ rowId: row.id, severity: 'error', field: 'harvestDate', message: `${row.fieldName} is missing harvest date.` });
+        }
+        if (!row.production || row.production <= 0) {
+            issues.push({ rowId: row.id, severity: 'error', field: 'production', message: `${row.fieldName} has invalid production quantity.` });
+        }
+        if (isBlank(row.destination)) {
+            issues.push({ rowId: row.id, severity: 'warning', field: 'destination', message: `${row.fieldName} is missing destination/storage.` });
+        }
+        if (isBlank(row.evidenceReference)) {
+            issues.push({ rowId: row.id, severity: 'warning', field: 'evidenceReference', message: `${row.fieldName} is missing ticket/evidence reference.` });
+        }
+    }
+
+    return issues;
+}
+
+export function buildFsaFallProductionCsv({
+    metadata,
+    rows,
+}: {
+    metadata: FsaFallProductionMetadata;
+    rows: FsaFallProductionRow[];
+}): string {
+    const titleRows = [
+        [sanitizeCsvValue('FSA Fall Harvest / Production Evidence Worksheet')],
+        [sanitizeCsvValue('Not an official USDA form. Verify program-specific requirements with your county FSA office.')],
+        [],
+        [sanitizeCsvValue('Farm Name'), sanitizeCsvValue(metadata.farmName)],
+        [sanitizeCsvValue('Crop Year'), sanitizeCsvValue(metadata.cropYear)],
+        [sanitizeCsvValue('Report Date'), sanitizeCsvValue(metadata.reportDate)],
+        [],
+    ].map(row => row.join(','));
+
+    const header = [
+        'Crop Year',
+        'Farm Name',
+        'Record Type',
+        'Field Name',
+        'Farm #',
+        'Tract #',
+        'Crop / Use',
+        'Harvest Date',
+        'Production',
+        'Unit',
+        'Moisture %',
+        'Destination / Storage',
+        'Evidence / Ticket #',
+        'Landlord Name',
+        'Landlord Share %',
+        'Notes',
+    ].map(sanitizeCsvValue).join(',');
+
+    const dataRows = rows.map(row => [
+        metadata.cropYear,
+        metadata.farmName,
+        row.recordType,
+        row.fieldName,
+        row.farmNumber,
+        row.tractNumber,
+        row.crop,
+        row.harvestDate,
+        row.production,
+        row.productionUnit,
+        row.moisturePercent ?? '',
+        row.destination,
+        row.evidenceReference,
+        row.landlordName || '',
+        row.landlordSplitPercent ?? '',
+        row.notes,
+    ].map(sanitizeCsvValue).join(','));
+
+    return [...titleRows, header, ...dataRows].join('\n');
+}
+
+export async function exportFsaFallProductionData({
+    harvestRecords,
+    hayRecords,
+    fields,
+    metadata,
+}: {
+    harvestRecords: HarvestRecord[];
+    hayRecords: HayHarvestRecord[];
+    fields: Field[];
+    metadata?: Partial<FsaFallProductionMetadata>;
+}): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    const report = buildFsaFallProductionRows({ harvestRecords, hayRecords, fields });
+    const cropYear = metadata?.cropYear ?? harvestRecords[0]?.seasonYear ?? hayRecords[0]?.seasonYear ?? new Date().getFullYear();
+    const csvContent = buildFsaFallProductionCsv({
+        metadata: {
+            farmName: metadata?.farmName || 'AcreLedger Farm',
+            cropYear,
+            reportDate: metadata?.reportDate || today,
+        },
+        rows: [...report.grainRows, ...report.hayRows],
+    });
+
+    await downloadFile(csvContent, `FSA_Fall_Production_${cropYear}_${today}.csv`, 'text/csv');
 }
 
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {
@@ -330,35 +679,24 @@ export async function exportFsa578Data(
     fields: Field[],
     cluAssignments: FieldCluAssignment[] = [],
     fsaTracts: FsaTractImport[] = [],
+    metadata?: Partial<Fsa578WorksheetMetadata>,
 ): Promise<void> {
-    const header = [
-        'Farm #',
-        'Tract #',
-        'CLU/Field #',
-        'Acreage',
-        'Crop',
-        'Land Use',
-        'Intended Use',
-        'Irrigation Practice',
-        'Producer Share %',
-        'Plant Date'
-    ].join(',');
+    const today = new Date().toISOString().split('T')[0];
+    const rows = buildFsa578Rows(plantRecords, fields, cluAssignments, fsaTracts);
+    const cropYear = metadata?.cropYear ?? plantRecords[0]?.seasonYear ?? new Date().getFullYear();
+    const csvContent = buildFsa578WorksheetCsv({
+        metadata: {
+            farmName: metadata?.farmName || 'AcreLedger Farm',
+            producerName: metadata?.producerName,
+            county: metadata?.county,
+            state: metadata?.state,
+            cropYear,
+            reportDate: metadata?.reportDate || today,
+        },
+        rows,
+    });
 
-    const rows = buildFsa578Rows(plantRecords, fields, cluAssignments, fsaTracts).map(row => [
-        sanitizeCsvValue(row.farmNumber),
-        sanitizeCsvValue(row.tractNumber),
-        sanitizeCsvValue(row.fieldNumber),
-        sanitizeCsvValue(row.acreage),
-        sanitizeCsvValue(row.crop),
-        sanitizeCsvValue(row.landUse),
-        sanitizeCsvValue(row.intendedUse),
-        sanitizeCsvValue(row.irrigationCode),
-        sanitizeCsvValue(row.producerShare),
-        sanitizeCsvValue(row.date)
-    ].join(','));
-
-    const csvContent = [header, ...rows].join('\n');
-    await downloadFile(csvContent, `FSA_578_Summary_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `FSA_578_Worksheet_${cropYear}_${today}.csv`, 'text/csv');
 }
 
 export async function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]): Promise<void> {

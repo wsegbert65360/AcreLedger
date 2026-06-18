@@ -11,6 +11,7 @@ interface ExportPdfOptions {
   fileName: string;
   summaryText?: string;
   summaryValue?: string;
+  footerText?: string[];
 }
 
 export function exportToPdf({
@@ -20,7 +21,8 @@ export function exportToPdf({
   rows,
   fileName,
   summaryText,
-  summaryValue
+  summaryValue,
+  footerText
 }: ExportPdfOptions) {
   const doc = new jsPDF();
 
@@ -71,8 +73,8 @@ export function exportToPdf({
   });
 
   // Add Summary if provided
+  let finalY = ((doc as any).lastAutoTable?.finalY || 35) + 10;
   if (summaryText && summaryValue) {
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(40);
@@ -82,6 +84,23 @@ export function exportToPdf({
     const valueWidth = doc.getTextWidth(summaryValue);
     const pageWidth = doc.internal.pageSize.width;
     doc.text(summaryValue, pageWidth - valueWidth - 14, finalY);
+    finalY += 10;
+  }
+
+  if (footerText?.length) {
+    const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+    if (finalY + footerText.length * 6 > pageHeight - 20) {
+      doc.addPage();
+      finalY = 20;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(40);
+    footerText.forEach((line) => {
+      doc.text(line, 14, finalY);
+      finalY += 6;
+    });
   }
 
   if (Capacitor.isNativePlatform()) {
