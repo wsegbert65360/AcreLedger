@@ -182,6 +182,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Network & Offline State ---
   const { isOnline } = useNetworkStatus();
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [cacheHydrated, setCacheHydrated] = useState(false);
 
   const updatePendingSyncCount = useCallback(async () => {
     if (farm_id) {
@@ -200,6 +201,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (session === undefined) return;
 
+    setCacheHydrated(false);
     const userId = session?.user?.id ?? null;
     const hydrateCache = async () => {
       try {
@@ -245,6 +247,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         console.error('Failed to hydrate store from offline cache:', err);
+      } finally {
+        setCacheHydrated(true);
       }
     };
     hydrateCache();
@@ -351,20 +355,20 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [session?.user?.id, farm_id]);
 
   // --- Local storage persistence ---
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('fields', session.user.id, fields); } }, [fields, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('bins', session.user.id, bins); } }, [bins, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('plant_records', session.user.id, plantRecords); } }, [plantRecords, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('spray_records', session.user.id, sprayRecords); } }, [sprayRecords, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('harvest_records', session.user.id, harvestRecords); } }, [harvestRecords, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('hay_harvest_records', session.user.id, hayHarvestRecords); } }, [hayHarvestRecords, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('fertilizer_applications', session.user.id, fertilizerApplications); } }, [fertilizerApplications, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('tillage_records', session.user.id, tillageRecords); } }, [tillageRecords, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('grain_movements', session.user.id, grainMovements); } }, [grainMovements, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('saved_seeds', session.user.id, savedSeeds); } }, [savedSeeds, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('fertilizer_recipes', session.user.id, fertilizerRecipes); } }, [fertilizerRecipes, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('spray_recipes', session.user.id, sprayRecipes); } }, [sprayRecipes, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('fsa_tract_imports', session.user.id, fsaTracts); } }, [fsaTracts, session?.user?.id]);
-  useEffect(() => { if (session?.user?.id) { offlineStorage.saveCache('field_clu_assignments', session.user.id, cluAssignments); } }, [cluAssignments, session?.user?.id]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('fields', session.user.id, fields); } }, [fields, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('bins', session.user.id, bins); } }, [bins, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('plant_records', session.user.id, plantRecords); } }, [plantRecords, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('spray_records', session.user.id, sprayRecords); } }, [sprayRecords, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('harvest_records', session.user.id, harvestRecords); } }, [harvestRecords, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('hay_harvest_records', session.user.id, hayHarvestRecords); } }, [hayHarvestRecords, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('fertilizer_applications', session.user.id, fertilizerApplications); } }, [fertilizerApplications, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('tillage_records', session.user.id, tillageRecords); } }, [tillageRecords, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('grain_movements', session.user.id, grainMovements); } }, [grainMovements, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('saved_seeds', session.user.id, savedSeeds); } }, [savedSeeds, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('fertilizer_recipes', session.user.id, fertilizerRecipes); } }, [fertilizerRecipes, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('spray_recipes', session.user.id, sprayRecipes); } }, [sprayRecipes, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('fsa_tract_imports', session.user.id, fsaTracts); } }, [fsaTracts, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('field_clu_assignments', session.user.id, cluAssignments); } }, [cluAssignments, session?.user?.id, cacheHydrated]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);

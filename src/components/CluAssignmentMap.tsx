@@ -26,8 +26,8 @@ function MapResizeHandler() {
 const COLORS = {
   selectedCropland: { color: '#4ade80', fillColor: '#22c55e', weight: 3, opacity: 0.95, fillOpacity: 0.26 },
   selectedNonCropland: { color: '#f59e0b', fillColor: '#f97316', weight: 3, opacity: 0.95, fillOpacity: 0.28 },
-  otherCropland: { color: '#93c5fd', fillColor: '#3b82f6', weight: 1.5, opacity: 0.42, fillOpacity: 0.06 },
-  otherNonCropland: { color: '#fdba74', fillColor: '#f97316', weight: 1.5, opacity: 0.45, fillOpacity: 0.07 },
+  assignedCropland: { color: '#60a5fa', fillColor: '#3b82f6', weight: 2.5, opacity: 0.9, fillOpacity: 0.18 },
+  assignedNonCropland: { color: '#fb923c', fillColor: '#f97316', weight: 2.5, opacity: 0.9, fillOpacity: 0.2 },
   unassigned: { color: '#dc2626', fillColor: '#ef4444', weight: 4, opacity: 1, fillOpacity: 0.38, dashArray: '9 5' },
   unassignedHalo: { color: '#ffffff', weight: 8, opacity: 0.95, fillOpacity: 0 },
 };
@@ -167,13 +167,12 @@ function CluPolygons({
       const status = assignmentMap.get(key);
       const isUnassigned = !status;
       const isSelected = selectedFieldId && status?.fieldId === selectedFieldId;
-      const isOther = status && status.fieldId && status.fieldId !== selectedFieldId;
 
       const style = isSelected
         ? status?.landUse === 'non_cropland' ? COLORS.selectedNonCropland : COLORS.selectedCropland
-        : isOther
-            ? status?.landUse === 'non_cropland' ? COLORS.otherNonCropland : COLORS.otherCropland
-            : COLORS.unassigned;
+        : status
+          ? status.landUse === 'non_cropland' ? COLORS.assignedNonCropland : COLORS.assignedCropland
+          : COLORS.unassigned;
       const latlngs: L.LatLngExpression[] = ring.map(c => [c[1], c[0]]);
       if (isUnassigned) {
         L.polygon(latlngs, {

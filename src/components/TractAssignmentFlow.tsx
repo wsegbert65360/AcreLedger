@@ -29,6 +29,7 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
   const [bundledTracts, setBundledTracts] = useState<FsaTractImport[]>([]);
   const [showTractList, setShowTractList] = useState(false);
   const reimportRef = useRef<HTMLInputElement>(null);
+  const touchedFieldIdsRef = useRef<Set<string>>(new Set());
   const [reimportTarget, setReimportTarget] = useState<string | null>(null);
 
   const legacyTractKeys = useMemo(() => {
@@ -131,7 +132,9 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
   );
 
   const availableCluCount = featureAcresByClu.size;
+  const assignedCluCount = displayAssignmentKeys.size;
   const unassignedCluCount = Math.max(0, availableCluCount - displayAssignmentKeys.size);
+  const assignmentsNotLoaded = availableCluCount > 0 && assignedCluCount === 0;
   const unassignedCluKeys = useMemo(
     () => Array.from(featureAcresByClu.keys())
       .filter(key => !displayAssignmentKeys.has(key))
@@ -148,8 +151,15 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
     }
   }, [focusedUnassignedIndex, unassignedCluKeys.length]);
 
+  useEffect(() => {
+    if (unassignedCluKeys.length === 0 && showUnassignedOnly) {
+      setShowUnassignedOnly(false);
+    }
+  }, [showUnassignedOnly, unassignedCluKeys.length]);
+
   const handleToggleClu = useCallback(async (tractKey: string, cluNumber: string, acres: number) => {
     if (!selectedFieldId) return;
+    touchedFieldIdsRef.current.add(selectedFieldId);
 
     const existing = cluAssignments.find(
       a => a.fieldId === selectedFieldId && a.tractKey === tractKey && a.cluNumber === cluNumber,
@@ -191,15 +201,10 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
   }, [editableTracts, addField]);
 
   const persistFieldAssignments = useCallback(async (
-    assignments: typeof cluAssignments,
+    assignments: FieldCluAssignment[],
   ): Promise<boolean> => {
     const fieldUpdates = new Map<string, { cluNumbers: string[]; acres: number }>();
-
-    for (const field of fields) {
-      if (field.cluNumbers?.length) {
-        fieldUpdates.set(field.id, { cluNumbers: [], acres: 0 });
-      }
-    }
+    const fieldIdsToUpdate = new Set<string>(touchedFieldIdsRef.current);
 
     for (const a of assignments) {
       if (a.deletedAt) continue;
@@ -207,13 +212,15 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
       existing.cluNumbers.push(a.cluNumber);
       existing.acres += a.acres;
       fieldUpdates.set(a.fieldId, existing);
+      fieldIdsToUpdate.add(a.fieldId);
     }
 
     let updated = 0;
     let failed = 0;
-    for (const [fieldId, { cluNumbers, acres }] of fieldUpdates) {
+    for (const fieldId of fieldIdsToUpdate) {
       const field = fields.find(f => f.id === fieldId);
       if (!field) continue;
+      const { cluNumbers, acres } = fieldUpdates.get(fieldId) || { cluNumbers: [], acres: 0 };
       const ok = await updateField({
         ...field,
         cluNumbers,
@@ -228,14 +235,20 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
       toast.error(`${failed} field${failed > 1 ? 's' : ''} could not be updated`);
       return false;
     }
+    touchedFieldIdsRef.current.clear();
     return true;
   }, [fields, updateField]);
 
   const handleDone = useCallback(async () => {
-    const saved = await persistFieldAssignments(cluAssignments);
+    if (assignmentsNotLoaded && touchedFieldIdsRef.current.size === 0) {
+      toast.error('No CLU assignments are loaded, so field totals were not changed. Refresh before saving.');
+      return;
+    }
+
+    const saved = await persistFieldAssignments(displayAssignments.filter(a => !a.deletedAt));
     if (!saved) return;
     onDone?.();
-  }, [cluAssignments, persistFieldAssignments, onDone]);
+  }, [assignmentsNotLoaded, displayAssignments, persistFieldAssignments, onDone]);
 
   const handleDeleteTract = useCallback(async (tractId: string) => {
     const tract = fsaTracts.find(t => t.id === tractId);
@@ -250,10 +263,15 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
 
     const deleted = await deleteTract(tractId);
     if (deleted && tract) {
+      for (const assignment of displayAssignments) {
+        if (!assignment.deletedAt && assignment.tractKey === tract.tractKey) {
+          touchedFieldIdsRef.current.add(assignment.fieldId);
+        }
+      }
       const remainingAssignments = cluAssignments.filter(a => a.tractKey !== tract.tractKey);
       await persistFieldAssignments(remainingAssignments);
     }
-  }, [fsaTracts, cluAssignments, deleteTract, persistFieldAssignments]);
+  }, [fsaTracts, cluAssignments, displayAssignments, deleteTract, persistFieldAssignments]);
 
   const handleReimport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -288,7 +306,7 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
         <div className="flex items-center justify-between gap-3">
           <FsaTractImporter />
           <div className="text-xs text-muted-foreground text-right">
-            {editableTracts.length} tract{editableTracts.length !== 1 ? 's' : ''} available, {displayAssignments.length} CLU{displayAssignments.length !== 1 ? 's' : ''} assigned, {unassignedCluCount} unassigned
+            {editableTracts.length} tract{editableTracts.length !== 1 ? 's' : ''} available, {assignedCluCount} CLU{assignedCluCount !== 1 ? 's' : ''} assigned, {unassignedCluCount} unassigned
           </div>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto">
@@ -329,6 +347,27 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
             {unassignedCluKeys.length} left
           </span>
         </div>
+        {showUnassignedOnly && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+            <span className="font-semibold">
+              Showing only unassigned CLUs. {assignedCluCount} assigned CLU{assignedCluCount !== 1 ? 's are' : ' is'} hidden.
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-xs text-red-700 hover:bg-red-500/15 dark:text-red-200"
+              onClick={() => setShowUnassignedOnly(false)}
+            >
+              Show all
+            </Button>
+          </div>
+        )}
+        {assignmentsNotLoaded && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-800 dark:text-amber-200">
+            No assigned CLUs are loaded. Existing field totals will not be changed until assignments are visible again.
+          </div>
+        )}
       </div>
 
       {fsaTracts.length > 0 && (
