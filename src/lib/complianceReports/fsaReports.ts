@@ -4,6 +4,7 @@ import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
+import { roundTo } from '../../utils/numbers';
 import { formatTotalAmount } from '../../utils/unitConversion';
 
 function sanitizeCsvValue(val: string | number | null | undefined): string {
@@ -48,6 +49,11 @@ export interface Fsa578ValidationIssue {
     severity: 'warning' | 'error';
     field: string;
     message: string;
+}
+
+export interface Fsa578FieldAcreTotal {
+    fieldName: string;
+    acres: number;
 }
 
 export interface FsaFallProductionRow {
@@ -184,6 +190,30 @@ function compareFsa578Rows(a: Fsa578ReportRow, b: Fsa578ReportRow): number {
         || a.landUse.localeCompare(b.landUse)
         || (a.crop || '').localeCompare(b.crop || '')
         || a.fieldName.localeCompare(b.fieldName);
+}
+
+function isPlantedCroplandRow(row: Fsa578ReportRow): boolean {
+    return row.landUse === 'Cropland' && row.crop.trim().length > 0;
+}
+
+export function calculateFsa578PlantedAcreTotals(rows: Fsa578ReportRow[]): {
+    totalAcres: number;
+    byField: Fsa578FieldAcreTotal[];
+} {
+    const totals = new Map<string, number>();
+    let totalAcres = 0;
+
+    rows.filter(isPlantedCroplandRow).forEach(row => {
+        totalAcres += row.acreage;
+        totals.set(row.fieldName, (totals.get(row.fieldName) || 0) + row.acreage);
+    });
+
+    return {
+        totalAcres: roundTo(totalAcres, 2),
+        byField: [...totals.entries()]
+            .map(([fieldName, acres]) => ({ fieldName, acres: roundTo(acres, 2) }))
+            .sort((a, b) => a.fieldName.localeCompare(b.fieldName)),
+    };
 }
 
 export function buildFsa578Rows(

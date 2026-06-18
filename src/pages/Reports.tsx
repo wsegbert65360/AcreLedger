@@ -7,7 +7,7 @@ import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { buildFsa578Rows, buildFsaFallProductionRows, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
+import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import ReportTable from '@/components/ReportTable';
@@ -148,22 +148,9 @@ export default function Reports() {
     () => buildFsa578Rows(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts)),
     [plantRecords, fields, cluAssignments, fsaTracts],
   );
-  const totalPlantAcres  = useMemo(
-    () => roundTo(fsaPlantRows.filter(row => row.crop).reduce((s, row) => s + row.acreage, 0), 2),
-    [fsaPlantRows],
-  );
-  const plantedAcresByField = useMemo(() => {
-    const totals = new Map<string, number>();
-    fsaPlantRows
-      .filter(row => row.crop)
-      .forEach(row => {
-        totals.set(row.fieldName, (totals.get(row.fieldName) || 0) + row.acreage);
-      });
-
-    return [...totals.entries()]
-      .map(([fieldName, acres]) => ({ fieldName, acres: roundTo(acres, 2) }))
-      .sort((a, b) => a.fieldName.localeCompare(b.fieldName));
-  }, [fsaPlantRows]);
+  const plantedAcreTotals = useMemo(() => calculateFsa578PlantedAcreTotals(fsaPlantRows), [fsaPlantRows]);
+  const totalPlantAcres = plantedAcreTotals.totalAcres;
+  const plantedAcresByField = plantedAcreTotals.byField;
   const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
   const fsaReadinessErrors = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'error'), [fsaReadinessIssues]);
   const fsaReadinessWarnings = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'warning'), [fsaReadinessIssues]);

@@ -1,14 +1,17 @@
 import { useNavigate } from 'react-router-dom';
-import { Field } from '@/types/farm';
 import { MapPin, ChevronRight, Sprout, Cloud, FlaskConical as Flask } from 'lucide-react';
 
+import { Field } from '@/types/farm';
+import { roundTo } from '@/utils/numbers';
+
 interface FieldCardProps {
-  field: Field;
+  field: Field & { displayAcreage?: number };
 }
 
 export default function FieldCard({ field }: FieldCardProps) {
   const navigate = useNavigate();
   const summary = field.activitySummary;
+  const displayAcreage = roundTo(field.displayAcreage ?? field.acreage, 0);
 
   const openField = () => {
     navigate(`/field/${field.id}`);
@@ -46,7 +49,7 @@ export default function FieldCard({ field }: FieldCardProps) {
         <div>
           <h3 className="font-bold text-foreground">{field.name}</h3>
           <div className="flex items-center gap-1 text-muted-foreground text-xs mt-0.5">
-            {field.acreage} ac
+            {displayAcreage} ac
           </div>
         </div>
       </div>

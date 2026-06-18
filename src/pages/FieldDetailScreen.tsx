@@ -19,7 +19,9 @@ import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
 import FieldBoundaryMap from '@/components/FieldBoundaryMap';
+import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { generateSprayPDF } from '@/lib/sprayExport';
+import { roundTo } from '@/utils/numbers';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
 
@@ -43,10 +45,15 @@ export default function FieldDetailScreen() {
     hayHarvestRecords, 
     fertilizerApplications,
     tillageRecords,
+    cluAssignments,
     viewingSeason,
     farmName
   } = useFarm();
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
+  const displayFieldAcres = useMemo(
+    () => field ? roundTo(getDisplayFieldAcres(field, cluAssignments), 0) : 0,
+    [field?.id, field?.acreage, cluAssignments]
+  );
 
   const [rainStats, setRainStats] = useState<RainfallResult | null>(null);
 
@@ -204,7 +211,7 @@ export default function FieldDetailScreen() {
         <section className="space-y-1">
           <div className="flex items-baseline justify-between">
             <h1 className="text-3xl font-black text-foreground tracking-tight">{field.name}</h1>
-            <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{field.acreage} ac</span>
+            <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{displayFieldAcres} ac</span>
           </div>
           <div className="flex flex-wrap gap-2 items-center text-muted-foreground">
             <div className="flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded text-xs font-bold uppercase tracking-tight">
@@ -530,7 +537,7 @@ export default function FieldDetailScreen() {
           <div className="grid grid-cols-2 gap-y-4 text-xs">
             <div>
               <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Acreage</label>
-              <div className="font-bold text-foreground">{field.acreage} Calculated Acres</div>
+              <div className="font-bold text-foreground">{displayFieldAcres} Plantable Acres</div>
             </div>
             <div>
               <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Location</label>

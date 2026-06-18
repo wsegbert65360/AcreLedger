@@ -7,13 +7,15 @@ import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
 import Logo from '@/components/Logo';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
 
 const Index = () => {
-  const { fields: allFields, viewingSeason } = useFarm();
+  const { fields: allFields, cluAssignments, viewingSeason } = useFarm();
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
     let total = 0;
     const totals: Record<string, number> = {};
+    const displayAcreMap = buildDisplayFieldAcreMap(allFields, cluAssignments);
 
     const rc = [];
     const ph = [];
@@ -21,9 +23,10 @@ const Index = () => {
     for (const f of allFields) {
       const use = f.intendedUse ? f.intendedUse.trim() : 'Unassigned';
       const useLower = use.toLowerCase();
+      const displayAcres = displayAcreMap.get(f.id) ?? f.acreage;
       
-      total += f.acreage;
-      totals[use] = (totals[use] || 0) + f.acreage;
+      total += displayAcres;
+      totals[use] = (totals[use] || 0) + displayAcres;
 
       if (useLower.includes('pasture') || useLower.includes('hay')) {
         ph.push(f);
@@ -38,10 +41,10 @@ const Index = () => {
     return {
       rowCrops: rc,
       pastureHay: ph,
-      totalAcres: roundTo(total, 2),
-      cropTotals: sortedCropTotals.map(([crop, acres]) => [crop, roundTo(acres, 2)] as [string, number])
+      totalAcres: roundTo(total, 0),
+      cropTotals: sortedCropTotals.map(([crop, acres]) => [crop, roundTo(acres, 0)] as [string, number])
     };
-  }, [allFields]);
+  }, [allFields, cluAssignments]);
 
   const [managing, setManaging] = useState(false);
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);

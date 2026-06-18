@@ -4,6 +4,7 @@ import {
     buildFsa578WorksheetCsv,
     buildFsaFallProductionCsv,
     buildFsaFallProductionRows,
+    calculateFsa578PlantedAcreTotals,
     generateMissouriLogRows,
     validateFsa578Rows,
     validateFsaFallProductionRows
@@ -409,6 +410,67 @@ describe('FSA 578 report rows', () => {
         expect(rows.map(row => row.crop)).toEqual(['Pasture', 'Hay Ground']);
         expect(rows.map(row => row.intendedUse)).toEqual(['Pasture', 'Hay Ground']);
         expect(rows.every(row => row.landUse === 'Non-cropland')).toBe(true);
+    });
+
+    it('calculates planted totals from cropland rows only', () => {
+        const field: Field = {
+            id: 'field-1',
+            name: 'Bottom Field',
+            acreage: 40,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '918',
+            fsaTractNumber: '1327',
+            intendedUse: 'Grain',
+            deleted_at: null
+        };
+
+        const plantRecord: PlantRecord = {
+            id: 'plant-1',
+            fieldId: 'field-1',
+            fieldName: 'Bottom Field',
+            crop: 'Soybeans',
+            seedVariety: 'AG38XF3',
+            acreage: 40,
+            plantDate: '2026-05-01',
+            timestamp: new Date('2026-05-01T12:00:00Z').getTime(),
+            seasonYear: 2026
+        };
+
+        const assignments: FieldCluAssignment[] = [
+            {
+                id: 'cropland-assignment',
+                farmId: 'farm-1',
+                fieldId: 'field-1',
+                tractKey: '918-1327',
+                cluNumber: '1',
+                acres: 32,
+                landUse: 'cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            },
+            {
+                id: 'non-cropland-assignment',
+                farmId: 'farm-1',
+                fieldId: 'field-1',
+                tractKey: '918-1327',
+                cluNumber: '2',
+                acres: 8,
+                landUse: 'non_cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            }
+        ];
+
+        const rows = buildFsa578Rows([plantRecord], [field], assignments);
+        const totals = calculateFsa578PlantedAcreTotals(rows);
+
+        expect(rows).toEqual(expect.arrayContaining([
+            expect.objectContaining({ acreage: 32, landUse: 'Cropland' }),
+            expect.objectContaining({ acreage: 8, landUse: 'Non-cropland', crop: 'Grain' }),
+        ]));
+        expect(totals.totalAcres).toBe(32);
+        expect(totals.byField).toEqual([{ fieldName: 'Bottom Field', acres: 32 }]);
     });
 
     it('defaults planted rows to planted status without untracked certifications', () => {

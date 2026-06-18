@@ -1,27 +1,32 @@
 import { useMemo, useCallback } from 'react';
+import { RefreshCw } from 'lucide-react';
+
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
-import FieldCard from './FieldCard';
+import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
 import { usePullToRefresh } from '@/hooks/use-pull-refresh';
-import { RefreshCw } from 'lucide-react';
+
+import FieldCard from './FieldCard';
 
 interface FieldListProps {
   fields: Field[];
 }
 
 export default function FieldList({ fields }: FieldListProps) {
-  const { plantRecords, sprayRecords, fertilizerApplications, viewingSeason, refresh } = useFarm();
+  const { plantRecords, sprayRecords, fertilizerApplications, cluAssignments, viewingSeason, refresh } = useFarm();
 
   const augmentedFields = useMemo(() => {
+    const displayAcreMap = buildDisplayFieldAcreMap(fields, cluAssignments);
+
     return fields.map(field => {
       const summary = {
         planted: plantRecords.some(r => r.fieldId === field.id && r.seasonYear === viewingSeason),
         sprayed: sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).length,
         fertilized: fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).length,
       };
-      return { ...field, activitySummary: summary };
+      return { ...field, activitySummary: summary, displayAcreage: displayAcreMap.get(field.id) ?? field.acreage };
     });
-  }, [fields, plantRecords, sprayRecords, fertilizerApplications, viewingSeason]);
+  }, [fields, plantRecords, sprayRecords, fertilizerApplications, cluAssignments, viewingSeason]);
 
   const handleRefresh = useCallback(async () => {
     if (refresh) await refresh();
