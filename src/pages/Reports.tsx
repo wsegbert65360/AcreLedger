@@ -221,29 +221,29 @@ export default function Reports() {
       exportToPdf({
         title: 'FSA-578 Acreage Certification Worksheet',
         subtitle: `Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`,
-        headers: ['DATE', 'FIELD', 'CLU/FIELD #', 'LAND USE', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %'],
+        headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS'],
         rows: fsaPlantRows.map(row => [
-          row.date ? fmtDate(row.date) : '—',
-          row.fieldName,
-          row.fieldNumber || '—',
+          row.farmNumber || '-',
+          row.tractNumber || '-',
+          row.fieldNumber || '-',
           row.landUse,
-          row.crop || '—',
-          row.seedVariety || '—',
+          row.crop || '-',
+          row.seedVariety || '-',
           row.acreage,
-          row.farmNumber || '—',
-          row.tractNumber || '—',
-          row.intendedUse || '—',
+          row.date ? fmtDate(row.date) : '-',
+          row.intendedUse || '-',
           row.irrigationCode,
-          row.producerShare
+          row.producerShare,
+          row.cropStatus || '-',
         ]),
         fileName: `FSA_578_Worksheet_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
         summaryText: 'Total Planted Acreage',
         summaryValue: `${totalPlantAcres} AC`,
         footerText: [
-          'Farmer Certification Worksheet',
-          'I certify that the acreage and crop information shown above is accurate to the best of my knowledge.',
-          'Producer Signature: _______________________________',
-          'Date: ___________________',
+          'Farmer Review Worksheet',
+          'Review acreage, crop/use, shares, and maps with your county FSA office before certification.',
+          'Producer Notes: _______________________________',
+          'Review Date: ___________________',
           'Notes / FSA Office Corrections:',
           '__________________________________________________',
           '__________________________________________________',
@@ -430,7 +430,7 @@ export default function Reports() {
           <ReportTable
             title="FSA-578 Acreage Certification Worksheet"
             subtitle={`Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`}
-            headers={['DATE', 'FIELD', 'CLU/FIELD #', 'LAND USE', 'CROP', 'VARIETY', 'ACRES', 'FARM #', 'TRACT #', 'USE', 'IRR', 'SHARE %']}
+            headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS', 'ACRELEDGER FIELD']}
             onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
               farmName,
               cropYear: viewingSeason,
@@ -438,6 +438,7 @@ export default function Reports() {
             }), 'FSA-578 worksheet data')}
             onExportPdf={handleExportFsaPlantPdf}
             exportLabel="CSV"
+            screenOnlyColumnIndexes={[12]}
             summary={(
               <div className="flex justify-between items-center font-mono text-sm">
                 <span className="font-bold text-muted-foreground uppercase">TOTAL PLANTED ACREAGE</span>
@@ -447,7 +448,7 @@ export default function Reports() {
           >
             {fsaReadinessIssues.length > 0 && (
               <tr className="print:hidden">
-                <td colSpan={12} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+                <td colSpan={13} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
                   <div className="font-bold uppercase tracking-wide mb-1">
                     FSA-578 readiness check: {fsaReadinessErrors.length} errors, {fsaReadinessWarnings.length} warnings
                   </div>
@@ -465,24 +466,25 @@ export default function Reports() {
             {fsaPlantRows.map(row => {
               return (
                 <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.date ? fmtDate(row.date) : '—'}</td>
-                  <td className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.fieldNumber || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '-'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '-'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.fieldNumber || '-'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.landUse}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.seedVariety || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '-'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.seedVariety || '-'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.acreage}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.intendedUse || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.date ? fmtDate(row.date) : '-'}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.intendedUse || '-'}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.irrigationCode}</td>
                   <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.producerShare}</td>
+                  <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.cropStatus || '-'}</td>
+                  <td className="px-4 py-3 text-xs font-bold text-foreground print:hidden">{row.fieldName}</td>
                 </tr>
               );
             })}
             {fsaPlantRows.length === 0 && (
               <tr>
-                <td colSpan={12} className="py-12 text-center text-muted-foreground text-xs">
+                <td colSpan={13} className="py-12 text-center text-muted-foreground text-xs">
                   No planting or non-cropland CLU records to report for this season
                 </td>
               </tr>

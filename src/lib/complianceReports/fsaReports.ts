@@ -177,6 +177,15 @@ function latestPlantRecordsByField(plantRecords: PlantRecord[]): PlantRecord[] {
     return [...latest.values()];
 }
 
+function compareFsa578Rows(a: Fsa578ReportRow, b: Fsa578ReportRow): number {
+    return (a.farmNumber || '').localeCompare(b.farmNumber || '', undefined, { numeric: true })
+        || (a.tractNumber || '').localeCompare(b.tractNumber || '', undefined, { numeric: true })
+        || (a.fieldNumber || '').localeCompare(b.fieldNumber || '', undefined, { numeric: true })
+        || a.landUse.localeCompare(b.landUse)
+        || (a.crop || '').localeCompare(b.crop || '')
+        || a.fieldName.localeCompare(b.fieldName);
+}
+
 export function buildFsa578Rows(
     plantRecords: PlantRecord[],
     fields: Field[],
@@ -215,8 +224,6 @@ export function buildFsa578Rows(
             producerShare: `${shareDisplay}%`,
             landUse: 'Cropland' as const,
             cropStatus: 'Planted' as const,
-            cropSequence: 'Initial' as const,
-            organicStatus: 'Conventional' as const,
             notes: '',
         };
 
@@ -301,7 +308,7 @@ export function buildFsa578Rows(
             };
         });
 
-    return [...plantedRows, ...nonCroplandRows];
+    return [...plantedRows, ...nonCroplandRows].sort(compareFsa578Rows);
 }
 
 export function validateFsa578Rows(rows: Fsa578ReportRow[]): Fsa578ValidationIssue[] {
@@ -381,42 +388,36 @@ export function buildFsa578WorksheetCsv({
     const header = [
         'Crop Year',
         'Farm Name',
-        'Field Name',
         'Farm #',
         'Tract #',
         'CLU / Field #',
         'Land Use',
         'Crop',
-        'Variety',
-        'Plant Date',
+        'Type / Variety',
         'Acres',
+        'Plant Date',
         'Intended Use',
         'Irrigation',
         'Producer Share',
         'Crop Status',
-        'Crop Sequence',
-        'Organic Status',
         'Notes',
     ].map(sanitizeCsvValue).join(',');
 
     const dataRows = rows.map(row => [
         metadata.cropYear,
         metadata.farmName,
-        row.fieldName,
         row.farmNumber,
         row.tractNumber,
         row.fieldNumber,
         row.landUse,
         row.crop,
         row.seedVariety,
-        row.date,
         row.acreage,
+        row.date,
         row.intendedUse,
         row.irrigationCode,
         row.producerShare,
         row.cropStatus || '',
-        row.cropSequence || '',
-        row.organicStatus || '',
         row.notes || '',
     ].map(sanitizeCsvValue).join(','));
 

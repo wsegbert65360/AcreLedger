@@ -411,7 +411,7 @@ describe('FSA 578 report rows', () => {
         expect(rows.every(row => row.landUse === 'Non-cropland')).toBe(true);
     });
 
-    it('defaults new worksheet status fields for planted rows', () => {
+    it('defaults planted rows to planted status without untracked certifications', () => {
         const field: Field = {
             id: 'field-1',
             name: 'Bottom Field',
@@ -442,10 +442,10 @@ describe('FSA 578 report rows', () => {
 
         expect(rows[0]).toMatchObject({
             cropStatus: 'Planted',
-            cropSequence: 'Initial',
-            organicStatus: 'Conventional',
             notes: ''
         });
+        expect(rows[0].cropSequence).toBeUndefined();
+        expect(rows[0].organicStatus).toBeUndefined();
     });
 
     it('validates missing FSA worksheet data with error and warning severity', () => {
@@ -561,7 +561,9 @@ describe('FSA 578 report rows', () => {
         expect(csv).toContain('Crop Year');
         expect(csv).toContain('"2026"');
         expect(csv).toContain('"AcreLedger Test Farm"');
-        expect(csv).toContain('"Ready Field"');
+        expect(csv).not.toContain('"AcreLedger Field"');
+        expect(csv).toContain('"Type / Variety"');
+        expect(csv).not.toContain('"Ready Field"');
         expect(csv).toContain('"Planted"');
     });
 });
