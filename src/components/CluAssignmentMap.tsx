@@ -28,7 +28,7 @@ const COLORS = {
   selectedNonCropland: { color: '#f59e0b', fillColor: '#f97316', weight: 3, opacity: 0.95, fillOpacity: 0.3 },
   otherCropland: { color: '#60a5fa', fillColor: '#3b82f6', weight: 2, opacity: 0.7, fillOpacity: 0.15 },
   otherNonCropland: { color: '#fb923c', fillColor: '#f97316', weight: 2, opacity: 0.75, fillOpacity: 0.16 },
-  unassigned: { color: '#94a3b8', fillColor: '#64748b', weight: 2, opacity: 0.5, fillOpacity: 0.08 },
+  unassigned: { color: '#f87171', fillColor: '#ef4444', weight: 2.5, opacity: 0.9, fillOpacity: 0.18 },
 };
 
 interface CluAssignmentMapProps {
