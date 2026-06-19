@@ -147,6 +147,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Plant records support FSA status (`Planted`, `Prevented Planting`, `Failed`, `Volunteer`, `Cover Crop`) and optional planting pattern/practice notes. Update `types/farm.ts`, `types/database.ts`, mappers, backup schema, migrations, UI, reports, and tests together when changing these fields.
 - Prevented planting records may omit seed variety; normal planted/failed/volunteer/cover-crop records should still require the expected crop/seed details.
 - FSA PDF output intentionally omits type/variety unless the user asks otherwise; preview/print/CSV may include it for farmer review.
+- FSA compliance reports (both FSA-578 and Fall Production worksheets) must include the farm name in their header subtitles for both on-screen UI preview tables and generated PDF exports.
 
 ### Backup and Restore
 
@@ -193,6 +194,15 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Every form input must have a unique `id` and `name`.
 - Every `Label` must use `htmlFor` linked to the input ID.
 - Interactive touch targets should be at least 44px high.
+
+### Light Mode Theme
+- The light mode theme is a high-contrast, vibrant palette.
+- Background uses a soft pastel denim-blue (`212 40% 91%`).
+- Cards and popover elements use pure white (`0 0% 100%`) for crisp visual elevation.
+- Typography foreground color uses deep navy-black (`212 80% 6%`) to guarantee high readability.
+- Brand colors are highly saturated: Plant/primary green (`142 90% 28%`), Spray/secondary blue (`212 100% 36%`), and Harvest/accent amber (`36 95% 44%`).
+- Outlines and borders use defined slate-denim gray (`212 25% 78%`).
+- Muted helper/secondary text uses a darker slate-denim gray (`212 25% 30%`) to meet WCAG AA contrast guidelines.
 
 ### Typography
 
