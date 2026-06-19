@@ -39,7 +39,7 @@ export function ThemeProvider({
             const metaThemeColor = document.querySelector('meta[name="theme-color"]');
             if (metaThemeColor) {
                 // Background colors from index.css translated to hex/rgb for meta tag
-                const color = isDark ? "#000000" : "#d9e1e8"; // #d9e1e8 approx hsl(210 20% 88%)
+                const color = isDark ? "#000000" : "#dfe7f1"; // #dfe7f1 approx hsl(212 40% 91%)
                 metaThemeColor.setAttribute("content", color);
             }
             if (isDark) {

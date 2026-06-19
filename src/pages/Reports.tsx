@@ -238,7 +238,7 @@ export default function Reports() {
     safeExport(() => {
       exportToPdf({
         title: 'FSA-578 Acreage Certification Worksheet',
-        subtitle: `Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`,
+        subtitle: `Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`,
         headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'ACRES', 'PLANT DATE', 'SHARE %', 'USE', 'IRR', 'FIELD'],
         rows: fsaPlantRows.map(row => [
           row.farmNumber || '-',
@@ -307,7 +307,7 @@ export default function Reports() {
     safeExport(() => {
       exportToPdf({
         title: 'FSA Fall Harvest / Production Evidence Worksheet',
-        subtitle: `Production support report for FSA/crop-program review. Not an official USDA form. Generated ${reportDate}.`,
+        subtitle: `Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`,
         headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #'],
         rows: fsaFallRows.map(row => [
           fmtDate(row.harvestDate) || '—',
@@ -455,7 +455,7 @@ export default function Reports() {
         {tab === 'fsa-plant' && (
           <ReportTable
             title="FSA-578 Acreage Certification Worksheet"
-            subtitle={`Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`}
+            subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
             headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
             onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
               farmName,
@@ -659,7 +659,7 @@ export default function Reports() {
         {tab === 'fsa-harvest' && (
           <ReportTable
             title="FSA Fall Harvest / Production Evidence Worksheet"
-            subtitle={`Production support report for FSA/crop-program review. Not an official USDA form. Generated ${reportDate}.`}
+            subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
             headers={['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #']}
             onExport={() => safeExport(() => exportFsaFallProductionData({
               harvestRecords,
