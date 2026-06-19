@@ -194,6 +194,17 @@ function isPlantedCroplandRow(row: Fsa578ReportRow): boolean {
         && row.cropStatus !== 'Prevented Planting';
 }
 
+function cropFromFieldUse(field: Field | undefined): string {
+    const intendedUse = field?.intendedUse?.trim();
+    if (!intendedUse) return '';
+
+    const use = intendedUse.toLowerCase();
+    if (use.includes('hay')) return intendedUse;
+    if (use.includes('pasture')) return intendedUse;
+
+    return '';
+}
+
 export function calculateFsa578PlantedAcreTotals(rows: Fsa578ReportRow[]): {
     totalAcres: number;
     byField: Fsa578FieldAcreTotal[];
@@ -321,6 +332,7 @@ export function buildFsa578Rows(
             const tract = parseTractKey(a.tractKey);
             const share = field?.producerShare ?? 100;
             const irrigation = field?.irrigationPractice || 'Non-Irrigated';
+            const fieldUseCrop = cropFromFieldUse(field);
 
             return {
                 id: `unreported-cropland-${a.id}`,
@@ -330,13 +342,15 @@ export function buildFsa578Rows(
                 tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                 fieldNumber: a.cluNumber,
                 acreage: a.acres,
-                crop: '',
+                crop: fieldUseCrop,
                 seedVariety: '',
                 intendedUse: field?.intendedUse?.trim() || '',
                 irrigationCode: irrigation === 'Irrigated' ? 'IR' : 'NI',
                 producerShare: `${share.toFixed(0)}%`,
                 landUse: 'Cropland' as const,
-                notes: 'Assigned cropland has no planting or prevented/failed status recorded.',
+                notes: fieldUseCrop
+                    ? ''
+                    : 'Assigned cropland has no planting or prevented/failed status recorded.',
             };
         });
 

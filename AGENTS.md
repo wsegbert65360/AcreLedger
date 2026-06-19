@@ -141,6 +141,12 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Persisting assignments back to fields should round computed field acreage for display/state, but not mutate the source CLU feature acres.
 - FSA-578 and fall production worksheets are farmer worksheets, not official USDA forms. Preserve the disclaimer wording and keep CSV/PDF exports aligned when changing columns, summaries, footers, or readiness checks.
 - FSA report readiness checks should surface missing farm/tract/CLU/crop/acreage issues without blocking export unless the user explicitly asks for blocking validation.
+- FSA acreage reports must preserve multiple planting records for the same field/CLU as separate rows instead of collapsing to latest-only.
+- Assigned cropland CLUs with no planting record must appear as review rows so missing FSA reporting is visible.
+- If an assigned cropland field is labeled hay or pasture by `intendedUse`, use that hay/pasture label as the FSA crop instead of flagging crop as missing.
+- Plant records support FSA status (`Planted`, `Prevented Planting`, `Failed`, `Volunteer`, `Cover Crop`) and optional planting pattern/practice notes. Update `types/farm.ts`, `types/database.ts`, mappers, backup schema, migrations, UI, reports, and tests together when changing these fields.
+- Prevented planting records may omit seed variety; normal planted/failed/volunteer/cover-crop records should still require the expected crop/seed details.
+- FSA PDF output intentionally omits type/variety unless the user asks otherwise; preview/print/CSV may include it for farmer review.
 
 ### Backup and Restore
 

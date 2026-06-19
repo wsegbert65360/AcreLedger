@@ -526,6 +526,64 @@ describe('FSA 578 report rows', () => {
         ]));
     });
 
+    it('uses hay or pasture field use as the crop for assigned cropland readiness', () => {
+        const pastureField: Field = {
+            id: 'pasture-1',
+            name: 'South Pasture',
+            acreage: 20,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '123',
+            fsaTractNumber: '456',
+            intendedUse: 'Pasture',
+            deleted_at: null
+        };
+
+        const hayField: Field = {
+            id: 'hay-1',
+            name: 'East Hay Ground',
+            acreage: 15,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '123',
+            fsaTractNumber: '456',
+            intendedUse: 'Hay Ground',
+            deleted_at: null
+        };
+
+        const assignments: FieldCluAssignment[] = [
+            {
+                id: 'pasture-assignment',
+                farmId: 'farm-1',
+                fieldId: 'pasture-1',
+                tractKey: '123-456',
+                cluNumber: '30',
+                acres: 20,
+                landUse: 'cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            },
+            {
+                id: 'hay-assignment',
+                farmId: 'farm-1',
+                fieldId: 'hay-1',
+                tractKey: '123-456',
+                cluNumber: '31',
+                acres: 15,
+                landUse: 'cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            }
+        ];
+
+        const rows = buildFsa578Rows([], [pastureField, hayField], assignments);
+
+        expect(rows).toHaveLength(2);
+        expect(rows.map(row => row.crop)).toEqual(['Pasture', 'Hay Ground']);
+        expect(rows.map(row => row.notes)).toEqual(['', '']);
+        expect(validateFsa578Rows(rows).filter(issue => issue.field === 'crop')).toEqual([]);
+    });
+
     it('defaults planted rows to planted status without untracked certifications', () => {
         const field: Field = {
             id: 'field-1',
