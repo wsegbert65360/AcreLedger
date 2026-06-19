@@ -196,7 +196,7 @@ describe('FSA 578 report rows', () => {
         expect(rows.every(row => row.tractNumber === '1417')).toBe(true);
     });
 
-    it('uses the latest planting date and variety when a field has multiple planting records', () => {
+    it('keeps multiple planting records as separate FSA acreage rows', () => {
         const field: Field = {
             id: 'field-1',
             name: 'Hensley',
@@ -228,6 +228,8 @@ describe('FSA 578 report rows', () => {
             seedVariety: 'Eisenhower 2639e',
             plantDate: '2026-06-11',
             timestamp: new Date('2026-06-11T12:00:00.000Z').getTime(),
+            cropStatus: 'Cover Crop' as const,
+            plantingPattern: 'Double crop',
         };
 
         const tract: FsaTractImport = {
@@ -250,13 +252,24 @@ describe('FSA 578 report rows', () => {
 
         const rows = buildFsa578Rows([olderPlantRecord, updatedPlantRecord], [field], [], [tract]);
 
-        expect(rows).toHaveLength(1);
-        expect(rows[0]).toMatchObject({
-            date: '2026-06-11',
-            seedVariety: 'Eisenhower 2639e',
-            fieldNumber: '2',
-            acreage: 28.26
-        });
+        expect(rows).toHaveLength(2);
+        expect(rows).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                date: '2026-06-10',
+                seedVariety: 'Old Variety',
+                fieldNumber: '2',
+                acreage: 28.26,
+                cropStatus: 'Planted',
+            }),
+            expect.objectContaining({
+                date: '2026-06-11',
+                seedVariety: 'Eisenhower 2639e',
+                fieldNumber: '2',
+                acreage: 28.26,
+                cropStatus: 'Cover Crop',
+                plantingPattern: 'Double crop',
+            }),
+        ]));
     });
 
     it('infers a single CLU number from the imported tract polygon when legacy fields lack cluNumbers', () => {
@@ -471,6 +484,46 @@ describe('FSA 578 report rows', () => {
         ]));
         expect(totals.totalAcres).toBe(32);
         expect(totals.byField).toEqual([{ fieldName: 'Bottom Field', acres: 32 }]);
+    });
+
+    it('includes assigned cropland that has no planting record for FSA review', () => {
+        const field: Field = {
+            id: 'field-1',
+            name: 'Unreported North',
+            acreage: 24,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '918',
+            fsaTractNumber: '1327',
+            intendedUse: 'Grain',
+            deleted_at: null
+        };
+
+        const assignments: FieldCluAssignment[] = [{
+            id: 'cropland-assignment',
+            farmId: 'farm-1',
+            fieldId: 'field-1',
+            tractKey: '918-1327',
+            cluNumber: '4',
+            acres: 24,
+            landUse: 'cropland',
+            assignedAt: '2026-06-16T00:00:00.000Z',
+            deletedAt: null
+        }];
+
+        const rows = buildFsa578Rows([], [field], assignments);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            fieldName: 'Unreported North',
+            landUse: 'Cropland',
+            crop: '',
+            acreage: 24,
+            notes: 'Assigned cropland has no planting or prevented/failed status recorded.',
+        });
+        expect(validateFsa578Rows(rows)).toEqual(expect.arrayContaining([
+            expect.objectContaining({ severity: 'error', field: 'crop' }),
+        ]));
     });
 
     it('defaults planted rows to planted status without untracked certifications', () => {

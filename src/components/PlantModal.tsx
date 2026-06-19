@@ -13,6 +13,14 @@ import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
 import { Sprout, Loader2 } from 'lucide-react';
 
+const CROP_STATUS_OPTIONS: NonNullable<PlantRecord['cropStatus']>[] = [
+  'Planted',
+  'Prevented Planting',
+  'Failed',
+  'Volunteer',
+  'Cover Crop',
+];
+
 interface PlantModalProps {
   field: Field;
   open: boolean;
@@ -30,9 +38,12 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   const [intendedUse, setIntendedUse] = useState(initialData?.intendedUse || fieldIntendedUse);
   const [producerShare, setProducerShare] = useState(initialData?.producerShare?.toString() || fieldProducerShare);
   const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || fieldIrrigationPractice);
+  const [cropStatus, setCropStatus] = useState<NonNullable<PlantRecord['cropStatus']>>(initialData?.cropStatus || 'Planted');
+  const [plantingPattern, setPlantingPattern] = useState(initialData?.plantingPattern || '');
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
   const [memo, setMemo] = useState(initialData?.memo || '');
   const [isSaving, setIsSaving] = useState(false);
+  const requiresSeedVariety = cropStatus !== 'Prevented Planting';
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +53,8 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setIntendedUse(initialData.intendedUse || fieldIntendedUse);
       setProducerShare(initialData.producerShare?.toString() || fieldProducerShare);
       setIrrigationPractice(initialData.irrigationPractice || fieldIrrigationPractice);
+      setCropStatus(initialData.cropStatus || 'Planted');
+      setPlantingPattern(initialData.plantingPattern || '');
       setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
       setMemo(initialData.memo || '');
     } else {
@@ -50,13 +63,15 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setIntendedUse(fieldIntendedUse);
       setProducerShare(fieldProducerShare);
       setIrrigationPractice(fieldIrrigationPractice);
+      setCropStatus('Planted');
+      setPlantingPattern('');
       setPlantDate(new Date().toISOString().split('T')[0]);
       setMemo('');
     }
   }, [initialData, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open]);
 
   const handleSubmit = async () => {
-    if (!seedVariety.trim()) {
+    if (requiresSeedVariety && !seedVariety.trim()) {
       native.haptic.error();
       return;
     }
@@ -64,28 +79,33 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
     setIsSaving(true);
     try {
       let success = false;
+      const savedSeedVariety = seedVariety.trim() || (cropStatus === 'Prevented Planting' ? 'N/A' : '');
       if (initialData) {
         success = await updatePlantRecord({
           ...initialData,
-          seedVariety: seedVariety.trim(),
+          seedVariety: savedSeedVariety,
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
           producerShare: parseFloat(producerShare) || 100,
           irrigationPractice,
+          cropStatus,
+          plantingPattern: plantingPattern.trim() || undefined,
           memo: memo.trim() || undefined,
         });
       } else {
         success = await addPlantRecord({
           fieldId: field.id,
           fieldName: field.name,
-          seedVariety: seedVariety.trim(),
+          seedVariety: savedSeedVariety,
           acreage: field.acreage,
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
           producerShare: parseFloat(producerShare) || 100,
           irrigationPractice,
+          cropStatus,
+          plantingPattern: plantingPattern.trim() || undefined,
           memo: memo.trim() || undefined,
         });
       }
@@ -129,7 +149,9 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div>
-            <Label htmlFor="seedVariety" className="text-muted-foreground font-mono text-xs">SEED VARIETY *</Label>
+            <Label htmlFor="seedVariety" className="text-muted-foreground font-mono text-xs">
+              SEED VARIETY {requiresSeedVariety ? '*' : ''}
+            </Label>
             {savedSeeds.length > 0 ? (
               <Select value={seedVariety} onValueChange={setSeedVariety}>
                 <SelectTrigger className="mt-1 bg-muted border-border text-foreground">
@@ -224,6 +246,33 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/20">
+            <div>
+              <Label htmlFor="cropStatusSelect" className="text-muted-foreground font-mono text-xs">FSA STATUS</Label>
+              <Select value={cropStatus} onValueChange={(v: NonNullable<PlantRecord['cropStatus']>) => setCropStatus(v)}>
+                <SelectTrigger id="cropStatusSelect" className="mt-1 bg-muted border-border text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CROP_STATUS_OPTIONS.map(status => (
+                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="plantingPattern" className="text-muted-foreground font-mono text-xs">PATTERN</Label>
+              <Input
+                id="plantingPattern"
+                name="plantingPattern"
+                value={plantingPattern}
+                onChange={e => setPlantingPattern(e.target.value)}
+                placeholder="Optional"
+                className="mt-1 bg-muted border-border text-foreground"
+              />
+            </div>
+          </div>
+
           <div className="pt-2 border-t border-border/20">
             <Label htmlFor="plantMemo" className="text-muted-foreground font-mono text-xs">MEMO</Label>
             <Textarea
@@ -240,7 +289,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
         <DialogFooter>
           <Button
             onClick={handleSubmit}
-            disabled={!seedVariety.trim() || isSaving}
+            disabled={(requiresSeedVariety && !seedVariety.trim()) || isSaving}
             className="touch-target w-full bg-plant text-plant-foreground hover:bg-plant/90 glow-plant font-bold"
           >
             {isSaving ? (

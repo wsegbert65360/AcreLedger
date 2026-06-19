@@ -123,11 +123,16 @@ describe('Reverse mapper Zod schema validation', () => {
   });
 
   it('mapPlantToDb passes Zod validation for valid plant record', () => {
-    const result = mapPlantToDb(makePlant());
+    const result = mapPlantToDb(makePlant({
+      cropStatus: 'Cover Crop',
+      plantingPattern: 'Double crop',
+    }));
     expect(result).toBeDefined();
     expect(result.farm_id).toBe(farmId);
     expect(result.season_year).toBe(2026);
     expect(result.field_id).toBe('field-1');
+    expect(result.crop_status).toBe('Cover Crop');
+    expect(result.planting_pattern).toBe('Double crop');
     expect(result.deleted_at).toBeNull();
   });
 

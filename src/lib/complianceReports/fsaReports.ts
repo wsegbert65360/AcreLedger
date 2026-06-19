@@ -32,6 +32,7 @@ export interface Fsa578ReportRow {
     cropStatus?: 'Planted' | 'Prevented Planting' | 'Failed' | 'Volunteer' | 'Cover Crop';
     cropSequence?: 'Initial' | 'Double Crop' | 'Subsequent Crop';
     organicStatus?: 'Conventional' | 'Organic' | 'Transitioning';
+    plantingPattern?: string;
     notes?: string;
 }
 
@@ -170,17 +171,12 @@ function plantSortTime(record: PlantRecord): number {
     return Number.isFinite(dateTime) ? dateTime : record.timestamp;
 }
 
-function latestPlantRecordsByField(plantRecords: PlantRecord[]): PlantRecord[] {
-    const latest = new Map<string, PlantRecord>();
-
-    for (const record of plantRecords) {
-        const existing = latest.get(record.fieldId);
-        if (!existing || plantSortTime(record) >= plantSortTime(existing)) {
-            latest.set(record.fieldId, record);
-        }
-    }
-
-    return [...latest.values()];
+function sortedPlantRecords(plantRecords: PlantRecord[]): PlantRecord[] {
+    return [...plantRecords].sort((a, b) =>
+        a.fieldName.localeCompare(b.fieldName)
+        || plantSortTime(a) - plantSortTime(b)
+        || a.id.localeCompare(b.id)
+    );
 }
 
 function compareFsa578Rows(a: Fsa578ReportRow, b: Fsa578ReportRow): number {
@@ -193,7 +189,9 @@ function compareFsa578Rows(a: Fsa578ReportRow, b: Fsa578ReportRow): number {
 }
 
 function isPlantedCroplandRow(row: Fsa578ReportRow): boolean {
-    return row.landUse === 'Cropland' && row.crop.trim().length > 0;
+    return row.landUse === 'Cropland'
+        && row.crop.trim().length > 0
+        && row.cropStatus !== 'Prevented Planting';
 }
 
 export function calculateFsa578PlantedAcreTotals(rows: Fsa578ReportRow[]): {
@@ -233,7 +231,9 @@ export function buildFsa578Rows(
         activeAssignmentsByField.set(assignment.fieldId, current);
     }
 
-    const plantedRows = latestPlantRecordsByField(plantRecords).flatMap(r => {
+    const plantedFieldIds = new Set(plantRecords.map(record => record.fieldId));
+
+    const plantedRows = sortedPlantRecords(plantRecords).flatMap(r => {
         const field = fieldMap.get(r.fieldId);
         const assignments = activeAssignmentsByField.get(r.fieldId) || [];
         const croplandAssignments = assignments.filter(a => a.landUse === 'cropland');
@@ -253,7 +253,8 @@ export function buildFsa578Rows(
             irrigationCode,
             producerShare: `${shareDisplay}%`,
             landUse: 'Cropland' as const,
-            cropStatus: 'Planted' as const,
+            cropStatus: r.cropStatus || 'Planted' as const,
+            plantingPattern: r.plantingPattern || '',
             notes: '',
         };
 
@@ -313,6 +314,32 @@ export function buildFsa578Rows(
         });
     });
 
+    const unreportedCroplandRows = cluAssignments
+        .filter(a => !a.deletedAt && a.landUse === 'cropland' && !plantedFieldIds.has(a.fieldId))
+        .map(a => {
+            const field = fieldMap.get(a.fieldId);
+            const tract = parseTractKey(a.tractKey);
+            const share = field?.producerShare ?? 100;
+            const irrigation = field?.irrigationPractice || 'Non-Irrigated';
+
+            return {
+                id: `unreported-cropland-${a.id}`,
+                date: '',
+                fieldName: field?.name || 'Unmatched field',
+                farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
+                tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
+                fieldNumber: a.cluNumber,
+                acreage: a.acres,
+                crop: '',
+                seedVariety: '',
+                intendedUse: field?.intendedUse?.trim() || '',
+                irrigationCode: irrigation === 'Irrigated' ? 'IR' : 'NI',
+                producerShare: `${share.toFixed(0)}%`,
+                landUse: 'Cropland' as const,
+                notes: 'Assigned cropland has no planting or prevented/failed status recorded.',
+            };
+        });
+
     const nonCroplandRows = cluAssignments
         .filter(a => !a.deletedAt && a.landUse === 'non_cropland')
         .map(a => {
@@ -338,7 +365,7 @@ export function buildFsa578Rows(
             };
         });
 
-    return [...plantedRows, ...nonCroplandRows].sort(compareFsa578Rows);
+    return [...plantedRows, ...unreportedCroplandRows, ...nonCroplandRows].sort(compareFsa578Rows);
 }
 
 export function validateFsa578Rows(rows: Fsa578ReportRow[]): Fsa578ValidationIssue[] {
@@ -425,6 +452,7 @@ export function buildFsa578WorksheetCsv({
         'Land Use',
         'Crop',
         'Type / Variety',
+        'Planting Pattern',
         'Acres',
         'Plant Date',
         'Intended Use',
@@ -444,6 +472,7 @@ export function buildFsa578WorksheetCsv({
         row.landUse,
         row.crop,
         row.seedVariety,
+        row.plantingPattern || '',
         row.acreage,
         row.date,
         row.intendedUse,

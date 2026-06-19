@@ -151,6 +151,25 @@ export default function Reports() {
   const plantedAcreTotals = useMemo(() => calculateFsa578PlantedAcreTotals(fsaPlantRows), [fsaPlantRows]);
   const totalPlantAcres = plantedAcreTotals.totalAcres;
   const plantedAcresByField = plantedAcreTotals.byField;
+  const fsaCluMapAppendix = useMemo(() => {
+    const groups = new Map<string, string[]>();
+
+    cluAssignments
+      .filter(assignment => !assignment.deletedAt)
+      .forEach(assignment => {
+        const field = fieldMap.get(assignment.fieldId);
+        const fieldName = field?.name || 'Unmatched field';
+        const label = `${assignment.tractKey} / CLU ${assignment.cluNumber} - ${roundTo(assignment.acres, 2)} AC - ${assignment.landUse === 'cropland' ? 'Cropland' : 'Non-cropland'}`;
+        groups.set(fieldName, [...(groups.get(fieldName) || []), label]);
+      });
+
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([fieldName, labels]) => [
+        fieldName,
+        ...labels.sort().map(label => `  ${label}`),
+      ]);
+  }, [cluAssignments, fieldMap]);
   const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
   const fsaReadinessErrors = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'error'), [fsaReadinessIssues]);
   const fsaReadinessWarnings = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'warning'), [fsaReadinessIssues]);
@@ -248,6 +267,9 @@ export default function Reports() {
           'Notes / FSA Office Corrections:',
           '__________________________________________________',
           '__________________________________________________',
+          '',
+          'CLU Map Appendix:',
+          ...fsaCluMapAppendix,
         ],
         orientation: 'landscape',
         tableCellPadding: 1.4,
@@ -434,7 +456,7 @@ export default function Reports() {
           <ReportTable
             title="FSA-578 Acreage Certification Worksheet"
             subtitle={`Farmer worksheet for FSA acreage certification. Not an official USDA form. Generated ${reportDate}.`}
-            headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
+            headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
             onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
               farmName,
               cropYear: viewingSeason,
@@ -468,7 +490,7 @@ export default function Reports() {
           >
             {fsaReadinessIssues.length > 0 && (
               <tr className="print:hidden">
-                <td colSpan={13} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+                <td colSpan={14} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
                   <div className="font-bold uppercase tracking-wide mb-1">
                     FSA-578 readiness check: {fsaReadinessErrors.length} errors, {fsaReadinessWarnings.length} warnings
                   </div>
@@ -493,6 +515,7 @@ export default function Reports() {
                   <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.landUse}</td>
                   <td className="px-2 py-2 font-mono text-[11px] text-harvest font-bold print:px-1 print:py-1">{row.crop || '-'}</td>
                   <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.seedVariety || '-'}</td>
+                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.plantingPattern || '-'}</td>
                   <td className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.acreage}</td>
                   <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.date ? fmtDate(row.date) : '-'}</td>
                   <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.intendedUse || '-'}</td>
@@ -504,7 +527,7 @@ export default function Reports() {
             })}
             {fsaPlantRows.length === 0 && (
               <tr>
-                <td colSpan={13} className="py-12 text-center text-muted-foreground text-xs">
+                <td colSpan={14} className="py-12 text-center text-muted-foreground text-xs">
                   No planting or non-cropland CLU records to report for this season
                 </td>
               </tr>

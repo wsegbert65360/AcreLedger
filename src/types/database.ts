@@ -58,6 +58,8 @@ export interface PlantRecordRow {
     intended_use?: string | null;
     producer_share?: number | null;
     irrigation_practice?: string | null;
+    crop_status?: string | null;
+    planting_pattern?: string | null;
     season_year: number;
     timestamp: string;
     deleted_at?: string | null;
