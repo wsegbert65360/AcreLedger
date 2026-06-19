@@ -163,4 +163,58 @@ describe('WeatherService', () => {
             expect((global.fetch as any).mock.calls[0][0]).toContain('key=test-api-key');
         });
     });
+
+    describe('fetchExtendedWeather', () => {
+        it('should correctly map successful extended weather response including coordinates', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            const mockData = {
+                address: 'New York',
+                latitude: 40.7128,
+                longitude: -74.0060,
+                currentConditions: {
+                    temp: 72.4,
+                    feelslike: 71.2,
+                    humidity: 45,
+                    windspeed: 10,
+                    windgusts: 15,
+                    winddir: 180,
+                    dew: 50.5,
+                    precipprob: 20,
+                    precip: 0,
+                    cloudcover: 10,
+                    conditions: 'Partly Cloudy',
+                    icon: 'partly-cloudy-day',
+                    sunrise: '05:30:00',
+                    sunset: '20:15:00'
+                },
+                days: [
+                    {
+                        datetime: new Date().toISOString().split('T')[0],
+                        tempmax: 80,
+                        tempmin: 60,
+                        precipprob: 30,
+                        precip: 0.05,
+                        conditions: 'Partly Cloudy',
+                        icon: 'partly-cloudy-day',
+                        cloudcover: 25,
+                        windspeed: 12
+                    }
+                ]
+            };
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => mockData
+            });
+
+            const result = await WeatherService.fetchExtendedWeather('New York');
+            expect(result.isError).toBe(false);
+            expect(result.temp).toBe(72);
+            expect(result.feelsLike).toBe(71);
+            expect(result.latitude).toBe(40.7128);
+            expect(result.longitude).toBe(-74.0060);
+            expect(result.forecastDays.length).toBe(1);
+            expect(result.forecastDays[0].tempHighF).toBe(80);
+            expect(result.forecastDays[0].tempLowF).toBe(60);
+        });
+    });
 });

@@ -125,3 +125,12 @@ export function getConditionGradient(vcIcon?: string, isRainingNow?: boolean): s
   return 'from-amber-400/10 to-orange-500/5';
 }
 
+/** Get degrees of rotation for wind direction arrow */
+export function getWindRotation(dir: string): number {
+  const angles: Record<string, number> = {
+    N: 0, NNE: 22.5, NE: 45, ENE: 67.5, E: 90, ESE: 112.5, SE: 135, SSE: 157.5,
+    S: 180, SSW: 202.5, SW: 225, WSW: 247.5, W: 270, WNW: 292.5, NW: 315, NNW: 337.5
+  };
+  return angles[dir] ?? 0;
+}
+

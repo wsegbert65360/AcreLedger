@@ -42,4 +42,6 @@ export interface ExtendedWeatherData {
     sunset: string;           // HH:mm
     isError?: boolean;
     forecastDays: ForecastDay[];
+    latitude?: number;
+    longitude?: number;
 }

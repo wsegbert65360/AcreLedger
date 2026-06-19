@@ -275,6 +275,8 @@ export const WeatherService = {
                 cloudCover: 0, conditions: '', icon: 'clear-day',
                 sunrise: '', sunset: '',
                 isError: true, forecastDays: [],
+                latitude: data.latitude,
+                longitude: data.longitude,
             };
         }
 
@@ -329,6 +331,8 @@ export const WeatherService = {
             sunset: current.sunset ? (current.sunset as string).slice(0, 5) : '',
             isError: false,
             forecastDays,
+            latitude: data.latitude,
+            longitude: data.longitude,
         };
     },
 

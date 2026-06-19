@@ -3,19 +3,31 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   ArrowLeft,
+  ArrowUp,
   CloudRain,
   Crosshair,
   Droplets,
   Loader2,
   MapPin,
   RefreshCw,
+  Search,
   Thermometer,
   Wind,
 } from 'lucide-react';
 
 import ForecastGrid from '@/components/weather/ForecastGrid';
 import RadarEmbed from '@/components/weather/RadarEmbed';
-import { formatTime, getConditionGradient, getWeatherLucideIcon, loadZip, resolveCoords } from '@/lib/weatherHelpers';
+import {
+  formatTime,
+  getConditionGradient,
+  getWeatherLucideIcon,
+  getWindRotation,
+  loadZip,
+  resolveCoords,
+  saveZip,
+  ZIP_REGEX,
+} from '@/lib/weatherHelpers';
+import { native } from '@/lib/native';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
 import { ExtendedWeatherData } from '@/types/weather';
@@ -32,7 +44,22 @@ export default function Weather() {
   const [lastUpdated, setLastUpdated] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [usingGps, setUsingGps] = useState(false);
+  const [inputLoc, setInputLoc] = useState('');
+  const [searchError, setSearchError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+
+  // Sync initial location input when fields or saved location changes
+  useEffect(() => {
+    const saved = loadZip(userId);
+    if (saved) {
+      setInputLoc(saved);
+    } else {
+      const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+      if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
+        setInputLoc(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
+      }
+    }
+  }, [userId, fields]);
 
   // Resolve location when fields load (fields start as [] then populate from Supabase)
   useEffect(() => {
@@ -74,6 +101,9 @@ export default function Weather() {
       if (!controller.signal.aborted) {
         setWeather(result);
         setLastUpdated(formatTime());
+        if (result.latitude != null && result.longitude != null) {
+          setCoords({ lat: result.latitude, lng: result.longitude });
+        }
       }
     } catch {
       if (!controller.signal.aborted) {
@@ -104,6 +134,54 @@ export default function Weather() {
     }, 300_000);
     return () => clearInterval(interval);
   }, [userId, fields, loadWeather]);
+
+  const handleLocationSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const loc = inputLoc.trim();
+    if (!loc) {
+      setSearchError('Enter a zip code or coordinates');
+      return;
+    }
+
+    const coordsMatch = loc.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+    if (!coordsMatch && !ZIP_REGEX.test(loc)) {
+      setSearchError('Enter a valid 5/9-digit zip or lat,lng');
+      return;
+    }
+
+    setSearchError('');
+    if (coordsMatch) {
+      const lat = parseFloat(coordsMatch[1]);
+      const lng = parseFloat(coordsMatch[2]);
+      setCoords({ lat, lng });
+    } else {
+      setCoords(null);
+    }
+
+    saveZip(loc, userId);
+    loadWeather(loc);
+  }, [inputLoc, userId, loadWeather]);
+
+  const handleUseGps = useCallback(() => {
+    setLoading(true);
+    setUsingGps(true);
+    setSearchError('');
+    native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000 })
+      .then((pos) => {
+        const lat = Math.round(pos.coords.latitude * 10000) / 10000;
+        const lng = Math.round(pos.coords.longitude * 10000) / 10000;
+        const locStr = `${lat},${lng}`;
+        setInputLoc(locStr);
+        setCoords({ lat, lng });
+        saveZip(locStr, userId);
+        loadWeather(locStr);
+      })
+      .catch(() => {
+        setSearchError('Failed to get GPS location');
+        setLoading(false);
+        setUsingGps(false);
+      });
+  }, [userId, loadWeather]);
 
   const handleRefresh = useCallback(() => {
     setLoading(true);
@@ -158,6 +236,49 @@ export default function Weather() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-3 space-y-3 lg:max-w-5xl lg:px-8">
+        {/* ── Location Selector ── */}
+        <div className="bg-card border border-border rounded-2xl p-3">
+          <form onSubmit={handleLocationSubmit} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                <input
+                  type="text"
+                  placeholder="Enter zip code (e.g. 72301) or lat,lng..."
+                  value={inputLoc}
+                  onChange={(e) => {
+                    setInputLoc(e.target.value);
+                    setSearchError('');
+                  }}
+                  className="w-full bg-muted/30 border border-border rounded-xl pl-9 pr-4 py-2 text-xs font-mono placeholder:text-muted-foreground/60 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl text-xs transition-colors shrink-0 disabled:opacity-50"
+              >
+                Search
+              </button>
+              <button
+                type="button"
+                onClick={handleUseGps}
+                disabled={loading}
+                title="Use Current Location"
+                aria-label="Use Current Location"
+                className="p-2 border border-border hover:bg-muted/40 text-muted-foreground rounded-xl flex items-center justify-center shrink-0 transition-colors disabled:opacity-50"
+              >
+                <Crosshair size={16} className={usingGps ? 'animate-pulse text-primary' : ''} />
+              </button>
+            </div>
+            {searchError && (
+              <p className="text-[10px] font-semibold text-destructive mt-0.5 ml-1 uppercase tracking-wider">
+                {searchError}
+              </p>
+            )}
+          </form>
+        </div>
+
         {/* ── Loading State ── */}
         {loading && !weather && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -174,7 +295,7 @@ export default function Weather() {
             <MapPin size={40} className="mx-auto text-muted-foreground/20 mb-3" />
             <h3 className="text-sm font-bold text-foreground mb-1">No Location</h3>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-[260px] mx-auto">
-              Enter a zip code in the weather bar on the home screen, or add field coordinates.
+              Enter a zip code or coordinates in the search bar above, allow location access, or add field coordinates.
             </p>
           </div>
         )}
@@ -274,7 +395,19 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
           <MiniStat
             icon={<Wind size={12} className="text-foreground/50" />}
             label="Wind"
-            value={`${weather.wind} ${weather.windDirection}`}
+            value={
+              <span className="flex items-center gap-0.5">
+                <span>{weather.wind}</span>
+                {weather.windDirection && weather.windDirection !== '—' && (
+                  <ArrowUp
+                    size={10}
+                    className="text-emerald-500/80 transition-transform duration-500"
+                    style={{ transform: `rotate(${getWindRotation(weather.windDirection)}deg)` }}
+                  />
+                )}
+                <span>{weather.windDirection}</span>
+              </span>
+            }
           />
           <MiniStat
             icon={<Wind size={12} className="text-foreground/50" />}
@@ -327,7 +460,7 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
 function MiniStat({ icon, label, value, highlight = false }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
   highlight?: boolean;
 }) {
   return (
@@ -336,7 +469,7 @@ function MiniStat({ icon, label, value, highlight = false }: {
         {icon}
         <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</span>
       </div>
-      <span className={`text-xs font-semibold font-mono ${highlight ? 'text-blue-400' : 'text-foreground'}`}>
+      <span className={`text-xs font-semibold font-mono flex items-center justify-center gap-0.5 ${highlight ? 'text-blue-400' : 'text-foreground'}`}>
         {value}
       </span>
     </div>

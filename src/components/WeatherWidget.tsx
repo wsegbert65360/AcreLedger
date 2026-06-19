@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer } from 'lucide-react';
 
-import { loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
+import { getWindRotation, loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
 import { WeatherData } from '@/types/weather';
@@ -11,14 +11,6 @@ import { WeatherData } from '@/types/weather';
 function initialWeather(): WeatherData {
   return { wind: 0, temp: 0, humidity: 0, windDirection: '—', precip24h: 0, precip72h: 0, precipProb: 0 };
 }
-
-const getWindRotation = (dir: string): number => {
-  const angles: Record<string, number> = {
-    N: 0, NNE: 22.5, NE: 45, ENE: 67.5, E: 90, ESE: 112.5, SE: 135, SSE: 157.5,
-    S: 180, SSW: 202.5, SW: 225, WSW: 247.5, W: 270, WNW: 292.5, NW: 315, NNW: 337.5
-  };
-  return angles[dir] ?? 0;
-};
 
 export default function WeatherBar() {
   const { session, fields } = useFarm();
