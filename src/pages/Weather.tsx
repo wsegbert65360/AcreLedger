@@ -17,6 +17,7 @@ import {
 
 import ForecastGrid from '@/components/weather/ForecastGrid';
 import RadarEmbed from '@/components/weather/RadarEmbed';
+import { native } from '@/lib/native';
 import {
   formatTime,
   getConditionGradient,
@@ -27,7 +28,7 @@ import {
   saveZip,
   ZIP_REGEX,
 } from '@/lib/weatherHelpers';
-import { native } from '@/lib/native';
+import { RainService } from '@/services/RainService';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
 import { ExtendedWeatherData } from '@/types/weather';
@@ -47,6 +48,63 @@ export default function Weather() {
   const [inputLoc, setInputLoc] = useState('');
   const [searchError, setSearchError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+
+  const loadWeather = useCallback(async (loc: string) => {
+    if (!loc.trim()) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setLoading(true);
+    try {
+      const result = await WeatherService.fetchExtendedWeather(loc.trim(), controller.signal);
+      if (!controller.signal.aborted) {
+        const lat = result.latitude;
+        const lng = result.longitude;
+        if (lat != null && lng != null) {
+          try {
+            // Find if there is a matching field with the same coords, or use a generic fieldId
+            const matchedField = fields.find(
+              f =>
+                f.lat != null &&
+                f.lng != null &&
+                Math.abs(f.lat - lat) < 0.0001 &&
+                Math.abs(f.lng - lng) < 0.0001
+            );
+            const fieldId = matchedField?.id || 'weather-overview';
+
+            const rainData = await RainService.fetchComprehensiveRainfall({
+              fieldId,
+              lat,
+              lng,
+              signal: controller.signal,
+            });
+
+            result.precip24h = rainData['24h'];
+            result.precip72h = rainData['72h'];
+            result.precip168h = rainData['168h'];
+          } catch (rainErr) {
+            console.error('[Weather] Failed to fetch high-res radar rainfall:', rainErr);
+          }
+        }
+
+        setWeather(result);
+        setLastUpdated(formatTime());
+        if (result.latitude != null && result.longitude != null) {
+          setCoords({ lat: result.latitude, lng: result.longitude });
+        }
+      }
+    } catch {
+      if (!controller.signal.aborted) {
+        setWeather(null);
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  }, [fields]);
 
   // Sync initial location input when fields or saved location changes
   useEffect(() => {
@@ -86,35 +144,7 @@ export default function Weather() {
     });
 
     return () => { cancelled = true; };
-  }, [userId, fields]);
-
-  const loadWeather = useCallback(async (loc: string) => {
-    if (!loc.trim()) return;
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setLoading(true);
-    try {
-      const result = await WeatherService.fetchExtendedWeather(loc.trim(), controller.signal);
-      if (!controller.signal.aborted) {
-        setWeather(result);
-        setLastUpdated(formatTime());
-        if (result.latitude != null && result.longitude != null) {
-          setCoords({ lat: result.latitude, lng: result.longitude });
-        }
-      }
-    } catch {
-      if (!controller.signal.aborted) {
-        setWeather(null);
-      }
-    } finally {
-      if (!controller.signal.aborted) {
-        setLoading(false);
-      }
-    }
-  }, []);
+  }, [userId, fields, loadWeather]);
 
   useEffect(() => {
     return () => {

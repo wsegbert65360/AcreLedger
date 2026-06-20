@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer } from 'lucide-react';
 
 import { getWindRotation, loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
+import { RainService } from '@/services/RainService';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
 import { WeatherData } from '@/types/weather';
@@ -54,16 +55,58 @@ export default function WeatherBar() {
     try {
       const result = await WeatherService.fetchCurrentWeather(z.trim(), controller.signal);
       if (!controller.signal.aborted) {
+        // Resolve coordinates from input string or fields fallback
+        let lat: number | null = null;
+        let lng: number | null = null;
+
+        const coordsMatch = z.trim().match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+        if (coordsMatch) {
+          lat = parseFloat(coordsMatch[1]);
+          lng = parseFloat(coordsMatch[2]);
+        } else {
+          // If zip code is used, fall back to first field with coordinates
+          const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+          if (fieldWithCoords) {
+            lat = fieldWithCoords.lat;
+            lng = fieldWithCoords.lng;
+          }
+        }
+
+        if (lat != null && lng != null) {
+          try {
+            // Find if there is a matching field with the same coords, or use a generic fieldId
+            const matchedField = fields.find(
+              f =>
+                f.lat != null &&
+                f.lng != null &&
+                Math.abs(f.lat - lat!) < 0.0001 &&
+                Math.abs(f.lng - lng!) < 0.0001
+            );
+            const fieldId = matchedField?.id || 'weather-overview';
+
+            const rainData = await RainService.fetchComprehensiveRainfall({
+              fieldId,
+              lat,
+              lng,
+              signal: controller.signal,
+            });
+
+            result.precip24h = rainData['24h'];
+            result.precip72h = rainData['72h'];
+          } catch (rainErr) {
+            console.error('[WeatherWidget] Failed to fetch high-res radar rainfall:', rainErr);
+          }
+        }
+
         setWeather(result);
         setLocationName(result.locationName || '');
-
       }
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [fields]);
 
   useEffect(() => {
     if (!zip) return;
@@ -161,9 +204,11 @@ export default function WeatherBar() {
           <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">HUMIDITY</span>
         </div>
 
-        {/* Rain Prob */}
+        {/* Rain Amount */}
         <div className="flex flex-col items-center">
-          <span className="text-lg font-mono font-bold">{weather.precipProb}%</span>
+          <span className="text-lg font-mono font-bold">
+            {weather.precip24h != null ? `${weather.precip24h.toFixed(2)}"` : '0.00"'}
+          </span>
           <span className="text-[10px] font-bold text-emerald-500/60 tracking-wider">RAIN</span>
         </div>
 
