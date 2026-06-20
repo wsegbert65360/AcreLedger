@@ -56,3 +56,9 @@ build/
 
 # Website (development only)
 website/
+
+# local scratch and assistant files
+.tmp/
+.claude/
+*.log
+acreledger_fields*.csv

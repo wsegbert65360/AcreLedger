@@ -1,0 +1,4 @@
+{
+  "lensDir": ".code-review/lenses",
+  "defaultLenses": ["code-quality", "maintainability", "accessibility", "product-vision"]
+}
