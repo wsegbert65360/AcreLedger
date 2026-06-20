@@ -135,6 +135,12 @@ interface FarmState {
   farm_id: string | null;
   /** Display name of the current farm */
   farmName: string | null;
+  /** Update display name of the current farm */
+  updateFarmName: (name: string) => Promise<boolean>;
+  /** Whether the user has completed the onboarding flow */
+  onboardingComplete: boolean;
+  /** Marks onboarding as complete on server & client */
+  completeOnboarding: () => Promise<boolean>;
   /** Restores the entire farm state from a JSON backup */
   restoreFromBackup: (data: any) => Promise<boolean>;
   /** Refresh/refetch all farm data from Supabase */
@@ -159,6 +165,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     farm_id, setFarmId,
     activeSeason, setActiveSeason,
     viewingSeason, setViewingSeason,
+    onboardingComplete, setOnboardingComplete,
   } = auth;
 
   const [farmName, setFarmName] = useState<string | null>(null);
@@ -485,6 +492,55 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     return binTotals[key] || 0;
   }, [binTotals]);
 
+  const updateFarmName = useCallback(async (newName: string): Promise<boolean> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+    if (!newName.trim()) {
+      toast.error('Farm name cannot be empty.');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase.rpc('update_farm_name', { p_name: newName.trim() });
+      if (error) throw error;
+
+      setFarmName(newName.trim());
+      toast.success('Farm name updated successfully.');
+      return true;
+    } catch (err: any) {
+      console.error('Error updating farm name:', err);
+      toast.error(err.message || 'Failed to update farm name.');
+      return false;
+    }
+  }, [farm_id]);
+
+  const completeOnboarding = useCallback(async (): Promise<boolean> => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      toast.error('Authentication required.');
+      return false;
+    }
+
+    try {
+      localStorage.setItem(`${userId}_al_onboarding_complete`, '1');
+      setOnboardingComplete(true);
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ onboarding_complete: true })
+        .eq('id', userId);
+      if (error) throw error;
+
+      return true;
+    } catch (err: any) {
+      console.error('Error completing onboarding:', err);
+      // Fallback: we set localStorage and local state so user can proceed
+      return true;
+    }
+  }, [session, setOnboardingComplete]);
+
   return (
     <FarmContext.Provider value={{
       session, isOnline, pendingSyncCount, loading, fetchError,
@@ -514,6 +570,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       clearLocalCache: seasonOps.clearLocalCache,
       farm_id,
       farmName,
+      updateFarmName,
+      onboardingComplete,
+      completeOnboarding,
       restoreFromBackup: seasonOps.restoreFromBackup,
       refresh: fetchData,
       importTract: tractOps.importTract,
@@ -526,7 +585,6 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     </FarmContext.Provider>
   );
 }
-
 
 /**
  * Custom hook to access the global farm state and operations.

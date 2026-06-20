@@ -9,6 +9,7 @@ export function useAuth() {
   const [farm_id, setFarmId] = useState<string | null>(null);
   const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
   const [viewingSeason, setViewingSeason] = useState<number>(new Date().getFullYear());
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean>(false);
 
   // Initialize Supabase session & handle Auth Changes
   useEffect(() => {
@@ -23,15 +24,18 @@ export function useAuth() {
           let storedId: string | null = null;
           let storedSeason: string | null = null;
           let storedViewingSeason: string | null = null;
+          let storedOnboarding: string | null = null;
           try {
             storedId = localStorage.getItem(`${prefix}_al_farm_id`);
             storedSeason = localStorage.getItem(`${prefix}_al_active_season`);
             storedViewingSeason = localStorage.getItem(`${prefix}_al_viewing_season`);
+            storedOnboarding = localStorage.getItem(`${prefix}_al_onboarding_complete`);
           } catch (storageErr) {
             console.error('Local storage read failed during session bootstrap:', storageErr);
           }
           
           if (storedId) setFarmId(storedId);
+          if (storedOnboarding === '1') setOnboardingComplete(true);
           if (storedSeason) {
             const active = parseInt(storedSeason, 10);
             setActiveSeason(active);
@@ -78,7 +82,7 @@ export function useAuth() {
       try {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('farm_id, active_season')
+          .select('farm_id, active_season, onboarding_complete')
           .eq('id', session.user.id)
           .single();
 
@@ -103,26 +107,39 @@ export function useAuth() {
             if (currentFarmId !== jwtId) {
               await supabase.auth.refreshSession();
             }
-            if (profileData.active_season) {
-              const active = profileData.active_season;
-              setActiveSeason(active);
+            let active = profileData.active_season;
+            if (!active) {
+              active = new Date().getFullYear();
+              supabase
+                .from('profiles')
+                .update({ active_season: active })
+                .eq('id', session.user.id)
+                .then(({ error }) => {
+                  if (error) console.error('Failed to sync fallback active_season to profile:', error);
+                });
+            }
 
-              const prefix = session.user.id;
-              let storedViewingSeason: string | null = null;
-              try {
-                storedViewingSeason = localStorage.getItem(`${prefix}_al_viewing_season`);
-              } catch (storageErr) {
-                console.error('Local storage read failed during session sync:', storageErr);
-              }
+            setActiveSeason(active);
 
-              let viewing = active;
-              if (storedViewingSeason) {
-                const parsedViewing = parseInt(storedViewingSeason, 10);
-                if (!isNaN(parsedViewing) && parsedViewing >= active - 10 && parsedViewing <= active + 1) {
-                  viewing = parsedViewing;
-                }
+            const prefix = session.user.id;
+            let storedViewingSeason: string | null = null;
+            try {
+              storedViewingSeason = localStorage.getItem(`${prefix}_al_viewing_season`);
+            } catch (storageErr) {
+              console.error('Local storage read failed during session sync:', storageErr);
+            }
+
+            let viewing = active;
+            if (storedViewingSeason) {
+              const parsedViewing = parseInt(storedViewingSeason, 10);
+              if (!isNaN(parsedViewing) && parsedViewing >= active - 10 && parsedViewing <= active + 1) {
+                viewing = parsedViewing;
               }
-              setViewingSeason(viewing);
+            }
+            setViewingSeason(viewing);
+
+            if (profileData.onboarding_complete) {
+              setOnboardingComplete(true);
             }
           }
         }
@@ -148,6 +165,8 @@ export function useAuth() {
     setActiveSeason,
     viewingSeason,
     setViewingSeason,
+    onboardingComplete,
+    setOnboardingComplete,
     signOut,
   };
 }

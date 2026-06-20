@@ -81,7 +81,8 @@ const AnimatedRoutes = () => {
 };
 
 const AppContent = () => {
-  const { session, loading, isOnline, farm_id, fields } = useFarm();
+  const { session, loading, isOnline, farm_id, fields, onboardingComplete } = useFarm();
+  const location = useLocation();
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -131,11 +132,14 @@ const AppContent = () => {
         </div>
         <div className="mt-8 flex flex-col items-center gap-1">
           <h2 className="text-sm font-mono font-bold text-foreground uppercase tracking-[0.2em]">AcreLedger</h2>
-          <div className="flex gap-1">
+          <div className="flex gap-1 mb-2">
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
           </div>
+          <p className="text-xs text-muted-foreground animate-pulse mt-1">
+            {!farm_id ? 'Connecting to your farm...' : 'Syncing records...'}
+          </p>
         </div>
       </div>
     );
@@ -146,8 +150,8 @@ const AppContent = () => {
   }
 
   const onboardingKey = `${session.user.id}_al_onboarding_complete`;
-  const needsOnboarding = !localStorage.getItem(onboardingKey) && fields.length === 0;
-  if (needsOnboarding && window.location.pathname !== '/onboarding') {
+  const needsOnboarding = !onboardingComplete && !localStorage.getItem(onboardingKey) && fields.length === 0;
+  if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
   }
 
