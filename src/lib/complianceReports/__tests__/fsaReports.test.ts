@@ -272,6 +272,116 @@ describe('FSA 578 report rows', () => {
         ]));
     });
 
+    it('combines split first-crop planting records using the latest planting date', () => {
+        const field: Field = {
+            id: 'field-behind-grandma',
+            name: 'Behind Grandma',
+            acreage: 36,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '6418',
+            fsaTractNumber: '1417',
+            cluNumbers: ['2', '7'],
+            deleted_at: null
+        };
+
+        const plantRecord: PlantRecord = {
+            id: 'plant-behind-grandma-1',
+            fieldId: 'field-behind-grandma',
+            fieldName: 'Behind Grandma',
+            crop: 'Soybeans',
+            seedVariety: 'Eisenhower 2639e',
+            acreage: 18,
+            plantDate: '2026-06-10',
+            timestamp: new Date('2026-06-10T12:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            deleted_at: null
+        };
+
+        const duplicatePlantRecord: PlantRecord = {
+            ...plantRecord,
+            id: 'plant-behind-grandma-duplicate',
+            plantDate: '2026-06-12',
+            timestamp: new Date('2026-06-12T18:00:00.000Z').getTime(),
+        };
+
+        const tract: FsaTractImport = {
+            id: 'tract-6418-1417',
+            farmId: 'farm-1',
+            tractKey: '6418-1417',
+            filename: 'F6418_T1417.json',
+            featureCount: 2,
+            importedAt: '2026-06-16T00:00:00.000Z',
+            deletedAt: null,
+            geojson: {
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+                        properties: { cluNumber: '2', acres: 28.26 }
+                    },
+                    {
+                        type: 'Feature',
+                        geometry: { type: 'Polygon', coordinates: [[[1, 1], [2, 1], [2, 2], [1, 1]]] },
+                        properties: { cluNumber: '7', acres: 0.64 }
+                    }
+                ]
+            }
+        };
+
+        const rows = buildFsa578Rows([plantRecord, duplicatePlantRecord], [field], [], [tract]);
+        const totals = calculateFsa578PlantedAcreTotals(rows);
+
+        expect(rows).toHaveLength(2);
+        expect(rows.map(row => row.fieldNumber)).toEqual(['2', '7']);
+        expect(rows.map(row => row.acreage)).toEqual([28.26, 0.64]);
+        expect(rows.every(row => row.date === '2026-06-12')).toBe(true);
+        expect(totals.byField).toEqual([{ fieldName: 'Behind Grandma', acres: 28.9 }]);
+    });
+
+    it('keeps first crop and second crop plantings as separate FSA rows', () => {
+        const field: Field = {
+            id: 'field-sequence',
+            name: 'Sequence Field',
+            acreage: 40,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '6418',
+            fsaTractNumber: '1417',
+            cluNumbers: ['2'],
+            deleted_at: null
+        };
+
+        const firstCrop: PlantRecord = {
+            id: 'plant-first-crop',
+            fieldId: 'field-sequence',
+            fieldName: 'Sequence Field',
+            crop: 'Soybeans',
+            seedVariety: 'AG38XF3',
+            acreage: 40,
+            plantDate: '2026-05-01',
+            timestamp: new Date('2026-05-01T12:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            cropSequence: 'First Crop',
+            deleted_at: null
+        };
+
+        const secondCrop: PlantRecord = {
+            ...firstCrop,
+            id: 'plant-second-crop',
+            plantDate: '2026-06-20',
+            timestamp: new Date('2026-06-20T12:00:00.000Z').getTime(),
+            cropSequence: 'Second Crop',
+        };
+
+        const rows = buildFsa578Rows([firstCrop, secondCrop], [field]);
+
+        expect(rows).toHaveLength(2);
+        expect(rows.map(row => row.cropSequence)).toEqual(['First Crop', 'Second Crop']);
+        expect(rows.map(row => row.date)).toEqual(['2026-05-01', '2026-06-20']);
+    });
+
     it('infers a single CLU number from the imported tract polygon when legacy fields lack cluNumbers', () => {
         const field: Field = {
             id: 'field-1',
@@ -618,7 +728,7 @@ describe('FSA 578 report rows', () => {
             cropStatus: 'Planted',
             notes: ''
         });
-        expect(rows[0].cropSequence).toBeUndefined();
+        expect(rows[0].cropSequence).toBe('First Crop');
         expect(rows[0].organicStatus).toBeUndefined();
     });
 
@@ -724,7 +834,7 @@ describe('FSA 578 report rows', () => {
                 producerShare: '100%',
                 landUse: 'Cropland',
                 cropStatus: 'Planted',
-                cropSequence: 'Initial',
+                cropSequence: 'First Crop',
                 organicStatus: 'Conventional',
                 notes: 'Review with county office',
             }]

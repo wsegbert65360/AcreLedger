@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Loader2, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { native } from '@/lib/native';
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
-import { Sprout, Loader2 } from 'lucide-react';
+import { formatIsoDate } from '@/utils/dates';
 
 const CROP_STATUS_OPTIONS: NonNullable<PlantRecord['cropStatus']>[] = [
   'Planted',
@@ -19,6 +21,11 @@ const CROP_STATUS_OPTIONS: NonNullable<PlantRecord['cropStatus']>[] = [
   'Failed',
   'Volunteer',
   'Cover Crop',
+];
+
+const CROP_SEQUENCE_OPTIONS: NonNullable<PlantRecord['cropSequence']>[] = [
+  'First Crop',
+  'Second Crop',
 ];
 
 interface PlantModalProps {
@@ -29,7 +36,7 @@ interface PlantModalProps {
 }
 
 export default function PlantModal({ field, open, onClose, initialData }: PlantModalProps) {
-  const { addPlantRecord, updatePlantRecord, savedSeeds, viewingSeason } = useFarm();
+  const { addPlantRecord, updatePlantRecord, plantRecords, savedSeeds, viewingSeason } = useFarm();
   const fieldIntendedUse = field.intendedUse || '';
   const fieldProducerShare = field.producerShare?.toString() || '100';
   const fieldIrrigationPractice = field.irrigationPractice || 'Non-Irrigated';
@@ -39,11 +46,37 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   const [producerShare, setProducerShare] = useState(initialData?.producerShare?.toString() || fieldProducerShare);
   const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || fieldIrrigationPractice);
   const [cropStatus, setCropStatus] = useState<NonNullable<PlantRecord['cropStatus']>>(initialData?.cropStatus || 'Planted');
+  const [cropSequence, setCropSequence] = useState<NonNullable<PlantRecord['cropSequence']>>(initialData?.cropSequence || 'First Crop');
   const [plantingPattern, setPlantingPattern] = useState(initialData?.plantingPattern || '');
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
+  const [acreage, setAcreage] = useState((initialData?.acreage ?? field.acreage).toString());
   const [memo, setMemo] = useState(initialData?.memo || '');
   const [isSaving, setIsSaving] = useState(false);
   const requiresSeedVariety = cropStatus !== 'Prevented Planting';
+  const duplicatePlanting = useMemo(() => {
+    const targetSeason = initialData?.seasonYear ?? viewingSeason;
+
+    return plantRecords
+      .filter(record =>
+        record.fieldId === field.id
+        && record.seasonYear === targetSeason
+        && record.id !== initialData?.id
+        && !record.deleted_at
+        && (record.cropStatus ?? 'Planted') === 'Planted'
+        && (record.cropSequence ?? 'First Crop') === cropSequence
+      )
+      .sort((a, b) => {
+        const bTime = new Date(b.plantDate || b.timestamp).getTime();
+        const aTime = new Date(a.plantDate || a.timestamp).getTime();
+        return bTime - aTime;
+      })[0];
+  }, [cropSequence, field.id, initialData?.id, initialData?.seasonYear, plantRecords, viewingSeason]);
+  const duplicatePlantingDate = duplicatePlanting
+    ? formatIsoDate(duplicatePlanting.plantDate)
+        || (Number.isFinite(new Date(duplicatePlanting.timestamp).getTime())
+            ? new Date(duplicatePlanting.timestamp).toLocaleDateString()
+            : '')
+    : '';
 
   useEffect(() => {
     if (!open) return;
@@ -54,8 +87,10 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setProducerShare(initialData.producerShare?.toString() || fieldProducerShare);
       setIrrigationPractice(initialData.irrigationPractice || fieldIrrigationPractice);
       setCropStatus(initialData.cropStatus || 'Planted');
+      setCropSequence(initialData.cropSequence || 'First Crop');
       setPlantingPattern(initialData.plantingPattern || '');
       setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
+      setAcreage((initialData.acreage ?? field.acreage).toString());
       setMemo(initialData.memo || '');
     } else {
       setSeedVariety('');
@@ -64,14 +99,23 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setProducerShare(fieldProducerShare);
       setIrrigationPractice(fieldIrrigationPractice);
       setCropStatus('Planted');
+      setCropSequence('First Crop');
       setPlantingPattern('');
       setPlantDate(new Date().toISOString().split('T')[0]);
+      setAcreage(field.acreage.toString());
       setMemo('');
     }
-  }, [initialData, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open]);
+  }, [field.acreage, initialData, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open]);
 
   const handleSubmit = async () => {
     if (requiresSeedVariety && !seedVariety.trim()) {
+      native.haptic.error();
+      return;
+    }
+
+    const plantedAcres = parseFloat(acreage);
+    if (!Number.isFinite(plantedAcres) || plantedAcres <= 0) {
+      toast.error('Enter planted acres greater than 0.');
       native.haptic.error();
       return;
     }
@@ -84,12 +128,14 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
         success = await updatePlantRecord({
           ...initialData,
           seedVariety: savedSeedVariety,
+          acreage: plantedAcres,
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
           producerShare: parseFloat(producerShare) || 100,
           irrigationPractice,
           cropStatus,
+          cropSequence: cropStatus === 'Planted' ? cropSequence : undefined,
           plantingPattern: plantingPattern.trim() || undefined,
           memo: memo.trim() || undefined,
         });
@@ -98,13 +144,14 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
           fieldId: field.id,
           fieldName: field.name,
           seedVariety: savedSeedVariety,
-          acreage: field.acreage,
+          acreage: plantedAcres,
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
           producerShare: parseFloat(producerShare) || 100,
           irrigationPractice,
           cropStatus,
+          cropSequence: cropStatus === 'Planted' ? cropSequence : undefined,
           plantingPattern: plantingPattern.trim() || undefined,
           memo: memo.trim() || undefined,
         });
@@ -148,6 +195,17 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {cropStatus === 'Planted' && duplicatePlanting && (
+            <Alert className="border-amber-500/40 bg-amber-500/10 text-foreground [&>svg]:text-amber-600">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                Already marked planted
+              </AlertTitle>
+              <AlertDescription className="text-sm text-muted-foreground">
+                {field.name} already has a {cropSequence.toLowerCase()} planting{duplicatePlantingDate ? ` on ${duplicatePlantingDate}` : ' this season'}.
+              </AlertDescription>
+            </Alert>
+          )}
           <div>
             <Label htmlFor="seedVariety" className="text-muted-foreground font-mono text-xs">
               SEED VARIETY {requiresSeedVariety ? '*' : ''}
@@ -210,10 +268,17 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
               />
             </div>
             <div>
-              <span className="text-muted-foreground font-mono text-xs text-right block">ACREAGE</span>
-              <div className="mt-1 px-3 py-2 bg-muted/50 border border-border/30 rounded-lg font-mono text-foreground text-center text-sm">
-                {field.acreage} ac
-              </div>
+              <Label htmlFor="plantedAcres" className="text-muted-foreground font-mono text-xs">PLANTED ACRES</Label>
+              <Input
+                id="plantedAcres"
+                name="plantedAcres"
+                type="number"
+                min="0"
+                step="0.01"
+                value={acreage}
+                onChange={e => setAcreage(e.target.value)}
+                className="mt-1 bg-muted border-border text-foreground font-mono"
+              />
             </div>
           </div>
 
@@ -260,6 +325,21 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
                 </SelectContent>
               </Select>
             </div>
+            {cropStatus === 'Planted' && (
+              <div>
+                <Label htmlFor="cropSequenceSelect" className="text-muted-foreground font-mono text-xs">CROP SEQUENCE</Label>
+                <Select value={cropSequence} onValueChange={(v: NonNullable<PlantRecord['cropSequence']>) => setCropSequence(v)}>
+                  <SelectTrigger id="cropSequenceSelect" className="mt-1 bg-muted border-border text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CROP_SEQUENCE_OPTIONS.map(sequence => (
+                      <SelectItem key={sequence} value={sequence}>{sequence}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label htmlFor="plantingPattern" className="text-muted-foreground font-mono text-xs">PATTERN</Label>
               <Input

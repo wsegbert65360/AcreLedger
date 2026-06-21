@@ -52,6 +52,7 @@ export interface PlantRecord {
   producerShare?: number; // FSA 578 mandatory: 0 to 100 (%)
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated'; // FSA 578 mandatory: IR or NI
   cropStatus?: 'Planted' | 'Prevented Planting' | 'Failed' | 'Volunteer' | 'Cover Crop';
+  cropSequence?: 'First Crop' | 'Second Crop';
   plantingPattern?: string;
   seasonYear: number;
   farm_id?: string;

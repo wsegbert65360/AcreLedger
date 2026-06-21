@@ -59,6 +59,7 @@ export const plantRecordSchema = z.object({
   producerShare: z.number().optional(),
   irrigationPractice: z.string().optional(),
   cropStatus: z.string().optional(),
+  cropSequence: z.string().optional(),
   plantingPattern: z.string().optional(),
   seasonYear: z.number(),
   timestamp: z.number().optional(),
