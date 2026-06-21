@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer } from 'lucide-react';
 
-import { getWindRotation, loadZip, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
+import { getWindRotation, loadZip, matchFieldByCoords, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
 import { RainService } from '@/services/RainService';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
@@ -74,15 +74,7 @@ export default function WeatherBar() {
 
         if (lat != null && lng != null) {
           try {
-            // Find if there is a matching field with the same coords, or use a generic fieldId
-            const matchedField = fields.find(
-              f =>
-                f.lat != null &&
-                f.lng != null &&
-                Math.abs(f.lat - lat!) < 0.0001 &&
-                Math.abs(f.lng - lng!) < 0.0001
-            );
-            const fieldId = matchedField?.id || 'weather-overview';
+            const fieldId = matchFieldByCoords(fields, lat, lng);
 
             const rainData = await RainService.fetchComprehensiveRainfall({
               fieldId,

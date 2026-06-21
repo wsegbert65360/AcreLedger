@@ -116,6 +116,9 @@ export function useAuth() {
                 .eq('id', session.user.id)
                 .then(({ error }) => {
                   if (error) console.error('Failed to sync fallback active_season to profile:', error);
+                })
+                .catch((syncErr) => {
+                  console.error('Unexpected error syncing active_season:', syncErr);
                 });
             }
 

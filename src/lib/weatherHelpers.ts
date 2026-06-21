@@ -99,6 +99,25 @@ export function resolveCoords(
   });
 }
 
+/**
+ * Find a field whose coordinates match the given lat/lng within a small
+ * tolerance (0.0001 ≈ 11 m). Returns the field id or a generic fallback.
+ */
+export function matchFieldByCoords(
+  fields: { id: string; lat: number | null; lng: number | null }[],
+  lat: number,
+  lng: number,
+): string {
+  const matched = fields.find(
+    f =>
+      f.lat != null &&
+      f.lng != null &&
+      Math.abs(f.lat - lat) < 0.0001 &&
+      Math.abs(f.lng - lng) < 0.0001,
+  );
+  return matched?.id || 'weather-overview';
+}
+
 /** Map Visual Crossing icon/conditions to a Lucide icon component */
 export function getWeatherLucideIcon(vcIcon?: string, precipProb?: number, isRainingNow?: boolean): LucideIcon {
   if (isRainingNow) return CloudRain;

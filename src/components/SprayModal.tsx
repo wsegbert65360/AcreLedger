@@ -275,9 +275,10 @@ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
           return;
         }
         setWeather(w);
-        // Only auto-populate manual fields if they are empty
-        if (!manualWindDirection) setManualWindDirection(w.windDirection);
-        if (!manualWindSpeed) setManualWindSpeed(w.wind.toString());
+        // Only auto-populate manual fields if they are empty.
+        // Functional updates avoid stale closures if the user already typed.
+        setManualWindDirection(prev => prev || w.windDirection || 'CALM');
+        setManualWindSpeed(prev => prev || String(Number.isFinite(w.wind) ? w.wind : 0));
         setLoading(false);
       }).catch(() => {
         setLoading(false);

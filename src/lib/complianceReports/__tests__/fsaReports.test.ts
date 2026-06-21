@@ -9,7 +9,7 @@ import {
     validateFsa578Rows,
     validateFsaFallProductionRows
 } from '../fsaReports';
-import { SprayRecord, Field, HarvestRecord, HayHarvestRecord } from '../../../types/farm';
+import { SprayRecord, Field, PlantRecord, HarvestRecord, HayHarvestRecord } from '../../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../../types/fsaTract';
 
 describe('Missouri Log Generation', () => {
@@ -447,7 +447,8 @@ describe('FSA 578 report rows', () => {
             acreage: 40,
             plantDate: '2026-05-01',
             timestamp: new Date('2026-05-01T12:00:00Z').getTime(),
-            seasonYear: 2026
+            seasonYear: 2026,
+            deleted_at: null
         };
 
         const assignments: FieldCluAssignment[] = [
@@ -739,6 +740,176 @@ describe('FSA 578 report rows', () => {
         expect(csv).toContain('"Type / Variety"');
         expect(csv).toContain('"Ready Field"');
         expect(csv).toContain('"Planted"');
+    });
+
+    it('does not duplicate rows when field CLU numbers are repeated', () => {
+        const field: Field = {
+            id: 'field-1',
+            name: 'Behind Grandma',
+            acreage: 36,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '6418',
+            fsaTractNumber: '1417',
+            cluNumbers: ['2', '7', '2'], // duplicate '2'
+            deleted_at: null
+        };
+
+        const plantRecord = {
+            id: 'plant-1',
+            fieldId: 'field-1',
+            fieldName: 'Behind Grandma',
+            crop: 'Soybeans',
+            seedVariety: 'Eisenhower 2639e',
+            acreage: 36,
+            timestamp: new Date('2026-06-10T12:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            deleted_at: null
+        };
+
+        const tract: FsaTractImport = {
+            id: 'tract-1',
+            farmId: 'farm-1',
+            tractKey: '6418-1417',
+            filename: 'F6418_T1417.json',
+            featureCount: 2,
+            importedAt: '2026-06-16T00:00:00.000Z',
+            deletedAt: null,
+            geojson: {
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+                        properties: { cluNumber: '2', acres: 28.26 }
+                    },
+                    {
+                        type: 'Feature',
+                        geometry: { type: 'Polygon', coordinates: [[[1, 1], [2, 1], [2, 2], [1, 1]]] },
+                        properties: { cluNumber: '7', acres: 0.64 }
+                    }
+                ]
+            }
+        };
+
+        const rows = buildFsa578Rows([plantRecord], [field], [], [tract]);
+
+        expect(rows).toHaveLength(2);
+        expect(rows.map(row => row.fieldNumber)).toEqual(['2', '7']);
+        expect(rows.map(row => row.acreage)).toEqual([28.26, 0.64]);
+    });
+
+    it('does not duplicate rows when farm/tract numbers are repeated', () => {
+        const field: Field = {
+            id: 'field-1',
+            name: 'Behind Grandma',
+            acreage: 36,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '6418/6418',
+            fsaTractNumber: '1417',
+            cluNumbers: ['2', '7'],
+            deleted_at: null
+        };
+
+        const plantRecord = {
+            id: 'plant-1',
+            fieldId: 'field-1',
+            fieldName: 'Behind Grandma',
+            crop: 'Soybeans',
+            seedVariety: 'Eisenhower 2639e',
+            acreage: 36,
+            timestamp: new Date('2026-06-10T12:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            deleted_at: null
+        };
+
+        const tract: FsaTractImport = {
+            id: 'tract-1',
+            farmId: 'farm-1',
+            tractKey: '6418-1417',
+            filename: 'F6418_T1417.json',
+            featureCount: 2,
+            importedAt: '2026-06-16T00:00:00.000Z',
+            deletedAt: null,
+            geojson: {
+                type: 'FeatureCollection',
+                features: [
+                    {
+                        type: 'Feature',
+                        geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+                        properties: { cluNumber: '2', acres: 28.26 }
+                    },
+                    {
+                        type: 'Feature',
+                        geometry: { type: 'Polygon', coordinates: [[[1, 1], [2, 1], [2, 2], [1, 1]]] },
+                        properties: { cluNumber: '7', acres: 0.64 }
+                    }
+                ]
+            }
+        };
+
+        const rows = buildFsa578Rows([plantRecord], [field], [], [tract]);
+
+        expect(rows).toHaveLength(2);
+        expect(rows.map(row => row.fieldNumber)).toEqual(['2', '7']);
+        expect(rows.map(row => row.acreage)).toEqual([28.26, 0.64]);
+    });
+
+    it('does not duplicate rows when active CLU assignments are repeated', () => {
+        const field: Field = {
+            id: 'field-1',
+            name: 'Bottom Field',
+            acreage: 40,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '918',
+            fsaTractNumber: '1327',
+            deleted_at: null
+        };
+
+        const plantRecord = {
+            id: 'plant-1',
+            fieldId: 'field-1',
+            fieldName: 'Bottom Field',
+            crop: 'Soybeans',
+            seedVariety: 'AG38XF3',
+            acreage: 40,
+            timestamp: new Date('2026-05-01T12:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            deleted_at: null
+        };
+
+        const assignments: FieldCluAssignment[] = [
+            {
+                id: 'assignment-1',
+                farmId: 'farm-1',
+                fieldId: 'field-1',
+                tractKey: '918-1327',
+                cluNumber: '1',
+                acres: 32.41,
+                landUse: 'cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            },
+            {
+                id: 'assignment-2',
+                farmId: 'farm-1',
+                fieldId: 'field-1',
+                tractKey: '918-1327',
+                cluNumber: '1', // duplicate CLU
+                acres: 32.41,
+                landUse: 'cropland',
+                assignedAt: '2026-06-17T00:00:00.000Z',
+                deletedAt: null
+            }
+        ];
+
+        const rows = buildFsa578Rows([plantRecord], [field], assignments);
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0].fieldNumber).toBe('1');
+        expect(rows[0].acreage).toBe(32.41);
     });
 });
 

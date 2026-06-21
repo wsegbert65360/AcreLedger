@@ -28,4 +28,10 @@ describe('parseTractKeys', () => {
       '6418-1418',
     ]);
   });
+
+  it('deduplicates repeated farm or tract identifiers', () => {
+    expect(parseTractKeys('6418/6418', '1417')).toEqual(['6418-1417']);
+    expect(parseTractKeys('6418', '1417/1417')).toEqual(['6418-1417']);
+    expect(parseTractKeys('6418/6418-1417', undefined)).toEqual(['6418-1417']);
+  });
 });

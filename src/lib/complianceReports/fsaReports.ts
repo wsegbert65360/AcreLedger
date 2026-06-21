@@ -102,6 +102,16 @@ function parseTractKey(tractKey: string): { farmNumber: string; tractNumber: str
     };
 }
 
+function dedupeAssignments(assignments: FieldCluAssignment[]): FieldCluAssignment[] {
+    const seen = new Set<string>();
+    return assignments.filter(a => {
+        const key = `${a.tractKey}:${a.cluNumber}:${a.landUse}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
 function buildTractAcreMap(fsaTracts: FsaTractImport[]): Map<string, number> {
     const acresByPart = new Map<string, number>();
 
@@ -242,6 +252,11 @@ export function buildFsa578Rows(
         activeAssignmentsByField.set(assignment.fieldId, current);
     }
 
+    // Normalize: one active assignment per field/tract/CLU/land-use to prevent duplicated acres
+    activeAssignmentsByField.forEach((assignments, fieldId) => {
+        activeAssignmentsByField.set(fieldId, dedupeAssignments(assignments));
+    });
+
     const plantedFieldIds = new Set(plantRecords.map(record => record.fieldId));
 
     const plantedRows = sortedPlantRecords(plantRecords).flatMap(r => {
@@ -271,7 +286,7 @@ export function buildFsa578Rows(
 
         if (croplandAssignments.length === 0) {
             const tractKeys = parseTractKeys(field?.fsaFarmNumber, field?.fsaTractNumber);
-            const legacyCluNumbers = field?.cluNumbers?.filter(Boolean) || [];
+            const legacyCluNumbers = Array.from(new Set(field?.cluNumbers?.filter(Boolean) || []));
             const legacyRows = tractKeys.flatMap(tractKey => {
                 const tract = parseTractKey(tractKey);
 

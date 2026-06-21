@@ -190,11 +190,14 @@ export const WeatherService = {
             precip72h = sortedDays.slice(0, 3).reduce((sum, day) => sum + (day.precip || 0), 0);
         }
 
+        const windSpeed = current.windspeed != null ? Math.round(current.windspeed) : 0;
+        const windDirDeg = current.winddir != null ? current.winddir : null;
+
         return {
-            temp: Math.round(current.temp),
-            humidity: Math.round(current.humidity),
-            wind: Math.round(current.windspeed),
-            windDirection: this.degreesToDirection(current.winddir),
+            temp: current.temp != null ? Math.round(current.temp) : 0,
+            humidity: current.humidity != null ? Math.round(current.humidity) : 0,
+            wind: windSpeed,
+            windDirection: windDirDeg != null ? this.degreesToDirection(windDirDeg) : (windSpeed === 0 ? 'CALM' : '—'),
             locationName: data.address,
             isError: false,
             precip24h: Math.round(precip24h * 100) / 100,
@@ -340,6 +343,7 @@ export const WeatherService = {
      * Helper to convert degrees to cardinal direction.
      */
     degreesToDirection(deg: number): string {
+        if (deg == null || Number.isNaN(deg)) return '—';
         const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
         const idx = Math.round(deg / 22.5) % 16;
         return directions[idx];

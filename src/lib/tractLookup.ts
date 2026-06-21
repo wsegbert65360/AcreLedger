@@ -24,7 +24,7 @@ export function parseTractKeys(fsaFarmNumber: string | null | undefined, fsaTrac
 
   // Combined format: "6418-1417/7653-12050"
   if (tracts.length === 0) {
-    return farms.filter(farm => farm.includes('-'));
+    return Array.from(new Set(farms.filter(farm => farm.includes('-'))));
   }
 
   const keys: string[] = [];
@@ -34,7 +34,7 @@ export function parseTractKeys(fsaFarmNumber: string | null | undefined, fsaTrac
     const farmNum = farm.includes('-') ? farm.split('-')[0] : farm;
     keys.push(`${farmNum}-${tract}`);
   }
-  return keys;
+  return Array.from(new Set(keys));
 }
 
 export async function loadTractData(keys: string[]): Promise<TractFeatureCollection[]> {

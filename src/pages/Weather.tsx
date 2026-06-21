@@ -24,6 +24,7 @@ import {
   getWeatherLucideIcon,
   getWindRotation,
   loadZip,
+  matchFieldByCoords,
   resolveCoords,
   saveZip,
   ZIP_REGEX,
@@ -48,6 +49,8 @@ export default function Weather() {
   const [inputLoc, setInputLoc] = useState('');
   const [searchError, setSearchError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
 
   const loadWeather = useCallback(async (loc: string) => {
     if (!loc.trim()) return;
@@ -64,15 +67,7 @@ export default function Weather() {
         const lng = result.longitude;
         if (lat != null && lng != null) {
           try {
-            // Find if there is a matching field with the same coords, or use a generic fieldId
-            const matchedField = fields.find(
-              f =>
-                f.lat != null &&
-                f.lng != null &&
-                Math.abs(f.lat - lat) < 0.0001 &&
-                Math.abs(f.lng - lng) < 0.0001
-            );
-            const fieldId = matchedField?.id || 'weather-overview';
+            const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
 
             const rainData = await RainService.fetchComprehensiveRainfall({
               fieldId,
@@ -104,7 +99,7 @@ export default function Weather() {
         setLoading(false);
       }
     }
-  }, [fields]);
+  }, []);
 
   // Sync initial location input when fields or saved location changes
   useEffect(() => {

@@ -536,8 +536,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (err: any) {
       console.error('Error completing onboarding:', err);
-      // Fallback: we set localStorage and local state so user can proceed
-      return true;
+      toast.error(err.message || 'Failed to save onboarding progress. Please try again.');
+      return false;
     }
   }, [session, setOnboardingComplete]);
 

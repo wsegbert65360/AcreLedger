@@ -1,10 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import SprayModal from '../SprayModal';
 import { Field, SprayRecord } from '@/types/farm';
+import { WeatherService } from '@/services/WeatherService';
 
 // --- Mocks ---
 const addSprayRecordMock = vi.fn().mockResolvedValue(true);
@@ -23,8 +24,8 @@ vi.mock('@/store/farmStore', () => ({
 
 vi.mock('@/services/WeatherService', () => ({
   WeatherService: {
-    fetchCurrentWeather: vi.fn().mockResolvedValue(null),
-    fetchHistoricalConditions: vi.fn().mockResolvedValue(null)
+    fetchCurrentWeather: vi.fn(),
+    fetchHistoricalConditions: vi.fn()
   }
 }));
 
@@ -49,15 +50,30 @@ vi.mock('@/components/ui/dialog', () => ({
 }));
 
 vi.mock('@/components/ui/select', () => ({
-  Select: ({ children, value, onValueChange }: any) => (
-    <select value={value} onChange={e => onValueChange(e.target.value)} data-testid="select">
-      {children}
-    </select>
-  ),
+  Select: ({ children, value, onValueChange }: any) => {
+    const trigger = (Array.isArray(children) ? children : [children]).find((c: any) => c?.props?.id);
+    const collectOptions = (node: any): any[] => {
+      if (!node) return [];
+      if (Array.isArray(node)) return node.flatMap(collectOptions);
+      if (node.props?.value != null) return [node];
+      return collectOptions(node.props?.children);
+    };
+
+    return (
+      <select
+        id={trigger?.props?.id}
+        value={value}
+        onChange={e => onValueChange(e.target.value)}
+        data-testid="select"
+      >
+        {collectOptions(children)}
+      </select>
+    );
+  },
   SelectContent: ({ children }: any) => <>{children}</>,
   SelectItem: ({ children, value }: any) => <option value={value}>{children}</option>,
   SelectTrigger: ({ children }: any) => <>{children}</>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>
+  SelectValue: () => null
 }));
 
 vi.mock('@/components/ui/accordion', () => ({
@@ -131,6 +147,111 @@ describe('SprayModal Data Retention', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue(null);
+    vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
+  });
+
+  it('auto-populates wind direction and speed when weather fetch succeeds for a new record', async () => {
+    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
+      temp: 72,
+      humidity: 45,
+      wind: 8,
+      windDirection: 'SSE',
+      isError: false,
+      precip24h: 0,
+      precip72h: 0,
+      precipProb: 0
+    });
+
+    const fieldWithLocation: Field = { ...field, lat: 41.5, lng: -93.6 };
+
+    render(
+      <SprayModal
+        field={fieldWithLocation}
+        open={true}
+        onClose={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
+      expect(windSpeedInput.value).toBe('8');
+    });
+
+    const windDirectionSelect = screen.getByLabelText(/Wind Direction/i) as HTMLSelectElement;
+    expect(windDirectionSelect.value).toBe('SSE');
+  });
+
+  it('falls back to CALM/0 when weather API omits wind fields', async () => {
+    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
+      temp: 72,
+      humidity: 45,
+      wind: NaN,
+      windDirection: undefined as any,
+      isError: false,
+      precip24h: 0,
+      precip72h: 0,
+      precipProb: 0
+    });
+
+    const fieldWithLocation: Field = { ...field, lat: 41.5, lng: -93.6 };
+
+    render(
+      <SprayModal
+        field={fieldWithLocation}
+        open={true}
+        onClose={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
+      expect(windSpeedInput.value).toBe('0');
+    });
+
+    const windDirectionSelect = screen.getByLabelText(/Wind Direction/i) as HTMLSelectElement;
+    expect(windDirectionSelect.value).toBe('CALM');
+  });
+
+  it('does not overwrite user-entered wind values when weather fetch returns later', async () => {
+    let resolveWeather: (value: any) => void;
+    vi.mocked(WeatherService.fetchCurrentWeather).mockImplementation(
+      () => new Promise(resolve => { resolveWeather = resolve; })
+    );
+
+    const fieldWithLocation: Field = { ...field, lat: 41.5, lng: -93.6 };
+
+    render(
+      <SprayModal
+        field={fieldWithLocation}
+        open={true}
+        onClose={vi.fn()}
+      />
+    );
+
+    const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
+    const windDirectionSelect = screen.getByLabelText(/Wind Direction/i) as HTMLSelectElement;
+
+    // User types manual values before weather arrives
+    fireEvent.change(windSpeedInput, { target: { value: '12' } });
+    fireEvent.change(windDirectionSelect, { target: { value: 'NW' } });
+
+    // Now weather arrives
+    resolveWeather!({
+      temp: 72,
+      humidity: 45,
+      wind: 8,
+      windDirection: 'SSE',
+      isError: false,
+      precip24h: 0,
+      precip72h: 0,
+      precipProb: 0
+    });
+
+    await waitFor(() => {
+      expect(windSpeedInput.value).toBe('12');
+    });
+    expect(windDirectionSelect.value).toBe('NW');
   });
 
   it('preserves the original seasonYear when updating an existing spray record', async () => {
@@ -148,7 +269,7 @@ describe('SprayModal Data Retention', () => {
     fireEvent.click(updateBtn);
 
     // Verify updateSprayRecord is called with the original seasonYear (2025), not the global viewingSeason (2026)
-    expect(updateSprayRecordMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(updateSprayRecordMock).toHaveBeenCalledTimes(1));
     expect(updateSprayRecordMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'spray-123',
@@ -182,7 +303,7 @@ describe('SprayModal Data Retention', () => {
     fireEvent.click(updateBtn);
 
     // Verify updateSprayRecord is called preserving the 0 wind speed
-    expect(updateSprayRecordMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(updateSprayRecordMock).toHaveBeenCalledTimes(1));
     expect(updateSprayRecordMock).toHaveBeenCalledWith(
       expect.objectContaining({
         windSpeed: 0
