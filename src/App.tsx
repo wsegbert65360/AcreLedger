@@ -81,7 +81,7 @@ const AnimatedRoutes = () => {
 };
 
 const AppContent = () => {
-  const { session, loading, isOnline, farm_id, fields, onboardingComplete } = useFarm();
+  const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
   const location = useLocation();
 
   useEffect(() => {
@@ -150,7 +150,16 @@ const AppContent = () => {
   }
 
   const onboardingKey = `${session.user.id}_al_onboarding_complete`;
-  const needsOnboarding = !onboardingComplete && !localStorage.getItem(onboardingKey) && fields.length === 0;
+  // Require the initial data load to settle before deciding onboarding. Without
+  // this, the transient empty-fields render before fetchData resolves would
+  // bounce an existing user (especially on a new device / cleared storage) into
+  // /onboarding with no way back once their fields populate.
+  const needsOnboarding =
+    initialFetchComplete &&
+    !fetchError &&
+    !onboardingComplete &&
+    !localStorage.getItem(onboardingKey) &&
+    fields.length === 0;
   if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
   }

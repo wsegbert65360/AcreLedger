@@ -38,6 +38,8 @@ interface FarmState {
   pendingSyncCount: number;
   /** Global loading state for data fetching */
   loading: boolean;
+  /** True once the initial data load has settled for the current session (online fetch when online, cache hydration when offline). Gates decisions that must not race with the transient empty-fields render. */
+  initialFetchComplete: boolean;
   /** Global error state for data fetching */
   fetchError: boolean;
   /** List of farm fields, filtered and sorted */
@@ -190,6 +192,13 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const { isOnline } = useNetworkStatus();
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [cacheHydrated, setCacheHydrated] = useState(false);
+  // True once the authoritative initial data load has settled for this session.
+  // Online: set when fetchData resolves. Offline: set when cache hydration resolves.
+  const [initialFetchComplete, setInitialFetchComplete] = useState(false);
+  // Mirror isOnline in a ref so effects that must NOT re-run on network changes
+  // (e.g. cache hydration) can still read the latest status when they settle.
+  const isOnlineRef = useRef(isOnline);
+  useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
 
   const updatePendingSyncCount = useCallback(async () => {
     if (farm_id) {
@@ -208,7 +217,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (session === undefined) return;
 
+    // Reset load-settled flag on session/user change so initial-load-sensitive
+    // decisions (e.g. the onboarding gate) don't act on stale signals.
     setCacheHydrated(false);
+    setInitialFetchComplete(false);
     const userId = session?.user?.id ?? null;
     const hydrateCache = async () => {
       try {
@@ -256,6 +268,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         console.error('Failed to hydrate store from offline cache:', err);
       } finally {
         setCacheHydrated(true);
+        // When offline, the local cache is the authoritative source — mark the
+        // initial load settled. Online users wait for fetchData instead.
+        if (!isOnlineRef.current) setInitialFetchComplete(true);
       }
     };
     hydrateCache();
@@ -265,7 +280,13 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Fetch data when farm_id is stable ---
   const fetchData = useCallback(async (): Promise<boolean> => {
     if (!session || !farm_id) return false;
-    if (!isOnline) return true;
+    if (!isOnline) {
+      // Offline with a valid farm: the local cache is authoritative, so the
+      // initial load has settled. Mirrors the cache-hydration path and covers
+      // the case where hydration ran while online before the network dropped.
+      setInitialFetchComplete(true);
+      return true;
+    }
     setLoading(true);
     setFetchError(false);
     try {
@@ -349,6 +370,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           return false;
         } finally {
           setLoading(false);
+          setInitialFetchComplete(true);
         }
   }, [session, farm_id, isOnline, setLoading]);
 
@@ -543,7 +565,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   return (
     <FarmContext.Provider value={{
-      session, isOnline, pendingSyncCount, loading, fetchError,
+      session, isOnline, pendingSyncCount, loading, initialFetchComplete, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords,

@@ -105,6 +105,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 ### Supabase and Database
 
 - Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
+- Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract or reassigning a CLU must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
 - New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
 - Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
 - Every farm-owned table must have RLS enabled.
