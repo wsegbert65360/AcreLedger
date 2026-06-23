@@ -228,11 +228,20 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 
 - Preserve the mobile-first design.
 - Page headers should follow the sticky header pattern from `BLUEPRINT.md`.
+- Mobile pages must reserve bottom padding for the fixed `BottomNav`. `BottomNav` uses `.touch-target` (`min-height: 64px` ≈ `4rem`) plus `pb-[env(safe-area-inset-bottom)]`. Use `pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` on the page container — never below the nav height, or the last cards scroll under the tab bar.
+- Do not reintroduce floating/sticky bottom bars on the dashboard. Crop filters, totals, and quick actions live in the scrollable body (directly below the `WeatherBar`), not in an overlay footer.
 - Use consistent radius rules:
   - Inline items, badges, small buttons: `rounded-lg`
   - Cards, sections, containers: `rounded-2xl`
   - Pills and avatars: `rounded-full`
   - Progress bars: `rounded-full`
+
+### Responsive Tables
+
+- `ReportTable` applies the `mobile-cards` class globally. On screens ≤ 768px each table renders as a stack of bordered cards instead of a horizontally-scrollable grid.
+- Every data `<td>` inside a `ReportTable` MUST carry a `data-label="<HEADER>"` matching its column header. Cells without `data-label` render as unlabeled, right-aligned cards on mobile.
+- Full-width rows (`<td colSpan={n}>` for banners, readiness checks, and empty states) MUST NOT carry `data-label`; they are handled automatically by the `td[colspan]` CSS rules and render full-width.
+- Standalone `<table>`s that bypass `ReportTable` (e.g. the Landlord statement) are excluded from the card layout by design. Do not add `mobile-cards` to them unless every cell also gets `data-label`.
 
 ### Icons
 
@@ -340,6 +349,5 @@ Do not read the full blueprint for small isolated edits such as text copy, minor
 ## Cross-Agent Consistency
 
 - `AGENTS.md` is the canonical shared instruction file.
-- `GEMINI.md` may add Gemini CLI behavior but must not contradict this file.
-- Other agent-specific files may point back here.
+- Agent-specific instruction files (`CLAUDE.md`, `GEMINI.md`, `CODEX.md`) may add model-specific notes but must always point back to `AGENTS.md` and never contradict it.
 - If instructions conflict, follow the more specific project safety rule first, especially data safety, farm scoping, RLS, mapper discipline, and soft delete rules.

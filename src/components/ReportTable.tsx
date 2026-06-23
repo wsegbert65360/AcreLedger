@@ -46,7 +46,7 @@ export default function ReportTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto mobile-cards">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b border-border">

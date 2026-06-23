@@ -98,6 +98,30 @@ const Index = () => {
           </ErrorBoundary>
         ) : (
           <>
+            {allFields.length > 0 && (
+              <div className="bg-muted/10 rounded-2xl border border-border/50 p-3 mb-4 space-y-2 mt-4">
+                <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest text-center">
+                  Total Operation: {formatMeasurement(totalAcres, 'Acres')}
+                </div>
+                <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
+                  {cropTotals.map(([crop, acres]) => {
+                    const isActive = selectedCrops.includes(crop);
+                    return (
+                      <button
+                        key={crop}
+                        onClick={() => toggleCrop(crop)}
+                        className={`flex-none flex items-center justify-center h-9 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
+                          ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
+                          : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50'
+                          }`}
+                      >
+                        {crop}: {formatMeasurement(acres, 'AC')}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {filteredRowCrops.length > 0 && (
               <div className="space-y-1">
                 {filteredPastureHay.length > 0 && (
@@ -127,35 +151,6 @@ const Index = () => {
               </div>
             )}
 
-            {allFields.length > 0 && (
-            <div className="bg-background/60 backdrop-blur-xl sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-0 mt-8 border-t border-border/50 px-4 py-2 pb-3 z-30">
-              {/* Glass Gradient Transition Overlay */}
-              <div className="absolute -top-12 left-0 right-0 h-12 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
-              
-              <div className="flex flex-col items-center justify-center space-y-1.5">
-                  <div className="text-xs font-semibold text-muted-foreground">
-                    Total Operation: {formatMeasurement(totalAcres, 'Acres')}
-                  </div>
-                  <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
-                    {cropTotals.map(([crop, acres]) => {
-                      const isActive = selectedCrops.includes(crop);
-                      return (
-                        <button
-                          key={crop}
-                          onClick={() => toggleCrop(crop)}
-                          className={`flex-none flex items-center justify-center h-10 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
-                            ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
-                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:bg-muted/50'
-                            }`}
-                        >
-                          {crop}: {formatMeasurement(acres, 'AC')}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         )}
       </main>

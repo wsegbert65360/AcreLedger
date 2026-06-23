@@ -509,21 +509,21 @@ export default function Reports() {
             {fsaPlantRows.map(row => {
               return (
                 <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.farmNumber || '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.tractNumber || '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.fieldNumber || '-'}</td>
-                  <td className="px-2 py-2 text-[11px] font-bold text-foreground print:px-1 print:py-1">{row.fieldName}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.landUse}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-harvest font-bold print:px-1 print:py-1">{row.crop || '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropSequence || '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.seedVariety || '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.plantingPattern || '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.acreage}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.date ? fmtDate(row.date) : '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.intendedUse || '-'}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.irrigationCode}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.producerShare}</td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropStatus || '-'}</td>
+                  <td data-label="FARM #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.farmNumber || '-'}</td>
+                  <td data-label="TRACT #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.tractNumber || '-'}</td>
+                  <td data-label="CLU/FIELD #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.fieldNumber || '-'}</td>
+                  <td data-label="FIELD" className="px-2 py-2 text-[11px] font-bold text-foreground print:px-1 print:py-1">{row.fieldName}</td>
+                  <td data-label="LAND USE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.landUse}</td>
+                  <td data-label="CROP" className="px-2 py-2 font-mono text-[11px] text-harvest font-bold print:px-1 print:py-1">{row.crop || '-'}</td>
+                  <td data-label="SEQ" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropSequence || '-'}</td>
+                  <td data-label="TYPE/VARIETY" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.seedVariety || '-'}</td>
+                  <td data-label="PATTERN" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.plantingPattern || '-'}</td>
+                  <td data-label="ACRES" className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.acreage}</td>
+                  <td data-label="PLANT DATE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.date ? fmtDate(row.date) : '-'}</td>
+                  <td data-label="USE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.intendedUse || '-'}</td>
+                  <td data-label="IRR" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.irrigationCode}</td>
+                  <td data-label="SHARE %" className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.producerShare}</td>
+                  <td data-label="STATUS" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropStatus || '-'}</td>
                 </tr>
               );
             })}
@@ -639,12 +639,12 @@ export default function Reports() {
           >
             {fertilizerRecords.map(r => (
               <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground uppercase tracking-tighter">{fmtDate(r.date)}</td>
-                <td className="px-4 py-3 text-xs font-bold text-foreground sm:min-w-[120px]">
+                <td data-label="DATE" className="px-4 py-3 font-mono text-[10px] text-foreground uppercase tracking-tighter">{fmtDate(r.date)}</td>
+                <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground sm:min-w-[120px]">
                   {fieldMap.get(r.fieldId)?.name || r.fieldName}
                 </td>
-                <td className="px-4 py-3 font-mono text-[10px] text-lime-600 dark:text-lime-400 font-bold">{r.fertilizer_formula}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acres}</td>
+                <td data-label="FORMULA" className="px-4 py-3 font-mono text-[10px] text-lime-600 dark:text-lime-400 font-bold">{r.fertilizer_formula}</td>
+                <td data-label="ACRES" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acres}</td>
               </tr>
             ))}
             {fertilizerRecords.length === 0 && (
@@ -692,16 +692,16 @@ export default function Reports() {
           >
             {fsaFallRows.map(row => (
               <tr key={`${row.recordType}-${row.id}`} className="hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(row.harvestDate) || '—'}</td>
-                <td className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '—'}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.production.toLocaleString()}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-muted-foreground">{row.productionUnit}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.moisturePercent != null ? `${row.moisturePercent}%` : '—'}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.destination || '—'}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.evidenceReference || '—'}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '—'}</td>
-                <td className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '—'}</td>
+                <td data-label="DATE" className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(row.harvestDate) || '—'}</td>
+                <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
+                <td data-label="CROP/USE" className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '—'}</td>
+                <td data-label="PROD." className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.production.toLocaleString()}</td>
+                <td data-label="UNIT" className="px-4 py-3 font-mono text-[10px] text-muted-foreground">{row.productionUnit}</td>
+                <td data-label="MOIST %" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.moisturePercent != null ? `${row.moisturePercent}%` : '—'}</td>
+                <td data-label="DEST/STORAGE" className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.destination || '—'}</td>
+                <td data-label="EVIDENCE #" className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.evidenceReference || '—'}</td>
+                <td data-label="FARM #" className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '—'}</td>
+                <td data-label="TRACT #" className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '—'}</td>
               </tr>
             ))}
             {fsaFallRows.length === 0 && (
@@ -753,12 +753,12 @@ export default function Reports() {
 
                 return (
                   <tr key={f.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 text-xs font-bold text-foreground">{f.name}</td>
+                    <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{f.name}</td>
                     {/* Use explicit zero check — c1 > 0 avoids hiding a legitimate 0 bale count */}
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c1 > 0 ? c1 : '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c2 > 0 ? c2 : '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c3plus > 0 ? c3plus : '—'}</td>
-                    <td className="px-4 py-3 font-mono text-[10px] font-bold text-harvest text-right border-l border-border/20">
+                    <td data-label="CUTTING #1" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c1 > 0 ? c1 : '—'}</td>
+                    <td data-label="CUTTING #2" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c2 > 0 ? c2 : '—'}</td>
+                    <td data-label="CUTTING #3+" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c3plus > 0 ? c3plus : '—'}</td>
+                    <td data-label="TOTAL" className="px-4 py-3 font-mono text-[10px] font-bold text-harvest text-right border-l border-border/20">
                       {total.toLocaleString()}
                     </td>
                   </tr>

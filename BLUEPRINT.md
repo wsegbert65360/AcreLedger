@@ -405,6 +405,29 @@ PDF export for spray records. It handles both single-record and multi-record exp
 The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time
 signals over static data.
 
+### Dashboard Crop-Filter Bar (`Index.tsx`)
+The operation-total summary and per-crop filter pills live in a static `rounded-2xl`
+container in the scrollable dashboard body, directly below the `WeatherBar`. They are
+**not** a floating/sticky footer — an earlier floating footer overlapped field cards and
+the OS home indicator and was removed. The page container keeps
+`pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` so the last field card clears
+the fixed `BottomNav` (`.touch-target` ≈ `4rem` + safe-area).
+
+### ReportTable (Mobile Card Stack)
+`ReportTable` (`src/components/ReportTable.tsx`) wraps every report table and applies the
+`mobile-cards` class. On screens ≤ 768px a CSS block in `src/index.css` (`@layer utilities`)
+restructures the `<table>` into stacked cards:
+- the `<thead>` is hidden off-screen; each `<tr>` becomes a bordered, rounded card;
+- each data `<td>` shows its column header as a left-side label via
+  `td::before { content: attr(data-label) }`;
+- `<td colSpan>` rows (banners, readiness checks, empty states) are reset to full-width by
+  the `td[colspan]` rules and render no label.
+
+Consequently every data `<td>` passed to `ReportTable` must include a `data-label` attribute
+matching its header (enforced in `AGENTS.md` → Responsive Tables). Standalone `<table>`s
+(the Landlord statement) do not use `ReportTable` and remain horizontally scrollable by
+design.
+
 ### FieldNotes Component (Auto-Save)
 Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange`
 event to automatically sync content to Supabase.
