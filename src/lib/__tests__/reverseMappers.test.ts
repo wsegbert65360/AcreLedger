@@ -3,11 +3,12 @@ import {
   mapFieldToDb, mapPlantToDb, mapSprayToDb, mapHarvestToDb,
   mapHayToDb, mapGrainToDb, mapBinToDb, mapSeedToDb,
   mapRecipeToDb, mapFertilizerRecipeToDb, mapFertilizerToDb,
-  mapTillageToDb
+  mapTillageToDb, mapFsaTractToDb, mapFieldCluAssignmentToDb
 } from '../mappers';
 import type { Field, PlantRecord, SprayRecord, HarvestRecord,
   HayHarvestRecord, GrainMovement, Bin, SavedSeed, SprayRecipe,
   FertilizerRecipe, FertilizerApplication, TillageRecord } from '../../types/farm';
+import type { FsaTractImport, FieldCluAssignment } from '../../types/fsaTract';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,43 @@ function makePlant(overrides?: Partial<PlantRecord>): PlantRecord {
     timestamp: Date.now(),
     farm_id: farmId,
     deleted_at: null,
+    ...overrides,
+  };
+}
+
+
+function makeFsaTract(overrides?: Partial<FsaTractImport>): FsaTractImport {
+  return {
+    id: 'tract-1',
+    farmId,
+    tractKey: '6418-1417',
+    filename: '6418-1417.json',
+    featureCount: 1,
+    importedAt: '2026-06-16T00:00:00.000Z',
+    deletedAt: null,
+    geojson: {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+        properties: { cluNumber: '11', acres: 10.5 },
+      }],
+    },
+    ...overrides,
+  };
+}
+
+function makeCluAssignment(overrides?: Partial<FieldCluAssignment>): FieldCluAssignment {
+  return {
+    id: 'assignment-1',
+    farmId,
+    fieldId: 'field-1',
+    tractKey: '6418-1417',
+    cluNumber: '11',
+    acres: 10.5,
+    landUse: 'cropland',
+    assignedAt: '2026-06-16T00:00:00.000Z',
+    deletedAt: null,
     ...overrides,
   };
 }
@@ -109,6 +147,16 @@ describe('Reverse mapper required field validation', () => {
   it('mapTillageToDb throws on missing farm_id', () => {
     expect(() => mapTillageToDb({ id: '1', fieldId: 'fld1', seasonYear: 2026 } as any))
       .toThrow('[Mapper Error] mapTillageToDb: Missing required field "farm_id"');
+  });
+
+  it('mapFsaTractToDb throws on missing farmId', () => {
+    expect(() => mapFsaTractToDb({ id: 'tract-1', tractKey: '6418-1417' } as any))
+      .toThrow('[Mapper Error] mapFsaTractToDb: Missing required field "farmId"');
+  });
+
+  it('mapFieldCluAssignmentToDb throws on missing fieldId', () => {
+    expect(() => mapFieldCluAssignmentToDb({ id: 'assignment-1', farmId, tractKey: '6418-1417', cluNumber: '11', assignedAt: '2026-06-16T00:00:00.000Z' } as any))
+      .toThrow('[Mapper Error] mapFieldCluAssignmentToDb: Missing required field "fieldId"');
   });
 });
 
@@ -213,6 +261,22 @@ describe('Reverse mapper Zod schema validation', () => {
     const result = mapGrainToDb(grain);
     expect(result.bushels).toBe(-50);
   });
+
+  it('mapFsaTractToDb passes Zod validation for valid CLU tract import', () => {
+    const result = mapFsaTractToDb(makeFsaTract());
+    expect(result.farm_id).toBe(farmId);
+    expect(result.tract_key).toBe('6418-1417');
+    expect(result.feature_count).toBe(1);
+    expect(result.deleted_at).toBeNull();
+  });
+
+  it('mapFieldCluAssignmentToDb passes Zod validation for valid CLU assignment', () => {
+    const result = mapFieldCluAssignmentToDb(makeCluAssignment({ landUse: 'non_cropland' }));
+    expect(result.farm_id).toBe(farmId);
+    expect(result.field_id).toBe('field-1');
+    expect(result.clu_number).toBe('11');
+    expect(result.land_use).toBe('non_cropland');
+  });
 });
 
 // ─── Database Output Keys ──────────────────────────────────────────────────────
@@ -243,6 +307,29 @@ describe('Reverse mapper output keys', () => {
     expect(keys).toContain('season_year');
     expect(keys).not.toContain('fieldId');
     expect(keys).not.toContain('seedVariety');
+  });
+
+  it('mapFsaTractToDb outputs snake_case database keys', () => {
+    const result = mapFsaTractToDb(makeFsaTract());
+    const keys = Object.keys(result);
+    expect(keys).toContain('farm_id');
+    expect(keys).toContain('tract_key');
+    expect(keys).toContain('feature_count');
+    expect(keys).toContain('imported_at');
+    expect(keys).not.toContain('farmId');
+    expect(keys).not.toContain('tractKey');
+  });
+
+  it('mapFieldCluAssignmentToDb outputs snake_case database keys', () => {
+    const result = mapFieldCluAssignmentToDb(makeCluAssignment());
+    const keys = Object.keys(result);
+    expect(keys).toContain('farm_id');
+    expect(keys).toContain('field_id');
+    expect(keys).toContain('tract_key');
+    expect(keys).toContain('clu_number');
+    expect(keys).toContain('land_use');
+    expect(keys).not.toContain('farmId');
+    expect(keys).not.toContain('fieldId');
   });
 
   it('mapSprayToDb outputs snake_case keys', () => {

@@ -5,7 +5,7 @@ export interface TractProperties {
 
 export interface TractFeature {
   type: 'Feature';
-  geometry: { type: 'Polygon'; coordinates: number[][][] };
+  geometry: { type: 'Polygon'; coordinates: number[][][] } | { type: 'MultiPolygon'; coordinates: number[][][][] };
   properties: TractProperties;
 }
 

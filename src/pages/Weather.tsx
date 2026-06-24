@@ -16,7 +16,9 @@ import {
 } from 'lucide-react';
 
 import ForecastGrid from '@/components/weather/ForecastGrid';
+import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import RadarEmbed from '@/components/weather/RadarEmbed';
+import { SprayDecisionMatrix } from '@/components/weather/SprayDecisionMatrix';
 import { native } from '@/lib/native';
 import {
   formatTime,
@@ -249,14 +251,17 @@ export default function Weather() {
               </p>
             </div>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={loading}
-            aria-label="Refresh weather data"
-            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted/50 transition-colors"
-          >
-            <RefreshCw size={16} className={`text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <SyncStatusIndicator />
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              aria-label="Refresh weather data"
+              className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <RefreshCw size={16} className={`text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -350,6 +355,17 @@ export default function Weather() {
 
             {/* ── Current Conditions ── */}
             <CurrentConditionsCard weather={weather} lastUpdated={lastUpdated} />
+
+            {/* ── Spray Decision Matrix ── */}
+            {!weather.isError && (
+              <SprayDecisionMatrix
+                tempF={weather.temp}
+                humidity={weather.humidity}
+                windSpeed={weather.wind}
+                windDirection={weather.windDirection}
+                precipProb={weather.precipProb}
+              />
+            )}
 
             {/* ── 10-Day Forecast ── */}
             <ForecastGrid days={weather.forecastDays} />

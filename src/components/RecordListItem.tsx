@@ -1,4 +1,10 @@
-import { Check, Edit2, Tractor, CloudRain, Wheat, Beaker, FileText, AlertTriangle } from 'lucide-react';
+import { Check, Edit2, AlertTriangle } from 'lucide-react';
+import {
+  ACTIVITY_ICONS,
+  ACTIVITY_TEXT_COLORS,
+  ACTIVITY_BG_COLORS,
+  type ActivityType,
+} from '@/lib/activityIcons';
 
 interface RecordListItemProps {
   id: string;
@@ -9,36 +15,16 @@ interface RecordListItemProps {
   isSelected: boolean;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: () => void;
-  type: 'plant' | 'spray' | 'harvest' | 'grain' | 'hay' | 'fertilizer' | 'tillage';
+  type: ActivityType;
   warning?: boolean;
 }
 
 export default function RecordListItem({
   id, title, subtitle, details, date, isSelected, onToggle, onEdit, type, warning
 }: RecordListItemProps) {
-  const Icon = type === 'plant' ? Tractor
-    : type === 'spray' ? CloudRain
-    : type === 'harvest' ? Wheat
-    : type === 'grain' ? Wheat
-    : type === 'hay' ? FileText
-    : type === 'tillage' ? Tractor
-    : Beaker;
-
-  const colorClass = type === 'plant' ? 'text-plant'
-    : type === 'spray' ? 'text-spray'
-    : type === 'harvest' ? 'text-harvest'
-    : type === 'grain' ? 'text-harvest'
-    : type === 'hay' ? 'text-harvest'
-    : type === 'tillage' ? 'text-orange-600'
-    : 'text-plant';
-
-  const bgClass = type === 'plant' ? 'bg-plant/10'
-    : type === 'spray' ? 'bg-spray/10'
-    : type === 'harvest' ? 'bg-harvest/10'
-    : type === 'grain' ? 'bg-harvest/10'
-    : type === 'hay' ? 'bg-harvest/10'
-    : type === 'tillage' ? 'bg-orange-600/10'
-    : 'bg-plant/10';
+  const Icon = ACTIVITY_ICONS[type];
+  const colorClass = ACTIVITY_TEXT_COLORS[type];
+  const bgClass = ACTIVITY_BG_COLORS[type];
 
   return (
     <div

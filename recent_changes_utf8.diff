@@ -1,0 +1,3786 @@
+﻿diff --git a/AGENTS.md b/AGENTS.md
+index 94d5fd6..67e1c0d 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -28,6 +28,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
+ - `TESTING.md` ΓÇö verification protocols and test credentials.
+ - `@/types/farm.ts` ΓÇö canonical TypeScript entity definitions.
+ - `@/lib/mappers.ts` ΓÇö entity to database row translation.
++- `@/lib/backupSchema.ts` ΓÇö strict backup/restore validation schema.
+ - `farmStore.tsx` ΓÇö global React Context store and CRUD actions.
+ - `@/lib/native.ts` ΓÇö centralized native capabilities (haptics, status bar, geolocation).
+ - `@/lib/syncQueue.ts` ΓÇö local sync queue and transaction retry engine for offline operation.
+@@ -105,7 +106,7 @@ All add, update, and delete operations return `Promise<boolean>` ΓÇö `true` on s
+ ### Supabase and Database
+ 
+ - Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
+-- Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract or reassigning a CLU must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
++- Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue and backup restore RPC MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract, reassigning a CLU, or restoring a backup must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
+ - New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
+ - Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
+ - Every farm-owned table must have RLS enabled.
+@@ -134,8 +135,10 @@ All add, update, and delete operations return `Promise<boolean>` ΓÇö `true` on s
+ 
+ - FSA tract imports and field CLU assignments are farm-owned records and must follow farm scoping, mapper discipline, optimistic updates, and soft delete rules.
+ - FSA tract and CLU assignment changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup/restore schema, bundled tract helpers, assignment UI, and FSA report generation/tests.
++- Central mapper names are `mapFsaTractFromDb`, `mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`, and `mapFieldCluAssignmentToDb`; use them before React state changes and before backup restore RPC payload construction.
+ - `field_clu_assignments` stores one active assignment per farm/tract/CLU. Assignment actions must preserve the authoritative current `farm_id`, restore soft-deleted rows when reassigning, and never hard-delete assignments.
+ - `fsa_tract_imports` stores parsed GeoJSON per farm/tract key. Imported tracts may replace bundled tract data with the same tract key in assignment flows.
++- Backup exports MUST include `fsaTracts` and `cluAssignments`. Restore must validate those arrays through `backupSchema.ts`, map them to `fsa_tract_imports` and `field_clu_assignments`, and replay them through the restore RPC using the CLU conflict keys above.
+ - When showing CLU totals, assigned counts, or unassigned counts, compare assignments against the same CLU universe being displayed. Do not subtract bundled or legacy assignment keys from imported-only tract totals.
+ - Active CLU assignment counts must exclude soft-deleted assignments (`deletedAt` / `deleted_at`).
+ - Bundled FSA tract data may be used for display and assignment flows, but imported tract counts should be labeled and calculated as imported-only unless the UI explicitly says it includes bundled tracts.
+@@ -154,6 +157,8 @@ All add, update, and delete operations return `Promise<boolean>` ΓÇö `true` on s
+ 
+ - Backup restore must treat the current selected `farm_id` as authoritative.
+ - Before mapping restored records, merge `{ ...record, farm_id }` into each restored record.
++- For FSA tract imports and CLU assignments, the app type uses `farmId`; merge `{ ...record, farmId: farm_id }` before calling `mapFsaTractToDb` or `mapFieldCluAssignmentToDb`.
++- Backups must preserve CLU setup with `fsaTracts` and `cluAssignments`; the restore RPC payload must send those as `fsa_tract_imports` and `field_clu_assignments`.
+ - Do not hydrate React state directly from raw backup arrays.
+ - Normalize restored records first.
+ - If the restore RPC fails, do not mutate React state.
+diff --git a/BLUEPRINT.md b/BLUEPRINT.md
+index e53ae17..4cca91c 100644
+--- a/BLUEPRINT.md
++++ b/BLUEPRINT.md
+@@ -241,6 +241,27 @@ Saved fertilizer formulas for reuse on fertilizer application records.
+ - **Management**: Users can create, edit, and delete fertilizer recipes directly in the **Settings** page or save a new formula as a recipe while recording an application.
+ - **Usage**: Saved recipes appear as a dropdown in the Fertilizer Modal for quick data entry.
+ 
++### FsaTractImport
++Imported FSA tract/CLU GeoJSON owned by a farm. Not season-scoped.
++```ts
++{ id, farmId, tractKey, filename, featureCount, geojson, importedAt, deletedAt }
++```
++- **DB table**: `fsa_tract_imports` stores `farm_id`, `tract_key`, `filename`, `feature_count`, `geojson`, `imported_at`, and `deleted_at`.
++- **Conflict key**: One active/restoreable import per farm/tract key. Inserts and backup restore replays use upsert conflict `farm_id,tract_key` so a re-import restores a soft-deleted tract instead of violating the unique constraint.
++- **Mappers**: Use `mapFsaTractFromDb` and `mapFsaTractToDb` from `@/lib/mappers.ts`.
++
++### FieldCluAssignment
++Farm-owned assignment from one CLU inside a tract to one AcreLedger field. Not season-scoped.
++```ts
++{ id, farmId, fieldId, tractKey, cluNumber, acres,
++  landUse: 'cropland' | 'non_cropland', assignedAt, deletedAt }
++```
++- **DB table**: `field_clu_assignments` stores `farm_id`, `field_id`, `tract_key`, `clu_number`, `acres`, `land_use`, `assigned_at`, and `deleted_at`.
++- **Conflict key**: One active/restoreable assignment per farm/tract/CLU. Inserts and backup restore replays use upsert conflict `farm_id,tract_key,clu_number` so reassignment restores soft-deleted rows safely.
++- **Mappers**: Use `mapFieldCluAssignmentFromDb` and `mapFieldCluAssignmentToDb` from `@/lib/mappers.ts`.
++- **Counts**: Assigned/unassigned totals must compare assignments against the same CLU universe being displayed, and must exclude soft-deleted assignments.
++- **Acreage**: Persisted field acreage may be rounded for display/state, but the source CLU feature acres must not be mutated.
++
+ ### Rainfall
+ High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar + field-based historical lookups).
+ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and range coverage.
+@@ -324,9 +345,17 @@ Backup files may contain stale, missing, or foreign `farm_id` values because use
+ older exports or pre-fix local cache data. Restore must always treat the currently selected
+ `farm_id` as authoritative:
+ - Before calling any `mapXToDb` mapper in `restoreFromBackup`, merge `{ ...record, farm_id }`
+-  into every restored record.
+-- The Supabase `restore_farm_backup` RPC payload and the React state hydrated after a successful
+-  restore must use the same current `farm_id`.
++  into every restored farm entity record.
++- FSA tract imports and CLU assignments use camelCase `farmId` in app state, so merge
++  `{ ...record, farmId: farm_id }` before calling `mapFsaTractToDb` or
++  `mapFieldCluAssignmentToDb`.
++- Backup files must preserve CLU setup with `fsaTracts` and `cluAssignments`; the schema also
++  accepts the Settings export metadata field `backupDate`.
++- The Supabase `restore_farm_backup` RPC payload must send normalized database rows, including
++  `fsa_tract_imports` and `field_clu_assignments`, using the same current `farm_id`.
++- Restore SQL must replay `fsa_tract_imports` by `farm_id,tract_key` and
++  `field_clu_assignments` by `farm_id,tract_key,clu_number`, while rejecting conflicting row IDs
++  that already belong to another farm.
+ - Never hydrate React state directly from raw backup arrays after a restore. Normalize records
+   first so localStorage, in-memory state, and Supabase stay aligned.
+ - Restore must fail without mutating state if the RPC returns an error.
+@@ -365,7 +394,8 @@ Every entity has a dedicated mapper in `@/lib/mappers.ts`.
+ - **CamelCase to SnakeCase**: Mappers handle all translation.
+ - **Payload Sanitization**: Mappers MUST ensure optional fields are sent as `null` to the DB to prevent serialization issues.
+ - **Safety**: Use `safeNum` and `safeStr` helpers to prevent type errors.
+-- **Identity Preservation**: Mappers for user-managed reference data, including `saved_seeds`, MUST preserve `id`, `farm_id`, and `deleted_at` so optimistic local IDs, backup restores, and persisted DB rows remain aligned.
++- **Identity Preservation**: Mappers for user-managed reference data, including `saved_seeds`, `fsa_tract_imports`, and `field_clu_assignments`, MUST preserve `id`, `farm_id`, and `deleted_at` so optimistic local IDs, backup restores, and persisted DB rows remain aligned.
++- **CLU mappers**: Use `mapFsaTractFromDb`, `mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`, and `mapFieldCluAssignmentToDb` for every FSA tract import and CLU assignment read/write/restore path.
+ 
+ ### farm_id Rule
+ `farm_id` is a relational partition key. Inserts and restore payloads MUST include the current
+@@ -374,6 +404,14 @@ strip `farm_id` out of `.update()` payloads after mapping. Service-layer update
+ inject the authoritative current `farmId` before mapper validation, then omit it from the update
+ payload.
+ 
++### FSA / CLU Upsert Exception
++The default rule remains no `upsert` for updates. The only farm-owned exception is insert/replay
++for `fsa_tract_imports` and `field_clu_assignments`:
++- `fsa_tract_imports`: upsert on `farm_id,tract_key`.
++- `field_clu_assignments`: upsert on `farm_id,tract_key,clu_number`.
++- Normal update and soft-delete paths still use `.update().eq('id', id).eq('farm_id', farm_id)`.
++- Offline sync and `restore_farm_backup` must preserve these conflict keys so soft-deleted rows can be restored safely.
++
+ ### Soft Delete
+ `.update({ deleted_at: new Date().toISOString() }).in('id', ids).eq('farm_id', farm_id)`
+ Never use Supabase `.delete()` on user records.
+@@ -452,7 +490,7 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
+ ## 12. Coding Rules & Conventions
+ 
+ - **Icon Shadowing**: Use `MapIcon`, `HistoryIcon` aliasing.
+-- **No `upsert` for updates**: Use `.update().eq('id').eq('farm_id')`.
++- **No `upsert` for updates**: Use `.update().eq('id').eq('farm_id')`; only FSA tract/CLU insert and restore replay paths use the documented conflict-key upserts.
+ - **Radix Modals**: Always include `DialogDescription`.
+ - **Form Inputs**: Always include `id`, `name`, and linked `Label`.
+ - **Data Safety**: Optional fields default to `null` in mappers.
+diff --git a/CODEMAGIC.md b/CODEMAGIC.md
+index 0a14654..e8d8f47 100644
+--- a/CODEMAGIC.md
++++ b/CODEMAGIC.md
+@@ -140,6 +140,7 @@ Upload to App Store Connect / TestFlight
+ - Verify your App Store Connect integration in CodeMagic settings.
+ - Ensure the API key has **App Manager** permission.
+ - Check that an app record exists in App Store Connect.
++- Confirm **Beta App Information** and **Beta App Review Information** are filled out in App Store Connect.
+ 
+ ### App shows "load failed" on launch
+ - The `appstore` environment variable group is missing or has incorrect values.
+diff --git a/src/App.tsx b/src/App.tsx
+index 57c768a..c75770e 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -8,11 +8,13 @@ import { AnimatePresence, motion } from "framer-motion";
+ 
+ import { Auth } from "@/components/Auth";
+ import BottomNav from "@/components/BottomNav";
++import CoachmarkOverlay from "@/components/CoachmarkOverlay";
+ import ErrorBoundary from "@/components/ErrorBoundary";
+ import OfflineBanner from "@/components/OfflineBanner";
+ import SeasonRolloverModal from "@/components/SeasonRolloverModal";
+ import Sidebar from "@/components/Sidebar";
+ import { ThemeProvider } from "@/components/ThemeProvider";
++import { useCoachmarks } from "@/hooks/useCoachmarks";
+ import { Toaster as Sonner } from "@/components/ui/sonner";
+ import { TooltipProvider } from "@/components/ui/tooltip";
+ import { syncQueue } from "@/lib/syncQueue";
+@@ -83,6 +85,10 @@ const AnimatedRoutes = () => {
+ const AppContent = () => {
+   const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
+   const location = useLocation();
++  const coachmarks = useCoachmarks({
++    userId: session?.user?.id,
++    enabled: !!session && onboardingComplete && location.pathname === '/'
++  });
+ 
+   useEffect(() => {
+     if (!Capacitor.isNativePlatform()) return;
+@@ -173,6 +179,17 @@ const AppContent = () => {
+       </div>
+       <BottomNav />
+       <SeasonRolloverModal />
++      {coachmarks.isActive && coachmarks.currentStep && (
++        <CoachmarkOverlay
++          step={coachmarks.currentStep}
++          stepIndex={coachmarks.stepIndex}
++          totalSteps={coachmarks.totalSteps}
++          onNext={coachmarks.next}
++          onBack={coachmarks.back}
++          onSkip={coachmarks.skip}
++          isLast={coachmarks.stepIndex === coachmarks.totalSteps - 1}
++        />
++      )}
+     </>
+   );
+ };
+diff --git a/src/components/BottomNav.tsx b/src/components/BottomNav.tsx
+index 7664a64..4d4f38a 100644
+--- a/src/components/BottomNav.tsx
++++ b/src/components/BottomNav.tsx
+@@ -16,6 +16,7 @@ export default function BottomNav() {
+           return (
+             <button
+               key={path}
++              id={path === '/activity' ? 'coachmark-activity-tab' : path === '/reports' ? 'coachmark-reports-tab' : undefined}
+               onClick={() => {
+                 native.haptic.light();
+                 navigate(path);
+diff --git a/src/components/DashboardStats.tsx b/src/components/DashboardStats.tsx
+index 6d0a460..8b625a5 100644
+--- a/src/components/DashboardStats.tsx
++++ b/src/components/DashboardStats.tsx
+@@ -1,10 +1,11 @@
+ import { useMemo } from 'react';
+ import {
+-  MapPin, Sprout, Wheat, CloudRain, Warehouse, AlertCircle,
++  MapPin, Wheat, Warehouse, AlertCircle,
+ } from 'lucide-react';
+ 
+ import { useFarm } from '@/store/farmStore';
+ import { Skeleton } from '@/components/ui/skeleton';
++import { ACTIVITY_ICONS } from '@/lib/activityIcons';
+ import { roundTo } from '@/utils/numbers';
+ 
+ // ΓöÇΓöÇ Shared card shell ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+@@ -165,7 +166,7 @@ export default function DashboardStats() {
+ 
+       {/* 2 ΓÇö Planted */}
+       <StatCard
+-        icon={Sprout}
++        icon={ACTIVITY_ICONS.plant}
+         iconColor="text-plant"
+         label="Planted"
+         value={`${stats.plantedAcres.toLocaleString()} AC`}
+@@ -192,7 +193,7 @@ export default function DashboardStats() {
+ 
+       {/* 4 ΓÇö Spray */}
+       <StatCard
+-        icon={CloudRain}
++        icon={ACTIVITY_ICONS.spray}
+         iconColor="text-spray"
+         label="Spray Apps"
+         value={stats.sprayCount.toLocaleString()}
+diff --git a/src/components/FieldCard.tsx b/src/components/FieldCard.tsx
+index 5c9cff7..26f9bbe 100644
+--- a/src/components/FieldCard.tsx
++++ b/src/components/FieldCard.tsx
+@@ -1,8 +1,9 @@
+ import { useNavigate } from 'react-router-dom';
+-import { MapPin, ChevronRight, Sprout, Cloud, FlaskConical as Flask } from 'lucide-react';
++import { MapPin, ChevronRight } from 'lucide-react';
+ 
+ import { Field } from '@/types/farm';
+ import { roundTo } from '@/utils/numbers';
++import { ACTIVITY_ICONS } from '@/lib/activityIcons';
+ 
+ interface FieldCardProps {
+   field: Field & { displayAcreage?: number };
+@@ -17,8 +18,13 @@ export default function FieldCard({ field }: FieldCardProps) {
+     navigate(`/field/${field.id}`);
+   };
+ 
+-  // Determine status: green if planted, gray if no activity at all
++  // Determine status: green if planted, blue if any activity, gray if none
+   const hasActivity = summary?.planted || (summary?.sprayed ?? 0) > 0 || (summary?.fertilized ?? 0) > 0;
++  const statusLabel = summary?.planted
++    ? 'Planted'
++    : hasActivity
++      ? 'Activity logged'
++      : 'No activity';
+   const statusColor = summary?.planted
+     ? 'bg-plant'
+     : hasActivity
+@@ -40,7 +46,11 @@ export default function FieldCard({ field }: FieldCardProps) {
+       className="bg-card/60 backdrop-blur-md border border-border rounded-lg p-2 px-3 flex items-center justify-between ring-1 ring-white/5 shadow-xl cursor-pointer hover:bg-card/80 transition-all active:scale-[0.98] relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+     >
+       {/* Status dot */}
+-      <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${statusColor}`} />
++      <div
++        className={`absolute top-2 right-2 w-2 h-2 rounded-full ${statusColor}`}
++        title={statusLabel}
++        aria-label={statusLabel}
++      />
+ 
+       <div className="flex items-center gap-2">
+         <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">
+@@ -62,7 +72,7 @@ export default function FieldCard({ field }: FieldCardProps) {
+               className="h-8 w-8 flex items-center justify-center text-primary/40"
+               title="Planting Activity"
+             >
+-              <Sprout size={16} />
++              <ACTIVITY_ICONS.plant size={16} />
+             </div>
+           )}
+           {(summary?.sprayed ?? 0) > 0 && (
+@@ -71,7 +81,7 @@ export default function FieldCard({ field }: FieldCardProps) {
+               title="Spraying Activity"
+             >
+               <div className="flex items-center">
+-                <Cloud size={16} />
++                <ACTIVITY_ICONS.spray size={16} />
+                 <span className="text-[11px] font-mono font-bold ml-0.5">x{summary?.sprayed}</span>
+               </div>
+             </div>
+@@ -81,7 +91,7 @@ export default function FieldCard({ field }: FieldCardProps) {
+               className="h-8 w-8 flex items-center justify-center text-primary/40"
+               title="Fertilizer Activity"
+             >
+-              <Flask size={16} />
++              <ACTIVITY_ICONS.fertilizer size={16} />
+             </div>
+           )}
+         </div>
+diff --git a/src/components/FieldManager.tsx b/src/components/FieldManager.tsx
+index be9deb1..6913c8c 100644
+--- a/src/components/FieldManager.tsx
++++ b/src/components/FieldManager.tsx
+@@ -1,11 +1,9 @@
+-import { useState, useMemo } from 'react';
++import { useState, useMemo, useCallback } from 'react';
+ import { useFarm } from '@/store/farmStore';
+ import { Field } from '@/types/farm';
+ import { Plus, Pencil, Trash2 } from 'lucide-react';
+-import {
+-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+-} from '@/components/ui/alert-dialog';
++import { toast } from 'sonner';
++import { useUndoDelete } from '@/hooks/useUndoDelete';
+ import FieldManageModal from './FieldManageModal';
+ 
+ // Γ£à Fix: Extracted shared card component ΓÇö eliminates duplication
+@@ -54,8 +52,28 @@ function FieldCard({
+ 
+ export default function FieldManager() {
+   const { fields: allFields, deleteField, fetchError } = useFarm();
++
++  const [editField, setEditField] = useState<Field | null>(null);
++  const [addOpen, setAddOpen] = useState(false);
++
++  const commitDelete = useCallback(async (ids: string[]) => {
++    const results = await Promise.all(ids.map(id => deleteField(id)));
++    if (results.some(r => !r)) {
++      throw new Error('One or more field deletions failed');
++    }
++  }, [deleteField]);
++
++  const { pending: pendingDeletes, requestDelete } = useUndoDelete<string>({
++    onCommit: commitDelete,
++    onError: () => toast.error('Failed to delete field. It remains visible.'),
++  });
++
++  const activeFields = useMemo(() =>
++    allFields.filter(f => !f.deleted_at && !pendingDeletes.has(f.id)),
++    [allFields, pendingDeletes]
++  );
++
+   const { rowCrops, pastureHay } = useMemo(() => {
+-    const activeFields = allFields.filter(f => !f.deleted_at);
+     const sorted = [...activeFields].sort((a, b) => a.name.localeCompare(b.name));
+ 
+     return {
+@@ -68,17 +86,16 @@ export default function FieldManager() {
+         return use.includes('pasture') || use.includes('hay');
+       }),
+     };
+-  }, [allFields]);
+-
+-  const [editField, setEditField] = useState<Field | null>(null);
+-  const [addOpen, setAddOpen] = useState(false);
+-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
++  }, [activeFields]);
+ 
+-  const hasFields = rowCrops.length > 0 || pastureHay.length > 0; // Γ£à Fix: no unnecessary array spread
+-  const bothCategories = rowCrops.length > 0 && pastureHay.length > 0; // Γ£à Fix: used for header visibility
++  const hasFields = rowCrops.length > 0 || pastureHay.length > 0;
++  const bothCategories = rowCrops.length > 0 && pastureHay.length > 0;
+ 
+-  // Γ£à Fix: Look up field name for use in delete dialog
+-  const fieldToDelete = allFields.find(f => f.id === deleteConfirm);
++  const handleDeleteRequest = (id: string) => {
++    const field = allFields.find(f => f.id === id);
++    if (!field) return;
++    requestDelete([id], `Field "${field.name}" deleted`, field.name);
++  };
+ 
+   return (
+     <>
+@@ -126,7 +143,7 @@ export default function FieldManager() {
+                     key={field.id}
+                     field={field}
+                     onEdit={setEditField}
+-                    onDelete={setDeleteConfirm}
++                    onDelete={handleDeleteRequest}
+                   />
+                 ))}
+               </div>
+@@ -144,7 +161,7 @@ export default function FieldManager() {
+                     key={field.id}
+                     field={field}
+                     onEdit={setEditField}
+-                    onDelete={setDeleteConfirm}
++                    onDelete={handleDeleteRequest}
+                   />
+                 ))}
+               </div>
+@@ -157,35 +174,6 @@ export default function FieldManager() {
+       {editField && (
+         <FieldManageModal open editField={editField} onClose={() => setEditField(null)} />
+       )}
+-
+-      {/* Γ£à Fix: onOpenChange respects the boolean argument */}
+-      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+-        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+-          <AlertDialogHeader>
+-            {/* Γ£à Fix: Show the field name in the dialog */}
+-            <AlertDialogTitle className="text-foreground">
+-              Delete &ldquo;{fieldToDelete?.name ?? 'this field'}&rdquo;?
+-            </AlertDialogTitle>
+-            <AlertDialogDescription className="text-muted-foreground">
+-              This will permanently remove this field. Existing records will be preserved.
+-            </AlertDialogDescription>
+-          </AlertDialogHeader>
+-          <AlertDialogFooter>
+-            <AlertDialogCancel className="touch-target border-border text-muted-foreground">
+-              Cancel
+-            </AlertDialogCancel>
+-            <AlertDialogAction
+-              onClick={async () => {
+-                if (deleteConfirm) await deleteField(deleteConfirm);
+-                setDeleteConfirm(null);
+-              }}
+-              className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+-            >
+-              Delete
+-            </AlertDialogAction>
+-          </AlertDialogFooter>
+-        </AlertDialogContent>
+-      </AlertDialog>
+     </>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/components/RecordListItem.tsx b/src/components/RecordListItem.tsx
+index ffaa482..821c9fb 100644
+--- a/src/components/RecordListItem.tsx
++++ b/src/components/RecordListItem.tsx
+@@ -1,4 +1,10 @@
+-import { Check, Edit2, Tractor, CloudRain, Wheat, Beaker, FileText, AlertTriangle } from 'lucide-react';
++import { Check, Edit2, AlertTriangle } from 'lucide-react';
++import {
++  ACTIVITY_ICONS,
++  ACTIVITY_TEXT_COLORS,
++  ACTIVITY_BG_COLORS,
++  type ActivityType,
++} from '@/lib/activityIcons';
+ 
+ interface RecordListItemProps {
+   id: string;
+@@ -9,36 +15,16 @@ interface RecordListItemProps {
+   isSelected: boolean;
+   onToggle: (id: string, shift: boolean) => void;
+   onEdit: () => void;
+-  type: 'plant' | 'spray' | 'harvest' | 'grain' | 'hay' | 'fertilizer' | 'tillage';
++  type: ActivityType;
+   warning?: boolean;
+ }
+ 
+ export default function RecordListItem({
+   id, title, subtitle, details, date, isSelected, onToggle, onEdit, type, warning
+ }: RecordListItemProps) {
+-  const Icon = type === 'plant' ? Tractor
+-    : type === 'spray' ? CloudRain
+-    : type === 'harvest' ? Wheat
+-    : type === 'grain' ? Wheat
+-    : type === 'hay' ? FileText
+-    : type === 'tillage' ? Tractor
+-    : Beaker;
+-
+-  const colorClass = type === 'plant' ? 'text-plant'
+-    : type === 'spray' ? 'text-spray'
+-    : type === 'harvest' ? 'text-harvest'
+-    : type === 'grain' ? 'text-harvest'
+-    : type === 'hay' ? 'text-harvest'
+-    : type === 'tillage' ? 'text-orange-600'
+-    : 'text-plant';
+-
+-  const bgClass = type === 'plant' ? 'bg-plant/10'
+-    : type === 'spray' ? 'bg-spray/10'
+-    : type === 'harvest' ? 'bg-harvest/10'
+-    : type === 'grain' ? 'bg-harvest/10'
+-    : type === 'hay' ? 'bg-harvest/10'
+-    : type === 'tillage' ? 'bg-orange-600/10'
+-    : 'bg-plant/10';
++  const Icon = ACTIVITY_ICONS[type];
++  const colorClass = ACTIVITY_TEXT_COLORS[type];
++  const bgClass = ACTIVITY_BG_COLORS[type];
+ 
+   return (
+     <div
+diff --git a/src/components/SprayModal.tsx b/src/components/SprayModal.tsx
+index c072e8d..29327e8 100644
+--- a/src/components/SprayModal.tsx
++++ b/src/components/SprayModal.tsx
+@@ -1,26 +1,17 @@
+-import { useState, useEffect, useRef } from 'react';
+ import {
+-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+-} from '@/components/ui/alert-dialog';
+-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
++  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
++} from '@/components/ui/dialog';
+ import { Button } from '@/components/ui/button';
+-import { Input } from '@/components/ui/input';
+-import { Label } from '@/components/ui/label';
+-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+ import { useFarm } from '@/store/farmStore';
+-import { Field, SprayRecipeProduct, SprayRecord } from '@/types/farm';
+-import { WeatherService } from '@/services/WeatherService';
+-import { WeatherData } from '@/types/weather';
+-import { native } from '@/lib/native';
+-import { CloudRain, Loader2, Clock, MapPin, User, FileText, X, Plus, FileDown, AlertTriangle, History as HistoryIcon } from 'lucide-react';
++import { Field, SprayRecord } from '@/types/farm';
++import { CloudRain, Loader2, ChevronLeft, ChevronRight, FileDown, AlertTriangle } from 'lucide-react';
+ import { generateSprayPDF } from '@/lib/sprayExport';
+-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+-import { Textarea } from '@/components/ui/textarea';
+-import { Switch } from '@/components/ui/switch';
+-import { Checkbox } from '@/components/ui/checkbox';
+-import { toast } from 'sonner';
+-import { calculateTotalAmount } from '@/utils/unitConversion';
++import { useSprayForm } from '@/hooks/useSprayForm';
++import { SprayWizardNav } from '@/components/spray/SprayWizardNav';
++import { SprayWizardCoreStep } from '@/components/spray/SprayWizardCoreStep';
++import { SprayWizardMixStep } from '@/components/spray/SprayWizardMixStep';
++import { SprayWizardConditionsStep } from '@/components/spray/SprayWizardConditionsStep';
++import { SprayWizardReviewStep } from '@/components/spray/SprayWizardReviewStep';
+ 
+ interface SprayModalProps {
+   field: Field;
+@@ -30,855 +21,157 @@ interface SprayModalProps {
+ }
+ 
+ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
+-  const { addSprayRecord, updateSprayRecord, sprayRecipes, session, viewingSeason, farmName } = useFarm();
+-  const userPrefix = session?.user?.id?.slice(0, 8) || "local";
+-  const [weather, setWeather] = useState<WeatherData | null>(null);
+-  const [loading, setLoading] = useState(false);
+-  const [products, setProducts] = useState<SprayRecipeProduct[]>(
+-    initialData?.products?.map(p => ({ 
+-      ...p, 
+-      ui_id: p.ui_id || crypto.randomUUID(),
+-      epaRegNumber: p.epaRegNumber || '',
+-      activeIngredients: p.activeIngredients || '',
+-      totalProductAmount: p.totalProductAmount || '',
+-      totalProductUnit: p.totalProductUnit || 'gal'
+-    })) || [{ 
+-      ui_id: crypto.randomUUID(), 
+-      product: '', 
+-      rate: '', 
+-      rateUnit: 'oz/ac', 
+-      epaRegNumber: '',
+-      activeIngredients: '',
+-      totalProductAmount: '',
+-      totalProductUnit: 'gal'
+-    }]
+-  );
+-  const [selectedRecipeId, setSelectedRecipeId] = useState('');
+-  const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
+-  const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
+-  const [targetPest, setTargetPest] = useState(initialData?.targetPest || 'grass/broadleaves');
+-  const [sprayDate, setSprayDate] = useState(initialData?.sprayDate || new Date().toISOString().split('T')[0]);
+-  const [startTime, setStartTime] = useState(() => initialData?.startTime || new Date().toTimeString().slice(0, 5));
+-  const [involvedTechnicians, setInvolvedTechnicians] = useState(initialData?.involvedTechnicians || '');
+-  const [siteAddress, setSiteAddress] = useState(initialData?.siteAddress || field.name);
+-  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || field.acreage.toString());
+-  const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied?.toString() || '');
+-  const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
+-  const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
+-  const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
+-  const [manualWindDirection, setManualWindDirection] = useState<string>('');
+-  const [manualWindSpeed, setManualWindSpeed] = useState<string>('');
+-  const [isPremixed, setIsPremixed] = useState(initialData?.isPremixed || false);
+-
+-  // Initialize weather related states from initialData if available
+-  useEffect(() => {
+-    if (initialData) {
+-      setManualWindDirection(initialData.windDirection || '');
+-      setManualWindSpeed(initialData.windSpeed?.toString() || '');
+-    }
+-  }, [initialData]);
+-
+-  // New Universal Fields
+-  const [endTime, setEndTime] = useState(initialData?.endTime || '');
+-  const [isEndTimeManual, setIsEndTimeManual] = useState(!!initialData?.endTime);
+-  const [cropOrSiteTreated, setCropOrSiteTreated] = useState(initialData?.cropOrSiteTreated || '');
+-  const [applicationMethod, setApplicationMethod] = useState(initialData?.applicationMethod || 'Ground Broadcast');
+-  const [treatedAreaUnit, setTreatedAreaUnit] = useState(initialData?.treatedAreaUnit || 'ac');
+-  const [rei, setRei] = useState(initialData?.rei || '12h');
+-  const [notes, setNotes] = useState(initialData?.notes || '');
+-  const [sensitiveAreaCheck, setSensitiveAreaCheck] = useState(initialData?.sensitiveAreaCheck || false);
+-  const [sensitiveAreaNotes, setSensitiveAreaNotes] = useState(initialData?.sensitiveAreaNotes || '');
+-  const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
+-  const [isSaving, setIsSaving] = useState(false);
+-  const [isRecovering, setIsRecovering] = useState(false);
+-  const [productIndexToDelete, setProductIndexToDelete] = useState<number | null>(null);
+-  const [accordionValue, setAccordionValue] = useState<string>("compliance");
+-  const hasSeenIncompleteWarning = useRef(false);
+-
+-  // Auto-calculate total amount for each product and the general summary
+-  useEffect(() => {
+-    const acres = parseFloat(treatedAreaSize);
+-    if (isNaN(acres) || acres <= 0) return;
+-
+-    let firstProductTotal = 0;
+-
+-    setProducts(prev => {
+-      let changed = false;
+-      const next = prev.map((p, i) => {
+-        const rateValue = parseFloat(p.rate || '0');
+-        if (isNaN(rateValue) || rateValue <= 0) return p;
+-
+-        const { value, unit } = calculateTotalAmount(rateValue, acres, p.rateUnit);
+-
+-        if (i === 0) firstProductTotal = value;
+-
+-        if (p.totalProductAmount !== value.toString() || p.totalProductUnit !== unit) {
+-          changed = true;
+-          return { ...p, totalProductAmount: value.toString(), totalProductUnit: unit };
+-        }
+-        return p;
+-      });
+-      return changed ? next : prev;
+-    });
+-
+-    if (firstProductTotal > 0 && totalAmountApplied !== firstProductTotal.toString()) {
+-      setTotalAmountApplied(firstProductTotal.toString());
+-    }
+-  }, [treatedAreaSize, products.map(p => `${p.rate}-${p.rateUnit}`).join(',')]);
+-
+-  // Handle End Time Estimation
+-  useEffect(() => {
+-    if (isEndTimeManual || !startTime || !treatedAreaSize) return;
+-
+-    const acres = parseFloat(treatedAreaSize);
+-    if (isNaN(acres) || acres <= 0) return;
+-
+-    const [hours, minutes] = startTime.split(':').map(Number);
+-    if (isNaN(hours) || isNaN(minutes)) return;
+-    const startMins = hours * 60 + minutes;
+-
+-    // 100' sprayer @ 5mph = ~60.6 acres per hour
+-    // (100 * 5) / 8.25 = 60.6 (Approx 1 acre per minute)
+-    const durationMins = Math.round(acres / (60.6 / 60));
+-    const endTotalMins = (startMins + durationMins) % (24 * 60);
+-
+-    const endH = Math.floor(endTotalMins / 60).toString().padStart(2, '0');
+-    const endM = (endTotalMins % 60).toString().padStart(2, '0');
+-
+-    const newEndTime = `${endH}:${endM}`;
+-    if (endTime !== newEndTime) {
+-      setEndTime(newEndTime);
+-    }
+-  }, [startTime, treatedAreaSize, isEndTimeManual, open]);
+-
+-  const resetComplianceFields = () => {
+-    const now = new Date();
+-    setStartTime(now.toTimeString().slice(0, 5));
+-    setEndTime('');
+-    setIsEndTimeManual(false);
+-    setCropOrSiteTreated('');
+-    setApplicationMethod('Ground Broadcast');
+-    setTreatedAreaUnit('ac');
+-    setRei('12h');
+-    setNotes('');
+-    setSensitiveAreaCheck(false);
+-    setSensitiveAreaNotes('');
+-    setSiteAddress(field.name);
+-    setTreatedAreaSize(field.acreage.toString());
+-    setTargetPest('grass/broadleaves');
+-    setTotalAmountApplied('');
+-    setMixtureRate('');
+-    setTotalMixtureVolume('');
+-    setIsPremixed(false);
+-    setManualWindDirection('');
+-    setManualWindSpeed('');
+-    setProducts([{ 
+-      ui_id: crypto.randomUUID(), 
+-      product: '', 
+-      rate: '', 
+-      rateUnit: 'oz/ac', 
+-      epaRegNumber: '',
+-      activeIngredients: '',
+-      totalProductAmount: '',
+-      totalProductUnit: 'gal'
+-    }]);
+-    setSelectedRecipeId('');
+-    setWeather(null);
++  const { sprayRecipes, farmName, viewingSeason } = useFarm();
++  const form = useSprayForm({ field, open, onClose, initialData });
++
++  const {
++    step, WIZARD_STEPS, canGoNext, canGoBack, goNext, goBack, goToStep,
++    isSaving, isMinimumValid, isFullyCompliant, missingComplianceFields,
++    handleSubmit
++  } = form;
++
++  const handleClose = () => {
++    if (isSaving) return;
++    onClose();
+   };
+ 
+-  useEffect(() => {
+-    if (!open) return;
+-    setShowValidation(false);
+-    hasSeenIncompleteWarning.current = false;
+-    setAccordionValue("compliance");
+-
+-    if (initialData) {
+-      setProducts(initialData.products?.map(p => ({ 
+-        ...p, 
+-        ui_id: p.ui_id || crypto.randomUUID(),
+-        epaRegNumber: p.epaRegNumber || '',
+-        activeIngredients: p.activeIngredients || '',
+-        totalProductAmount: p.totalProductAmount || '',
+-        totalProductUnit: p.totalProductUnit || 'gal'
+-      })) || [{ 
+-        ui_id: crypto.randomUUID(), 
+-        product: '', 
+-        rate: '', 
+-        rateUnit: 'oz/ac', 
+-        epaRegNumber: '',
+-        activeIngredients: '',
+-        totalProductAmount: '',
+-        totalProductUnit: 'gal'
+-      }]);
+-      setApplicatorName(initialData.applicatorName || '');
+-      setLicenseNumber(initialData.licenseNumber || '');
+-      setTargetPest(initialData.targetPest || 'grass/broadleaves');
+-      setSprayDate(initialData.sprayDate || new Date().toISOString().split('T')[0]);
+-      setStartTime(initialData.startTime || '');
+-      setEndTime(initialData.endTime || '');
+-      setIsEndTimeManual(!!initialData.endTime);
+-      setSiteAddress(initialData.siteAddress || field.name);
+-      setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field.acreage.toString());
+-      setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
+-      setTotalAmountApplied(initialData.totalAmountApplied?.toString() || '');
+-      setMixtureRate(initialData.mixtureRate || '');
+-      setTotalMixtureVolume(initialData.totalMixtureVolume || '');
+-      setInvolvedTechnicians(initialData.involvedTechnicians || '');
+-      setEquipmentId(initialData.equipmentId || '');
+-      setManualWindDirection(initialData.windDirection || '');
+-      setManualWindSpeed(initialData.windSpeed?.toString() || '');
+-      setIsPremixed(initialData.isPremixed || false);
+-      setCropOrSiteTreated(initialData.cropOrSiteTreated || '');
+-      setApplicationMethod(initialData.applicationMethod || 'Ground Broadcast');
+-      setRei(initialData.rei || '12h');
+-      setNotes(initialData.notes || '');
+-      setSensitiveAreaCheck(initialData.sensitiveAreaCheck || false);
+-      setSensitiveAreaNotes(initialData.sensitiveAreaNotes || '');
+-      setSelectedRecipeId('');
+-
+-      if (
+-        initialData.windSpeed !== undefined ||
+-        initialData.temperature !== undefined ||
+-        initialData.relativeHumidity !== undefined ||
+-        initialData.windDirection
+-      ) {
+-        setWeather({
+-          wind: initialData.windSpeed ?? 0,
+-          temp: initialData.temperature ?? 0,
+-          humidity: initialData.relativeHumidity ?? 0,
+-          windDirection: initialData.windDirection ?? '',
+-          isError: false
+-        });
+-      } else {
+-        setWeather(null);
+-      }
+-    } else {
+-      resetComplianceFields();
+-    }
+-    // Depend on open/initialData only ΓÇö NOT the `field` object reference.
+-    // The store recreates field objects on every fetchData() (mount + network
+-    // reconnect), which would otherwise re-trigger this effect, call
+-    // resetComplianceFields(), and clear `weather` to null. Because the weather
+-    // effect below keys on field.lat/field.lng primitives (unchanged), the
+-    // weather would never be re-fetched, leaving the spray log without weather.
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [open, initialData]);
+-
+-  useEffect(() => {
+-    // Only auto-fetch current weather for NEW records.
+-    // For existing records, we rely on stored data or the manual "Recover" button.
+-    if (open && !initialData && field.lat != null && field.lng != null) {
+-      setLoading(true);
+-      WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
+-        if (!w || w.isError) {
+-          setLoading(false);
+-          return;
+-        }
+-        setWeather(w);
+-        // Only auto-populate manual fields if they are empty.
+-        // Functional updates avoid stale closures if the user already typed.
+-        setManualWindDirection(prev => prev || w.windDirection || 'CALM');
+-        setManualWindSpeed(prev => prev || String(Number.isFinite(w.wind) ? w.wind : 0));
+-        setLoading(false);
+-      }).catch(() => {
+-        setLoading(false);
+-      });
+-    } else if (open) {
+-      setLoading(false);
+-    }
+-  }, [open, initialData, field.lat, field.lng]);
+-
+-  const handleRecipeSelect = (recipeId: string) => {
+-    setSelectedRecipeId(recipeId);
+-    const recipe = sprayRecipes.find(r => r.id === recipeId);
+-    if (recipe) {
+-      setProducts(recipe.products.map(p => ({ ...p, ui_id: crypto.randomUUID(), epaRegNumber: p.epaRegNumber || '' })));
+-      if (recipe.applicatorName) setApplicatorName(recipe.applicatorName);
+-      if (recipe.licenseNumber) setLicenseNumber(recipe.licenseNumber);
+-      if (recipe.targetPest) setTargetPest(recipe.targetPest);
+-    }
+-  };
+-
+-  const handleRecoverWeather = async () => {
+-    if (!field.lat || !field.lng || !sprayDate) {
+-      toast.error('Need field location and spray date to recover weather.');
++  const handleNext = () => {
++    if (step === 'review') {
++      handleSubmit();
+       return;
+     }
+-    
+-    setIsRecovering(true);
+-    try {
+-      const hist = await WeatherService.fetchHistoricalConditions(
+-        field.lat, 
+-        field.lng, 
+-        sprayDate, 
+-        startTime || undefined
+-      );
+-      
+-      if (hist) {
+-        setWeather(hist);
+-        setManualWindDirection(hist.windDirection);
+-        setManualWindSpeed(hist.wind.toString());
+-        toast.success(`Recovered weather for ${sprayDate}${startTime ? ' at ' + startTime : ''}`);
+-      } else {
+-        toast.error('Could not find historical weather for this time.');
+-      }
+-    } catch (_err) {
+-      toast.error('Weather recovery failed.');
+-    } finally {
+-      setIsRecovering(false);
+-    }
+-  };
+-
+-  const updateProduct = (i: number, field: keyof SprayRecipeProduct, value: string) => {
+-    setProducts(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+-  };
+-
+-  const addProduct = () => {
+-    setProducts(prev => [...prev, { 
+-      ui_id: crypto.randomUUID(), 
+-      product: '', 
+-      rate: '', 
+-      rateUnit: 'oz/ac', 
+-      epaRegNumber: '',
+-      activeIngredients: '',
+-      totalProductAmount: '',
+-      totalProductUnit: 'gal'
+-    }]);
++    goNext();
+   };
+ 
+-  const removeProduct = (i: number) => {
+-    setProducts(prev => prev.filter((_, idx) => idx !== i));
+-    setProductIndexToDelete(null);
+-  };
+-
+-  const [showValidation, setShowValidation] = useState(false);
+-
+-  const isMinimumValid = products.length > 0 && products.some(p => p.product.trim()) && !!sprayDate;
+-
+-  const isFullyCompliant =
+-    products.every(p => p.product.trim()) &&
+-    startTime.trim() &&
+-    endTime.trim() &&
+-    (!!weather && !weather.isError) &&
+-    applicatorName.trim() &&
+-    licenseNumber.trim() &&
+-    manualWindDirection.trim() &&
+-    cropOrSiteTreated.trim() &&
+-    applicationMethod.trim() &&
+-    equipmentId.trim() &&
+-    products.every(p => p.epaRegNumber?.trim());
+-
+-  const missingComplianceFields: string[] = [];
+-  if (!products.every(p => p.product.trim())) missingComplianceFields.push('Product name(s)');
+-  if (!startTime.trim()) missingComplianceFields.push('Start time');
+-  if (!endTime.trim()) missingComplianceFields.push('End time');
+-  if (!weather || weather.isError) missingComplianceFields.push('Weather data');
+-  if (!applicatorName.trim()) missingComplianceFields.push('Cert. applicator');
+-  if (!licenseNumber.trim()) missingComplianceFields.push('License #');
+-  if (!manualWindDirection.trim()) missingComplianceFields.push('Wind direction');
+-  if (!cropOrSiteTreated.trim()) missingComplianceFields.push('Crop / site treated');
+-  if (!applicationMethod.trim()) missingComplianceFields.push('Application method');
+-  if (!equipmentId.trim()) missingComplianceFields.push('Equipment ID');
+-  if (!products.every(p => p.epaRegNumber?.trim())) missingComplianceFields.push('EPA Reg # (one or more products)');
+-  const productToDelete = productIndexToDelete != null ? products[productIndexToDelete] : null;
+-
+-  const handleSubmit = async () => {
+-    if (!isMinimumValid) {
+-      setShowValidation(true);
+-      toast.error('Enter at least one product name and an application date to save.');
+-      native.haptic.error();
+-      return;
+-    }
+-    if (!isFullyCompliant && !hasSeenIncompleteWarning.current) {
+-      setShowValidation(true);
+-      setAccordionValue("compliance");
+-      hasSeenIncompleteWarning.current = true;
+-      toast.warning('Compliance fields are incomplete. Click Save again to save anyway.');
+-      native.haptic.light();
+-      return;
+-    }
+-    if (!isFullyCompliant) {
+-      setShowValidation(true);
+-    }
+-
+-    setIsSaving(true);
+-    try {
+-      if (applicatorName.trim()) localStorage.setItem(`al_applicator_name_${userPrefix}`, applicatorName.trim());
+-      if (licenseNumber.trim()) localStorage.setItem(`al_license_number_${userPrefix}`, licenseNumber.trim());
+-      if (equipmentId.trim()) localStorage.setItem(`al_equipment_id_${userPrefix}`, equipmentId.trim());
+-
+-      const data = {
+-        fieldId: field.id,
+-        fieldName: field.name,
+-        products: products.filter(p => p.product.trim()).map(p => ({
+-          ...p,
+-          totalProductAmount: p.totalProductAmount || undefined,
+-          totalProductUnit: p.totalProductUnit || 'gal'
+-        })),
+-        windSpeed: !isNaN(parseFloat(manualWindSpeed)) ? parseFloat(manualWindSpeed) : (weather ? weather.wind : (initialData?.windSpeed ?? 0)),
+-        temperature: weather ? weather.temp : (initialData?.temperature ?? 0),
+-        applicatorName: applicatorName.trim(),
+-        licenseNumber: licenseNumber.trim(),
+-        epaRegNumber: products[0]?.epaRegNumber,
+-        targetPest: targetPest.trim() || undefined,
+-        windDirection: manualWindDirection || weather?.windDirection || initialData?.windDirection,
+-        relativeHumidity: weather ? weather.humidity : (initialData?.relativeHumidity ?? 0),
+-        sprayDate: sprayDate || undefined,
+-        startTime: startTime || undefined,
+-        endTime: endTime || undefined,
+-        siteAddress: siteAddress.trim() || undefined,
+-        cropOrSiteTreated: cropOrSiteTreated.trim() || undefined,
+-        applicationMethod: applicationMethod.trim() || undefined,
+-        treatedAreaSize: parseFloat(treatedAreaSize) || 0,
+-        treatedAreaUnit: treatedAreaUnit || 'ac',
+-        totalAmountApplied: parseFloat(totalAmountApplied) || 0,
+-        mixtureRate: mixtureRate.trim() || undefined,
+-        totalMixtureVolume: totalMixtureVolume.trim() || undefined,
+-        involvedTechnicians: involvedTechnicians.trim() || undefined,
+-        equipmentId: equipmentId.trim() || undefined,
+-        rei: rei.trim() || undefined,
+-        notes: notes.trim() || undefined,
+-        sensitiveAreaCheck,
+-        sensitiveAreaNotes: sensitiveAreaNotes.trim() || undefined,
+-        complianceProfile,
+-        isPremixed,
+-        nonCompliant: !isFullyCompliant,
+-        deleted_at: null,
+-        seasonYear: initialData ? initialData.seasonYear : viewingSeason,
+-      };
+-
+-      let success = false;
+-      if (initialData) {
+-        success = await updateSprayRecord({ ...initialData, ...data });
+-      } else {
+-        success = await addSprayRecord(data);
+-      }
+-
+-      if (success) {
+-        native.haptic.success();
+-        onClose();
+-      } else {
+-        native.haptic.error();
+-      }
+-    } catch (err) {
+-      console.error('Submission error:', err);
+-      toast.error('An unexpected error occurred while saving.');
+-      native.haptic.error();
+-    } finally {
+-      setIsSaving(false);
+-    }
+-  };
++  const stepTitle = {
++    core: 'Core Info',
++    mix: 'Chemical Mix',
++    conditions: 'Conditions',
++    review: 'Review & Submit'
++  }[step];
+ 
+   return (
+-    <>
+-    <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
++    <Dialog open={open} onOpenChange={(open) => { if (!open) handleClose(); }}>
+       <DialogContent className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
+         <DialogHeader>
+           <DialogTitle className="flex items-center flex-wrap gap-2 text-spray font-bold">
+             <div className="flex items-center gap-2">
+               <CloudRain size={20} />
+-              <span>{initialData ? 'Edit' : 'Spray Application'} ΓÇö {field.name}</span>
++              <span>{initialData ? 'Edit' : 'Spray'} ΓÇö {field.name}</span>
+             </div>
+             <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
+-              {initialData ? initialData.seasonYear : viewingSeason} Season
++              {stepTitle}
+             </span>
+           </DialogTitle>
+           <DialogDescription className="sr-only">
+-            {initialData ? 'Update the details of this spray application.' : 'Log a new pesticide or fertilizer spray application for this field.'}
++            {initialData
++              ? 'Update the details of this spray application across the wizard steps.'
++              : 'Log a new pesticide or fertilizer spray application for this field across the wizard steps.'}
+           </DialogDescription>
+         </DialogHeader>
+-        <div className="space-y-4 py-2">
+-          <div className="space-y-3">
+-            {sprayRecipes.length > 0 && (
+-              <div>
+-                <Label htmlFor="recipeSelect" className="text-muted-foreground font-mono text-xs">SELECT RECIPE</Label>
+-                <Select value={selectedRecipeId} onValueChange={handleRecipeSelect}>
+-                  <SelectTrigger className="mt-1 bg-muted border-border text-foreground">
+-                    <SelectValue placeholder="Recipe (optional)" />
+-                  </SelectTrigger>
+-                  <SelectContent>
+-                    {sprayRecipes.map(r => (
+-                      <SelectItem key={r.id} value={r.id}>
+-                        {r.name}
+-                      </SelectItem>
+-                    ))}
+-                  </SelectContent>
+-                </Select>
+-              </div>
+-            )}
+-
+-            <div className="space-y-3">
+-              <div className="flex items-center justify-between">
+-                <span className="text-muted-foreground font-mono text-xs font-bold uppercase tracking-wider block">Herbicide Mix (Granular Audit) *</span>
+-                <div className="text-[11px] font-mono text-muted-foreground">EPA REG # REQUIRED PER ITEM</div>
+-              </div>
+ 
+-              {products.map((p, i) => (
+-                <div key={p.ui_id || i} className="bg-muted p-2.5 rounded-lg border border-border/50 relative">
+-                  {products.length > 1 && (
+-                    <button
+-                      onClick={() => setProductIndexToDelete(i)}
+-                      className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 shadow-md hover:bg-destructive/80 transition-colors"
+-                      aria-label={`Remove ${p.product || 'product'} from spray mix`}
+-                    >
+-                      <X size={12} />
+-                    </button>
+-                  )}
+-                  <div className="space-y-2">
+-                    <div className="grid grid-cols-2 gap-2">
+-                      <div className="col-span-1">
+-                        <Label htmlFor={`productName-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Trade Name *</Label>
+-                        <Input
+-                          id={`productName-${i}`}
+-                          value={p.product}
+-                          onChange={e => updateProduct(i, 'product', e.target.value)}
+-                          placeholder="e.g. Roundup"
+-                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.product.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+-                        />
+-                      </div>
+-                      <div className="col-span-1">
+-                        <Label htmlFor={`epaReg-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
+-                        <Input
+-                          id={`epaReg-${i}`}
+-                          value={p.epaRegNumber}
+-                          onChange={e => updateProduct(i, 'epaRegNumber', e.target.value)}
+-                          placeholder="e.g. 524-549"
+-                          className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.epaRegNumber?.trim() ? 'border-yellow-500/50' : ''}`}
+-                        />
+-                      </div>
+-                    </div>
+-                    
+-                    <div>
+-                      <Label htmlFor={`activeIngredients-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Active Ingredients</Label>
+-                      <Input
+-                        id={`activeIngredients-${i}`}
+-                        value={p.activeIngredients || ''}
+-                        onChange={e => updateProduct(i, 'activeIngredients', e.target.value)}
+-                        placeholder="e.g. Glyphosate 41%"
+-                        className="mt-0.5 bg-background border-border text-foreground text-xs h-8"
+-                      />
+-                    </div>
+-
+-                    <div className="grid grid-cols-2 gap-2">
+-                      <div>
+-                        <Label htmlFor={`appRate-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Rate / Ac *</Label>
+-                        <div className="flex gap-1.5 mt-0.5">
+-                          <Input 
+-                            id={`appRate-${i}`} 
+-                            value={p.rate} 
+-                            onChange={e => updateProduct(i, 'rate', e.target.value)} 
+-                            placeholder="22" 
+-                            className="bg-background border-border text-foreground text-xs h-8 px-2 w-16" 
+-                          />
+-                          <Select 
+-                            value={p.rateUnit} 
+-                            onValueChange={(val) => updateProduct(i, 'rateUnit', val)}
+-                          >
+-                            <SelectTrigger className="bg-background border-border text-foreground text-[11px] h-8 px-2 flex-1">
+-                              <SelectValue placeholder="Unit" />
+-                            </SelectTrigger>
+-                            <SelectContent>
+-                              <SelectItem value="fl oz/ac">fl oz/ac</SelectItem>
+-                              <SelectItem value="pt/ac">pt/ac</SelectItem>
+-                              <SelectItem value="qt/ac">qt/ac</SelectItem>
+-                              <SelectItem value="gal/ac">gal/ac</SelectItem>
+-                              <SelectItem value="oz/ac">oz/ac</SelectItem>
+-                              <SelectItem value="lb/ac">lb/ac</SelectItem>
+-                            </SelectContent>
+-                          </Select>
+-                        </div>
+-                      </div>
+-                      <div>
+-                        <Label htmlFor={`totalProduct-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Total Product Amt</Label>
+-                        <div className="flex gap-1.5 mt-0.5">
+-                          <Input 
+-                            id={`totalProduct-${i}`} 
+-                            value={p.totalProductAmount || ''} 
+-                            onChange={e => updateProduct(i, 'totalProductAmount', e.target.value)} 
+-                            placeholder="15" 
+-                            className="bg-background border-border text-foreground text-xs h-8 px-2 w-16" 
+-                          />
+-                          <Select 
+-                            value={p.totalProductUnit || 'gal'} 
+-                            onValueChange={(val) => updateProduct(i, 'totalProductUnit', val)}
+-                          >
+-                            <SelectTrigger className="bg-background border-border text-foreground text-[11px] h-8 px-2 flex-1">
+-                              <SelectValue placeholder="Unit" />
+-                            </SelectTrigger>
+-                            <SelectContent>
+-                              <SelectItem value="gal">gal</SelectItem>
+-                              <SelectItem value="qt">qt</SelectItem>
+-                              <SelectItem value="pt">pt</SelectItem>
+-                              <SelectItem value="fl oz">fl oz</SelectItem>
+-                              <SelectItem value="lb">lb</SelectItem>
+-                              <SelectItem value="oz">oz</SelectItem>
+-                            </SelectContent>
+-                          </Select>
+-                        </div>
+-                      </div>
+-                    </div>
+-                  </div>
+-                </div>
+-              ))}
+-
+-              <Button onClick={addProduct} variant="outline" size="sm" className="w-full border-dashed border-spray/30 text-spray text-[11px] h-8 font-bold">
+-                <Plus size={12} className="mr-1" /> ADD ANOTHER PRODUCT
+-              </Button>
+-            </div>
+-
+-            <div>
+-              <Label htmlFor="sprayDate" className="text-muted-foreground font-mono text-xs font-bold">APPLICATION DATE *</Label>
+-              <Input id="sprayDate" name="sprayDate" type="date" value={sprayDate} onChange={e => setSprayDate(e.target.value)} className="mt-1 bg-muted border-border text-foreground" />
+-            </div>
+-          </div>
+-
+-          <Accordion type="single" collapsible className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
+-            <AccordionItem value="compliance" className="border-spray/20">
+-              <AccordionTrigger className="text-spray font-mono text-xs font-bold hover:no-underline py-2">
+-                APPLICATION & COMPLIANCE DETAILS
+-              </AccordionTrigger>
+-              <AccordionContent className="space-y-4 pt-4">
+-                <div className="space-y-2">
+-                  <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
+-                    <Clock size={12} /> timing
+-                  </div>
+-                  <div className="grid grid-cols-2 gap-3">
+-                    <div>
+-                      <Label htmlFor="startTime" className="text-[11px] font-mono text-muted-foreground uppercase">Start Time *</Label>
+-                      <Input id="startTime" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !startTime.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                    </div>
+-                    <div>
+-                      <div className="flex items-center justify-between">
+-                        <Label htmlFor="endTime" className="text-[11px] font-mono text-muted-foreground uppercase">End Time *</Label>
+-                        <div className="flex items-center gap-1">
+-                          <span className="text-[11px] font-mono text-muted-foreground">MANUAL</span>
+-                          <Switch id="endTimeManual" checked={isEndTimeManual} onCheckedChange={setIsEndTimeManual} className="scale-75 h-4 w-7" />
+-                        </div>
+-                      </div>
+-                      <Input id="endTime" type="time" value={endTime} onChange={e => { setEndTime(e.target.value); setIsEndTimeManual(true); }} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !endTime.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                    </div>
+-                  </div>
+-                </div>
+-
+-                <div className="space-y-2">
+-                  <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
+-                    <MapPin size={12} /> site & crop
+-                  </div>
+-                  <div className="grid grid-cols-2 gap-3">
+-                    <div className="col-span-1">
+-                      <Label htmlFor="cropTreated" className="text-[11px] font-mono text-muted-foreground uppercase">Crop / Site Treated *</Label>
+-                      <Input id="cropTreated" value={cropOrSiteTreated} onChange={e => setCropOrSiteTreated(e.target.value)} placeholder="e.g. Corn" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !cropOrSiteTreated.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                    </div>
+-                    <div>
+-                      <Label htmlFor="appMethod" className="text-[11px] font-mono text-muted-foreground uppercase">App Method *</Label>
+-                      <Select value={applicationMethod} onValueChange={setApplicationMethod}>
+-                        <SelectTrigger className={`mt-0.5 bg-muted border-border text-foreground h-9 text-xs ${showValidation && !applicationMethod.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
+-                          <SelectValue placeholder="Select method" />
+-                        </SelectTrigger>
+-                        <SelectContent>
+-                          {['Ground Broadcast', 'Ground Banded', 'Ground Directed', 'Aerial', 'Chemigation', 'Handheld'].map(m => (
+-                            <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+-                          ))}
+-                        </SelectContent>
+-                      </Select>
+-                    </div>
+-                  </div>
+-                  <div>
+-                    <Label htmlFor="siteAddress" className="text-[11px] font-mono text-muted-foreground uppercase">Site Description / Address</Label>
+-                    <Input id="siteAddress" value={siteAddress} onChange={e => setSiteAddress(e.target.value)} placeholder="Field name or location" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+-                  </div>
+-                </div>
+-
+-                <div className="space-y-4">
+-                  <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
+-                    <FileText size={12} /> area & volume
+-                  </div>
+-                  <div className="grid grid-cols-2 gap-3">
+-                    <div>
+-                      <Label htmlFor="treatedArea" className="text-[11px] font-mono text-muted-foreground uppercase">Treated Area Size *</Label>
+-                      <div className="flex gap-1">
+-                        <Input id="treatedArea" value={treatedAreaSize} onChange={e => setTreatedAreaSize(e.target.value)} placeholder="80" className={`mt-0.5 bg-muted border-border text-foreground h-9 flex-1 ${showValidation && !treatedAreaSize.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                        <Select value={treatedAreaUnit} onValueChange={setTreatedAreaUnit}>
+-                          <SelectTrigger className="mt-0.5 bg-muted border-border text-foreground h-9 w-16 text-xs capitaize">
+-                            <SelectValue />
+-                          </SelectTrigger>
+-                          <SelectContent>
+-                            <SelectItem value="ac">ac</SelectItem>
+-                            <SelectItem value="sqft">sqft</SelectItem>
+-                          </SelectContent>
+-                        </Select>
+-                      </div>
+-                    </div>
+-                    <div>
+-                      <Label htmlFor="targetPest" className="text-[11px] font-mono text-muted-foreground uppercase">Target Pest(s) *</Label>
+-                      <Input id="targetPest" value={targetPest} onChange={e => setTargetPest(e.target.value)} placeholder="e.g. Pigweed" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !targetPest.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                    </div>
+-                  </div>
+-
+-                  <div className="grid grid-cols-2 gap-3">
+-                    <div>
+-                      <Label htmlFor="totalAmount" className="text-[11px] font-mono text-muted-foreground uppercase">Total Material Applied</Label>
+-                      <Input id="totalAmount" value={totalAmountApplied} onChange={e => setTotalAmountApplied(e.target.value)} placeholder="Auto-sum" className="mt-0.5 bg-muted border-border text-foreground h-9 font-bold" />
+-                    </div>
+-                    <div className="flex items-center space-x-2 pt-5">
+-                      <Switch id="premixed" checked={isPremixed} onCheckedChange={setIsPremixed} />
+-                      <Label htmlFor="premixed" className="text-[11px] font-mono text-muted-foreground uppercase">Premixed</Label>
+-                    </div>
+-                  </div>
+-                </div>
+-
+-                <div className="space-y-4">
+-                  <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
+-                    <User size={12} /> APPLICATORS & SAFETY
+-                  </div>
+-                  <div className="grid grid-cols-2 gap-3">
+-                    <div>
+-                      <Label htmlFor="applicator" className="text-[11px] font-mono text-muted-foreground uppercase">Cert. Applicator *</Label>
+-                      <Input id="applicator" value={applicatorName} onChange={e => setApplicatorName(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !applicatorName.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                    </div>
+-                    <div>
+-                      <Label htmlFor="license" className="text-[11px] font-mono text-muted-foreground uppercase">License # *</Label>
+-                      <Input id="license" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !licenseNumber.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                    </div>
+-                  </div>
+-                  <div className="grid grid-cols-2 gap-3">
+-                    <div>
+-                      <Label htmlFor="equipmentId" className="text-[11px] font-mono text-muted-foreground uppercase">Equipment ID *</Label>
+-                      <Input id="equipmentId" value={equipmentId} onChange={e => setEquipmentId(e.target.value)} placeholder="e.g. Miller Nitro" className={`mt-0.5 bg-muted border-border text-foreground h-9 ${showValidation && !equipmentId.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`} />
+-                    </div>
+-                    <div>
+-                      <Label htmlFor="rei" className="text-[11px] font-mono text-muted-foreground uppercase">REI (Re-entry)</Label>
+-                      <Input id="rei" value={rei} onChange={e => setRei(e.target.value)} placeholder="e.g. 12h" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+-                    </div>
+-                  </div>
+-                  <div>
+-                    <Label htmlFor="technicians" className="text-[11px] font-mono text-muted-foreground uppercase">Involved Technicians / Helpers (Optional)</Label>
+-                    <Input id="technicians" value={involvedTechnicians} onChange={e => setInvolvedTechnicians(e.target.value)} placeholder="e.g. John Doe, Mike Smith" className="mt-0.5 bg-muted border-border text-foreground h-9" />
+-                  </div>
+-                  <div className="pt-1">
+-                    <div className="flex items-start space-x-2 bg-spray/5 p-2.5 rounded-lg border border-spray/10">
+-                      <Checkbox 
+-                        id="sensitiveAreaCheck" 
+-                        checked={sensitiveAreaCheck} 
+-                        onCheckedChange={(checked) => setSensitiveAreaCheck(!!checked)}
+-                        className="mt-0.5 border-spray/50 data-[state=checked]:bg-spray data-[state=checked]:border-spray"
+-                      />
+-                      <div className="grid gap-1.5 leading-none">
+-                        <Label 
+-                          htmlFor="sensitiveAreaCheck" 
+-                          className="text-[11px] font-bold text-spray uppercase leading-tight cursor-pointer"
+-                        >
+-                          Sensitive Area Check Performed
+-                        </Label>
+-                        <p className="text-[10px] text-muted-foreground leading-tight">
+-                          Verified nearby sensitive crops/bees via DriftWatch or visual check.
+-                        </p>
+-                      </div>
+-                    </div>
+-                  </div>
+-                  {sensitiveAreaCheck && (
+-                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+-                      <Label htmlFor="sensitiveAreaNotes" className="text-[11px] font-mono text-muted-foreground uppercase text-spray">Sensitive Area Notes</Label>
+-                      <Input 
+-                        id="sensitiveAreaNotes" 
+-                        value={sensitiveAreaNotes} 
+-                        onChange={e => setSensitiveAreaNotes(e.target.value)} 
+-                        placeholder="e.g. Neighboring vineyard verified clear" 
+-                        className="mt-0.5 bg-muted border-spray/20 text-foreground h-9 focus-visible:ring-spray" 
+-                      />
+-                    </div>
+-                  )}
+-                  <div>
+-                    <Label htmlFor="notes" className="text-[11px] font-mono text-muted-foreground uppercase">Notes / Additional Info</Label>
+-                    <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Add any extra compliance or field notes here..." className="mt-0.5 bg-muted border-border text-foreground text-xs resize-none" rows={2} />
+-                  </div>
+-                </div>
+-              </AccordionContent>
+-            </AccordionItem>
+-          </Accordion>
+-
+-          <div className={`rounded-lg border p-3 space-y-3 ${weather ? 'border-spray/20 bg-muted/30' : 'border-destructive/30 bg-destructive/5'}`}>
+-            <div className="flex items-center justify-between">
+-              <span className={`font-mono text-[11px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
+-                Environmental Conditions *
+-              </span>
+-              <div className="flex items-center gap-2">
+-                {(!!initialData || !weather || weather.wind === 0 || manualWindSpeed === '0' || !manualWindDirection.trim()) && (
+-                  <Button 
+-                    variant="ghost" 
+-                    size="sm" 
+-                    onClick={handleRecoverWeather}
+-                    disabled={isRecovering}
+-                    className="h-6 px-2 text-[10px] font-bold text-spray hover:bg-spray/10"
+-                  >
+-                    {isRecovering ? <Loader2 size={10} className="animate-spin mr-1" /> : <HistoryIcon size={10} className="mr-1" />}
+-                    {initialData ? 'PULL WEATHER' : 'RECOVER PAST WEATHER'}
+-                  </Button>
+-                )}
+-                {loading && <Loader2 size={12} className="text-spray animate-spin" />}
+-              </div>
+-            </div>
+-
+-            <div className="grid grid-cols-2 gap-3">
+-              <div className="space-y-1">
+-                <Label htmlFor="windDirection" className="text-[11px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
+-                <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
+-                  <SelectTrigger id="windDirection" className={`h-8 bg-background border-border text-xs font-mono ${showValidation && !manualWindDirection.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}>
+-                    <SelectValue placeholder="Dir" />
+-                  </SelectTrigger>
+-                  <SelectContent>
+-                    {['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW', 'CALM'].map(dir => (
+-                      <SelectItem key={dir} value={dir} className="font-mono text-xs">{dir}</SelectItem>
+-                    ))}
+-                  </SelectContent>
+-                </Select>
+-              </div>
+-              <div className="space-y-1">
+-                <Label htmlFor="windSpeed" className="text-[11px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
+-                <Input 
+-                  id="windSpeed"
+-                  name="windSpeed"
+-                  value={manualWindSpeed} 
+-                  onChange={e => setManualWindSpeed(e.target.value)} 
+-                  placeholder={weather?.wind?.toString() || "0"}
+-                  className={`h-8 bg-background border-border text-xs font-mono text-right ${showValidation && !manualWindSpeed.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+-                />
+-              </div>
+-            </div>
+-
+-            {weather && (
+-              <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
+-                <div className="space-y-0.5">
+-                  <div className="text-[11px] font-mono text-muted-foreground uppercase">Temp (┬░F) *</div>
+-                  <div className="text-xs font-mono font-bold">{weather.temp}┬░F</div>
+-                </div>
+-                <div className="space-y-0.5 text-right">
+-                  <div className="text-[11px] font-mono text-muted-foreground uppercase">Humidity (%)</div>
+-                  <div className="text-xs font-mono font-bold">{weather.humidity}%</div>
+-                </div>
+-              </div>
+-            )}
+-          </div>
+-          {showValidation && !isFullyCompliant && isMinimumValid && (
+-            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-1">
+-              <div className="flex items-center gap-2 text-yellow-400 font-mono text-xs font-bold uppercase tracking-wider">
+-                <AlertTriangle size={14} />
+-                Record will be saved as incomplete
+-              </div>
+-              <p className="text-[11px] text-yellow-300/80 leading-relaxed">
+-                The following compliance fields are missing. You can complete them later by editing this record.
+-              </p>
+-              <ul className="mt-1 space-y-0.5">
+-                {missingComplianceFields.map(f => (
+-                  <li key={f} className="text-[11px] font-mono text-yellow-400/80">┬╖ {f}</li>
+-                ))}
+-              </ul>
+-            </div>
+-          )}
+-          <div className="h-20" aria-hidden="true" />
++        <SprayWizardNav steps={WIZARD_STEPS} currentStep={step} onStepClick={goToStep} />
++
++        <div className="py-2">
++          {step === 'core' && <SprayWizardCoreStep
++            sprayDate={form.sprayDate}
++            startTime={form.startTime}
++            endTime={form.endTime}
++            isEndTimeManual={form.isEndTimeManual}
++            applicatorName={form.applicatorName}
++            licenseNumber={form.licenseNumber}
++            targetPest={form.targetPest}
++            cropOrSiteTreated={form.cropOrSiteTreated}
++            applicationMethod={form.applicationMethod}
++            siteAddress={form.siteAddress}
++            involvedTechnicians={form.involvedTechnicians}
++            equipmentId={form.equipmentId}
++            rei={form.rei}
++            notes={form.notes}
++            sensitiveAreaCheck={form.sensitiveAreaCheck}
++            sensitiveAreaNotes={form.sensitiveAreaNotes}
++            showValidation={form.showValidation}
++            setSprayDate={form.setSprayDate}
++            setStartTime={form.setStartTime}
++            setEndTime={form.setEndTime}
++            setIsEndTimeManual={form.setIsEndTimeManual}
++            setApplicatorName={form.setApplicatorName}
++            setLicenseNumber={form.setLicenseNumber}
++            setTargetPest={form.setTargetPest}
++            setCropOrSiteTreated={form.setCropOrSiteTreated}
++            setApplicationMethod={form.setApplicationMethod}
++            setSiteAddress={form.setSiteAddress}
++            setInvolvedTechnicians={form.setInvolvedTechnicians}
++            setEquipmentId={form.setEquipmentId}
++            setRei={form.setRei}
++            setNotes={form.setNotes}
++            setSensitiveAreaCheck={form.setSensitiveAreaCheck}
++            setSensitiveAreaNotes={form.setSensitiveAreaNotes}
++          />}
++
++          {step === 'mix' && <SprayWizardMixStep
++            sprayRecipes={sprayRecipes}
++            selectedRecipeId={form.selectedRecipeId}
++            products={form.products}
++            showValidation={form.showValidation}
++            onRecipeSelect={form.handleRecipeSelect}
++            updateProduct={form.updateProduct}
++            addProduct={form.addProduct}
++            removeProduct={form.removeProduct}
++          />}
++
++          {step === 'conditions' && <SprayWizardConditionsStep
++            fieldLat={field.lat}
++            fieldLng={field.lng}
++            weather={form.weather}
++            loading={form.loading}
++            isRecovering={form.isRecovering}
++            manualWindDirection={form.manualWindDirection}
++            manualWindSpeed={form.manualWindSpeed}
++            treatedAreaSize={form.treatedAreaSize}
++            treatedAreaUnit={form.treatedAreaUnit}
++            totalAmountApplied={form.totalAmountApplied}
++            mixtureRate={form.mixtureRate}
++            totalMixtureVolume={form.totalMixtureVolume}
++            isPremixed={form.isPremixed}
++            showValidation={form.showValidation}
++            onRecoverWeather={form.handleRecoverWeather}
++            setManualWindDirection={form.setManualWindDirection}
++            setManualWindSpeed={form.setManualWindSpeed}
++            setTreatedAreaSize={form.setTreatedAreaSize}
++            setTreatedAreaUnit={form.setTreatedAreaUnit}
++            setTotalAmountApplied={form.setTotalAmountApplied}
++            setMixtureRate={form.setMixtureRate}
++            setTotalMixtureVolume={form.setTotalMixtureVolume}
++            setIsPremixed={form.setIsPremixed}
++          />}
++
++          {step === 'review' && <SprayWizardReviewStep
++            fieldName={field.name}
++            seasonYear={initialData ? initialData.seasonYear : viewingSeason}
++            isExisting={!!initialData}
++            sprayDate={form.sprayDate}
++            startTime={form.startTime}
++            endTime={form.endTime}
++            applicatorName={form.applicatorName}
++            licenseNumber={form.licenseNumber}
++            equipmentId={form.equipmentId}
++            targetPest={form.targetPest}
++            cropOrSiteTreated={form.cropOrSiteTreated}
++            applicationMethod={form.applicationMethod}
++            treatedAreaSize={form.treatedAreaSize}
++            treatedAreaUnit={form.treatedAreaUnit}
++            products={form.products}
++            weather={form.weather}
++            manualWindDirection={form.manualWindDirection}
++            manualWindSpeed={form.manualWindSpeed}
++            isFullyCompliant={isFullyCompliant}
++            missingComplianceFields={missingComplianceFields}
++          />}
+         </div>
+-        <DialogFooter className="sticky bottom-0 bg-card pt-2 border-t border-border/20 flex flex-col gap-2">
+-          {initialData && (
++
++        <DialogFooter className="flex flex-col gap-2 pt-2 border-t border-border/20">
++          {initialData && step === 'review' && (
+             <Button
+               variant="outline"
+               onClick={() => generateSprayPDF([initialData], farmName)}
+@@ -888,53 +181,55 @@ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
+               Export PDF
+             </Button>
+           )}
+-          <Button
+-            onClick={handleSubmit}
+-            disabled={!isMinimumValid || loading || isSaving}
+-            className={`touch-target w-full font-bold py-6 text-base disabled:opacity-50 disabled:grayscale ${
+-              isFullyCompliant
+-                ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
+-                : 'bg-yellow-600 text-white hover:bg-yellow-500'
+-            }`}
+-          >
+-            {isSaving ? (
+-              <div className="flex items-center gap-2">
+-                <Loader2 size={24} className="animate-spin" />
+-                <span>Saving...</span>
+-              </div>
+-            ) : loading ? <Loader2 size={20} className="animate-spin" /> :
+-              !isMinimumValid ? 'Enter Product Name to Save' :
+-              !isFullyCompliant ? (
++
++          <div className="flex gap-2 w-full">
++            {canGoBack && (
++              <Button
++                variant="outline"
++                onClick={goBack}
++                disabled={isSaving}
++                className="touch-target flex-1 border-border text-foreground hover:bg-muted font-bold py-6 text-base"
++              >
++                <ChevronLeft size={20} className="mr-1" />
++                Back
++              </Button>
++            )}
++            <Button
++              onClick={handleNext}
++              disabled={isSaving || (step !== 'review' && !canGoNext)}
++              className={`touch-target flex-1 font-bold py-6 text-base disabled:opacity-50 disabled:grayscale ${
++                isFullyCompliant || step !== 'review'
++                  ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
++                  : 'bg-yellow-600 text-white hover:bg-yellow-500'
++              }`}
++            >
++              {isSaving ? (
+                 <div className="flex items-center gap-2">
+-                  <AlertTriangle size={18} />
+-                  <span>{initialData ? 'Update (Incomplete Record)' : 'Save (Incomplete Record)'}</span>
++                  <Loader2 size={24} className="animate-spin" />
++                  <span>Saving...</span>
++                </div>
++              ) : step === 'review' ? (
++                !isMinimumValid ? (
++                  <span>Enter Product Name to Save</span>
++                ) : !isFullyCompliant ? (
++                  <div className="flex items-center gap-2">
++                    <AlertTriangle size={18} />
++                    <span>{initialData ? 'Update (Incomplete)' : 'Save (Incomplete)'}</span>
++                  </div>
++                ) : (
++                  <span>{initialData ? 'Update Spray Record' : 'Save Spray Record'}</span>
++                )
++              ) : (
++                <div className="flex items-center gap-1">
++                  <span>Next</span>
++                  <ChevronRight size={18} />
+                 </div>
+-              ) :
+-                initialData ? 'Update Spray Record' : 'Save Spray Record'}
+-          </Button>
++              )}
++            </Button>
++          </div>
+         </DialogFooter>
+       </DialogContent>
+     </Dialog>
+-    <AlertDialog open={productIndexToDelete != null} onOpenChange={(open) => { if (!open) setProductIndexToDelete(null); }}>
+-      <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+-        <AlertDialogHeader>
+-          <AlertDialogTitle className="text-foreground">Remove Product?</AlertDialogTitle>
+-          <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
+-            Remove &ldquo;{productToDelete?.product || 'this product'}&rdquo; from this spray mix?
+-          </AlertDialogDescription>
+-        </AlertDialogHeader>
+-        <AlertDialogFooter>
+-          <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+-          <AlertDialogAction
+-            onClick={() => { if (productIndexToDelete != null) removeProduct(productIndexToDelete); }}
+-            className="touch-target bg-destructive text-destructive-foreground glow-destructive"
+-          >
+-            Remove
+-          </AlertDialogAction>
+-        </AlertDialogFooter>
+-      </AlertDialogContent>
+-    </AlertDialog>
+-    </>
+   );
+ }
+ 
+diff --git a/src/components/TractAssignmentFlow.tsx b/src/components/TractAssignmentFlow.tsx
+index 8ea4ab2..04ac73e 100644
+--- a/src/components/TractAssignmentFlow.tsx
++++ b/src/components/TractAssignmentFlow.tsx
+@@ -216,7 +216,7 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
+     }
+ 
+     const id = crypto.randomUUID();
+-    const ok = await addField({ name, acreage: 0, lat, lng, farm_id: '' }, id);
++    const ok = await addField({ name, acreage: 0, lat, lng, farm_id: '', deleted_at: null }, id);
+     if (!ok) return null;
+ 
+     return id;
+diff --git a/src/components/WeatherWidget.tsx b/src/components/WeatherWidget.tsx
+index 455d1ac..7d3445d 100644
+--- a/src/components/WeatherWidget.tsx
++++ b/src/components/WeatherWidget.tsx
+@@ -135,6 +135,7 @@ export default function WeatherBar() {
+ 
+   return (
+     <div
++      id="coachmark-weather"
+       className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between min-h-[90px] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-transform"
+       onClick={() => navigate('/weather')}
+       role="button"
+diff --git a/src/components/__tests__/SprayModal.test.tsx b/src/components/__tests__/SprayModal.test.tsx
+index f410f24..22ef8e5 100644
+--- a/src/components/__tests__/SprayModal.test.tsx
++++ b/src/components/__tests__/SprayModal.test.tsx
+@@ -1,7 +1,7 @@
+ /**
+  * @vitest-environment jsdom
+  */
+-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
++import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
+ import SprayModal from '../SprayModal';
+ import { Field, SprayRecord } from '@/types/farm';
+@@ -76,13 +76,6 @@ vi.mock('@/components/ui/select', () => ({
+   SelectValue: () => null
+ }));
+ 
+-vi.mock('@/components/ui/accordion', () => ({
+-  Accordion: ({ children }: any) => <div>{children}</div>,
+-  AccordionItem: ({ children }: any) => <div>{children}</div>,
+-  AccordionTrigger: ({ children }: any) => <button type="button">{children}</button>,
+-  AccordionContent: ({ children }: any) => <div>{children}</div>
+-}));
+-
+ vi.mock('@/components/ui/switch', () => ({
+   Switch: ({ checked, onCheckedChange, id }: any) => (
+     <input
+@@ -151,6 +144,48 @@ describe('SprayModal Data Retention', () => {
+     vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
+   });
+ 
++  const fillCoreStep = () => {
++    act(() => {
++      fireEvent.change(screen.getByLabelText(/application date/i), { target: { value: '2026-06-23' } });
++      fireEvent.change(screen.getByLabelText(/start time/i), { target: { value: '08:00' } });
++      fireEvent.change(screen.getByLabelText(/cert\. applicator/i), { target: { value: 'Cert Applicator' } });
++      fireEvent.change(screen.getByLabelText(/license/i), { target: { value: 'L12345' } });
++      fireEvent.change(screen.getByLabelText(/target pest/i), { target: { value: 'Grass' } });
++    });
++  };
++
++  const clickNext = async () => {
++    act(() => {
++      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
++    });
++  };
++
++  const fillMixStep = () => {
++    act(() => {
++      fireEvent.change(screen.getByLabelText(/trade name/i), { target: { value: 'Roundup' } });
++    });
++  };
++
++  const navigateToConditions = async () => {
++    fillCoreStep();
++    await clickNext(); // core -> mix
++    await waitFor(() => expect(screen.getByText(/Herbicide Mix/i)).toBeInTheDocument());
++    fillMixStep();
++    await clickNext(); // mix -> conditions
++    await waitFor(() => expect(screen.getByLabelText(/Wind Speed/i)).toBeInTheDocument());
++  };
++
++  const navigateToReview = async () => {
++    fillCoreStep();
++    await clickNext(); // core -> mix
++    await waitFor(() => expect(screen.getByText(/Herbicide Mix/i)).toBeInTheDocument());
++    fillMixStep();
++    await clickNext(); // mix -> conditions
++    await waitFor(() => expect(screen.getByLabelText(/Wind Speed/i)).toBeInTheDocument());
++    await clickNext(); // conditions -> review
++    await waitFor(() => expect(screen.getByRole('button', { name: /Spray Record/i })).toBeInTheDocument());
++  };
++
+   it('auto-populates wind direction and speed when weather fetch succeeds for a new record', async () => {
+     vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
+       temp: 72,
+@@ -173,6 +208,8 @@ describe('SprayModal Data Retention', () => {
+       />
+     );
+ 
++    await navigateToConditions();
++
+     await waitFor(() => {
+       const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
+       expect(windSpeedInput.value).toBe('8');
+@@ -204,6 +241,8 @@ describe('SprayModal Data Retention', () => {
+       />
+     );
+ 
++    await navigateToConditions();
++
+     await waitFor(() => {
+       const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
+       expect(windSpeedInput.value).toBe('0');
+@@ -229,12 +268,16 @@ describe('SprayModal Data Retention', () => {
+       />
+     );
+ 
++    await navigateToConditions();
++
+     const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
+     const windDirectionSelect = screen.getByLabelText(/Wind Direction/i) as HTMLSelectElement;
+ 
+     // User types manual values before weather arrives
+-    fireEvent.change(windSpeedInput, { target: { value: '12' } });
+-    fireEvent.change(windDirectionSelect, { target: { value: 'NW' } });
++    act(() => {
++      fireEvent.change(windSpeedInput, { target: { value: '12' } });
++      fireEvent.change(windDirectionSelect, { target: { value: 'NW' } });
++    });
+ 
+     // Now weather arrives
+     resolveWeather!({
+@@ -264,9 +307,13 @@ describe('SprayModal Data Retention', () => {
+       />
+     );
+ 
++    await navigateToReview();
++
+     // Find and click the Update button
+     const updateBtn = screen.getByRole('button', { name: /Update Spray Record/i });
+-    fireEvent.click(updateBtn);
++    act(() => {
++      fireEvent.click(updateBtn);
++    });
+ 
+     // Verify updateSprayRecord is called with the original seasonYear (2025), not the global viewingSeason (2026)
+     await waitFor(() => expect(updateSprayRecordMock).toHaveBeenCalledTimes(1));
+@@ -294,13 +341,20 @@ describe('SprayModal Data Retention', () => {
+       />
+     );
+ 
++    await navigateToConditions();
++
+     // Check that wind speed input displays 0
+     const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
+     expect(windSpeedInput.value).toBe('0');
+ 
++    await clickNext(); // conditions -> review
++    await waitFor(() => expect(screen.getByRole('button', { name: /Update Spray Record/i })).toBeInTheDocument());
++
+     // Submit the form
+     const updateBtn = screen.getByRole('button', { name: /Update Spray Record/i });
+-    fireEvent.click(updateBtn);
++    act(() => {
++      fireEvent.click(updateBtn);
++    });
+ 
+     // Verify updateSprayRecord is called preserving the 0 wind speed
+     await waitFor(() => expect(updateSprayRecordMock).toHaveBeenCalledTimes(1));
+diff --git a/src/components/settings/BackupManager.tsx b/src/components/settings/BackupManager.tsx
+index 566cd31..be6f486 100644
+--- a/src/components/settings/BackupManager.tsx
++++ b/src/components/settings/BackupManager.tsx
+@@ -44,6 +44,8 @@ export default function BackupManager() {
+     savedSeeds,
+     fertilizerRecipes,
+     sprayRecipes,
++    fsaTracts,
++    cluAssignments,
+     activeSeason,
+   } = useFarm();
+   const [backingUp, setBackingUp] = useState(false);
+@@ -61,7 +63,9 @@ export default function BackupManager() {
+     (grainMovements?.length ?? 0) +
+     (savedSeeds?.length ?? 0) +
+     (fertilizerRecipes?.length ?? 0) +
+-    (sprayRecipes?.length ?? 0);
++    (sprayRecipes?.length ?? 0) +
++    (fsaTracts?.length ?? 0) +
++    (cluAssignments?.length ?? 0);
+ 
+   const hasData = recordCount > 0;
+   const backupIsStale = lastBackup
+@@ -89,6 +93,8 @@ export default function BackupManager() {
+         savedSeeds,
+         fertilizerRecipes,
+         sprayRecipes,
++        fsaTracts,
++        cluAssignments,
+         activeSeason,
+         backupDate: new Date().toISOString(),
+       };
+@@ -165,6 +171,12 @@ export default function BackupManager() {
+             <div className="flex justify-between">
+               <span>Tillage Records</span><span className="text-foreground">{tillageRecords?.length ?? 0}</span>
+             </div>
++            <div className="flex justify-between">
++              <span>FSA Tracts</span><span className="text-foreground">{fsaTracts?.length ?? 0}</span>
++            </div>
++            <div className="flex justify-between">
++              <span>CLU Assignments</span><span className="text-foreground">{cluAssignments?.length ?? 0}</span>
++            </div>
+             <div className="flex justify-between pt-1 border-t border-border font-bold">
+               <span>Total Records</span><span className="text-foreground">{recordCount}</span>
+             </div>
+diff --git a/src/lib/__tests__/reverseMappers.test.ts b/src/lib/__tests__/reverseMappers.test.ts
+index 1cfa7aa..df481e6 100644
+--- a/src/lib/__tests__/reverseMappers.test.ts
++++ b/src/lib/__tests__/reverseMappers.test.ts
+@@ -3,11 +3,12 @@ import {
+   mapFieldToDb, mapPlantToDb, mapSprayToDb, mapHarvestToDb,
+   mapHayToDb, mapGrainToDb, mapBinToDb, mapSeedToDb,
+   mapRecipeToDb, mapFertilizerRecipeToDb, mapFertilizerToDb,
+-  mapTillageToDb
++  mapTillageToDb, mapFsaTractToDb, mapFieldCluAssignmentToDb
+ } from '../mappers';
+ import type { Field, PlantRecord, SprayRecord, HarvestRecord,
+   HayHarvestRecord, GrainMovement, Bin, SavedSeed, SprayRecipe,
+   FertilizerRecipe, FertilizerApplication, TillageRecord } from '../../types/farm';
++import type { FsaTractImport, FieldCluAssignment } from '../../types/fsaTract';
+ 
+ // ΓöÇΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ 
+@@ -43,6 +44,43 @@ function makePlant(overrides?: Partial<PlantRecord>): PlantRecord {
+   };
+ }
+ 
++
++function makeFsaTract(overrides?: Partial<FsaTractImport>): FsaTractImport {
++  return {
++    id: 'tract-1',
++    farmId,
++    tractKey: '6418-1417',
++    filename: '6418-1417.json',
++    featureCount: 1,
++    importedAt: '2026-06-16T00:00:00.000Z',
++    deletedAt: null,
++    geojson: {
++      type: 'FeatureCollection',
++      features: [{
++        type: 'Feature',
++        geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
++        properties: { cluNumber: '11', acres: 10.5 },
++      }],
++    },
++    ...overrides,
++  };
++}
++
++function makeCluAssignment(overrides?: Partial<FieldCluAssignment>): FieldCluAssignment {
++  return {
++    id: 'assignment-1',
++    farmId,
++    fieldId: 'field-1',
++    tractKey: '6418-1417',
++    cluNumber: '11',
++    acres: 10.5,
++    landUse: 'cropland',
++    assignedAt: '2026-06-16T00:00:00.000Z',
++    deletedAt: null,
++    ...overrides,
++  };
++}
++
+ // ΓöÇΓöÇΓöÇ Required Field Validation ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ 
+ describe('Reverse mapper required field validation', () => {
+@@ -110,6 +148,16 @@ describe('Reverse mapper required field validation', () => {
+     expect(() => mapTillageToDb({ id: '1', fieldId: 'fld1', seasonYear: 2026 } as any))
+       .toThrow('[Mapper Error] mapTillageToDb: Missing required field "farm_id"');
+   });
++
++  it('mapFsaTractToDb throws on missing farmId', () => {
++    expect(() => mapFsaTractToDb({ id: 'tract-1', tractKey: '6418-1417' } as any))
++      .toThrow('[Mapper Error] mapFsaTractToDb: Missing required field "farmId"');
++  });
++
++  it('mapFieldCluAssignmentToDb throws on missing fieldId', () => {
++    expect(() => mapFieldCluAssignmentToDb({ id: 'assignment-1', farmId, tractKey: '6418-1417', cluNumber: '11', assignedAt: '2026-06-16T00:00:00.000Z' } as any))
++      .toThrow('[Mapper Error] mapFieldCluAssignmentToDb: Missing required field "fieldId"');
++  });
+ });
+ 
+ // ΓöÇΓöÇΓöÇ Zod Schema Validation (post-fix #1) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+@@ -213,6 +261,22 @@ describe('Reverse mapper Zod schema validation', () => {
+     const result = mapGrainToDb(grain);
+     expect(result.bushels).toBe(-50);
+   });
++
++  it('mapFsaTractToDb passes Zod validation for valid CLU tract import', () => {
++    const result = mapFsaTractToDb(makeFsaTract());
++    expect(result.farm_id).toBe(farmId);
++    expect(result.tract_key).toBe('6418-1417');
++    expect(result.feature_count).toBe(1);
++    expect(result.deleted_at).toBeNull();
++  });
++
++  it('mapFieldCluAssignmentToDb passes Zod validation for valid CLU assignment', () => {
++    const result = mapFieldCluAssignmentToDb(makeCluAssignment({ landUse: 'non_cropland' }));
++    expect(result.farm_id).toBe(farmId);
++    expect(result.field_id).toBe('field-1');
++    expect(result.clu_number).toBe('11');
++    expect(result.land_use).toBe('non_cropland');
++  });
+ });
+ 
+ // ΓöÇΓöÇΓöÇ Database Output Keys ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+@@ -245,6 +309,29 @@ describe('Reverse mapper output keys', () => {
+     expect(keys).not.toContain('seedVariety');
+   });
+ 
++  it('mapFsaTractToDb outputs snake_case database keys', () => {
++    const result = mapFsaTractToDb(makeFsaTract());
++    const keys = Object.keys(result);
++    expect(keys).toContain('farm_id');
++    expect(keys).toContain('tract_key');
++    expect(keys).toContain('feature_count');
++    expect(keys).toContain('imported_at');
++    expect(keys).not.toContain('farmId');
++    expect(keys).not.toContain('tractKey');
++  });
++
++  it('mapFieldCluAssignmentToDb outputs snake_case database keys', () => {
++    const result = mapFieldCluAssignmentToDb(makeCluAssignment());
++    const keys = Object.keys(result);
++    expect(keys).toContain('farm_id');
++    expect(keys).toContain('field_id');
++    expect(keys).toContain('tract_key');
++    expect(keys).toContain('clu_number');
++    expect(keys).toContain('land_use');
++    expect(keys).not.toContain('farmId');
++    expect(keys).not.toContain('fieldId');
++  });
++
+   it('mapSprayToDb outputs snake_case keys', () => {
+     const result = mapSprayToDb({
+       id: 'spray-1',
+diff --git a/src/lib/backupSchema.ts b/src/lib/backupSchema.ts
+index 92690eb..0c3ffb9 100644
+--- a/src/lib/backupSchema.ts
++++ b/src/lib/backupSchema.ts
+@@ -5,6 +5,20 @@ const geoJsonPolygonSchema = z.object({
+   coordinates: z.array(z.array(z.array(z.number()))),
+ });
+ 
++const tractFeatureSchema = z.object({
++  type: z.literal('Feature'),
++  geometry: geoJsonPolygonSchema,
++  properties: z.object({
++    cluNumber: z.string(),
++    acres: z.number(),
++  }).strict(),
++}).strict();
++
++const tractFeatureCollectionSchema = z.object({
++  type: z.literal('FeatureCollection'),
++  features: z.array(tractFeatureSchema),
++}).strict();
++
+ const sprayProductSchema = z.object({
+   id: z.string().optional(),
+   ui_id: z.string().optional(),
+@@ -229,6 +243,29 @@ export const tillageRecordSchema = z.object({
+   deleted_at: z.string().nullable().optional(),
+ }).strict();
+ 
++export const fsaTractImportSchema = z.object({
++  id: z.string(),
++  farmId: z.string(),
++  tractKey: z.string(),
++  filename: z.string(),
++  featureCount: z.number(),
++  geojson: tractFeatureCollectionSchema,
++  importedAt: z.string(),
++  deletedAt: z.string().nullable().optional(),
++}).strict();
++
++export const fieldCluAssignmentSchema = z.object({
++  id: z.string(),
++  farmId: z.string(),
++  fieldId: z.string(),
++  tractKey: z.string(),
++  cluNumber: z.string(),
++  acres: z.number(),
++  landUse: z.enum(['cropland', 'non_cropland']),
++  assignedAt: z.string(),
++  deletedAt: z.string().nullable().optional(),
++}).strict();
++
+ export const backupSchema = z.object({
+   fields: z.array(fieldSchema).optional(),
+   bins: z.array(binSchema).optional(),
+@@ -242,7 +279,10 @@ export const backupSchema = z.object({
+   savedSeeds: z.array(savedSeedSchema).optional(),
+   fertilizerRecipes: z.array(fertilizerRecipeSchema).optional(),
+   sprayRecipes: z.array(sprayRecipeSchema).optional(),
++  fsaTracts: z.array(fsaTractImportSchema).optional(),
++  cluAssignments: z.array(fieldCluAssignmentSchema).optional(),
+   activeSeason: z.number().optional(),
++  backupDate: z.string().optional(),
+   rolloverDate: z.string().optional(),
+ }).strict();
+ 
+diff --git a/src/lib/cluImport.ts b/src/lib/cluImport.ts
+index a8ebb04..a8f8705 100644
+--- a/src/lib/cluImport.ts
++++ b/src/lib/cluImport.ts
+@@ -2,7 +2,7 @@ import type { TractFeatureCollection } from '@/lib/tractLookup';
+ 
+ const WEB_MERCATOR_MAX = 20037508.34;
+ 
+-function isWebMercator(coords: number[][]): boolean {
++function isWebMercator(coords: number[][][]): boolean {
+   for (const ring of coords) {
+     for (const pt of ring) {
+       if (Math.abs(pt[0]) > 180 || Math.abs(pt[1]) > 90) return true;
+@@ -93,7 +93,7 @@ export function parseCluGeoJson(contents: string, filename: string): { tractKey:
+   let needsProjection = false;
+   for (const f of featuresWithClu) {
+     const geom = f.geometry as Record<string, unknown>;
+-    if (isWebMercator(geom.coordinates as number[][])) {
++    if (isWebMercator(geom.coordinates as number[][][])) {
+       needsProjection = true;
+       break;
+     }
+diff --git a/src/lib/mappers.ts b/src/lib/mappers.ts
+index 5dc6596..a078707 100644
+--- a/src/lib/mappers.ts
++++ b/src/lib/mappers.ts
+@@ -6,13 +6,16 @@ import {
+ import {
+     PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow,
+     GrainMovementRow, FieldRow, BinRow, SavedSeedRow, SprayRecipeRow,
+-    FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow
++    FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow,
++    FsaTractImportRow, FieldCluAssignmentRow
+ } from '../types/database';
++import type { FsaTractImport, FieldCluAssignment } from '../types/fsaTract';
+ import {
+     fieldSchema, binSchema, plantRecordSchema, sprayRecordSchema,
+     harvestRecordSchema, hayHarvestRecordSchema, grainMovementSchema,
+     savedSeedSchema, fertilizerRecipeSchema, sprayRecipeSchema,
+-    fertilizerApplicationSchema, tillageRecordSchema
++    fertilizerApplicationSchema, tillageRecordSchema,
++    fsaTractImportSchema, fieldCluAssignmentSchema
+ } from './backupSchema';
+ 
+ // --- Safe Mapping Helpers (Runtime Validation) ---
+@@ -242,6 +245,29 @@ export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
+     deleted_at: db.deleted_at ?? null
+ });
+ 
++export const mapFsaTractFromDb = (db: FsaTractImportRow): FsaTractImport => ({
++    id: db.id,
++    farmId: db.farm_id,
++    tractKey: db.tract_key,
++    filename: safeStr(db.filename),
++    featureCount: safeNum(db.feature_count),
++    geojson: db.geojson as FsaTractImport['geojson'],
++    importedAt: db.imported_at,
++    deletedAt: db.deleted_at ?? null
++});
++
++export const mapFieldCluAssignmentFromDb = (db: FieldCluAssignmentRow): FieldCluAssignment => ({
++    id: db.id,
++    farmId: db.farm_id,
++    fieldId: db.field_id,
++    tractKey: db.tract_key,
++    cluNumber: db.clu_number,
++    acres: safeNum(db.acres),
++    landUse: db.land_use ?? 'cropland',
++    assignedAt: db.assigned_at,
++    deletedAt: db.deleted_at ?? null
++});
++
+ // --- Helper for Validation ---
+ 
+ function validateRequired(obj: any, fields: string[], mapperName: string) {
+@@ -529,3 +555,34 @@ export const mapTillageToDb = (r: TillageRecord) => {
+         deleted_at: r.deleted_at
+     };
+ };
++
++export const mapFsaTractToDb = (t: FsaTractImport): FsaTractImportRow => {
++    validateRequired(t, ['id', 'farmId', 'tractKey', 'filename', 'featureCount', 'geojson', 'importedAt'], 'mapFsaTractToDb');
++    fsaTractImportSchema.parse(t);
++    return {
++        id: t.id,
++        farm_id: t.farmId,
++        tract_key: t.tractKey,
++        filename: t.filename,
++        feature_count: t.featureCount,
++        geojson: t.geojson,
++        imported_at: t.importedAt,
++        deleted_at: t.deletedAt ?? null
++    };
++};
++
++export const mapFieldCluAssignmentToDb = (a: FieldCluAssignment): FieldCluAssignmentRow => {
++    validateRequired(a, ['id', 'farmId', 'fieldId', 'tractKey', 'cluNumber', 'assignedAt'], 'mapFieldCluAssignmentToDb');
++    fieldCluAssignmentSchema.parse(a);
++    return {
++        id: a.id,
++        farm_id: a.farmId,
++        field_id: a.fieldId,
++        tract_key: a.tractKey,
++        clu_number: a.cluNumber,
++        acres: a.acres,
++        land_use: a.landUse,
++        assigned_at: a.assignedAt,
++        deleted_at: a.deletedAt ?? null
++    };
++};
+diff --git a/src/lib/weatherHelpers.ts b/src/lib/weatherHelpers.ts
+index 562dd76..dcf412f 100644
+--- a/src/lib/weatherHelpers.ts
++++ b/src/lib/weatherHelpers.ts
+@@ -1,6 +1,6 @@
+ import {
+   Sun, CloudSun, Cloud, CloudRain, CloudDrizzle,
+-  CloudSnow, CloudLightning, CloudFog, Wind,
++  CloudSnow, CloudLightning, CloudFog, Wind, Thermometer, Droplets
+ } from 'lucide-react';
+ import type { LucideIcon } from 'lucide-react';
+ 
+@@ -153,3 +153,128 @@ export function getWindRotation(dir: string): number {
+   return angles[dir] ?? 0;
+ }
+ 
++export type SprayStatus = 'go' | 'caution' | 'wait';
++
++const WIND_ALERT_MPH = 10;
++const INVERSION_MPH = 3;
++const PRECIP_CAUTION_PCT = 30;
++const DELTA_T_MIN_GO = 2;
++const DELTA_T_MAX_GO = 8;
++const DELTA_T_MAX_CAUTION = 10;
++
++function fToC(f: number): number {
++  return (f - 32) * 5 / 9;
++}
++
++// Stull (2011) formula for wet-bulb temperature (input/output Celsius)
++function wetBulbC(tempC: number, rh: number): number {
++  return tempC * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) +
++    Math.atan(tempC + rh) -
++    Math.atan(rh - 1.676331) +
++    0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) -
++    4.686035;
++}
++
++export function calculateDeltaT(tempF: number, humidity: number): number {
++  const tempC = fToC(tempF);
++  const wetC = wetBulbC(tempC, humidity);
++  const delta = tempC - wetC;
++  return Math.round(delta * 10) / 10;
++}
++
++export function evaluateSprayConditions({
++  windSpeed,
++  precipProb,
++  tempF,
++  humidity
++}: {
++  windSpeed: number;
++  precipProb: number;
++  tempF: number;
++  humidity: number;
++}): {
++  overall: SprayStatus;
++  factors: { label: string; value: string; status: SprayStatus; note: string; icon: React.ElementType }[];
++} {
++  const factors: { label: string; value: string; status: SprayStatus; note: string; icon: React.ElementType }[] = [];
++
++  // Wind speed
++  let windStatus: SprayStatus = 'go';
++  let windNote = `${windSpeed} mph is in the acceptable ${INVERSION_MPH}-${WIND_ALERT_MPH} mph range.`;
++  if (windSpeed > WIND_ALERT_MPH) {
++    windStatus = 'wait';
++    windNote = `Wind ${windSpeed} mph exceeds ${WIND_ALERT_MPH} mph drift warning.`;
++  } else if (windSpeed < INVERSION_MPH) {
++    windStatus = 'caution';
++    windNote = `Wind ${windSpeed} mph below ${INVERSION_MPH} mph ΓÇö inversion risk.`;
++  }
++  factors.push({
++    label: 'Wind Speed',
++    value: `${windSpeed} mph`,
++    status: windStatus,
++    note: windNote,
++    icon: Wind
++  });
++
++  // Delta-T
++  const deltaT = calculateDeltaT(tempF, humidity);
++  let deltaStatus: SprayStatus = 'go';
++  let deltaNote = `╬öT ${deltaT} is in the ideal ${DELTA_T_MIN_GO}-${DELTA_T_MAX_GO} range.`;
++  if (deltaT > DELTA_T_MAX_CAUTION) {
++    deltaStatus = 'wait';
++    deltaNote = `╬öT ${deltaT} is high ΓÇö droplets may evaporate too quickly.`;
++  } else if (deltaT > DELTA_T_MAX_GO) {
++    deltaStatus = 'caution';
++    deltaNote = `╬öT ${deltaT} is elevated ΓÇö watch for evaporation.`;
++  } else if (deltaT < DELTA_T_MIN_GO) {
++    deltaStatus = 'wait';
++    deltaNote = `╬öT ${deltaT} is low ΓÇö strong inversion / settling risk.`;
++  }
++  factors.push({
++    label: 'Delta-T',
++    value: `${deltaT}`,
++    status: deltaStatus,
++    note: deltaNote,
++    icon: Thermometer
++  });
++
++  // Rain chance
++  let rainStatus: SprayStatus = 'go';
++  let rainNote = `${precipProb}% chance of rain ΓÇö acceptable.`;
++  if (precipProb > PRECIP_CAUTION_PCT) {
++    rainStatus = 'caution';
++    rainNote = `${precipProb}% chance of rain ΓÇö risk of washoff.`;
++  }
++  factors.push({
++    label: 'Rain Chance',
++    value: `${precipProb}%`,
++    status: rainStatus,
++    note: rainNote,
++    icon: CloudRain
++  });
++
++  // Humidity (informational ΓÇö contributes to Delta-T)
++  let humidStatus: SprayStatus = 'go';
++  let humidNote = `${humidity}% relative humidity.`;
++  if (humidity < 20) {
++    humidStatus = 'caution';
++    humidNote = `${humidity}% humidity ΓÇö very dry, increased evaporation risk.`;
++  }
++  factors.push({
++    label: 'Humidity',
++    value: `${humidity}%`,
++    status: humidStatus,
++    note: humidNote,
++    icon: Droplets
++  });
++
++  const overall = factors.reduce<SprayStatus>((worst, f) => {
++    if (worst === 'wait' || f.status === 'wait') return 'wait';
++    if (worst === 'caution' || f.status === 'caution') return 'caution';
++    return 'go';
++  }, 'go');
++
++  return { overall, factors };
++}
++
++
+diff --git a/src/pages/Activity.tsx b/src/pages/Activity.tsx
+index 323449b..f4306bb 100644
+--- a/src/pages/Activity.tsx
++++ b/src/pages/Activity.tsx
+@@ -1,8 +1,14 @@
+ import { useState, useMemo } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import { useFarm } from '@/store/farmStore';
+-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Sprout, Scissors, Disc3 } from 'lucide-react';
++import { ClipboardList, Trash2, Warehouse, FileDown } from 'lucide-react';
+ import { toast } from 'sonner';
++import { useUndoDelete } from '@/hooks/useUndoDelete';
++import SyncStatusIndicator from '@/components/SyncStatusIndicator';
++import {
++  ACTIVITY_ICONS,
++  ACTIVITY_TEXT_COLORS,
++} from '@/lib/activityIcons';
+ import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
+ import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
+ import { generateSprayPDF } from '@/lib/sprayExport';
+@@ -21,16 +27,6 @@ import GrainMovementModal from '@/components/GrainMovementModal';
+ import DeletedFieldFallback from '@/components/DeletedFieldFallback';
+ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+ import { Label } from '@/components/ui/label';
+-import {
+-  AlertDialog,
+-  AlertDialogAction,
+-  AlertDialogCancel,
+-  AlertDialogContent,
+-  AlertDialogDescription,
+-  AlertDialogFooter,
+-  AlertDialogHeader,
+-  AlertDialogTitle,
+-} from '@/components/ui/alert-dialog';
+ 
+ // Tab Components
+ import PlantTab from '@/components/activity/PlantTab';
+@@ -47,17 +43,17 @@ type Tab = 'all' | 'plant' | 'spray' | 'fertilizer' | 'tillage' | 'harvest' | 'h
+ const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; label: string; color: string }[] }[] = [
+   { group: 'All', tabs: [{ key: 'all', icon: ClipboardList, label: 'All', color: 'text-foreground' }] },
+   { group: 'Crop', tabs: [
+-    { key: 'plant', icon: Leaf, label: 'Planting', color: 'text-plant' },
+-    { key: 'harvest', icon: Wheat, label: 'Harvesting', color: 'text-harvest' },
+-    { key: 'hay', icon: Scissors, label: 'Hay', color: 'text-orange-700 dark:text-orange-400' },
++    { key: 'plant', icon: ACTIVITY_ICONS.plant, label: 'Planting', color: ACTIVITY_TEXT_COLORS.plant },
++    { key: 'harvest', icon: ACTIVITY_ICONS.harvest, label: 'Harvesting', color: ACTIVITY_TEXT_COLORS.harvest },
++    { key: 'hay', icon: ACTIVITY_ICONS.hay, label: 'Hay', color: ACTIVITY_TEXT_COLORS.hay },
+   ]},
+   { group: 'Inputs', tabs: [
+-    { key: 'spray', icon: CloudRain, label: 'Spraying', color: 'text-spray' },
+-    { key: 'fertilizer', icon: Sprout, label: 'Fertilizer', color: 'text-lime-600 dark:text-lime-400' },
+-    { key: 'tillage', icon: Disc3, label: 'Tillage', color: 'text-orange-600' },
++    { key: 'spray', icon: ACTIVITY_ICONS.spray, label: 'Spraying', color: ACTIVITY_TEXT_COLORS.spray },
++    { key: 'fertilizer', icon: ACTIVITY_ICONS.fertilizer, label: 'Fertilizer', color: ACTIVITY_TEXT_COLORS.fertilizer },
++    { key: 'tillage', icon: ACTIVITY_ICONS.tillage, label: 'Tillage', color: ACTIVITY_TEXT_COLORS.tillage },
+   ]},
+   { group: 'Logistics', tabs: [
+-    { key: 'grain', icon: Warehouse, label: 'Grain', color: 'text-harvest' },
++    { key: 'grain', icon: ACTIVITY_ICONS.grain, label: 'Grain', color: ACTIVITY_TEXT_COLORS.grain },
+   ]},
+ ];
+ 
+@@ -94,9 +90,33 @@ export default function Activity() {
+   const [search, setSearch] = useState('');
+   const [tab, setTab] = useState<Tab>('all');
+   const [selected, setSelected] = useState<Set<string>>(new Set());
+-  const [confirmDelete, setConfirmDelete] = useState(false);
+   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
+ 
++  const { pending: pendingDeletes, requestDelete } = useUndoDelete<ActivityRecord[]>({
++    onCommit: async (_ids, toDelete) => {
++      const byType = toDelete.reduce((acc, r) => {
++        acc[r.type] = acc[r.type] || [];
++        acc[r.type].push(r.data.id);
++        return acc;
++      }, {} as Record<string, string[]>);
++
++      const results = await Promise.all([
++        byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
++        byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
++        byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
++        byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
++        byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
++        byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
++        byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
++      ]);
++
++      if (results.some(r => !r)) {
++        throw new Error('One or more deletions failed');
++      }
++    },
++    onError: () => toast.error('Failed to delete records. They remain visible.'),
++  });
++
+   const getEditField = (fieldId: string) =>
+     fields.find(f => f.id === fieldId && !f.deleted_at) ?? null;
+ 
+@@ -158,7 +178,7 @@ export default function Activity() {
+     [tillageRecords, search, viewingSeason]
+   );
+ 
+-  const unifiedRecords = useMemo(() => {
++  const visibleUnifiedRecords = useMemo(() => {
+     const all: (ActivityRecord & { timestamp: number })[] = [
+       ...filteredPlant.map(r => ({ type: 'plant' as const, data: r, timestamp: r.timestamp })),
+       ...filteredSpray.map(r => ({ type: 'spray' as const, data: r, timestamp: r.timestamp })),
+@@ -168,33 +188,23 @@ export default function Activity() {
+       ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
+       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
+     ];
+-    return all.sort((a, b) => b.timestamp - a.timestamp);
+-  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredTillage, filteredGrain]);
++    return all.filter(r => !pendingDeletes.has(r.data.id)).sort((a, b) => b.timestamp - a.timestamp);
++  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
+ 
+-  const handleDelete = async () => {
++  const handleDeleteRequest = () => {
+     const ids = Array.from(selected);
+-    
+-    const toDelete = unifiedRecords.filter(r => ids.includes(r.data.id));
+-    const byType = toDelete.reduce((acc, r) => {
+-      acc[r.type] = acc[r.type] || [];
+-      acc[r.type].push(r.data.id);
+-      return acc;
+-    }, {} as Record<string, string[]>);
+-
+-    await Promise.all([
+-      byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
+-      byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
+-      byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
+-      byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
+-      byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
+-      byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
+-      byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
+-    ]);
+-
++    if (ids.length === 0) return;
++
++    const toDelete = visibleUnifiedRecords.filter(r => ids.includes(r.data.id));
++    requestDelete(
++      ids,
++      `${ids.length} record${ids.length !== 1 ? 's' : ''} deleted`,
++      toDelete
++    );
+     setSelected(new Set());
+-    setConfirmDelete(false);
+   };
+ 
++
+   return (
+     <div className="min-h-screen bg-background pb-24 lg:pb-8">
+       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
+@@ -226,6 +236,8 @@ export default function Activity() {
+             </div>
+           </div>
+ 
++          <SyncStatusIndicator />
++
+           {tab === 'spray' && (
+             <div className="flex gap-2">
+               <button
+@@ -285,14 +297,14 @@ export default function Activity() {
+             {TAB_GROUPS.map(group => (
+               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
+                 {group.tabs.map((t) => {
+-                  const count = t.key === 'all' ? unifiedRecords.length
+-                    : t.key === 'plant' ? filteredPlant.length
+-                    : t.key === 'spray' ? filteredSpray.length
+-                    : t.key === 'harvest' ? filteredHarvest.length
+-                    : t.key === 'grain' ? filteredGrain.length
+-                    : t.key === 'hay' ? filteredHay.length
+-                    : t.key === 'tillage' ? filteredTillage.length
+-                    : filteredFertilizer.length;
++                  const count = t.key === 'all' ? visibleUnifiedRecords.length
++                    : t.key === 'plant' ? filteredPlant.filter(r => !pendingDeletes.has(r.id)).length
++                    : t.key === 'spray' ? filteredSpray.filter(r => !pendingDeletes.has(r.id)).length
++                    : t.key === 'harvest' ? filteredHarvest.filter(r => !pendingDeletes.has(r.id)).length
++                    : t.key === 'grain' ? filteredGrain.filter(r => !pendingDeletes.has(r.id)).length
++                    : t.key === 'hay' ? filteredHay.filter(r => !pendingDeletes.has(r.id)).length
++                    : t.key === 'tillage' ? filteredTillage.filter(r => !pendingDeletes.has(r.id)).length
++                    : filteredFertilizer.filter(r => !pendingDeletes.has(r.id)).length;
+ 
+                   const isActive = tab === t.key;
+ 
+@@ -342,7 +354,7 @@ export default function Activity() {
+         {/* Bulk delete */}
+         {selected.size > 0 && (
+           <button
+-            onClick={() => setConfirmDelete(true)}
++            onClick={handleDeleteRequest}
+             className="touch-target w-full flex items-center justify-center gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg py-3 text-sm font-bold active:scale-95 transition-transform"
+           >
+             <Trash2 size={18} />
+@@ -352,35 +364,17 @@ export default function Activity() {
+ 
+         {/* Records */}
+         <div className="space-y-2">
+-          {tab === 'all' && <HistoryFeed records={unifiedRecords} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+-          {tab === 'plant' && <PlantTab records={filteredPlant} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+-          {tab === 'spray' && <SprayTab records={filteredSpray} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+-          {tab === 'harvest' && <HarvestTab records={filteredHarvest} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+-          {tab === 'hay' && <HayTab records={filteredHay} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+-          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+-          {tab === 'tillage' && <TillageTab records={filteredTillage} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+-          {tab === 'grain' && <GrainTab records={filteredGrain} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'spray' && <SprayTab records={filteredSpray.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
++          {tab === 'grain' && <GrainTab records={filteredGrain.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+         </div>
+       </main>
+ 
+-      {/* Confirm Delete Dialog */}
+-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+-        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+-          <AlertDialogHeader>
+-            <AlertDialogTitle className="text-foreground">Confirm Delete</AlertDialogTitle>
+-            <AlertDialogDescription className="text-muted-foreground">
+-              This will permanently remove {selected.size} record{selected.size > 1 ? 's' : ''}. This action cannot be undone.
+-            </AlertDialogDescription>
+-          </AlertDialogHeader>
+-          <AlertDialogFooter>
+-            <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+-            <AlertDialogAction onClick={handleDelete} className="touch-target bg-destructive text-destructive-foreground glow-destructive">
+-              Delete
+-            </AlertDialogAction>
+-          </AlertDialogFooter>
+-        </AlertDialogContent>
+-      </AlertDialog>
+-
+       {tab === 'grain' && editingRecord && (
+         <GrainMovementModal
+           open={!!editingRecord}
+diff --git a/src/pages/FieldDetailScreen.tsx b/src/pages/FieldDetailScreen.tsx
+index 2f7ab91..bf35d6b 100644
+--- a/src/pages/FieldDetailScreen.tsx
++++ b/src/pages/FieldDetailScreen.tsx
+@@ -82,7 +82,7 @@ export default function FieldDetailScreen() {
+       return dateStr ? new Date(dateStr).getTime() : 0;
+     };
+     return all.sort((a, b) => getTS(b.data) - getTS(a.data));
+-  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
++  }, [field?.id, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
+ 
+   const latestActivity = unifiedRecords[0];
+ 
+diff --git a/src/pages/Index.tsx b/src/pages/Index.tsx
+index 7f71ee9..e57cbdc 100644
+--- a/src/pages/Index.tsx
++++ b/src/pages/Index.tsx
+@@ -110,7 +110,7 @@ const Index = () => {
+                       <button
+                         key={crop}
+                         onClick={() => toggleCrop(crop)}
+-                        className={`flex-none flex items-center justify-center h-9 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
++                        className={`flex-none flex items-center justify-center h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
+                           ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
+                           : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50'
+                           }`}
+@@ -141,7 +141,7 @@ const Index = () => {
+                 </ErrorBoundary>
+               </div>
+             )}
+-            {filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
++            {allFields.length === 0 && (
+               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
+                 <Tractor size={48} className="mx-auto text-muted-foreground/30 mb-4" />
+                 <h3 className="text-lg font-bold text-foreground mb-1">No Fields Detected</h3>
+@@ -151,6 +151,14 @@ const Index = () => {
+               </div>
+             )}
+ 
++            {allFields.length > 0 && filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
++              <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
++                <p className="text-xs text-muted-foreground leading-relaxed">
++                  No fields match the selected crops.
++                </p>
++              </div>
++            )}
++
+           </>
+         )}
+       </main>
+diff --git a/src/pages/Logistics.tsx b/src/pages/Logistics.tsx
+index 00b60da..3fca8c9 100644
+--- a/src/pages/Logistics.tsx
++++ b/src/pages/Logistics.tsx
+@@ -4,6 +4,7 @@ import { Warehouse, Wheat, Settings, Banknote, Plus } from 'lucide-react';
+ import { BinManager } from '@/components/BinManageModal';
+ import SellModal from '@/components/SellModal';
+ import AddGrainModal from '@/components/AddGrainModal';
++import SyncStatusIndicator from '@/components/SyncStatusIndicator';
+ import { Button } from '@/components/ui/button';
+ import type { Bin } from '@/types/farm';
+ 
+@@ -43,15 +44,18 @@ export default function Logistics() {
+               <p className="text-xs text-muted-foreground">{bins.length} bins ┬╖ {viewingSeason} season</p>
+             </div>
+           </div>
+-          <button
+-            onClick={() => setManaging(!managing)}
+-            aria-label={managing ? "Exit management" : "Manage bins"}
+-            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
+-               }`}
+-          >
+-            <Settings size={16} />
+-            <span>{managing ? 'Done' : 'Manage Bins'}</span>
+-          </button>
++          <div className="flex items-center gap-2">
++            <SyncStatusIndicator />
++            <button
++              onClick={() => setManaging(!managing)}
++              aria-label={managing ? "Exit management" : "Manage bins"}
++              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
++                 }`}
++            >
++              <Settings size={16} />
++              <span>{managing ? 'Done' : 'Manage Bins'}</span>
++            </button>
++          </div>
+         </div>
+ 
+       </header>
+diff --git a/src/pages/Reports.tsx b/src/pages/Reports.tsx
+index 992b99f..a5070d7 100644
+--- a/src/pages/Reports.tsx
++++ b/src/pages/Reports.tsx
+@@ -1,16 +1,22 @@
+ import { useState, useMemo, useRef } from 'react';
+ import { Capacitor } from '@capacitor/core';
+-import { FileText, Sprout, CloudRain, Wheat, Printer, Download, History as HistoryIcon, Tractor } from 'lucide-react';
++import { FileText, Printer, History as HistoryIcon } from 'lucide-react';
+ import { toast } from 'sonner';
+ 
+ import { useFarm } from '@/store/farmStore';
+-import { Button } from '@/components/ui/button';
+ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
++import FsaPlantReport from '@/components/reports/FsaPlantReport';
++import SprayAuditReport from '@/components/reports/SprayAuditReport';
++import FertilizerReport from '@/components/reports/FertilizerReport';
++import FallFsaReport from '@/components/reports/FallFsaReport';
++import HaySummaryReport from '@/components/reports/HaySummaryReport';
++import LandlordStatementReport from '@/components/reports/LandlordStatementReport';
+ import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
+ import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
+ import { native, sanitizeNativeFileName } from '@/lib/native';
+ import { generateSprayPDF } from '@/lib/sprayExport';
+-import ReportTable from '@/components/ReportTable';
++import SyncStatusIndicator from '@/components/SyncStatusIndicator';
++import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
+ import { formatIsoDate } from '@/utils/dates';
+ import { roundTo } from '@/utils/numbers';
+ import { formatTotalAmount } from '@/utils/unitConversion';
+@@ -20,23 +26,17 @@ import { Field } from '@/types/farm';
+ 
+ type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harvest' | 'hay-summary' | 'landlord-statement';
+ 
+-const WIND_ALERT_MPH = 10;
+-
+-const TABS: { key: ReportTab; icon: typeof Sprout; label: string; color: string }[] = [
+-  { key: 'fsa-plant',          icon: Sprout,    label: 'FSA-578',     color: 'text-plant' },
+-  { key: 'spray-audit',        icon: CloudRain, label: 'Spray Audit', color: 'text-spray' },
+-  { key: 'fertilizer-summary', icon: Sprout,    label: 'Fertilizer',  color: 'text-lime-600 dark:text-lime-400' },
+-  { key: 'fsa-harvest',        icon: Wheat,     label: 'Fall FSA',    color: 'text-harvest' },
+-  { key: 'hay-summary',        icon: Tractor,   label: 'Hay Summary', color: 'text-harvest' },
+-  { key: 'landlord-statement', icon: FileText,  label: 'Landlord',    color: 'text-blue-600' },
++const TABS: { key: ReportTab; icon: typeof ACTIVITY_ICONS.plant; label: string; color: string }[] = [
++  { key: 'fsa-plant',          icon: ACTIVITY_ICONS.plant,      label: 'FSA-578',     color: ACTIVITY_TEXT_COLORS.plant },
++  { key: 'spray-audit',        icon: ACTIVITY_ICONS.spray,      label: 'Spray Audit', color: ACTIVITY_TEXT_COLORS.spray },
++  { key: 'fertilizer-summary', icon: ACTIVITY_ICONS.fertilizer, label: 'Fertilizer',  color: ACTIVITY_TEXT_COLORS.fertilizer },
++  { key: 'fsa-harvest',        icon: ACTIVITY_ICONS.harvest,    label: 'Fall FSA',    color: ACTIVITY_TEXT_COLORS.harvest },
++  { key: 'hay-summary',        icon: ACTIVITY_ICONS.hay,        label: 'Hay Summary', color: ACTIVITY_TEXT_COLORS.hay },
++  { key: 'landlord-statement', icon: FileText,                  label: 'Landlord',    color: 'text-blue-600' },
+ ];
+ 
+ // ΓöÇΓöÇΓöÇ Pure helpers (module-level ΓÇö not recreated on every render) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ 
+-function fmt(ts: number): string {
+-  return new Date(ts).toLocaleDateString();
+-}
+-
+ function fmtDate(d?: string): string {
+   return d ? formatIsoDate(d) : 'ΓÇö';
+ }
+@@ -171,8 +171,6 @@ export default function Reports() {
+       ]);
+   }, [cluAssignments, fieldMap]);
+   const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
+-  const fsaReadinessErrors = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'error'), [fsaReadinessIssues]);
+-  const fsaReadinessWarnings = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'warning'), [fsaReadinessIssues]);
+   const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
+   const fsaFallReport = useMemo(
+     () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields }),
+@@ -183,8 +181,6 @@ export default function Reports() {
+     [fsaFallReport],
+   );
+   const fsaFallIssues = useMemo(() => validateFsaFallProductionRows(fsaFallRows), [fsaFallRows]);
+-  const fsaFallErrors = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'error'), [fsaFallIssues]);
+-  const fsaFallWarnings = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'warning'), [fsaFallIssues]);
+   const totalFallHayBales = useMemo(() => fsaFallReport.hayRows.reduce((s, row) => s + row.production, 0), [fsaFallReport]);
+   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
+   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
+@@ -401,13 +397,16 @@ export default function Reports() {
+             </div>
+           </div>
+           {/* Single print button ΓÇö header only, consistent across all tabs */}
+-          <button
+-            onClick={handlePrint}
+-            className="touch-target flex items-center gap-2 px-4 py-2 bg-muted border border-border rounded-lg text-foreground text-sm hover:bg-muted/80 transition-colors print:hidden"
+-          >
+-            <Printer size={16} />
+-            Print
+-          </button>
++          <div className="flex items-center gap-2">
++            <SyncStatusIndicator />
++            <button
++              onClick={handlePrint}
++              className="touch-target flex items-center gap-2 px-4 py-2 bg-muted border border-border rounded-lg text-foreground text-sm hover:bg-muted/80 transition-colors print:hidden"
++            >
++              <Printer size={16} />
++              Print
++            </button>
++          </div>
+         </div>
+ 
+       </header>
+@@ -454,216 +453,56 @@ export default function Reports() {
+ 
+         {/* ΓöÇΓöÇ FSA Planting Report ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+         {tab === 'fsa-plant' && (
+-          <ReportTable
+-            title="FSA-578 Acreage Certification Worksheet"
+-            subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
+-            headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'SEQ', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
+-            onExport={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
++          <FsaPlantReport
++            fsaPlantRows={fsaPlantRows}
++            totalPlantAcres={totalPlantAcres}
++            plantedAcresByField={plantedAcresByField}
++            fsaReadinessIssues={fsaReadinessIssues}
++            farmName={farmName}
++            viewingSeason={viewingSeason}
++            reportDate={reportDate}
++            onExportCsv={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
+               farmName,
+               cropYear: viewingSeason,
+               reportDate: new Date().toISOString().split('T')[0],
+             }), 'FSA-578 worksheet data')}
+             onExportPdf={handleExportFsaPlantPdf}
+-            exportLabel="CSV"
+-            summary={(
+-              <div className="space-y-3 font-mono text-sm print:space-y-2">
+-                <div className="flex justify-between items-center">
+-                  <span className="font-bold text-muted-foreground uppercase">Total planted acreage</span>
+-                  <span className="font-bold text-plant">{totalPlantAcres} AC</span>
+-                </div>
+-                {plantedAcresByField.length > 0 && (
+-                  <div className="border-t border-border pt-3 print:pt-2">
+-                    <div className="text-[10px] font-bold uppercase text-muted-foreground mb-2 print:mb-1">
+-                      Planted acres by field
+-                    </div>
+-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1 print:grid-cols-3 print:gap-x-4">
+-                      {plantedAcresByField.map(row => (
+-                        <div key={row.fieldName} className="flex justify-between gap-3 text-xs">
+-                          <span className="text-foreground font-semibold truncate">{row.fieldName}</span>
+-                          <span className="text-plant font-bold whitespace-nowrap">{row.acres} AC</span>
+-                        </div>
+-                      ))}
+-                    </div>
+-                  </div>
+-                )}
+-              </div>
+-            )}
+-          >
+-            {fsaReadinessIssues.length > 0 && (
+-              <tr className="print:hidden">
+-                <td colSpan={15} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+-                  <div className="font-bold uppercase tracking-wide mb-1">
+-                    FSA-578 readiness check: {fsaReadinessErrors.length} errors, {fsaReadinessWarnings.length} warnings
+-                  </div>
+-                  <ul className="list-disc list-inside space-y-0.5">
+-                    {fsaReadinessIssues.slice(0, 6).map(issue => (
+-                      <li key={`${issue.rowId}-${issue.field}-${issue.severity}`}>{issue.message}</li>
+-                    ))}
+-                    {fsaReadinessIssues.length > 6 && (
+-                      <li>{fsaReadinessIssues.length - 6} more issue(s)</li>
+-                    )}
+-                  </ul>
+-                </td>
+-              </tr>
+-            )}
+-            {fsaPlantRows.map(row => {
+-              return (
+-                <tr key={row.id} className="hover:bg-muted/30 transition-colors">
+-                  <td data-label="FARM #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.farmNumber || '-'}</td>
+-                  <td data-label="TRACT #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.tractNumber || '-'}</td>
+-                  <td data-label="CLU/FIELD #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.fieldNumber || '-'}</td>
+-                  <td data-label="FIELD" className="px-2 py-2 text-[11px] font-bold text-foreground print:px-1 print:py-1">{row.fieldName}</td>
+-                  <td data-label="LAND USE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.landUse}</td>
+-                  <td data-label="CROP" className="px-2 py-2 font-mono text-[11px] text-harvest font-bold print:px-1 print:py-1">{row.crop || '-'}</td>
+-                  <td data-label="SEQ" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropSequence || '-'}</td>
+-                  <td data-label="TYPE/VARIETY" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.seedVariety || '-'}</td>
+-                  <td data-label="PATTERN" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.plantingPattern || '-'}</td>
+-                  <td data-label="ACRES" className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.acreage}</td>
+-                  <td data-label="PLANT DATE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.date ? fmtDate(row.date) : '-'}</td>
+-                  <td data-label="USE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.intendedUse || '-'}</td>
+-                  <td data-label="IRR" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.irrigationCode}</td>
+-                  <td data-label="SHARE %" className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.producerShare}</td>
+-                  <td data-label="STATUS" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropStatus || '-'}</td>
+-                </tr>
+-              );
+-            })}
+-            {fsaPlantRows.length === 0 && (
+-              <tr>
+-                <td colSpan={15} className="py-12 text-center text-muted-foreground text-xs">
+-                  No planting or non-cropland CLU records to report for this season
+-                </td>
+-              </tr>
+-            )}
+-          </ReportTable>
++          />
+         )}
+ 
+         {/* ΓöÇΓöÇ Spray Audit ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+         {tab === 'spray-audit' && (
+-          <div className="space-y-4">
+-            <div className="bg-card border border-border rounded-lg p-4 print:border-foreground/20">
+-              <h2 className="font-bold text-foreground text-base mb-1">Pesticide Application Record</h2>
+-              <p className="text-xs text-muted-foreground mb-1">
+-                Private applicator license compliance audit trail. Generated {reportDate}.
+-              </p>
+-
+-              <div className="flex gap-2 pb-4 print:hidden">
+-                <Button
+-                  size="sm"
+-                  variant="outline"
+-                  className="h-8 text-[11px] font-mono border-spray/30 text-spray hover:bg-spray/10"
+-                  onClick={() => safeExport(() => generateMissouriLog(sprayRecords, fields), 'spray log')}
+-                >
+-                  <Download size={12} className="mr-1.5" />
+-                  CSV
+-                </Button>
+-                <Button
+-                  size="sm"
+-                  variant="outline"
+-                  className="h-8 text-[11px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+-                  onClick={handleExportSprayAuditPdf}
+-                >
+-                  <Download size={12} className="mr-1.5" />
+-                  PDF
+-                </Button>
+-              </div>
+-
+-              {sprayRows.length === 0 ? (
+-                <p className="text-center text-muted-foreground text-sm py-8">
+-                  No spray records to report
+-                </p>
+-              ) : (
+-                <div className="space-y-4">
+-                  {sprayRows.map(r => (
+-                    <div key={r._rowKey} className="border border-border/50 rounded-lg p-3 space-y-2 relative overflow-hidden">
+-                      <div className="absolute top-0 left-0 w-1 h-full bg-spray opacity-50" />
+-                      <div className="flex items-center justify-between">
+-                        <span className="font-bold text-foreground text-sm tracking-tight">{r.fieldName}</span>
+-                        <span className="font-mono text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+-                          {fmtDate(r.sprayDate) || fmt(r.timestamp)}{r.startTime ? ` @ ${r.startTime}${r.endTime ? '-' + r.endTime : ''}` : ''}
+-                        </span>
+-                      </div>
+-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">Crop / Site:</span><div className="text-harvest font-bold">{r.cropOrSiteTreated || 'ΓÇö'}</div></div>
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || 'ΓÇö'}</span></div>
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">Product:</span><div className="text-spray font-bold">{r.product}</div></div>
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">EPA Reg #:</span><div className="text-foreground">{r.epaRegNumber || 'ΓÇö'}</div></div>
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">Rate / Ac:</span><div className="text-foreground">{r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : 'ΓÇö'}</div></div>
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">Total Acres Treated:</span><div className="text-foreground font-bold">{r.treatedAreaSize || 'ΓÇö'}</div></div>
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">Total Product:</span><div className="text-foreground font-bold">{r.amountDisplay}</div></div>
+-                        <div><span className="text-muted-foreground uppercase text-[11px]">Equipment:</span><div className="text-foreground">{r.equipmentId || 'ΓÇö'}</div></div>
+-                        <div className="col-span-2 pt-1 border-t border-border/30 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+-                          <div><span className="text-muted-foreground uppercase text-[11px]">Applicator:</span> <span className="text-foreground/80">{r.applicatorName || 'ΓÇö'}</span></div>
+-                          <div><span className="text-muted-foreground uppercase text-[11px]">License:</span> <span className="text-foreground/80">{r.licenseNumber || 'ΓÇö'}</span></div>
+-                        </div>
+-                        <div className="col-span-2 pt-1 flex flex-wrap gap-x-4 text-[11px] opacity-80">
+-                          <div><span className="text-muted-foreground uppercase text-[11px]">Wind:</span> <span className="text-foreground">{r.windSpeed} mph {r.windDirection || ''}</span></div>
+-                          <div><span className="text-muted-foreground uppercase text-[11px]">Temp:</span> <span className="text-foreground">{r.temperature}┬░F</span></div>
+-                          <div><span className="text-muted-foreground uppercase text-[11px]">Hum:</span> <span className="text-foreground">{r.relativeHumidity != null ? `${r.relativeHumidity}%` : 'ΓÇö'}</span></div>
+-                        </div>
+-                      </div>
+-                      <div className="flex gap-2 flex-wrap pt-1 print:hidden">
+-                        {r.windSpeed > WIND_ALERT_MPH && (
+-                          <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+-                            ΓÜá WIND ALERT
+-                          </span>
+-                        )}
+-                        {!r.epaRegNumber && (
+-                          <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">
+-                            NON-COMPLIANT: NO EPA #
+-                          </span>
+-                        )}
+-                      </div>
+-                    </div>
+-                  ))}
+-                </div>
+-              )}
+-            </div>
+-          </div>
++          <SprayAuditReport
++            sprayRows={sprayRows}
++            reportDate={reportDate}
++            onExportCsv={() => safeExport(() => generateMissouriLog(sprayRecords, fields), 'spray log')}
++            onExportPdf={handleExportSprayAuditPdf}
++          />
+         )}
+ 
+         {/* ΓöÇΓöÇ Fertilizer Summary ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+         {tab === 'fertilizer-summary' && (
+-          <ReportTable
+-            title="Fertilizer Application Summary"
+-            subtitle={`Summary of fertilizer applications. Generated ${reportDate}.`}
+-            headers={['DATE', 'FIELD', 'FORMULA', 'ACRES']}
+-            onExport={() => safeExport(() => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
++          <FertilizerReport
++            fertilizerRecords={fertilizerRecords}
++            fieldMap={fieldMap}
++            totalFertAcres={totalFertAcres}
++            reportDate={reportDate}
++            onExportCsv={() => safeExport(() => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
+             onExportPdf={handleExportFertilizerPdf}
+-            exportLabel="CSV"
+-            summary={(
+-              <div className="flex justify-between items-center font-mono text-sm">
+-                <span className="font-bold text-muted-foreground uppercase">GRAND TOTAL APPLIED</span>
+-                <span className="font-bold text-lime-600 dark:text-lime-400">{totalFertAcres} AC</span>
+-              </div>
+-            )}
+-          >
+-            {fertilizerRecords.map(r => (
+-              <tr key={r.id} className="hover:bg-muted/30 transition-colors">
+-                <td data-label="DATE" className="px-4 py-3 font-mono text-[10px] text-foreground uppercase tracking-tighter">{fmtDate(r.date)}</td>
+-                <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground sm:min-w-[120px]">
+-                  {fieldMap.get(r.fieldId)?.name || r.fieldName}
+-                </td>
+-                <td data-label="FORMULA" className="px-4 py-3 font-mono text-[10px] text-lime-600 dark:text-lime-400 font-bold">{r.fertilizer_formula}</td>
+-                <td data-label="ACRES" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acres}</td>
+-              </tr>
+-            ))}
+-            {fertilizerRecords.length === 0 && (
+-              <tr>
+-                <td colSpan={4} className="py-12 text-center text-muted-foreground text-xs">
+-                  No fertilizer records to report for this season
+-                </td>
+-              </tr>
+-            )}
+-          </ReportTable>
++          />
+         )}
+ 
+         {/* ΓöÇΓöÇ FSA Fall Harvest / Production Report ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+         {tab === 'fsa-harvest' && (
+-          <ReportTable
+-            title="FSA Fall Harvest / Production Evidence Worksheet"
+-            subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
+-            headers={['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #']}
+-            onExport={() => safeExport(() => exportFsaFallProductionData({
++          <FallFsaReport
++            fsaFallRows={fsaFallRows}
++            totalHarvestBu={totalHarvestBu}
++            totalFallHayBales={totalFallHayBales}
++            fsaFallIssues={fsaFallIssues}
++            farmName={farmName}
++            viewingSeason={viewingSeason}
++            reportDate={reportDate}
++            onExportCsv={() => safeExport(() => exportFsaFallProductionData({
+               harvestRecords,
+               hayRecords,
+               fields,
+@@ -674,200 +513,31 @@ export default function Reports() {
+               },
+             }), 'fall production data')}
+             onExportPdf={handleExportHarvestPdf}
+-            exportLabel="CSV"
+-            summary={(
+-              <div className="flex flex-col gap-1 font-mono text-sm">
+-                <div className="flex justify-between items-center">
+-                  <span className="font-bold text-muted-foreground uppercase">TOTAL GRAIN PRODUCTION</span>
+-                  <span className="font-bold text-harvest">{totalHarvestBu.toLocaleString()} BU</span>
+-                </div>
+-                {totalFallHayBales > 0 && (
+-                  <div className="flex justify-between items-center">
+-                    <span className="font-bold text-muted-foreground uppercase">TOTAL HAY PRODUCTION</span>
+-                    <span className="font-bold text-harvest">{totalFallHayBales.toLocaleString()} BALES</span>
+-                  </div>
+-                )}
+-              </div>
+-            )}
+-          >
+-            {fsaFallRows.map(row => (
+-              <tr key={`${row.recordType}-${row.id}`} className="hover:bg-muted/30 transition-colors">
+-                <td data-label="DATE" className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(row.harvestDate) || 'ΓÇö'}</td>
+-                <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
+-                <td data-label="CROP/USE" className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || 'ΓÇö'}</td>
+-                <td data-label="PROD." className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.production.toLocaleString()}</td>
+-                <td data-label="UNIT" className="px-4 py-3 font-mono text-[10px] text-muted-foreground">{row.productionUnit}</td>
+-                <td data-label="MOIST %" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.moisturePercent != null ? `${row.moisturePercent}%` : 'ΓÇö'}</td>
+-                <td data-label="DEST/STORAGE" className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.destination || 'ΓÇö'}</td>
+-                <td data-label="EVIDENCE #" className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.evidenceReference || 'ΓÇö'}</td>
+-                <td data-label="FARM #" className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || 'ΓÇö'}</td>
+-                <td data-label="TRACT #" className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || 'ΓÇö'}</td>
+-              </tr>
+-            ))}
+-            {fsaFallRows.length === 0 && (
+-              <tr>
+-                <td colSpan={10} className="py-12 text-center text-muted-foreground text-xs">
+-                  No harvest or hay production records to report for this season
+-                </td>
+-              </tr>
+-            )}
+-            {fsaFallRows.length > 0 && fsaFallErrors.length > 0 && (
+-              <tr className="print:hidden">
+-                <td colSpan={10} className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 text-xs text-red-600 dark:text-red-400 font-semibold">
+-                  ΓÜá {fsaFallErrors.length} error(s) ΓÇö {fsaFallErrors.map(e => e.message).join('; ')}
+-                </td>
+-              </tr>
+-            )}
+-            {fsaFallRows.length > 0 && fsaFallWarnings.length > 0 && (
+-              <tr className="print:hidden">
+-                <td colSpan={10} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-600 dark:text-amber-400 font-semibold">
+-                  ΓÜá {fsaFallWarnings.length} warning(s) ΓÇö missing destination or evidence references will show as gaps
+-                </td>
+-              </tr>
+-            )}
+-          </ReportTable>
++          />
+         )}
+ 
+         {/* ΓöÇΓöÇ Hay Summary ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+         {tab === 'hay-summary' && (
+-          <ReportTable
+-            title="Hay Production Summary"
+-            subtitle={`Total bale production across all cuttings. Generated ${reportDate}.`}
+-            headers={['FIELD', 'CUTTING #1', 'CUTTING #2', 'CUTTING #3+', 'TOTAL']}
++          <HaySummaryReport
++            hayRecords={hayRecords}
++            fields={fields}
++            totalHayBales={totalHayBales}
++            reportDate={reportDate}
+             onExportPdf={handleExportHayPdf}
+-            summary={(
+-              <div className="flex justify-between items-center font-mono text-sm">
+-                <span className="font-bold text-muted-foreground uppercase">SEASON GRAND TOTAL</span>
+-                <span className="font-bold text-harvest">{totalHayBales.toLocaleString()} BALES</span>
+-              </div>
+-            )}
+-          >
+-            {fields
+-              .filter(f => hayRecords.some(r => r.fieldId === f.id))
+-              .map(f => {
+-                const fieldHay  = hayRecords.filter(r => r.fieldId === f.id);
+-                const c1        = fieldHay.filter(r => r.cuttingNumber === 1).reduce((s, r) => s + r.baleCount, 0);
+-                const c2        = fieldHay.filter(r => r.cuttingNumber === 2).reduce((s, r) => s + r.baleCount, 0);
+-                const c3plus    = fieldHay.filter(r => r.cuttingNumber >= 3).reduce((s, r) => s + r.baleCount, 0);
+-                const total     = c1 + c2 + c3plus;
+-
+-                return (
+-                  <tr key={f.id} className="hover:bg-muted/30 transition-colors">
+-                    <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{f.name}</td>
+-                    {/* Use explicit zero check ΓÇö c1 > 0 avoids hiding a legitimate 0 bale count */}
+-                    <td data-label="CUTTING #1" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c1 > 0 ? c1 : 'ΓÇö'}</td>
+-                    <td data-label="CUTTING #2" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c2 > 0 ? c2 : 'ΓÇö'}</td>
+-                    <td data-label="CUTTING #3+" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c3plus > 0 ? c3plus : 'ΓÇö'}</td>
+-                    <td data-label="TOTAL" className="px-4 py-3 font-mono text-[10px] font-bold text-harvest text-right border-l border-border/20">
+-                      {total.toLocaleString()}
+-                    </td>
+-                  </tr>
+-                );
+-              })}
+-            {hayRecords.length === 0 && (
+-              <tr>
+-                <td colSpan={5} className="py-12 text-center text-muted-foreground text-xs">
+-                  No hay records to report for this season
+-                </td>
+-              </tr>
+-            )}
+-          </ReportTable>
++          />
+         )}
+ 
+         {/* ΓöÇΓöÇ Landlord Statement ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+         {tab === 'landlord-statement' && (
+-          <div className="space-y-4">
+-            <div className="bg-card border border-border rounded-lg p-4 print:border-foreground/20">
+-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 print:hidden">
+-                <div>
+-                  <h2 className="font-bold text-foreground text-base mb-1">Landlord Crop Share Statement</h2>
+-                  <p className="text-xs text-muted-foreground">
+-                    Per-landlord production summary. Generated {reportDate}.
+-                  </p>
+-                </div>
+-                <Select value={selectedLandlord} onValueChange={setSelectedLandlord}>
+-                  <SelectTrigger className="w-full sm:w-[200px] h-9 font-mono text-sm bg-background border-border">
+-                    <SelectValue placeholder="Select Landlord" />
+-                  </SelectTrigger>
+-                  <SelectContent className="bg-card border-border">
+-                    {uniqueLandlords.map((name: string) => (
+-                      <SelectItem key={name} value={name} className="font-mono text-xs">
+-                        {name}
+-                      </SelectItem>
+-                    ))}
+-                  </SelectContent>
+-                </Select>
+-              </div>
+-
+-              {!selectedLandlord ? (
+-                <div className="py-12 text-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+-                  <p className="text-muted-foreground text-sm">
+-                    Select a landlord to generate their statement
+-                  </p>
+-                </div>
+-              ) : landlordStatement ? (
+-                <div className="space-y-6">
+-                  <div className="flex gap-2 print:hidden">
+-                    <Button
+-                      size="sm"
+-                      variant="outline"
+-                      className="h-8 text-[11px] font-mono border-blue-500/30 text-blue-600 hover:bg-blue-50"
+-                      onClick={handleExportLandlordCSV}
+-                    >
+-                      <Download size={12} className="mr-1.5" />
+-                      CSV
+-                    </Button>
+-                    <Button
+-                      size="sm"
+-                      variant="outline"
+-                      className="h-8 text-[11px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+-                      onClick={handleExportLandlordPdf}
+-                    >
+-                      <Download size={12} className="mr-1.5" />
+-                      PDF
+-                    </Button>
+-                  </div>
+-
+-                  <div className="overflow-x-auto border border-border rounded-lg">
+-                    <table className="w-full border-collapse">
+-                      <thead className="bg-muted/50 border-b border-border">
+-                        <tr>
+-                          <th className="px-4 py-3 text-left font-mono text-[11px] text-muted-foreground uppercase">Field</th>
+-                          <th className="px-4 py-3 text-left font-mono text-[11px] text-muted-foreground uppercase">Crop</th>
+-                          <th className="px-4 py-3 text-left font-mono text-[11px] text-muted-foreground uppercase">Date</th>
+-                          <th className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground uppercase">Total Bu.</th>
+-                          <th className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground uppercase">Split %</th>
+-                          <th className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground uppercase">Your Share</th>
+-                        </tr>
+-                      </thead>
+-                      <tbody className="divide-y divide-border/50">
+-                        {landlordStatement.rows.map((r: any, i: number) => (
+-                          <tr key={i} className="hover:bg-muted/30 transition-colors">
+-                            <td className="px-4 py-3 text-xs font-bold text-foreground">{r.fieldName}</td>
+-                            <td className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{r.crop}</td>
+-                            <td className="px-4 py-3 font-mono text-[10px] text-foreground">{r.harvestDate}</td>
+-                            <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.totalBushels.toLocaleString()}</td>
+-                            <td className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.landlordSplitPercent}%</td>
+-                            <td className="px-4 py-3 font-mono text-[10px] text-blue-600 font-bold text-right">{r.landlordBushels.toLocaleString()}</td>
+-                          </tr>
+-                        ))}
+-                      </tbody>
+-                      <tfoot className="bg-blue-500/5 border-t-2 border-primary">
+-                        <tr>
+-                          <td colSpan={5} className="px-4 py-4 font-mono text-sm font-bold text-muted-foreground uppercase">
+-                            Total Landlord Share
+-                          </td>
+-                          <td className="px-4 py-4 font-mono text-base font-black text-blue-600 text-right">
+-                            {landlordStatement.totalLandlordBushels.toLocaleString()} BU
+-                          </td>
+-                        </tr>
+-                      </tfoot>
+-                    </table>
+-                  </div>
+-                </div>
+-              ) : null}
+-            </div>
+-          </div>
++          <LandlordStatementReport
++            selectedLandlord={selectedLandlord}
++            setSelectedLandlord={setSelectedLandlord}
++            uniqueLandlords={uniqueLandlords}
++            landlordStatement={landlordStatement}
++            reportDate={reportDate}
++            onExportCsv={handleExportLandlordCSV}
++            onExportPdf={handleExportLandlordPdf}
++          />
+         )}
+       </main>
+ 
+diff --git a/src/pages/Settings.tsx b/src/pages/Settings.tsx
+index cfe720d..c4221c0 100644
+--- a/src/pages/Settings.tsx
++++ b/src/pages/Settings.tsx
+@@ -1,4 +1,4 @@
+-import { Settings as SettingsIcon } from 'lucide-react';
++import { Settings as SettingsIcon, Sprout, Database, User } from 'lucide-react';
+ import FsaTractManager from '@/components/settings/FsaTractManager';
+ import SeedManager from '@/components/settings/SeedManager';
+ import RecipeManager from '@/components/settings/RecipeManager';
+@@ -10,35 +10,82 @@ import SecurityManager from '@/components/settings/SecurityManager';
+ import AccountManager from '@/components/settings/AccountManager';
+ import DevTools from '@/components/settings/DevTools';
+ import VersionFooter from '@/components/VersionFooter';
++import SyncStatusIndicator from '@/components/SyncStatusIndicator';
++import {
++  Accordion,
++  AccordionContent,
++  AccordionItem,
++  AccordionTrigger,
++} from '@/components/ui/accordion';
+ 
+ export default function Settings() {
+   return (
+     <div className="min-h-screen bg-background pb-24 lg:pb-8">
+       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
+-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3 lg:max-w-4xl lg:px-8">
+-          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+-            <SettingsIcon size={20} className="text-foreground" />
+-          </div>
+-          <div>
+-            <h1 className="text-lg font-bold text-foreground tracking-tight">Settings</h1>
+-            <p className="text-xs text-muted-foreground">App configuration</p>
++        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-4xl lg:px-8">
++          <div className="flex items-center gap-3">
++            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
++              <SettingsIcon size={20} className="text-foreground" />
++            </div>
++            <div>
++              <h1 className="text-lg font-bold text-foreground tracking-tight">Settings</h1>
++              <p className="text-xs text-muted-foreground">App configuration</p>
++            </div>
+           </div>
++          <SyncStatusIndicator />
+         </div>
+       </header>
+       <div className="max-w-lg mx-auto p-4 space-y-6 lg:max-w-4xl lg:px-8">
++        <Accordion type="multiple" defaultValue={['farm-data']} className="space-y-4">
++          <AccordionItem value="farm-data" className="border border-border rounded-2xl bg-card px-4">
++            <AccordionTrigger className="hover:no-underline py-4">
++              <div className="flex items-center gap-2 text-foreground">
++                <Sprout size={18} className="text-plant" />
++                <span className="font-bold">Farm Data</span>
++              </div>
++            </AccordionTrigger>
++            <AccordionContent>
++              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
++                <SeedManager />
++                <RecipeManager />
++                <FertilizerRecipeManager />
++                <FsaTractManager />
++              </div>
++            </AccordionContent>
++          </AccordionItem>
+ 
+-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+-          <FsaTractManager />
+-          <SeedManager />
+-          <RecipeManager />
+-          <FertilizerRecipeManager />
+-          <DisplayManager />
+-          <SyncStatus />
+-          <BackupManager />
+-          <SecurityManager />
+-          <AccountManager />
+-          {import.meta.env.DEV && <DevTools />}
+-        </div>
++          <AccordionItem value="data-management" className="border border-border rounded-2xl bg-card px-4">
++            <AccordionTrigger className="hover:no-underline py-4">
++              <div className="flex items-center gap-2 text-foreground">
++                <Database size={18} className="text-spray" />
++                <span className="font-bold">Data Management</span>
++              </div>
++            </AccordionTrigger>
++            <AccordionContent>
++              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
++                <SyncStatus />
++                <BackupManager />
++                {import.meta.env.DEV && <DevTools />}
++              </div>
++            </AccordionContent>
++          </AccordionItem>
++
++          <AccordionItem value="account-display" className="border border-border rounded-2xl bg-card px-4">
++            <AccordionTrigger className="hover:no-underline py-4">
++              <div className="flex items-center gap-2 text-foreground">
++                <User size={18} className="text-primary" />
++                <span className="font-bold">Account &amp; Display</span>
++              </div>
++            </AccordionTrigger>
++            <AccordionContent>
++              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
++                <AccountManager />
++                <SecurityManager />
++                <DisplayManager />
++              </div>
++            </AccordionContent>
++          </AccordionItem>
++        </Accordion>
+ 
+         <VersionFooter />
+       </div>
+diff --git a/src/pages/Weather.tsx b/src/pages/Weather.tsx
+index dc1091e..445e163 100644
+--- a/src/pages/Weather.tsx
++++ b/src/pages/Weather.tsx
+@@ -16,7 +16,9 @@ import {
+ } from 'lucide-react';
+ 
+ import ForecastGrid from '@/components/weather/ForecastGrid';
++import SyncStatusIndicator from '@/components/SyncStatusIndicator';
+ import RadarEmbed from '@/components/weather/RadarEmbed';
++import { SprayDecisionMatrix } from '@/components/weather/SprayDecisionMatrix';
+ import { native } from '@/lib/native';
+ import {
+   formatTime,
+@@ -249,14 +251,17 @@ export default function Weather() {
+               </p>
+             </div>
+           </div>
+-          <button
+-            onClick={handleRefresh}
+-            disabled={loading}
+-            aria-label="Refresh weather data"
+-            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted/50 transition-colors"
+-          >
+-            <RefreshCw size={16} className={`text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
+-          </button>
++          <div className="flex items-center gap-2">
++            <SyncStatusIndicator />
++            <button
++              onClick={handleRefresh}
++              disabled={loading}
++              aria-label="Refresh weather data"
++              className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted/50 transition-colors"
++            >
++              <RefreshCw size={16} className={`text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
++            </button>
++          </div>
+         </div>
+       </header>
+ 
+@@ -351,6 +356,17 @@ export default function Weather() {
+             {/* ΓöÇΓöÇ Current Conditions ΓöÇΓöÇ */}
+             <CurrentConditionsCard weather={weather} lastUpdated={lastUpdated} />
+ 
++            {/* ΓöÇΓöÇ Spray Decision Matrix ΓöÇΓöÇ */}
++            {!weather.isError && (
++              <SprayDecisionMatrix
++                tempF={weather.temp}
++                humidity={weather.humidity}
++                windSpeed={weather.wind}
++                windDirection={weather.windDirection}
++                precipProb={weather.precipProb}
++              />
++            )}
++
+             {/* ΓöÇΓöÇ 10-Day Forecast ΓöÇΓöÇ */}
+             <ForecastGrid days={weather.forecastDays} />
+ 
+diff --git a/src/store/__tests__/useSeasonManagement.test.ts b/src/store/__tests__/useSeasonManagement.test.ts
+index 9f05272..2cb7f71 100644
+--- a/src/store/__tests__/useSeasonManagement.test.ts
++++ b/src/store/__tests__/useSeasonManagement.test.ts
+@@ -31,6 +31,13 @@ describe('Backup restore validation (fix #4)', () => {
+     expect(result.activeSeason).toBeUndefined();
+   });
+ 
++
++  it('accepts backupDate from settings backups', () => {
++    const backup = { ...makeValidBackup(), backupDate: '2026-06-24T12:00:00.000Z' };
++    const result = backupSchema.parse(backup);
++    expect(result.backupDate).toBe('2026-06-24T12:00:00.000Z');
++  });
++
+   it('rejects activeSeason that is a string', () => {
+     const backup = { ...makeValidBackup(), activeSeason: '2026' as any };
+     expect(() => backupSchema.parse(backup)).toThrow();
+@@ -65,11 +72,41 @@ describe('Backup restore validation (fix #4)', () => {
+       savedSeeds: [{ id: 'se1', name: 'Seed', farm_id: 'farm-1', deleted_at: null }],
+       fertilizerRecipes: [{ id: 'fr1', name: 'Recipe', farm_id: 'farm-1', deleted_at: null }],
+       sprayRecipes: [{ id: 'sr1', name: 'Recipe', farm_id: 'farm-1', deleted_at: null }],
++      fsaTracts: [{
++        id: 'tract-1',
++        farmId: 'farm-1',
++        tractKey: '6418-1417',
++        filename: '6418-1417.json',
++        featureCount: 1,
++        importedAt: '2026-06-16T00:00:00.000Z',
++        deletedAt: null,
++        geojson: {
++          type: 'FeatureCollection',
++          features: [{
++            type: 'Feature',
++            geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
++            properties: { cluNumber: '11', acres: 10.5 },
++          }],
++        },
++      }],
++      cluAssignments: [{
++        id: 'assignment-1',
++        farmId: 'farm-1',
++        fieldId: 'f1',
++        tractKey: '6418-1417',
++        cluNumber: '11',
++        acres: 10.5,
++        landUse: 'cropland',
++        assignedAt: '2026-06-16T00:00:00.000Z',
++        deletedAt: null,
++      }],
+       activeSeason: 2026,
+     };
+     const result = backupSchema.parse(backup);
+     expect(result.fields).toHaveLength(1);
+     expect(result.bins).toHaveLength(1);
++    expect(result.fsaTracts).toHaveLength(1);
++    expect(result.cluAssignments).toHaveLength(1);
+   });
+ });
+ 
+diff --git a/src/store/farmStore.tsx b/src/store/farmStore.tsx
+index 7807545..c925b34 100644
+--- a/src/store/farmStore.tsx
++++ b/src/store/farmStore.tsx
+@@ -4,7 +4,8 @@ import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract
+ import { supabase } from '@/lib/supabase';
+ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
+   mapHarvestFromDb, mapHayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
+-  mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb
++  mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb,
++  mapFsaTractFromDb, mapFieldCluAssignmentFromDb
+ } from '../lib/mappers';
+ // Database row types are handled via mappers
+ import { Session } from '@supabase/supabase-js';
+@@ -21,7 +22,7 @@ import { useGrainMovements } from './useGrainMovements';
+ import { useFieldsAndBins } from './useFieldsAndBins';
+ import { useSeasonManagement } from './useSeasonManagement';
+ import { useTillageRecords } from './useTillageRecords';
+-import { mapAssignmentFromDb, mapTractFromDb, useFsaTracts } from './useFsaTracts';
++import { useFsaTracts } from './useFsaTracts';
+ import { useNetworkStatus } from '../hooks/useNetworkStatus';
+ import { offlineStorage } from '../lib/offlineStorage';
+ import { syncQueue } from '../lib/syncQueue';
+@@ -356,8 +357,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
+           if (seedsData) setSavedSeeds(seedsData.map(mapSeedFromDb));
+           if (fertilizerRecipesData) setFertilizerRecipes(fertilizerRecipesData.map(mapFertilizerRecipeFromDb));
+           if (recipesData) setSprayRecipes(recipesData.map(mapRecipeFromDb));
+-          if (tractsData) setFsaTracts(tractsData.map(mapTractFromDb));
+-          if (assignmentsData) setCluAssignments(assignmentsData.map(mapAssignmentFromDb));
++          if (tractsData) setFsaTracts(tractsData.map(mapFsaTractFromDb));
++          if (assignmentsData) setCluAssignments(assignmentsData.map(mapFieldCluAssignmentFromDb));
+           
+           if (farmData && farmData.name) {
+             setFarmName(farmData.name);
+@@ -443,11 +444,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
+     session, farm_id,
+     fields, bins, plantRecords, sprayRecords, harvestRecords,
+     hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+-    savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
++    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
+     setActiveSeason, setViewingSeason, setLoading,
+     setFields, setBins, setPlantRecords, setSprayRecords,
+     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
+     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
++    setFsaTracts, setCluAssignments,
+     refetchFarmData: fetchData,
+     isOnline,
+   });
+diff --git a/src/store/useFsaTracts.ts b/src/store/useFsaTracts.ts
+index f21e633..228a31e 100644
+--- a/src/store/useFsaTracts.ts
++++ b/src/store/useFsaTracts.ts
+@@ -1,9 +1,12 @@
+ import { useCallback } from 'react';
+-import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
++
+ import { toast } from 'sonner';
+-import { fsaTractService } from '@/services/fsaTractService';
+-import { cluAssignmentService } from '@/services/cluAssignmentService';
++
++import { mapFieldCluAssignmentFromDb, mapFieldCluAssignmentToDb, mapFsaTractFromDb, mapFsaTractToDb } from '@/lib/mappers';
+ import { syncQueue } from '@/lib/syncQueue';
++import { cluAssignmentService } from '@/services/cluAssignmentService';
++import { fsaTractService } from '@/services/fsaTractService';
++import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+ 
+ interface UseFsaTractsArgs {
+   farm_id: string | null;
+@@ -15,82 +18,6 @@ interface UseFsaTractsArgs {
+   onMutation: () => void | Promise<void>;
+ }
+ 
+-interface DbTractRow {
+-  id: string;
+-  farm_id: string;
+-  tract_key: string;
+-  filename: string;
+-  feature_count: number;
+-  geojson: unknown;
+-  imported_at: string;
+-  deleted_at: string | null;
+-}
+-
+-interface DbAssignmentRow {
+-  id: string;
+-  farm_id: string;
+-  field_id: string;
+-  tract_key: string;
+-  clu_number: string;
+-  acres: number | null;
+-  land_use: CluLandUse | null;
+-  assigned_at: string;
+-  deleted_at: string | null;
+-}
+-
+-interface DbAssignmentPayload {
+-  id: string;
+-  farm_id: string;
+-  field_id: string;
+-  tract_key: string;
+-  clu_number: string;
+-  acres: number;
+-  land_use: CluLandUse;
+-  assigned_at: string;
+-  deleted_at: string | null;
+-}
+-
+-export function mapTractFromDb(row: DbTractRow): FsaTractImport {
+-  return {
+-    id: row.id,
+-    farmId: row.farm_id,
+-    tractKey: row.tract_key,
+-    filename: row.filename,
+-    featureCount: row.feature_count,
+-    geojson: row.geojson as FsaTractImport['geojson'],
+-    importedAt: row.imported_at,
+-    deletedAt: row.deleted_at,
+-  };
+-}
+-
+-export function mapAssignmentFromDb(row: DbAssignmentRow): FieldCluAssignment {
+-  return {
+-    id: row.id,
+-    farmId: row.farm_id,
+-    fieldId: row.field_id,
+-    tractKey: row.tract_key,
+-    cluNumber: row.clu_number,
+-    acres: row.acres ?? 0,
+-    landUse: row.land_use ?? 'cropland',
+-    assignedAt: row.assigned_at,
+-    deletedAt: row.deleted_at,
+-  };
+-}
+-
+-function mapAssignmentToDb(assignment: FieldCluAssignment): DbAssignmentPayload {
+-  return {
+-    id: assignment.id,
+-    farm_id: assignment.farmId,
+-    field_id: assignment.fieldId,
+-    tract_key: assignment.tractKey,
+-    clu_number: assignment.cluNumber,
+-    acres: assignment.acres,
+-    land_use: assignment.landUse,
+-    assigned_at: assignment.assignedAt,
+-    deleted_at: assignment.deletedAt,
+-  };
+-}
+-
+ export function useFsaTracts({
+   farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments,
+   isOnline, onMutation,
+@@ -104,10 +31,10 @@ export function useFsaTracts({
+     ]);
+ 
+     if (tractResult.data) {
+-      setFsaTracts(tractResult.data.map(mapTractFromDb));
++      setFsaTracts(tractResult.data.map(mapFsaTractFromDb));
+     }
+     if (assignmentResult.data) {
+-      setCluAssignments(assignmentResult.data.map(mapAssignmentFromDb));
++      setCluAssignments(assignmentResult.data.map(mapFieldCluAssignmentFromDb));
+     }
+   }, [farm_id, isOnline, setFsaTracts, setCluAssignments]);
+ 
+@@ -133,14 +60,15 @@ export function useFsaTracts({
+       importedAt: new Date().toISOString(),
+       deletedAt: null,
+     };
++    const dbPayload = mapFsaTractToDb(newTract);
+ 
+     setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), newTract]);
+ 
+     if (!isOnline) {
+       try {
+         await syncQueue.enqueueMutation('fsa_tract_imports', existingTract ? 'update' : 'insert', {
+-          id, farm_id, tract_key: tractKey, filename, feature_count: featureCount,
+-          geojson, imported_at: newTract.importedAt, deleted_at: null,
++          ...dbPayload,
++          geojson,
+         }, farm_id);
+         if (onMutation) await onMutation();
+         toast.success(`Tract ${tractKey} imported (${featureCount} CLUs)`);
+@@ -168,7 +96,7 @@ export function useFsaTracts({
+       return false;
+     }
+ 
+-    const persistedTract = mapTractFromDb(data as DbTractRow);
++    const persistedTract = mapFsaTractFromDb(data as any);
+     setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), persistedTract]);
+     toast.success(`Tract ${tractKey} imported (${featureCount} CLUs)`);
+     return true;
+@@ -260,7 +188,7 @@ export function useFsaTracts({
+       assignedAt: new Date().toISOString(),
+       deletedAt: null,
+     };
+-    const dbPayload = mapAssignmentToDb(newAssignment);
++    const dbPayload = mapFieldCluAssignmentToDb(newAssignment);
+ 
+     setCluAssignments(prev => [...prev.filter(a => !(a.tractKey === tractKey && a.cluNumber === cluNumber)), newAssignment]);
+ 
+@@ -293,7 +221,7 @@ export function useFsaTracts({
+       return false;
+     }
+ 
+-    const persistedAssignment = mapAssignmentFromDb(data as DbAssignmentRow);
++    const persistedAssignment = mapFieldCluAssignmentFromDb(data as any);
+     setCluAssignments(prev => [
+       ...prev.filter(a => !(a.tractKey === tractKey && a.cluNumber === cluNumber)),
+       persistedAssignment,
+@@ -317,7 +245,7 @@ export function useFsaTracts({
+     }
+ 
+     const updatedAssignment: FieldCluAssignment = { ...assignment, landUse };
+-    const dbPayload = mapAssignmentToDb(updatedAssignment);
++    const dbPayload = mapFieldCluAssignmentToDb(updatedAssignment);
+ 
+     setCluAssignments(prev => prev.map(a => (a.id === assignmentId ? updatedAssignment : a)));
+ 
+@@ -342,7 +270,7 @@ export function useFsaTracts({
+       return false;
+     }
+ 
+-    const persistedAssignment = mapAssignmentFromDb(data as DbAssignmentRow);
++    const persistedAssignment = mapFieldCluAssignmentFromDb(data as any);
+     setCluAssignments(prev => prev.map(a => (a.id === assignmentId ? persistedAssignment : a)));
+     return true;
+   }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
+diff --git a/src/store/useSeasonManagement.ts b/src/store/useSeasonManagement.ts
+index 2063526..70860e9 100644
+--- a/src/store/useSeasonManagement.ts
++++ b/src/store/useSeasonManagement.ts
+@@ -3,10 +3,12 @@ import {
+   Field, Bin, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord,
+   FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe, FertilizerRecipe, TillageRecord
+ } from '@/types/farm';
++import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+ import {
+   mapFieldToDb, mapBinToDb, mapPlantToDb, mapSprayToDb,
+   mapHarvestToDb, mapHayToDb, mapGrainToDb, mapSeedToDb,
+-  mapRecipeToDb, mapFertilizerToDb, mapFertilizerRecipeToDb, mapTillageToDb
++  mapRecipeToDb, mapFertilizerToDb, mapFertilizerRecipeToDb, mapTillageToDb,
++  mapFsaTractToDb, mapFieldCluAssignmentToDb
+ } from '@/lib/mappers';
+ import { supabase } from '@/lib/supabase';
+ import { Session } from '@supabase/supabase-js';
+@@ -33,6 +35,8 @@ interface UseSeasonManagementArgs {
+   fertilizerRecipes: FertilizerRecipe[];
+   sprayRecipes: SprayRecipe[];
+   tillageRecords: TillageRecord[];
++  fsaTracts: FsaTractImport[];
++  cluAssignments: FieldCluAssignment[];
+   activeSeason: number;
+   setActiveSeason: React.Dispatch<React.SetStateAction<number>>;
+   setViewingSeason: React.Dispatch<React.SetStateAction<number>>;
+@@ -49,6 +53,8 @@ interface UseSeasonManagementArgs {
+   setFertilizerRecipes: React.Dispatch<React.SetStateAction<FertilizerRecipe[]>>;
+   setSprayRecipes: React.Dispatch<React.SetStateAction<SprayRecipe[]>>;
+   setTillageRecords: React.Dispatch<React.SetStateAction<TillageRecord[]>>;
++  setFsaTracts: React.Dispatch<React.SetStateAction<FsaTractImport[]>>;
++  setCluAssignments: React.Dispatch<React.SetStateAction<FieldCluAssignment[]>>;
+   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
+   /** Reload all farm entities from Supabase after restore (source of truth). */
+   refetchFarmData: () => Promise<boolean>;
+@@ -73,12 +79,13 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+     session, farm_id,
+     fields, bins, plantRecords, sprayRecords, harvestRecords,
+     hayHarvestRecords, fertilizerApplications, grainMovements,
+-    savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords, activeSeason,
++    savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords,
++    fsaTracts, cluAssignments, activeSeason,
+     setActiveSeason, setViewingSeason, setLoading,
+     setFields, setBins, setPlantRecords, setSprayRecords,
+     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
+     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
+-    setTillageRecords, setFarmId,
++    setTillageRecords, setFsaTracts, setCluAssignments, setFarmId,
+     refetchFarmData,
+     isOnline,
+   } = args;
+@@ -103,7 +110,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+       const backupData = {
+         fields, bins, plantRecords, sprayRecords, harvestRecords,
+         hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+-        savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
++        savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
+         rolloverDate: new Date().toISOString(),
+       };
+ 
+@@ -140,8 +147,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+   }, [
+     session, fields, bins, plantRecords, sprayRecords, harvestRecords,
+     hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+-    savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
+-    setActiveSeason, setViewingSeason, setLoading,
++    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
++    isOnline, setActiveSeason, setViewingSeason, setLoading,
+   ]);
+ 
+   // ΓöÇΓöÇΓöÇ Restore ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+@@ -178,6 +185,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+       const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => mapSeedToDb({ ...s, farm_id } as unknown as SavedSeed));
+       const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => mapFertilizerRecipeToDb({ ...r, farm_id } as unknown as FertilizerRecipe));
+       const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDb({ ...r, farm_id } as unknown as SprayRecipe));
++      const tractsToDb      = (backupData.fsaTracts            ?? []).map((t) => mapFsaTractToDb({ ...t, farmId: farm_id } as FsaTractImport));
++      const assignmentsToDb = (backupData.cluAssignments       ?? []).map((a) => mapFieldCluAssignmentToDb({ ...a, farmId: farm_id } as FieldCluAssignment));
+ 
+       const payload = {
+         fields: fieldsToDb,
+@@ -192,6 +201,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+         saved_seeds: seedsToDb,
+         fertilizer_recipes: fRecipesToDb,
+         spray_recipes: recipesToDb,
++        fsa_tract_imports: tractsToDb,
++        field_clu_assignments: assignmentsToDb,
+       };
+ 
+       if (backupData.activeSeason !== undefined) {
+@@ -233,7 +244,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+       setLoading(false);
+     }
+   }, [
+-    farm_id, setLoading, refetchFarmData,
++    farm_id, isOnline, setLoading, refetchFarmData,
+     setActiveSeason, setViewingSeason,
+   ]);
+ 
+@@ -288,6 +299,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+     setSprayRecipes([]);
+     setFertilizerRecipes([]);
+     setTillageRecords([]);
++    setFsaTracts([]);
++    setCluAssignments([]);
+     setFarmId(null);
+     setActiveSeason(getCurrentYear());
+     setViewingSeason(getCurrentYear());
+@@ -298,7 +311,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
+     setFields, setBins, setPlantRecords, setSprayRecords,
+     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
+     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
+-    setFarmId, setActiveSeason, setViewingSeason,
++    setFsaTracts, setCluAssignments, setFarmId, setActiveSeason, setViewingSeason,
+   ]);
+ 
+   return useMemo(() => ({
+diff --git a/src/types/database.ts b/src/types/database.ts
+index dbdf9b8..1b5d17a 100644
+--- a/src/types/database.ts
++++ b/src/types/database.ts
+@@ -227,3 +227,26 @@ export interface TillageRecordRow {
+     timestamp: string;
+     deleted_at?: string | null;
+ }
++
++export interface FsaTractImportRow {
++    id: string;
++    farm_id: string;
++    tract_key: string;
++    filename: string;
++    feature_count: number;
++    geojson: any;
++    imported_at: string;
++    deleted_at?: string | null;
++}
++
++export interface FieldCluAssignmentRow {
++    id: string;
++    farm_id: string;
++    field_id: string;
++    tract_key: string;
++    clu_number: string;
++    acres?: number | null;
++    land_use?: 'cropland' | 'non_cropland' | null;
++    assigned_at: string;
++    deleted_at?: string | null;
++}

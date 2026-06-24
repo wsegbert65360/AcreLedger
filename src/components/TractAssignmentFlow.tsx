@@ -196,10 +196,17 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
       } else {
         await unassignClu(selectedFieldId, tractKey, cluNumber);
       }
+    } else if (legacyExisting) {
+      // First tap on legacy -> unassign it from the field by removing from cluNumbers
+      const field = fields.find(f => f.id === selectedFieldId);
+      if (field) {
+        const newClus = field.cluNumbers?.filter(c => c !== cluNumber) || [];
+        await updateField({ ...field, cluNumbers: newClus });
+      }
     } else {
       await assignClu(selectedFieldId, tractKey, cluNumber, legacyExisting?.acres ?? acres, selectedLandUse);
     }
-  }, [selectedFieldId, selectedLandUse, cluAssignments, displayAssignments, assignClu, updateCluLandUse, unassignClu]);
+  }, [selectedFieldId, selectedLandUse, cluAssignments, displayAssignments, assignClu, updateCluLandUse, unassignClu, fields, updateField]);
 
   const handleCreateField = useCallback(async (name: string): Promise<string | null> => {
     let lat = 38.47, lng = -93.54;
@@ -216,7 +223,7 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
     }
 
     const id = crypto.randomUUID();
-    const ok = await addField({ name, acreage: 0, lat, lng, farm_id: '' }, id);
+    const ok = await addField({ name, acreage: 0, lat, lng, farm_id: '', deleted_at: null }, id);
     if (!ok) return null;
 
     return id;

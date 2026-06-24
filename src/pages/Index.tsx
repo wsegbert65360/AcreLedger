@@ -110,7 +110,7 @@ const Index = () => {
                       <button
                         key={crop}
                         onClick={() => toggleCrop(crop)}
-                        className={`flex-none flex items-center justify-center h-9 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
+                        className={`flex-none flex items-center justify-center h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
                           ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
                           : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50'
                           }`}
@@ -141,12 +141,20 @@ const Index = () => {
                 </ErrorBoundary>
               </div>
             )}
-            {filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
+            {allFields.length === 0 && (
               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
                 <Tractor size={48} className="mx-auto text-muted-foreground/30 mb-4" />
                 <h3 className="text-lg font-bold text-foreground mb-1">No Fields Detected</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px] mx-auto">
                   Use the <Settings size={12} className="inline mx-0.5" /> icon above to add your first field.
+                </p>
+              </div>
+            )}
+
+            {allFields.length > 0 && filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
+              <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  No fields match the selected crops.
                 </p>
               </div>
             )}

@@ -1,6 +1,6 @@
 import {
   Sun, CloudSun, Cloud, CloudRain, CloudDrizzle,
-  CloudSnow, CloudLightning, CloudFog, Wind,
+  CloudSnow, CloudLightning, CloudFog, Wind, Thermometer, Droplets
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -152,4 +152,129 @@ export function getWindRotation(dir: string): number {
   };
   return angles[dir] ?? 0;
 }
+
+export type SprayStatus = 'go' | 'caution' | 'wait';
+
+const WIND_ALERT_MPH = 10;
+const INVERSION_MPH = 3;
+const PRECIP_CAUTION_PCT = 30;
+const DELTA_T_MIN_GO = 2;
+const DELTA_T_MAX_GO = 8;
+const DELTA_T_MAX_CAUTION = 10;
+
+function fToC(f: number): number {
+  return (f - 32) * 5 / 9;
+}
+
+// Stull (2011) formula for wet-bulb temperature (input/output Celsius)
+function wetBulbC(tempC: number, rh: number): number {
+  return tempC * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) +
+    Math.atan(tempC + rh) -
+    Math.atan(rh - 1.676331) +
+    0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) -
+    4.686035;
+}
+
+export function calculateDeltaT(tempF: number, humidity: number): number {
+  const tempC = fToC(tempF);
+  const wetC = wetBulbC(tempC, humidity);
+  const delta = tempC - wetC;
+  return Math.round(delta * 10) / 10;
+}
+
+export function evaluateSprayConditions({
+  windSpeed,
+  precipProb,
+  tempF,
+  humidity
+}: {
+  windSpeed: number;
+  precipProb: number;
+  tempF: number;
+  humidity: number;
+}): {
+  overall: SprayStatus;
+  factors: { label: string; value: string; status: SprayStatus; note: string; icon: React.ElementType }[];
+} {
+  const factors: { label: string; value: string; status: SprayStatus; note: string; icon: React.ElementType }[] = [];
+
+  // Wind speed
+  let windStatus: SprayStatus = 'go';
+  let windNote = `${windSpeed} mph is in the acceptable ${INVERSION_MPH}-${WIND_ALERT_MPH} mph range.`;
+  if (windSpeed > WIND_ALERT_MPH) {
+    windStatus = 'wait';
+    windNote = `Wind ${windSpeed} mph exceeds ${WIND_ALERT_MPH} mph drift warning.`;
+  } else if (windSpeed < INVERSION_MPH) {
+    windStatus = 'caution';
+    windNote = `Wind ${windSpeed} mph below ${INVERSION_MPH} mph — inversion risk.`;
+  }
+  factors.push({
+    label: 'Wind Speed',
+    value: `${windSpeed} mph`,
+    status: windStatus,
+    note: windNote,
+    icon: Wind
+  });
+
+  // Delta-T
+  const deltaT = calculateDeltaT(tempF, humidity);
+  let deltaStatus: SprayStatus = 'go';
+  let deltaNote = `ΔT ${deltaT} is in the ideal ${DELTA_T_MIN_GO}-${DELTA_T_MAX_GO} range.`;
+  if (deltaT > DELTA_T_MAX_CAUTION) {
+    deltaStatus = 'wait';
+    deltaNote = `ΔT ${deltaT} is high — droplets may evaporate too quickly.`;
+  } else if (deltaT > DELTA_T_MAX_GO) {
+    deltaStatus = 'caution';
+    deltaNote = `ΔT ${deltaT} is elevated — watch for evaporation.`;
+  } else if (deltaT < DELTA_T_MIN_GO) {
+    deltaStatus = 'wait';
+    deltaNote = `ΔT ${deltaT} is low — strong inversion / settling risk.`;
+  }
+  factors.push({
+    label: 'Delta-T',
+    value: `${deltaT}`,
+    status: deltaStatus,
+    note: deltaNote,
+    icon: Thermometer
+  });
+
+  // Rain chance
+  let rainStatus: SprayStatus = 'go';
+  let rainNote = `${precipProb}% chance of rain — acceptable.`;
+  if (precipProb > PRECIP_CAUTION_PCT) {
+    rainStatus = 'caution';
+    rainNote = `${precipProb}% chance of rain — risk of washoff.`;
+  }
+  factors.push({
+    label: 'Rain Chance',
+    value: `${precipProb}%`,
+    status: rainStatus,
+    note: rainNote,
+    icon: CloudRain
+  });
+
+  // Humidity (informational — contributes to Delta-T)
+  let humidStatus: SprayStatus = 'go';
+  let humidNote = `${humidity}% relative humidity.`;
+  if (humidity < 20) {
+    humidStatus = 'caution';
+    humidNote = `${humidity}% humidity — very dry, increased evaporation risk.`;
+  }
+  factors.push({
+    label: 'Humidity',
+    value: `${humidity}%`,
+    status: humidStatus,
+    note: humidNote,
+    icon: Droplets
+  });
+
+  const overall = factors.reduce<SprayStatus>((worst, f) => {
+    if (worst === 'wait' || f.status === 'wait') return 'wait';
+    if (worst === 'caution' || f.status === 'caution') return 'caution';
+    return 'go';
+  }, 'go');
+
+  return { overall, factors };
+}
+
 

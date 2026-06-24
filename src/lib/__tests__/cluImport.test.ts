@@ -186,4 +186,26 @@ describe('parseCluGeoJson', () => {
     const result = parseCluGeoJson(validJson, 'test.json');
     expect(result.collection.features[0].geometry.coordinates[0][0]).toEqual([0, 0]);
   });
+
+  it('parses MultiPolygon features correctly', () => {
+    const multiPolygonJson = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: [
+            [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+            [[[2, 2], [3, 2], [3, 3], [2, 3], [2, 2]]]
+          ],
+        },
+        properties: { clu_number: '99', clu_acres: 15.5 },
+      }],
+    });
+    const result = parseCluGeoJson(multiPolygonJson, '1234-5678.json');
+    expect(result.collection.features).toHaveLength(1);
+    expect(result.collection.features[0].geometry.type).toBe('MultiPolygon');
+    expect(result.collection.features[0].geometry.coordinates).toHaveLength(2);
+    expect(result.collection.features[0].properties.cluNumber).toBe('99');
+  });
 });

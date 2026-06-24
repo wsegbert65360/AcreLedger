@@ -82,7 +82,7 @@ export default function FieldDetailScreen() {
       return dateStr ? new Date(dateStr).getTime() : 0;
     };
     return all.sort((a, b) => getTS(b.data) - getTS(a.data));
-  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
+  }, [field?.id, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
 
   const latestActivity = unifiedRecords[0];
 

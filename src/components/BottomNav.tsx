@@ -16,6 +16,7 @@ export default function BottomNav() {
           return (
             <button
               key={path}
+              id={path === '/activity' ? 'coachmark-activity-tab' : path === '/reports' ? 'coachmark-reports-tab' : undefined}
               onClick={() => {
                 native.haptic.light();
                 navigate(path);

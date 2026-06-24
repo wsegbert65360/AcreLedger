@@ -1,9 +1,12 @@
 import { useCallback } from 'react';
-import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+
 import { toast } from 'sonner';
-import { fsaTractService } from '@/services/fsaTractService';
-import { cluAssignmentService } from '@/services/cluAssignmentService';
+
+import { mapFieldCluAssignmentFromDb, mapFieldCluAssignmentToDb, mapFsaTractFromDb, mapFsaTractToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { cluAssignmentService } from '@/services/cluAssignmentService';
+import { fsaTractService } from '@/services/fsaTractService';
+import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 
 interface UseFsaTractsArgs {
   farm_id: string | null;
@@ -13,82 +16,6 @@ interface UseFsaTractsArgs {
   setCluAssignments: React.Dispatch<React.SetStateAction<FieldCluAssignment[]>>;
   isOnline: boolean;
   onMutation: () => void | Promise<void>;
-}
-
-interface DbTractRow {
-  id: string;
-  farm_id: string;
-  tract_key: string;
-  filename: string;
-  feature_count: number;
-  geojson: unknown;
-  imported_at: string;
-  deleted_at: string | null;
-}
-
-interface DbAssignmentRow {
-  id: string;
-  farm_id: string;
-  field_id: string;
-  tract_key: string;
-  clu_number: string;
-  acres: number | null;
-  land_use: CluLandUse | null;
-  assigned_at: string;
-  deleted_at: string | null;
-}
-
-interface DbAssignmentPayload {
-  id: string;
-  farm_id: string;
-  field_id: string;
-  tract_key: string;
-  clu_number: string;
-  acres: number;
-  land_use: CluLandUse;
-  assigned_at: string;
-  deleted_at: string | null;
-}
-
-export function mapTractFromDb(row: DbTractRow): FsaTractImport {
-  return {
-    id: row.id,
-    farmId: row.farm_id,
-    tractKey: row.tract_key,
-    filename: row.filename,
-    featureCount: row.feature_count,
-    geojson: row.geojson as FsaTractImport['geojson'],
-    importedAt: row.imported_at,
-    deletedAt: row.deleted_at,
-  };
-}
-
-export function mapAssignmentFromDb(row: DbAssignmentRow): FieldCluAssignment {
-  return {
-    id: row.id,
-    farmId: row.farm_id,
-    fieldId: row.field_id,
-    tractKey: row.tract_key,
-    cluNumber: row.clu_number,
-    acres: row.acres ?? 0,
-    landUse: row.land_use ?? 'cropland',
-    assignedAt: row.assigned_at,
-    deletedAt: row.deleted_at,
-  };
-}
-
-function mapAssignmentToDb(assignment: FieldCluAssignment): DbAssignmentPayload {
-  return {
-    id: assignment.id,
-    farm_id: assignment.farmId,
-    field_id: assignment.fieldId,
-    tract_key: assignment.tractKey,
-    clu_number: assignment.cluNumber,
-    acres: assignment.acres,
-    land_use: assignment.landUse,
-    assigned_at: assignment.assignedAt,
-    deleted_at: assignment.deletedAt,
-  };
 }
 
 export function useFsaTracts({
@@ -104,10 +31,10 @@ export function useFsaTracts({
     ]);
 
     if (tractResult.data) {
-      setFsaTracts(tractResult.data.map(mapTractFromDb));
+      setFsaTracts(tractResult.data.map(mapFsaTractFromDb));
     }
     if (assignmentResult.data) {
-      setCluAssignments(assignmentResult.data.map(mapAssignmentFromDb));
+      setCluAssignments(assignmentResult.data.map(mapFieldCluAssignmentFromDb));
     }
   }, [farm_id, isOnline, setFsaTracts, setCluAssignments]);
 
@@ -133,14 +60,15 @@ export function useFsaTracts({
       importedAt: new Date().toISOString(),
       deletedAt: null,
     };
+    const dbPayload = mapFsaTractToDb(newTract);
 
     setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), newTract]);
 
     if (!isOnline) {
       try {
         await syncQueue.enqueueMutation('fsa_tract_imports', existingTract ? 'update' : 'insert', {
-          id, farm_id, tract_key: tractKey, filename, feature_count: featureCount,
-          geojson, imported_at: newTract.importedAt, deleted_at: null,
+          ...dbPayload,
+          geojson,
         }, farm_id);
         if (onMutation) await onMutation();
         toast.success(`Tract ${tractKey} imported (${featureCount} CLUs)`);
@@ -168,7 +96,7 @@ export function useFsaTracts({
       return false;
     }
 
-    const persistedTract = mapTractFromDb(data as DbTractRow);
+    const persistedTract = mapFsaTractFromDb(data as any);
     setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), persistedTract]);
     toast.success(`Tract ${tractKey} imported (${featureCount} CLUs)`);
     return true;
@@ -260,7 +188,7 @@ export function useFsaTracts({
       assignedAt: new Date().toISOString(),
       deletedAt: null,
     };
-    const dbPayload = mapAssignmentToDb(newAssignment);
+    const dbPayload = mapFieldCluAssignmentToDb(newAssignment);
 
     setCluAssignments(prev => [...prev.filter(a => !(a.tractKey === tractKey && a.cluNumber === cluNumber)), newAssignment]);
 
@@ -293,7 +221,7 @@ export function useFsaTracts({
       return false;
     }
 
-    const persistedAssignment = mapAssignmentFromDb(data as DbAssignmentRow);
+    const persistedAssignment = mapFieldCluAssignmentFromDb(data as any);
     setCluAssignments(prev => [
       ...prev.filter(a => !(a.tractKey === tractKey && a.cluNumber === cluNumber)),
       persistedAssignment,
@@ -317,7 +245,7 @@ export function useFsaTracts({
     }
 
     const updatedAssignment: FieldCluAssignment = { ...assignment, landUse };
-    const dbPayload = mapAssignmentToDb(updatedAssignment);
+    const dbPayload = mapFieldCluAssignmentToDb(updatedAssignment);
 
     setCluAssignments(prev => prev.map(a => (a.id === assignmentId ? updatedAssignment : a)));
 
@@ -342,7 +270,7 @@ export function useFsaTracts({
       return false;
     }
 
-    const persistedAssignment = mapAssignmentFromDb(data as DbAssignmentRow);
+    const persistedAssignment = mapFieldCluAssignmentFromDb(data as any);
     setCluAssignments(prev => prev.map(a => (a.id === assignmentId ? persistedAssignment : a)));
     return true;
   }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
@@ -395,6 +323,52 @@ export function useFsaTracts({
     return true;
   }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
 
+  const unassignAllClusForField = useCallback(async (fieldId: string): Promise<boolean> => {
+    if (!farm_id) return false;
+
+    const toDelete = cluAssignments.filter(a => a.fieldId === fieldId && !a.deletedAt);
+    if (toDelete.length === 0) return true;
+
+    const previousAssignments = cluAssignments;
+    const deletedAt = new Date().toISOString();
+
+    setCluAssignments(prev => prev.map(a => 
+      a.fieldId === fieldId ? { ...a, deletedAt } : a
+    ));
+
+    if (!isOnline) {
+      try {
+        for (const a of toDelete) {
+          await syncQueue.enqueueMutation('field_clu_assignments', 'soft_delete', {
+            id: a.id,
+            deleted_at: deletedAt,
+          }, farm_id);
+        }
+        if (onMutation) await onMutation();
+        return true;
+      } catch (err) {
+        console.error('Failed to enqueue mass CLU unassignment offline:', err);
+        setCluAssignments(previousAssignments);
+        return false;
+      }
+    }
+
+    let allSuccess = true;
+    for (const a of toDelete) {
+      const { error } = await cluAssignmentService.removeAssignment(a.id, farm_id);
+      if (error) {
+        console.error('Failed to unassign CLU on field delete:', error);
+        allSuccess = false;
+      }
+    }
+
+    if (!allSuccess) {
+      setCluAssignments(previousAssignments);
+      return false;
+    }
+    return true;
+  }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
+
   return {
     fetchTractsAndAssignments,
     importTract,
@@ -402,5 +376,6 @@ export function useFsaTracts({
     assignClu,
     updateCluLandUse,
     unassignClu,
+    unassignAllClusForField,
   };
 }

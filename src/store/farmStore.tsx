@@ -4,7 +4,8 @@ import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract
 import { supabase } from '@/lib/supabase';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
   mapHarvestFromDb, mapHayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
-  mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb
+  mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb,
+  mapFsaTractFromDb, mapFieldCluAssignmentFromDb
 } from '../lib/mappers';
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
@@ -21,7 +22,7 @@ import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
 import { useSeasonManagement } from './useSeasonManagement';
 import { useTillageRecords } from './useTillageRecords';
-import { mapAssignmentFromDb, mapTractFromDb, useFsaTracts } from './useFsaTracts';
+import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { offlineStorage } from '../lib/offlineStorage';
 import { syncQueue } from '../lib/syncQueue';
@@ -356,8 +357,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           if (seedsData) setSavedSeeds(seedsData.map(mapSeedFromDb));
           if (fertilizerRecipesData) setFertilizerRecipes(fertilizerRecipesData.map(mapFertilizerRecipeFromDb));
           if (recipesData) setSprayRecipes(recipesData.map(mapRecipeFromDb));
-          if (tractsData) setFsaTracts(tractsData.map(mapTractFromDb));
-          if (assignmentsData) setCluAssignments(assignmentsData.map(mapAssignmentFromDb));
+          if (tractsData) setFsaTracts(tractsData.map(mapFsaTractFromDb));
+          if (assignmentsData) setCluAssignments(assignmentsData.map(mapFieldCluAssignmentFromDb));
           
           if (farmData && farmData.name) {
             setFarmName(farmData.name);
@@ -425,29 +426,31 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const tillageOps = useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
   const grainOps = useGrainMovements({ farm_id, viewingSeason, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
 
+  const tractOps = useFsaTracts({
+    farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments,
+    isOnline, onMutation: updatePendingSyncCount,
+  });
+
   const entityOps = useFieldsAndBins({
     farm_id, setFields, setBins,
     setSavedSeeds,
     setFertilizerRecipes,
     setSprayRecipes,
     isOnline,
-    onMutation: updatePendingSyncCount
-  });
-
-  const tractOps = useFsaTracts({
-    farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments,
-    isOnline, onMutation: updatePendingSyncCount,
+    onMutation: updatePendingSyncCount,
+    onFieldDeleted: tractOps.unassignAllClusForField,
   });
 
   const seasonOps = useSeasonManagement({
     session, farm_id,
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
-    savedSeeds, fertilizerRecipes, sprayRecipes, activeSeason,
+    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
+    setFsaTracts, setCluAssignments,
     refetchFarmData: fetchData,
     isOnline,
   });

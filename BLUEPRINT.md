@@ -241,6 +241,27 @@ Saved fertilizer formulas for reuse on fertilizer application records.
 - **Management**: Users can create, edit, and delete fertilizer recipes directly in the **Settings** page or save a new formula as a recipe while recording an application.
 - **Usage**: Saved recipes appear as a dropdown in the Fertilizer Modal for quick data entry.
 
+### FsaTractImport
+Imported FSA tract/CLU GeoJSON owned by a farm. Not season-scoped.
+```ts
+{ id, farmId, tractKey, filename, featureCount, geojson, importedAt, deletedAt }
+```
+- **DB table**: `fsa_tract_imports` stores `farm_id`, `tract_key`, `filename`, `feature_count`, `geojson`, `imported_at`, and `deleted_at`.
+- **Conflict key**: One active/restoreable import per farm/tract key. Inserts and backup restore replays use upsert conflict `farm_id,tract_key` so a re-import restores a soft-deleted tract instead of violating the unique constraint.
+- **Mappers**: Use `mapFsaTractFromDb` and `mapFsaTractToDb` from `@/lib/mappers.ts`.
+
+### FieldCluAssignment
+Farm-owned assignment from one CLU inside a tract to one AcreLedger field. Not season-scoped.
+```ts
+{ id, farmId, fieldId, tractKey, cluNumber, acres,
+  landUse: 'cropland' | 'non_cropland', assignedAt, deletedAt }
+```
+- **DB table**: `field_clu_assignments` stores `farm_id`, `field_id`, `tract_key`, `clu_number`, `acres`, `land_use`, `assigned_at`, and `deleted_at`.
+- **Conflict key**: One active/restoreable assignment per farm/tract/CLU. Inserts and backup restore replays use upsert conflict `farm_id,tract_key,clu_number` so reassignment restores soft-deleted rows safely.
+- **Mappers**: Use `mapFieldCluAssignmentFromDb` and `mapFieldCluAssignmentToDb` from `@/lib/mappers.ts`.
+- **Counts**: Assigned/unassigned totals must compare assignments against the same CLU universe being displayed, and must exclude soft-deleted assignments.
+- **Acreage**: Persisted field acreage may be rounded for display/state, but the source CLU feature acres must not be mutated.
+
 ### Rainfall
 High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar + field-based historical lookups).
 The system uses a **Dual-Source Lookup** strategy to ensure data reliability and range coverage.
@@ -324,9 +345,17 @@ Backup files may contain stale, missing, or foreign `farm_id` values because use
 older exports or pre-fix local cache data. Restore must always treat the currently selected
 `farm_id` as authoritative:
 - Before calling any `mapXToDb` mapper in `restoreFromBackup`, merge `{ ...record, farm_id }`
-  into every restored record.
-- The Supabase `restore_farm_backup` RPC payload and the React state hydrated after a successful
-  restore must use the same current `farm_id`.
+  into every restored farm entity record.
+- FSA tract imports and CLU assignments use camelCase `farmId` in app state, so merge
+  `{ ...record, farmId: farm_id }` before calling `mapFsaTractToDb` or
+  `mapFieldCluAssignmentToDb`.
+- Backup files must preserve CLU setup with `fsaTracts` and `cluAssignments`; the schema also
+  accepts the Settings export metadata field `backupDate`.
+- The Supabase `restore_farm_backup` RPC payload must send normalized database rows, including
+  `fsa_tract_imports` and `field_clu_assignments`, using the same current `farm_id`.
+- Restore SQL must replay `fsa_tract_imports` by `farm_id,tract_key` and
+  `field_clu_assignments` by `farm_id,tract_key,clu_number`, while rejecting conflicting row IDs
+  that already belong to another farm.
 - Never hydrate React state directly from raw backup arrays after a restore. Normalize records
   first so localStorage, in-memory state, and Supabase stay aligned.
 - Restore must fail without mutating state if the RPC returns an error.
@@ -365,7 +394,8 @@ Every entity has a dedicated mapper in `@/lib/mappers.ts`.
 - **CamelCase to SnakeCase**: Mappers handle all translation.
 - **Payload Sanitization**: Mappers MUST ensure optional fields are sent as `null` to the DB to prevent serialization issues.
 - **Safety**: Use `safeNum` and `safeStr` helpers to prevent type errors.
-- **Identity Preservation**: Mappers for user-managed reference data, including `saved_seeds`, MUST preserve `id`, `farm_id`, and `deleted_at` so optimistic local IDs, backup restores, and persisted DB rows remain aligned.
+- **Identity Preservation**: Mappers for user-managed reference data, including `saved_seeds`, `fsa_tract_imports`, and `field_clu_assignments`, MUST preserve `id`, `farm_id`, and `deleted_at` so optimistic local IDs, backup restores, and persisted DB rows remain aligned.
+- **CLU mappers**: Use `mapFsaTractFromDb`, `mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`, and `mapFieldCluAssignmentToDb` for every FSA tract import and CLU assignment read/write/restore path.
 
 ### farm_id Rule
 `farm_id` is a relational partition key. Inserts and restore payloads MUST include the current
@@ -373,6 +403,14 @@ Every entity has a dedicated mapper in `@/lib/mappers.ts`.
 strip `farm_id` out of `.update()` payloads after mapping. Service-layer update helpers should
 inject the authoritative current `farmId` before mapper validation, then omit it from the update
 payload.
+
+### FSA / CLU Upsert Exception
+The default rule remains no `upsert` for updates. The only farm-owned exception is insert/replay
+for `fsa_tract_imports` and `field_clu_assignments`:
+- `fsa_tract_imports`: upsert on `farm_id,tract_key`.
+- `field_clu_assignments`: upsert on `farm_id,tract_key,clu_number`.
+- Normal update and soft-delete paths still use `.update().eq('id', id).eq('farm_id', farm_id)`.
+- Offline sync and `restore_farm_backup` must preserve these conflict keys so soft-deleted rows can be restored safely.
 
 ### Soft Delete
 `.update({ deleted_at: new Date().toISOString() }).in('id', ids).eq('farm_id', farm_id)`
@@ -452,7 +490,7 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 ## 12. Coding Rules & Conventions
 
 - **Icon Shadowing**: Use `MapIcon`, `HistoryIcon` aliasing.
-- **No `upsert` for updates**: Use `.update().eq('id').eq('farm_id')`.
+- **No `upsert` for updates**: Use `.update().eq('id').eq('farm_id')`; only FSA tract/CLU insert and restore replay paths use the documented conflict-key upserts.
 - **Radix Modals**: Always include `DialogDescription`.
 - **Form Inputs**: Always include `id`, `name`, and linked `Label`.
 - **Data Safety**: Optional fields default to `null` in mappers.

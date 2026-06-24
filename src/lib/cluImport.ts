@@ -2,8 +2,10 @@ import type { TractFeatureCollection } from '@/lib/tractLookup';
 
 const WEB_MERCATOR_MAX = 20037508.34;
 
-function isWebMercator(coords: number[][]): boolean {
-  for (const ring of coords) {
+function isWebMercator(coords: number[][][] | number[][][][]): boolean {
+  // If it's a MultiPolygon, grab the first polygon
+  const firstPoly = (coords.length > 0 && Array.isArray(coords[0][0][0])) ? coords[0] as number[][][] : coords as number[][][];
+  for (const ring of firstPoly) {
     for (const pt of ring) {
       if (Math.abs(pt[0]) > 180 || Math.abs(pt[1]) > 90) return true;
     }
@@ -17,8 +19,13 @@ function webMercatorToWgs84(x: number, y: number): [number, number] {
   return [lng, lat];
 }
 
-function convertCoordsToWgs84(coords: number[][][]): number[][][] {
-  return coords.map(ring => ring.map(pt => webMercatorToWgs84(pt[0], pt[1])));
+function convertCoordsToWgs84(coords: any[]): any[] {
+  if (coords.length === 0) return [];
+  if (typeof coords[0] === 'number') {
+    const pt = webMercatorToWgs84(coords[0], coords[1]);
+    return pt;
+  }
+  return coords.map(c => convertCoordsToWgs84(c));
 }
 
 function normalizePropertyName(name: string): string {
@@ -73,7 +80,7 @@ export function parseCluGeoJson(contents: string, filename: string): { tractKey:
     .filter(f => {
       if (f.type !== 'Feature') return false;
       const geom = f.geometry as Record<string, unknown> | undefined;
-      return geom?.type === 'Polygon' && Array.isArray(geom.coordinates);
+      return (geom?.type === 'Polygon' || geom?.type === 'MultiPolygon') && Array.isArray(geom.coordinates);
     });
 
   if (features.length === 0) {
@@ -93,7 +100,7 @@ export function parseCluGeoJson(contents: string, filename: string): { tractKey:
   let needsProjection = false;
   for (const f of featuresWithClu) {
     const geom = f.geometry as Record<string, unknown>;
-    if (isWebMercator(geom.coordinates as number[][])) {
+    if (isWebMercator(geom.coordinates as any)) {
       needsProjection = true;
       break;
     }
@@ -103,12 +110,12 @@ export function parseCluGeoJson(contents: string, filename: string): { tractKey:
     type: 'FeatureCollection',
     features: featuresWithClu.map(f => {
       const props = f.properties as Record<string, unknown>;
-      const geom = f.geometry as { type: string; coordinates: number[][][] };
+      const geom = f.geometry as { type: 'Polygon' | 'MultiPolygon'; coordinates: any };
       const coords = needsProjection ? convertCoordsToWgs84(geom.coordinates) : geom.coordinates;
 
       return {
         type: 'Feature',
-        geometry: { type: 'Polygon' as const, coordinates: coords },
+        geometry: { type: geom.type, coordinates: coords } as any,
         properties: {
           cluNumber: String(getCluNumber(props)),
           acres: getAcres(props),

@@ -15,14 +15,15 @@ interface UseFieldsAndBinsArgs {
   setSprayRecipes: React.Dispatch<React.SetStateAction<SprayRecipe[]>>;
   setFertilizerRecipes: React.Dispatch<React.SetStateAction<FertilizerRecipe[]>>;
   isOnline: boolean;
-  onMutation: () => void | Promise<void>;
+  onMutation?: () => void | Promise<void>;
+  onFieldDeleted?: (fieldId: string) => Promise<boolean>;
 }
 
 export function useFieldsAndBins({
   farm_id, setFields, setBins,
   setSavedSeeds, setSprayRecipes,
   setFertilizerRecipes,
-  isOnline, onMutation
+  isOnline, onMutation, onFieldDeleted
 }: UseFieldsAndBinsArgs) {
   // --- Fields ---
   const addField = useCallback(async (f: Omit<Field, 'id'>, requestedId?: string): Promise<boolean> => {
@@ -165,10 +166,13 @@ export function useFieldsAndBins({
       toast.error('Failed to delete field');
       return false;
     } else {
+      if (onFieldDeleted) {
+        await onFieldDeleted(id);
+      }
       toast.success('Field deleted');
       return true;
     }
-  }, [farm_id, setFields, isOnline, onMutation]);
+  }, [farm_id, setFields, isOnline, onMutation, onFieldDeleted]);
 
   // --- Bins ---
   const addBin = useCallback(async (b: Omit<Bin, 'id'>): Promise<boolean> => {

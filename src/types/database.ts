@@ -227,3 +227,26 @@ export interface TillageRecordRow {
     timestamp: string;
     deleted_at?: string | null;
 }
+
+export interface FsaTractImportRow {
+    id: string;
+    farm_id: string;
+    tract_key: string;
+    filename: string;
+    feature_count: number;
+    geojson: any;
+    imported_at: string;
+    deleted_at?: string | null;
+}
+
+export interface FieldCluAssignmentRow {
+    id: string;
+    farm_id: string;
+    field_id: string;
+    tract_key: string;
+    clu_number: string;
+    acres?: number | null;
+    land_use?: 'cropland' | 'non_cropland' | null;
+    assigned_at: string;
+    deleted_at?: string | null;
+}

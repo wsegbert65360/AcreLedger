@@ -135,6 +135,7 @@ export default function WeatherBar() {
 
   return (
     <div
+      id="coachmark-weather"
       className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between min-h-[90px] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-transform"
       onClick={() => navigate('/weather')}
       role="button"

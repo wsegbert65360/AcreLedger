@@ -5,6 +5,27 @@ const geoJsonPolygonSchema = z.object({
   coordinates: z.array(z.array(z.array(z.number()))),
 });
 
+const geoJsonMultiPolygonSchema = z.object({
+  type: z.literal('MultiPolygon'),
+  coordinates: z.array(z.array(z.array(z.array(z.number())))),
+});
+
+const geoJsonGeometrySchema = z.union([geoJsonPolygonSchema, geoJsonMultiPolygonSchema]);
+
+const tractFeatureSchema = z.object({
+  type: z.literal('Feature'),
+  geometry: geoJsonGeometrySchema,
+  properties: z.object({
+    cluNumber: z.string(),
+    acres: z.number(),
+  }).strict(),
+}).strict();
+
+const tractFeatureCollectionSchema = z.object({
+  type: z.literal('FeatureCollection'),
+  features: z.array(tractFeatureSchema),
+}).strict();
+
 const sprayProductSchema = z.object({
   id: z.string().optional(),
   ui_id: z.string().optional(),
@@ -29,7 +50,7 @@ export const fieldSchema = z.object({
   producerShare: z.number().optional(),
   irrigationPractice: z.string().optional(),
   intendedUse: z.string().optional(),
-  boundary: geoJsonPolygonSchema.nullable().optional(),
+  boundary: geoJsonGeometrySchema.nullable().optional(),
   cluNumbers: z.array(z.string()).optional(),
   farm_id: z.string(),
   deleted_at: z.string().nullable().optional(),
@@ -229,6 +250,29 @@ export const tillageRecordSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
+export const fsaTractImportSchema = z.object({
+  id: z.string(),
+  farmId: z.string(),
+  tractKey: z.string(),
+  filename: z.string(),
+  featureCount: z.number(),
+  geojson: tractFeatureCollectionSchema,
+  importedAt: z.string(),
+  deletedAt: z.string().nullable().optional(),
+}).strict();
+
+export const fieldCluAssignmentSchema = z.object({
+  id: z.string(),
+  farmId: z.string(),
+  fieldId: z.string(),
+  tractKey: z.string(),
+  cluNumber: z.string(),
+  acres: z.number(),
+  landUse: z.enum(['cropland', 'non_cropland']),
+  assignedAt: z.string(),
+  deletedAt: z.string().nullable().optional(),
+}).strict();
+
 export const backupSchema = z.object({
   fields: z.array(fieldSchema).optional(),
   bins: z.array(binSchema).optional(),
@@ -242,7 +286,10 @@ export const backupSchema = z.object({
   savedSeeds: z.array(savedSeedSchema).optional(),
   fertilizerRecipes: z.array(fertilizerRecipeSchema).optional(),
   sprayRecipes: z.array(sprayRecipeSchema).optional(),
+  fsaTracts: z.array(fsaTractImportSchema).optional(),
+  cluAssignments: z.array(fieldCluAssignmentSchema).optional(),
   activeSeason: z.number().optional(),
+  backupDate: z.string().optional(),
   rolloverDate: z.string().optional(),
 }).strict();
 

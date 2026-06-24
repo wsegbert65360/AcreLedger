@@ -140,6 +140,7 @@ Upload to App Store Connect / TestFlight
 - Verify your App Store Connect integration in CodeMagic settings.
 - Ensure the API key has **App Manager** permission.
 - Check that an app record exists in App Store Connect.
+- Confirm **Beta App Information** and **Beta App Review Information** are filled out in App Store Connect.
 
 ### App shows "load failed" on launch
 - The `appstore` environment variable group is missing or has incorrect values.

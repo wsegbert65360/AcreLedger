@@ -8,11 +8,13 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { Auth } from "@/components/Auth";
 import BottomNav from "@/components/BottomNav";
+import CoachmarkOverlay from "@/components/CoachmarkOverlay";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import OfflineBanner from "@/components/OfflineBanner";
 import SeasonRolloverModal from "@/components/SeasonRolloverModal";
 import Sidebar from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { useCoachmarks } from "@/hooks/useCoachmarks";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { syncQueue } from "@/lib/syncQueue";
@@ -83,6 +85,10 @@ const AnimatedRoutes = () => {
 const AppContent = () => {
   const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
   const location = useLocation();
+  const coachmarks = useCoachmarks({
+    userId: session?.user?.id,
+    enabled: !!session && onboardingComplete && location.pathname === '/'
+  });
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -173,6 +179,17 @@ const AppContent = () => {
       </div>
       <BottomNav />
       <SeasonRolloverModal />
+      {coachmarks.isActive && coachmarks.currentStep && (
+        <CoachmarkOverlay
+          step={coachmarks.currentStep}
+          stepIndex={coachmarks.stepIndex}
+          totalSteps={coachmarks.totalSteps}
+          onNext={coachmarks.next}
+          onBack={coachmarks.back}
+          onSkip={coachmarks.skip}
+          isLast={coachmarks.stepIndex === coachmarks.totalSteps - 1}
+        />
+      )}
     </>
   );
 };

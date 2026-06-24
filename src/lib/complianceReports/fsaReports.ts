@@ -160,9 +160,14 @@ function findContainingFeature(
         const tract = fsaTracts.find(t => !t.deletedAt && t.tractKey === tractKey);
         if (!tract) continue;
 
-        const feature = tract.geojson.features.find(f =>
-            pointInPolygon(field.lng!, field.lat!, f.geometry.coordinates)
-        );
+        const feature = tract.geojson.features.find(f => {
+            if (f.geometry.type === 'MultiPolygon') {
+                return (f.geometry.coordinates as number[][][][]).some(poly =>
+                    pointInPolygon(field.lng!, field.lat!, poly)
+                );
+            }
+            return pointInPolygon(field.lng!, field.lat!, f.geometry.coordinates as number[][][]);
+        });
 
         if (feature?.properties.cluNumber) {
             return {
@@ -329,7 +334,7 @@ export function buildFsa578Rows(
         const baseRow = {
             date: displayedPlantDate(r),
             fieldName: r.fieldName,
-            crop: r.crop,
+            crop: r.crop || '',
             seedVariety: r.seedVariety || '',
             intendedUse: r.intendedUse || field?.intendedUse || '',
             irrigationCode,

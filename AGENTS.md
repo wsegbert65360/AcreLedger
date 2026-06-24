@@ -28,6 +28,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `TESTING.md` — verification protocols and test credentials.
 - `@/types/farm.ts` — canonical TypeScript entity definitions.
 - `@/lib/mappers.ts` — entity to database row translation.
+- `@/lib/backupSchema.ts` — strict backup/restore validation schema.
 - `farmStore.tsx` — global React Context store and CRUD actions.
 - `@/lib/native.ts` — centralized native capabilities (haptics, status bar, geolocation).
 - `@/lib/syncQueue.ts` — local sync queue and transaction retry engine for offline operation.
@@ -42,6 +43,10 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/services/fsaTractService.ts` and `@/services/cluAssignmentService.ts` — Supabase persistence for FSA tract imports and CLU assignments.
 - `@/components/TractAssignmentFlow.tsx`, `@/components/CluAssignmentMap.tsx`, `@/components/CluFieldSelector.tsx`, `@/components/FsaTractImporter.tsx` — FSA tract management UI.
 - `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
+- `@/lib/activityIcons.ts` — centralized activity type icon and color maps (`ACTIVITY_ICONS`, `ACTIVITY_TEXT_COLORS`, `ACTIVITY_BG_COLORS`).
+- `@/hooks/useSprayForm.ts` — shared spray form state for the SprayWizard step components.
+- `@/hooks/useUndoDelete.ts` — undo-safe soft-delete pattern for FieldManager and similar bulk-delete UI.
+- `@/hooks/useCoachmarks.ts` + `@/components/CoachmarkOverlay.tsx` — onboarding coachmark overlay system.
 - `codemagic.yaml` — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
 - `CODEMAGIC.md` — CodeMagic setup guide, credentials, and troubleshooting.
 
@@ -105,7 +110,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 ### Supabase and Database
 
 - Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
-- Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract or reassigning a CLU must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
+- Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue and backup restore RPC MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract, reassigning a CLU, or restoring a backup must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
 - New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
 - Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
 - Every farm-owned table must have RLS enabled.
@@ -134,10 +139,14 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 
 - FSA tract imports and field CLU assignments are farm-owned records and must follow farm scoping, mapper discipline, optimistic updates, and soft delete rules.
 - FSA tract and CLU assignment changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup/restore schema, bundled tract helpers, assignment UI, and FSA report generation/tests.
+- Central mapper names are `mapFsaTractFromDb`, `mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`, and `mapFieldCluAssignmentToDb`; use them before React state changes and before backup restore RPC payload construction.
+- CLU parsing and GeoJSON rendering logic must support both `Polygon` and `MultiPolygon` geometries. Downstream systems (like map rendering and FSA reports) must extract coordinates or centroids correctly from deeply nested `MultiPolygon` structures.
 - `field_clu_assignments` stores one active assignment per farm/tract/CLU. Assignment actions must preserve the authoritative current `farm_id`, restore soft-deleted rows when reassigning, and never hard-delete assignments.
 - `fsa_tract_imports` stores parsed GeoJSON per farm/tract key. Imported tracts may replace bundled tract data with the same tract key in assignment flows.
+- Backup exports MUST include `fsaTracts` and `cluAssignments`. Restore must validate those arrays through `backupSchema.ts`, map them to `fsa_tract_imports` and `field_clu_assignments`, and replay them through the restore RPC using the CLU conflict keys above.
 - When showing CLU totals, assigned counts, or unassigned counts, compare assignments against the same CLU universe being displayed. Do not subtract bundled or legacy assignment keys from imported-only tract totals.
 - Active CLU assignment counts must exclude soft-deleted assignments (`deletedAt` / `deleted_at`).
+- When a field is soft-deleted, its active field CLU assignments must also be soft-deleted. These deletion mutations must be enqueued via `syncQueue.enqueueMutation` to guarantee offline synchronization.
 - Bundled FSA tract data may be used for display and assignment flows, but imported tract counts should be labeled and calculated as imported-only unless the UI explicitly says it includes bundled tracts.
 - Persisting assignments back to fields should round computed field acreage for display/state, but not mutate the source CLU feature acres.
 - FSA-578 and fall production worksheets are farmer worksheets, not official USDA forms. Preserve the disclaimer wording and keep CSV/PDF exports aligned when changing columns, summaries, footers, or readiness checks.
@@ -154,6 +163,8 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 
 - Backup restore must treat the current selected `farm_id` as authoritative.
 - Before mapping restored records, merge `{ ...record, farm_id }` into each restored record.
+- For FSA tract imports and CLU assignments, the app type uses `farmId`; merge `{ ...record, farmId: farm_id }` before calling `mapFsaTractToDb` or `mapFieldCluAssignmentToDb`.
+- Backups must preserve CLU setup with `fsaTracts` and `cluAssignments`; the restore RPC payload must send those as `fsa_tract_imports` and `field_clu_assignments`.
 - Do not hydrate React state directly from raw backup arrays.
 - Normalize restored records first.
 - If the restore RPC fails, do not mutate React state.
@@ -299,6 +310,55 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 - **Type definitions**: camelCase — e.g. `farm.ts`, `database.ts`, `weather.ts`.
 - **shadcn/ui primitives**: kebab-case in `src/components/ui/` — e.g. `alert-dialog.tsx`, `input-otp.tsx`.
 - **Tests**: colocated, appended `.test` — e.g. `mappers.test.ts`, `WeatherService.test.ts`.
+
+### Spray Wizard Pattern
+
+`SprayModal` is refactored into a 5-file wizard pattern:
+- `src/components/spray/SprayWizardNav.tsx` — step progress bar and Prev/Next/Save buttons.
+- `src/components/spray/SprayWizardCoreStep.tsx` — field, date, applicator, equipment, site info.
+- `src/components/spray/SprayWizardMixStep.tsx` — tank mix, products, rates, recipe loading.
+- `src/components/spray/SprayWizardConditionsStep.tsx` — weather, wind, conditions.
+- `src/components/spray/SprayWizardReviewStep.tsx` — summary and save.
+- `src/hooks/useSprayForm.ts` — shared form state (products, weather, conditions, review data) consumed by all step components.
+
+Keep each step component under ~150 lines. All form state lives in `useSprayForm`; step components are pure presenters. `SprayModal` owns only the step routing, navigation callbacks, and save dispatch.
+
+### Undo-Delete Pattern
+
+Field deletion uses an undo-safe pattern via `src/hooks/useUndoDelete.ts`. Instead of a blocking AlertDialog confirmation, the record is hidden immediately with a toast undo affordance. The mutation commits only after the undo window expires:
+
+```ts
+const { pending, requestDelete } = useUndoDelete<T>({
+  onCommit: async (ids) => { /* actual deleteField() calls */ },
+  onError: () => toast.error('Failed to delete field.'),
+});
+
+// Call site:
+requestDelete([fieldId], `Field "${field.name}" deleted`, field.name);
+```
+
+`pending` is a `Set<T>` of IDs pending deletion. Filter it out of render arrays: `fields.filter(f => !f.deleted_at && !pending.has(f.id))`. Never call the delete API directly from a UI click handler when using this hook.
+
+### Activity Icons
+
+Icon and color mapping for activity types is centralized in `src/lib/activityIcons.ts`:
+- `ACTIVITY_ICONS` — Lucide icon per `ActivityType`.
+- `ACTIVITY_TEXT_COLORS` — Tailwind text color class per type.
+- `ACTIVITY_BG_COLORS` — Tailwind background color class per type.
+
+Replace inline icon/color switch logic in `RecordListItem`, `FieldCard`, `DashboardStats`, and similar components with these maps. `ActivityType` covers: `plant`, `spray`, `harvest`, `grain`, `hay`, `fertilizer`, `tillage`.
+
+### Coachmarks (Onboarding Overlay)
+
+Onboarding coachmarks use `src/hooks/useCoachmarks` and render via `src/components/CoachmarkOverlay`. Steps target DOM elements by `id` on those elements. Target IDs on key UI elements:
+- Dashboard tab: `id="coachmark-activity-tab"`, `id="coachmark-reports-tab"`.
+
+The hook is enabled only when `session && onboardingComplete && location.pathname === '/'`. New coachmark steps targeting other elements must add stable `id` attributes to those elements first.
+
+### Testing
+
+- Component testing involving complex map lifecycles (like `MapContainer` or Leaflet) should mock the nested map components (`CluAssignmentMap`, `CluFieldSelector`, etc.) and invoke their callbacks explicitly.
+- Use explicit `await waitFor(...)` assertions when interacting with mocked component state that relies on React's asynchronous render cycle to avoid stale prop values during test execution.
 
 ### Import Order
 

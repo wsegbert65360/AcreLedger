@@ -1,8 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { ClipboardList, Leaf, CloudRain, Wheat, Trash2, Warehouse, FileDown, Sprout, Scissors, Disc3 } from 'lucide-react';
+import { ClipboardList, Trash2, Warehouse, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
+import SyncStatusIndicator from '@/components/SyncStatusIndicator';
+import {
+  ACTIVITY_ICONS,
+  ACTIVITY_TEXT_COLORS,
+} from '@/lib/activityIcons';
 import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
@@ -21,16 +27,6 @@ import GrainMovementModal from '@/components/GrainMovementModal';
 import DeletedFieldFallback from '@/components/DeletedFieldFallback';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 
 // Tab Components
 import PlantTab from '@/components/activity/PlantTab';
@@ -47,17 +43,17 @@ type Tab = 'all' | 'plant' | 'spray' | 'fertilizer' | 'tillage' | 'harvest' | 'h
 const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; label: string; color: string }[] }[] = [
   { group: 'All', tabs: [{ key: 'all', icon: ClipboardList, label: 'All', color: 'text-foreground' }] },
   { group: 'Crop', tabs: [
-    { key: 'plant', icon: Leaf, label: 'Planting', color: 'text-plant' },
-    { key: 'harvest', icon: Wheat, label: 'Harvesting', color: 'text-harvest' },
-    { key: 'hay', icon: Scissors, label: 'Hay', color: 'text-orange-700 dark:text-orange-400' },
+    { key: 'plant', icon: ACTIVITY_ICONS.plant, label: 'Planting', color: ACTIVITY_TEXT_COLORS.plant },
+    { key: 'harvest', icon: ACTIVITY_ICONS.harvest, label: 'Harvesting', color: ACTIVITY_TEXT_COLORS.harvest },
+    { key: 'hay', icon: ACTIVITY_ICONS.hay, label: 'Hay', color: ACTIVITY_TEXT_COLORS.hay },
   ]},
   { group: 'Inputs', tabs: [
-    { key: 'spray', icon: CloudRain, label: 'Spraying', color: 'text-spray' },
-    { key: 'fertilizer', icon: Sprout, label: 'Fertilizer', color: 'text-lime-600 dark:text-lime-400' },
-    { key: 'tillage', icon: Disc3, label: 'Tillage', color: 'text-orange-600' },
+    { key: 'spray', icon: ACTIVITY_ICONS.spray, label: 'Spraying', color: ACTIVITY_TEXT_COLORS.spray },
+    { key: 'fertilizer', icon: ACTIVITY_ICONS.fertilizer, label: 'Fertilizer', color: ACTIVITY_TEXT_COLORS.fertilizer },
+    { key: 'tillage', icon: ACTIVITY_ICONS.tillage, label: 'Tillage', color: ACTIVITY_TEXT_COLORS.tillage },
   ]},
   { group: 'Logistics', tabs: [
-    { key: 'grain', icon: Warehouse, label: 'Grain', color: 'text-harvest' },
+    { key: 'grain', icon: ACTIVITY_ICONS.grain, label: 'Grain', color: ACTIVITY_TEXT_COLORS.grain },
   ]},
 ];
 
@@ -94,8 +90,32 @@ export default function Activity() {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<Tab>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
+
+  const { pending: pendingDeletes, requestDelete } = useUndoDelete<ActivityRecord[]>({
+    onCommit: async (_ids, toDelete) => {
+      const byType = toDelete.reduce((acc, r) => {
+        acc[r.type] = acc[r.type] || [];
+        acc[r.type].push(r.data.id);
+        return acc;
+      }, {} as Record<string, string[]>);
+
+      const results = await Promise.all([
+        byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
+        byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
+        byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
+        byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
+        byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
+        byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
+        byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
+      ]);
+
+      if (results.some(r => !r)) {
+        throw new Error('One or more deletions failed');
+      }
+    },
+    onError: () => toast.error('Failed to delete records. They remain visible.'),
+  });
 
   const getEditField = (fieldId: string) =>
     fields.find(f => f.id === fieldId && !f.deleted_at) ?? null;
@@ -158,7 +178,7 @@ export default function Activity() {
     [tillageRecords, search, viewingSeason]
   );
 
-  const unifiedRecords = useMemo(() => {
+  const visibleUnifiedRecords = useMemo(() => {
     const all: (ActivityRecord & { timestamp: number })[] = [
       ...filteredPlant.map(r => ({ type: 'plant' as const, data: r, timestamp: r.timestamp })),
       ...filteredSpray.map(r => ({ type: 'spray' as const, data: r, timestamp: r.timestamp })),
@@ -168,32 +188,22 @@ export default function Activity() {
       ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
     ];
-    return all.sort((a, b) => b.timestamp - a.timestamp);
-  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredTillage, filteredGrain]);
+    return all.filter(r => !pendingDeletes.has(r.data.id)).sort((a, b) => b.timestamp - a.timestamp);
+  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
 
-  const handleDelete = async () => {
+  const handleDeleteRequest = () => {
     const ids = Array.from(selected);
-    
-    const toDelete = unifiedRecords.filter(r => ids.includes(r.data.id));
-    const byType = toDelete.reduce((acc, r) => {
-      acc[r.type] = acc[r.type] || [];
-      acc[r.type].push(r.data.id);
-      return acc;
-    }, {} as Record<string, string[]>);
+    if (ids.length === 0) return;
 
-    await Promise.all([
-      byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
-      byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
-      byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
-      byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
-      byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
-      byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
-      byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
-    ]);
-
+    const toDelete = visibleUnifiedRecords.filter(r => ids.includes(r.data.id));
+    requestDelete(
+      ids,
+      `${ids.length} record${ids.length !== 1 ? 's' : ''} deleted`,
+      toDelete
+    );
     setSelected(new Set());
-    setConfirmDelete(false);
   };
+
 
   return (
     <div className="min-h-screen bg-background pb-24 lg:pb-8">
@@ -225,6 +235,8 @@ export default function Activity() {
               <p className="text-xs text-muted-foreground">Review & manage</p>
             </div>
           </div>
+
+          <SyncStatusIndicator />
 
           {tab === 'spray' && (
             <div className="flex gap-2">
@@ -285,14 +297,14 @@ export default function Activity() {
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
                 {group.tabs.map((t) => {
-                  const count = t.key === 'all' ? unifiedRecords.length
-                    : t.key === 'plant' ? filteredPlant.length
-                    : t.key === 'spray' ? filteredSpray.length
-                    : t.key === 'harvest' ? filteredHarvest.length
-                    : t.key === 'grain' ? filteredGrain.length
-                    : t.key === 'hay' ? filteredHay.length
-                    : t.key === 'tillage' ? filteredTillage.length
-                    : filteredFertilizer.length;
+                  const count = t.key === 'all' ? visibleUnifiedRecords.length
+                    : t.key === 'plant' ? filteredPlant.filter(r => !pendingDeletes.has(r.id)).length
+                    : t.key === 'spray' ? filteredSpray.filter(r => !pendingDeletes.has(r.id)).length
+                    : t.key === 'harvest' ? filteredHarvest.filter(r => !pendingDeletes.has(r.id)).length
+                    : t.key === 'grain' ? filteredGrain.filter(r => !pendingDeletes.has(r.id)).length
+                    : t.key === 'hay' ? filteredHay.filter(r => !pendingDeletes.has(r.id)).length
+                    : t.key === 'tillage' ? filteredTillage.filter(r => !pendingDeletes.has(r.id)).length
+                    : filteredFertilizer.filter(r => !pendingDeletes.has(r.id)).length;
 
                   const isActive = tab === t.key;
 
@@ -342,7 +354,7 @@ export default function Activity() {
         {/* Bulk delete */}
         {selected.size > 0 && (
           <button
-            onClick={() => setConfirmDelete(true)}
+            onClick={handleDeleteRequest}
             className="touch-target w-full flex items-center justify-center gap-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg py-3 text-sm font-bold active:scale-95 transition-transform"
           >
             <Trash2 size={18} />
@@ -352,34 +364,16 @@ export default function Activity() {
 
         {/* Records */}
         <div className="space-y-2">
-          {tab === 'all' && <HistoryFeed records={unifiedRecords} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'plant' && <PlantTab records={filteredPlant} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'spray' && <SprayTab records={filteredSpray} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'harvest' && <HarvestTab records={filteredHarvest} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'hay' && <HayTab records={filteredHay} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'tillage' && <TillageTab records={filteredTillage} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'grain' && <GrainTab records={filteredGrain} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'spray' && <SprayTab records={filteredSpray.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'grain' && <GrainTab records={filteredGrain.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
         </div>
       </main>
-
-      {/* Confirm Delete Dialog */}
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Confirm Delete</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              This will permanently remove {selected.size} record{selected.size > 1 ? 's' : ''}. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="touch-target bg-destructive text-destructive-foreground glow-destructive">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {tab === 'grain' && editingRecord && (
         <GrainMovementModal

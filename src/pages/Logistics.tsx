@@ -4,6 +4,7 @@ import { Warehouse, Wheat, Settings, Banknote, Plus } from 'lucide-react';
 import { BinManager } from '@/components/BinManageModal';
 import SellModal from '@/components/SellModal';
 import AddGrainModal from '@/components/AddGrainModal';
+import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
 import type { Bin } from '@/types/farm';
 
@@ -43,15 +44,18 @@ export default function Logistics() {
               <p className="text-xs text-muted-foreground">{bins.length} bins · {viewingSeason} season</p>
             </div>
           </div>
-          <button
-            onClick={() => setManaging(!managing)}
-            aria-label={managing ? "Exit management" : "Manage bins"}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
-               }`}
-          >
-            <Settings size={16} />
-            <span>{managing ? 'Done' : 'Manage Bins'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <SyncStatusIndicator />
+            <button
+              onClick={() => setManaging(!managing)}
+              aria-label={managing ? "Exit management" : "Manage bins"}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
+                 }`}
+            >
+              <Settings size={16} />
+              <span>{managing ? 'Done' : 'Manage Bins'}</span>
+            </button>
+          </div>
         </div>
 
       </header>

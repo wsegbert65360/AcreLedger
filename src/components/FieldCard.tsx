@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import { MapPin, ChevronRight, Sprout, Cloud, FlaskConical as Flask } from 'lucide-react';
+import { MapPin, ChevronRight } from 'lucide-react';
 
 import { Field } from '@/types/farm';
 import { roundTo } from '@/utils/numbers';
+import { ACTIVITY_ICONS } from '@/lib/activityIcons';
 
 interface FieldCardProps {
   field: Field & { displayAcreage?: number };
@@ -17,8 +18,13 @@ export default function FieldCard({ field }: FieldCardProps) {
     navigate(`/field/${field.id}`);
   };
 
-  // Determine status: green if planted, gray if no activity at all
+  // Determine status: green if planted, blue if any activity, gray if none
   const hasActivity = summary?.planted || (summary?.sprayed ?? 0) > 0 || (summary?.fertilized ?? 0) > 0;
+  const statusLabel = summary?.planted
+    ? 'Planted'
+    : hasActivity
+      ? 'Activity logged'
+      : 'No activity';
   const statusColor = summary?.planted
     ? 'bg-plant'
     : hasActivity
@@ -40,7 +46,11 @@ export default function FieldCard({ field }: FieldCardProps) {
       className="bg-card/60 backdrop-blur-md border border-border rounded-lg p-2 px-3 flex items-center justify-between ring-1 ring-white/5 shadow-xl cursor-pointer hover:bg-card/80 transition-all active:scale-[0.98] relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       {/* Status dot */}
-      <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${statusColor}`} />
+      <div
+        className={`absolute top-2 right-2 w-2 h-2 rounded-full ${statusColor}`}
+        title={statusLabel}
+        aria-label={statusLabel}
+      />
 
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -62,7 +72,7 @@ export default function FieldCard({ field }: FieldCardProps) {
               className="h-8 w-8 flex items-center justify-center text-primary/40"
               title="Planting Activity"
             >
-              <Sprout size={16} />
+              <ACTIVITY_ICONS.plant size={16} />
             </div>
           )}
           {(summary?.sprayed ?? 0) > 0 && (
@@ -71,7 +81,7 @@ export default function FieldCard({ field }: FieldCardProps) {
               title="Spraying Activity"
             >
               <div className="flex items-center">
-                <Cloud size={16} />
+                <ACTIVITY_ICONS.spray size={16} />
                 <span className="text-[11px] font-mono font-bold ml-0.5">x{summary?.sprayed}</span>
               </div>
             </div>
@@ -81,7 +91,7 @@ export default function FieldCard({ field }: FieldCardProps) {
               className="h-8 w-8 flex items-center justify-center text-primary/40"
               title="Fertilizer Activity"
             >
-              <Flask size={16} />
+              <ACTIVITY_ICONS.fertilizer size={16} />
             </div>
           )}
         </div>

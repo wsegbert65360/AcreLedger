@@ -1,4 +1,16 @@
 {
   "lensDir": ".code-review/lenses",
-  "defaultLenses": ["code-quality", "maintainability", "accessibility", "product-vision"]
+  "defaultLenses": ["code-quality", "maintainability", "accessibility", "product-vision"],
+  "review": {
+    "passes": 5,
+    "validate": true,
+    "minVotes": 2,
+    "concurrency": 5,
+    "temperature": 0.4,
+    "maxFindings": 50,
+    "recordRejections": true,
+    "passModels": [
+      "deepseek/deepseek-v4-pro"
+    ]
+  }
 }

@@ -1,11 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
 import FieldManageModal from './FieldManageModal';
 
 // ✅ Fix: Extracted shared card component — eliminates duplication
@@ -54,8 +52,28 @@ function FieldCard({
 
 export default function FieldManager() {
   const { fields: allFields, deleteField, fetchError } = useFarm();
+
+  const [editField, setEditField] = useState<Field | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const commitDelete = useCallback(async (ids: string[]) => {
+    const results = await Promise.all(ids.map(id => deleteField(id)));
+    if (results.some(r => !r)) {
+      throw new Error('One or more field deletions failed');
+    }
+  }, [deleteField]);
+
+  const { pending: pendingDeletes, requestDelete } = useUndoDelete<string>({
+    onCommit: commitDelete,
+    onError: () => toast.error('Failed to delete field. It remains visible.'),
+  });
+
+  const activeFields = useMemo(() =>
+    allFields.filter(f => !f.deleted_at && !pendingDeletes.has(f.id)),
+    [allFields, pendingDeletes]
+  );
+
   const { rowCrops, pastureHay } = useMemo(() => {
-    const activeFields = allFields.filter(f => !f.deleted_at);
     const sorted = [...activeFields].sort((a, b) => a.name.localeCompare(b.name));
 
     return {
@@ -68,17 +86,16 @@ export default function FieldManager() {
         return use.includes('pasture') || use.includes('hay');
       }),
     };
-  }, [allFields]);
+  }, [activeFields]);
 
-  const [editField, setEditField] = useState<Field | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const hasFields = rowCrops.length > 0 || pastureHay.length > 0;
+  const bothCategories = rowCrops.length > 0 && pastureHay.length > 0;
 
-  const hasFields = rowCrops.length > 0 || pastureHay.length > 0; // ✅ Fix: no unnecessary array spread
-  const bothCategories = rowCrops.length > 0 && pastureHay.length > 0; // ✅ Fix: used for header visibility
-
-  // ✅ Fix: Look up field name for use in delete dialog
-  const fieldToDelete = allFields.find(f => f.id === deleteConfirm);
+  const handleDeleteRequest = (id: string) => {
+    const field = allFields.find(f => f.id === id);
+    if (!field) return;
+    requestDelete([id], `Field "${field.name}" deleted`, field.name);
+  };
 
   return (
     <>
@@ -126,7 +143,7 @@ export default function FieldManager() {
                     key={field.id}
                     field={field}
                     onEdit={setEditField}
-                    onDelete={setDeleteConfirm}
+                    onDelete={handleDeleteRequest}
                   />
                 ))}
               </div>
@@ -144,7 +161,7 @@ export default function FieldManager() {
                     key={field.id}
                     field={field}
                     onEdit={setEditField}
-                    onDelete={setDeleteConfirm}
+                    onDelete={handleDeleteRequest}
                   />
                 ))}
               </div>
@@ -157,35 +174,6 @@ export default function FieldManager() {
       {editField && (
         <FieldManageModal open editField={editField} onClose={() => setEditField(null)} />
       )}
-
-      {/* ✅ Fix: onOpenChange respects the boolean argument */}
-      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
-        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
-          <AlertDialogHeader>
-            {/* ✅ Fix: Show the field name in the dialog */}
-            <AlertDialogTitle className="text-foreground">
-              Delete &ldquo;{fieldToDelete?.name ?? 'this field'}&rdquo;?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              This will permanently remove this field. Existing records will be preserved.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="touch-target border-border text-muted-foreground">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                if (deleteConfirm) await deleteField(deleteConfirm);
-                setDeleteConfirm(null);
-              }}
-              className="touch-target bg-destructive text-destructive-foreground glow-destructive"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

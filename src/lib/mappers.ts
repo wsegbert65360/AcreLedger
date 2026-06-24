@@ -6,13 +6,16 @@ import {
 import {
     PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow,
     GrainMovementRow, FieldRow, BinRow, SavedSeedRow, SprayRecipeRow,
-    FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow
+    FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow,
+    FsaTractImportRow, FieldCluAssignmentRow
 } from '../types/database';
+import type { FsaTractImport, FieldCluAssignment } from '../types/fsaTract';
 import {
     fieldSchema, binSchema, plantRecordSchema, sprayRecordSchema,
     harvestRecordSchema, hayHarvestRecordSchema, grainMovementSchema,
     savedSeedSchema, fertilizerRecipeSchema, sprayRecipeSchema,
-    fertilizerApplicationSchema, tillageRecordSchema
+    fertilizerApplicationSchema, tillageRecordSchema,
+    fsaTractImportSchema, fieldCluAssignmentSchema
 } from './backupSchema';
 
 // --- Safe Mapping Helpers (Runtime Validation) ---
@@ -240,6 +243,29 @@ export const mapTillageFromDb = (db: TillageRecordRow): TillageRecord => ({
     seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
+});
+
+export const mapFsaTractFromDb = (db: FsaTractImportRow): FsaTractImport => ({
+    id: db.id,
+    farmId: db.farm_id,
+    tractKey: db.tract_key,
+    filename: safeStr(db.filename),
+    featureCount: safeNum(db.feature_count),
+    geojson: db.geojson as FsaTractImport['geojson'],
+    importedAt: db.imported_at,
+    deletedAt: db.deleted_at ?? null
+});
+
+export const mapFieldCluAssignmentFromDb = (db: FieldCluAssignmentRow): FieldCluAssignment => ({
+    id: db.id,
+    farmId: db.farm_id,
+    fieldId: db.field_id,
+    tractKey: db.tract_key,
+    cluNumber: db.clu_number,
+    acres: safeNum(db.acres),
+    landUse: db.land_use ?? 'cropland',
+    assignedAt: db.assigned_at,
+    deletedAt: db.deleted_at ?? null
 });
 
 // --- Helper for Validation ---
@@ -527,5 +553,36 @@ export const mapTillageToDb = (r: TillageRecord) => {
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
         deleted_at: r.deleted_at
+    };
+};
+
+export const mapFsaTractToDb = (t: FsaTractImport): FsaTractImportRow => {
+    validateRequired(t, ['id', 'farmId', 'tractKey', 'filename', 'featureCount', 'geojson', 'importedAt'], 'mapFsaTractToDb');
+    fsaTractImportSchema.parse(t);
+    return {
+        id: t.id,
+        farm_id: t.farmId,
+        tract_key: t.tractKey,
+        filename: t.filename,
+        feature_count: t.featureCount,
+        geojson: t.geojson,
+        imported_at: t.importedAt,
+        deleted_at: t.deletedAt ?? null
+    };
+};
+
+export const mapFieldCluAssignmentToDb = (a: FieldCluAssignment): FieldCluAssignmentRow => {
+    validateRequired(a, ['id', 'farmId', 'fieldId', 'tractKey', 'cluNumber', 'assignedAt'], 'mapFieldCluAssignmentToDb');
+    fieldCluAssignmentSchema.parse(a);
+    return {
+        id: a.id,
+        farm_id: a.farmId,
+        field_id: a.fieldId,
+        tract_key: a.tractKey,
+        clu_number: a.cluNumber,
+        acres: a.acres,
+        land_use: a.landUse,
+        assigned_at: a.assignedAt,
+        deleted_at: a.deletedAt ?? null
     };
 };

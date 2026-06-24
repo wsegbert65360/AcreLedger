@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import {
-  MapPin, Sprout, Wheat, CloudRain, Warehouse, AlertCircle,
+  MapPin, Wheat, Warehouse, AlertCircle,
 } from 'lucide-react';
 
 import { useFarm } from '@/store/farmStore';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ACTIVITY_ICONS } from '@/lib/activityIcons';
 import { roundTo } from '@/utils/numbers';
 
 // ── Shared card shell ────────────────────────────────────────────────────────
@@ -165,7 +166,7 @@ export default function DashboardStats() {
 
       {/* 2 — Planted */}
       <StatCard
-        icon={Sprout}
+        icon={ACTIVITY_ICONS.plant}
         iconColor="text-plant"
         label="Planted"
         value={`${stats.plantedAcres.toLocaleString()} AC`}
@@ -192,7 +193,7 @@ export default function DashboardStats() {
 
       {/* 4 — Spray */}
       <StatCard
-        icon={CloudRain}
+        icon={ACTIVITY_ICONS.spray}
         iconColor="text-spray"
         label="Spray Apps"
         value={stats.sprayCount.toLocaleString()}

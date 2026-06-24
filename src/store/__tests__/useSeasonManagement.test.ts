@@ -31,6 +31,13 @@ describe('Backup restore validation (fix #4)', () => {
     expect(result.activeSeason).toBeUndefined();
   });
 
+
+  it('accepts backupDate from settings backups', () => {
+    const backup = { ...makeValidBackup(), backupDate: '2026-06-24T12:00:00.000Z' };
+    const result = backupSchema.parse(backup);
+    expect(result.backupDate).toBe('2026-06-24T12:00:00.000Z');
+  });
+
   it('rejects activeSeason that is a string', () => {
     const backup = { ...makeValidBackup(), activeSeason: '2026' as any };
     expect(() => backupSchema.parse(backup)).toThrow();
@@ -65,11 +72,41 @@ describe('Backup restore validation (fix #4)', () => {
       savedSeeds: [{ id: 'se1', name: 'Seed', farm_id: 'farm-1', deleted_at: null }],
       fertilizerRecipes: [{ id: 'fr1', name: 'Recipe', farm_id: 'farm-1', deleted_at: null }],
       sprayRecipes: [{ id: 'sr1', name: 'Recipe', farm_id: 'farm-1', deleted_at: null }],
+      fsaTracts: [{
+        id: 'tract-1',
+        farmId: 'farm-1',
+        tractKey: '6418-1417',
+        filename: '6418-1417.json',
+        featureCount: 1,
+        importedAt: '2026-06-16T00:00:00.000Z',
+        deletedAt: null,
+        geojson: {
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+            properties: { cluNumber: '11', acres: 10.5 },
+          }],
+        },
+      }],
+      cluAssignments: [{
+        id: 'assignment-1',
+        farmId: 'farm-1',
+        fieldId: 'f1',
+        tractKey: '6418-1417',
+        cluNumber: '11',
+        acres: 10.5,
+        landUse: 'cropland',
+        assignedAt: '2026-06-16T00:00:00.000Z',
+        deletedAt: null,
+      }],
       activeSeason: 2026,
     };
     const result = backupSchema.parse(backup);
     expect(result.fields).toHaveLength(1);
     expect(result.bins).toHaveLength(1);
+    expect(result.fsaTracts).toHaveLength(1);
+    expect(result.cluAssignments).toHaveLength(1);
   });
 });
 
@@ -140,7 +177,7 @@ describe('Backup schema boundary validation (fix #5)', () => {
     const backup = {
       fields: [{
         id: 'f1', name: 'Test', farm_id: 'farm-1', acreage: 80, deleted_at: null,
-        boundary: { type: 'MultiPolygon', coordinates: [] },
+        boundary: { type: 'Point', coordinates: [0, 0] },
       }],
     };
     expect(() => backupSchema.parse(backup)).toThrow();

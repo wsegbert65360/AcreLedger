@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import SprayModal from '../SprayModal';
 import { Field, SprayRecord } from '@/types/farm';
@@ -76,13 +76,6 @@ vi.mock('@/components/ui/select', () => ({
   SelectValue: () => null
 }));
 
-vi.mock('@/components/ui/accordion', () => ({
-  Accordion: ({ children }: any) => <div>{children}</div>,
-  AccordionItem: ({ children }: any) => <div>{children}</div>,
-  AccordionTrigger: ({ children }: any) => <button type="button">{children}</button>,
-  AccordionContent: ({ children }: any) => <div>{children}</div>
-}));
-
 vi.mock('@/components/ui/switch', () => ({
   Switch: ({ checked, onCheckedChange, id }: any) => (
     <input
@@ -151,6 +144,48 @@ describe('SprayModal Data Retention', () => {
     vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
   });
 
+  const fillCoreStep = () => {
+    act(() => {
+      fireEvent.change(screen.getByLabelText(/application date/i), { target: { value: '2026-06-23' } });
+      fireEvent.change(screen.getByLabelText(/start time/i), { target: { value: '08:00' } });
+      fireEvent.change(screen.getByLabelText(/cert\. applicator/i), { target: { value: 'Cert Applicator' } });
+      fireEvent.change(screen.getByLabelText(/license/i), { target: { value: 'L12345' } });
+      fireEvent.change(screen.getByLabelText(/target pest/i), { target: { value: 'Grass' } });
+    });
+  };
+
+  const clickNext = async () => {
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: /Next/i }));
+    });
+  };
+
+  const fillMixStep = () => {
+    act(() => {
+      fireEvent.change(screen.getByLabelText(/trade name/i), { target: { value: 'Roundup' } });
+    });
+  };
+
+  const navigateToConditions = async () => {
+    fillCoreStep();
+    await clickNext(); // core -> mix
+    await waitFor(() => expect(screen.getByText(/Herbicide Mix/i)).toBeInTheDocument());
+    fillMixStep();
+    await clickNext(); // mix -> conditions
+    await waitFor(() => expect(screen.getByLabelText(/Wind Speed/i)).toBeInTheDocument());
+  };
+
+  const navigateToReview = async () => {
+    fillCoreStep();
+    await clickNext(); // core -> mix
+    await waitFor(() => expect(screen.getByText(/Herbicide Mix/i)).toBeInTheDocument());
+    fillMixStep();
+    await clickNext(); // mix -> conditions
+    await waitFor(() => expect(screen.getByLabelText(/Wind Speed/i)).toBeInTheDocument());
+    await clickNext(); // conditions -> review
+    await waitFor(() => expect(screen.getByRole('button', { name: /Spray Record/i })).toBeInTheDocument());
+  };
+
   it('auto-populates wind direction and speed when weather fetch succeeds for a new record', async () => {
     vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
       temp: 72,
@@ -172,6 +207,8 @@ describe('SprayModal Data Retention', () => {
         onClose={vi.fn()}
       />
     );
+
+    await navigateToConditions();
 
     await waitFor(() => {
       const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
@@ -204,6 +241,8 @@ describe('SprayModal Data Retention', () => {
       />
     );
 
+    await navigateToConditions();
+
     await waitFor(() => {
       const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
       expect(windSpeedInput.value).toBe('0');
@@ -229,12 +268,16 @@ describe('SprayModal Data Retention', () => {
       />
     );
 
+    await navigateToConditions();
+
     const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
     const windDirectionSelect = screen.getByLabelText(/Wind Direction/i) as HTMLSelectElement;
 
     // User types manual values before weather arrives
-    fireEvent.change(windSpeedInput, { target: { value: '12' } });
-    fireEvent.change(windDirectionSelect, { target: { value: 'NW' } });
+    act(() => {
+      fireEvent.change(windSpeedInput, { target: { value: '12' } });
+      fireEvent.change(windDirectionSelect, { target: { value: 'NW' } });
+    });
 
     // Now weather arrives
     resolveWeather!({
@@ -264,9 +307,13 @@ describe('SprayModal Data Retention', () => {
       />
     );
 
+    await navigateToReview();
+
     // Find and click the Update button
     const updateBtn = screen.getByRole('button', { name: /Update Spray Record/i });
-    fireEvent.click(updateBtn);
+    act(() => {
+      fireEvent.click(updateBtn);
+    });
 
     // Verify updateSprayRecord is called with the original seasonYear (2025), not the global viewingSeason (2026)
     await waitFor(() => expect(updateSprayRecordMock).toHaveBeenCalledTimes(1));
@@ -294,13 +341,20 @@ describe('SprayModal Data Retention', () => {
       />
     );
 
+    await navigateToConditions();
+
     // Check that wind speed input displays 0
     const windSpeedInput = screen.getByLabelText(/Wind Speed/i) as HTMLInputElement;
     expect(windSpeedInput.value).toBe('0');
 
+    await clickNext(); // conditions -> review
+    await waitFor(() => expect(screen.getByRole('button', { name: /Update Spray Record/i })).toBeInTheDocument());
+
     // Submit the form
     const updateBtn = screen.getByRole('button', { name: /Update Spray Record/i });
-    fireEvent.click(updateBtn);
+    act(() => {
+      fireEvent.click(updateBtn);
+    });
 
     // Verify updateSprayRecord is called preserving the 0 wind speed
     await waitFor(() => expect(updateSprayRecordMock).toHaveBeenCalledTimes(1));
