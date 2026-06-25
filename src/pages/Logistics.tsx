@@ -167,7 +167,7 @@ export default function Logistics() {
     return {
       ...selectedBin,
       recentMovements: [...ascending].reverse().slice(0, 5),
-      lastFill: ascending.find((movement) => movement.type === 'in'),
+      lastFill: [...ascending].reverse().find((movement) => movement.type === 'in'),
       trend: buildBinTrend(ascending),
     };
   }, [binOverview, selectedBinId, seasonMovements]);
