@@ -7,179 +7,127 @@ interface BinFillGaugeProps {
   percentFull: number;
 }
 
-const LEVEL_ACCENT: Record<CapacityLevel, { rail: string; marker: string }> = {
+const LEVEL_ACCENT: Record<CapacityLevel, { glow: string; marker: string; rail: string }> = {
   ok: {
-    rail: 'bg-primary dark:bg-emerald-400',
-    marker: 'border-primary/50 bg-primary/10 text-primary dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-400',
+    glow: 'shadow-[0_0_35px_rgba(245,158,11,0.7)]',
+    marker: 'border-amber-500/50 bg-black/80 text-amber-400 font-bold',
+    rail: 'bg-amber-500/80',
   },
   warning: {
-    rail: 'bg-amber-500 dark:bg-amber-400',
-    marker: 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:border-amber-400/50 dark:bg-amber-400/10 dark:text-amber-400',
+    glow: 'shadow-[0_0_45px_rgba(245,158,11,0.9)]',
+    marker: 'border-amber-500/80 bg-black/80 text-amber-400 font-bold',
+    rail: 'bg-amber-500',
   },
   critical: {
-    rail: 'bg-destructive dark:bg-red-400',
-    marker: 'border-destructive/50 bg-destructive/10 text-red-700 dark:border-red-400/50 dark:bg-red-400/10 dark:text-red-400',
+    glow: 'shadow-[0_0_50px_rgba(239,68,68,0.9)]',
+    marker: 'border-red-500/80 bg-black/80 text-red-500 font-bold',
+    rail: 'bg-red-500',
   },
 };
 
+const GRAIN_TEXTURE_CLASS = [
+  '[background-image:radial-gradient(circle_at_20%_30%,rgba(255,232,156,0.5)_0_1px,transparent_1.5px),radial-gradient(circle_at_80%_70%,rgba(106,58,18,0.9)_0_1px,transparent_1.5px),radial-gradient(circle_at_50%_50%,rgba(245,158,11,0.5)_0_1px,transparent_1.5px)]',
+  '[background-size:4px_6px,5px_7px,3px_5px]'
+].join(' ');
+
 export default function BinFillGauge({ bushels, capacity, percentFull }: BinFillGaugeProps) {
   const cappedPercent = Math.max(0, Math.min(percentFull, 100));
+  // Tube height is exactly 100% - 4rem (top-8 to bottom-8)
+  const markerBottom = `calc(2rem + (100% - 4rem) * ${cappedPercent / 100})`;
   const level = getCapacityLevel(percentFull);
   const accent = LEVEL_ACCENT[level];
 
-  // SVG dimensions
-  const w = 200;
-  const h = 320;
-  const rx = 80;
-  const ry = 24;
-  const topCy = 40;
-  const bottomCy = 280;
-  const bodyH = bottomCy - topCy;
-  
-  // Fill level mapping
-  const fillY = bottomCy - (bodyH * cappedPercent) / 100;
-  const clipY = fillY;
-  const clipH = h - clipY;
-
   return (
     <div
-      className="relative mx-auto flex h-[22rem] w-full max-w-[24rem] items-center justify-center overflow-visible sm:h-[25rem]"
+      className="relative mx-auto flex h-[24rem] w-full max-w-[26rem] items-center justify-center overflow-visible sm:h-[28rem]"
       role="img"
-      aria-label={`Bin is ${Math.round(percentFull)} percent full with ${bushels.toLocaleString()} bushels of ${capacity.toLocaleString()} bushels capacity.`}
+      aria-label={`Bin is ${Math.round(percentFull)} percent full`}
     >
-      <div className="relative flex h-full w-full items-center justify-center pr-12 sm:pr-16">
+      <div className="relative flex h-full w-full items-center justify-center pr-16 sm:pr-20">
         {/* Floor shadow */}
-        <div className="absolute inset-x-12 bottom-4 h-8 rounded-[50%] bg-black/10 blur-xl dark:bg-black/60" aria-hidden="true" />
+        <div className="absolute inset-x-12 bottom-2 h-10 rounded-[50%] bg-black/80 blur-2xl" aria-hidden="true" />
 
-        <div className="relative h-full w-full max-w-[16rem]">
-          <svg 
-            viewBox={`0 0 ${w} ${h}`} 
-            preserveAspectRatio="xMidYMid meet"
-            className="h-full w-full overflow-visible drop-shadow-xl dark:drop-shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
-          >
-            <defs>
-              <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="currentColor" stopOpacity="0.25" />
-                <stop offset="15%" stopColor="currentColor" stopOpacity="0.02" />
-                <stop offset="50%" stopColor="currentColor" stopOpacity="0.0" />
-                <stop offset="85%" stopColor="currentColor" stopOpacity="0.05" />
-                <stop offset="100%" stopColor="currentColor" stopOpacity="0.3" />
-              </linearGradient>
-              
-              <linearGradient id="grainGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="hsl(var(--harvest))" stopOpacity="0.85" />
-                <stop offset="20%" stopColor="hsl(var(--harvest))" stopOpacity="1" />
-                <stop offset="80%" stopColor="hsl(var(--harvest))" stopOpacity="0.95" />
-                <stop offset="100%" stopColor="hsl(var(--harvest))" stopOpacity="0.7" />
-              </linearGradient>
-
-              <linearGradient id="grainTop" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="white" stopOpacity="0.3" />
-                <stop offset="50%" stopColor="transparent" stopOpacity="0" />
-                <stop offset="100%" stopColor="black" stopOpacity="0.15" />
-              </linearGradient>
-
-              <clipPath id="fillClip">
-                <rect x="0" y={clipY} width={w} height={clipH} />
-              </clipPath>
-            </defs>
-
-            {/* Back interior wall */}
-            <path 
-              d={`M ${w/2 - rx} ${topCy} L ${w/2 - rx} ${bottomCy} A ${rx} ${ry} 0 0 0 ${w/2 + rx} ${bottomCy} L ${w/2 + rx} ${topCy} A ${rx} ${ry} 0 0 0 ${w/2 - rx} ${topCy} Z`} 
-              className="fill-slate-200/50 dark:fill-slate-800/60" 
-            />
+        <div className="relative h-[22rem] w-[14rem] sm:h-[26rem] sm:w-[16rem]">
+          
+          {/* Glass Tube (z-10) */}
+          <div className="absolute inset-x-1 bottom-8 top-8 z-10 overflow-hidden rounded-b-[3.5rem] border-x border-slate-700/60 bg-slate-900/90 shadow-[inset_25px_0_40px_rgba(0,0,0,0.9),inset_-25px_0_40px_rgba(0,0,0,0.9)] backdrop-blur-[2px]">
+            
+            {/* Empty back wall texture */}
+            <div className="absolute inset-x-0 top-0 bottom-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0_1px,transparent_1px)] [background-size:4px_4px] opacity-60" />
 
             {/* Grain Fill */}
-            {cappedPercent > 0 && (
-              <g>
-                <g clipPath="url(#fillClip)">
-                  {/* Grain body */}
-                  <path 
-                    d={`M ${w/2 - rx} ${topCy} L ${w/2 - rx} ${bottomCy} A ${rx} ${ry} 0 0 0 ${w/2 + rx} ${bottomCy} L ${w/2 + rx} ${topCy} Z`} 
-                    fill="url(#grainGrad)" 
-                  />
-                </g>
-                {/* Grain top surface base color */}
-                <ellipse cx={w/2} cy={fillY} rx={rx} ry={ry} className="fill-amber-400 dark:fill-amber-500" />
-                {/* Grain top surface gradient highlight */}
-                <ellipse cx={w/2} cy={fillY} rx={rx} ry={ry} fill="url(#grainTop)" />
-              </g>
-            )}
+            <div
+              className={cn('absolute inset-x-0 bottom-0 transition-all duration-700 ease-out', accent.glow)}
+              style={{ height: `${cappedPercent}%` }}
+            >
+              {/* Internal top surface ellipse of the grain */}
+              <div className="absolute inset-x-0 top-0 h-10 -translate-y-1/2 rounded-[50%] border-t border-amber-300/40 bg-gradient-to-b from-amber-200 via-amber-500 to-amber-900 shadow-[0_0_35px_rgba(245,158,11,0.9)]" />
+              
+              {/* Grain body gradient (bright top, dark bottom) */}
+              <div className="absolute inset-0 bg-gradient-to-b from-amber-500/90 via-amber-800/80 to-[#050505]" />
+              
+              {/* Noise texture overlay */}
+              <div className={cn("absolute inset-0 mix-blend-overlay opacity-90", GRAIN_TEXTURE_CLASS)} />
+              
+              {/* Front glass highlight on the grain itself */}
+              <div className="absolute inset-y-0 left-[15%] w-[15%] bg-gradient-to-r from-transparent via-white/10 to-transparent blur-[2px]" />
+            </div>
 
-            {/* Front Glass */}
-            <path 
-              d={`M ${w/2 - rx} ${topCy} L ${w/2 - rx} ${bottomCy} A ${rx} ${ry} 0 0 0 ${w/2 + rx} ${bottomCy} L ${w/2 + rx} ${topCy} A ${rx} ${ry} 0 0 1 ${w/2 - rx} ${topCy} Z`} 
-              fill="url(#glass)" 
-              className="text-white dark:text-slate-400" 
-            />
+            {/* Overall Glass Reflections */}
+            <div className="absolute inset-y-0 left-[10%] w-[12%] bg-gradient-to-r from-transparent via-white/10 to-transparent blur-[1px] pointer-events-none" />
+            <div className="absolute inset-y-0 right-[8%] w-[15%] bg-gradient-to-r from-transparent via-black/80 to-transparent blur-[4px] pointer-events-none" />
+          </div>
 
-            {/* Corrugated horizontal lines (behind glass reflection) */}
-            <g className="stroke-slate-400/20 fill-none stroke-[1px] dark:stroke-slate-500/20">
-              {[...Array(15)].map((_, i) => {
-                const y = topCy + (i + 1) * (bodyH / 16);
-                return <path key={i} d={`M ${w/2 - rx} ${y} A ${rx} ${ry} 0 0 0 ${w/2 + rx} ${y}`} />;
-              })}
-            </g>
+          {/* Glowing External Marker Ring (z-50) */}
+          {cappedPercent > 0 && (
+            <div
+              className="absolute inset-x-[2px] z-50 h-8 -translate-y-1/2 rounded-[50%] border-[1.5px] border-amber-300/90 bg-transparent shadow-[0_0_20px_rgba(245,158,11,1),inset_0_0_15px_rgba(245,158,11,0.8)]"
+              style={{ bottom: markerBottom }}
+              aria-hidden="true"
+            >
+               <div className="absolute inset-x-[15%] top-0 h-[2px] bg-white/70 blur-[1px]" />
+               <div className="absolute inset-x-[15%] bottom-0 h-[1px] bg-white/40 blur-[1px]" />
+            </div>
+          )}
 
-            {/* Top opening rim */}
-            <ellipse 
-              cx={w/2} cy={topCy} rx={rx} ry={ry} 
-              className="fill-slate-900/5 stroke-slate-400/80 stroke-[2px] dark:fill-black/40 dark:stroke-slate-500" 
-            />
-            {/* Top opening inner shadow highlight */}
-            <ellipse 
-              cx={w/2} cy={topCy + 1} rx={rx - 1} ry={ry - 1} 
-              className="fill-transparent stroke-white/50 stroke-[1px] dark:stroke-white/10" 
-            />
+          {/* Top Cap (z-20 to z-40) */}
+          <div className="absolute inset-x-0 top-1 z-30 h-14 rounded-[50%] border-2 border-slate-700 bg-gradient-to-b from-slate-600 via-slate-800 to-[#0a0a0a] shadow-[0_10px_20px_rgba(0,0,0,0.8)]" />
+          <div className="absolute inset-x-3 top-3 z-40 h-10 rounded-[50%] border border-black/80 bg-gradient-to-b from-slate-800 to-black shadow-inner" />
+          <div className="absolute inset-x-5 top-5 z-50 h-6 rounded-[50%] bg-[#050505] shadow-[inset_0_2px_8px_rgba(0,0,0,0.9)]" />
 
-            {/* Bottom Rim */}
-            <path 
-              d={`M ${w/2 - rx} ${bottomCy} A ${rx} ${ry} 0 0 0 ${w/2 + rx} ${bottomCy}`} 
-              className="fill-none stroke-slate-400/80 stroke-[3px] dark:stroke-slate-500" 
-            />
-
-            {/* Reflections / Highlights */}
-            <path d={`M ${w/2 - rx + 15} ${topCy + ry/2} L ${w/2 - rx + 15} ${bottomCy - ry/2}`} className="fill-none stroke-white/60 stroke-[4px] blur-[2px] dark:stroke-white/10" />
-            <path d={`M ${w/2 + rx - 10} ${topCy + ry/2} L ${w/2 + rx - 10} ${bottomCy - ry/2}`} className="fill-none stroke-black/5 stroke-[6px] blur-[3px] dark:stroke-black/30" />
-          </svg>
+          {/* Bottom Cap (z-30) */}
+          <div className="absolute inset-x-0 bottom-1 z-30 h-14 rounded-[50%] border-b-2 border-slate-700/50 bg-gradient-to-b from-[#111] via-slate-800 to-black shadow-[0_15px_30px_rgba(0,0,0,0.9)]" />
+          <div className="absolute inset-x-2 bottom-3 z-40 h-10 rounded-[50%] border border-black/50 bg-gradient-to-b from-slate-800/80 to-[#050505] shadow-inner" />
+          <div className="absolute inset-x-5 bottom-4 z-50 h-6 rounded-[50%] bg-black" />
 
           {/* Right side markers & percentage line */}
-          <div className="absolute bottom-[12.5%] right-[-3rem] top-[12.5%] z-50 w-full sm:right-[-4rem]">
-            <div
-              className="absolute right-0 flex items-center gap-2 transition-all duration-500"
-              style={{ bottom: `${cappedPercent}%`, transform: 'translateY(50%)' }}
-            >
-              <span className={cn('h-px w-8 sm:w-10', accent.rail)} />
-              <span className={cn('rounded-lg border px-2 py-1 font-mono text-xs font-bold shadow-sm', accent.marker)}>
-                {Math.round(percentFull)}%
-              </span>
-            </div>
+          <div
+            className="absolute right-[-4.5rem] z-50 flex translate-y-1/2 items-center gap-3 sm:right-[-5.5rem] transition-all duration-700 ease-out"
+            style={{ bottom: markerBottom }}
+          >
+            <span className={cn('h-[2px] w-12 sm:w-16 shadow-[0_0_8px_rgba(245,158,11,0.8)]', accent.rail)} />
+            <span className={cn('rounded border px-2 py-1 font-mono text-sm shadow-[0_0_15px_rgba(245,158,11,0.3)] backdrop-blur-sm', accent.marker)}>
+              {Math.round(percentFull)}%
+            </span>
+          </div>
+
+          {/* Axis ticks on the right */}
+          <div className="absolute bottom-8 right-1 top-8 hidden w-14 sm:block" aria-hidden="true">
+            <div className="absolute bottom-0 left-0 top-0 w-px bg-slate-700/60" />
+            {[100, 75, 50, 25, 0].map((tick) => (
+              <div
+                key={tick}
+                className="absolute left-0 flex items-center gap-2"
+                style={{ bottom: `${tick}%`, transform: 'translateY(50%)' }}
+              >
+                <span className="h-px w-4 bg-slate-600" />
+                <span className={cn('font-mono text-[11px]', tick === 100 ? 'text-red-500/90 font-bold' : 'text-slate-500')}>
+                  {tick}%
+                </span>
+              </div>
+            ))}
           </div>
         </div>
-
-        {/* Axis ticks on the right */}
-        <div className="absolute bottom-[12.5%] right-1 top-[12.5%] hidden w-12 sm:block" aria-hidden="true">
-          <div className="absolute bottom-0 left-0 top-0 w-px bg-slate-300 dark:bg-slate-700" />
-          {[100, 75, 50, 25, 0].map((tick) => (
-            <div
-              key={tick}
-              className="absolute left-0 flex items-center gap-2"
-              style={{ bottom: `${tick}%`, transform: 'translateY(50%)' }}
-            >
-              <span className="h-px w-3 bg-slate-400 dark:bg-slate-600" />
-              <span className={cn('font-mono text-[10px]', tick === 100 ? 'text-red-500/80 dark:text-red-400' : 'text-slate-500 dark:text-slate-400')}>
-                {tick}%
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Floating Status Badge */}
-      <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs text-slate-700 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200">
-        <span className={cn('h-2 w-2 rounded-full', accent.rail)} />
-        <span className="font-semibold">{CAPACITY_LEVEL_STYLES[level].statusLabel}</span>
       </div>
     </div>
   );
