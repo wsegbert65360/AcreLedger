@@ -1,18 +1,20 @@
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { useFarm } from '@/store/farmStore';
-import { Field, SprayRecord } from '@/types/farm';
-import { CloudRain, Loader2, ChevronLeft, ChevronRight, FileDown, AlertTriangle } from 'lucide-react';
-import { generateSprayPDF } from '@/lib/sprayExport';
-import { useSprayForm } from '@/hooks/useSprayForm';
-import { SprayWizardNav } from '@/components/spray/SprayWizardNav';
+import { CloudRain, FileDown } from 'lucide-react';
+
+import { SprayWizardConditionsStep } from '@/components/spray/SprayWizardConditionsStep';
 import { SprayWizardCoreStep } from '@/components/spray/SprayWizardCoreStep';
 import { SprayWizardMixStep } from '@/components/spray/SprayWizardMixStep';
-import { SprayWizardConditionsStep } from '@/components/spray/SprayWizardConditionsStep';
+import { SprayWizardNav } from '@/components/spray/SprayWizardNav';
 import { SprayWizardReviewStep } from '@/components/spray/SprayWizardReviewStep';
-
+import { Button } from '@/components/ui/button';
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { WizardDialogFooter } from '@/components/wizard/WizardDialogFooter';
+import { WizardStepLayout } from '@/components/wizard/WizardNav';
+import { useSprayForm } from '@/hooks/useSprayForm';
+import { generateSprayPDF } from '@/lib/sprayExport';
+import { useFarm } from '@/store/farmStore';
+import { type Field, type SprayRecord } from '@/types/farm';
 interface SprayModalProps {
   field: Field;
   open: boolean;
@@ -72,7 +74,7 @@ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
 
         <SprayWizardNav steps={WIZARD_STEPS} currentStep={step} onStepClick={goToStep} />
 
-        <div className="py-2">
+        <WizardStepLayout>
           {step === 'core' && <SprayWizardCoreStep
             sprayDate={form.sprayDate}
             startTime={form.startTime}
@@ -168,66 +170,39 @@ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
             isFullyCompliant={isFullyCompliant}
             missingComplianceFields={missingComplianceFields}
           />}
-        </div>
+        </WizardStepLayout>
 
-        <DialogFooter className="flex flex-col gap-2 pt-2 border-t border-border/20">
-          {initialData && step === 'review' && (
+        <WizardDialogFooter
+          canGoBack={canGoBack}
+          canContinue={step === 'review' || canGoNext}
+          isFinalStep={step === 'review'}
+          isSaving={isSaving}
+          onBack={goBack}
+          onPrimary={handleNext}
+          finalContent={
+            !isMinimumValid
+              ? 'Enter Product Name to Save'
+              : !isFullyCompliant
+                ? initialData ? 'Update (Incomplete)' : 'Save (Incomplete)'
+                : initialData ? 'Update Spray Record' : 'Save Spray Record'
+          }
+          showFinalWarningIcon={step === 'review' && isMinimumValid && !isFullyCompliant}
+          primaryClassName={
+            isFullyCompliant || step !== 'review'
+              ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
+              : 'bg-yellow-600 text-white hover:bg-yellow-500'
+          }
+          extraActions={initialData && step === 'review' ? (
             <Button
               variant="outline"
               onClick={() => generateSprayPDF([initialData], farmName)}
-              className="touch-target w-full border-spray/30 text-spray hover:bg-spray/10 font-bold py-6 text-base"
+              className="touch-target w-full border-spray/30 py-6 text-base font-bold text-spray hover:bg-spray/10"
             >
               <FileDown size={20} className="mr-2" />
               Export PDF
             </Button>
-          )}
-
-          <div className="flex gap-2 w-full">
-            {canGoBack && (
-              <Button
-                variant="outline"
-                onClick={goBack}
-                disabled={isSaving}
-                className="touch-target flex-1 border-border text-foreground hover:bg-muted font-bold py-6 text-base"
-              >
-                <ChevronLeft size={20} className="mr-1" />
-                Back
-              </Button>
-            )}
-            <Button
-              onClick={handleNext}
-              disabled={isSaving || (step !== 'review' && !canGoNext)}
-              className={`touch-target flex-1 font-bold py-6 text-base disabled:opacity-50 disabled:grayscale ${
-                isFullyCompliant || step !== 'review'
-                  ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
-                  : 'bg-yellow-600 text-white hover:bg-yellow-500'
-              }`}
-            >
-              {isSaving ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 size={24} className="animate-spin" />
-                  <span>Saving...</span>
-                </div>
-              ) : step === 'review' ? (
-                !isMinimumValid ? (
-                  <span>Enter Product Name to Save</span>
-                ) : !isFullyCompliant ? (
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle size={18} />
-                    <span>{initialData ? 'Update (Incomplete)' : 'Save (Incomplete)'}</span>
-                  </div>
-                ) : (
-                  <span>{initialData ? 'Update Spray Record' : 'Save Spray Record'}</span>
-                )
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span>Next</span>
-                  <ChevronRight size={18} />
-                </div>
-              )}
-            </Button>
-          </div>
-        </DialogFooter>
+          ) : undefined}
+        />
       </DialogContent>
     </Dialog>
   );
