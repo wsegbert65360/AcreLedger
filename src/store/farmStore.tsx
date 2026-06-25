@@ -11,6 +11,7 @@ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
+import { getSignedBushels } from '@/utils/numbers';
 import { saveToStorage } from './storageUtils';
 import { useAuth } from './useAuth';
 import { usePlantRecords } from './usePlantRecords';
@@ -503,11 +504,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const binTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     grainMovements.filter(m => !m.deleted_at).forEach(m => {
+      const delta = getSignedBushels(m);
       const sKey = `${m.binId}-${m.seasonYear}`;
-      totals[sKey] = (totals[sKey] || 0) + (m.type === 'in' ? m.bushels : -m.bushels);
+      totals[sKey] = (totals[sKey] || 0) + delta;
 
       const aKey = `${m.binId}-all`;
-      totals[aKey] = (totals[aKey] || 0) + (m.type === 'in' ? m.bushels : -m.bushels);
+      totals[aKey] = (totals[aKey] || 0) + delta;
     });
     return totals;
   }, [grainMovements]);

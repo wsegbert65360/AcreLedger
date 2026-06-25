@@ -179,7 +179,7 @@ export function BinManager() {
                     <AlertDialogHeader>
                         <AlertDialogTitle className="text-foreground">Delete Bin</AlertDialogTitle>
                         <AlertDialogDescription className="text-muted-foreground">
-                            This will permanently remove this bin. Grain movement records associated with this bin ID will remain but may not display correctly.
+                            This will remove this bin from active tracking. Grain movement records associated with this bin ID will remain in your records.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

@@ -39,3 +39,6 @@ export const formatDate = (ts: number) =>
         hour: 'numeric',
         minute: '2-digit'
     });
+
+export const formatShortDate = (ts: number) =>
+    new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });

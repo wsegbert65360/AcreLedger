@@ -1,15 +1,126 @@
-import { useMemo, useState } from 'react';
-import { useFarm } from '@/store/farmStore';
-import { Warehouse, Wheat, Settings, Banknote, Plus } from 'lucide-react';
-import { BinManager } from '@/components/BinManageModal';
-import SellModal from '@/components/SellModal';
+import { useMemo, useState, type ReactNode } from 'react';
+
+import { AlertTriangle, ArrowLeft, Banknote, Plus, Settings, Warehouse, Wheat } from 'lucide-react';
+
 import AddGrainModal from '@/components/AddGrainModal';
+import { BinManager } from '@/components/BinManageModal';
+import BinMonitorPanel, { BinMonitorPanelData, BinTrendPoint } from '@/components/grain/BinMonitorPanel';
+import SellModal from '@/components/SellModal';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
-import type { Bin } from '@/types/farm';
+import { cn } from '@/lib/utils';
+import { useFarm } from '@/store/farmStore';
+import type { Bin, GrainMovement } from '@/types/farm';
+import { formatShortDate } from '@/utils/dates';
+import { CAPACITY_LEVEL_STYLES, formatMeasurement, getCapacityLevel, getSignedBushels, roundTo } from '@/utils/numbers';
 
-function formatMovementDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+interface BinOverview extends Bin {
+  total: number;
+  pct: number;
+  movementCount: number;
+}
+
+interface BinDetailView extends BinMonitorPanelData {
+  recentMovements: GrainMovement[];
+}
+
+function buildBinTrend(movementsForBin: GrainMovement[]): BinTrendPoint[] {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  const dayEnds = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    return date.getTime();
+  });
+
+  const relevant = movementsForBin
+    .filter((movement) => movement.timestamp <= dayEnds[6])
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const points: BinTrendPoint[] = [];
+  let cumulative = 0;
+  let cursor = 0;
+
+  for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+    const dayEnd = dayEnds[dayIndex];
+    while (cursor < relevant.length && relevant[cursor].timestamp <= dayEnd) {
+      cumulative += getSignedBushels(relevant[cursor]);
+      cursor++;
+    }
+    points.push({
+      label: new Date(dayEnd).toLocaleDateString(undefined, { weekday: 'short' }),
+      bushels: roundTo(cumulative, 1),
+    });
+  }
+
+  return points;
+}
+
+function CapacityBar({ pct, className }: { pct: number; className?: string }) {
+  const level = getCapacityLevel(pct);
+  return (
+    <div className={cn('overflow-hidden rounded-full bg-muted', className)}>
+      <div
+        className={cn('h-full rounded-full transition-all', CAPACITY_LEVEL_STYLES[level].bar)}
+        style={{ width: `${Math.min(pct, 100)}%` }}
+      />
+    </div>
+  );
+}
+
+interface BinQuickActionsProps {
+  bin: Pick<Bin, 'name' | 'total'>;
+  variant: 'compact' | 'full';
+  onAdd: () => void;
+  onSell: () => void;
+}
+
+function BinQuickActions({ bin, variant, onAdd, onSell }: BinQuickActionsProps) {
+  if (variant === 'compact') {
+    return (
+      <div className="flex shrink-0 gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-harvest/30 bg-harvest/5 text-harvest hover:bg-harvest/10"
+          onClick={onAdd}
+          aria-label={`Add grain to ${bin.name}`}
+        >
+          <Plus size={16} className="sm:mr-2" />
+          <span className="hidden sm:inline">Add</span>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={bin.total <= 0}
+          className="border-harvest/30 bg-harvest/5 text-harvest hover:bg-harvest/10"
+          onClick={onSell}
+          aria-label={`Sell from ${bin.name}`}
+        >
+          <Banknote size={16} className="sm:mr-2" />
+          <span className="hidden sm:inline">Sell</span>
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-2">
+      <Button className="w-full bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={onAdd}>
+        <Plus size={16} className="mr-2" />
+        Add grain
+      </Button>
+      <Button
+        variant="outline"
+        className="w-full border-harvest/30 text-harvest hover:bg-harvest/10"
+        disabled={bin.total <= 0}
+        onClick={onSell}
+      >
+        <Banknote size={16} className="mr-2" />
+        Sell from bin
+      </Button>
+    </div>
+  );
 }
 
 export default function Logistics() {
@@ -17,164 +128,273 @@ export default function Logistics() {
   const [managing, setManaging] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
   const [addingBin, setAddingBin] = useState<Bin | null>(null);
+  const [selectedBinId, setSelectedBinId] = useState<string | null>(null);
 
-  const binOverview = useMemo(() => {
-    return bins.map(bin => {
-      const total = getBinTotal(bin.id, viewingSeason);
-      const pct = Math.min((total / bin.capacity) * 100, 100);
-      const movements = grainMovements
-        .filter(m => m.binId === bin.id && m.seasonYear === viewingSeason)
-        .slice(-5) // Show more movements
-        .reverse();
+  const seasonMovements = useMemo(
+    () => grainMovements.filter((movement) => !movement.deleted_at && movement.seasonYear === viewingSeason),
+    [grainMovements, viewingSeason],
+  );
 
-      return { ...bin, total, pct, recentMovements: movements };
+  const { binOverview, totals } = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const movement of seasonMovements) {
+      counts.set(movement.binId, (counts.get(movement.binId) ?? 0) + 1);
+    }
+    let stored = 0;
+    let capacity = 0;
+    const overview = bins.map((bin) => {
+      const total = roundTo(getBinTotal(bin.id, viewingSeason), 1);
+      const pct = bin.capacity > 0 ? Math.min(Math.max((total / bin.capacity) * 100, 0), 100) : 0;
+      stored += total;
+      capacity += bin.capacity;
+      return { ...bin, total, pct, movementCount: counts.get(bin.id) ?? 0 };
     });
-  }, [bins, getBinTotal, grainMovements, viewingSeason]);
+    return {
+      binOverview: overview,
+      totals: { stored: roundTo(stored, 1), capacity: roundTo(capacity, 1) },
+    };
+  }, [bins, getBinTotal, seasonMovements, viewingSeason]);
+
+  const selectedBinDetail = useMemo<BinDetailView | null>(() => {
+    if (!selectedBinId) return null;
+    const selectedBin = binOverview.find((bin) => bin.id === selectedBinId);
+    if (!selectedBin) return null;
+
+    const ascending = seasonMovements
+      .filter((movement) => movement.binId === selectedBin.id)
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return {
+      ...selectedBin,
+      recentMovements: [...ascending].reverse().slice(0, 5),
+      lastFill: ascending.find((movement) => movement.type === 'in'),
+      trend: buildBinTrend(ascending),
+    };
+  }, [binOverview, selectedBinId, seasonMovements]);
+
+  const totalPercent = totals.capacity > 0 ? Math.min((totals.stored / totals.capacity) * 100, 100) : 0;
+
+  let mainContent: ReactNode;
+  if (managing) {
+    mainContent = (
+      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-foreground">Manage storage bins</h2>
+          <p className="text-sm text-muted-foreground">Add, rename, resize, or remove bins from active tracking.</p>
+        </div>
+        <BinManager />
+      </section>
+    );
+  } else if (binOverview.length === 0) {
+    mainContent = (
+      <div className="rounded-2xl border-2 border-dashed border-border bg-card p-8 text-center shadow-sm">
+        <Warehouse size={48} className="mx-auto mb-4 text-muted-foreground/40" />
+        <h3 className="mb-1 text-lg font-bold text-foreground">No storage bins</h3>
+        <p className="mx-auto max-w-[16rem] text-sm leading-relaxed text-muted-foreground">
+          Add your first bin to start monitoring capacity, inventory, and grain movement.
+        </p>
+        <Button className="mt-5 bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={() => setManaging(true)}>
+          <Plus size={16} className="mr-2" />
+          Add bin
+        </Button>
+      </div>
+    );
+  } else if (selectedBinDetail) {
+    mainContent = (
+      <>
+        <Button variant="ghost" className="h-11 px-2 text-muted-foreground hover:text-foreground" onClick={() => setSelectedBinId(null)}>
+          <ArrowLeft size={18} className="mr-2" />
+          All bins
+        </Button>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+          <div className="space-y-4">
+            <BinMonitorPanel bin={selectedBinDetail} />
+
+            <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">Recent movement</h2>
+                  <p className="text-sm text-muted-foreground">Latest activity for {selectedBinDetail.name}</p>
+                </div>
+                <BinQuickActions
+                  variant="compact"
+                  bin={selectedBinDetail}
+                  onAdd={() => setAddingBin(selectedBinDetail)}
+                  onSell={() => setSellingBin(selectedBinDetail)}
+                />
+              </div>
+
+              {selectedBinDetail.recentMovements.length === 0 ? (
+                <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  No grain movement logged for this bin this season.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedBinDetail.recentMovements.map((movement) => {
+                    const signedBushels = getSignedBushels(movement);
+                    const amountClass = signedBushels < 0 ? 'text-destructive' : 'text-primary';
+                    const locationLabel = movement.type === 'in'
+                      ? movement.sourceFieldName || 'Field transfer'
+                      : movement.destination || 'Destination not set';
+
+                    return (
+                      <div key={movement.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/60 p-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {movement.type === 'in' ? 'Inbound' : 'Outbound'} - {locationLabel}
+                          </p>
+                          <p className="font-mono text-xs text-muted-foreground">{formatShortDate(movement.timestamp)}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {movement.bushels < 0 && <AlertTriangle size={14} className="text-amber-600" />}
+                          <span className={cn('font-mono text-sm font-bold', amountClass)}>
+                            {signedBushels > 0 ? '+' : ''}{formatMeasurement(signedBushels, 'bu', 1)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+
+          <aside className="space-y-3">
+            <section className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+              <h2 className="mb-3 px-1 text-sm font-bold text-foreground">Selected bin</h2>
+              <div className="rounded-lg border border-harvest/50 bg-harvest/10 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-foreground">{selectedBinDetail.name}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{formatMeasurement(selectedBinDetail.total, 'bu', 1)}</p>
+                  </div>
+                  <span className={cn('font-mono text-sm font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(selectedBinDetail.pct)].tone)}>
+                    {Math.round(selectedBinDetail.pct)}%
+                  </span>
+                </div>
+                <CapacityBar pct={selectedBinDetail.pct} className="mt-3 h-2" />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+              <BinQuickActions
+                variant="full"
+                bin={selectedBinDetail}
+                onAdd={() => setAddingBin(selectedBinDetail)}
+                onSell={() => setSellingBin(selectedBinDetail)}
+              />
+            </section>
+          </aside>
+        </div>
+      </>
+    );
+  } else {
+    mainContent = (
+      <>
+        <section className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-sm font-semibold text-muted-foreground">Stored</p>
+            <p className="mt-1 font-mono text-2xl font-bold text-foreground">{formatMeasurement(totals.stored, 'bu', 1)}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-sm font-semibold text-muted-foreground">Capacity</p>
+            <p className="mt-1 font-mono text-2xl font-bold text-foreground">{formatMeasurement(totals.capacity, 'bu', 1)}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-sm font-semibold text-muted-foreground">Overall fill</p>
+            <p className={cn('mt-1 font-mono text-2xl font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(totalPercent)].tone)}>
+              {Math.round(totalPercent)}%
+            </p>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Bin status</h2>
+              <p className="text-sm text-muted-foreground">Tap a bin to open monitoring and movement details.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {binOverview.map((bin) => {
+              const level = getCapacityLevel(bin.pct);
+              return (
+                <button
+                  key={bin.id}
+                  type="button"
+                  onClick={() => setSelectedBinId(bin.id)}
+                  className="group rounded-2xl border border-border bg-background/60 p-4 text-left transition-colors hover:border-harvest/50 hover:bg-harvest/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Warehouse size={17} className="text-harvest" />
+                        <h3 className="truncate text-base font-bold text-foreground">{bin.name}</h3>
+                      </div>
+                      <p className="mt-1 font-mono text-sm text-muted-foreground">
+                        {formatMeasurement(bin.total, 'bu', 1)} of {formatMeasurement(bin.capacity, 'bu', 1)}
+                      </p>
+                    </div>
+                    <span className={cn('font-mono text-2xl font-bold leading-none', CAPACITY_LEVEL_STYLES[level].tone)}>
+                      {Math.round(bin.pct)}%
+                    </span>
+                  </div>
+
+                  <CapacityBar pct={bin.pct} className="mt-4 h-4 border border-border/50" />
+
+                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>{bin.movementCount} movement{bin.movementCount !== 1 ? 's' : ''} this season</span>
+                    <span className="font-semibold text-harvest group-hover:text-harvest">View details</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background pb-24 lg:pb-8">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-5xl lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-harvest/10 flex items-center justify-center">
+    <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-4 lg:max-w-6xl lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-harvest/10">
               <Wheat size={20} className="text-harvest" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">Grain Logistics</h1>
-              <p className="text-xs text-muted-foreground">{bins.length} bins · {viewingSeason} season</p>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-bold tracking-tight text-foreground">Grain logistics</h1>
+              <p className="text-xs text-muted-foreground">
+                {bins.length} bin{bins.length !== 1 ? 's' : ''} - {viewingSeason} season
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <SyncStatusIndicator />
-            <button
-              onClick={() => setManaging(!managing)}
-              aria-label={managing ? "Exit management" : "Manage bins"}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-harvest/10 border-harvest/30 text-harvest' : 'border-border text-muted-foreground hover:text-foreground'
-                 }`}
+            <Button
+              variant={managing ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setManaging((value) => !value);
+                setSelectedBinId(null);
+              }}
+              aria-label={managing ? 'Done managing bins' : 'Manage bins'}
+              className={cn('touch-target min-h-11 min-w-11 px-3', managing && 'bg-harvest text-harvest-foreground hover:bg-harvest/90')}
             >
-              <Settings size={16} />
-              <span>{managing ? 'Done' : 'Manage Bins'}</span>
-            </button>
+              <Settings size={16} className="sm:mr-2" />
+              <span className="hidden sm:inline">{managing ? 'Done' : 'Manage'}</span>
+            </Button>
           </div>
         </div>
-
       </header>
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
-        {managing ? (
-          <BinManager />
-        ) : (
-          binOverview.length === 0 ? (
-            <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
-              <Warehouse size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-              <h3 className="text-lg font-bold text-foreground mb-1">No Storage Bins</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px] mx-auto">
-                Add bins using the <Settings size={12} className="inline mx-0.5" /> icon to start tracking inventory.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {binOverview.map(bin => (
-              <div key={bin.id} className="bg-card border border-border rounded-lg p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Warehouse size={18} className="text-harvest" />
-                    <span className="font-bold text-foreground">{bin.name}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-sm font-bold text-foreground">
-                      {bin.total.toLocaleString()} bu
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      of {bin.capacity.toLocaleString()} bu
-                    </div>
-                  </div>
-                </div>
 
-                {/* Capacity bar */}
-                <div className="h-4 bg-muted rounded-full overflow-hidden border border-border/50">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${bin.pct > 85 ? 'bg-destructive shadow-[0_0_10px_rgba(239,68,68,0.3)]' : bin.pct > 60 ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-harvest shadow-[0_0_10px_rgba(212,175,55,0.3)]'}`}
-                    style={{ width: `${bin.pct}%` }}
-                  />
-                </div>
+      <main className="mx-auto max-w-lg space-y-4 px-4 py-4 lg:max-w-6xl lg:px-8">{mainContent}</main>
 
-                <div className="space-y-1 rounded-lg border border-border/50 bg-muted/20 p-2">
-                  <p className="text-xs font-semibold text-muted-foreground">Recent Activity</p>
-                  {bin.recentMovements.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No grain movement logged this season.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {bin.recentMovements.slice(0, 3).map((movement) => {
-                        const signedBushels = movement.type === 'out' ? -Math.abs(movement.bushels) : movement.bushels;
-                        const amountClass = signedBushels < 0 ? 'text-destructive' : 'text-primary';
-                        const locationLabel = movement.type === 'in'
-                          ? movement.sourceFieldName || 'Field transfer'
-                          : movement.destination || 'Destination not set';
-
-                        return (
-                          <div key={movement.id} className="flex items-center justify-between gap-3 text-xs">
-                            <div className="min-w-0">
-                              <p className="font-semibold text-foreground truncate">
-                                {movement.type === 'in' ? 'Inbound' : 'Outbound'} · {locationLabel}
-                              </p>
-                              <p className="font-mono text-muted-foreground">{formatMovementDate(movement.timestamp)}</p>
-                            </div>
-                            <span className={`font-mono font-bold ${amountClass}`}>
-                              {signedBushels > 0 ? '+' : ''}{signedBushels.toLocaleString()} bu
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 pt-1 border-t border-border/50">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
-                    onClick={() => setAddingBin({ id: bin.id, name: bin.name, capacity: bin.capacity, deleted_at: null })}
-                  >
-                    <Plus size={16} className="mr-2" />
-                    Add Grain
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={bin.total <= 0}
-                    className="flex-1 bg-harvest/5 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold"
-                    onClick={() => setSellingBin({ id: bin.id, name: bin.name, capacity: bin.capacity, deleted_at: null })}
-                  >
-                    <Banknote size={16} className="mr-2" />
-                    Sell from Bin
-                  </Button>
-                </div>
-              </div>
-            ))}
-            </div>
-          )
-        )}
-      </main>
-
-      {sellingBin && (
-        <SellModal
-          bin={sellingBin}
-          open={!!sellingBin}
-          onClose={() => setSellingBin(null)}
-        />
-      )}
-
-      {addingBin && (
-        <AddGrainModal
-          bin={addingBin}
-          open={!!addingBin}
-          onClose={() => setAddingBin(null)}
-        />
-      )}
-
-
+      {sellingBin && <SellModal bin={sellingBin} open={!!sellingBin} onClose={() => setSellingBin(null)} />}
+      {addingBin && <AddGrainModal bin={addingBin} open={!!addingBin} onClose={() => setAddingBin(null)} />}
     </div>
   );
 }
-
