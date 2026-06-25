@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => ({
       filename: 'sw.js',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png'],
+      injectManifest: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+      },
       manifest: {
         name: 'AcreLedger',
         short_name: 'AcreLedger',
