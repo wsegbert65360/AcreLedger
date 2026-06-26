@@ -43,6 +43,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/services/fsaTractService.ts` and `@/services/cluAssignmentService.ts` — Supabase persistence for FSA tract imports and CLU assignments.
 - `@/components/TractAssignmentFlow.tsx`, `@/components/CluAssignmentMap.tsx`, `@/components/CluFieldSelector.tsx`, `@/components/FsaTractImporter.tsx` — FSA tract management UI.
 - `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
+- `@/lib/utils.ts` — `cn` Tailwind class merge plus `getLatestForField` generic helper for finding the most recent non-deleted record for a field (used by activity modal suggested-record prefill).
 - `@/lib/activityIcons.ts` — centralized activity type icon and color maps (`ACTIVITY_ICONS`, `ACTIVITY_TEXT_COLORS`, `ACTIVITY_BG_COLORS`).
 - `@/hooks/useSprayForm.ts` — shared spray form state for the SprayWizard step components.
 - `@/hooks/useUndoDelete.ts` — undo-safe soft-delete pattern for FieldManager and similar bulk-delete UI.
@@ -150,7 +151,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Bundled FSA tract data may be used for display and assignment flows, but imported tract counts should be labeled and calculated as imported-only unless the UI explicitly says it includes bundled tracts.
 - Persisting assignments back to fields should round computed field acreage for display/state, but not mutate the source CLU feature acres.
 - Use `@/lib/geoHelpers.ts` for converting Polygon and MultiPolygon coordinates for Leaflet map render layers and centroid calculations.
-- FSA CLU assignments automatically synchronize to their associated field's `cluNumbers` and `acreage` properties immediately on each assignment toggle to maintain data integrity and prevent sync drift.
+- FSA CLU assignments automatically synchronize to their associated field's `cluNumbers` and `acreage` properties immediately on each assignment toggle via `syncFieldAcreageAndClus` in `TractAssignmentFlow.tsx`. The sync reads from `displayAssignments` (persisted + legacy) through `getFieldAssignmentsWithDelta`, and includes a no-op guard that skips the Supabase write when the field's `cluNumbers` (compared order-independently via `hasSameCluNumbers`) and rounded acreage already match. This prevents redundant writes on idempotent toggles (e.g., same-field legacy promotion) while still allowing legacy assignments to count toward field acreage.
 - FSA-578 and fall production worksheets are farmer worksheets, not official USDA forms. Preserve the disclaimer wording and keep CSV/PDF exports aligned when changing columns, summaries, footers, or readiness checks.
 - FSA report readiness checks should surface missing farm/tract/CLU/crop/acreage issues without blocking export unless the user explicitly asks for blocking validation.
 - FSA acreage reports must preserve multiple planting records for the same field/CLU as separate rows instead of collapsing to latest-only.
@@ -266,6 +267,12 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 ```
 
+### Leaflet Maps
+
+- Leaflet's internal panes default to z-index 200–1000, which sit above shadcn's `Dialog`/`Sheet`/`Popover` overlays (`z-50`). A global CSS override in `src/index.css` caps all Leaflet panes/controls at z-index 1–6 (preserving internal ordering) so modals render above maps. Do not raise these values without also bumping the shadcn overlay z-index, or maps will bleed through dialogs again.
+- Internal map overlays (loading spinners, source badges, footer selectors) should use `z-10` to layer above the panes (1–6) but stay below the dialog overlay (50).
+- Polygon and MultiPolygon coordinate extraction for Leaflet render layers and centroid calculations must go through `@/lib/geoHelpers.ts` (`getLatLngsFromGeometry`, `hasValidGeometry`, `getCentroid`).
+
 ## Error Handling
 
 - Every page route is wrapped in `ErrorBoundary` (`src/components/ErrorBoundary.tsx`), a class component that catches render-time crashes and shows a retry UI.
@@ -325,6 +332,19 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 
 Keep each step component under ~150 lines. All form state lives in `useSprayForm`; step components are pure presenters. `SprayModal` owns only the step routing, navigation callbacks, and save dispatch.
 
+### Activity Record Modals
+
+All 7 activity record modals (`PlantModal`, `SprayModal`, `HarvestModal`, `HayModal`, `FertilizerModal`, `TillageModal`, `GrainMovementModal`) share a common prop and behavior pattern:
+
+- **`mode?: 'edit' | 'duplicate'`** — defaults to `'edit'`. Pass `'duplicate'` to open the modal pre-filled from an existing record but creating a new record on save instead of updating the source.
+- **`isDuplicate = mode === 'duplicate' && !!initialData`** — every modal computes this locally. Duplicate mode without `initialData` falls through to "new" behavior.
+- **Duplicate semantics**: stamp today's date (not the source record's date), stamp `viewingSeason` as `seasonYear` (not the source's season), and call `addXxxRecord` (not `updateXxxRecord`) on save.
+- **`onDuplicate?` callback** is plumbed through `RecordListItem` → activity tabs (`PlantTab`, `SprayTab`, `HarvestTab`, `HayTab`, `FertilizerTab`, `TillageTab`, `GrainTab`) and `HistoryFeed` → `Activity.tsx` / `FieldDetailScreen.tsx`. Tabs that don't pass `onDuplicate` simply hide the duplicate button.
+
+**Suggested-record prefill**: when opening a modal without `initialData` (new record), each modal pre-fills non-date fields from the most recent prior record of the same type for that field — e.g., spray pre-fills applicator name, license number, target pest, and tank-mix products from the last spray on the field; plant pre-fills crop and seed variety; hay pre-fills bale type; etc. Use `getLatestForField` from `@/lib/utils` to compute the source record. Duplicate mode bypasses the prefill (it uses `initialData`).
+
+**`editingRecordType` discriminator**: `Activity.tsx` and `FieldDetailScreen.tsx` track the clicked record's type in a separate `editingRecordType` state and gate modal rendering on it (`editingRecordType === 'plant' && ...`), NOT on the visible tab. This lets users click edit/duplicate on any record from the All/History tab and still get the correct modal — gating on `tab` would fail when the user is on the All tab. Modal `onClose` handlers must reset all three states together: `setEditingRecord(null); setEditingRecordType(null); setEditingMode('edit')`.
+
 ### Undo-Delete Pattern
 
 Field deletion uses an undo-safe pattern via `src/hooks/useUndoDelete.ts`. Instead of a blocking AlertDialog confirmation, the record is hidden immediately with a toast undo affordance. The mutation commits only after the undo window expires:
@@ -361,6 +381,7 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 
 - Component testing involving complex map lifecycles (like `MapContainer` or Leaflet) should mock the nested map components (`CluAssignmentMap`, `CluFieldSelector`, etc.) and invoke their callbacks explicitly.
 - Use explicit `await waitFor(...)` assertions when interacting with mocked component state that relies on React's asynchronous render cycle to avoid stale prop values during test execution.
+- When mocking `useFarm` in modal tests, include every collection the modal reads (`plantRecords`, `sprayRecords`, `harvestRecords`, `hayHarvestRecords`, `fertilizerApplications`, `tillageRecords`, `fields`, `cluAssignments`, etc.). Activity modals compute suggested-record prefills via `.filter()` on these arrays, so an `undefined` collection crashes the `useMemo` on mount — see `SprayModal.test.tsx` for the canonical mock shape.
 
 ### Import Order
 
