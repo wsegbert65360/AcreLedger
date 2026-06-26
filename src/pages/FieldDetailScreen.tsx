@@ -1,13 +1,21 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useFarm } from '@/store/farmStore';
 import {
   Sprout, Leaf, Tractor, ArrowLeft,
   Cloud, MapPin, Droplets, RefreshCw,
   AlertCircle, History as HistoryIcon, Wheat, Package,
-  FileText, ExternalLink, Info, CheckCircle2
+  FileText, ExternalLink, Info, CheckCircle2, Map as MapIcon
 } from 'lucide-react';
+
+import { useFarm } from '@/store/farmStore';
 import { RainService, type RainfallResult } from '@/services/RainService';
+import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
+import { generateSprayPDF } from '@/lib/sprayExport';
+import { roundTo } from '@/utils/numbers';
+
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import TractAssignmentFlow from '@/components/TractAssignmentFlow';
 
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
@@ -19,9 +27,6 @@ import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
 import FieldBoundaryMap from '@/components/FieldBoundaryMap';
-import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
-import { generateSprayPDF } from '@/lib/sprayExport';
-import { roundTo } from '@/utils/numbers';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
 
@@ -60,6 +65,19 @@ export default function FieldDetailScreen() {
   const [rainError, setRainError] = useState<string | null>(null);
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
+  const [isCluDialogOpen, setIsCluDialogOpen] = useState(false);
+
+  const fieldClus = useMemo(() => {
+    return cluAssignments.filter(a => a.fieldId === id && !a.deletedAt);
+  }, [cluAssignments, id]);
+
+  const fieldCroplandAcres = useMemo(() => {
+    return fieldClus.filter(a => a.landUse === 'cropland').reduce((sum, a) => sum + a.acres, 0);
+  }, [fieldClus]);
+
+  const fieldNonCroplandAcres = useMemo(() => {
+    return fieldClus.filter(a => a.landUse === 'non_cropland').reduce((sum, a) => sum + a.acres, 0);
+  }, [fieldClus]);
   const [editingRecord, setEditingRecord] = useState<any>(null);
   const fetchingRainRef = useRef(false);
   const inFlightRainFetchKeyRef = useRef<string | null>(null);
@@ -235,6 +253,74 @@ export default function FieldDetailScreen() {
             <FieldBoundaryMap fieldId={field.id} />
           </section>
         )}
+
+        {/* CLU Assignments Section */}
+        <section className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <MapIcon size={18} className="text-primary" />
+              FSA CLU Assignments
+            </h2>
+            <Button
+              onClick={() => setIsCluDialogOpen(true)}
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs font-bold"
+            >
+              Manage CLUs
+            </Button>
+          </div>
+
+          {fieldClus.length > 0 ? (
+            <div className="space-y-3">
+              <div className="divide-y divide-border rounded-xl border border-border bg-muted/30 overflow-hidden">
+                {fieldClus.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between p-3 text-sm">
+                    <div className="space-y-0.5">
+                      <div className="font-mono font-bold text-foreground">
+                        CLU {a.cluNumber}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground font-mono">
+                        Tract Key: {a.tractKey}
+                      </div>
+                    </div>
+                    <div className="text-right space-y-0.5">
+                      <div className="font-mono font-bold text-foreground">
+                        {roundTo(a.acres, 2)} ac
+                      </div>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium font-sans uppercase tracking-tight ${
+                        a.landUse === 'cropland' 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                          : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                      }`}>
+                        {a.landUse === 'cropland' ? 'Cropland' : 'Non-crop'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs font-medium text-muted-foreground bg-muted/20 p-2.5 rounded-xl border border-border/50">
+                <div>Cropland: <span className="font-mono font-bold text-foreground">{roundTo(fieldCroplandAcres, 1)} ac</span></div>
+                <div>Non-cropland: <span className="font-mono font-bold text-foreground">{roundTo(fieldNonCroplandAcres, 1)} ac</span></div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6 px-4 border border-dashed border-border rounded-xl bg-muted/10 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                No FSA Common Land Unit (CLU) boundaries assigned to this field yet.
+              </p>
+              <Button
+                onClick={() => setIsCluDialogOpen(true)}
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs text-primary font-bold"
+              >
+                Assign CLU Boundaries
+              </Button>
+            </div>
+          )}
+        </section>
 
         {/* 2. Today at a Glance - Grid of 4 Cards */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
@@ -583,6 +669,21 @@ export default function FieldDetailScreen() {
       {modal === 'tillage' && (
         <TillageModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
       )}
+
+      {/* Dialog for CLU management */}
+      <Dialog open={isCluDialogOpen} onOpenChange={setIsCluDialogOpen}>
+        <DialogContent className="max-w-2xl h-[80vh] p-0 flex flex-col gap-0">
+          <DialogHeader className="p-4 pb-0 shrink-0">
+            <DialogTitle>FSA Tract Management</DialogTitle>
+            <DialogDescription>
+              Import FSA tract JSON files and assign CLU polygons to your fields.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            <TractAssignmentFlow initialFieldId={field.id} onDone={() => setIsCluDialogOpen(false)} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -87,8 +87,8 @@ describe('TractAssignmentFlow Legacy Toggling', () => {
       updateField: mockUpdateField,
       importTract: vi.fn(),
       deleteTract: vi.fn(),
-      assignClu: vi.fn(),
-      unassignClu: vi.fn(),
+      assignClu: vi.fn().mockResolvedValue(true),
+      unassignClu: vi.fn().mockResolvedValue(true),
     });
 
     render(<TractAssignmentFlow />);

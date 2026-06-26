@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Check } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ export default function CluFieldSelector({
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const activeAssignments = assignments.filter(a => a.fieldId === selectedFieldId);
+  const activeAssignments = assignments.filter(a => a.fieldId === selectedFieldId && !a.deletedAt);
   const totalAcres = activeAssignments.reduce((sum, a) => sum + a.acres, 0);
   const croplandAcres = activeAssignments
     .filter(a => a.landUse === 'cropland')
@@ -37,6 +37,15 @@ export default function CluFieldSelector({
     .filter(a => a.landUse === 'non_cropland')
     .reduce((sum, a) => sum + a.acres, 0);
   const selectedField = fields.find(f => f.id === selectedFieldId);
+
+  const assignmentCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of assignments) {
+      if (a.deletedAt) continue;
+      counts.set(a.fieldId, (counts.get(a.fieldId) || 0) + 1);
+    }
+    return counts;
+  }, [assignments]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -112,9 +121,15 @@ export default function CluFieldSelector({
             className="flex-1 h-8 text-sm rounded-md border border-input bg-background px-2"
           >
             <option value="">Select a field to assign CLUs...</option>
-            {fields.map(f => (
-              <option key={f.id} value={f.id}>{f.name} ({f.acreage} ac)</option>
-            ))}
+            {fields.map(f => {
+              const cluCount = assignmentCounts.get(f.id) || 0;
+              const cluLabel = cluCount > 0 ? ` · ${cluCount} CLU${cluCount !== 1 ? 's' : ''}` : ' · No CLUs';
+              return (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.acreage} ac{cluLabel})
+                </option>
+              );
+            })}
           </select>
           <Button
             size="sm"

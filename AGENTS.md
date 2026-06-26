@@ -149,6 +149,8 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - When a field is soft-deleted, its active field CLU assignments must also be soft-deleted. These deletion mutations must be enqueued via `syncQueue.enqueueMutation` to guarantee offline synchronization.
 - Bundled FSA tract data may be used for display and assignment flows, but imported tract counts should be labeled and calculated as imported-only unless the UI explicitly says it includes bundled tracts.
 - Persisting assignments back to fields should round computed field acreage for display/state, but not mutate the source CLU feature acres.
+- Use `@/lib/geoHelpers.ts` for converting Polygon and MultiPolygon coordinates for Leaflet map render layers and centroid calculations.
+- FSA CLU assignments automatically synchronize to their associated field's `cluNumbers` and `acreage` properties immediately on each assignment toggle to maintain data integrity and prevent sync drift.
 - FSA-578 and fall production worksheets are farmer worksheets, not official USDA forms. Preserve the disclaimer wording and keep CSV/PDF exports aligned when changing columns, summaries, footers, or readiness checks.
 - FSA report readiness checks should surface missing farm/tract/CLU/crop/acreage issues without blocking export unless the user explicitly asks for blocking validation.
 - FSA acreage reports must preserve multiple planting records for the same field/CLU as separate rows instead of collapsing to latest-only.

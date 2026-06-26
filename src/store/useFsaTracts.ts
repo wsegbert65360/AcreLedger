@@ -287,14 +287,15 @@ export function useFsaTracts({
     const assignment = cluAssignments.find(
       a => a.fieldId === fieldId && a.tractKey === tractKey && a.cluNumber === cluNumber,
     );
-    setCluAssignments(prev => prev.filter(
-      a => !(a.fieldId === fieldId && a.tractKey === tractKey && a.cluNumber === cluNumber),
-    ));
 
     if (!assignment) {
       toast.error('CLU assignment not found');
       return false;
     }
+
+    setCluAssignments(prev => prev.filter(
+      a => !(a.fieldId === fieldId && a.tractKey === tractKey && a.cluNumber === cluNumber),
+    ));
 
     if (!isOnline) {
       try {

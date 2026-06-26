@@ -9,6 +9,7 @@ import { useFarm } from '@/store/farmStore';
 import { loadTractData, parseTractKeys, type TractFeature, type TractFeatureCollection } from '@/lib/tractLookup';
 import type { CluLandUse, FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
 import type { Field } from '@/types/farm';
+import { getLatLngsFromGeometry, hasValidGeometry } from '@/lib/geoHelpers';
 
 interface FieldBoundaryMapProps {
   fieldId: string;
@@ -100,10 +101,9 @@ function TractPolygons({ features, field }: { features: DisplayFeature[]; field:
 
     let polyCount = 0;
     for (const feat of features) {
-      const ring = feat.geometry.coordinates[0];
-      if (!ring || ring.length < 3) continue;
+      if (!hasValidGeometry(feat.geometry)) continue;
 
-      const latlngs: L.LatLngExpression[] = ring.map(c => [c[1], c[0]]);
+      const latlngs = getLatLngsFromGeometry(feat.geometry);
       const style = feat.isAssigned
         ? feat.landUse === 'non_cropland' ? CLU_STYLES.assignedNonCropland : CLU_STYLES.assignedCropland
         : feat.landUse ? CLU_STYLES.legacy : CLU_STYLES.context;

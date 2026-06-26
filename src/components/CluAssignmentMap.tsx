@@ -8,6 +8,7 @@ import '@/lib/leafletSetup';
 
 import type { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import type { TractFeature } from '@/lib/tractLookup';
+import { getLatLngsFromGeometry, hasValidGeometry, getCentroid } from '@/lib/geoHelpers';
 
 function MapResizeHandler() {
   const map = useMap();
@@ -92,14 +93,7 @@ export default function CluAssignmentMap({
   );
 
   const center = useMemo<[number, number]>(() => {
-    if (allFeatures.length === 0) return [38.47, -93.54];
-    let lat = 0, lng = 0, n = 0;
-    for (const f of allFeatures) {
-      const ring = f.geometry.coordinates[0];
-      if (!ring) continue;
-      for (const c of ring) { lng += c[0]; lat += c[1]; n++; }
-    }
-    return n > 0 ? [lat / n, lng / n] : [38.47, -93.54];
+    return getCentroid(allFeatures);
   }, [allFeatures]);
 
   if (allFeatures.length === 0) {
@@ -171,8 +165,7 @@ function CluPolygons({
     for (const feat of features) {
       if (!feat.properties.cluNumber) continue;
 
-      const ring = feat.geometry.coordinates[0];
-      if (!ring || ring.length < 3) continue;
+      if (!hasValidGeometry(feat.geometry)) continue;
 
       const key = `${feat.tractKey}:${feat.properties.cluNumber}`;
       const status = assignmentMap.get(key);
@@ -184,7 +177,7 @@ function CluPolygons({
         : status
           ? status.landUse === 'non_cropland' ? COLORS.assignedNonCropland : COLORS.assignedCropland
           : COLORS.unassigned;
-      const latlngs: L.LatLngExpression[] = ring.map(c => [c[1], c[0]]);
+      const latlngs = getLatLngsFromGeometry(feat.geometry);
       if (isUnassigned) {
         L.polygon(latlngs, {
           ...COLORS.unassignedHalo,

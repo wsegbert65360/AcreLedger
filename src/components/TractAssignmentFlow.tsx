@@ -19,19 +19,27 @@ import FsaTractImporter from '@/components/FsaTractImporter';
 import CluAssignmentMap from '@/components/CluAssignmentMap';
 import CluFieldSelector from '@/components/CluFieldSelector';
 import type { CluLandUse, FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
+import { getCentroid } from '@/lib/geoHelpers';
 
 interface TractAssignmentFlowProps {
   onDone?: () => void;
+  initialFieldId?: string | null;
 }
 
-export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps) {
+export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAssignmentFlowProps) {
   const {
     fields, fsaTracts, cluAssignments,
     addField, updateField, importTract, deleteTract,
     assignClu, updateCluLandUse, unassignClu,
   } = useFarm();
 
-  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(initialFieldId ?? null);
+
+  useEffect(() => {
+    if (initialFieldId) {
+      setSelectedFieldId(initialFieldId);
+    }
+  }, [initialFieldId]);
   const [selectedLandUse, setSelectedLandUse] = useState<CluLandUse>('cropland');
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false);
   const [focusedUnassignedIndex, setFocusedUnassignedIndex] = useState(0);
@@ -41,6 +49,14 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
   const reimportRef = useRef<HTMLInputElement>(null);
   const touchedFieldIdsRef = useRef<Set<string>>(new Set());
   const [reimportTarget, setReimportTarget] = useState<string | null>(null);
+
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+
+  const cluAssignmentsRef = useRef(cluAssignments);
+  cluAssignmentsRef.current = cluAssignments;
+
+  const displayAssignmentsRef = useRef<FieldCluAssignment[]>([]);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isDialogDragActive, setIsDialogDragActive] = useState(false);
   const dialogFileInputRef = useRef<HTMLInputElement>(null);
@@ -139,6 +155,8 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
     return [...cluAssignments, ...legacyAssignments];
   }, [persistedAssignmentKeys, cluAssignments, featureAcresByClu, fields]);
 
+  displayAssignmentsRef.current = displayAssignments;
+
   const displayAssignmentKeys = useMemo(
     () => new Set(displayAssignments.filter(a => !a.deletedAt).map(a => `${a.tractKey}:${a.cluNumber}`)),
     [displayAssignments],
@@ -172,54 +190,112 @@ export default function TractAssignmentFlow({ onDone }: TractAssignmentFlowProps
     }
   }, [focusedUnassignedKey, unassignedCluKeys]);
 
-  const handleToggleClu = useCallback(async (tractKey: string, cluNumber: string, acres: number) => {
+  const syncFieldAcreageAndClus = useCallback(async (fieldId: string, nextAssignments: { cluNumber: string; acres: number }[]) => {
+    const field = fieldsRef.current.find(f => f.id === fieldId);
+    if (!field) return;
+
+    const cluNumbers = nextAssignments.map(a => a.cluNumber);
+    const acres = nextAssignments.reduce((sum, a) => sum + a.acres, 0);
+
+    await updateField({
+      ...field,
+      cluNumbers,
+      acreage: Math.round(acres * 100) / 100,
+    });
+  }, [updateField]);
+
+  const handleToggleClu = useCallback(async (
+    tractKey: string, cluNumber: string, acres: number
+  ) => {
     if (!selectedFieldId) return;
     touchedFieldIdsRef.current.add(selectedFieldId);
 
-    const existingAnywhere = cluAssignments.find(
-      a => a.tractKey === tractKey && a.cluNumber === cluNumber,
+    const existing = cluAssignmentsRef.current.find(
+      a => a.fieldId === selectedFieldId && a.tractKey === tractKey && a.cluNumber === cluNumber && !a.deletedAt,
     );
-    if (existingAnywhere && existingAnywhere.fieldId !== selectedFieldId) {
-      touchedFieldIdsRef.current.add(existingAnywhere.fieldId);
-    }
+    const legacyExisting = displayAssignmentsRef.current.find(
+      a => a.id.startsWith('legacy-') && a.tractKey === tractKey && a.cluNumber === cluNumber,
+    );
 
-    const existing = cluAssignments.find(
-      a => a.fieldId === selectedFieldId && a.tractKey === tractKey && a.cluNumber === cluNumber,
-    );
-    const legacyExisting = displayAssignments.find(
-      a => a.id.startsWith('legacy-') && a.fieldId === selectedFieldId && a.tractKey === tractKey && a.cluNumber === cluNumber,
+    // Find if assigned to any other field
+    const otherExisting = cluAssignmentsRef.current.find(
+      a => a.fieldId !== selectedFieldId && a.tractKey === tractKey && a.cluNumber === cluNumber && !a.deletedAt,
     );
 
     if (existing) {
       if (existing.landUse !== selectedLandUse) {
-        await updateCluLandUse(existing.id, selectedLandUse);
+        const ok = await updateCluLandUse(existing.id, selectedLandUse);
+        if (!ok) return;
       } else {
-        await unassignClu(selectedFieldId, tractKey, cluNumber);
+        const ok = await unassignClu(selectedFieldId, tractKey, cluNumber);
+        if (!ok) return;
+        // Sync selected field by removing this CLU using latest cluAssignmentsRef
+        const remaining = cluAssignmentsRef.current.filter(
+          a => a.fieldId === selectedFieldId && !a.deletedAt && !(a.tractKey === tractKey && a.cluNumber === cluNumber)
+        );
+        await syncFieldAcreageAndClus(selectedFieldId, remaining);
       }
     } else if (legacyExisting) {
-      // First tap on legacy -> unassign it from the field by removing from cluNumbers
-      const field = fields.find(f => f.id === selectedFieldId);
-      if (field) {
-        const newClus = field.cluNumbers?.filter(c => c !== cluNumber) || [];
-        await updateField({ ...field, cluNumbers: newClus });
+      if (legacyExisting.fieldId === selectedFieldId) {
+        // Promote same field
+        const ok = await assignClu(selectedFieldId, tractKey, cluNumber, legacyExisting.acres, selectedLandUse);
+        if (!ok) return;
+        const field = fieldsRef.current.find(f => f.id === selectedFieldId);
+        if (field) {
+          const newClus = field.cluNumbers?.filter(c => c !== cluNumber) || [];
+          await updateField({ ...field, cluNumbers: newClus });
+        }
+      } else {
+        // Promote & reassign to selected field
+        const ok = await assignClu(selectedFieldId, tractKey, cluNumber, legacyExisting.acres, selectedLandUse);
+        if (!ok) return;
+        
+        // Remove legacy from old field
+        const oldField = fieldsRef.current.find(f => f.id === legacyExisting.fieldId);
+        if (oldField) {
+          const newClus = oldField.cluNumbers?.filter(c => c !== cluNumber) || [];
+          await updateField({ ...oldField, cluNumbers: newClus });
+        }
+
+        // Add to selected field using latest cluAssignmentsRef
+        const current = cluAssignmentsRef.current.filter(a => a.fieldId === selectedFieldId && !a.deletedAt);
+        await syncFieldAcreageAndClus(selectedFieldId, [...current, { cluNumber, acres }]);
       }
     } else {
-      await assignClu(selectedFieldId, tractKey, cluNumber, legacyExisting?.acres ?? acres, selectedLandUse);
+      // Assign new CLU
+      const ok = await assignClu(selectedFieldId, tractKey, cluNumber, acres, selectedLandUse);
+      if (!ok) return;
+
+      // Sync selected field using latest cluAssignmentsRef
+      const current = cluAssignmentsRef.current.filter(a => a.fieldId === selectedFieldId && !a.deletedAt);
+      await syncFieldAcreageAndClus(selectedFieldId, [...current, { cluNumber, acres }]);
+
+      // If assigned to another field, sync that field too (remove this CLU)
+      if (otherExisting) {
+        touchedFieldIdsRef.current.add(otherExisting.fieldId);
+        const otherRemaining = cluAssignmentsRef.current.filter(
+          a => a.fieldId === otherExisting.fieldId && !a.deletedAt && !(a.tractKey === tractKey && a.cluNumber === cluNumber)
+        );
+        await syncFieldAcreageAndClus(otherExisting.fieldId, otherRemaining);
+      }
     }
-  }, [selectedFieldId, selectedLandUse, cluAssignments, displayAssignments, assignClu, updateCluLandUse, unassignClu, fields, updateField]);
+  }, [
+    selectedFieldId,
+    selectedLandUse,
+    assignClu,
+    updateCluLandUse,
+    unassignClu,
+    updateField,
+    syncFieldAcreageAndClus
+  ]);
 
   const handleCreateField = useCallback(async (name: string): Promise<string | null> => {
     let lat = 38.47, lng = -93.54;
     if (editableTracts.length > 0) {
-      let sumLat = 0, sumLng = 0, n = 0;
-      for (const tract of editableTracts) {
-        for (const f of tract.geojson.features) {
-          const ring = f.geometry.coordinates[0];
-          if (!ring) continue;
-          for (const c of ring) { sumLng += c[0]; sumLat += c[1]; n++; }
-        }
-      }
-      if (n > 0) { lat = sumLat / n; lng = sumLng / n; }
+      const allFeats = editableTracts.flatMap(t => t.geojson.features);
+      const [latVal, lngVal] = getCentroid(allFeats);
+      lat = latVal;
+      lng = lngVal;
     }
 
     const id = crypto.randomUUID();

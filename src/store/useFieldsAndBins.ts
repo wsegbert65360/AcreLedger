@@ -143,6 +143,9 @@ export function useFieldsAndBins({
       try {
         await syncQueue.enqueueMutation('fields', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
         if (onMutation) await onMutation();
+        if (onFieldDeleted) {
+          await onFieldDeleted(id);
+        }
         toast.success('Field deleted offline');
         return true;
       } catch (err) {
