@@ -8,6 +8,7 @@ interface HayTabProps {
   selected: Set<string>;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: HayHarvestRecord) => void;
+  onDuplicate?: (record: HayHarvestRecord) => void;
 }
 function buildSubtitle(r: HayHarvestRecord): string {
   return `${r.baleCount} BALES · ${r.baleType}`;
@@ -21,7 +22,7 @@ function buildDate(r: HayHarvestRecord): string {
   return formatIsoDate(r.date) || formatDate(r.timestamp);
 }
 
-export default function HayTab({ records, selected, onToggle, onEdit }: HayTabProps) {
+export default function HayTab({ records, selected, onToggle, onEdit, onDuplicate }: HayTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -44,6 +45,7 @@ export default function HayTab({ records, selected, onToggle, onEdit }: HayTabPr
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
+          onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
         />
       ))}
     </div>

@@ -7,10 +7,11 @@ interface ActivityFeedProps {
   records: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }[];
   year: number;
   onEdit: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord) => void;
+  onDuplicate?: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord) => void;
   hideHeader?: boolean;
 }
 
-export default function ActivityFeed({ records, year, onEdit, hideHeader }: ActivityFeedProps) {
+export default function ActivityFeed({ records, year, onEdit, onDuplicate, hideHeader }: ActivityFeedProps) {
   const getFeedInfo = (record: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }) => {
     const { type, data } = record;
 
@@ -79,6 +80,15 @@ export default function ActivityFeed({ records, year, onEdit, hideHeader }: Acti
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {onDuplicate && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDuplicate(record.type as ModalType, record.data); }}
+                    className="p-1.5 rounded hover:bg-muted/50"
+                    title="Duplicate record"
+                  >
+                    <span className="text-[14px]">📄</span>
+                  </button>
+                )}
                 <Edit2
                   size={12}
                   data-testid={`edit-icon-${record.type}-${r.id}`}

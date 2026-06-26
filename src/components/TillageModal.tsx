@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { TillageRecord, Field } from '@/types/farm';
 import { native } from '@/lib/native';
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { getLatestForField } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     AlertDialog,
@@ -25,28 +26,35 @@ interface TillageModalProps {
     open: boolean;
     onClose: () => void;
     initialData?: TillageRecord;
+    mode?: 'edit' | 'duplicate';
 }
 
-export default function TillageModal({ field, open, onClose, initialData }: TillageModalProps) {
-    const { addTillageRecord, updateTillageRecord, deleteTillageRecords, viewingSeason } = useFarm();
+export default function TillageModal({ field, open, onClose, initialData, mode = 'edit' }: TillageModalProps) {
+    const isDuplicate = mode === 'duplicate' && !!initialData;
+    const { addTillageRecord, updateTillageRecord, deleteTillageRecords, tillageRecords, viewingSeason } = useFarm();
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [implementType, setImplementType] = useState('Disk');
     const [notes, setNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+    const suggestedTillage = useMemo(() => {
+        if (initialData) return null;
+        return getLatestForField(tillageRecords, field.id, 'date');
+    }, [field.id, initialData, tillageRecords]);
     useEffect(() => {
         if (!open) return;
         if (initialData) {
-            setDate(initialData.date);
+            setDate(isDuplicate ? new Date().toISOString().split('T')[0] : initialData.date);
             setImplementType(initialData.implementType);
             setNotes(initialData.notes || '');
         } else {
             setDate(new Date().toISOString().split('T')[0]);
-            setImplementType('Disk');
+            setImplementType(suggestedTillage?.implementType || 'Disk');
             setNotes('');
         }
-    }, [initialData, field, open]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialData?.id, field.id, open, isDuplicate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -62,7 +70,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
         setIsSaving(true);
         try {
             let success = false;
-            if (initialData) {
+            if (initialData && !isDuplicate) {
                 success = await updateTillageRecord({
                     id: initialData.id,
                     fieldId: data.fieldId,
@@ -127,9 +135,9 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <DialogTitle className="text-lg font-bold text-foreground leading-tight">Tillage</DialogTitle>
+                                <DialogTitle className="text-lg font-bold text-foreground leading-tight">{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'New'} Tillage</DialogTitle>
                                 <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-orange-600/10 text-orange-600 dark:text-orange-400 border border-orange-600/20">
-                                    {initialData ? initialData.seasonYear : viewingSeason} Season
+                                    {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                                 </span>
                             </div>
                             <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
@@ -196,7 +204,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                     </div>
 
                     <div className="pt-2 flex gap-3">
-                        {initialData && (
+                        {initialData && !isDuplicate && (
                             <Button
                                 type="button"
                                 variant="outline"
@@ -211,7 +219,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className={`${initialData ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target`}
+                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target`}
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">
@@ -219,7 +227,7 @@ export default function TillageModal({ field, open, onClose, initialData }: Till
                                     <span>Saving...</span>
                                 </div>
                             ) : (
-                                initialData ? 'Update' : 'Save Record'
+                                isDuplicate ? 'Log Duplicate' : initialData ? 'Update' : 'Save Record'
                             )}
                         </Button>
                     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
 import { native } from '@/lib/native';
@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { getLatestForField } from '@/lib/utils';
 
 interface FertilizerModalProps {
     field: Field;
     open: boolean;
     onClose: () => void;
     initialData?: FertilizerApplication;
+    mode?: 'edit' | 'duplicate';
 }
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,7 +30,8 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-export default function FertilizerModal({ field, open, onClose, initialData }: FertilizerModalProps) {
+export default function FertilizerModal({ field, open, onClose, initialData, mode = 'edit' }: FertilizerModalProps) {
+    const isDuplicate = mode === 'duplicate' && !!initialData;
     const { 
         addFertilizerApplication, 
         updateFertilizerApplication, 
@@ -37,6 +39,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
         addFertilizerRecipe,
         deleteFertilizerRecipe,
         fertilizerRecipes,
+        fertilizerApplications,
         viewingSeason
     } = useFarm();
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -49,17 +52,24 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
     const [showDeleteAppConfirm, setShowDeleteAppConfirm] = useState(false);
     const [recipeToDelete, setRecipeToDelete] = useState<{ id: string; name: string } | null>(null);
 
+    const suggestedFertilizer = useMemo(() => {
+        if (initialData) return null;
+        return getLatestForField(fertilizerApplications, field.id, 'date');
+    }, [field.id, initialData, fertilizerApplications]);
+
     useEffect(() => {
+        if (!open) return;
         if (initialData) {
-            setDate(initialData.date);
+            setDate(isDuplicate ? new Date().toISOString().split('T')[0] : initialData.date);
             setAcres(initialData.acres.toString());
             setFormula(initialData.fertilizer_formula);
         } else {
             setDate(new Date().toISOString().split('T')[0]);
             setAcres(field.acreage.toString());
-            setFormula('');
+            setFormula(suggestedFertilizer?.fertilizer_formula || '');
         }
-    }, [initialData, field, open]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialData?.id, field.id, field.acreage, open, isDuplicate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -86,7 +96,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
         setIsSaving(true);
         try {
             let success = false;
-            if (initialData) {
+            if (initialData && !isDuplicate) {
                 success = await updateFertilizerApplication({ ...initialData, ...data });
             } else {
                 success = await addFertilizerApplication(data);
@@ -179,9 +189,9 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <DialogTitle className="text-lg font-bold text-foreground leading-tight">Fertilizer</DialogTitle>
+                                <DialogTitle className="text-lg font-bold text-foreground leading-tight">{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'New'} Fertilizer</DialogTitle>
                                 <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-lime-600/10 text-lime-600 dark:text-lime-400 border border-lime-600/20">
-                                    {initialData ? initialData.seasonYear : viewingSeason} Season
+                                    {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                                 </span>
                             </div>
                             <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
@@ -326,7 +336,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                     </div>
 
                     <div className="pt-2 flex gap-3">
-                        {initialData && (
+                        {initialData && !isDuplicate && (
                             <Button
                                 type="button"
                                 variant="outline"
@@ -341,7 +351,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className={`${initialData ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target`}
+                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target`}
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">
@@ -349,7 +359,7 @@ export default function FertilizerModal({ field, open, onClose, initialData }: F
                                     <span>Saving...</span>
                                 </div>
                             ) : (
-                                initialData ? 'Update' : 'Save Application'
+                                isDuplicate ? 'Log Duplicate' : initialData ? 'Update' : 'Save Application'
                             )}
                         </Button>
                     </div>

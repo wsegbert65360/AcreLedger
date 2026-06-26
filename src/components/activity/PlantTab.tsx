@@ -8,6 +8,7 @@ interface PlantTabProps {
   selected: Set<string>;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: PlantRecord) => void;
+  onDuplicate?: (record: PlantRecord) => void;
 }
 function buildSubtitle(r: PlantRecord): string {
   return `${r.crop || 'UNSPECIFIED'} · ${r.seedVariety}`;
@@ -23,7 +24,7 @@ function buildDate(r: PlantRecord): string {
   return formatIsoDate(r.plantDate) || formatDate(r.timestamp);
 }
 
-export default function PlantTab({ records, selected, onToggle, onEdit }: PlantTabProps) {
+export default function PlantTab({ records, selected, onToggle, onEdit, onDuplicate }: PlantTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -46,6 +47,7 @@ export default function PlantTab({ records, selected, onToggle, onEdit }: PlantT
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
+          onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
         />
       ))}
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,17 +8,19 @@ import { useFarm } from '@/store/farmStore';
 import { Field, HarvestRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { getLatestForField } from '@/lib/utils';
 
 interface HarvestModalProps {
   field: Field;
   open: boolean;
   onClose: () => void;
   initialData?: HarvestRecord;
+  mode?: 'edit' | 'duplicate';
 }
 
-export default function HarvestModal({ field, open, onClose, initialData }: HarvestModalProps) {
-  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, bins, viewingSeason } = useFarm();
+export default function HarvestModal({ field, open, onClose, initialData, mode = 'edit' }: HarvestModalProps) {
+  const isDuplicate = mode === 'duplicate' && !!initialData;
+  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, harvestRecords, bins, viewingSeason } = useFarm();
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -29,6 +31,11 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
   const [scaleTicketNumber, setScaleTicketNumber] = useState(initialData?.scaleTicketNumber || '');
   const [harvestDate, setHarvestDate] = useState(initialData?.harvestDate || new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
+
+  const suggestedHarvest = useMemo(() => {
+    if (initialData) return null;
+    return getLatestForField(harvestRecords, field.id, 'harvestDate');
+  }, [field.id, initialData, harvestRecords]);
 
   useEffect(() => {
     if (!open) return;
@@ -41,19 +48,20 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
       setCrop(initialData.crop || '');
       setLandlordName(initialData.landlordName || '');
       setScaleTicketNumber(initialData.scaleTicketNumber || '');
-      setHarvestDate(initialData.harvestDate || new Date().toISOString().split('T')[0]);
+      setHarvestDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.harvestDate || new Date().toISOString().split('T')[0]));
     } else {
       setDestination(null);
       setBinId('');
       setMoisture('');
       setLandlordSplit(field.producerShare ? (100 - field.producerShare).toString() : '0');
       setBushels('');
-      setCrop(field.intendedUse || '');
+      setCrop(suggestedHarvest?.crop || field.intendedUse || '');
       setLandlordName('');
       setScaleTicketNumber('');
       setHarvestDate(new Date().toISOString().split('T')[0]);
     }
-  }, [initialData, field, open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData?.id, field.id, field.producerShare, field.intendedUse, open, isDuplicate]);
 
   const reset = () => {
     if (!initialData) {
@@ -98,7 +106,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
       };
 
       let success = false;
-      if (initialData) {
+      if (initialData && !isDuplicate) {
         success = await updateHarvestRecord({ ...initialData, ...harvestData });
         if (!success) {
           toast.error('Failed to update harvest record.');
@@ -193,10 +201,10 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
           <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest">
             <div className="flex items-center gap-2">
               <Wheat size={20} />
-              <span>{initialData ? 'Edit' : 'Harvest'} — {field.name}</span>
+              <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Harvest'} — {field.name}</span>
             </div>
             <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
-              {initialData ? initialData.seasonYear : viewingSeason} Season
+              {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
             </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -345,7 +353,7 @@ export default function HarvestModal({ field, open, onClose, initialData }: Harv
                   <span>Saving...</span>
                 </div>
               ) : (
-                initialData ? 'Update Record' : 'Log Harvest'
+                isDuplicate ? 'Log Duplicate' : initialData ? 'Update Record' : 'Log Harvest'
               )}
             </Button>
           </DialogFooter>

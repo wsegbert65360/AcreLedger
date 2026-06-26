@@ -1,5 +1,21 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
 
+/*
+ * Leaflet panes default to z-index 200-1000, which sits above shadcn's Dialog
+ * overlay (z-50) and causes the underlying map to bleed through modals. Lower
+ * all panes/controls below z-50 while preserving internal ordering.
+ */
+.leaflet-pane,
+.leaflet-tile-pane,
+.leaflet-overlay-pane { z-index: 1 !important; }
+.leaflet-shadow-pane   { z-index: 2 !important; }
+.leaflet-marker-pane   { z-index: 3 !important; }
+.leaflet-tooltip-pane  { z-index: 4 !important; }
+.leaflet-popup-pane    { z-index: 5 !important; }
+.leaflet-control,
+.leaflet-top,
+.leaflet-bottom        { z-index: 6 !important; }
+
 .tract-clu-tooltip {
   background: none !important;
   border: none !important;

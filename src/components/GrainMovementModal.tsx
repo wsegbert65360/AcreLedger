@@ -12,12 +12,14 @@ import { Warehouse, ArrowUpRight, ArrowDownLeft, Calendar, AlertTriangle } from 
 interface GrainMovementModalProps {
   open: boolean;
   onClose: () => void;
-  /** Must be a fully-formed GrainMovement — this modal is edit-only. */
+  /** Must be a fully-formed GrainMovement — this modal is edit-only, unless mode is 'duplicate'. */
   initialData: GrainMovement;
+  mode?: 'edit' | 'duplicate';
 }
 
-export default function GrainMovementModal({ open, onClose, initialData }: GrainMovementModalProps) {
-  const { updateGrainMovement, bins, fields, viewingSeason } = useFarm();
+export default function GrainMovementModal({ open, onClose, initialData, mode = 'edit' }: GrainMovementModalProps) {
+  const isDuplicate = mode === 'duplicate' && !!initialData;
+  const { addGrainMovement, updateGrainMovement, bins, fields, viewingSeason } = useFarm();
   const [binId, setBinId] = useState(initialData.binId);
   const [bushels, setBushels] = useState(initialData.bushels.toString());
   const [moisture, setMoisture] = useState(initialData.moisturePercent.toString());
@@ -71,7 +73,7 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
 
     setIsSaving(true);
     try {
-      const success = await updateGrainMovement({
+      const data = {
         ...initialData,
         binId,
         binName: bin.name,
@@ -80,7 +82,24 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
         price: price ? parseFloat(price) : undefined,
         destination: destination || undefined,
         sourceFieldName: sourceField || undefined,
-      });
+      };
+
+      let success = false;
+      if (initialData && !isDuplicate) {
+        success = await updateGrainMovement(data);
+      } else {
+        success = await addGrainMovement({
+          type: data.type,
+          binId: data.binId,
+          binName: data.binName,
+          bushels: data.bushels,
+          moisturePercent: data.moisturePercent,
+          price: data.price,
+          destination: data.destination,
+          sourceFieldName: data.sourceFieldName,
+          timestamp: Date.now()
+        });
+      }
 
       if (success) {
         native.haptic.success();
@@ -106,10 +125,10 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
           <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest font-bold">
             <div className="flex items-center gap-2">
               <Warehouse size={20} />
-              <span>Edit Grain Movement</span>
+              <span>{isDuplicate ? 'Duplicate' : 'Edit'} Grain Movement</span>
             </div>
             <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
-              {initialData ? initialData.seasonYear : viewingSeason} Season
+              {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
             </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -245,14 +264,16 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
           )}
 
           {/* Timestamp */}
-          <div className="pt-2 border-t border-border/50">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Calendar size={14} />
-              <span className="text-[11px] font-mono uppercase">
-                Recorded: {new Date(initialData.timestamp).toLocaleString()}
-              </span>
+          {!isDuplicate && (
+            <div className="pt-2 border-t border-border/50">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar size={14} />
+                <span className="text-[11px] font-mono uppercase">
+                  Recorded: {new Date(initialData.timestamp).toLocaleString()}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <DialogFooter className="pt-2">
@@ -261,7 +282,7 @@ export default function GrainMovementModal({ open, onClose, initialData }: Grain
             disabled={isSaving || bins.length === 0}
             className="w-full bg-harvest text-white hover:bg-harvest/90 font-bold glow-harvest"
           >
-            {isSaving ? 'Updating...' : 'Update Movement Record'}
+            {isSaving ? 'Updating...' : (isDuplicate ? 'Log Duplicate' : 'Update Movement Record')}
           </Button>
         </DialogFooter>
       </DialogContent>

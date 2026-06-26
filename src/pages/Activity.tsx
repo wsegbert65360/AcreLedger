@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { ClipboardList, Trash2, Warehouse, FileDown } from 'lucide-react';
+import { ClipboardList, Trash2, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUndoDelete } from '@/hooks/useUndoDelete';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -91,6 +91,20 @@ export default function Activity() {
   const [tab, setTab] = useState<Tab>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
+  const [editingRecordType, setEditingRecordType] = useState<ActivityRecord['type'] | null>(null);
+  const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
+
+  const openModal = (type: ActivityRecord['type'], record: EditableRecord, mode: 'edit' | 'duplicate') => {
+    setEditingRecord(record);
+    setEditingRecordType(type);
+    setEditingMode(mode);
+  };
+
+  const closeModal = () => {
+    setEditingRecord(null);
+    setEditingRecordType(null);
+    setEditingMode('edit');
+  };
 
   const { pending: pendingDeletes, requestDelete } = useUndoDelete<ActivityRecord[]>({
     onCommit: async (_ids, toDelete) => {
@@ -364,94 +378,106 @@ export default function Activity() {
 
         {/* Records */}
         <div className="space-y-2">
-          {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'spray' && <SprayTab records={filteredSpray.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
-          {tab === 'grain' && <GrainTab records={filteredGrain.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={setEditingRecord} />}
+          {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={(r) => openModal(r.type, r.data, 'edit')} onDuplicate={(r) => openModal(r.type, r.data, 'duplicate')} />}
+          {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('plant', r, 'edit')} onDuplicate={(r) => openModal('plant', r, 'duplicate')} />}
+          {tab === 'spray' && <SprayTab records={filteredSpray.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('spray', r, 'edit')} onDuplicate={(r) => openModal('spray', r, 'duplicate')} />}
+          {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} />}
+          {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('hay', r, 'edit')} onDuplicate={(r) => openModal('hay', r, 'duplicate')} />}
+          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('fertilizer', r, 'edit')} onDuplicate={(r) => openModal('fertilizer', r, 'duplicate')} />}
+          {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('tillage', r, 'edit')} onDuplicate={(r) => openModal('tillage', r, 'duplicate')} />}
+          {tab === 'grain' && <GrainTab records={filteredGrain.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('grain', r, 'edit')} onDuplicate={(r) => openModal('grain', r, 'duplicate')} />}
         </div>
       </main>
 
-      {tab === 'grain' && editingRecord && (
+      {editingRecordType === 'grain' && editingRecord && (
         <GrainMovementModal
           open={!!editingRecord}
-          onClose={() => setEditingRecord(null)}
+          onClose={closeModal}
           initialData={editingRecord as GrainMovement}
+          mode={editingMode}
         />
       )}
 
-      {tab === 'plant' && editingRecord && (() => {
+      {editingRecordType === 'plant' && editingRecord && (() => {
         const editField = getEditField((editingRecord as PlantRecord).fieldId);
-        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
+        if (!editField) return <DeletedFieldFallback onClose={closeModal} />;
         return (
           <PlantModal
             open={!!editingRecord}
-            onClose={() => setEditingRecord(null)}
+            onClose={closeModal}
             field={editField}
             initialData={editingRecord as PlantRecord}
+            mode={editingMode}
           />
         );
       })()}
-      {tab === 'spray' && editingRecord && (() => {
+
+      {editingRecordType === 'spray' && editingRecord && (() => {
         const editField = getEditField((editingRecord as SprayRecord).fieldId);
-        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
+        if (!editField) return <DeletedFieldFallback onClose={closeModal} />;
         return (
           <SprayModal
             open={!!editingRecord}
-            onClose={() => setEditingRecord(null)}
+            onClose={closeModal}
             field={editField}
             initialData={editingRecord as SprayRecord}
+            mode={editingMode}
           />
         );
       })()}
-      {tab === 'harvest' && editingRecord && (() => {
+
+      {editingRecordType === 'harvest' && editingRecord && (() => {
         const editField = getEditField((editingRecord as HarvestRecord).fieldId);
-        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
+        if (!editField) return <DeletedFieldFallback onClose={closeModal} />;
         return (
           <HarvestModal
             open={!!editingRecord}
-            onClose={() => setEditingRecord(null)}
+            onClose={closeModal}
             field={editField}
             initialData={editingRecord as HarvestRecord}
+            mode={editingMode}
           />
         );
       })()}
-      {tab === 'hay' && editingRecord && (() => {
+
+      {editingRecordType === 'hay' && editingRecord && (() => {
         const editField = getEditField((editingRecord as HayHarvestRecord).fieldId);
-        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
+        if (!editField) return <DeletedFieldFallback onClose={closeModal} />;
         return (
           <HayModal
             open={!!editingRecord}
-            onClose={() => setEditingRecord(null)}
+            onClose={closeModal}
             field={editField}
             initialData={editingRecord as HayHarvestRecord}
+            mode={editingMode}
           />
         );
       })()}
-      {tab === 'fertilizer' && editingRecord && (() => {
+
+      {editingRecordType === 'fertilizer' && editingRecord && (() => {
         const editField = getEditField((editingRecord as FertilizerApplication).fieldId);
-        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
+        if (!editField) return <DeletedFieldFallback onClose={closeModal} />;
         return (
           <FertilizerModal
             open={!!editingRecord}
-            onClose={() => setEditingRecord(null)}
+            onClose={closeModal}
             field={editField}
             initialData={editingRecord as FertilizerApplication}
+            mode={editingMode}
           />
         );
       })()}
-      {tab === 'tillage' && editingRecord && (() => {
+
+      {editingRecordType === 'tillage' && editingRecord && (() => {
         const editField = getEditField((editingRecord as TillageRecord).fieldId);
-        if (!editField) return <DeletedFieldFallback onClose={() => setEditingRecord(null)} />;
+        if (!editField) return <DeletedFieldFallback onClose={closeModal} />;
         return (
           <TillageModal
             open={!!editingRecord}
-            onClose={() => setEditingRecord(null)}
+            onClose={closeModal}
             field={editField}
             initialData={editingRecord as TillageRecord}
+            mode={editingMode}
           />
         );
       })()}

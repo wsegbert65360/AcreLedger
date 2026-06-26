@@ -60,7 +60,7 @@ export default function CluFieldSelector({
   };
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-[1000] bg-background/95 backdrop-blur border-t border-border p-3 space-y-2">
+    <div className="absolute bottom-0 left-0 right-0 z-10 bg-background/95 backdrop-blur border-t border-border p-3 space-y-2">
       {selectedField && activeAssignments.length > 0 && (
         <div className="text-xs text-muted-foreground flex items-center gap-1">
           <Check size={12} className="text-green-500" />

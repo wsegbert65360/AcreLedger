@@ -6,6 +6,7 @@ import { useFarm } from '@/store/farmStore';
 import { native } from '@/lib/native';
 import { toast } from 'sonner';
 import { calculateTotalAmount } from '@/utils/unitConversion';
+import { getLatestForField } from '@/lib/utils';
 
 export type SprayWizardStep = 'core' | 'mix' | 'conditions' | 'review';
 
@@ -16,6 +17,7 @@ interface UseSprayFormProps {
   open: boolean;
   onClose: () => void;
   initialData?: SprayRecord;
+  mode?: 'edit' | 'duplicate';
 }
 
 function createEmptyProduct(): SprayRecipeProduct {
@@ -44,8 +46,9 @@ function normalizeProducts(initial?: SprayRecord): SprayRecipeProduct[] {
   }));
 }
 
-export function useSprayForm({ field, open, onClose, initialData }: UseSprayFormProps) {
-  const { addSprayRecord, updateSprayRecord, sprayRecipes, session, viewingSeason } = useFarm();
+export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' }: UseSprayFormProps) {
+  const isDuplicate = mode === 'duplicate' && !!initialData;
+  const { addSprayRecord, updateSprayRecord, sprayRecipes, sprayRecords, session, viewingSeason } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || 'local';
 
   const initialDataRef = useRef(initialData);
@@ -94,6 +97,11 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
   const [showValidation, setShowValidation] = useState(false);
   const hasSeenIncompleteWarning = useRef(false);
 
+  const suggestedSpray = useMemo(() => {
+    if (initialData) return null;
+    return getLatestForField(sprayRecords, field.id, 'sprayDate');
+  }, [field.id, initialData, sprayRecords]);
+
   // Reset form when modal opens/closes or record changes
   useEffect(() => {
     if (!open) return;
@@ -108,7 +116,7 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
       setApplicatorName(initialData.applicatorName || '');
       setLicenseNumber(initialData.licenseNumber || '');
       setTargetPest(initialData.targetPest || 'grass/broadleaves');
-      setSprayDate(initialData.sprayDate || new Date().toISOString().split('T')[0]);
+      setSprayDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.sprayDate || new Date().toISOString().split('T')[0]));
       setStartTime(initialData.startTime || '');
       setEndTime(initialData.endTime || '');
       setIsEndTimeManual(!!initialData.endTime);
@@ -120,8 +128,8 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
       setTotalMixtureVolume(initialData.totalMixtureVolume || '');
       setInvolvedTechnicians(initialData.involvedTechnicians || '');
       setEquipmentId(initialData.equipmentId || '');
-      setManualWindDirection(initialData.windDirection || '');
-      setManualWindSpeed(initialData.windSpeed?.toString() || '');
+      setManualWindDirection(isDuplicate ? '' : (initialData.windDirection || ''));
+      setManualWindSpeed(isDuplicate ? '' : (initialData.windSpeed?.toString() || ''));
       setIsPremixed(initialData.isPremixed || false);
       setCropOrSiteTreated(initialData.cropOrSiteTreated || '');
       setApplicationMethod(initialData.applicationMethod || 'Ground Broadcast');
@@ -131,10 +139,11 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
       setSensitiveAreaNotes(initialData.sensitiveAreaNotes || '');
 
       if (
-        initialData.windSpeed !== undefined ||
+        !isDuplicate &&
+        (initialData.windSpeed !== undefined ||
         initialData.temperature !== undefined ||
         initialData.relativeHumidity !== undefined ||
-        initialData.windDirection
+        initialData.windDirection)
       ) {
         setWeather({
           wind: initialData.windSpeed ?? 0,
@@ -148,10 +157,10 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
       }
     } else {
       const now = new Date();
-      setProducts([createEmptyProduct()]);
-      setApplicatorName(localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
-      setLicenseNumber(localStorage.getItem(`al_license_number_${userPrefix}`) || '');
-      setTargetPest('grass/broadleaves');
+      setProducts(suggestedSpray ? normalizeProducts(suggestedSpray).map(p => ({ ...p, ui_id: crypto.randomUUID() })) : [createEmptyProduct()]);
+      setApplicatorName(suggestedSpray?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
+      setLicenseNumber(suggestedSpray?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
+      setTargetPest(suggestedSpray?.targetPest || 'grass/broadleaves');
       setSprayDate(now.toISOString().split('T')[0]);
       setStartTime(now.toTimeString().slice(0, 5));
       setEndTime('');
@@ -177,11 +186,11 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
     }
     // Depend only on open/initialData primitives per AGENTS.md (do not depend on `field` object reference).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialData?.id]);
+  }, [open, initialData?.id, isDuplicate]);
 
-  // Auto-fetch current weather for new records
+  // Auto-fetch current weather for new or duplicate records
   useEffect(() => {
-    if (open && !initialData && field.lat != null && field.lng != null) {
+    if (open && (!initialData || isDuplicate) && field.lat != null && field.lng != null) {
       setLoading(true);
       WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
         if (!w || w.isError) {
@@ -199,7 +208,7 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialData?.id, field.lat, field.lng]);
+  }, [open, initialData?.id, field.lat, field.lng, isDuplicate]);
 
   // Auto-calculate total product amounts and summary total
   const ratesSignature = useMemo(() =>
@@ -449,11 +458,11 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
         isPremixed,
         nonCompliant: !isFullyCompliant,
         deleted_at: null,
-        seasonYear: initialDataRef.current ? initialDataRef.current.seasonYear : viewingSeason,
+        seasonYear: initialDataRef.current && !isDuplicate ? initialDataRef.current.seasonYear : viewingSeason,
       };
 
       let success = false;
-      if (initialDataRef.current) {
+      if (initialDataRef.current && !isDuplicate) {
         success = await updateSprayRecord({ ...initialDataRef.current, ...data });
       } else {
         success = await addSprayRecord(data);
@@ -472,7 +481,7 @@ export function useSprayForm({ field, open, onClose, initialData }: UseSprayForm
     } finally {
       setIsSaving(false);
     }
-  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, isPremixed, field.id, field.name, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose]);
+  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, isPremixed, field.id, field.name, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose, isDuplicate]);
 
   return {
     // Wizard

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Settings, Tractor } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { useFarm } from '@/store/farmStore';
 import FieldList from '@/components/FieldList';
@@ -11,7 +12,7 @@ import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
 
 const Index = () => {
-  const { fields: allFields, cluAssignments, viewingSeason } = useFarm();
+  const { fields: allFields, cluAssignments, viewingSeason, setViewingSeason, seasonOptions } = useFarm();
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
     let total = 0;
     const totals: Record<string, number> = {};
@@ -73,7 +74,22 @@ const Index = () => {
             <Logo />
             <div className="flex flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
-              <p className="text-xs text-muted-foreground">{allFields.length} fields · {viewingSeason} season</p>
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                {allFields.length} fields · 
+                <Select 
+                  value={viewingSeason.toString()} 
+                  onValueChange={(val) => setViewingSeason(parseInt(val, 10))}
+                >
+                  <SelectTrigger className="h-5 py-0 px-1.5 text-xs font-bold border-none bg-transparent hover:bg-muted focus:ring-0 w-fit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {seasonOptions.map(year => (
+                      <SelectItem key={year} value={year.toString()}>{year} season</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <button

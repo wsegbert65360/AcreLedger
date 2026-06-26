@@ -7,7 +7,8 @@ interface HistoryFeedProps {
   records: ActivityRecord[];
   selected: Set<string>;
   onToggle: (id: string, shift: boolean) => void;
-  onEdit: (record: ActivityRecord['data']) => void;
+  onEdit: (record: ActivityRecord) => void;
+  onDuplicate?: (record: ActivityRecord) => void;
 }
 
 function getRecordInfo(record: ActivityRecord) {
@@ -94,7 +95,7 @@ function getRecordInfo(record: ActivityRecord) {
   }
 }
 
-export default function HistoryFeed({ records, selected, onToggle, onEdit }: HistoryFeedProps) {
+export default function HistoryFeed({ records, selected, onToggle, onEdit, onDuplicate }: HistoryFeedProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -119,7 +120,8 @@ export default function HistoryFeed({ records, selected, onToggle, onEdit }: His
             date={info.date}
             isSelected={selected.has(id)}
             onToggle={onToggle}
-            onEdit={() => onEdit(record.data)}
+            onEdit={() => onEdit(record)}
+            onDuplicate={onDuplicate ? () => onDuplicate(record) : undefined}
           />
         );
       })}

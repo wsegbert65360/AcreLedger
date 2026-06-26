@@ -8,6 +8,7 @@ interface GrainTabProps {
   selected: Set<string>;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: GrainMovement) => void;
+  onDuplicate?: (record: GrainMovement) => void;
 }
 function buildSubtitle(m: GrainMovement): string {
   return `${m.type === 'in' ? 'ADDITION' : 'SALE'} · ${m.bushels} BU`;
@@ -17,7 +18,7 @@ function buildDetails(m: GrainMovement): string {
   return `${m.sourceFieldName || m.destination || 'N/A'} · ${m.moisturePercent}% MST`;
 }
 
-export default function GrainTab({ records, selected, onToggle, onEdit }: GrainTabProps) {
+export default function GrainTab({ records, selected, onToggle, onEdit, onDuplicate }: GrainTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -40,6 +41,7 @@ export default function GrainTab({ records, selected, onToggle, onEdit }: GrainT
           isSelected={selected.has(m.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(m)}
+          onDuplicate={onDuplicate ? () => onDuplicate(m) : undefined}
           warning={m.bushels < 0}
         />
       ))}

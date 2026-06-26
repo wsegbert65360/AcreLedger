@@ -8,6 +8,7 @@ interface SprayTabProps {
   selected: Set<string>;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: SprayRecord) => void;
+  onDuplicate?: (record: SprayRecord) => void;
 }
 
 function buildDetails(r: SprayRecord): string {
@@ -30,7 +31,7 @@ function buildDate(r: SprayRecord): string {
   return formatIsoDate(r.sprayDate) || formatDate(r.timestamp);
 }
 
-export default function SprayTab({ records, selected, onToggle, onEdit }: SprayTabProps) {
+export default function SprayTab({ records, selected, onToggle, onEdit, onDuplicate }: SprayTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -53,6 +54,8 @@ export default function SprayTab({ records, selected, onToggle, onEdit }: SprayT
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
+          onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
+          warning={r.nonCompliant}
         />
       ))}
     </div>

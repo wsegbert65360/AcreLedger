@@ -265,7 +265,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
   return (
     <div className="h-48 w-full rounded-lg overflow-hidden border border-border bg-muted relative">
       {loading && (
-        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-muted">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted">
           <span className="text-sm font-bold text-muted-foreground animate-pulse">Loading map...</span>
         </div>
       )}
@@ -285,7 +285,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
       </MapContainer>
 
       {features.length === 0 && !loading && (
-        <div className="absolute bottom-2 left-2 z-[1000] bg-background/80 backdrop-blur px-2 py-1 rounded text-[11px] font-medium text-muted-foreground">
+        <div className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur px-2 py-1 rounded text-[11px] font-medium text-muted-foreground">
           No boundary data
         </div>
       )}

@@ -1,4 +1,4 @@
-import { Check, Edit2, AlertTriangle } from 'lucide-react';
+import { Check, Edit2, AlertTriangle, Copy } from 'lucide-react';
 import {
   ACTIVITY_ICONS,
   ACTIVITY_TEXT_COLORS,
@@ -15,12 +15,13 @@ interface RecordListItemProps {
   isSelected: boolean;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: () => void;
+  onDuplicate?: () => void;
   type: ActivityType;
   warning?: boolean;
 }
 
 export default function RecordListItem({
-  id, title, subtitle, details, date, isSelected, onToggle, onEdit, type, warning
+  id, title, subtitle, details, date, isSelected, onToggle, onEdit, onDuplicate, type, warning
 }: RecordListItemProps) {
   const Icon = ACTIVITY_ICONS[type];
   const colorClass = ACTIVITY_TEXT_COLORS[type];
@@ -54,12 +55,24 @@ export default function RecordListItem({
             }`}>
             {isSelected && <Check size={12} strokeWidth={3} />}
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Edit2 size={14} />
-          </button>
+          <div className="flex gap-1">
+            {onDuplicate && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title="Duplicate record"
+              >
+                <Copy size={14} />
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Edit record"
+            >
+              <Edit2 size={14} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

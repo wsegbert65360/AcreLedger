@@ -8,12 +8,13 @@ interface FertilizerTabProps {
   selected: Set<string>;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: FertilizerApplication) => void;
+  onDuplicate?: (record: FertilizerApplication) => void;
 }
 function buildDate(r: FertilizerApplication): string {
   return formatIsoDate(r.date) || formatDate(r.timestamp);
 }
 
-export default function FertilizerTab({ records, selected, onToggle, onEdit }: FertilizerTabProps) {
+export default function FertilizerTab({ records, selected, onToggle, onEdit, onDuplicate }: FertilizerTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -36,6 +37,7 @@ export default function FertilizerTab({ records, selected, onToggle, onEdit }: F
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
+          onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
         />
       ))}
     </div>

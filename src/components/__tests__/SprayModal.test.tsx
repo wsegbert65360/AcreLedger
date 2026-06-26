@@ -16,6 +16,7 @@ vi.mock('@/store/farmStore', () => ({
     addSprayRecord: addSprayRecordMock,
     updateSprayRecord: updateSprayRecordMock,
     sprayRecipes: [],
+    sprayRecords: [],
     session: { user: { id: 'test-user-id' } },
     viewingSeason: 2026,
     farmName: 'Test Farm'

@@ -20,11 +20,13 @@ interface SprayModalProps {
   open: boolean;
   onClose: () => void;
   initialData?: SprayRecord;
+  mode?: 'edit' | 'duplicate';
 }
 
-function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
+function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayModalProps) {
+  const isDuplicate = mode === 'duplicate' && !!initialData;
   const { sprayRecipes, farmName, viewingSeason } = useFarm();
-  const form = useSprayForm({ field, open, onClose, initialData });
+  const form = useSprayForm({ field, open, onClose, initialData, mode });
 
   const {
     step, WIZARD_STEPS, canGoNext, canGoBack, goNext, goBack, goToStep,
@@ -59,7 +61,7 @@ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
           <DialogTitle className="flex items-center flex-wrap gap-2 text-spray font-bold">
             <div className="flex items-center gap-2">
               <CloudRain size={20} />
-              <span>{initialData ? 'Edit' : 'Spray'} — {field.name}</span>
+              <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Spray'} — {field.name}</span>
             </div>
             <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
               {stepTitle}
@@ -150,7 +152,7 @@ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
 
           {step === 'review' && <SprayWizardReviewStep
             fieldName={field.name}
-            seasonYear={initialData ? initialData.seasonYear : viewingSeason}
+            seasonYear={initialData && !isDuplicate ? initialData.seasonYear : viewingSeason}
             isExisting={!!initialData}
             sprayDate={form.sprayDate}
             startTime={form.startTime}
@@ -183,8 +185,8 @@ function SprayModal({ field, open, onClose, initialData }: SprayModalProps) {
             !isMinimumValid
               ? 'Enter Product Name to Save'
               : !isFullyCompliant
-                ? initialData ? 'Update (Incomplete)' : 'Save (Incomplete)'
-                : initialData ? 'Update Spray Record' : 'Save Spray Record'
+                ? (isDuplicate ? 'Log Duplicate (Incomplete)' : initialData ? 'Update (Incomplete)' : 'Save (Incomplete)')
+                : (isDuplicate ? 'Log Duplicate' : initialData ? 'Update Spray Record' : 'Save Spray Record')
           }
           showFinalWarningIcon={step === 'review' && isMinimumValid && !isFullyCompliant}
           primaryClassName={

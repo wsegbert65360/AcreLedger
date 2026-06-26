@@ -8,6 +8,7 @@ interface TillageTabProps {
   selected: Set<string>;
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: TillageRecord) => void;
+  onDuplicate?: (record: TillageRecord) => void;
 }
 
 function buildSubtitle(r: TillageRecord): string {
@@ -22,7 +23,7 @@ function buildDate(r: TillageRecord): string {
   return formatIsoDate(r.date) || formatDate(r.timestamp);
 }
 
-export default function TillageTab({ records, selected, onToggle, onEdit }: TillageTabProps) {
+export default function TillageTab({ records, selected, onToggle, onEdit, onDuplicate }: TillageTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -45,6 +46,7 @@ export default function TillageTab({ records, selected, onToggle, onEdit }: Till
           isSelected={selected.has(r.id)}
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
+          onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
         />
       ))}
     </div>

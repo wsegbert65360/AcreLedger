@@ -57,7 +57,7 @@ export default function FieldDetailScreen() {
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
   const displayFieldAcres = useMemo(
     () => field ? roundTo(getDisplayFieldAcres(field, cluAssignments), 0) : 0,
-    [field?.id, field?.acreage, cluAssignments]
+    [field, cluAssignments]
   );
 
   const [rainStats, setRainStats] = useState<RainfallResult | null>(null);
@@ -79,6 +79,7 @@ export default function FieldDetailScreen() {
     return fieldClus.filter(a => a.landUse === 'non_cropland').reduce((sum, a) => sum + a.acres, 0);
   }, [fieldClus]);
   const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
   const fetchingRainRef = useRef(false);
   const inFlightRainFetchKeyRef = useRef<string | null>(null);
   const lastSuccessfulRainFetchKeyRef = useRef<string | null>(null);
@@ -100,7 +101,7 @@ export default function FieldDetailScreen() {
       return dateStr ? new Date(dateStr).getTime() : 0;
     };
     return all.sort((a, b) => getTS(b.data) - getTS(a.data));
-  }, [field?.id, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
+  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
 
   const latestActivity = unifiedRecords[0];
 
@@ -207,7 +208,20 @@ export default function FieldDetailScreen() {
 
   const handleEdit = (type: ModalType, record: any) => {
     setEditingRecord(record);
+    setEditingMode('edit');
     setModal(type);
+  };
+
+  const handleDuplicate = (type: ModalType, record: any) => {
+    setEditingRecord(record);
+    setEditingMode('duplicate');
+    setModal(type);
+  };
+
+  const closeModal = () => {
+    setModal(null);
+    setEditingRecord(null);
+    setEditingMode('edit');
   };
 
   return (
@@ -592,6 +606,7 @@ export default function FieldDetailScreen() {
               records={unifiedRecords.slice(0, 8)}
               year={viewingSeason}
               onEdit={handleEdit}
+              onDuplicate={handleDuplicate}
               hideHeader
             />
             {unifiedRecords.length > 8 && (
@@ -652,22 +667,22 @@ export default function FieldDetailScreen() {
 
       {/* Modals - Reusing existing implementation */}
       {modal === 'plant' && (
-        <PlantModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
+        <PlantModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'spray' && (
-        <SprayModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
+        <SprayModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'harvest' && (
-        <HarvestModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
+        <HarvestModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'hay' && (
-        <HayModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
+        <HayModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'fertilizer' && (
-        <FertilizerModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
+        <FertilizerModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'tillage' && (
-        <TillageModal field={field} open initialData={editingRecord} onClose={() => { setModal(null); setEditingRecord(null); }} />
+        <TillageModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
 
       {/* Dialog for CLU management */}

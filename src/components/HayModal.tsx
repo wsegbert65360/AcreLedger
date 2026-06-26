@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { useFarm } from '@/store/farmStore';
 import { Field, HayHarvestRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { Tractor, Thermometer, Cloud, Hash, Layers, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { getLatestForField } from '@/lib/utils';
 import { WeatherService } from '@/services/WeatherService';
 
 interface HayModalProps {
@@ -16,10 +16,12 @@ interface HayModalProps {
     open: boolean;
     onClose: () => void;
     initialData?: HayHarvestRecord;
+    mode?: 'edit' | 'duplicate';
 }
 
-export default function HayModal({ field, open, onClose, initialData }: HayModalProps) {
-    const { addHayHarvestRecord, updateHayHarvestRecord, viewingSeason } = useFarm();
+export default function HayModal({ field, open, onClose, initialData, mode = 'edit' }: HayModalProps) {
+    const isDuplicate = mode === 'duplicate' && !!initialData;
+    const { addHayHarvestRecord, updateHayHarvestRecord, hayHarvestRecords, viewingSeason } = useFarm();
     const [baleCount, setBaleCount] = useState(initialData?.baleCount.toString() || '');
     const [cuttingNumber, setCuttingNumber] = useState(initialData?.cuttingNumber.toString() || '1');
     const [baleType, setBaleType] = useState<'Round' | 'Square'>(initialData?.baleType || 'Round');
@@ -29,27 +31,33 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
     const [loadingWeather, setLoadingWeather] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
+    const suggestedHay = useMemo(() => {
+        if (initialData) return null;
+        return getLatestForField(hayHarvestRecords, field.id, 'date');
+    }, [field.id, initialData, hayHarvestRecords]);
+
     useEffect(() => {
         if (!open) return;
         if (initialData) {
             setBaleCount(initialData.baleCount.toString());
             setCuttingNumber(initialData.cuttingNumber.toString());
             setBaleType(initialData.baleType);
-            setTemp(initialData.temperature?.toString() || '');
-            setConditions(initialData.conditions || '');
-            setDate(initialData.date || new Date().toISOString().split('T')[0]);
+            setTemp(isDuplicate ? '' : (initialData.temperature?.toString() || ''));
+            setConditions(isDuplicate ? '' : (initialData.conditions || ''));
+            setDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.date || new Date().toISOString().split('T')[0]));
         } else {
             setBaleCount('');
             setCuttingNumber('1');
-            setBaleType('Round');
+            setBaleType(suggestedHay?.baleType || 'Round');
             setTemp('');
             setConditions('');
             setDate(new Date().toISOString().split('T')[0]);
         }
-    }, [open, initialData]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, initialData?.id, isDuplicate]);
 
     useEffect(() => {
-        if (open && !initialData && field.lat != null && field.lng != null) {
+        if (open && (!initialData || isDuplicate) && field.lat != null && field.lng != null) {
             setLoadingWeather(true);
             WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
                 if (w) {
@@ -60,10 +68,10 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
             }).catch(() => {
                 setLoadingWeather(false);
             });
-        } else if (open && !initialData) {
+        } else if (open) {
             setLoadingWeather(false);
         }
-    }, [open, field.lat, field.lng, initialData]);
+    }, [open, field.lat, field.lng, initialData, isDuplicate]);
 
     const handleSubmit = async () => {
         const count = parseInt(baleCount, 10);
@@ -76,7 +84,7 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
         setIsSaving(true);
         try {
             let success = false;
-            if (initialData) {
+            if (initialData && !isDuplicate) {
                 success = await updateHayHarvestRecord({
                     ...initialData,
                     date,
@@ -121,10 +129,10 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
                     <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest font-bold uppercase tracking-tight">
                         <div className="flex items-center gap-2">
                             <Tractor size={20} />
-                            <span>Hay/Forage — {field.name}</span>
+                            <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Record'} Hay/Forage — {field.name}</span>
                         </div>
                         <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20 normal-case tracking-normal">
-                            {initialData ? initialData.seasonYear : viewingSeason} Season
+                            {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                         </span>
                     </DialogTitle>
                     <DialogDescription className="sr-only">
@@ -233,7 +241,7 @@ export default function HayModal({ field, open, onClose, initialData }: HayModal
                                 <span>Saving...</span>
                             </div>
                         ) : (
-                            initialData ? 'Update Record' : 'Record Hay Baling'
+                            isDuplicate ? 'Log Duplicate' : initialData ? 'Update Record' : 'Record Hay Baling'
                         )}
                     </Button>
                 </DialogFooter>

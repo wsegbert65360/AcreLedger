@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Loader2, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
+import { getLatestForField } from '@/lib/utils';
 
 import { native } from '@/lib/native';
 
@@ -33,9 +34,11 @@ interface PlantModalProps {
   open: boolean;
   onClose: () => void;
   initialData?: PlantRecord;
+  mode?: 'edit' | 'duplicate';
 }
 
-export default function PlantModal({ field, open, onClose, initialData }: PlantModalProps) {
+export default function PlantModal({ field, open, onClose, initialData, mode = 'edit' }: PlantModalProps) {
+  const isDuplicate = mode === 'duplicate' && !!initialData;
   const { addPlantRecord, updatePlantRecord, plantRecords, savedSeeds, viewingSeason } = useFarm();
   const fieldIntendedUse = field.intendedUse || '';
   const fieldProducerShare = field.producerShare?.toString() || '100';
@@ -54,13 +57,13 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
   const [isSaving, setIsSaving] = useState(false);
   const requiresSeedVariety = cropStatus !== 'Prevented Planting';
   const duplicatePlanting = useMemo(() => {
-    const targetSeason = initialData?.seasonYear ?? viewingSeason;
+    const targetSeason = initialData && !isDuplicate ? initialData.seasonYear : viewingSeason;
 
-    return plantRecords
+    return (plantRecords || [])
       .filter(record =>
         record.fieldId === field.id
         && record.seasonYear === targetSeason
-        && record.id !== initialData?.id
+        && record.id !== (isDuplicate ? undefined : initialData?.id)
         && !record.deleted_at
         && (record.cropStatus ?? 'Planted') === 'Planted'
         && (record.cropSequence ?? 'First Crop') === cropSequence
@@ -70,13 +73,23 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
         const aTime = new Date(a.plantDate || a.timestamp).getTime();
         return bTime - aTime;
       })[0];
-  }, [cropSequence, field.id, initialData?.id, initialData?.seasonYear, plantRecords, viewingSeason]);
+  }, [cropSequence, field.id, initialData, isDuplicate, plantRecords, viewingSeason]);
   const duplicatePlantingDate = duplicatePlanting
     ? formatIsoDate(duplicatePlanting.plantDate)
         || (Number.isFinite(new Date(duplicatePlanting.timestamp).getTime())
             ? new Date(duplicatePlanting.timestamp).toLocaleDateString()
             : '')
     : '';
+
+  const suggestedPlanting = useMemo(() => {
+    if (initialData) return null;
+    return getLatestForField(
+      plantRecords,
+      field.id,
+      'plantDate',
+      record => (record.cropStatus ?? 'Planted') === 'Planted'
+    );
+  }, [field.id, initialData, plantRecords]);
 
   useEffect(() => {
     if (!open) return;
@@ -89,12 +102,12 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setCropStatus(initialData.cropStatus || 'Planted');
       setCropSequence(initialData.cropSequence || 'First Crop');
       setPlantingPattern(initialData.plantingPattern || '');
-      setPlantDate(initialData.plantDate || new Date().toISOString().split('T')[0]);
+      setPlantDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.plantDate || new Date().toISOString().split('T')[0]));
       setAcreage((initialData.acreage ?? field.acreage).toString());
       setMemo(initialData.memo || '');
     } else {
-      setSeedVariety('');
-      setCrop('');
+      setSeedVariety(suggestedPlanting?.seedVariety || '');
+      setCrop(suggestedPlanting?.crop || '');
       setIntendedUse(fieldIntendedUse);
       setProducerShare(fieldProducerShare);
       setIrrigationPractice(fieldIrrigationPractice);
@@ -105,7 +118,8 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
       setAcreage(field.acreage.toString());
       setMemo('');
     }
-  }, [field.acreage, initialData, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field.acreage, initialData?.id, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open, isDuplicate]);
 
   const handleSubmit = async () => {
     if (requiresSeedVariety && !seedVariety.trim()) {
@@ -124,7 +138,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
     try {
       let success = false;
       const savedSeedVariety = seedVariety.trim() || (cropStatus === 'Prevented Planting' ? 'N/A' : '');
-      if (initialData) {
+      if (initialData && !isDuplicate) {
         success = await updatePlantRecord({
           ...initialData,
           seedVariety: savedSeedVariety,
@@ -159,7 +173,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
 
       if (success) {
         native.haptic.success();
-        if (!initialData) {
+        if (!initialData || isDuplicate) {
           setSeedVariety('');
           setCrop('');
           setIntendedUse('');
@@ -184,10 +198,10 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
           <DialogTitle className="flex items-center flex-wrap gap-2 text-plant">
             <div className="flex items-center gap-2">
               <Sprout size={20} />
-              <span>{initialData ? 'Edit' : 'Plant'} — {field.name}</span>
+              <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Plant'} — {field.name}</span>
             </div>
             <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-plant/10 text-plant border border-plant/20">
-              {initialData ? initialData.seasonYear : viewingSeason} Season
+              {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
             </span>
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -378,7 +392,7 @@ export default function PlantModal({ field, open, onClose, initialData }: PlantM
                 <span>Saving...</span>
               </div>
             ) : (
-              initialData ? 'Update Record' : 'Log Planting'
+              isDuplicate ? 'Log Duplicate' : initialData ? 'Update Record' : 'Log Planting'
             )}
           </Button>
         </DialogFooter>
