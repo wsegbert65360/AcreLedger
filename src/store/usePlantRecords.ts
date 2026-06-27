@@ -60,7 +60,9 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       try {
         await syncQueue.enqueueMutation('plant_records', 'insert', { ...mapped, farm_id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Planting record saved offline.');
+        toast.success('Planting record saved offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue plant record offline:', err);
@@ -129,7 +131,9 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       try {
         await syncQueue.enqueueMutation('plant_records', 'update', { ...mapped, id: r.id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Record updated offline.');
+        toast.success('Record updated offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue plant record update offline:', err);
@@ -210,7 +214,9 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
         }
         if (onMutation) await onMutation();
         const count = ids.length;
-        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue plant record delete offline:', err);

@@ -6,7 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { WeatherData } from '@/types/weather';
 import { SprayDecisionMatrix } from '@/components/weather/SprayDecisionMatrix';
-import { Loader2, History as HistoryIcon } from 'lucide-react';
+import { Loader2, History as HistoryIcon, AlertTriangle } from 'lucide-react';
+
+// Wind drift warning threshold. Local copy matches SprayAuditReport.tsx and
+// weatherHelpers.ts; promote to a shared constants file if a fourth site appears.
+const WIND_ALERT_MPH = 10;
 
 interface SprayWizardConditionsStepProps {
   fieldLat: number | null;
@@ -48,6 +52,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
   const inputError = (missing: boolean) => missing && showValidation ? 'border-destructive ring-1 ring-destructive' : '';
   const windNum = parseFloat(manualWindSpeed);
   const hasWind = !isNaN(windNum);
+  const isHighWind = hasWind && windNum > WIND_ALERT_MPH;
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
@@ -87,7 +92,9 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="windDirection" className="text-[11px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
+            <Label htmlFor="windDirection" className="text-xs font-semibold text-muted-foreground">
+              Wind Direction <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
               <SelectTrigger id="windDirection" className={`h-11 bg-background border-border text-sm font-mono ${inputError(!manualWindDirection.trim())}`}>
                 <SelectValue placeholder="Dir" />
@@ -100,10 +107,14 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
             </Select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="windSpeed" className="text-[11px] font-mono text-muted-foreground uppercase text-right block">Wind Speed (mph) *</Label>
+            <Label htmlFor="windSpeed" className="text-xs font-semibold text-muted-foreground text-right block">
+              Wind Speed (mph) <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Input
               id="windSpeed"
               name="windSpeed"
+              type="number"
+              inputMode="decimal"
               value={manualWindSpeed}
               onChange={e => setManualWindSpeed(e.target.value)}
               placeholder={weather?.wind?.toString() || '0'}
@@ -111,6 +122,18 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
             />
           </div>
         </div>
+
+        {isHighWind && (
+          <div className="flex items-start gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-yellow-600 animate-in fade-in slide-in-from-top-2 duration-200 mt-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div className="text-xs font-mono font-bold uppercase">High Drift Risk!</div>
+              <p className="text-[10px] text-yellow-700/80 leading-normal">
+                Wind speed ({windNum} mph) exceeds the recommended limit of {WIND_ALERT_MPH} mph. High risk of chemical drift.
+              </p>
+            </div>
+          </div>
+        )}
 
         {hasWind && weather && (
           <SprayDecisionMatrix
@@ -140,10 +163,14 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
         <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">Area & Volume</div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="treatedArea" className="text-[11px] font-mono text-muted-foreground uppercase">Treated Area Size *</Label>
+            <Label htmlFor="treatedArea" className="text-xs font-semibold text-muted-foreground">
+              Treated Area Size <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <div className="flex gap-1">
               <Input
                 id="treatedArea"
+                type="number"
+                inputMode="decimal"
                 value={treatedAreaSize}
                 onChange={e => setTreatedAreaSize(e.target.value)}
                 placeholder="80"
@@ -161,9 +188,11 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
             </div>
           </div>
           <div>
-            <Label htmlFor="totalAmount" className="text-[11px] font-mono text-muted-foreground uppercase">Total Material Applied</Label>
+            <Label htmlFor="totalAmount" className="text-xs font-semibold text-muted-foreground">Total Material Applied</Label>
             <Input
               id="totalAmount"
+              type="number"
+              inputMode="decimal"
               value={totalAmountApplied}
               onChange={e => setTotalAmountApplied(e.target.value)}
               placeholder="Auto-sum"
@@ -173,7 +202,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="mixtureRate" className="text-[11px] font-mono text-muted-foreground uppercase">Mixture Rate</Label>
+            <Label htmlFor="mixtureRate" className="text-xs font-semibold text-muted-foreground">Mixture Rate</Label>
             <Input
               id="mixtureRate"
               value={mixtureRate}
@@ -183,7 +212,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
             />
           </div>
           <div>
-            <Label htmlFor="totalMixtureVolume" className="text-[11px] font-mono text-muted-foreground uppercase">Total Mix Volume</Label>
+            <Label htmlFor="totalMixtureVolume" className="text-xs font-semibold text-muted-foreground">Total Mix Volume</Label>
             <Input
               id="totalMixtureVolume"
               value={totalMixtureVolume}
@@ -195,7 +224,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
         </div>
         <div className="flex items-center space-x-2 pt-1">
           <Switch id="premixed" checked={isPremixed} onCheckedChange={setIsPremixed} />
-          <Label htmlFor="premixed" className="text-[11px] font-mono text-muted-foreground uppercase">Premixed</Label>
+          <Label htmlFor="premixed" className="text-xs font-semibold text-muted-foreground">Premixed</Label>
         </div>
       </div>
     </div>

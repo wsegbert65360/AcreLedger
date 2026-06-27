@@ -64,7 +64,9 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       try {
         await syncQueue.enqueueMutation('spray_records', 'insert', { ...mapped, farm_id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Spray application recorded offline.');
+        toast.success('Spray application recorded offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue spray record offline:', err);
@@ -136,7 +138,9 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       try {
         await syncQueue.enqueueMutation('spray_records', 'update', { ...mapped, id: r.id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Spray record updated offline.');
+        toast.success('Spray record updated offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue spray record update offline:', err);
@@ -221,7 +225,9 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
         }
         if (onMutation) await onMutation();
         const count = ids.length;
-        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue spray record delete offline:', err);

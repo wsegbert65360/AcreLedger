@@ -1,14 +1,14 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SprayRecord } from '@/types/farm';
-import { 
-  formatNumber, 
-  formatUnit, 
-  getComplianceStatus, 
-  formatTime, 
+import {
+  formatNumber,
+  formatUnit,
+  getComplianceStatus,
+  formatTime,
   formatReportDate,
   joinParts,
-  sanitizeFilename 
+  sanitizeFilename
 } from './sprayExportFormatters';
 import { cleanName } from '@/utils/text';
 import { Capacitor } from '@capacitor/core';
@@ -20,13 +20,23 @@ interface ExportOptions {
   endDate?: string;
 }
 
+function splitAttachmentFromNotes(notes?: string): { cleanNotes: string; attachmentDataUri: string | null } {
+  if (!notes) return { cleanNotes: '', attachmentDataUri: null };
+
+  const match = notes.match(/\[ATTACHMENT:(data:image\/[^;]+;base64,[^\]]+)\]/);
+  return {
+    cleanNotes: notes.replace(/\s*\[ATTACHMENT:[^\]]+\]\s*/g, ' ').trim(),
+    attachmentDataUri: match?.[1] ?? null,
+  };
+}
+
 /**
  * Main entry point for generating a Spray Log PDF.
  * Supports both single and multiple records.
  */
 export function generateSprayPDF(
-  records: SprayRecord[], 
-  farmName: string | null, 
+  records: SprayRecord[],
+  farmName: string | null,
   options: ExportOptions = {}
 ) {
   const doc = new jsPDF({
@@ -43,11 +53,11 @@ export function generateSprayPDF(
   doc.setFontSize(18);
   doc.setTextColor(0, 0, 0);
   doc.text(isMulti ? 'AcreLedger Spray Log Export' : 'AcreLedger Spray Record', 14, 20);
-  
+
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text(`Farm: ${displayFarmName}`, 14, 28);
-  
+
   if (isMulti && (options.startDate || options.endDate)) {
     const range = `${formatReportDate(options.startDate)} to ${formatReportDate(options.endDate)}`;
     doc.text(`Date Range: ${range}`, 14, 33);
@@ -73,7 +83,7 @@ export function generateSprayPDF(
         doc.line(14, yPos, 196, yPos);
         yPos += 10;
       }
-      
+
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
@@ -91,7 +101,7 @@ export function generateSprayPDF(
     // Application Details Grid
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
-    
+
     const detailsLeft = [
       `Applicator: ${record.applicatorName || '—'}`,
       `License #: ${record.licenseNumber || '—'}`,
@@ -117,7 +127,7 @@ export function generateSprayPDF(
     detailsLeft.forEach((text, i) => doc.text(text, 14, detailY + i * 5));
     detailsRight.forEach((text, i) => doc.text(text, 75, detailY + i * 5));
     detailsFarRight.forEach((text, i) => doc.text(text, 140, detailY + i * 5));
-    
+
     yPos += 25;
 
     // 2b. Mix & Personnel Details (NEW)
@@ -127,7 +137,7 @@ export function generateSprayPDF(
       doc.setFont('helvetica', 'bold');
       doc.text('Mix & Personnel Details:', 14, yPos);
       doc.setFont('helvetica', 'normal');
-      
+
       const mixParts = [];
       if (record.mixtureRate) mixParts.push(`Rate: ${record.mixtureRate}`);
       if (record.totalMixtureVolume) mixParts.push(`Total Vol: ${record.totalMixtureVolume}`);
@@ -137,7 +147,7 @@ export function generateSprayPDF(
         if (record.sensitiveAreaNotes) checkStr += ` (${record.sensitiveAreaNotes})`;
         mixParts.push(checkStr);
       }
-      
+
       doc.text(mixParts.join('  |  '), 55, yPos);
       yPos += 7;
     }
@@ -148,9 +158,9 @@ export function generateSprayPDF(
         startY: yPos,
         head: [['Product / Active Ingredients', 'EPA Reg #', 'Rate', 'Total Applied']],
         body: record.products.map(p => [
-          { 
-            content: `${p.product}${p.activeIngredients ? '\n' + p.activeIngredients : ''}`, 
-            styles: { fontStyle: p.activeIngredients ? 'normal' : 'bold' } 
+          {
+            content: `${p.product}${p.activeIngredients ? '\n' + p.activeIngredients : ''}`,
+            styles: { fontStyle: p.activeIngredients ? 'normal' : 'bold' }
           },
           p.epaRegNumber || '—',
           `${p.rate || '—'} ${p.rateUnit || ''}`.trim(),
@@ -182,10 +192,28 @@ export function generateSprayPDF(
     }
 
     doc.setFontSize(8);
-    if (record.notes) {
-      const splitNotes = doc.splitTextToSize(`Notes: ${record.notes}`, 180);
+    const { cleanNotes, attachmentDataUri } = splitAttachmentFromNotes(record.notes);
+    if (cleanNotes) {
+      const splitNotes = doc.splitTextToSize(`Notes: ${cleanNotes}`, 180);
       doc.text(splitNotes, 14, yPos);
       yPos += (splitNotes.length * 4);
+    }
+
+    if (attachmentDataUri) {
+      if (yPos > 220) {
+        doc.addPage();
+        yPos = 20;
+      }
+      doc.text('Attached Ticket / Label:', 14, yPos);
+      yPos += 4;
+      try {
+        const imageFormat = attachmentDataUri.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(attachmentDataUri, imageFormat, 14, yPos, 70, 52);
+        yPos += 57;
+      } catch {
+        doc.text('Attachment image could not be embedded in this export.', 14, yPos);
+        yPos += 5;
+      }
     }
 
     if (record.siteAddress) {

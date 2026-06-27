@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { ClipboardList, Trash2, FileDown, Plus } from 'lucide-react';
+import { ClipboardList, Trash2, FileDown, Plus, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUndoDelete } from '@/hooks/useUndoDelete';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -92,6 +92,7 @@ export default function Activity() {
 
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<Tab>('all');
+  const [reviewQueueOnly, setReviewQueueOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
   const [editingRecordType, setEditingRecordType] = useState<ActivityRecord['type'] | null>(null);
@@ -159,6 +160,12 @@ export default function Activity() {
       .sort((a, b) => b.timestamp - a.timestamp),
     [sprayRecords, search, viewingSeason]
   );
+
+  const reviewQueueSprays = useMemo(
+    () => filteredSpray.filter(r => r.nonCompliant === true),
+    [filteredSpray]
+  );
+  const reviewQueueCount = reviewQueueSprays.length;
 
   const filteredHarvest = useMemo(() =>
     harvestRecords
@@ -366,6 +373,8 @@ export default function Activity() {
                         if (isActive) setTab('all');
                         else setTab(t.key);
                         setSelected(new Set());
+                        setReviewQueueOnly(false);
+                        native.haptic.light();
                       }}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-xs font-bold ${isActive
                         ? 'ring-2 ring-primary bg-primary/10 text-primary shadow-sm'
@@ -388,18 +397,48 @@ export default function Activity() {
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Label htmlFor="activitySearch" className="sr-only">Search Records</Label>
-          <input
-            id="activitySearch"
-            name="activitySearch"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search records..."
-            aria-label="Search records"
-            className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+        {/* Search + Review Queue filter */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Label htmlFor="activitySearch" className="sr-only">Search Records</Label>
+            <input
+              id="activitySearch"
+              name="activitySearch"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search records..."
+              aria-label="Search records"
+              className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setReviewQueueOnly(prev => !prev);
+              setSelected(new Set());
+              native.haptic.light();
+            }}
+            aria-pressed={reviewQueueOnly}
+            title="Show only incomplete spray records needing review"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors border ${
+              reviewQueueOnly
+                ? 'bg-yellow-500 text-white border-yellow-500 shadow-sm'
+                : reviewQueueCount > 0
+                  ? 'bg-yellow-500/10 text-yellow-700 border-yellow-500/30 hover:bg-yellow-500/20'
+                  : 'bg-card text-muted-foreground border-border hover:bg-muted/50'
+            }`}
+          >
+            <AlertTriangle size={14} />
+            <span className="hidden sm:inline">Review Queue</span>
+            <span className="inline sm:hidden">Review</span>
+            {reviewQueueCount > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
+                reviewQueueOnly ? 'bg-white/25 text-white' : 'bg-yellow-500/20 text-yellow-700'
+              }`}>
+                {reviewQueueCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Bulk delete */}
@@ -415,14 +454,44 @@ export default function Activity() {
 
         {/* Records */}
         <div className="space-y-2">
-          {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={(r) => openModal(r.type, r.data, 'edit')} onDuplicate={(r) => openModal(r.type, r.data, 'duplicate')} />}
-          {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('plant', r, 'edit')} onDuplicate={(r) => openModal('plant', r, 'duplicate')} />}
-          {tab === 'spray' && <SprayTab records={filteredSpray.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('spray', r, 'edit')} onDuplicate={(r) => openModal('spray', r, 'duplicate')} />}
-          {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} />}
-          {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('hay', r, 'edit')} onDuplicate={(r) => openModal('hay', r, 'duplicate')} />}
-          {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('fertilizer', r, 'edit')} onDuplicate={(r) => openModal('fertilizer', r, 'duplicate')} />}
-          {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('tillage', r, 'edit')} onDuplicate={(r) => openModal('tillage', r, 'duplicate')} />}
-          {tab === 'grain' && <GrainTab records={filteredGrain.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('grain', r, 'edit')} onDuplicate={(r) => openModal('grain', r, 'duplicate')} />}
+          {reviewQueueOnly ? (
+            <>
+              <div className="flex items-center justify-between rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs">
+                <span className="font-bold text-yellow-700 flex items-center gap-1.5">
+                  <AlertTriangle size={12} />
+                  Review Queue — incomplete spray records
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewQueueOnly(false);
+                    native.haptic.light();
+                  }}
+                  className="text-yellow-700 hover:underline font-bold"
+                >
+                  Clear filter
+                </button>
+              </div>
+              <SprayTab
+                records={reviewQueueSprays.filter(r => !pendingDeletes.has(r.id))}
+                selected={selected}
+                onToggle={toggle}
+                onEdit={(r) => openModal('spray', r, 'edit')}
+                onDuplicate={(r) => openModal('spray', r, 'duplicate')}
+              />
+            </>
+          ) : (
+            <>
+              {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={(r) => openModal(r.type, r.data, 'edit')} onDuplicate={(r) => openModal(r.type, r.data, 'duplicate')} />}
+              {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('plant', r, 'edit')} onDuplicate={(r) => openModal('plant', r, 'duplicate')} />}
+              {tab === 'spray' && <SprayTab records={filteredSpray.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('spray', r, 'edit')} onDuplicate={(r) => openModal('spray', r, 'duplicate')} />}
+              {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} />}
+              {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('hay', r, 'edit')} onDuplicate={(r) => openModal('hay', r, 'duplicate')} />}
+              {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('fertilizer', r, 'edit')} onDuplicate={(r) => openModal('fertilizer', r, 'duplicate')} />}
+              {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('tillage', r, 'edit')} onDuplicate={(r) => openModal('tillage', r, 'duplicate')} />}
+              {tab === 'grain' && <GrainTab records={filteredGrain.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('grain', r, 'edit')} onDuplicate={(r) => openModal('grain', r, 'duplicate')} />}
+            </>
+          )}
         </div>
       </main>
 

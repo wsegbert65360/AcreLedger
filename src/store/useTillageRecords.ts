@@ -55,7 +55,9 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       try {
         await syncQueue.enqueueMutation('tillage_records', 'insert', { ...mapped, farm_id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Tillage record saved offline.');
+        toast.success('Tillage record saved offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue tillage record offline:', err);
@@ -121,7 +123,9 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       try {
         await syncQueue.enqueueMutation('tillage_records', 'update', { ...mapped, id: r.id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Record updated offline.');
+        toast.success('Record updated offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue tillage record update offline:', err);
@@ -195,7 +199,9 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
         }
         if (onMutation) await onMutation();
         const count = ids.length;
-        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue tillage records delete offline:', err);

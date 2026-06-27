@@ -60,7 +60,9 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       try {
         await syncQueue.enqueueMutation('grain_movements', 'insert', { ...mapped, farm_id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Grain movement recorded offline.');
+        toast.success('Grain movement recorded offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue grain movement offline:', err);
@@ -141,7 +143,9 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       try {
         await syncQueue.enqueueMutation('grain_movements', 'update', { ...mapped, id: r.id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Grain movement updated offline.');
+        toast.success('Grain movement updated offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue grain movement update offline:', err);
@@ -211,7 +215,9 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
         }
         if (onMutation) await onMutation();
         const count = ids.length;
-        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue grain movements delete offline:', err);

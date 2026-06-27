@@ -10,6 +10,7 @@ import {
 import { useFarm } from '@/store/farmStore';
 import { RainService, type RainfallResult } from '@/services/RainService';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
+import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { roundTo } from '@/utils/numbers';
 
@@ -51,6 +52,7 @@ export default function FieldDetailScreen() {
     fertilizerApplications,
     tillageRecords,
     cluAssignments,
+    fsaTracts,
     viewingSeason,
     farmName
   } = useFarm();
@@ -83,6 +85,22 @@ export default function FieldDetailScreen() {
   const fetchingRainRef = useRef(false);
   const inFlightRainFetchKeyRef = useRef<string | null>(null);
   const lastSuccessfulRainFetchKeyRef = useRef<string | null>(null);
+  const fieldRef = useRef(field);
+  const fieldClusRef = useRef(fieldClus);
+  const fsaTractsRef = useRef(fsaTracts);
+  fieldRef.current = field;
+  fieldClusRef.current = fieldClus;
+  fsaTractsRef.current = fsaTracts;
+  const fieldCluNumbersKey = (field?.cluNumbers ?? []).filter(Boolean).sort().join('|');
+  const fieldAssignmentLocationKey = fieldClus
+    .map(assignment => `${assignment.tractKey}:${assignment.cluNumber}:${assignment.deletedAt ?? ''}`)
+    .sort()
+    .join('|');
+  const fsaTractLocationKey = fsaTracts
+    .filter(tract => !tract.deletedAt)
+    .map(tract => `${tract.tractKey}:${tract.featureCount}:${tract.importedAt}`)
+    .sort()
+    .join('|');
 
   // Derived Values
   const unifiedRecords = useMemo(() => {
@@ -131,30 +149,41 @@ export default function FieldDetailScreen() {
 
   // Fetching Logic
   const handleFetchRain = useCallback(async (signal?: AbortSignal, force = false) => {
-    if (!field?.id || fetchingRainRef.current) return;
-    
-    // Skip if this exact field/activity combination is already loaded or loading.
-    const fetchKey = JSON.stringify({
-      fieldId: field.id,
-      lat: field.lat,
-      lng: field.lng,
-      boundary: field.boundary ?? null,
-      plantDate: latestPlanting?.plantDate || '',
-      sprayDate: latestSpray?.sprayDate || '',
-    });
-    if (!force && lastSuccessfulRainFetchKeyRef.current === fetchKey) return;
-    if (inFlightRainFetchKeyRef.current === fetchKey) return;
-    inFlightRainFetchKeyRef.current = fetchKey;
+    const currentField = fieldRef.current;
+    if (!currentField?.id || fetchingRainRef.current) return;
 
     fetchingRainRef.current = true;
     setFetchingRain(true);
     setRainError(null);
+
+    let fetchKey: string | null = null;
     try {
+      const location = await resolveFieldRainfallLocation(
+        currentField,
+        fieldClusRef.current,
+        fsaTractsRef.current,
+      );
+      if (signal?.aborted) return;
+
+      // Skip if this exact field/activity/location combination is already loaded or loading.
+      fetchKey = JSON.stringify({
+        fieldId: currentField.id,
+        lat: location.lat,
+        lng: location.lng,
+        boundary: location.boundary ?? null,
+        locationSource: location.source,
+        plantDate: latestPlanting?.plantDate || '',
+        sprayDate: latestSpray?.sprayDate || '',
+      });
+      if (!force && lastSuccessfulRainFetchKeyRef.current === fetchKey) return;
+      if (inFlightRainFetchKeyRef.current === fetchKey) return;
+      inFlightRainFetchKeyRef.current = fetchKey;
+
       const data = await RainService.fetchComprehensiveRainfall({
-        fieldId: field.id,
-        lat: field.lat,
-        lng: field.lng,
-        boundary: field.boundary,
+        fieldId: currentField.id,
+        lat: location.lat,
+        lng: location.lng,
+        boundary: location.boundary,
         sincePlantingDate: latestPlanting?.plantDate,
         sinceLastSprayDate: latestSpray?.sprayDate,
         signal
@@ -168,7 +197,7 @@ export default function FieldDetailScreen() {
       console.error('[FieldDetail] Rain fetch error:', err);
       setRainError(err.message || 'Could not load rainfall data.');
     } finally {
-      if (inFlightRainFetchKeyRef.current === fetchKey) {
+      if (fetchKey && inFlightRainFetchKeyRef.current === fetchKey) {
         inFlightRainFetchKeyRef.current = null;
       }
       fetchingRainRef.current = false;
@@ -177,11 +206,16 @@ export default function FieldDetailScreen() {
       }
     }
   }, [
-    field?.id, 
-    field?.lat, 
-    field?.lng, 
-    field?.boundary, 
-    latestPlanting?.plantDate, 
+    field?.id,
+    field?.lat,
+    field?.lng,
+    field?.boundary,
+    field?.fsaFarmNumber,
+    field?.fsaTractNumber,
+    fieldCluNumbersKey,
+    fieldAssignmentLocationKey,
+    fsaTractLocationKey,
+    latestPlanting?.plantDate,
     latestSpray?.sprayDate
   ]);
 
@@ -224,6 +258,15 @@ export default function FieldDetailScreen() {
     setEditingMode('edit');
   };
 
+  const hasFsaTractReference = !!field.fsaFarmNumber && (
+    !!field.fsaTractNumber || field.fsaFarmNumber.includes('-')
+  );
+  const hasFieldMapData =
+    (field.lat != null && field.lng != null) ||
+    !!field.boundary ||
+    fieldClus.length > 0 ||
+    hasFsaTractReference;
+
   return (
     <div className="min-h-screen bg-background pb-24 lg:pb-8">
       {/* Sticky Header */}
@@ -262,7 +305,7 @@ export default function FieldDetailScreen() {
         </section>
 
         {/* Field Boundary Map */}
-        {(field.fsaFarmNumber || field.cluNumbers?.length) && field.lat != null && field.lng != null && (
+        {hasFieldMapData && (
           <section>
             <FieldBoundaryMap fieldId={field.id} />
           </section>

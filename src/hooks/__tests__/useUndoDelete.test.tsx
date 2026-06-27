@@ -40,8 +40,10 @@ describe('useUndoDelete', () => {
     act(() => vi.advanceTimersByTime(10000));
 
     await waitFor(() => expect(onCommit).toHaveBeenCalledWith(['a', 'b'], null));
-    expect(result.current.pending.has('a')).toBe(false);
-    expect(result.current.pending.has('b')).toBe(false);
+    await waitFor(() => {
+      expect(result.current.pending.has('a')).toBe(false);
+      expect(result.current.pending.has('b')).toBe(false);
+    });
   });
 
   it('cancels commit when Undo is clicked', async () => {
@@ -96,7 +98,7 @@ describe('useUndoDelete', () => {
 
     await waitFor(() => expect(onCommit).toHaveBeenCalled());
     await waitFor(() => expect(onError).toHaveBeenCalled());
-    expect(result.current.pending.has('a')).toBe(false);
+    await waitFor(() => expect(result.current.pending.has('a')).toBe(false));
   });
 
   it('passes context to onCommit', async () => {

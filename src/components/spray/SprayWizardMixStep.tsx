@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SprayRecipe, SprayRecipeProduct } from '@/types/farm';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, BookOpen } from 'lucide-react';
 
 interface SprayWizardMixStepProps {
   sprayRecipes: SprayRecipe[];
@@ -31,21 +31,33 @@ export function SprayWizardMixStep({
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-200">
-      {sprayRecipes.length > 0 && (
-        <div>
-          <Label htmlFor="recipeSelect" className="text-muted-foreground font-mono text-xs">SELECT RECIPE</Label>
+      <div className="bg-spray/5 border border-spray/10 p-3.5 rounded-2xl space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="recipeSelect" className="text-xs font-semibold text-spray flex items-center gap-1.5 cursor-pointer">
+            <BookOpen size={14} className="text-spray" />
+            Load Saved Mix / Recipe
+          </Label>
+          {sprayRecipes.length === 0 && (
+            <span className="text-[10px] font-mono text-muted-foreground">None saved</span>
+          )}
+        </div>
+        {sprayRecipes.length > 0 ? (
           <Select value={selectedRecipeId} onValueChange={onRecipeSelect}>
-            <SelectTrigger className="mt-1 bg-muted border-border text-foreground">
-              <SelectValue placeholder="Recipe (optional)" />
+            <SelectTrigger id="recipeSelect" className="h-11 bg-background border-spray/20 hover:border-spray/40 text-foreground text-sm font-semibold transition-all">
+              <SelectValue placeholder="Tap to select a mix recipe..." />
             </SelectTrigger>
             <SelectContent>
               {sprayRecipes.map(r => (
-                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                <SelectItem key={r.id} value={r.id} className="text-xs font-semibold">{r.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-      )}
+        ) : (
+          <p className="text-[11px] text-muted-foreground leading-normal">
+            No saved recipes yet. You can save any custom mix as a recipe after successfully logging a spray.
+          </p>
+        )}
+      </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -68,7 +80,9 @@ export function SprayWizardMixStep({
             <div className="space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="col-span-1">
-                  <Label htmlFor={`productName-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Trade Name *</Label>
+                  <Label htmlFor={`productName-${i}`} className="text-xs font-semibold text-muted-foreground">
+                    Trade Name <span className="text-destructive ml-0.5">*</span>
+                  </Label>
                   <Input
                     id={`productName-${i}`}
                     value={p.product}
@@ -78,7 +92,7 @@ export function SprayWizardMixStep({
                   />
                 </div>
                 <div className="col-span-1">
-                  <Label htmlFor={`epaReg-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
+                  <Label htmlFor={`epaReg-${i}`} className="text-xs font-semibold text-muted-foreground">EPA Reg #</Label>
                   <Input
                     id={`epaReg-${i}`}
                     value={p.epaRegNumber}
@@ -90,7 +104,7 @@ export function SprayWizardMixStep({
               </div>
 
               <div>
-                <Label htmlFor={`activeIngredients-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Active Ingredients</Label>
+                <Label htmlFor={`activeIngredients-${i}`} className="text-xs font-semibold text-muted-foreground">Active Ingredients</Label>
                 <Input
                   id={`activeIngredients-${i}`}
                   value={p.activeIngredients || ''}
@@ -102,10 +116,14 @@ export function SprayWizardMixStep({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor={`appRate-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Rate / Ac *</Label>
+                  <Label htmlFor={`appRate-${i}`} className="text-xs font-semibold text-muted-foreground">
+                    Rate / Ac <span className="text-destructive ml-0.5">*</span>
+                  </Label>
                   <div className="flex gap-1.5 mt-0.5">
                     <Input
                       id={`appRate-${i}`}
+                      type="number"
+                      inputMode="decimal"
                       value={p.rate}
                       onChange={e => updateProduct(i, 'rate', e.target.value)}
                       placeholder="22"
@@ -124,10 +142,12 @@ export function SprayWizardMixStep({
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor={`totalProduct-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Total Product Amt</Label>
+                  <Label htmlFor={`totalProduct-${i}`} className="text-xs font-semibold text-muted-foreground">Total Product Amt</Label>
                   <div className="flex gap-1.5 mt-0.5">
                     <Input
                       id={`totalProduct-${i}`}
+                      type="number"
+                      inputMode="decimal"
                       value={p.totalProductAmount || ''}
                       onChange={e => updateProduct(i, 'totalProductAmount', e.target.value)}
                       placeholder="15"

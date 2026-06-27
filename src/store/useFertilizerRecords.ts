@@ -65,7 +65,9 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
       try {
         await syncQueue.enqueueMutation('fertilizer_applications', 'insert', { ...mapped, farm_id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Fertilizer application recorded offline.');
+        toast.success('Fertilizer application recorded offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue fertilizer record offline:', err);
@@ -144,7 +146,9 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
       try {
         await syncQueue.enqueueMutation('fertilizer_applications', 'update', { ...mapped, id: r.id }, farm_id);
         if (onMutation) await onMutation();
-        toast.success('Fertilizer application updated offline.');
+        toast.success('Fertilizer application updated offline.', {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue fertilizer record update offline:', err);
@@ -226,7 +230,9 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
         }
         if (onMutation) await onMutation();
         const count = ids.length;
-        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`);
+        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
+          description: 'Queued locally — will sync automatically when connection is restored.',
+        });
         return true;
       } catch (err) {
         console.error('Failed to enqueue fertilizer record delete offline:', err);

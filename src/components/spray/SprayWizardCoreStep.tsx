@@ -4,7 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Clock, MapPin, User, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Clock, MapPin, User, FileText, Camera, Trash2 } from 'lucide-react';
 
 interface SprayWizardCoreStepProps {
   // State
@@ -22,6 +23,8 @@ interface SprayWizardCoreStepProps {
   equipmentId: string;
   rei: string;
   notes: string;
+  photoBase64: string;
+  photoType: string;
   sensitiveAreaCheck: boolean;
   sensitiveAreaNotes: string;
   showValidation: boolean;
@@ -41,6 +44,8 @@ interface SprayWizardCoreStepProps {
   setEquipmentId: (v: string) => void;
   setRei: (v: string) => void;
   setNotes: (v: string) => void;
+  setPhotoBase64: (v: string) => void;
+  setPhotoType: (v: string) => void;
   setSensitiveAreaCheck: (v: boolean) => void;
   setSensitiveAreaNotes: (v: string) => void;
 }
@@ -51,15 +56,57 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
     applicatorName, licenseNumber, targetPest,
     cropOrSiteTreated, applicationMethod, siteAddress,
     involvedTechnicians, equipmentId, rei, notes,
-    sensitiveAreaCheck, sensitiveAreaNotes, showValidation,
+    photoBase64, photoType, sensitiveAreaCheck, sensitiveAreaNotes, showValidation,
     setSprayDate, setStartTime, setEndTime, setIsEndTimeManual,
     setApplicatorName, setLicenseNumber, setTargetPest,
     setCropOrSiteTreated, setApplicationMethod, setSiteAddress,
     setInvolvedTechnicians, setEquipmentId, setRei, setNotes,
-    setSensitiveAreaCheck, setSensitiveAreaNotes
+    setPhotoBase64, setPhotoType, setSensitiveAreaCheck, setSensitiveAreaNotes
   } = props;
 
   const inputError = (missing: boolean) => missing && showValidation ? 'border-destructive ring-1 ring-destructive' : '';
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          const base64 = dataUrl.split(',')[1];
+          setPhotoBase64(base64);
+          setPhotoType('image/jpeg');
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
@@ -68,19 +115,23 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
           <Clock size={12} /> timing
         </div>
         <div>
-          <Label htmlFor="sprayDate" className="text-muted-foreground font-mono text-xs font-bold">APPLICATION DATE *</Label>
+          <Label htmlFor="sprayDate" className="text-xs font-semibold text-muted-foreground">
+            Application Date <span className="text-destructive ml-0.5">*</span>
+          </Label>
           <Input
             id="sprayDate"
             name="sprayDate"
             type="date"
             value={sprayDate}
             onChange={e => setSprayDate(e.target.value)}
-            className={`mt-1 bg-muted border-border text-foreground ${inputError(!sprayDate)}`}
+            className={`mt-1 bg-muted border-border text-foreground h-11 ${inputError(!sprayDate)}`}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="startTime" className="text-[11px] font-mono text-muted-foreground uppercase">Start Time *</Label>
+            <Label htmlFor="startTime" className="text-xs font-semibold text-muted-foreground">
+              Start Time <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Input
               id="startTime"
               type="time"
@@ -91,9 +142,11 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
           </div>
           <div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="endTime" className="text-[11px] font-mono text-muted-foreground uppercase">End Time *</Label>
+              <Label htmlFor="endTime" className="text-xs font-semibold text-muted-foreground">
+                End Time <span className="text-destructive ml-0.5">*</span>
+              </Label>
               <div className="flex items-center gap-1">
-                <span className="text-[11px] font-mono text-muted-foreground">MANUAL</span>
+                <span className="text-[10px] font-mono text-muted-foreground">MANUAL</span>
                 <Switch
                   id="endTimeManual"
                   checked={isEndTimeManual}
@@ -119,7 +172,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="applicator" className="text-[11px] font-mono text-muted-foreground uppercase">Cert. Applicator *</Label>
+            <Label htmlFor="applicator" className="text-xs font-semibold text-muted-foreground">
+              Cert. Applicator <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Input
               id="applicator"
               value={applicatorName}
@@ -128,7 +183,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             />
           </div>
           <div>
-            <Label htmlFor="license" className="text-[11px] font-mono text-muted-foreground uppercase">License # *</Label>
+            <Label htmlFor="license" className="text-xs font-semibold text-muted-foreground">
+              License Number <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Input
               id="license"
               value={licenseNumber}
@@ -139,7 +196,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="equipmentId" className="text-[11px] font-mono text-muted-foreground uppercase">Equipment ID *</Label>
+            <Label htmlFor="equipmentId" className="text-xs font-semibold text-muted-foreground">
+              Equipment ID <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Input
               id="equipmentId"
               value={equipmentId}
@@ -149,7 +208,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             />
           </div>
           <div>
-            <Label htmlFor="rei" className="text-[11px] font-mono text-muted-foreground uppercase">REI (Re-entry)</Label>
+            <Label htmlFor="rei" className="text-xs font-semibold text-muted-foreground">
+              REI (Re-entry Interval)
+            </Label>
             <Input
               id="rei"
               value={rei}
@@ -160,7 +221,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
           </div>
         </div>
         <div>
-          <Label htmlFor="technicians" className="text-[11px] font-mono text-muted-foreground uppercase">Involved Technicians / Helpers (Optional)</Label>
+          <Label htmlFor="technicians" className="text-xs font-semibold text-muted-foreground">
+            Involved Technicians / Helpers (Optional)
+          </Label>
           <Input
             id="technicians"
             value={involvedTechnicians}
@@ -177,7 +240,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="col-span-1">
-            <Label htmlFor="cropTreated" className="text-[11px] font-mono text-muted-foreground uppercase">Crop / Site Treated *</Label>
+            <Label htmlFor="cropTreated" className="text-xs font-semibold text-muted-foreground">
+              Crop / Site Treated <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Input
               id="cropTreated"
               value={cropOrSiteTreated}
@@ -187,7 +252,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             />
           </div>
           <div>
-            <Label htmlFor="appMethod" className="text-[11px] font-mono text-muted-foreground uppercase">App Method *</Label>
+            <Label htmlFor="appMethod" className="text-xs font-semibold text-muted-foreground">
+              Application Method <span className="text-destructive ml-0.5">*</span>
+            </Label>
             <Select value={applicationMethod} onValueChange={setApplicationMethod}>
               <SelectTrigger className={`mt-0.5 bg-muted border-border text-foreground h-11 text-sm ${inputError(!applicationMethod.trim())}`}>
                 <SelectValue placeholder="Select method" />
@@ -201,7 +268,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
           </div>
         </div>
         <div>
-          <Label htmlFor="siteAddress" className="text-[11px] font-mono text-muted-foreground uppercase">Site Description / Address</Label>
+          <Label htmlFor="siteAddress" className="text-xs font-semibold text-muted-foreground">
+            Site Description / Address
+          </Label>
           <Input
             id="siteAddress"
             value={siteAddress}
@@ -211,7 +280,9 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
           />
         </div>
         <div>
-          <Label htmlFor="targetPest" className="text-[11px] font-mono text-muted-foreground uppercase">Target Pest(s) *</Label>
+          <Label htmlFor="targetPest" className="text-xs font-semibold text-muted-foreground">
+            Target Pest(s) <span className="text-destructive ml-0.5">*</span>
+          </Label>
           <Input
             id="targetPest"
             value={targetPest}
@@ -234,7 +305,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             className="mt-0.5 border-spray/50 data-[state=checked]:bg-spray data-[state=checked]:border-spray"
           />
           <div className="grid gap-1.5 leading-none">
-            <Label htmlFor="sensitiveAreaCheck" className="text-[11px] font-bold text-spray uppercase leading-tight cursor-pointer">
+            <Label htmlFor="sensitiveAreaCheck" className="text-xs font-bold text-spray uppercase leading-tight cursor-pointer">
               Sensitive Area Check Performed
             </Label>
             <p className="text-[10px] text-muted-foreground leading-tight">
@@ -244,7 +315,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
         </div>
         {sensitiveAreaCheck && (
           <div className="animate-in fade-in slide-in-from-top-1 duration-200">
-            <Label htmlFor="sensitiveAreaNotes" className="text-[11px] font-mono text-muted-foreground uppercase text-spray">Sensitive Area Notes</Label>
+            <Label htmlFor="sensitiveAreaNotes" className="text-xs font-semibold text-spray">Sensitive Area Notes</Label>
             <Input
               id="sensitiveAreaNotes"
               value={sensitiveAreaNotes}
@@ -255,7 +326,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
           </div>
         )}
         <div>
-          <Label htmlFor="notes" className="text-[11px] font-mono text-muted-foreground uppercase">Notes / Additional Info</Label>
+          <Label htmlFor="notes" className="text-xs font-semibold text-muted-foreground">Notes / Additional Info</Label>
           <Textarea
             id="notes"
             value={notes}
@@ -264,6 +335,54 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             className="mt-0.5 bg-muted border-border text-foreground text-sm resize-none"
             rows={2}
           />
+        </div>
+
+        {/* Ticket/Label Photo attachment */}
+        <div className="space-y-2 mt-2 pt-2 border-t border-border/40">
+          <Label className="text-xs font-semibold text-muted-foreground">Attach Ticket / Label Photo</Label>
+          <div className="flex items-center gap-3">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              id="spray-ticket-photo"
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
+            {photoBase64 ? (
+              <div className="flex items-center gap-2 bg-muted p-2 rounded-xl border border-border w-full justify-between">
+                <div className="flex items-center gap-2">
+                  <img
+                    src={`data:${photoType || 'image/jpeg'};base64,${photoBase64}`}
+                    alt="Ticket Preview"
+                    className="w-12 h-12 object-cover rounded-lg border border-border"
+                  />
+                  <span className="text-xs font-semibold text-foreground">Photo attached</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setPhotoBase64(''); setPhotoType(''); }}
+                  className="h-8 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 size={14} className="mr-1" /> Remove
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full border-dashed border-spray/30 text-spray text-xs font-bold hover:bg-spray/5"
+                asChild
+              >
+                <Label htmlFor="spray-ticket-photo" className="cursor-pointer flex items-center justify-center gap-2 w-full h-full">
+                  <Camera size={16} />
+                  Capture Photo / Ticket
+                </Label>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

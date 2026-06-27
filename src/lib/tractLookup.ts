@@ -14,6 +14,17 @@ export interface TractFeatureCollection {
   features: TractFeature[];
 }
 
+export interface KeyedTractCollection {
+  tractKey: string;
+  collection: TractFeatureCollection;
+}
+
+export interface ImportedTractLike {
+  tractKey: string;
+  geojson: TractFeatureCollection;
+  deletedAt?: string | null;
+}
+
 const tractCache = new Map<string, TractFeatureCollection>();
 
 export function parseTractKeys(fsaFarmNumber: string | null | undefined, fsaTractNumber: string | null | undefined): string[] {
@@ -57,6 +68,33 @@ export async function loadTractData(keys: string[]): Promise<TractFeatureCollect
   }
 
   return results;
+}
+
+export async function loadKeyedTractCollections(
+  tractKeys: string[],
+  importedTracts: ImportedTractLike[] = [],
+): Promise<KeyedTractCollection[]> {
+  const importedByKey = new Map(
+    importedTracts
+      .filter(tract => !tract.deletedAt)
+      .map(tract => [tract.tractKey, tract.geojson] as const),
+  );
+  const collections: KeyedTractCollection[] = [];
+
+  for (const tractKey of tractKeys) {
+    const imported = importedByKey.get(tractKey);
+    if (imported) {
+      collections.push({ tractKey, collection: imported });
+      continue;
+    }
+
+    const [bundled] = await loadTractData([tractKey]);
+    if (bundled) {
+      collections.push({ tractKey, collection: bundled });
+    }
+  }
+
+  return collections;
 }
 
 export function loadTractDataFromStore(

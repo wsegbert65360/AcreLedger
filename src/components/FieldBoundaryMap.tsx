@@ -6,8 +6,8 @@ import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet';
 import '@/lib/leafletSetup';
 
 import { useFarm } from '@/store/farmStore';
-import { loadTractData, parseTractKeys, type TractFeature, type TractFeatureCollection } from '@/lib/tractLookup';
-import type { CluLandUse, FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
+import { loadKeyedTractCollections, parseTractKeys, type TractFeature } from '@/lib/tractLookup';
+import type { CluLandUse, FieldCluAssignment } from '@/types/fsaTract';
 import type { Field } from '@/types/farm';
 import { getLatLngsFromGeometry, hasValidGeometry } from '@/lib/geoHelpers';
 
@@ -21,10 +21,6 @@ type DisplayFeature = TractFeature & {
   isAssigned: boolean;
 };
 
-interface KeyedCollection {
-  tractKey: string;
-  collection: TractFeatureCollection;
-}
 
 const CLU_STYLES = {
   assignedCropland: { color: '#86efac', fillColor: '#22c55e', weight: 3, opacity: 1, fillOpacity: 0.32 },
@@ -32,33 +28,6 @@ const CLU_STYLES = {
   legacy: { color: '#93c5fd', fillColor: '#3b82f6', weight: 3, opacity: 0.92, fillOpacity: 0.22 },
   context: { color: '#cbd5e1', fillColor: '#64748b', weight: 2, opacity: 0.65, fillOpacity: 0.08 },
 };
-
-async function loadKeyedCollections(
-  tractKeys: string[],
-  importedTracts: FsaTractImport[],
-): Promise<KeyedCollection[]> {
-  const importedByKey = new Map(
-    importedTracts
-      .filter(tract => !tract.deletedAt)
-      .map(tract => [tract.tractKey, tract.geojson] as const),
-  );
-  const collections: KeyedCollection[] = [];
-
-  for (const tractKey of tractKeys) {
-    const imported = importedByKey.get(tractKey);
-    if (imported) {
-      collections.push({ tractKey, collection: imported });
-      continue;
-    }
-
-    const [bundled] = await loadTractData([tractKey]);
-    if (bundled) {
-      collections.push({ tractKey, collection: bundled });
-    }
-  }
-
-  return collections;
-}
 
 function boundaryRings(field: Field | undefined): L.LatLngExpression[][] {
   return (field?.boundary?.coordinates ?? [])
@@ -201,7 +170,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
           assignmentByKey.set(`${assignment.tractKey}:${assignment.cluNumber}`, assignment);
         }
 
-        const collections = await loadKeyedCollections(tractKeys, fsaTracts);
+        const collections = await loadKeyedTractCollections(tractKeys, fsaTracts);
         if (cancelled) return;
 
         const assignedFeatures = collections.flatMap(({ tractKey, collection }) =>
@@ -231,7 +200,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
       }
 
       const legacyClus = new Set(field?.cluNumbers?.filter(Boolean) ?? []);
-      const collections = await loadKeyedCollections(keys, fsaTracts);
+      const collections = await loadKeyedTractCollections(keys, fsaTracts);
       if (cancelled) return;
 
       const fallbackFeatures = collections.flatMap(({ tractKey, collection }) =>
@@ -260,7 +229,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
     return () => { cancelled = true; };
   }, [fieldId, field?.fsaFarmNumber, field?.fsaTractNumber, field?.cluNumbers, cluAssignments, fsaTracts]);
 
-  if (field?.lat == null || field.lng == null) return null;
+  if (!field) return null;
 
   return (
     <div className="h-48 w-full rounded-lg overflow-hidden border border-border bg-muted relative">
@@ -281,7 +250,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
         <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}" />
         <TractPolygons features={features} field={field} />
-        {features.length === 0 && boundaryRings(field).length === 0 && <Marker position={center} />}
+        {features.length === 0 && boundaryRings(field).length === 0 && field.lat != null && field.lng != null && <Marker position={center} />}
       </MapContainer>
 
       {features.length === 0 && !loading && (

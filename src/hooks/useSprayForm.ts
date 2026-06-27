@@ -48,7 +48,7 @@ function normalizeProducts(initial?: SprayRecord): SprayRecipeProduct[] {
 
 export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' }: UseSprayFormProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { addSprayRecord, updateSprayRecord, sprayRecipes, sprayRecords, session, viewingSeason } = useFarm();
+  const { addSprayRecord, updateSprayRecord, addSprayRecipe, sprayRecipes, sprayRecords, session, viewingSeason } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || 'local';
 
   const initialDataRef = useRef(initialData);
@@ -56,9 +56,28 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     initialDataRef.current = initialData;
   }, [initialData]);
 
-  // Wizard navigation
+  // Utility to extract attachment from notes
+  const extractAttachment = useCallback((notesStr: string) => {
+    const match = notesStr.match(/\[ATTACHMENT:(data:image\/[^;]+;base64,([^\]]+))\]/);
+    if (match) {
+      return {
+        cleanNotes: notesStr.replace(/\[ATTACHMENT:[^\]]+\]/, '').trim(),
+        dataUri: match[1],
+        base64: match[2],
+        type: match[1].split(';')[0].replace('data:', '')
+      };
+    }
+    return { cleanNotes: notesStr, dataUri: '', base64: '', type: '' };
+  }, []);
+
+  // Wizard navigation & quick mode
   const [step, setStep] = useState<SprayWizardStep>('core');
   const stepIndex = WIZARD_STEPS.indexOf(step);
+  const [isQuickMode, setIsQuickMode] = useState(() => localStorage.getItem('al_spray_quick_mode') === 'true');
+
+  useEffect(() => {
+    localStorage.setItem('al_spray_quick_mode', String(isQuickMode));
+  }, [isQuickMode]);
 
   // Form state
   const [products, setProducts] = useState<SprayRecipeProduct[]>(() => normalizeProducts(initialData));
@@ -85,6 +104,8 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [applicationMethod, setApplicationMethod] = useState(initialData?.applicationMethod || 'Ground Broadcast');
   const [rei, setRei] = useState(initialData?.rei || '12h');
   const [notes, setNotes] = useState(initialData?.notes || '');
+  const [photoBase64, setPhotoBase64] = useState('');
+  const [photoType, setPhotoType] = useState('');
   const [sensitiveAreaCheck, setSensitiveAreaCheck] = useState(initialData?.sensitiveAreaCheck || false);
   const [sensitiveAreaNotes, setSensitiveAreaNotes] = useState(initialData?.sensitiveAreaNotes || '');
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
@@ -96,6 +117,18 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [isSaving, setIsSaving] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const hasSeenIncompleteWarning = useRef(false);
+
+  // Save-as-recipe dialog state
+  const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
+  const [recipeName, setRecipeName] = useState('');
+  const [isSavingRecipe, setIsSavingRecipe] = useState(false);
+  const closeAfterRecipeDialogRef = useRef(false);
+  const pendingRecipeRef = useRef<{
+    products: { product: string; rate: string; rateUnit: string; epaRegNumber?: string; activeIngredients?: string }[];
+    applicatorName: string;
+    licenseNumber: string;
+    targetPest: string;
+  } | null>(null);
 
   const suggestedSpray = useMemo(() => {
     if (initialData) return null;
@@ -134,7 +167,11 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setCropOrSiteTreated(initialData.cropOrSiteTreated || '');
       setApplicationMethod(initialData.applicationMethod || 'Ground Broadcast');
       setRei(initialData.rei || '12h');
-      setNotes(initialData.notes || '');
+      const parsed = extractAttachment(initialData.notes || '');
+      setNotes(parsed.cleanNotes);
+      setPhotoBase64(isDuplicate ? '' : parsed.base64);
+      setPhotoType(isDuplicate ? '' : parsed.type);
+
       setSensitiveAreaCheck(initialData.sensitiveAreaCheck || false);
       setSensitiveAreaNotes(initialData.sensitiveAreaNotes || '');
 
@@ -421,6 +458,11 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       if (licenseNumber.trim()) localStorage.setItem(`al_license_number_${userPrefix}`, licenseNumber.trim());
       if (equipmentId.trim()) localStorage.setItem(`al_equipment_id_${userPrefix}`, equipmentId.trim());
 
+      let finalNotes = notes.trim();
+      if (photoBase64 && photoType) {
+        finalNotes = `${finalNotes}\n[ATTACHMENT:data:${photoType};base64,${photoBase64}]`.trim();
+      }
+
       const data = {
         fieldId: field.id,
         fieldName: field.name,
@@ -451,7 +493,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
         involvedTechnicians: involvedTechnicians.trim() || undefined,
         equipmentId: equipmentId.trim() || undefined,
         rei: rei.trim() || undefined,
-        notes: notes.trim() || undefined,
+        notes: finalNotes || undefined,
         sensitiveAreaCheck,
         sensitiveAreaNotes: sensitiveAreaNotes.trim() || undefined,
         complianceProfile,
@@ -470,9 +512,59 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
       if (success) {
         native.haptic.success();
+
+        // Save as recipe prompt — only fire when the mix is novel.
+        // The canonical save success toast is fired by useSprayRecords.addSprayRecord,
+        // so we only emit a toast here when there's an actionable follow-up.
+        const currentProducts = [...products];
+        const currentApplicator = applicatorName.trim();
+        const currentLicense = licenseNumber.trim();
+        const currentTargetPest = targetPest.trim();
+
+        const getMixSignature = (recipeProducts: typeof currentProducts) => recipeProducts
+          .map(p => [
+            p.product.trim().toLowerCase(),
+            p.rate.trim().toLowerCase(),
+            p.rateUnit.trim().toLowerCase(),
+            p.epaRegNumber?.trim().toLowerCase() || '',
+          ].join('|'))
+          .sort()
+          .join(',');
+        const mixSignature = getMixSignature(currentProducts);
+        const recipeExists = sprayRecipes.some(r => getMixSignature(r.products) === mixSignature);
+        const shouldPromptForRecipe = currentProducts.some(p => p.product.trim()) && !recipeExists;
+
+        if (shouldPromptForRecipe) {
+          pendingRecipeRef.current = {
+            products: currentProducts.filter(p => p.product.trim()).map(p => ({
+              product: p.product,
+              rate: p.rate,
+              rateUnit: p.rateUnit,
+              epaRegNumber: p.epaRegNumber,
+              activeIngredients: p.activeIngredients
+            })),
+            applicatorName: currentApplicator,
+            licenseNumber: currentLicense,
+            targetPest: currentTargetPest,
+          };
+          setRecipeName('');
+          closeAfterRecipeDialogRef.current = !keepOpen;
+          setRecipeDialogOpen(true);
+          toast.success('Spray record saved.', {
+            description: 'Tap "Save as Recipe" to reuse this chemical mix.',
+            action: {
+              label: 'Save as Recipe',
+              onClick: () => setRecipeDialogOpen(true),
+            },
+            duration: 10000,
+          });
+        }
+
         if (keepOpen) {
           setProducts([createEmptyProduct()]);
           setNotes('');
+          setPhotoBase64('');
+          setPhotoType('');
           setTotalAmountApplied('');
           setStartTime(new Date().toTimeString().slice(0, 5));
           setEndTime('');
@@ -480,8 +572,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
           setShowValidation(false);
           hasSeenIncompleteWarning.current = false;
           setStep('core');
-          toast.success('Record saved. Ready for next entry.');
-        } else {
+        } else if (!shouldPromptForRecipe) {
           onClose();
         }
       } else {
@@ -494,7 +585,49 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     } finally {
       setIsSaving(false);
     }
-  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, isPremixed, field.id, field.name, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose, isDuplicate]);
+  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, isPremixed, field.id, field.name, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose, isDuplicate, sprayRecipes, photoBase64, photoType]);
+
+  const confirmSaveRecipe = useCallback(async () => {
+    const pending = pendingRecipeRef.current;
+    const name = recipeName.trim();
+    if (!pending || !name) return;
+
+    setIsSavingRecipe(true);
+    try {
+      const recSuccess = await addSprayRecipe({
+        name,
+        products: pending.products,
+        applicatorName: pending.applicatorName,
+        licenseNumber: pending.licenseNumber,
+        targetPest: pending.targetPest,
+        deleted_at: null,
+      });
+      if (recSuccess) {
+        toast.success(`Recipe "${name}" saved.`);
+        setRecipeDialogOpen(false);
+        setRecipeName('');
+        pendingRecipeRef.current = null;
+        if (closeAfterRecipeDialogRef.current) {
+          closeAfterRecipeDialogRef.current = false;
+          onClose();
+        }
+      } else {
+        toast.error('Failed to save recipe.');
+      }
+    } finally {
+      setIsSavingRecipe(false);
+    }
+  }, [recipeName, addSprayRecipe, onClose]);
+
+  const cancelRecipeDialog = useCallback(() => {
+    setRecipeDialogOpen(false);
+    setRecipeName('');
+    pendingRecipeRef.current = null;
+    if (closeAfterRecipeDialogRef.current) {
+      closeAfterRecipeDialogRef.current = false;
+      onClose();
+    }
+  }, [onClose]);
 
   return {
     // Wizard
@@ -507,6 +640,23 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     goNext,
     goBack,
     goToStep,
+
+    // Quick/Glove mode & Photo attachment
+    isQuickMode,
+    setIsQuickMode,
+    photoBase64,
+    setPhotoBase64,
+    photoType,
+    setPhotoType,
+
+    // Save-as-recipe dialog
+    recipeDialogOpen,
+    recipeName,
+    setRecipeName,
+    setRecipeDialogOpen,
+    confirmSaveRecipe,
+    cancelRecipeDialog,
+    isSavingRecipe,
 
     // State values
     products,

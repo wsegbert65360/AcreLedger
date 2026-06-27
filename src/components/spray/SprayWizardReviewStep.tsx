@@ -23,6 +23,9 @@ interface SprayWizardReviewStepProps {
   manualWindSpeed: string;
   isFullyCompliant: boolean;
   missingComplianceFields: string[];
+  notes: string;
+  photoBase64: string;
+  photoType: string;
 }
 
 function ReviewRow({ label, value, icon: Icon }: { label: string; value: React.ReactNode; icon?: React.ElementType }) {
@@ -45,7 +48,8 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
     targetPest, cropOrSiteTreated, applicationMethod,
     treatedAreaSize, treatedAreaUnit,
     products, weather, manualWindDirection, manualWindSpeed,
-    isFullyCompliant, missingComplianceFields
+    isFullyCompliant, missingComplianceFields,
+    notes, photoBase64, photoType
   } = props;
 
   return (
@@ -96,6 +100,25 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
         <ReviewRow label="Temperature" value={weather ? `${weather.temp}°F` : '—'} />
         <ReviewRow label="Humidity" value={weather ? `${weather.humidity}%` : '—'} />
       </div>
+
+      {(notes.trim() || photoBase64) && (
+        <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+          <div className="text-[11px] font-mono text-muted-foreground uppercase font-bold">Notes & Attachment</div>
+          {notes.trim() && (
+            <p className="text-xs font-mono text-foreground whitespace-pre-wrap">{notes}</p>
+          )}
+          {photoBase64 && (
+            <div className="mt-2 space-y-1">
+              <span className="text-[10px] font-mono text-muted-foreground block uppercase">Attached Ticket / Label:</span>
+              <img
+                src={`data:${photoType || 'image/jpeg'};base64,${photoBase64}`}
+                alt="Attached Ticket"
+                className="max-h-48 w-auto rounded-lg border border-border object-contain"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {isFullyCompliant ? (
         <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-green-600">
