@@ -328,7 +328,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
               <div>
                 <Label htmlFor="fsaImportCandidate" className="text-muted-foreground font-mono text-xs uppercase">Imported polygon</Label>
                 <Select value={selectedImportId} onValueChange={handleImportSelection}>
-                  <SelectTrigger id="fsaImportCandidate" className="h-9 mt-1 bg-background border-border font-mono text-xs">
+                  <SelectTrigger id="fsaImportCandidate" className="h-11 mt-1 bg-background border-border font-mono text-xs">
                     <SelectValue placeholder="Select FSA polygon" />
                   </SelectTrigger>
                   <SelectContent>
@@ -500,7 +500,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             <div>
               <Label htmlFor="fieldIrrigation" className="text-muted-foreground font-mono text-xs uppercase">Irrigation</Label>
               <Select value={irrigation} onValueChange={(val: any) => setIrrigation(val)}>
-                <SelectTrigger id="fieldIrrigation" className="h-10 mt-1 bg-muted border-border font-mono text-sm leading-tight text-foreground/80 focus:ring-1 focus:ring-primary/30">
+                <SelectTrigger id="fieldIrrigation" className="h-11 mt-1 bg-muted border-border font-mono text-sm leading-tight text-foreground/80 focus:ring-1 focus:ring-primary/30">
                   <SelectValue placeholder="Non-Irrigated" />
                 </SelectTrigger>
                 <SelectContent>

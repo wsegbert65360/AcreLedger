@@ -279,7 +279,7 @@ export default function FieldDetailScreen() {
               onClick={() => setIsCluDialogOpen(true)}
               variant="outline"
               size="sm"
-              className="h-8 text-xs font-bold"
+              className="h-11 text-xs font-bold px-4"
             >
               Manage CLUs
             </Button>
@@ -452,7 +452,7 @@ export default function FieldDetailScreen() {
               const el = document.getElementById('history-section');
               el?.scrollIntoView({ behavior: 'smooth' });
             }}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-muted/80 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted text-muted-foreground text-sm font-semibold hover:bg-muted/80 transition-colors"
           >
             <HistoryIcon size={14} />
             View Full History
@@ -462,7 +462,7 @@ export default function FieldDetailScreen() {
         {/* 4. Rainfall Summary Section */}
         <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Droplets size={16} className="text-spray" />
               Rainfall Summary
             </h3>
@@ -489,8 +489,8 @@ export default function FieldDetailScreen() {
                 return `${days}d`;})() : '—' },
             ].map((stat, i) => (
               <div key={i} className="p-3 rounded-2xl bg-muted/50 border border-border/60">
-                <div className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
-                <div className="text-xl font-black text-foreground leading-none">{stat.value}"</div>
+                <div className="text-xs font-semibold text-muted-foreground mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
+                <div className="text-xl font-black font-mono text-foreground leading-none">{stat.value}"</div>
               </div>
             ))}
           </div>
@@ -520,7 +520,7 @@ export default function FieldDetailScreen() {
         {latestSpray && (
           <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Cloud size={16} className="text-spray" />
                 Latest Spray
               </h3>
@@ -532,14 +532,14 @@ export default function FieldDetailScreen() {
 
             <div className="grid grid-cols-2 gap-y-4">
               <div>
-                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Application Date</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Application Date</label>
                 <div className="text-sm font-bold text-foreground">
                   {new Date(latestSpray.sprayDate || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
                 <div className="text-xs text-muted-foreground">{latestSpray.startTime} - {latestSpray.endTime}</div>
               </div>
               <div>
-                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Rain Since Spray</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Rain Since Spray</label>
                 <div className="text-sm font-bold text-foreground flex items-center gap-1.5">
                   <Droplets size={14} className="text-spray" />
                   {fmtRain(rainStats?.sinceLastSpray)}"
@@ -553,7 +553,7 @@ export default function FieldDetailScreen() {
                         {p.product} ({p.rate} {p.rateUnit})
                       </span>
                       {p.activeIngredients && (
-                        <span className="text-[11px] font-mono text-muted-foreground italic leading-none pb-0.5">
+                        <span className="text-xs font-mono text-muted-foreground italic leading-none pb-0.5">
                           {p.activeIngredients}
                         </span>
                       )}
@@ -562,7 +562,7 @@ export default function FieldDetailScreen() {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Target Pest</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Target Pest</label>
                 <div className="text-sm font-bold text-foreground truncate">{latestSpray.targetPest || 'General'}</div>
               </div>
             </div>
@@ -570,14 +570,14 @@ export default function FieldDetailScreen() {
             <div className="flex gap-2 pt-2 border-t border-border/70">
               <button
                 onClick={() => handleEdit('spray', latestSpray)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-muted text-muted-foreground text-xs font-bold uppercase tracking-widest hover:bg-muted/80 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-muted text-muted-foreground text-sm font-semibold hover:bg-muted/80 transition-colors"
               >
                 <FileText size={14} />
                 View Record
               </button>
               <button
                 onClick={() => generateSprayPDF([latestSpray], farmName)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-spray/10 text-spray text-xs font-bold uppercase tracking-widest hover:bg-spray/20 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-spray/10 text-spray text-sm font-semibold hover:bg-spray/20 transition-colors"
               >
                 <ExternalLink size={14} />
                 Export PDF
@@ -589,13 +589,13 @@ export default function FieldDetailScreen() {
         {/* 6. Field History Timeline */}
         <section id="history-section" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
               <HistoryIcon size={16} className="text-muted-foreground" />
               Field History
             </h3>
             <button
               onClick={() => navigate('/activity')}
-              className="text-xs font-black text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
+              className="text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
             >
               View All Activity
             </button>
@@ -612,7 +612,7 @@ export default function FieldDetailScreen() {
             {unifiedRecords.length > 8 && (
               <button
                 onClick={() => navigate('/activity')}
-                className="w-full py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
+                className="w-full py-4 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
               >
                 + {unifiedRecords.length - 8} more activities
               </button>
@@ -630,30 +630,30 @@ export default function FieldDetailScreen() {
 
         {/* 7. Field Details (Meta) */}
         <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
-          <h3 className="text-sm font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
             <MapPin size={16} className="text-primary" />
             Field Details
           </h3>
 
           <div className="grid grid-cols-2 gap-y-4 text-xs">
             <div>
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Acreage</label>
+              <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Acreage</label>
               <div className="font-bold text-foreground">{displayFieldAcres} Plantable Acres</div>
             </div>
             <div>
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Location</label>
+              <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Location</label>
               <div className="font-mono text-xs text-foreground">{field.lat != null ? field.lat.toFixed(4) : '—'}, {field.lng != null ? field.lng.toFixed(4) : '—'}</div>
             </div>
             <div>
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Irrigation</label>
+              <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Irrigation</label>
               <div className="font-bold text-foreground">{field.irrigationPractice || 'Non-Irrigated'}</div>
             </div>
             <div>
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Intended Use</label>
+              <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Intended Use</label>
               <div className="font-bold text-foreground">{field.intendedUse || 'Cash Grain'}</div>
             </div>
             <div>
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest block mb-0.5">Share %</label>
+              <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Share %</label>
               <div className="font-bold text-foreground">{field.producerShare || 100}% Producer</div>
             </div>
           </div>

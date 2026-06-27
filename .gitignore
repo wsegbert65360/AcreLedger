@@ -36,6 +36,7 @@ vite-dev.log
 vite-dev.err.log
 *.png
 SECURITY_AUDIT_*.md
+AcreLedger_UIUX_Recommendations*.md
 
 # local env files
 .env

@@ -422,7 +422,7 @@ export default function Reports() {
             value={viewingSeason.toString()}
             onValueChange={(v) => setViewingSeason(parseInt(v, 10))}
           >
-            <SelectTrigger className="w-[120px] h-9 font-mono text-sm bg-background border-border">
+            <SelectTrigger className="w-[120px] h-11 font-mono text-sm bg-background border-border">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
@@ -435,18 +435,18 @@ export default function Reports() {
           </Select>
         </div>
 
-        {/* Tab Bar */}
-        <div className="flex gap-1 bg-card border border-border rounded-lg p-1 print:hidden">
+        {/* Tab Bar — flex-1 shrink-0 allows tabs to fill screen width equally on desktop, but never shrink below content size on mobile */}
+        <div className="flex overflow-x-auto no-scrollbar gap-1 bg-card border border-border rounded-lg p-1 print:hidden">
           {TABS.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 touch-target flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+              className={`flex-1 shrink-0 touch-target flex items-center justify-center gap-1.5 rounded-lg py-2.5 px-3 text-sm font-semibold transition-all ${
                 tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
               }`}
             >
-              <t.icon size={16} />
-              <span className="hidden md:inline text-[11px]">{t.label}</span>
+              <t.icon size={16} className="shrink-0" />
+              <span className="text-[11px] whitespace-nowrap">{t.label}</span>
             </button>
           ))}
         </div>
