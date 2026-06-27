@@ -397,7 +397,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     }
   }, [stepIndex]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (keepOpen = false) => {
     if (!isMinimumValid) {
       setShowValidation(true);
       toast.error('Enter at least one product name and an application date to save.');
@@ -470,7 +470,20 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
       if (success) {
         native.haptic.success();
-        onClose();
+        if (keepOpen) {
+          setProducts([createEmptyProduct()]);
+          setNotes('');
+          setTotalAmountApplied('');
+          setStartTime(new Date().toTimeString().slice(0, 5));
+          setEndTime('');
+          setIsEndTimeManual(false);
+          setShowValidation(false);
+          hasSeenIncompleteWarning.current = false;
+          setStep('core');
+          toast.success('Record saved. Ready for next entry.');
+        } else {
+          onClose();
+        }
       } else {
         native.haptic.error();
       }
@@ -570,6 +583,9 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     isMinimumValid,
     isFullyCompliant,
     missingComplianceFields,
-    stepValidation
+    stepValidation,
+
+    // Prefill recommendation
+    suggestedSpray
   };
 }

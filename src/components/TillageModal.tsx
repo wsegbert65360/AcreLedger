@@ -56,9 +56,7 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialData?.id, field.id, open, isDuplicate]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
+    const handleSave = async (keepOpen = false) => {
         const data = {
             fieldId: field.id,
             fieldName: field.name,
@@ -89,7 +87,12 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
 
             if (success) {
                 native.haptic.success();
-                onClose();
+                if (keepOpen) {
+                    setNotes('');
+                    toast.success('Record saved. Ready for next entry.');
+                } else {
+                    onClose();
+                }
             } else {
                 native.haptic.error();
             }
@@ -100,6 +103,11 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSave(false);
     };
 
     const handleDelete = () => {
@@ -149,6 +157,14 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    {suggestedTillage && !initialData && (
+                        <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground animate-in fade-in duration-200">
+                            <div className="flex-grow">
+                                {/* Note: No "Clear" button is provided because implementType is a required selection that cannot be cleared to empty. */}
+                                Prefilled from last entry on this field: <span className="font-bold">{suggestedTillage.implementType}</span>.
+                            </div>
+                        </div>
+                    )}
                     <div className="space-y-4">
                         {/* Date Field */}
                         <div className="space-y-1.5">
@@ -216,10 +232,21 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
                                 Delete
                             </Button>
                         )}
+                        {(!initialData || isDuplicate) && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleSave(true)}
+                                disabled={isSaving}
+                                className="flex-1 h-16 text-lg font-bold border-orange-600/30 text-orange-600 hover:bg-orange-600/5 rounded-xl transition-all touch-target"
+                            >
+                                Save & Another
+                            </Button>
+                        )}
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target`}
+                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'flex-[2]'} h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target`}
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">

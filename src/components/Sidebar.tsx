@@ -2,12 +2,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import { navTabs } from './navConfig';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, Sprout } from 'lucide-react';
+import { CalendarDays, Sprout, Plus } from 'lucide-react';
+import { useQuickAdd } from '@/context/QuickAddContext';
+import { native } from '@/lib/native';
 
 export default function Sidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { activeSeason, viewingSeason, setViewingSeason, seasonOptions } = useFarm();
+  const { openQuickAdd } = useQuickAdd();
 
   return (
     <nav className="fixed left-0 top-0 bottom-0 w-60 z-30 bg-sidebar border-r border-sidebar-border flex-col hidden lg:flex print:hidden">
@@ -23,24 +26,37 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="flex-1 px-3 py-4 space-y-1">
-        {navTabs.map(({ path, icon: Icon, label }) => {
-          const active = pathname === path;
-          return (
-            <button
-              key={path}
-              onClick={() => navigate(path)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
-                active
-                  ? 'bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-              }`}
-            >
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
-              <span>{label}</span>
-            </button>
-          );
-        })}
+      <div className="flex-1 px-3 py-4 space-y-4">
+        <button
+          onClick={() => {
+            native.haptic.light();
+            openQuickAdd();
+          }}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-bold shadow-md active:scale-95 transition-transform"
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          <span>Quick Add Record</span>
+        </button>
+
+        <div className="space-y-1">
+          {navTabs.map(({ path, icon: Icon, label }) => {
+            const active = pathname === path;
+            return (
+              <button
+                key={path}
+                onClick={() => navigate(path)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
+                  active
+                    ? 'bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary'
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                }`}
+              >
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="px-5 py-3 border-t border-sidebar-border space-y-3">

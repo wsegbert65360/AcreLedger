@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFarm } from '@/store/farmStore';
 import { Field, HarvestRecord } from '@/types/farm';
 import { native } from '@/lib/native';
+import { toast } from 'sonner';
 import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
 
@@ -76,7 +77,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (keepOpen = false) => {
     const m = parseFloat(moisture);
     const ls = parseFloat(landlordSplit);
     const bu = parseFloat(bushels);
@@ -181,8 +182,14 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       }
 
       native.haptic.success();
-      reset();
-      onClose();
+      if (keepOpen) {
+        setBushels('');
+        setScaleTicketNumber('');
+        toast.success('Record saved. Ready for next entry.');
+      } else {
+        reset();
+        onClose();
+      }
     } catch (err) {
       console.error('Submission error:', err);
       toast.error('An unexpected error occurred while saving.');
@@ -236,6 +243,22 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
           </div>
         ) : (
           <div className="space-y-4 py-2">
+            {suggestedHarvest && !initialData && (
+              <div className="bg-harvest/5 border border-harvest/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground animate-in fade-in duration-200">
+                <div className="flex-grow">
+                  Prefilled from last harvest on this field: <span className="font-bold">{suggestedHarvest.crop || 'Crop'}</span>.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCrop('');
+                  }}
+                  className="text-harvest hover:underline font-bold"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             {destination === 'bin' && (
               <div>
                 <Label htmlFor="harvestBinSelect" className="text-muted-foreground font-mono text-xs">SELECT BIN</Label>
@@ -338,24 +361,37 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
         )}
 
         {destination && (
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setDestination(null)} className="touch-target border-border text-muted-foreground">
-              Back
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!valid || isSaving}
-              className="touch-target flex-1 bg-harvest text-harvest-foreground hover:bg-harvest/90 glow-harvest font-bold"
-            >
-              {isSaving ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="animate-spin" size={20} />
-                  <span>Saving...</span>
-                </div>
-              ) : (
-                isDuplicate ? 'Log Duplicate' : initialData ? 'Update Record' : 'Log Harvest'
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <div className="flex w-full gap-2">
+              <Button type="button" variant="outline" onClick={() => setDestination(null)} className="touch-target flex-1 border-border text-muted-foreground h-11 text-xs">
+                Back
+              </Button>
+              {(!initialData || isDuplicate) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleSubmit(true)}
+                  disabled={!valid || isSaving}
+                  className="touch-target flex-1 border-harvest/30 text-harvest hover:bg-harvest/10 font-bold h-11 text-xs"
+                >
+                  Save & Log Another
+                </Button>
               )}
-            </Button>
+              <Button
+                onClick={() => handleSubmit(false)}
+                disabled={!valid || isSaving}
+                className="touch-target flex-1 bg-harvest text-harvest-foreground hover:bg-harvest/90 glow-harvest font-bold h-11 text-xs"
+              >
+                {isSaving ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="animate-spin" size={16} />
+                    <span>Saving...</span>
+                  </div>
+                ) : (
+                  isDuplicate ? 'Log Duplicate' : initialData ? 'Update Record' : 'Log Harvest'
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         )}
       </DialogContent>

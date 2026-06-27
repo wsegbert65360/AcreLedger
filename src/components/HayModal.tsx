@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFarm } from '@/store/farmStore';
 import { Field, HayHarvestRecord } from '@/types/farm';
 import { native } from '@/lib/native';
+import { toast } from 'sonner';
 import { Tractor, Thermometer, Cloud, Hash, Layers, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
 import { WeatherService } from '@/services/WeatherService';
@@ -73,7 +74,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
         }
     }, [open, field.lat, field.lng, initialData, isDuplicate]);
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (keepOpen = false) => {
         const count = parseInt(baleCount, 10);
         const cutting = parseInt(cuttingNumber, 10);
         if (isNaN(count) || isNaN(cutting)) {
@@ -109,7 +110,14 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
 
             if (success) {
                 native.haptic.success();
-                onClose();
+                if (keepOpen) {
+                    setBaleCount('');
+                    setTemp('');
+                    setConditions('');
+                    toast.success('Record saved. Ready for next entry.');
+                } else {
+                    onClose();
+                }
             } else {
                 native.haptic.error();
             }
@@ -141,6 +149,14 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                 </DialogHeader>
 
                 <div className="space-y-4 py-2">
+                    {suggestedHay && !initialData && (
+                        <div className="bg-harvest/5 border border-harvest/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground animate-in fade-in duration-200">
+                            <div className="flex-grow">
+                                {/* Note: No "Clear" button is provided because baleType is a required toggle that cannot be cleared to empty. */}
+                                Prefilled from last entry on this field: <span className="font-bold">{suggestedHay.baleType} bales</span>.
+                            </div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <Label htmlFor="baleCount" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
@@ -229,15 +245,26 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                     </div>
                 </div>
 
-                <DialogFooter className="mt-2">
+                <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-2">
+                    {(!initialData || isDuplicate) && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleSubmit(true)}
+                            disabled={!baleCount || isNaN(parseInt(baleCount, 10)) || isSaving}
+                            className="touch-target flex-grow sm:flex-initial border-harvest/30 text-harvest hover:bg-harvest/10 font-bold h-11 text-xs"
+                        >
+                            Save & Log Another
+                        </Button>
+                    )}
                     <Button
-                        onClick={handleSubmit}
+                        onClick={() => handleSubmit(false)}
                         disabled={!baleCount || isNaN(parseInt(baleCount, 10)) || isSaving}
-                        className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold uppercase tracking-widest text-xs py-5"
+                        className="touch-target flex-grow sm:flex-initial bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold h-11 text-xs"
                     >
                         {isSaving ? (
                             <div className="flex items-center gap-2">
-                                <Loader2 className="animate-spin" size={20} />
+                                <Loader2 className="animate-spin" size={16} />
                                 <span>Saving...</span>
                             </div>
                         ) : (

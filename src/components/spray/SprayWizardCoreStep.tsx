@@ -86,7 +86,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               type="time"
               value={startTime}
               onChange={e => setStartTime(e.target.value)}
-              className={`mt-0.5 bg-muted border-border text-foreground h-9 ${inputError(!startTime.trim())}`}
+              className={`mt-0.5 bg-muted border-border text-foreground h-11 ${inputError(!startTime.trim())}`}
             />
           </div>
           <div>
@@ -107,7 +107,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               type="time"
               value={endTime}
               onChange={e => { setEndTime(e.target.value); setIsEndTimeManual(true); }}
-              className={`mt-0.5 bg-muted border-border text-foreground h-9 ${inputError(!endTime.trim())}`}
+              className={`mt-0.5 bg-muted border-border text-foreground h-11 ${inputError(!endTime.trim())}`}
             />
           </div>
         </div>
@@ -117,14 +117,14 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
         <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
           <User size={12} /> applicators & safety
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <Label htmlFor="applicator" className="text-[11px] font-mono text-muted-foreground uppercase">Cert. Applicator *</Label>
             <Input
               id="applicator"
               value={applicatorName}
               onChange={e => setApplicatorName(e.target.value)}
-              className={`mt-0.5 bg-muted border-border text-foreground h-9 ${inputError(!applicatorName.trim())}`}
+              className={`mt-0.5 bg-muted border-border text-foreground h-11 ${inputError(!applicatorName.trim())}`}
             />
           </div>
           <div>
@@ -133,11 +133,11 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               id="license"
               value={licenseNumber}
               onChange={e => setLicenseNumber(e.target.value)}
-              className={`mt-0.5 bg-muted border-border text-foreground h-9 ${inputError(!licenseNumber.trim())}`}
+              className={`mt-0.5 bg-muted border-border text-foreground h-11 ${inputError(!licenseNumber.trim())}`}
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <Label htmlFor="equipmentId" className="text-[11px] font-mono text-muted-foreground uppercase">Equipment ID *</Label>
             <Input
@@ -145,7 +145,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               value={equipmentId}
               onChange={e => setEquipmentId(e.target.value)}
               placeholder="e.g. Miller Nitro"
-              className={`mt-0.5 bg-muted border-border text-foreground h-9 ${inputError(!equipmentId.trim())}`}
+              className={`mt-0.5 bg-muted border-border text-foreground h-11 ${inputError(!equipmentId.trim())}`}
             />
           </div>
           <div>
@@ -155,7 +155,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               value={rei}
               onChange={e => setRei(e.target.value)}
               placeholder="e.g. 12h"
-              className="mt-0.5 bg-muted border-border text-foreground h-9"
+              className="mt-0.5 bg-muted border-border text-foreground h-11"
             />
           </div>
         </div>
@@ -166,7 +166,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             value={involvedTechnicians}
             onChange={e => setInvolvedTechnicians(e.target.value)}
             placeholder="e.g. John Doe, Mike Smith"
-            className="mt-0.5 bg-muted border-border text-foreground h-9"
+            className="mt-0.5 bg-muted border-border text-foreground h-11"
           />
         </div>
       </div>
@@ -175,7 +175,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
         <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground uppercase tracking-wider mb-1">
           <MapPin size={12} /> site & crop
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="col-span-1">
             <Label htmlFor="cropTreated" className="text-[11px] font-mono text-muted-foreground uppercase">Crop / Site Treated *</Label>
             <Input
@@ -183,13 +183,13 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               value={cropOrSiteTreated}
               onChange={e => setCropOrSiteTreated(e.target.value)}
               placeholder="e.g. Corn"
-              className={`mt-0.5 bg-muted border-border text-foreground h-9 ${inputError(!cropOrSiteTreated.trim())}`}
+              className={`mt-0.5 bg-muted border-border text-foreground h-11 ${inputError(!cropOrSiteTreated.trim())}`}
             />
           </div>
           <div>
             <Label htmlFor="appMethod" className="text-[11px] font-mono text-muted-foreground uppercase">App Method *</Label>
             <Select value={applicationMethod} onValueChange={setApplicationMethod}>
-              <SelectTrigger className={`mt-0.5 bg-muted border-border text-foreground h-9 text-xs ${inputError(!applicationMethod.trim())}`}>
+              <SelectTrigger className={`mt-0.5 bg-muted border-border text-foreground h-11 text-sm ${inputError(!applicationMethod.trim())}`}>
                 <SelectValue placeholder="Select method" />
               </SelectTrigger>
               <SelectContent>
@@ -207,7 +207,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             value={siteAddress}
             onChange={e => setSiteAddress(e.target.value)}
             placeholder="Field name or location"
-            className="mt-0.5 bg-muted border-border text-foreground h-9"
+            className="mt-0.5 bg-muted border-border text-foreground h-11"
           />
         </div>
         <div>
@@ -217,7 +217,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             value={targetPest}
             onChange={e => setTargetPest(e.target.value)}
             placeholder="e.g. Pigweed"
-            className={`mt-0.5 bg-muted border-border text-foreground h-9 ${inputError(!targetPest.trim())}`}
+            className={`mt-0.5 bg-muted border-border text-foreground h-11 ${inputError(!targetPest.trim())}`}
           />
         </div>
       </div>
@@ -250,7 +250,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               value={sensitiveAreaNotes}
               onChange={e => setSensitiveAreaNotes(e.target.value)}
               placeholder="e.g. Neighboring vineyard verified clear"
-              className="mt-0.5 bg-muted border-spray/20 text-foreground h-9 focus-visible:ring-spray"
+              className="mt-0.5 bg-muted border-spray/20 text-foreground h-11 focus-visible:ring-spray"
             />
           </div>
         )}
@@ -261,7 +261,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             value={notes}
             onChange={e => setNotes(e.target.value)}
             placeholder="Add any extra compliance or field notes here..."
-            className="mt-0.5 bg-muted border-border text-foreground text-xs resize-none"
+            className="mt-0.5 bg-muted border-border text-foreground text-sm resize-none"
             rows={2}
           />
         </div>

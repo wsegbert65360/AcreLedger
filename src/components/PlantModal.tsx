@@ -121,7 +121,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [field.acreage, initialData?.id, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open, isDuplicate]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (keepOpen = false) => {
     if (requiresSeedVariety && !seedVariety.trim()) {
       native.haptic.error();
       return;
@@ -173,12 +173,18 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
 
       if (success) {
         native.haptic.success();
-        if (!initialData || isDuplicate) {
+        if (keepOpen) {
           setSeedVariety('');
-          setCrop('');
-          setIntendedUse('');
+          setMemo('');
+          toast.success('Record saved. Ready for next entry.');
+        } else {
+          if (!initialData || isDuplicate) {
+            setSeedVariety('');
+            setCrop('');
+            setIntendedUse('');
+          }
+          onClose();
         }
-        onClose();
       } else {
         native.haptic.error();
       }
@@ -209,6 +215,24 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {suggestedPlanting && !initialData && (
+            <div className="bg-plant/5 border border-plant/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground">
+              <div className="flex-grow">
+                Prefilled from last entry on this field: <span className="font-bold">{suggestedPlanting.seedVariety}</span>.
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSeedVariety('');
+                  setCrop('');
+                }}
+                className="text-plant hover:underline font-bold"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
           {cropStatus === 'Planted' && duplicatePlanting && (
             <Alert className="border-amber-500/40 bg-amber-500/10 text-foreground [&>svg]:text-amber-600">
               <AlertTriangle className="h-4 w-4" />
@@ -380,15 +404,26 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          {(!initialData || isDuplicate) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleSubmit(true)}
+              disabled={(requiresSeedVariety && !seedVariety.trim()) || isSaving}
+              className="touch-target flex-grow sm:flex-initial border-plant/30 text-plant hover:bg-plant/10 font-bold h-11 text-xs"
+            >
+              Save & Log Another
+            </Button>
+          )}
           <Button
-            onClick={handleSubmit}
+            onClick={() => handleSubmit(false)}
             disabled={(requiresSeedVariety && !seedVariety.trim()) || isSaving}
-            className="touch-target w-full bg-plant text-plant-foreground hover:bg-plant/90 glow-plant font-bold"
+            className="touch-target flex-grow sm:flex-initial bg-plant text-plant-foreground hover:bg-plant/90 glow-plant font-bold h-11 text-xs"
           >
             {isSaving ? (
               <div className="flex items-center gap-2">
-                <Loader2 className="animate-spin" size={20} />
+                <Loader2 className="animate-spin" size={16} />
                 <span>Saving...</span>
               </div>
             ) : (

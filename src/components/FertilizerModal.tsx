@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
 import { native } from '@/lib/native';
+import { toast } from 'sonner';
 import { Sprout, Calendar, MapPin, Gauge, Loader2, ClipboardList, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -71,9 +72,7 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialData?.id, field.id, field.acreage, open, isDuplicate]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
+    const handleSave = async (keepOpen = false) => {
         const data = {
             fieldId: field.id,
             date,
@@ -123,7 +122,14 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
 
             if (success) {
                 native.haptic.success();
-                onClose();
+                if (keepOpen) {
+                    setFormula('');
+                    setNewRecipeName('');
+                    setSaveAsRecipe(false);
+                    toast.success('Record saved. Ready for next entry.');
+                } else {
+                    onClose();
+                }
             } else {
                 native.haptic.error();
             }
@@ -134,6 +140,11 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSave(false);
     };
 
     const handleDelete = () => {
@@ -203,6 +214,22 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    {suggestedFertilizer && !initialData && (
+                        <div className="bg-lime-500/5 border border-lime-500/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground animate-in fade-in duration-200">
+                            <div className="flex-grow">
+                                Prefilled from last entry on this field: <span className="font-bold">{suggestedFertilizer.fertilizer_formula}</span>.
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setFormula('');
+                                }}
+                                className="text-lime-600 dark:text-lime-400 hover:underline font-bold"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    )}
                     <div className="space-y-4">
                         {/* Date Field */}
                         <div className="space-y-1.5">
@@ -348,10 +375,21 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                                 Delete
                             </Button>
                         )}
+                        {(!initialData || isDuplicate) && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleSave(true)}
+                                disabled={isSaving}
+                                className="flex-1 h-16 text-lg font-bold border-primary/30 text-primary hover:bg-primary/5 rounded-xl transition-all touch-target"
+                            >
+                                Save & Another
+                            </Button>
+                        )}
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'w-full'} h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target`}
+                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'flex-[2]'} h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target`}
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">

@@ -19,6 +19,17 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { syncQueue } from "@/lib/syncQueue";
 import { FarmProvider, useFarm } from "@/store/farmStore";
+import { QuickAddProvider, useQuickAdd } from "@/context/QuickAddContext";
+import QuickAddDialog from "@/components/QuickAddDialog";
+import { native } from "@/lib/native";
+import { Plus } from "lucide-react";
+
+import PlantModal from "@/components/PlantModal";
+import SprayModal from "@/components/SprayModal";
+import HarvestModal from "@/components/HarvestModal";
+import HayModal from "@/components/HayModal";
+import FertilizerModal from "@/components/FertilizerModal";
+import TillageModal from "@/components/TillageModal";
 
 import Activity from "./pages/Activity";
 import FieldDetailScreen from "./pages/FieldDetailScreen";
@@ -82,8 +93,18 @@ const AnimatedRoutes = () => {
   );
 };
 
+const ModalMap = {
+  plant: PlantModal,
+  spray: SprayModal,
+  harvest: HarvestModal,
+  hay: HayModal,
+  fertilizer: FertilizerModal,
+  tillage: TillageModal,
+};
+
 const AppContent = () => {
   const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
+  const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
   const coachmarks = useCoachmarks({
     userId: session?.user?.id,
@@ -179,6 +200,35 @@ const AppContent = () => {
       </div>
       <BottomNav />
       <SeasonRolloverModal />
+
+      {/* Global Quick Add Dialog */}
+      <QuickAddDialog />
+
+      {/* Global Modals triggered from Quick Add */}
+      {selectedField && (() => {
+        const TargetModal = activeModal ? ModalMap[activeModal] : null;
+        if (!TargetModal) return null;
+        return (
+          <TargetModal
+            open={true}
+            field={selectedField}
+            onClose={clearActiveModal}
+          />
+        );
+      })()}
+
+      {/* Global Floating Action Button (FAB) for Mobile Quick Add */}
+      <button
+        onClick={() => {
+          native.haptic.light();
+          openQuickAdd();
+        }}
+        className="fixed z-40 right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center border border-primary-foreground/20 active:scale-95 transition-transform lg:hidden"
+        aria-label="Quick Add Record"
+      >
+        <Plus size={24} strokeWidth={2.5} />
+      </button>
+
       {coachmarks.isActive && coachmarks.currentStep && (
         <CoachmarkOverlay
           step={coachmarks.currentStep}
@@ -201,8 +251,10 @@ const App = () => (
       <ThemeProvider defaultTheme="dark" storageKey="al-ui-theme">
         <TooltipProvider>
             <FarmProvider>
-              <Sonner />
-              <AppContent />
+              <QuickAddProvider>
+                <Sonner />
+                <AppContent />
+              </QuickAddProvider>
             </FarmProvider>
         </TooltipProvider>
       </ThemeProvider>

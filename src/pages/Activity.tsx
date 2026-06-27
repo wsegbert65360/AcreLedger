@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { ClipboardList, Trash2, FileDown } from 'lucide-react';
+import { ClipboardList, Trash2, FileDown, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUndoDelete } from '@/hooks/useUndoDelete';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
+import { useQuickAdd } from '@/context/QuickAddContext';
+import { native } from '@/lib/native';
 import {
   ACTIVITY_ICONS,
   ACTIVITY_TEXT_COLORS,
@@ -63,6 +65,7 @@ type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestReco
 
 export default function Activity() {
   const navigate = useNavigate();
+  const { openQuickAdd } = useQuickAdd();
   const {
     fields,
     cluAssignments,
@@ -222,7 +225,7 @@ export default function Activity() {
   return (
     <div className="min-h-screen bg-background pb-24 lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-5xl lg:px-8">
+        <div className="max-w-lg mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3 lg:max-w-5xl lg:px-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <ClipboardList size={20} className="text-primary" />
@@ -250,57 +253,91 @@ export default function Activity() {
             </div>
           </div>
 
-          <SyncStatusIndicator />
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end flex-grow sm:flex-grow-0">
+            <SyncStatusIndicator />
 
-          {tab === 'spray' && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  const toExport = selected.size > 0 
-                    ? filteredSpray.filter(r => selected.has(r.id))
-                    : filteredSpray;
-                  generateSprayPDF(toExport, farmName);
-                }}
-                className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 text-xs font-bold"
-                title="Export Universal Spray Log PDF"
-              >
-                <FileDown size={16} />
-                EXPORT LOG
-              </button>
+            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+              {tab === 'spray' && (
+                <button
+                  onClick={() => {
+                    const toExport = selected.size > 0
+                      ? filteredSpray.filter(r => selected.has(r.id))
+                      : filteredSpray;
+                    generateSprayPDF(toExport, farmName);
+                  }}
+                  className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 text-xs font-bold"
+                  title="Export Universal Spray Log PDF"
+                >
+                  <FileDown size={16} />
+                  <span className="hidden sm:inline">EXPORT LOG</span>
+                  <span className="inline sm:hidden">EXPORT</span>
+                </button>
+              )}
+              {(tab === 'plant' || tab === 'harvest') && (
+                <button
+                  onClick={() => {
+                    const exportPromise = tab === 'plant'
+                      ? exportFsa578Data(filteredPlant, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
+                        farmName,
+                        cropYear: viewingSeason,
+                        reportDate: new Date().toISOString().split('T')[0],
+                      })
+                      : exportHarvestData(filteredHarvest, fields);
+
+                    exportPromise.catch((error) => {
+                      console.error('FSA export failed:', error);
+                      toast.error('Failed to export FSA data. Please try again.');
+                    });
+                  }}
+                  className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 text-xs font-bold"
+                  title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
+                >
+                  <FileDown size={16} />
+                  <span className="hidden sm:inline">FSA EXPORT</span>
+                  <span className="inline sm:hidden">FSA</span>
+                </button>
+              )}
+              {tab === 'hay' && (
+                <button
+                  onClick={() => navigate('/reports?tab=hay-summary')}
+                  className="p-2.5 rounded-lg bg-harvest/10 text-harvest hover:bg-harvest/20 transition-colors flex items-center gap-2 text-xs font-bold"
+                >
+                  <FileDown size={16} />
+                  <span className="hidden sm:inline">HAY SUMMARY</span>
+                  <span className="inline sm:hidden">SUMMARY</span>
+                </button>
+              )}
+
+              {tab !== 'grain' && (
+                <button
+                  onClick={() => {
+                    native.haptic.light();
+                    const map: Record<string, 'plant' | 'spray' | 'fertilizer' | 'tillage' | 'harvest' | 'hay'> = {
+                      plant: 'plant',
+                      spray: 'spray',
+                      fertilizer: 'fertilizer',
+                      tillage: 'tillage',
+                      harvest: 'harvest',
+                      hay: 'hay'
+                    };
+                    openQuickAdd(map[tab] || null);
+                  }}
+                  className="p-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1.5 text-xs font-bold shadow-sm"
+                >
+                  <Plus size={14} strokeWidth={2.5} />
+                  <span>
+                    {tab === 'all' && 'Log Activity'}
+                    {tab === 'plant' && <><span className="hidden sm:inline">New </span>Planting</>}
+                    {tab === 'spray' && <><span className="hidden sm:inline">New </span>Spray</>}
+                    {tab === 'fertilizer' && <><span className="hidden sm:inline">New </span>Fertilizing</>}
+                    {tab === 'tillage' && <><span className="hidden sm:inline">New </span>Tillage</>}
+                    {tab === 'harvest' && <><span className="hidden sm:inline">New </span>Harvest</>}
+                    {tab === 'hay' && <><span className="hidden sm:inline">New </span>Hay</>}
+                  </span>
+                </button>
+              )}
             </div>
-          )}
-          {(tab === 'plant' || tab === 'harvest') && (
-            <button
-              onClick={() => {
-                const exportPromise = tab === 'plant'
-                  ? exportFsa578Data(filteredPlant, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
-                    farmName,
-                    cropYear: viewingSeason,
-                    reportDate: new Date().toISOString().split('T')[0],
-                  })
-                  : exportHarvestData(filteredHarvest, fields);
-
-                exportPromise.catch((error) => {
-                  console.error('FSA export failed:', error);
-                  toast.error('Failed to export FSA data. Please try again.');
-                });
-              }}
-              className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 text-xs font-bold"
-              title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
-            >
-              <FileDown size={16} />
-              FSA EXPORT
-            </button>
-          )}
-          {tab === 'hay' && (
-            <button
-              onClick={() => navigate('/reports?tab=hay-summary')}
-              className="p-2.5 rounded-lg bg-harvest/10 text-harvest hover:bg-harvest/20 transition-colors flex items-center gap-2 text-xs font-bold"
-            >
-              <FileDown size={16} />
-              HAY SUMMARY
-            </button>
-          )}
+          </div>
         </div>
 
       </header>

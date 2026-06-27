@@ -48,6 +48,8 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/hooks/useSprayForm.ts` — shared spray form state for the SprayWizard step components.
 - `@/hooks/useUndoDelete.ts` — undo-safe soft-delete pattern for FieldManager and similar bulk-delete UI.
 - `@/hooks/useCoachmarks.ts` + `@/components/CoachmarkOverlay.tsx` — onboarding coachmark overlay system.
+- `@/context/QuickAddContext.tsx` — global Quick Add provider managing modal states, preselected types, and active fields.
+- `@/components/QuickAddDialog.tsx` — global Quick Add dialog providing field selection and GPS-based nearest field detection.
 - `codemagic.yaml` — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
 - `CODEMAGIC.md` — CodeMagic setup guide, credentials, and troubleshooting.
 

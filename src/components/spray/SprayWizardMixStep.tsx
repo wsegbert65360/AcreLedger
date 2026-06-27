@@ -66,7 +66,7 @@ export function SprayWizardMixStep({
               </button>
             )}
             <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="col-span-1">
                   <Label htmlFor={`productName-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Trade Name *</Label>
                   <Input
@@ -74,7 +74,7 @@ export function SprayWizardMixStep({
                     value={p.product}
                     onChange={e => updateProduct(i, 'product', e.target.value)}
                     placeholder="e.g. Roundup"
-                    className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.product.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                    className={`mt-0.5 bg-background border-border text-foreground h-11 ${showValidation && !p.product.trim() ? 'border-destructive ring-1 ring-destructive' : ''}`}
                   />
                 </div>
                 <div className="col-span-1">
@@ -84,7 +84,7 @@ export function SprayWizardMixStep({
                     value={p.epaRegNumber}
                     onChange={e => updateProduct(i, 'epaRegNumber', e.target.value)}
                     placeholder="e.g. 524-549"
-                    className={`mt-0.5 bg-background border-border text-foreground text-xs h-8 ${showValidation && !p.epaRegNumber?.trim() ? 'border-yellow-500/50' : ''}`}
+                    className={`mt-0.5 bg-background border-border text-foreground h-11 ${showValidation && !p.epaRegNumber?.trim() ? 'border-yellow-500/50' : ''}`}
                   />
                 </div>
               </div>
@@ -96,11 +96,11 @@ export function SprayWizardMixStep({
                   value={p.activeIngredients || ''}
                   onChange={e => updateProduct(i, 'activeIngredients', e.target.value)}
                   placeholder="e.g. Glyphosate 41%"
-                  className="mt-0.5 bg-background border-border text-foreground text-xs h-8"
+                  className="mt-0.5 bg-background border-border text-foreground h-11"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor={`appRate-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Rate / Ac *</Label>
                   <div className="flex gap-1.5 mt-0.5">
@@ -109,10 +109,10 @@ export function SprayWizardMixStep({
                       value={p.rate}
                       onChange={e => updateProduct(i, 'rate', e.target.value)}
                       placeholder="22"
-                      className="bg-background border-border text-foreground text-xs h-8 px-2 w-16"
+                      className="bg-background border-border text-foreground h-11 px-2 w-20"
                     />
                     <Select value={p.rateUnit} onValueChange={(val) => updateProduct(i, 'rateUnit', val)}>
-                      <SelectTrigger className="bg-background border-border text-foreground text-[11px] h-8 px-2 flex-1">
+                      <SelectTrigger className="bg-background border-border text-foreground h-11 px-2 flex-1">
                         <SelectValue placeholder="Unit" />
                       </SelectTrigger>
                       <SelectContent>
@@ -131,10 +131,10 @@ export function SprayWizardMixStep({
                       value={p.totalProductAmount || ''}
                       onChange={e => updateProduct(i, 'totalProductAmount', e.target.value)}
                       placeholder="15"
-                      className="bg-background border-border text-foreground text-xs h-8 px-2 w-16"
+                      className="bg-background border-border text-foreground h-11 px-2 w-20"
                     />
                     <Select value={p.totalProductUnit || 'gal'} onValueChange={(val) => updateProduct(i, 'totalProductUnit', val)}>
-                      <SelectTrigger className="bg-background border-border text-foreground text-[11px] h-8 px-2 flex-1">
+                      <SelectTrigger className="bg-background border-border text-foreground h-11 px-2 flex-1">
                         <SelectValue placeholder="Unit" />
                       </SelectTrigger>
                       <SelectContent>
@@ -150,8 +150,8 @@ export function SprayWizardMixStep({
           </div>
         ))}
 
-        <Button onClick={addProduct} variant="outline" size="sm" className="w-full border-dashed border-spray/30 text-spray text-[11px] h-8 font-bold">
-          <Plus size={12} className="mr-1" /> ADD ANOTHER PRODUCT
+        <Button onClick={addProduct} variant="outline" size="lg" className="w-full border-dashed border-spray/30 text-spray text-xs h-11 font-bold">
+          <Plus size={14} className="mr-1" /> ADD ANOTHER PRODUCT
         </Button>
       </div>
 

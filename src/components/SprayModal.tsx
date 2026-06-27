@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { CloudRain, FileDown } from 'lucide-react';
 
 import { SprayWizardConditionsStep } from '@/components/spray/SprayWizardConditionsStep';
@@ -54,6 +55,43 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
     review: 'Review & Submit'
   }[step];
 
+  const extraActions = useMemo(() => {
+    if (step !== 'review') return undefined;
+
+    const exportBtn = initialData && (
+      <Button
+        variant="outline"
+        onClick={() => generateSprayPDF([initialData], farmName)}
+        className="touch-target w-full border-spray/30 py-6 text-base font-bold text-spray hover:bg-spray/10"
+      >
+        <FileDown size={20} className="mr-2" />
+        Export PDF
+      </Button>
+    );
+
+    const logAnotherBtn = (!initialData || isDuplicate) && (
+      <Button
+        variant="outline"
+        onClick={() => handleSubmit(true)}
+        disabled={isSaving || !isMinimumValid}
+        className="touch-target w-full border-spray/30 py-6 text-base font-bold text-spray hover:bg-spray/10"
+      >
+        Save & Log Another
+      </Button>
+    );
+
+    if (logAnotherBtn || exportBtn) {
+      return (
+        <div className="flex flex-col gap-2 w-full">
+          {logAnotherBtn}
+          {exportBtn}
+        </div>
+      );
+    }
+
+    return undefined;
+  }, [step, initialData, isDuplicate, isSaving, isMinimumValid, farmName, handleSubmit]);
+
   return (
     <Dialog open={open} onOpenChange={(open) => { if (!open) handleClose(); }}>
       <DialogContent className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
@@ -75,6 +113,25 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
         </DialogHeader>
 
         <SprayWizardNav steps={WIZARD_STEPS} currentStep={step} onStepClick={goToStep} />
+
+        {form.suggestedSpray && !initialData && (
+          <div className="bg-spray/5 border border-spray/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground my-2 animate-in fade-in duration-200">
+            <div className="flex-grow">
+              Prefilled from last spray on this field: <span className="font-bold">{form.suggestedSpray.products?.[0]?.product || 'Pesticide'}</span>.
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                form.setProducts([{ product: '', epaRegNumber: '', activeIngredients: '', rate: '', rateUnit: 'fl oz/ac', totalProductAmount: '', totalProductUnit: 'gal', ui_id: crypto.randomUUID() }]);
+                form.setNotes('');
+                form.setTargetPest('');
+              }}
+              className="text-spray hover:underline font-bold"
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         <WizardStepLayout>
           {step === 'core' && <SprayWizardCoreStep
@@ -194,16 +251,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
               ? 'bg-spray text-white hover:bg-spray/90 glow-spray'
               : 'bg-yellow-600 text-white hover:bg-yellow-500'
           }
-          extraActions={initialData && step === 'review' ? (
-            <Button
-              variant="outline"
-              onClick={() => generateSprayPDF([initialData], farmName)}
-              className="touch-target w-full border-spray/30 py-6 text-base font-bold text-spray hover:bg-spray/10"
-            >
-              <FileDown size={20} className="mr-2" />
-              Export PDF
-            </Button>
-          ) : undefined}
+          extraActions={extraActions}
         />
       </DialogContent>
     </Dialog>

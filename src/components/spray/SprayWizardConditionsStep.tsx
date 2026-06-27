@@ -89,7 +89,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
           <div className="space-y-1">
             <Label htmlFor="windDirection" className="text-[11px] font-mono text-muted-foreground uppercase">Wind Direction *</Label>
             <Select value={manualWindDirection} onValueChange={setManualWindDirection}>
-              <SelectTrigger id="windDirection" className={`h-8 bg-background border-border text-xs font-mono ${inputError(!manualWindDirection.trim())}`}>
+              <SelectTrigger id="windDirection" className={`h-11 bg-background border-border text-sm font-mono ${inputError(!manualWindDirection.trim())}`}>
                 <SelectValue placeholder="Dir" />
               </SelectTrigger>
               <SelectContent>
@@ -107,7 +107,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
               value={manualWindSpeed}
               onChange={e => setManualWindSpeed(e.target.value)}
               placeholder={weather?.wind?.toString() || '0'}
-              className={`h-8 bg-background border-border text-xs font-mono text-right ${inputError(!manualWindSpeed.trim())}`}
+              className={`h-11 bg-background border-border text-sm font-mono text-right ${inputError(!manualWindSpeed.trim())}`}
             />
           </div>
         </div>
@@ -147,10 +147,10 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
                 value={treatedAreaSize}
                 onChange={e => setTreatedAreaSize(e.target.value)}
                 placeholder="80"
-                className={`mt-0.5 bg-muted border-border text-foreground h-9 flex-1 ${inputError(!treatedAreaSize.trim())}`}
+                className={`mt-0.5 bg-muted border-border text-foreground h-11 flex-1 ${inputError(!treatedAreaSize.trim())}`}
               />
               <Select value={treatedAreaUnit} onValueChange={setTreatedAreaUnit}>
-                <SelectTrigger className="mt-0.5 bg-muted border-border text-foreground h-9 w-16 text-xs">
+                <SelectTrigger className="mt-0.5 bg-muted border-border text-foreground h-11 w-16 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -167,11 +167,11 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
               value={totalAmountApplied}
               onChange={e => setTotalAmountApplied(e.target.value)}
               placeholder="Auto-sum"
-              className="mt-0.5 bg-muted border-border text-foreground h-9 font-bold"
+              className="mt-0.5 bg-muted border-border text-foreground h-11 font-bold"
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <Label htmlFor="mixtureRate" className="text-[11px] font-mono text-muted-foreground uppercase">Mixture Rate</Label>
             <Input
@@ -179,7 +179,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
               value={mixtureRate}
               onChange={e => setMixtureRate(e.target.value)}
               placeholder="e.g. 15 gal/ac"
-              className="mt-0.5 bg-muted border-border text-foreground h-9"
+              className="mt-0.5 bg-muted border-border text-foreground h-11"
             />
           </div>
           <div>
@@ -189,7 +189,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
               value={totalMixtureVolume}
               onChange={e => setTotalMixtureVolume(e.target.value)}
               placeholder="e.g. 1200 gal"
-              className="mt-0.5 bg-muted border-border text-foreground h-9"
+              className="mt-0.5 bg-muted border-border text-foreground h-11"
             />
           </div>
         </div>
