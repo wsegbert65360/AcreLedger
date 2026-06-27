@@ -208,7 +208,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Visually hidden descriptions are acceptable with `sr-only`.
 - Every form input must have a unique `id` and `name`.
 - Every `Label` must use `htmlFor` linked to the input ID.
-- Interactive touch targets should be at least 44px high.
+- Interactive touch targets should be at least 44px high. Default form `Input` and `SelectTrigger` components must use `h-11` (44px) height. Custom height overrides (such as `h-9` or `h-10`) on form inputs and selectors should be avoided to prevent touch-target regressions.
 
 ### Light Mode Theme
 - The light mode theme is a high-contrast, vibrant palette.
@@ -237,6 +237,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Prefer sentence case.
 - Avoid `uppercase` with `tracking-widest` for normal labels, buttons, and body text.
 - Uppercase is acceptable for tiny badges, report table headers, and legal/regulatory footers.
+- Field status indicators must render as high-contrast inline labeled pills (e.g., "Planted", "Activity logged", or "No activity") using opacity-friendly theme styles (e.g. `bg-plant/10 text-plant border-plant/20` / `bg-spray/10 text-spray border-spray/20` / `bg-muted text-muted-foreground border-border`) next to the entity header, rather than absolute-positioned corner status dots.
 
 ### Layout
 
@@ -244,6 +245,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Page headers should follow the sticky header pattern from `BLUEPRINT.md`.
 - Mobile pages must reserve bottom padding for the fixed `BottomNav`. `BottomNav` uses `.touch-target` (`min-height: 64px` ≈ `4rem`) plus `pb-[env(safe-area-inset-bottom)]`. Use `pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` on the page container — never below the nav height, or the last cards scroll under the tab bar.
 - Do not reintroduce floating/sticky bottom bars on the dashboard. Crop filters, totals, and quick actions live in the scrollable body (directly below the `WeatherBar`), not in an overlay footer.
+- Horizontal tab bars on mobile viewports should support horizontal scrolling (`flex overflow-x-auto no-scrollbar`) with non-shrinking, non-wrapping tab labels (`shrink-0 whitespace-nowrap`) to guarantee that labels are always visible and readable on mobile without text cutoff.
 - Use consistent radius rules:
   - Inline items, badges, small buttons: `rounded-lg`
   - Cards, sections, containers: `rounded-2xl`
