@@ -35,10 +35,11 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/offlineStorage.ts` — offline persistent key-value store.
 - `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
 - `@/lib/complianceReports` — report generation.
-- `@/lib/sprayExport.ts` — universal spray log PDF export.
+- `@/lib/sprayExport.ts` — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
 - `@/types/fsaTract.ts` — canonical FSA tract import and CLU assignment types.
 - `@/lib/cluImport.ts` — CLU/FSA GeoJSON parsing and validation.
-- `@/lib/tractLookup.ts` and `@/lib/bundledFsaTracts.ts` — bundled FSA tract lookup and merge helpers.
+- `@/lib/tractLookup.ts` and `@/lib/bundledFsaTracts.ts` — bundled/imported FSA tract lookup and merge helpers; use `loadKeyedTractCollections` when code needs tract keys preserved alongside GeoJSON collections.
+- `@/lib/fieldLocation.ts` — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
 - `@/store/useFsaTracts.ts` — FSA tract import and CLU assignment CRUD actions.
 - `@/services/fsaTractService.ts` and `@/services/cluAssignmentService.ts` — Supabase persistence for FSA tract imports and CLU assignments.
 - `@/components/TractAssignmentFlow.tsx`, `@/components/CluAssignmentMap.tsx`, `@/components/CluFieldSelector.tsx`, `@/components/FsaTractImporter.tsx` — FSA tract management UI.
@@ -302,6 +303,8 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 - Rainfall lookups should use coordinates when available so the radar merge remains active.
 - Lat/lng should be rounded to 4 decimals for radar grid consistency.
 - Polygon field boundaries should fall back to centroids when explicit coordinates are missing.
+- Field rainfall lookups should go through `resolveFieldRainfallLocation` from `@/lib/fieldLocation.ts` so fields without explicit lat/lng can use drawn boundary centroids, assigned CLU geometry, or legacy CLU numbers before showing missing-location errors.
+- When resolving CLU geometry for rainfall or maps, preserve tract keys with `loadKeyedTractCollections` rather than losing key context from raw `TractFeatureCollection[]` arrays.
 - Weather and rainfall request failures should degrade gracefully without crashing the UI.
 - Windy radar embeds require CSP entries in both `child-src` and `frame-src`.
 
@@ -336,6 +339,12 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 
 Keep each step component under ~150 lines. All form state lives in `useSprayForm`; step components are pure presenters. `SprayModal` owns only the step routing, navigation callbacks, and save dispatch.
 
+Spray also has an in-cab quick mode controlled by `useSprayForm.isQuickMode`; preserve both the quick path and full wizard path when changing validation, save behavior, or field prefills. Quick mode is optimized for glove-friendly spray logging and still writes through the same `handleSubmit` path.
+
+Spray photo/ticket attachments are stored in `notes` as `[ATTACHMENT:data:image/...;base64,...]` tokens. UI and exports must parse/strip this token and render the image separately; never display or export raw base64 attachment text. `sprayExport.ts` is responsible for embedding the attachment image in PDF exports.
+
+After a successful new spray with a novel mix, `useSprayForm` may prompt to save the mix as a spray recipe. Keep that recipe dialog mounted until the user confirms or cancels, even if the spray record itself has already saved. Recipe duplicate checks should compare product name, rate, rate unit, and EPA registration number, not product names alone.
+
 ### Activity Record Modals
 
 All 7 activity record modals (`PlantModal`, `SprayModal`, `HarvestModal`, `HayModal`, `FertilizerModal`, `TillageModal`, `GrainMovementModal`) share a common prop and behavior pattern:
@@ -348,6 +357,8 @@ All 7 activity record modals (`PlantModal`, `SprayModal`, `HarvestModal`, `HayMo
 **Suggested-record prefill**: when opening a modal without `initialData` (new record), each modal pre-fills non-date fields from the most recent prior record of the same type for that field — e.g., spray pre-fills applicator name, license number, target pest, and tank-mix products from the last spray on the field; plant pre-fills crop and seed variety; hay pre-fills bale type; etc. Use `getLatestForField` from `@/lib/utils` to compute the source record. Duplicate mode bypasses the prefill (it uses `initialData`).
 
 **`editingRecordType` discriminator**: `Activity.tsx` and `FieldDetailScreen.tsx` track the clicked record's type in a separate `editingRecordType` state and gate modal rendering on it (`editingRecordType === 'plant' && ...`), NOT on the visible tab. This lets users click edit/duplicate on any record from the All/History tab and still get the correct modal — gating on `tab` would fail when the user is on the All tab. Modal `onClose` handlers must reset all three states together: `setEditingRecord(null); setEditingRecordType(null); setEditingMode('edit')`.
+
+**Spray review queue**: `Activity.tsx` includes a review-queue filter for incomplete/non-compliant spray records (`nonCompliant === true`). Keep the queue scoped to `viewingSeason`, the current search filter, and pending-delete filtering so it matches the records the user can act on.
 
 ### Undo-Delete Pattern
 
