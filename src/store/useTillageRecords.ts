@@ -70,12 +70,18 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
     }
 
     try {
-      const { error } = await supabase
-        .from('tillage_records')
-        .insert([{
-          ...mapped,
-          farm_id
-        }]);
+      let error;
+      try {
+        const res = await supabase
+          .from('tillage_records')
+          .insert([{
+            ...mapped,
+            farm_id
+          }]);
+        error = res.error;
+      } catch (err) {
+        error = err;
+      }
 
       if (error) {
         console.error('Error adding tillage record:', error);
@@ -142,14 +148,20 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
-    const { data, error } = await supabase
-      .from('tillage_records')
-      .update(payload)
-      .eq('id', r.id)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('tillage_records')
+          .update(payload, { count: 'exact' })
+          .eq('id', r.id)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
 
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error updating tillage record:', error);
       } else {
@@ -219,18 +231,24 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       }
     }
 
-    const { data, error } = await supabase
-      .from('tillage_records')
-      .update({ deleted_at: new Date().toISOString() })
-      .in('id', ids)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('tillage_records')
+          .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
+          .in('id', ids)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
 
-    if (error || !data || data.length !== ids.length) {
+    if (error || affectedRows !== ids.length) {
       if (error) {
         console.error('Error deleting tillage records:', error);
       } else {
-        console.warn('Tillage delete mismatch:', { requested: ids.length, affected: data?.length ?? 0 });
+        console.warn('Tillage delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
       }
       // Restore records to their original positions. Sort descending by index.
       const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);

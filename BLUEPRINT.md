@@ -299,10 +299,10 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 - **`RadarEmbed`**: Windy.com radar iframe with fullscreen expand via `createPortal` to document body. Includes loading spinner (15s timeout), error fallback, body scroll lock when expanded, restoration of the prior body overflow value on close, and a single AcreLedger close bar above the interactive map.
 - **CSP requirement**: Windy radar embeds require `https://www.windy.com` in both `child-src` and `frame-src` in `index.html`. Without this, the browser blocks the iframe even though the React component renders correctly.
 - **`ForecastGrid`**: 2×5 grid of `ForecastDay` cells with weather emojis, rain-chance progress bars, high/low temps. Today cell highlighted with blue border.
+- **`SprayDecisionMatrix`**: Renders a GO / CAUTION / WAIT verdict from `evaluateSprayConditions` in `@/lib/weatherHelpers.ts` using current temp, humidity, wind, wind direction, and precip probability. Rendered on `/weather` alongside the radar and forecast.
 
 #### Future Expansion (Planned)
 Additional agricultural decision-support cards are planned, ported from FarmCMD's feature set:
-- **Spray Decision** (GO/WAIT) — wind, delta-T, inversion risk, humidity thresholds
 - **Field Workability** — composite score (0–100) factoring soil temp, rainfall, wind, forecast
 - **Frost & Freeze** — 3-night outlook with advisory/warning thresholds
 - **Rain Window** — dry stretch analysis with soil saturation estimate

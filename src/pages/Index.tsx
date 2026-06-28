@@ -1,11 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Settings, Tractor } from 'lucide-react';
+import { Settings, Tractor, Search, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 import { useFarm } from '@/store/farmStore';
 import FieldList from '@/components/FieldList';
 import WeatherBar from '@/components/WeatherWidget';
 import FieldManager from '@/components/FieldManager';
+import FieldManageModal from '@/components/FieldManageModal';
 import Logo from '@/components/Logo';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
@@ -47,18 +51,32 @@ const Index = () => {
     };
   }, [allFields, cluAssignments]);
 
-  const [managing, setManaging] = useState(false);
+  const [search, setSearch] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
 
   const { filteredRowCrops, filteredPastureHay } = useMemo(() => {
-    if (selectedCrops.length === 0) {
-      return { filteredRowCrops: rowCrops, filteredPastureHay: pastureHay };
+    const trimmedSearch = search.trim().toLowerCase();
+    
+    let rc = rowCrops;
+    let ph = pastureHay;
+
+    if (selectedCrops.length > 0) {
+      rc = rowCrops.filter(f => selectedCrops.includes(f.intendedUse?.trim() || 'Unassigned'));
+      ph = pastureHay.filter(f => selectedCrops.includes(f.intendedUse?.trim() || 'Unassigned'));
     }
+
+    if (trimmedSearch) {
+      rc = rc.filter(f => f.name.toLowerCase().includes(trimmedSearch));
+      ph = ph.filter(f => f.name.toLowerCase().includes(trimmedSearch));
+    }
+
     return {
-      filteredRowCrops: rowCrops.filter(f => selectedCrops.includes(f.intendedUse?.trim() || 'Unassigned')),
-      filteredPastureHay: pastureHay.filter(f => selectedCrops.includes(f.intendedUse?.trim() || 'Unassigned'))
+      filteredRowCrops: rc,
+      filteredPastureHay: ph
     };
-  }, [rowCrops, pastureHay, selectedCrops]);
+  }, [rowCrops, pastureHay, selectedCrops, search]);
 
   const toggleCrop = (crop: string) => {
     setSelectedCrops(prev =>
@@ -92,15 +110,24 @@ const Index = () => {
               </div>
             </div>
           </div>
-          <button
-            onClick={() => setManaging(!managing)}
-            aria-label={managing ? 'Exit field management' : 'Manage fields'}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors text-xs font-semibold ${managing ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
-               }`}
-          >
-            <Settings size={16} />
-            <span>{managing ? 'Done' : 'Manage Fields'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAddOpen(true)}
+              aria-label="Add new field"
+              className="flex items-center gap-1.5 px-3 py-2 h-11 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-xs font-semibold"
+            >
+              <Plus size={16} className="text-primary" />
+              <span>Add Field</span>
+            </button>
+            <button
+              onClick={() => setManageOpen(true)}
+              aria-label="Manage fields"
+              className="flex items-center gap-1.5 px-3 py-2 h-11 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-xs font-semibold"
+            >
+              <Settings size={16} />
+              <span>Manage</span>
+            </button>
+          </div>
         </div>
 
       </header>
@@ -108,11 +135,6 @@ const Index = () => {
         <ErrorBoundary>
           <WeatherBar />
         </ErrorBoundary>
-        {managing ? (
-          <ErrorBoundary>
-            <FieldManager />
-          </ErrorBoundary>
-        ) : (
           <>
             {allFields.length > 0 && (
               <div className="bg-muted/10 rounded-2xl border border-border/50 p-3 mb-4 space-y-2 mt-4">
@@ -136,6 +158,23 @@ const Index = () => {
                     );
                   })}
                 </div>
+              </div>
+            )}
+            {allFields.length > 0 && (
+              <div className="relative mb-3">
+                <Label htmlFor="field-search" className="sr-only">Search fields</Label>
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="field-search"
+                  name="field-search"
+                  type="search"
+                  inputMode="search"
+                  autoComplete="off"
+                  placeholder="Search fields by name…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-11 pl-9"
+                />
               </div>
             )}
             {filteredRowCrops.length > 0 && (
@@ -162,7 +201,7 @@ const Index = () => {
                 <Tractor size={48} className="mx-auto text-muted-foreground/30 mb-4" />
                 <h3 className="text-lg font-bold text-foreground mb-1">No Fields Detected</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px] mx-auto">
-                  Use the <Settings size={12} className="inline mx-0.5" /> icon above to add your first field.
+                  Tap <Plus size={12} className="inline mx-0.5" /> Add Field above to create your first field.
                 </p>
               </div>
             )}
@@ -170,14 +209,28 @@ const Index = () => {
             {allFields.length > 0 && filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  No fields match the selected crops.
+                  {search.trim() ? `No fields match "${search}".` : 'No fields match the selected crops.'}
                 </p>
               </div>
             )}
 
           </>
-        )}
       </main>
+
+      <FieldManageModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <Sheet open={manageOpen} onOpenChange={(o) => setManageOpen(o)}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Manage Fields</SheetTitle>
+            <SheetDescription className="sr-only">
+              Add, edit, or delete fields. Deletions can be undone from the toast.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <FieldManager />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

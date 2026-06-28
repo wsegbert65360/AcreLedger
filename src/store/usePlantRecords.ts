@@ -75,12 +75,18 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
     }
 
     try {
-      const { error } = await supabase
-        .from('plant_records')
-        .insert([{
-          ...mapped,
-          farm_id
-        }]);
+      let error;
+      try {
+        const res = await supabase
+          .from('plant_records')
+          .insert([{
+            ...mapped,
+            farm_id
+          }]);
+        error = res.error;
+      } catch (err) {
+        error = err;
+      }
 
       if (error) {
         // Replace with Sentry.captureException(error) in production
@@ -150,14 +156,20 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
-    const { data, error } = await supabase
-      .from('plant_records')
-      .update(payload)
-      .eq('id', r.id)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('plant_records')
+          .update(payload, { count: 'exact' })
+          .eq('id', r.id)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
 
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error updating plant record:', error);
       } else {
@@ -234,19 +246,25 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       }
     }
 
-    const { data, error } = await supabase
-      .from('plant_records')
-      .update({ deleted_at: new Date().toISOString() })
-      .in('id', ids)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('plant_records')
+          .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
+          .in('id', ids)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
 
-    if (error || !data || data.length !== ids.length) {
+    if (error || affectedRows !== ids.length) {
       // Replace with Sentry.captureException(error) in production
       if (error) {
         console.error('Error deleting plant records:', error);
       } else {
-        console.warn('Plant delete mismatch:', { requested: ids.length, affected: data?.length ?? 0 });
+        console.warn('Plant delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
       }
 
       // Restore records to their original positions. Sort descending by index.

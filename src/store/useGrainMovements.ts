@@ -75,12 +75,18 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
     }
 
     try {
-      const { error } = await supabase
-        .from('grain_movements')
-        .insert([{
-          ...mapped,
-          farm_id
-        }]);
+      let error;
+      try {
+        const res = await supabase
+          .from('grain_movements')
+          .insert([{
+            ...mapped,
+            farm_id
+          }]);
+        error = res.error;
+      } catch (err) {
+        error = err;
+      }
 
       if (error) {
         // Replace with Sentry.captureException(error) in production
@@ -155,15 +161,15 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       }
     }
 
-    const { data, error } = await supabase
+    const { error, count: affectedRows } = await supabase
       .from('grain_movements')
-      .update(payload)
+      .update(payload, { count: 'exact' })
       .eq('id', r.id)
       .eq('farm_id', farm_id)
       .eq('timestamp', previousTimestampIso)
       .select('id');
 
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       // Replace with Sentry.captureException(error) in production
       if (error) {
         console.error('Error updating grain movement:', error);
@@ -235,19 +241,25 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       }
     }
 
-    const { data, error } = await supabase
-      .from('grain_movements')
-      .update({ deleted_at: new Date().toISOString() })
-      .in('id', ids)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('grain_movements')
+          .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
+          .in('id', ids)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
 
-    if (error || !data || data.length !== ids.length) {
+    if (error || affectedRows !== ids.length) {
       // Replace with Sentry.captureException(error) in production
       if (error) {
         console.error('Error deleting grain movements:', error);
       } else {
-        console.warn('Grain delete mismatch:', { requested: ids.length, affected: data?.length ?? 0 });
+        console.warn('Grain delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
       }
 
       // Restore records to their original positions. Sort descending by index.

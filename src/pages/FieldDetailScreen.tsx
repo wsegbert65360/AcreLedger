@@ -702,7 +702,7 @@ export default function FieldDetailScreen() {
           </div>
 
           <div className="pt-4 border-t border-border/70">
-            <FieldNotes field={field} />
+            <FieldNotes key={field.id} field={field} />
           </div>
         </section>
 

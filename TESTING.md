@@ -22,7 +22,7 @@ For end-to-end verification and UI smoke testing, use the following bot credenti
 **Bot Credentials:**
 Credentials are in `.env.test.local` — see `.env.example` for required keys.
 
-### Verification Checklist (v3.2.0+)
+### Verification Checklist (v3.6.0+)
 1. **Login**: Verify successful authentication with bot credentials.
 2. **Fields**: Ensure "Test Plot A" is visible (or create it if the account is reset).
 3. **Fertilizer Recipes**:

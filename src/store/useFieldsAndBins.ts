@@ -109,7 +109,7 @@ export function useFieldsAndBins({
 
     const { data, error } = await fieldService.updateField(f, farm_id);
 
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Supabase error updating field:', error);
       } else {
@@ -158,7 +158,7 @@ export function useFieldsAndBins({
     }
 
     const { data, error } = await fieldService.softDeleteField(id, farm_id);
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error deleting field:', error);
       } else {
@@ -259,7 +259,7 @@ export function useFieldsAndBins({
     }
 
     const { data, error } = await binService.updateBin(b, farm_id);
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error updating bin:', error);
       } else {
@@ -305,7 +305,7 @@ export function useFieldsAndBins({
     }
 
     const { data, error } = await binService.softDeleteBin(id, farm_id);
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error deleting bin:', error);
       } else {
@@ -398,13 +398,12 @@ export function useFieldsAndBins({
       }
     }
 
-    const { data, error } = await supabase
+    const { error, count: affectedRows } = await supabase
       .from('saved_seeds')
       .update({ deleted_at: deletedAt })
       .eq('id', id)
-      .eq('farm_id', farm_id)
-      .select('id');
-    if (error || !data || data.length === 0) {
+      .eq('farm_id', farm_id);
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error deleting seed:', error);
       } else {
@@ -502,14 +501,20 @@ export function useFieldsAndBins({
     }
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
-    const { data, error } = await supabase
-      .from('spray_recipes')
-      .update(payload)
-      .eq('id', r.id)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('spray_recipes')
+          .update(payload, { count: 'exact' })
+          .eq('id', r.id)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
  
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error updating spray recipe:', error);
       } else {
@@ -607,14 +612,20 @@ export function useFieldsAndBins({
     }
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
-    const { data, error } = await supabase
-      .from('fertilizer_recipes')
-      .update(payload)
-      .eq('id', r.id)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('fertilizer_recipes')
+          .update(payload, { count: 'exact' })
+          .eq('id', r.id)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
  
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error updating fertilizer recipe:', error);
       } else {
@@ -657,13 +668,12 @@ export function useFieldsAndBins({
       }
     }
 
-    const { data, error } = await supabase
+    const { error, count: affectedRows } = await supabase
       .from('fertilizer_recipes')
       .update({ deleted_at: deletedAt })
       .eq('id', id)
-      .eq('farm_id', farm_id)
-      .select('id');
-    if (error || !data || data.length === 0) {
+      .eq('farm_id', farm_id);
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error deleting fertilizer recipe:', error);
       } else {
@@ -706,13 +716,12 @@ export function useFieldsAndBins({
       }
     }
 
-    const { data, error } = await supabase
+    const { error, count: affectedRows } = await supabase
       .from('spray_recipes')
       .update({ deleted_at: deletedAt })
       .eq('id', id)
-      .eq('farm_id', farm_id)
-      .select('id');
-    if (error || !data || data.length === 0) {
+      .eq('farm_id', farm_id);
+    if (error || affectedRows !== 1) {
       if (error) {
         console.error('Error deleting spray recipe:', error);
       } else {

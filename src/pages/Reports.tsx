@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { FileText, Printer, History as HistoryIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,7 +11,7 @@ import FertilizerReport from '@/components/reports/FertilizerReport';
 import FallFsaReport from '@/components/reports/FallFsaReport';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
 import LandlordStatementReport from '@/components/reports/LandlordStatementReport';
-import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
+import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
@@ -78,10 +78,27 @@ export default function Reports() {
   } = useFarm();
 
   const [tab, setTab] = useState<ReportTab>('fsa-plant');
+  const [bundledFsaTracts, setBundledFsaTracts] = useState<Awaited<ReturnType<typeof loadBundledFsaTracts>>>([]);
 
   // Fixed at mount — subtitle dates don't shift on re-render or after midnight
   const reportDateRef = useRef(new Date().toLocaleDateString());
   const reportDate = reportDateRef.current;
+
+  useEffect(() => {
+    if (tab !== 'fsa-plant') return;
+
+    let cancelled = false;
+    loadBundledFsaTracts()
+      .then(tracts => {
+        if (!cancelled) setBundledFsaTracts(tracts);
+      })
+      .catch(err => {
+        console.error('[Reports] Failed to load bundled FSA tracts:', err);
+        if (!cancelled) setBundledFsaTracts([]);
+      });
+
+    return () => { cancelled = true; };
+  }, [tab]);
 
   // O(1) field lookup — built once per fields change, not per row
   const fieldMap = useMemo(() => buildFieldMap(fields), [fields]);
@@ -144,9 +161,14 @@ export default function Reports() {
   }), [sprayRecords, fieldMap]);
 
   // Summary totals
+  const mergedFsaTracts = useMemo(
+    () => mergeBundledFsaTracts(fsaTracts, bundledFsaTracts),
+    [fsaTracts, bundledFsaTracts],
+  );
+
   const fsaPlantRows = useMemo(
-    () => buildFsa578Rows(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts)),
-    [plantRecords, fields, cluAssignments, fsaTracts],
+    () => buildFsa578Rows(plantRecords, fields, cluAssignments, mergedFsaTracts),
+    [plantRecords, fields, cluAssignments, mergedFsaTracts],
   );
   const plantedAcreTotals = useMemo(() => calculateFsa578PlantedAcreTotals(fsaPlantRows), [fsaPlantRows]);
   const totalPlantAcres = plantedAcreTotals.totalAcres;
@@ -194,6 +216,14 @@ export default function Reports() {
     return generateLandlordStatement(harvestRecords, selectedLandlord);
   }, [harvestRecords, selectedLandlord]);
 
+  const getMergedFsaTractsForExport = async () => {
+    if (bundledFsaTracts.length > 0) return mergedFsaTracts;
+
+    const loadedTracts = await loadBundledFsaTracts();
+    setBundledFsaTracts(loadedTracts);
+    return mergeBundledFsaTracts(fsaTracts, loadedTracts);
+  };
+
   const handlePrint = () => {
     if (Capacitor.isNativePlatform()) {
       toast.info('Printing is not supported directly in the mobile app. Please export to PDF and print/share from there.');
@@ -231,12 +261,16 @@ export default function Reports() {
   };
 
   const handleExportFsaPlantPdf = () => {
-    safeExport(() => {
+    safeExport(async () => {
+      const reportTracts = await getMergedFsaTractsForExport();
+      const reportRows = buildFsa578Rows(plantRecords, fields, cluAssignments, reportTracts);
+      const reportTotals = calculateFsa578PlantedAcreTotals(reportRows);
+
       exportToPdf({
         title: 'FSA-578 Acreage Certification Worksheet',
         subtitle: `Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`,
         headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'SEQ', 'ACRES', 'PLANT DATE', 'SHARE %', 'USE', 'IRR', 'FIELD'],
-        rows: fsaPlantRows.map(row => [
+        rows: reportRows.map(row => [
           row.farmNumber || '-',
           row.tractNumber || '-',
           row.fieldNumber || '-',
@@ -252,10 +286,10 @@ export default function Reports() {
         ]),
         fileName: `FSA_578_Worksheet_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
         summaryText: 'Total Planted Acreage',
-        summaryValue: `${totalPlantAcres} AC`,
+        summaryValue: `${reportTotals.totalAcres} AC`,
         footerText: [
           'Planted Acres by Field:',
-          ...plantedAcresByField.map(row => `${row.fieldName}: ${row.acres} AC`),
+          ...reportTotals.byField.map(row => `${row.fieldName}: ${row.acres} AC`),
           '',
           'Farmer Review Worksheet',
           'Review acreage, crop/use, shares, and maps with your county FSA office before certification.',
@@ -461,7 +495,7 @@ export default function Reports() {
             farmName={farmName}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
-            onExportCsv={() => safeExport(() => exportFsa578Data(plantRecords, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
+            onExportCsv={() => safeExport(async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
               farmName,
               cropYear: viewingSeason,
               reportDate: new Date().toISOString().split('T')[0],

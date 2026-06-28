@@ -11,7 +11,7 @@ import {
   ACTIVITY_ICONS,
   ACTIVITY_TEXT_COLORS,
 } from '@/lib/activityIcons';
-import { mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
+import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import type { 
@@ -284,11 +284,11 @@ export default function Activity() {
                 <button
                   onClick={() => {
                     const exportPromise = tab === 'plant'
-                      ? exportFsa578Data(filteredPlant, fields, cluAssignments, mergeBundledFsaTracts(fsaTracts), {
+                      ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {
                         farmName,
                         cropYear: viewingSeason,
                         reportDate: new Date().toISOString().split('T')[0],
-                      })
+                      }))
                       : exportHarvestData(filteredHarvest, fields);
 
                     exportPromise.catch((error) => {

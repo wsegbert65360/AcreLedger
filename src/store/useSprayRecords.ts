@@ -157,14 +157,20 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
 
     const { farm_id: _f, id: _i, ...payload } = mapped;
 
-    const { data, error } = await supabase
-      .from('spray_records')
-      .update(payload)
-      .eq('id', r.id)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('spray_records')
+          .update(payload, { count: 'exact' })
+          .eq('id', r.id)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
 
-    if (error || !data || data.length === 0) {
+    if (error || affectedRows !== 1) {
       // Replace with Sentry.captureException(error) in production
       if (error) {
         if (import.meta.env.DEV) {
@@ -245,19 +251,25 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       }
     }
 
-    const { data, error } = await supabase
-      .from('spray_records')
-      .update({ deleted_at: new Date().toISOString() })
-      .in('id', ids)
-      .eq('farm_id', farm_id)
-      .select('id');
+    let error, affectedRows;
+      try {
+        const res = await supabase
+          .from('spray_records')
+          .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
+          .in('id', ids)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
 
-    if (error || !data || data.length !== ids.length) {
+    if (error || affectedRows !== ids.length) {
       // Replace with Sentry.captureException(error) in production
       if (error) {
         console.error('Error deleting spray records:', error);
       } else {
-        console.warn('Spray delete mismatch:', { requested: ids.length, affected: data?.length ?? 0 });
+        console.warn('Spray delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
       }
 
       // Restore records to their original positions. Sort descending by index.
