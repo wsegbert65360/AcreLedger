@@ -1,12 +1,17 @@
 import { useNavigate } from 'react-router-dom';
-import { MapPin, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 import { Field } from '@/types/farm';
 import { roundTo } from '@/utils/numbers';
 import { ACTIVITY_ICONS } from '@/lib/activityIcons';
+import type { GeoJSONGeometry } from '@/lib/geoHelpers';
+import FieldBoundaryThumbnail from './FieldBoundaryThumbnail';
 
 interface FieldCardProps {
-  field: Field & { displayAcreage?: number };
+  field: Field & {
+    displayAcreage?: number;
+    thumbnailGeometry?: GeoJSONGeometry | null;
+  };
 }
 
 export default function FieldCard({ field }: FieldCardProps) {
@@ -47,7 +52,7 @@ export default function FieldCard({ field }: FieldCardProps) {
     >
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary shrink-0">
-          <MapPin size={12} />
+          <FieldBoundaryThumbnail geometry={field.thumbnailGeometry ?? field.boundary} />
         </div>
         <div>
           <div className="flex items-center gap-2 flex-wrap">
