@@ -105,8 +105,8 @@ Every add, update, and delete mutation must follow this sequence:
 2. Validate inputs and return `false` on invalid data.
 3. Call mapper before state changes.
 4. Apply optimistic React state update with a functional setter.
-5. Await the Supabase operation.
-6. On success, show success feedback and return `true`.
+5. Await the Supabase operation inside a `try...catch` block. You MUST catch unexpected fetch exceptions and assign them to an `error` variable so your existing rollback logic triggers gracefully instead of skipping it.
+6. On success (e.g., `error` is null and `{ count: 'exact' }` matches), show success feedback and return `true`.
 7. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
 
 All add, update, and delete operations return `Promise<boolean>` — `true` on success, `false` on failure. Never return `undefined`.
@@ -114,6 +114,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 ### Supabase and Database
 
 - Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
+- **Do not use `.select()` in update or soft-delete mutations** to verify success. The `deleted_at IS NULL` RLS SELECT policy will hide newly soft-deleted rows from the returning clause, making the client think 0 rows were updated (triggering a false rollback). Instead, use `.update(payload, { count: 'exact' })` and verify `count === 1` or `count === ids.length`.
 - Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue and backup restore RPC MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract, reassigning a CLU, or restoring a backup must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
 - New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
 - Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
