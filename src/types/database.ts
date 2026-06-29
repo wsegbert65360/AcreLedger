@@ -165,6 +165,7 @@ export interface GrainMovementRow {
     season_year: number;
     timestamp: string;
     deleted_at?: string | null;
+    harvest_record_id?: string | null;
 }
 
 export interface SavedSeedRow {

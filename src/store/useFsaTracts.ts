@@ -66,7 +66,7 @@ export function useFsaTracts({
 
     if (!isOnline) {
       try {
-        await syncQueue.enqueueMutation('fsa_tract_imports', existingTract ? 'update' : 'insert', {
+        await syncQueue.enqueueMutation('fsa_tract_imports', 'insert', {
           ...dbPayload,
           geojson,
         }, farm_id);
@@ -194,7 +194,7 @@ export function useFsaTracts({
 
     if (!isOnline) {
       try {
-        await syncQueue.enqueueMutation('field_clu_assignments', existingAssignment ? 'update' : 'insert', dbPayload, farm_id);
+        await syncQueue.enqueueMutation('field_clu_assignments', 'insert', dbPayload, farm_id);
         if (onMutation) await onMutation();
         return true;
       } catch (err) {

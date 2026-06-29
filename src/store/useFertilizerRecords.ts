@@ -14,7 +14,6 @@ interface UseFertilizerRecordsArgs {
   onMutation: () => void | Promise<void>;
 }
 
-/** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
 // ─── Internal Helper Hooks ──────────────────────────────────────────────────
@@ -61,25 +60,23 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
 
     setFertilizerApplications(prev => [...prev, newRecord]);
 
-    if (!isOnline) {
-      try {
-        await syncQueue.enqueueMutation('fertilizer_applications', 'insert', { ...mapped, farm_id }, farm_id);
-        if (onMutation) await onMutation();
-        toast.success('Fertilizer application recorded offline.', {
-          description: 'Queued locally — will sync automatically when connection is restored.',
-        });
-        return true;
-      } catch (err) {
-        console.error('Failed to enqueue fertilizer record offline:', err);
-        setFertilizerApplications(prev => prev.filter(rec => rec.id !== id));
-        toast.error('Failed to save record offline.');
-        return false;
-      } finally {
-        isMutating.current = false;
-      }
-    }
-
     try {
+      if (!isOnline) {
+        try {
+          await syncQueue.enqueueMutation('fertilizer_applications', 'insert', { ...mapped, farm_id }, farm_id);
+          if (onMutation) await onMutation();
+          toast.success('Fertilizer application recorded offline.', {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue fertilizer record offline:', err);
+          setFertilizerApplications(prev => prev.filter(rec => rec.id !== id));
+          toast.error('Failed to save record offline.');
+          return false;
+        }
+      }
+
       let error;
       try {
         const res = await supabase
@@ -105,7 +102,7 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
     } finally {
       isMutating.current = false;
     }
-  }, [viewingSeason, farm_id, setFertilizerApplications]);
+  }, [viewingSeason, farm_id, setFertilizerApplications, isOnline, onMutation]);
 
   return { addFertilizerApplication };
 }
@@ -130,10 +127,9 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
       mapped = mapFertilizerToDb(r);
     } catch (err) {
       console.error('mapFertilizerToDb failed:', err);
+      isMutating.current = false;
       toast.error('Failed to prepare record — check your inputs.');
       return false;
-    } finally {
-      isMutating.current = false;
     }
 
     previousRef.current = undefined;
@@ -148,30 +144,31 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
       return prev.map(item => item.id === r.id ? updatedRecord : item);
     });
 
-    if (!isOnline) {
-      try {
-        await syncQueue.enqueueMutation('fertilizer_applications', 'update', { ...mapped, id: r.id }, farm_id);
-        if (onMutation) await onMutation();
-        toast.success('Fertilizer application updated offline.', {
-          description: 'Queued locally — will sync automatically when connection is restored.',
-        });
-        return true;
-      } catch (err) {
-        console.error('Failed to enqueue fertilizer record update offline:', err);
-        const previous = previousRef.current;
-        if (previous) {
-          setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
-        } else {
-          setFertilizerApplications(prev => prev.filter(item => item.id !== r.id));
+    try {
+      if (!isOnline) {
+        try {
+          await syncQueue.enqueueMutation('fertilizer_applications', 'update', { ...mapped, id: r.id }, farm_id);
+          if (onMutation) await onMutation();
+          toast.success('Fertilizer application updated offline.', {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue fertilizer record update offline:', err);
+          const previous = previousRef.current;
+          if (previous) {
+            setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
+          } else {
+            setFertilizerApplications(prev => prev.filter(item => item.id !== r.id));
+          }
+          toast.error('Failed to update record offline.');
+          return false;
         }
-        toast.error('Failed to update record offline.');
-        return false;
       }
-    }
 
-    const { farm_id: _f, id: _i, ...payload } = mapped;
+      const { farm_id: _f, id: _i, ...payload } = mapped;
 
-    let error, affectedRows;
+      let error, affectedRows;
       try {
         const res = await supabase
           .from('fertilizer_applications')
@@ -184,28 +181,31 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
         error = err;
       }
 
-    if (error || affectedRows !== 1) {
-      if (error) {
-        console.error('Error updating fertilizer application:', error);
-      } else {
-        console.warn('Fertilizer update affected zero rows:', r.id);
+      if (error || affectedRows !== 1) {
+        if (error) {
+          console.error('Error updating fertilizer application:', error);
+        } else {
+          console.warn('Fertilizer update affected zero rows:', r.id);
+        }
+        
+        const previous = previousRef.current;
+        if (previous) {
+          setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
+        } else {
+          console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
+          setFertilizerApplications(prev => prev.filter(item => item.id !== r.id));
+        }
+        
+        toast.error('Failed to update fertilizer application.');
+        return false;
       }
-      
-      const previous = previousRef.current;
-      if (previous) {
-        setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
-      } else {
-        console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
-        setFertilizerApplications(prev => prev.filter(item => item.id !== r.id));
-      }
-      
-      toast.error('Failed to update fertilizer application.');
-      return false;
-    }
 
-    toast.success('Fertilizer application updated.');
-    return true;
-  }, [farm_id, setFertilizerApplications]);
+      toast.success('Fertilizer application updated.');
+      return true;
+    } finally {
+      isMutating.current = false;
+    }
+  }, [farm_id, setFertilizerApplications, isOnline, onMutation]);
 
   return { updateFertilizerApplication };
 }
@@ -234,35 +234,35 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
     });
 
     try {
-    if (!isOnline) {
-      try {
-        const deletedAt = new Date().toISOString();
-        for (const id of ids) {
-          await syncQueue.enqueueMutation('fertilizer_applications', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-        }
-        if (onMutation) await onMutation();
-        const count = ids.length;
-        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
-          description: 'Queued locally — will sync automatically when connection is restored.',
-        });
-        return true;
-      } catch (err) {
-        console.error('Failed to enqueue fertilizer record delete offline:', err);
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
-        setFertilizerApplications(prev => {
-          const restored = [...prev];
-          for (const { record, index } of snapshot) {
-            const insertAt = Math.min(index, restored.length);
-            restored.splice(insertAt, 0, record);
+      if (!isOnline) {
+        try {
+          const deletedAt = new Date().toISOString();
+          for (const id of ids) {
+            await syncQueue.enqueueMutation('fertilizer_applications', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
           }
-          return restored;
-        });
-        toast.error('Failed to delete records offline.');
-        return false;
+          if (onMutation) await onMutation();
+          const count = ids.length;
+          toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue fertilizer record delete offline:', err);
+          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          setFertilizerApplications(prev => {
+            const restored = [...prev];
+            for (const { record, index } of snapshot) {
+              const insertAt = Math.min(index, restored.length);
+              restored.splice(insertAt, 0, record);
+            }
+            return restored;
+          });
+          toast.error('Failed to delete records offline.');
+          return false;
+        }
       }
-    }
 
-    let error, affectedRows;
+      let error, affectedRows;
       try {
         const res = await supabase
           .from('fertilizer_applications')
@@ -275,36 +275,34 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
         error = err;
       }
 
-    if (error || affectedRows !== ids.length) {
-      if (error) {
-        console.error('Error deleting fertilizer applications:', error);
-      } else {
-        console.warn('Fertilizer delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+      if (error || affectedRows !== ids.length) {
+        if (error) {
+          console.error('Error deleting fertilizer applications:', error);
+        } else {
+          console.warn('Fertilizer delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+        }
+
+        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        setFertilizerApplications(prev => {
+          const restored = [...prev];
+          for (const { record, index } of snapshot) {
+            const insertAt = Math.min(index, restored.length);
+            restored.splice(insertAt, 0, record);
+          }
+          return restored;
+        });
+
+        toast.error('Failed to delete records.');
+        return false;
       }
 
-      // Restore records to their original positions. Sort descending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
-
-      setFertilizerApplications(prev => {
-        const restored = [...prev];
-        for (const { record, index } of snapshot) {
-          const insertAt = Math.min(index, restored.length);
-          restored.splice(insertAt, 0, record);
-        }
-        return restored;
-      });
-
-      toast.error('Failed to delete records.');
-      return false;
-    }
-
-    const count = ids.length;
-    toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
-    return true;
+      const count = ids.length;
+      toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
+      return true;
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setFertilizerApplications]);
+  }, [farm_id, setFertilizerApplications, isOnline, onMutation]);
 
   return { deleteFertilizerApplications };
 }

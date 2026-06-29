@@ -66,7 +66,11 @@ export function generateLandlordStatement(
 }
 
 function escapeCsvCell(val: string | number): string {
-  const str = String(val).replace(/"/g, '""');
+  let str = String(val);
+  if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
+    str = `'${str}`;
+  }
+  str = str.replace(/"/g, '""');
   return `"${str}"`;
 }
 
@@ -108,6 +112,15 @@ export function generateLandlordStatementCSV(statement: LandlordStatement): stri
   return allRows.map(row => row.map(cell => escapeCsvCell(cell)).join(',')).join('\n');
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function generateLandlordStatementHTML(statement: LandlordStatement): string {
   const reportDate = new Date(statement.generatedAt).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
@@ -115,10 +128,10 @@ export function generateLandlordStatementHTML(statement: LandlordStatement): str
 
   const rowsHTML = statement.rows.map(r => `
     <tr>
-      <td>${r.fieldName}</td>
-      <td>${r.crop}</td>
-      <td>${r.harvestDate}</td>
-      <td>${r.scaleTicketNumber || '—'}</td>
+      <td>${escapeHtml(r.fieldName)}</td>
+      <td>${escapeHtml(r.crop)}</td>
+      <td>${escapeHtml(r.harvestDate)}</td>
+      <td>${r.scaleTicketNumber ? escapeHtml(r.scaleTicketNumber) : '—'}</td>
       <td class="num">${r.totalBushels.toLocaleString()}</td>
       <td class="num">${r.landlordSplitPercent}%</td>
       <td class="num bold">${r.landlordBushels.toLocaleString()}</td>
@@ -147,7 +160,7 @@ export function generateLandlordStatementHTML(statement: LandlordStatement): str
     <body>
       <h1>Crop Share Statement</h1>
       <div class="subtitle">
-        Prepared for: <strong>${statement.landlordName}</strong>
+        Prepared for: <strong>${escapeHtml(statement.landlordName)}</strong>
         &nbsp;&nbsp;|&nbsp;&nbsp;
         Report Date: ${reportDate}
       </div>

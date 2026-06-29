@@ -13,83 +13,68 @@ interface UseHarvestRecordsArgs {
   onMutation: () => void | Promise<void>;
 }
 
-/** Returned by all three operations: true = committed, false = rolled back or blocked. */
 type OpResult = boolean;
 
 export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, isOnline, onMutation }: UseHarvestRecordsArgs) {
-  // Single boolean guard — prevents double-tap duplicate adds regardless of UUID
   const isMutating = useRef(false);
-
-  // Refs for passing values out of state updaters safely across await boundaries
   const previousRef = useRef<HarvestRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: HarvestRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
-
   const addHarvestRecord = useCallback(async (
-    r: Omit<HarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
+    r: Omit<HarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'> & { id?: string; timestamp?: number }
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
     }
-
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    const id = crypto.randomUUID();
-    const timestamp = Date.now();
+    const id = r.id ?? crypto.randomUUID();
+    const timestamp = r.timestamp ?? Date.now();
     const newRecord: HarvestRecord = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
 
-    // Map before touching state — surface mapper errors before any optimistic update
     let mapped: ReturnType<typeof mapHarvestToDb>;
     try {
       mapped = mapHarvestToDb(newRecord);
     } catch (err) {
-      // Replace with Sentry.captureException(err) in production
       console.error('mapHarvestToDb failed:', err);
       isMutating.current = false;
-      toast.error('Failed to prepare record — check your inputs.');
+      toast.error('Failed to prepare record — check inputs.');
       return false;
     }
 
-    // Optimistic add
     setHarvestRecords(prev => [...prev, newRecord]);
 
-    if (!isOnline) {
-      try {
-        await syncQueue.enqueueMutation('harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
-        if (onMutation) await onMutation();
-        toast.success('Harvest recorded offline.', {
-          description: 'Queued locally — will sync automatically when connection is restored.',
-        });
-        return true;
-      } catch (err) {
-        console.error('Failed to enqueue harvest record offline:', err);
-        setHarvestRecords(prev => prev.filter(rec => rec.id !== id));
-        toast.error('Failed to save record offline.');
-        return false;
-      } finally {
-        isMutating.current = false;
-      }
-    }
-
     try {
+      if (!isOnline) {
+        try {
+          await syncQueue.enqueueMutation('harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
+          if (onMutation) await onMutation();
+          toast.success('Harvest recorded offline.', {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue harvest record offline:', err);
+          setHarvestRecords(prev => prev.filter(rec => rec.id !== id));
+          toast.error('Failed to save record offline.');
+          return false;
+        }
+      }
+
       let error;
       try {
         const res = await supabase
           .from('harvest_records')
-          .insert([{
-            ...mapped,
-            farm_id
-          }]);
+          .insert([{ ...mapped, farm_id }]);
         error = res.error;
       } catch (err) {
         error = err;
       }
 
       if (error) {
-        // Replace with Sentry.captureException(error) in production
         console.error('Error adding harvest record:', error);
         setHarvestRecords(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save harvest record.');
@@ -99,19 +84,16 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       toast.success('Harvest recorded.');
       return true;
     } finally {
-      // Always release the guard
       isMutating.current = false;
     }
-  }, [viewingSeason, farm_id, setHarvestRecords]);
+  }, [viewingSeason, farm_id, setHarvestRecords, isOnline, onMutation]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
-
   const updateHarvestRecord = useCallback(async (r: HarvestRecord): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
     }
-
     if (isMutating.current) return false;
     isMutating.current = true;
 
@@ -120,44 +102,41 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       mapped = mapHarvestToDb(r);
     } catch (err) {
       console.error('mapHarvestToDb failed:', err);
-      toast.error('Failed to prepare record — check your inputs.');
-      return false;
-    } finally {
       isMutating.current = false;
+      toast.error('Failed to prepare record — check inputs.');
+      return false;
     }
 
-    // Capture previous record into a ref INSIDE the setter so it's guaranteed
-    // to reflect the same state snapshot as the optimistic apply
     previousRef.current = undefined;
     setHarvestRecords(prev => {
       previousRef.current = prev.find(item => item.id === r.id);
       return prev.map(item => item.id === r.id ? r : item);
     });
 
-    if (!isOnline) {
-      try {
-        await syncQueue.enqueueMutation('harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
-        if (onMutation) await onMutation();
-        toast.success('Harvest record updated offline.', {
-          description: 'Queued locally — will sync automatically when connection is restored.',
-        });
-        return true;
-      } catch (err) {
-        console.error('Failed to enqueue harvest record update offline:', err);
-        const previous = previousRef.current;
-        if (previous) {
-          setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
-        } else {
-          setHarvestRecords(prev => prev.filter(item => item.id !== r.id));
+    try {
+      if (!isOnline) {
+        try {
+          await syncQueue.enqueueMutation('harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
+          if (onMutation) await onMutation();
+          toast.success('Harvest record updated offline.', {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue harvest record update offline:', err);
+          const previous = previousRef.current;
+          if (previous) {
+            setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
+          } else {
+            setHarvestRecords(prev => prev.filter(item => item.id !== r.id));
+          }
+          toast.error('Failed to update record offline.');
+          return false;
         }
-        toast.error('Failed to update record offline.');
-        return false;
       }
-    }
 
-    const { farm_id: _f, id: _i, ...payload } = mapped;
-
-    let error, affectedRows;
+      const { farm_id: _f, id: _i, ...payload } = mapped;
+      let error, affectedRows;
       try {
         const res = await supabase
           .from('harvest_records')
@@ -170,44 +149,39 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
         error = err;
       }
 
-    if (error || affectedRows !== 1) {
-      // Replace with Sentry.captureException(error) in production
-      if (error) {
-        console.error('Error updating harvest record:', error);
-      } else {
-        console.warn('Harvest update affected zero rows:', r.id);
+      if (error || affectedRows !== 1) {
+        if (error) {
+          console.error('Error updating harvest record:', error);
+        } else {
+          console.warn('Harvest update affected zero rows:', r.id);
+        }
+        const previous = previousRef.current;
+        if (previous) {
+          setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
+        } else {
+          setHarvestRecords(prev => prev.filter(item => item.id !== r.id));
+        }
+        toast.error('Failed to update record.');
+        return false;
       }
 
-      const previous = previousRef.current;
-      if (previous) {
-        setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
-      } else {
-        console.warn('No previous record found for rollback, removing optimistic entry:', r.id);
-        setHarvestRecords(prev => prev.filter(item => item.id !== r.id));
-      }
-
-      toast.error('Failed to update harvest record.');
-      return false;
+      toast.success('Record updated.');
+      return true;
+    } finally {
+      isMutating.current = false;
     }
-
-    toast.success('Harvest record updated.');
-    return true;
-  }, [farm_id, setHarvestRecords]);
+  }, [farm_id, setHarvestRecords, isOnline, onMutation]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
-
   const deleteHarvestRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
     }
-
     if (ids.length === 0) return true;
-
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    // Capture snapshot into a ref inside the setter
     snapshotRef.current = [];
     setHarvestRecords(prev => {
       snapshotRef.current = prev
@@ -217,35 +191,35 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
     });
 
     try {
-    if (!isOnline) {
-      try {
-        const deletedAt = new Date().toISOString();
-        for (const id of ids) {
-          await syncQueue.enqueueMutation('harvest_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-        }
-        if (onMutation) await onMutation();
-        const count = ids.length;
-        toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
-          description: 'Queued locally — will sync automatically when connection is restored.',
-        });
-        return true;
-      } catch (err) {
-        console.error('Failed to enqueue harvest record delete offline:', err);
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
-        setHarvestRecords(prev => {
-          const restored = [...prev];
-          for (const { record, index } of snapshot) {
-            const insertAt = Math.min(index, restored.length);
-            restored.splice(insertAt, 0, record);
+      if (!isOnline) {
+        try {
+          const deletedAt = new Date().toISOString();
+          for (const id of ids) {
+            await syncQueue.enqueueMutation('harvest_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
           }
-          return restored;
-        });
-        toast.error('Failed to delete records offline.');
-        return false;
+          if (onMutation) await onMutation();
+          const count = ids.length;
+          toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue harvest record delete offline:', err);
+          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          setHarvestRecords(prev => {
+            const restored = [...prev];
+            for (const { record, index } of snapshot) {
+              const insertAt = Math.min(index, restored.length);
+              restored.splice(insertAt, 0, record);
+            }
+            return restored;
+          });
+          toast.error('Failed to delete records offline.');
+          return false;
+        }
       }
-    }
 
-    let error, affectedRows;
+      let error, affectedRows;
       try {
         const res = await supabase
           .from('harvest_records')
@@ -258,37 +232,32 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
         error = err;
       }
 
-    if (error || affectedRows !== ids.length) {
-      // Replace with Sentry.captureException(error) in production
-      if (error) {
-        console.error('Error deleting harvest records:', error);
-      } else {
-        console.warn('Harvest delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+      if (error || affectedRows !== ids.length) {
+        if (error) {
+          console.error('Error deleting harvest records:', error);
+        } else {
+          console.warn('Harvest delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+        }
+        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        setHarvestRecords(prev => {
+          const restored = [...prev];
+          for (const { record, index } of snapshot) {
+            const insertAt = Math.min(index, restored.length);
+            restored.splice(insertAt, 0, record);
+          }
+          return restored;
+        });
+        toast.error('Failed to delete records.');
+        return false;
       }
 
-      // Restore records to their original positions. Sort descending by index.
-      const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
-
-      setHarvestRecords(prev => {
-        const restored = [...prev];
-        for (const { record, index } of snapshot) {
-          const insertAt = Math.min(index, restored.length);
-          restored.splice(insertAt, 0, record);
-        }
-        return restored;
-      });
-
-      toast.error('Failed to delete records.');
-      return false;
-    }
-
-    const count = ids.length;
-    toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
-    return true;
+      const count = ids.length;
+      toast.success(`${count} record${count !== 1 ? 's' : ''} deleted.`);
+      return true;
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setHarvestRecords]);
+  }, [farm_id, setHarvestRecords, isOnline, onMutation]);
 
   return { addHarvestRecord, updateHarvestRecord, deleteHarvestRecords };
 }

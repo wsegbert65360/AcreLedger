@@ -6,6 +6,7 @@ import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto'
 
 const isNative = Capacitor.isNativePlatform();
 const WEB_QUEUE_KEY = 'al_sync_queue';
+let webQueuePromise: Promise<void> = Promise.resolve();
 
 const ALLOWED_TABLES = new Set([
   'fields', 'bins', 'plant_records', 'spray_records',
@@ -92,17 +93,21 @@ export const syncQueue = {
         console.error('Failed to enqueue native mutation:', err);
       }
     } else {
-      const queue = await getWebQueue();
-      queue.push({
-        id,
-        table_name: tableName,
-        operation,
-        payload,
-        farm_id: farmId,
-        created_at: now,
-        retry_count: 0
-      });
-      await saveWebQueue(queue);
+      await (webQueuePromise = webQueuePromise.then(async () => {
+        const queue = await getWebQueue();
+        queue.push({
+          id,
+          table_name: tableName,
+          operation,
+          payload,
+          farm_id: farmId,
+          created_at: now,
+          retry_count: 0
+        });
+        await saveWebQueue(queue);
+      }).catch(err => {
+        console.error('Failed to serialize web sync queue enqueue:', err);
+      }));
     }
   },
 
@@ -130,8 +135,14 @@ export const syncQueue = {
       }
       return [];
     } else {
-      const queue = await getWebQueue();
-      return queue.filter(item => item.farm_id === farmId);
+      let result: QueuedMutation[] = [];
+      await (webQueuePromise = webQueuePromise.then(async () => {
+        const queue = await getWebQueue();
+        result = queue.filter(item => item.farm_id === farmId);
+      }).catch(err => {
+        console.error('Failed to serialize web sync queue getQueue:', err);
+      }));
+      return result;
     }
   },
 
@@ -149,9 +160,13 @@ export const syncQueue = {
         console.error('Failed to dequeue native mutation:', err);
       }
     } else {
-      const queue = await getWebQueue();
-      const updated = queue.filter(item => item.id !== id);
-      await saveWebQueue(updated);
+      await (webQueuePromise = webQueuePromise.then(async () => {
+        const queue = await getWebQueue();
+        const updated = queue.filter(item => item.id !== id);
+        await saveWebQueue(updated);
+      }).catch(err => {
+        console.error('Failed to serialize web sync queue dequeue:', err);
+      }));
     }
   },
 
@@ -169,12 +184,16 @@ export const syncQueue = {
         console.error('Failed to update native retry count:', err);
       }
     } else {
-      const queue = await getWebQueue();
-      const idx = queue.findIndex(item => item.id === id);
-      if (idx !== -1) {
-        queue[idx].retry_count += 1;
-        await saveWebQueue(queue);
-      }
+      await (webQueuePromise = webQueuePromise.then(async () => {
+        const queue = await getWebQueue();
+        const idx = queue.findIndex(item => item.id === id);
+        if (idx !== -1) {
+          queue[idx].retry_count += 1;
+          await saveWebQueue(queue);
+        }
+      }).catch(err => {
+        console.error('Failed to serialize web sync queue increment retry:', err);
+      }));
     }
   },
 
@@ -196,8 +215,14 @@ export const syncQueue = {
       }
       return 0;
     } else {
-      const queue = await getWebQueue();
-      return queue.filter(item => item.farm_id === farmId).length;
+      let result = 0;
+      await (webQueuePromise = webQueuePromise.then(async () => {
+        const queue = await getWebQueue();
+        result = queue.filter(item => item.farm_id === farmId).length;
+      }).catch(err => {
+        console.error('Failed to serialize web sync queue getPendingCount:', err);
+      }));
+      return result;
     }
   },
 
@@ -270,8 +295,11 @@ export const syncQueue = {
               await syncQueue.dequeueMutation(mutation.id);
             } else {
               await syncQueue.incrementRetry(mutation.id, mutation.retry_count);
-              // Stop processing for now, will retry again on next sync trigger
-              return false;
+              // Intentional choice to continue processing so a poisoned or invalid mutation
+              // (e.g., RLS or schema constraint violation) does not block unrelated queue items indefinitely.
+              // Note: Dependent mutations in a chain (like insert -> update on the same row) will also
+              // fail and increment retry counts until discarded, but unrelated rows will sync successfully.
+              continue;
             }
           }
         } else {

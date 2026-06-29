@@ -12,19 +12,22 @@ const geoJsonMultiPolygonSchema = z.object({
 
 const geoJsonGeometrySchema = z.union([geoJsonPolygonSchema, geoJsonMultiPolygonSchema]);
 
+// Note: We deliberately omit .strict() from tractFeatureSchema and tractFeatureCollectionSchema
+// because imported GeoJSON features from the FSA may contain additional vendor/custom properties
+// that must be retained and not rejected during validation.
 const tractFeatureSchema = z.object({
   type: z.literal('Feature'),
   geometry: geoJsonGeometrySchema,
   properties: z.object({
     cluNumber: z.string(),
     acres: z.number(),
-  }).strict(),
-}).strict();
+  }),
+});
 
 const tractFeatureCollectionSchema = z.object({
   type: z.literal('FeatureCollection'),
   features: z.array(tractFeatureSchema),
-}).strict();
+});
 
 const sprayProductSchema = z.object({
   id: z.string().optional(),
@@ -187,6 +190,7 @@ export const grainMovementSchema = z.object({
   seasonYear: z.number(),
   timestamp: z.number().optional(),
   deleted_at: z.string().nullable().optional(),
+  harvestRecordId: z.string().optional(),
 }).strict();
 
 export const savedSeedSchema = z.object({

@@ -20,11 +20,14 @@ export interface Field {
   producerShare?: number; // 0 to 100 (%)
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated';
   intendedUse?: string; // e.g. Grain, Forage, Seed
-  farm_id?: string;
+  farm_id: string;
   cluNumbers?: string[];
   boundary?: {
     type: 'Polygon';
     coordinates: number[][][];
+  } | {
+    type: 'MultiPolygon';
+    coordinates: number[][][][];
   } | null;
   deleted_at: string | null;
   activitySummary?: {
@@ -55,7 +58,7 @@ export interface PlantRecord {
   cropSequence?: 'First Crop' | 'Second Crop';
   plantingPattern?: string;
   seasonYear: number;
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
   memo?: string;
 }
@@ -69,7 +72,7 @@ export interface SprayRecord {
   temperature: number;
   timestamp: number;
   seasonYear: number;
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
   // Applicator Identity
   applicatorName?: string;
@@ -134,7 +137,7 @@ export interface HarvestRecord {
   harvestDate?: string;
   landlordName?: string;
   scaleTicketNumber?: string;
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
 }
 
@@ -150,7 +153,7 @@ export interface HayHarvestRecord {
   conditions?: string;
   seasonYear: number;
   timestamp: number;
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
 }
 
@@ -158,7 +161,7 @@ export interface Bin {
   id: string;
   name: string;
   capacity: number;
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
 }
 
@@ -174,8 +177,9 @@ export interface GrainMovement {
   seasonYear: number;
   price?: number; // Price per bushel
   destination?: string; // Buyer or location
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
+  harvestRecordId?: string;
 }
 
 export interface SavedSeed {
@@ -187,7 +191,7 @@ export interface SavedSeed {
   lotNumber: string;
   year: number;
   notes: string;
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
 }
 
@@ -211,7 +215,7 @@ export interface SprayRecipe {
   licenseNumber?: string;
   targetPest?: string;
   epaRegNumber?: string; // Kept for backward compatibility/summary
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
 }
 
@@ -219,7 +223,7 @@ export interface FertilizerRecipe {
   id: string;
   name: string;
   npkRatio: string;
-  farm_id?: string;
+  farm_id: string;
   deleted_at: string | null;
 }
 
@@ -239,7 +243,7 @@ export interface FertilizerApplication {
 
 export interface TillageRecord {
   id: string;
-  farm_id?: string;
+  farm_id: string;
   fieldId: string;
   fieldName: string;
   date: string;

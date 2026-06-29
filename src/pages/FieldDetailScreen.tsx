@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import { useFarm } from '@/store/farmStore';
+import { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
 import { RainService, type RainfallResult } from '@/services/RainService';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
@@ -30,6 +31,8 @@ import FieldNotes from '@/components/FieldNotes';
 import FieldBoundaryMap from '@/components/FieldBoundaryMap';
 
 export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
+
+type EditingRecordType = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord | null;
 
 const FIELD_ACTIONS = [
   { id: 'spray', label: 'Log Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
@@ -80,7 +83,7 @@ export default function FieldDetailScreen() {
   const fieldNonCroplandAcres = useMemo(() => {
     return fieldClus.filter(a => a.landUse === 'non_cropland').reduce((sum, a) => sum + a.acres, 0);
   }, [fieldClus]);
-  const [editingRecord, setEditingRecord] = useState<any>(null);
+  const [editingRecord, setEditingRecord] = useState<EditingRecordType>(null);
   const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
   const fetchingRainRef = useRef(false);
   const inFlightRainFetchKeyRef = useRef<string | null>(null);
@@ -240,13 +243,13 @@ export default function FieldDetailScreen() {
 
   if (!field) return <div className="p-8 text-center text-muted-foreground">Field not found</div>;
 
-  const handleEdit = (type: ModalType, record: any) => {
+  const handleEdit = (type: ModalType, record: Exclude<EditingRecordType, null>) => {
     setEditingRecord(record);
     setEditingMode('edit');
     setModal(type);
   };
 
-  const handleDuplicate = (type: ModalType, record: any) => {
+  const handleDuplicate = (type: ModalType, record: Exclude<EditingRecordType, null>) => {
     setEditingRecord(record);
     setEditingMode('duplicate');
     setModal(type);
@@ -268,11 +271,11 @@ export default function FieldDetailScreen() {
     hasFsaTractReference;
 
   return (
-    <div className="min-h-screen bg-background pb-24 lg:pb-8">
+    <div className="min-h-screen bg-background pb-[calc(6rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       {/* Sticky Header */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4">
         <div className="max-w-lg mx-auto flex items-center justify-between lg:max-w-5xl lg:px-8">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors">
+          <button onClick={() => navigate(-1)} aria-label="Go back" className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors">
             <ArrowLeft size={24} />
           </button>
           <Logo className="h-8" />

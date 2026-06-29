@@ -16,18 +16,16 @@ export const binService = {
         const { farm_id: _f, id: _i, ...payload } = mapped;
         return await supabase
             .from('bins')
-            .update(payload)
+            .update(payload, { count: 'exact' })
             .eq('id', bin.id)
-            .eq('farm_id', farmId)
-            .select();
+            .eq('farm_id', farmId);
     },
 
     async softDeleteBin(id: string, farmId: string) {
         return await supabase
             .from('bins')
-            .update({ deleted_at: new Date().toISOString() })
+            .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
             .eq('id', id)
-            .eq('farm_id', farmId)
-            .select('id');
+            .eq('farm_id', farmId);
     }
 };

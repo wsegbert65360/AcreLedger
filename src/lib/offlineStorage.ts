@@ -31,6 +31,10 @@ export async function getDatabase() {
       const isConn = (await sqliteConnection.isConnection('acreledger_db', false)).result;
       if (isConn) {
         dbConnection = await sqliteConnection.retrieveConnection('acreledger_db', false);
+        const isOpened = (await dbConnection.isOpened()).result;
+        if (!isOpened) {
+          await dbConnection.open();
+        }
       } else {
         let { value: encKey } = await Preferences.get({ key: 'db_enc_key' });
         if (!encKey) {
@@ -38,16 +42,39 @@ export async function getDatabase() {
           await Preferences.set({ key: 'db_enc_key', value: encKey });
         }
 
-        dbConnection = await sqliteConnection.createConnection(
-          'acreledger_db',
-          false, // encrypted
-          encKey, // mode
-          1, // version
-          false // readonly
-        );
-      }
+        const isSecretStored = (await sqliteConnection.isSecretStored()).result;
+        if (!isSecretStored) {
+          await sqliteConnection.setEncryptionSecret(encKey);
+        }
 
-      await dbConnection.open();
+        try {
+          dbConnection = await sqliteConnection.createConnection(
+            'acreledger_db',
+            true, // encrypted
+            'secret', // mode
+            1, // version
+            false // readonly
+          );
+          await dbConnection.open();
+        } catch (openErr) {
+          console.warn('[OfflineStorage] Failed to open database in encrypted mode. Attempting fallback to unencrypted mode...', openErr);
+          try {
+            await sqliteConnection.closeConnection('acreledger_db', false);
+          } catch (closeErr) {
+            console.error('[OfflineStorage] Error closing connection registry:', closeErr);
+          }
+          
+          dbConnection = await sqliteConnection.createConnection(
+            'acreledger_db',
+            false, // encrypted
+            'no-encryption', // mode
+            1, // version
+            false // readonly
+          );
+          await dbConnection.open();
+          console.log('[OfflineStorage] Fallback to unencrypted mode succeeded.');
+        }
+      }
 
       // Create the offline cache table
       await dbConnection.execute(`

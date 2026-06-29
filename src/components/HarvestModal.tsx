@@ -118,9 +118,12 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
         // Sync linked grain movement
         if (initialData.destination === 'bin') {
           const movement = grainMovements.find(gm =>
-            gm.sourceFieldName === field.name &&
-            gm.timestamp === initialData.timestamp &&
-            gm.type === 'in'
+            gm.harvestRecordId === initialData.id || (
+              !gm.harvestRecordId &&
+              gm.sourceFieldName === field.name &&
+              gm.timestamp === initialData.timestamp &&
+              gm.type === 'in'
+            )
           );
           if (movement) {
             const bin = bins.find(b => b.id === binId);
@@ -147,6 +150,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             moisturePercent: m,
             sourceFieldName: field.name,
             timestamp: initialData.timestamp,
+            harvestRecordId: initialData.id,
           });
           if (!gmSuccess) {
             toast.error('Harvest saved but grain movement addition failed.');
@@ -155,7 +159,13 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
           }
         }
       } else {
-        success = await addHarvestRecord(harvestData);
+        const harvestId = crypto.randomUUID();
+        const harvestTimestamp = Date.now();
+        success = await addHarvestRecord({
+          ...harvestData,
+          id: harvestId,
+          timestamp: harvestTimestamp,
+        });
         if (!success) {
           toast.error('Failed to save harvest record.');
           native.haptic.error();
@@ -171,7 +181,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             bushels: bu,
             moisturePercent: m,
             sourceFieldName: field.name,
-            timestamp: Date.now(),
+            timestamp: harvestTimestamp,
+            harvestRecordId: harvestId,
           });
           if (!gmSuccess) {
             toast.error('Harvest saved but grain movement addition failed.');

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CalendarDays, Sprout, Plus } from 'lucide-react';
 import { useQuickAdd } from '@/context/QuickAddContext';
 import { native } from '@/lib/native';
+import pkg from '../../package.json';
 
 export default function Sidebar() {
   const { pathname } = useLocation();
@@ -76,7 +77,7 @@ export default function Sidebar() {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[11px] font-mono text-sidebar-foreground/40">v3.5.0</p>
+        <p className="text-[11px] font-mono text-sidebar-foreground/40">v{pkg.version}</p>
       </div>
     </nav>
   );

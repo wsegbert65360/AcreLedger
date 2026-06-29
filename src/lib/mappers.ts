@@ -175,7 +175,8 @@ export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
     price: db.price != null ? safeNum(db.price) : undefined,
     seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
-    deleted_at: db.deleted_at ?? null
+    deleted_at: db.deleted_at ?? null,
+    harvestRecordId: db.harvest_record_id || undefined
 });
 
 export const mapBinFromDb = (db: BinRow): Bin => ({
@@ -462,7 +463,8 @@ export const mapGrainToDb = (m: GrainMovement) => {
         price: m.price,
         season_year: m.seasonYear,
         timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: m.deleted_at
+        deleted_at: m.deleted_at,
+        harvest_record_id: m.harvestRecordId
     };
 };
 

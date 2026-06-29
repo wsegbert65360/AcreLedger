@@ -11,6 +11,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useFarm } from '@/store/farmStore';
 import { parseCluGeoJson } from '@/lib/cluImport';
 import { loadTractData, parseTractKeys } from '@/lib/tractLookup';
@@ -65,6 +75,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
   const displayAssignmentsRef = useRef<FieldCluAssignment[]>([]);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isDialogDragActive, setIsDialogDragActive] = useState(false);
+  const [tractToDelete, setTractToDelete] = useState<string | null>(null);
   const dialogFileInputRef = useRef<HTMLInputElement>(null);
 
   const legacyTractKeys = useMemo(() => {
@@ -344,17 +355,8 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
     onDone?.();
   }, [onDone]);
 
-  const handleDeleteTract = useCallback(async (tractId: string) => {
+  const executeDeleteTract = useCallback(async (tractId: string) => {
     const tract = fsaTracts.find(t => t.id === tractId);
-    const assignedCount = displayAssignments.filter(a => !a.deletedAt && a.tractKey === tract?.tractKey).length;
-
-    if (assignedCount > 0) {
-      const confirmed = window.confirm(
-        `This tract has ${assignedCount} CLU assignment${assignedCount > 1 ? 's' : ''} that will also be removed. Continue?`,
-      );
-      if (!confirmed) return;
-    }
-
     const deleted = await deleteTract(tractId);
     if (deleted && tract) {
       const affectedFieldIds = new Set<string>();
@@ -371,6 +373,17 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
       }
     }
   }, [fsaTracts, displayAssignments, deleteTract, syncFieldAcreageAndClus]);
+
+  const handleDeleteTract = useCallback(async (tractId: string) => {
+    const tract = fsaTracts.find(t => t.id === tractId);
+    const assignedCount = displayAssignments.filter(a => !a.deletedAt && a.tractKey === tract?.tractKey).length;
+
+    if (assignedCount > 0) {
+      setTractToDelete(tractId);
+    } else {
+      await executeDeleteTract(tractId);
+    }
+  }, [fsaTracts, displayAssignments, executeDeleteTract]);
 
   const handleReimport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -891,6 +904,30 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
           </Tabs>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!tractToDelete} onOpenChange={(open) => { if (!open) setTractToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                if (!tractToDelete) return '';
+                const tract = fsaTracts.find(t => t.id === tractToDelete);
+                const assignedCount = displayAssignments.filter(a => !a.deletedAt && a.tractKey === tract?.tractKey).length;
+                return `This tract has ${assignedCount} CLU assignment${assignedCount > 1 ? 's' : ''} that will also be removed. Continue?`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              if (tractToDelete) {
+                await executeDeleteTract(tractToDelete);
+                setTractToDelete(null);
+              }
+            }}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

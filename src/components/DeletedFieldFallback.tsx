@@ -1,4 +1,11 @@
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface DeletedFieldFallbackProps {
   onClose: () => void;
@@ -6,12 +13,19 @@ interface DeletedFieldFallbackProps {
 
 const DeletedFieldFallback = ({ onClose }: DeletedFieldFallbackProps) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-      <div className="bg-card border border-border p-6 rounded-xl max-w-sm w-full space-y-4 shadow-2xl">
-        <p className="text-sm text-muted-foreground">The original field for this record has been deleted.</p>
-        <Button onClick={onClose} className="w-full touch-target">Close</Button>
-      </div>
-    </div>
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm w-full p-6">
+        <DialogHeader>
+          <DialogTitle>Field Deleted</DialogTitle>
+          <DialogDescription>
+            The original field for this record has been deleted.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Button onClick={onClose} className="w-full touch-target mt-2">Close</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

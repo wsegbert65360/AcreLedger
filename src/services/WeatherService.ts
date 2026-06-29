@@ -6,13 +6,14 @@ const PROXY_URL = '/api/weather-proxy';
 const VISUAL_CROSSING_KEY = import.meta.env.VITE_VISUALCROSSING_KEY;
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
-const promiseCache = new Map<string, Promise<any>>();
+const conditionsCache = new Map<string, Promise<any>>();
+const currentWeatherCache = new Map<string, Promise<any>>();
 const extendedCache = new Map<string, Promise<any>>();
 
 function buildWeatherUrl(location: string, endpoint: string, query: Record<string, string>): string {
     const params = new URLSearchParams(query);
 
-    if (VISUAL_CROSSING_KEY) {
+    if (import.meta.env.DEV && VISUAL_CROSSING_KEY) {
         params.set('key', VISUAL_CROSSING_KEY);
         return `${VC_BASE_URL}/${location}${endpoint ? `/${endpoint}` : ''}?${params.toString()}`;
     }
@@ -55,9 +56,9 @@ export const WeatherService = {
         const defaults = { windspeed: null, winddir: null, windcardinal: '—', temp: null, humidity: null, isError: true };
 
         // If a request for this location is already in-flight, return the shared promise
-        if (promiseCache.has(location)) {
+        if (conditionsCache.has(location)) {
             try {
-                const data = await promiseCache.get(location);
+                const data = await conditionsCache.get(location);
                 return this._mapFieldConditions(data);
             } catch (_error) {
                 // If the cached promise fails, we fall through and try again or return defaults
@@ -85,7 +86,7 @@ export const WeatherService = {
             const fetchPromise = fetchWeatherJson(url, controller.signal);
 
             // Store the promise in the cache
-            promiseCache.set(location, fetchPromise);
+            conditionsCache.set(location, fetchPromise);
 
             const data = await fetchPromise;
             return this._mapFieldConditions(data);
@@ -100,7 +101,7 @@ export const WeatherService = {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
             // Remove from cache after completion so subsequent requests fetch fresh
-            promiseCache.delete(location);
+            conditionsCache.delete(location);
         }
     },
 
@@ -125,9 +126,9 @@ export const WeatherService = {
      */
     async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number, precipProb?: number }> {
         const encLocation = encodeURIComponent(location);
-        if (promiseCache.has(encLocation)) {
+        if (currentWeatherCache.has(encLocation)) {
             try {
-                const data = await promiseCache.get(encLocation);
+                const data = await currentWeatherCache.get(encLocation);
                 return this._mapCurrentWeather(data);
             } catch (_error) {
                 return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
@@ -154,7 +155,7 @@ export const WeatherService = {
             
             const fetchPromise = fetchWeatherJson(url, controller.signal);
                 
-            promiseCache.set(encLocation, fetchPromise);
+            currentWeatherCache.set(encLocation, fetchPromise);
             
             const data = await fetchPromise;
             return this._mapCurrentWeather(data);
@@ -170,7 +171,7 @@ export const WeatherService = {
         } finally {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
-            promiseCache.delete(encLocation);
+            currentWeatherCache.delete(encLocation);
         }
     },
 
