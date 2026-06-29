@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Settings, Tractor, Search, Plus } from 'lucide-react';
+import { Settings, Tractor, Search, Plus, X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,10 +13,27 @@ import FieldManageModal from '@/components/FieldManageModal';
 import Logo from '@/components/Logo';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
+import {
+  buildFieldActivityStatusMap,
+  parseSearchQuery,
+  fieldMatchesQuery,
+} from '@/lib/fieldSearch';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
 
 const Index = () => {
-  const { fields: allFields, cluAssignments, viewingSeason, setViewingSeason, seasonOptions } = useFarm();
+  const {
+    fields: allFields,
+    cluAssignments,
+    plantRecords,
+    sprayRecords,
+    fertilizerApplications,
+    harvestRecords,
+    hayHarvestRecords,
+    viewingSeason,
+    setViewingSeason,
+    seasonOptions,
+  } = useFarm();
+
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
     let total = 0;
     const totals: Record<string, number> = {};
@@ -29,7 +46,7 @@ const Index = () => {
       const use = f.intendedUse ? f.intendedUse.trim() : 'Unassigned';
       const useLower = use.toLowerCase();
       const displayAcres = displayAcreMap.get(f.id) ?? f.acreage;
-      
+
       total += displayAcres;
       totals[use] = (totals[use] || 0) + displayAcres;
 
@@ -52,13 +69,30 @@ const Index = () => {
   }, [allFields, cluAssignments]);
 
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
 
+  const activityMap = useMemo(
+    () => buildFieldActivityStatusMap(
+      allFields,
+      {
+        plantRecords,
+        sprayRecords,
+        fertilizerApplications,
+        harvestRecords,
+        hayHarvestRecords,
+      },
+      viewingSeason,
+    ),
+    [allFields, plantRecords, sprayRecords, fertilizerApplications, harvestRecords, hayHarvestRecords, viewingSeason],
+  );
+
+  const parsedQuery = useMemo(() => parseSearchQuery(search), [search]);
+  const hasSearch = parsedQuery.nameTerms.length > 0 || parsedQuery.statuses.length > 0;
+
   const { filteredRowCrops, filteredPastureHay } = useMemo(() => {
-    const trimmedSearch = search.trim().toLowerCase();
-    
     let rc = rowCrops;
     let ph = pastureHay;
 
@@ -67,21 +101,30 @@ const Index = () => {
       ph = pastureHay.filter(f => selectedCrops.includes(f.intendedUse?.trim() || 'Unassigned'));
     }
 
-    if (trimmedSearch) {
-      rc = rc.filter(f => f.name.toLowerCase().includes(trimmedSearch));
-      ph = ph.filter(f => f.name.toLowerCase().includes(trimmedSearch));
+    if (hasSearch) {
+      rc = rc.filter(f => fieldMatchesQuery(f.name, activityMap.get(f.id), parsedQuery));
+      ph = ph.filter(f => fieldMatchesQuery(f.name, activityMap.get(f.id), parsedQuery));
     }
 
     return {
       filteredRowCrops: rc,
       filteredPastureHay: ph
     };
-  }, [rowCrops, pastureHay, selectedCrops, search]);
+  }, [rowCrops, pastureHay, selectedCrops, hasSearch, activityMap, parsedQuery]);
 
   const toggleCrop = (crop: string) => {
     setSelectedCrops(prev =>
       prev.includes(crop) ? prev.filter(c => c !== crop) : [...prev, crop]
     );
+  };
+
+  const toggleSearch = () => {
+    if (searchOpen) {
+      setSearchOpen(false);
+      setSearch('');
+    } else {
+      setSearchOpen(true);
+    }
   };
 
   return (
@@ -93,9 +136,9 @@ const Index = () => {
             <div className="flex flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
               <div className="text-xs text-muted-foreground flex items-center gap-1">
-                {allFields.length} fields · 
-                <Select 
-                  value={viewingSeason.toString()} 
+                {allFields.length} fields ·
+                <Select
+                  value={viewingSeason.toString()}
                   onValueChange={(val) => setViewingSeason(parseInt(val, 10))}
                 >
                   <SelectTrigger className="h-5 py-0 px-1.5 text-xs font-bold border-none bg-transparent hover:bg-muted focus:ring-0 w-fit">
@@ -148,7 +191,7 @@ const Index = () => {
                       <button
                         key={crop}
                         onClick={() => toggleCrop(crop)}
-                        className={`flex-none flex items-center justify-center h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold ${isActive
+                        className={`flex-none flex items-center justify-center h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold whitespace-nowrap ${isActive
                           ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
                           : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50'
                           }`}
@@ -157,24 +200,47 @@ const Index = () => {
                       </button>
                     );
                   })}
+                  <button
+                    onClick={toggleSearch}
+                    aria-label={searchOpen ? 'Close search' : 'Open search'}
+                    aria-pressed={searchOpen}
+                    className={`flex-none flex items-center justify-center gap-1 h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold whitespace-nowrap ${searchOpen || hasSearch
+                      ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
+                      : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50'
+                      }`}
+                  >
+                    <Search size={14} />
+                    <span>Search</span>
+                  </button>
                 </div>
-              </div>
-            )}
-            {allFields.length > 0 && (
-              <div className="relative mb-3">
-                <Label htmlFor="field-search" className="sr-only">Search fields</Label>
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="field-search"
-                  name="field-search"
-                  type="search"
-                  inputMode="search"
-                  autoComplete="off"
-                  placeholder="Search fields by name…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-11 pl-9"
-                />
+                {searchOpen && (
+                  <div className="relative mt-1">
+                    <Label htmlFor="field-search" className="sr-only">Search fields</Label>
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                    <Input
+                      id="field-search"
+                      name="field-search"
+                      type="search"
+                      inputMode="search"
+                      autoComplete="off"
+                      placeholder="field name, planted, not sprayed, fertilized…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="h-11 pl-9 pr-9"
+                      autoFocus
+                    />
+                    {search && (
+                      <button
+                        type="button"
+                        onClick={() => setSearch('')}
+                        aria-label="Clear search"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {filteredRowCrops.length > 0 && (
@@ -209,7 +275,7 @@ const Index = () => {
             {allFields.length > 0 && filteredRowCrops.length === 0 && filteredPastureHay.length === 0 && (
               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  {search.trim() ? `No fields match "${search}".` : 'No fields match the selected crops.'}
+                  {hasSearch ? `No fields match "${search.trim()}".` : 'No fields match the selected crops.'}
                 </p>
               </div>
             )}
