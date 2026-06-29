@@ -91,7 +91,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [isEndTimeManual, setIsEndTimeManual] = useState(!!initialData?.endTime);
   const [involvedTechnicians, setInvolvedTechnicians] = useState(initialData?.involvedTechnicians || '');
   const [siteAddress, setSiteAddress] = useState(initialData?.siteAddress || field.name);
-  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || field.acreage.toString());
+  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || field?.acreage?.toString() || '');
   const [treatedAreaUnit, setTreatedAreaUnit] = useState(initialData?.treatedAreaUnit || 'ac');
   const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied?.toString() || '');
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
@@ -154,7 +154,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setEndTime(initialData.endTime || '');
       setIsEndTimeManual(!!initialData.endTime);
       setSiteAddress(initialData.siteAddress || field.name);
-      setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field.acreage.toString());
+      setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field?.acreage?.toString() || '');
       setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
       setTotalAmountApplied(initialData.totalAmountApplied?.toString() || '');
       setMixtureRate(initialData.mixtureRate || '');
@@ -203,7 +203,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setEndTime('');
       setIsEndTimeManual(false);
       setSiteAddress(field.name);
-      setTreatedAreaSize(field.acreage.toString());
+      setTreatedAreaSize(field?.acreage?.toString() || '');
       setTreatedAreaUnit('ac');
       setTotalAmountApplied('');
       setMixtureRate('');

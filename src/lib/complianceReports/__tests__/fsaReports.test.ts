@@ -1021,6 +1021,82 @@ describe('FSA 578 report rows', () => {
         expect(rows[0].fieldNumber).toBe('1');
         expect(rows[0].acreage).toBe(32.41);
     });
+
+    it('does not scale planted acres down when a field also has non-cropland CLUs', () => {
+        // Reproduces the FSA-578 under-reporting bug: a field with one cropland
+        // CLU and several non-cropland CLUs had its plant record scaled by the
+        // total field acreage (cropland + non-cropland) instead of cropland
+        // only, producing a worksheet row smaller than the CLU polygon.
+        const field: Field = {
+            id: 'field-fleming',
+            name: 'Fleming below Rick',
+            // field.acreage is the sum of all assigned CLUs (cropland + non-cropland)
+            acreage: 35.81,
+            lat: 39,
+            lng: -94,
+            fsaFarmNumber: '6418',
+            fsaTractNumber: '1315',
+            deleted_at: null
+        };
+
+        const plantRecord: PlantRecord = {
+            id: 'plant-fleming',
+            fieldId: 'field-fleming',
+            fieldName: 'Fleming below Rick',
+            crop: 'Corn',
+            seedVariety: 'Merschman 2512c-30',
+            acreage: 26.37,
+            plantDate: '2026-04-23',
+            timestamp: new Date('2026-04-23T12:00:00.000Z').getTime(),
+            seasonYear: 2026,
+            deleted_at: null
+        };
+
+        const assignments: FieldCluAssignment[] = [
+            {
+                id: 'crop-1',
+                farmId: 'farm-1',
+                fieldId: 'field-fleming',
+                tractKey: '6418-1315',
+                cluNumber: '1',
+                acres: 26.37,
+                landUse: 'cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            },
+            {
+                id: 'noncrop-15',
+                farmId: 'farm-1',
+                fieldId: 'field-fleming',
+                tractKey: '6418-1315',
+                cluNumber: '15',
+                acres: 1.2,
+                landUse: 'non_cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            },
+            {
+                id: 'noncrop-26',
+                farmId: 'farm-1',
+                fieldId: 'field-fleming',
+                tractKey: '6418-1315',
+                cluNumber: '26',
+                acres: 4.24,
+                landUse: 'non_cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null
+            }
+        ];
+
+        const rows = buildFsa578Rows([plantRecord], [field], assignments);
+
+        // Only the cropland CLU should produce a planted row.
+        const plantedRows = rows.filter(row => row.landUse === 'Cropland');
+        expect(plantedRows).toHaveLength(1);
+        // Pre-fix this would have been ~19.42 (26.37 * 26.37/35.81).
+        expect(plantedRows[0].acreage).toBe(26.37);
+        expect(plantedRows[0].fieldNumber).toBe('1');
+    });
 });
 
 describe('FSA fall harvest production report rows', () => {

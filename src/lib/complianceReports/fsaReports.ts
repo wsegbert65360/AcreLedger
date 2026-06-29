@@ -194,18 +194,52 @@ function sortedPlantRecords(plantRecords: PlantRecord[]): PlantRecord[] {
     );
 }
 
+function mergeCompatiblePlantRecords(records: PlantRecord[], fieldMap: Map<string, Field>): PlantRecord[] {
+    const grouped = new Map<string, PlantRecord>();
+
+    records.forEach(r => {
+        const field = fieldMap.get(r.fieldId);
+        const irrigation = r.irrigationPractice || field?.irrigationPractice || 'Non-Irrigated';
+        const share = r.producerShare ?? field?.producerShare ?? 100;
+        const intendedUse = r.intendedUse || field?.intendedUse || '';
+
+        const key = [
+            r.fieldId,
+            r.crop || '',
+            r.seedVariety || '',
+            intendedUse,
+            irrigation,
+            share,
+            r.cropStatus || 'Planted',
+            r.cropSequence || 'First Crop',
+            r.plantingPattern || '',
+        ].join('|');
+
+        const existing = grouped.get(key);
+        if (!existing) {
+            grouped.set(key, { ...r });
+            return;
+        }
+
+        existing.id = `${existing.id}+${r.id}`;
+        existing.acreage = roundTo(existing.acreage + r.acreage, 2);
+        if (r.plantDate && (!existing.plantDate || r.plantDate > existing.plantDate)) {
+            existing.plantDate = r.plantDate;
+        }
+        if (r.timestamp > existing.timestamp) {
+            existing.timestamp = r.timestamp;
+        }
+    });
+
+    return [...grouped.values()];
+}
+
 function displayedPlantDate(record: PlantRecord): string {
     if (record.plantDate) return record.plantDate;
     const ms = new Date(record.timestamp).getTime();
     // Guard against corrupted/invalid timestamps so one bad cached record
     // can't RangeError-crash the whole FSA-578 render.
     return Number.isFinite(ms) ? new Date(ms).toISOString().split('T')[0] : '';
-}
-
-function adjustedCluAcres(sourceAcres: number, record: PlantRecord, field: Field | undefined): number {
-    if (!field?.acreage || field.acreage <= 0) return sourceAcres;
-    if (record.acreage >= field.acreage) return sourceAcres;
-    return roundTo(sourceAcres * (record.acreage / field.acreage), 2);
 }
 
 function fsa578GroupKey(row: Fsa578ReportRow): string {
@@ -317,8 +351,8 @@ export function buildFsa578Rows(
     });
 
     const activeAssignments = [...activeAssignmentsByField.values()].flat();
-    const fsaPlantRecords = sortedPlantRecords(plantRecords);
-    const plantedFieldIds = new Set(fsaPlantRecords.map(record => record.fieldId));
+    const fsaPlantRecords = mergeCompatiblePlantRecords(sortedPlantRecords(plantRecords), fieldMap);
+    const plantedFieldIds = new Set(plantRecords.map(record => record.fieldId));
 
     const plantedRows = groupCompatibleFsa578Rows(fsaPlantRecords.flatMap(r => {
         const field = fieldMap.get(r.fieldId);
@@ -358,7 +392,7 @@ export function buildFsa578Rows(
                     farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
                     tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                     fieldNumber: cluNumber,
-                    acreage: adjustedCluAcres(tractAcres.get(`${tractKey}:${cluNumber}`) ?? (legacyCluNumbers.length === 1 ? r.acreage : 0), r, field),
+                    acreage: tractAcres.get(`${tractKey}:${cluNumber}`) ?? (legacyCluNumbers.length === 1 ? (field?.acreage ?? r.acreage) : 0),
                 }));
             });
 
@@ -374,7 +408,7 @@ export function buildFsa578Rows(
                     farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
                     tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                     fieldNumber: containingFeature.cluNumber,
-                    acreage: adjustedCluAcres(containingFeature.acres, r, field),
+                    acreage: containingFeature.acres,
                 }];
             }
 
@@ -384,7 +418,7 @@ export function buildFsa578Rows(
                 farmNumber: field?.fsaFarmNumber || '',
                 tractNumber: field?.fsaTractNumber || '',
                 fieldNumber: r.fsaFieldNumber || field?.fsaFieldNumber || '',
-                acreage: r.acreage,
+                acreage: field?.acreage ?? r.acreage,
             }];
         }
 
@@ -397,7 +431,7 @@ export function buildFsa578Rows(
                 farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
                 tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                 fieldNumber: a.cluNumber,
-                acreage: adjustedCluAcres(a.acres, r, field),
+                acreage: a.acres,
             };
         });
     }));
