@@ -440,8 +440,25 @@ The `generateSprayPDF` utility (`@/lib/sprayExport.ts`) provides a production-gr
 PDF export for spray records. It handles both single-record and multi-record exports.
 
 ### Field Dashboard (Mobile-First)
-The `FieldDetailScreen` follows a "Daily Status Board" pattern. It prioritizes real-time
-signals over static data.
+The `FieldDetailScreen` follows a "Daily Status Board" pattern ordered by farmer usage
+frequency. Canonical section order:
+
+1. Field header (name, acres, crop pill, FSA numbers)
+2. Boundary map (kept near top for field orientation)
+3. Quick Actions (six log buttons + View Full History shortcut)
+4. Today at a Glance (4 status cards: rainfall, spray, latest activity, crop)
+5. Latest Spray (conditional — compliance detail)
+6. Field History (ActivityFeed, last 8 records)
+7. Rainfall Summary (detailed rain grid with refresh)
+8. CLU Summary (compact one-liner: count + cropland/non-cropland totals + Manage/Assign button)
+9. Field Details & Notes (reference metadata + auto-saving notes)
+
+Action-oriented sections (3–6) come first because logging and status checks are the
+daily-use flows. Reference info (rainfall detail, CLU, field meta) sits at the bottom.
+The CLU section is intentionally compressed to a single row — the full per-CLU list
+(with tract keys, per-CLU acres, and land-use badges) lives in the management dialog
+opened via the Manage/Assign button, not on the page. Do not re-expand the CLU section
+inline; that pattern was retired because it pushed actionable content below the fold.
 
 ### Dashboard Crop-Filter Bar (`Index.tsx`)
 The operation-total summary and per-crop filter pills live in a static `rounded-2xl`

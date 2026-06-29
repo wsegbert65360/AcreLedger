@@ -314,75 +314,35 @@ export default function FieldDetailScreen() {
           </section>
         )}
 
-        {/* CLU Assignments Section */}
-        <section className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <MapIcon size={18} className="text-primary" />
-              FSA CLU Assignments
-            </h2>
-            <Button
-              onClick={() => setIsCluDialogOpen(true)}
-              variant="outline"
-              size="sm"
-              className="h-11 text-xs font-bold px-4"
-            >
-              Manage CLUs
-            </Button>
-          </div>
-
-          {fieldClus.length > 0 ? (
-            <div className="space-y-3">
-              <div className="divide-y divide-border rounded-xl border border-border bg-muted/30 overflow-hidden">
-                {fieldClus.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between p-3 text-sm">
-                    <div className="space-y-0.5">
-                      <div className="font-mono font-bold text-foreground">
-                        CLU {a.cluNumber}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground font-mono">
-                        Tract Key: {a.tractKey}
-                      </div>
-                    </div>
-                    <div className="text-right space-y-0.5">
-                      <div className="font-mono font-bold text-foreground">
-                        {roundTo(a.acres, 2)} ac
-                      </div>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium font-sans uppercase tracking-tight ${
-                        a.landUse === 'cropland' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
-                          : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                      }`}>
-                        {a.landUse === 'cropland' ? 'Cropland' : 'Non-crop'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs font-medium text-muted-foreground bg-muted/20 p-2.5 rounded-xl border border-border/50">
-                <div>Cropland: <span className="font-mono font-bold text-foreground">{roundTo(fieldCroplandAcres, 1)} ac</span></div>
-                <div>Non-cropland: <span className="font-mono font-bold text-foreground">{roundTo(fieldNonCroplandAcres, 1)} ac</span></div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-6 px-4 border border-dashed border-border rounded-xl bg-muted/10 space-y-2">
-              <p className="text-xs text-muted-foreground">
-                No FSA Common Land Unit (CLU) boundaries assigned to this field yet.
-              </p>
-              <Button
-                onClick={() => setIsCluDialogOpen(true)}
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-xs text-primary font-bold"
+        {/* 2. Quick Actions */}
+        <section className="space-y-3">
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+            {FIELD_ACTIONS.map((action) => (
+              <button
+                key={action.id}
+                onClick={() => { setEditingRecord(null); setModal(action.id as ModalType); }}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-card border border-border shadow-sm transition-transform active:scale-95"
               >
-                Assign CLU Boundaries
-              </Button>
-            </div>
-          )}
+                <div className={`p-2 rounded-xl ${action.bg} ${action.color}`}>
+                  <action.icon size={20} />
+                </div>
+                <span className="text-xs font-black uppercase tracking-tighter text-muted-foreground">{action.label.split(' ')[1]}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              const el = document.getElementById('history-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted text-muted-foreground text-sm font-semibold hover:bg-muted/80 transition-colors"
+          >
+            <HistoryIcon size={14} />
+            View Full History
+          </button>
         </section>
 
-        {/* 2. Today at a Glance - Grid of 4 Cards */}
+        {/* 3. Today at a Glance - Grid of 4 Cards */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
           {/* Rainfall Card */}
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
@@ -477,92 +437,7 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* 3. Quick Actions */}
-        <section className="space-y-3">
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
-            {FIELD_ACTIONS.map((action) => (
-              <button
-                key={action.id}
-                onClick={() => { setEditingRecord(null); setModal(action.id as ModalType); }}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-card border border-border shadow-sm transition-transform active:scale-95"
-              >
-                <div className={`p-2 rounded-xl ${action.bg} ${action.color}`}>
-                  <action.icon size={20} />
-                </div>
-                <span className="text-xs font-black uppercase tracking-tighter text-muted-foreground">{action.label.split(' ')[1]}</span>
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => {
-              const el = document.getElementById('history-section');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-muted text-muted-foreground text-sm font-semibold hover:bg-muted/80 transition-colors"
-          >
-            <HistoryIcon size={14} />
-            View Full History
-          </button>
-        </section>
-
-        {/* 4. Rainfall Summary Section */}
-        <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Droplets size={16} className="text-spray" />
-              Rainfall Summary
-            </h3>
-            <button
-              onClick={() => handleFetchRain(undefined, true)}
-              disabled={fetchingRain}
-              className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
-            >
-              <RefreshCw size={16} className={`${fetchingRain ? 'animate-spin' : ''} text-muted-foreground`} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: '24 Hours', value: fmtRain(rainStats?.['24h']) },
-              { label: '72 Hours', value: fmtRain(rainStats?.['72h']) },
-              { label: '7 Days', value: fmtRain(rainStats?.['7d']) },
-              { label: 'Planted', value: fmtRain(rainStats?.sincePlanting), sub: 'Since' },
-              { label: 'Sprayed', value: fmtRain(rainStats?.sinceLastSpray), sub: 'Since' },
-              { label: 'Season', value: rainStats?.periodEndUtc ? (() => {
-                const start = latestPlanting?.plantDate ? new Date(latestPlanting.plantDate) : new Date(`${viewingSeason}-03-01`);
-                const end = new Date();
-                const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000);
-                return `${days}d`;})() : '—' },
-            ].map((stat, i) => (
-              <div key={i} className="p-3 rounded-2xl bg-muted/50 border border-border/60">
-                <div className="text-xs font-semibold text-muted-foreground mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
-                <div className="text-xl font-black font-mono text-foreground leading-none">{stat.value}"</div>
-              </div>
-            ))}
-          </div>
-
-          {rainError && (
-            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex gap-2">
-              <AlertCircle size={14} className="text-red-500 shrink-0" />
-              <p className="text-xs text-red-600 dark:text-red-400 font-medium leading-tight">{rainError}</p>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-2 text-xs text-muted-foreground font-medium bg-muted/50 p-2 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Info size={12} />
-              Data updated hourly. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-            </div>
-            {rainStats?.dataWarning && (
-              <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400 font-bold uppercase tracking-tighter bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
-                <AlertCircle size={12} className="mt-0.5 animate-pulse" />
-                <span className="leading-tight">{rainStats.dataWarning}</span>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* 5. Spray Summary Card */}
+        {/* 4. Latest Spray */}
         {latestSpray && (
           <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
@@ -632,7 +507,7 @@ export default function FieldDetailScreen() {
           </section>
         )}
 
-        {/* 6. Field History Timeline */}
+        {/* 5. Field History Timeline */}
         <section id="history-section" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -674,7 +549,102 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* 7. Field Details (Meta) */}
+        {/* 6. Rainfall Summary */}
+        <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Droplets size={16} className="text-spray" />
+              Rainfall Summary
+            </h3>
+            <button
+              onClick={() => handleFetchRain(undefined, true)}
+              disabled={fetchingRain}
+              className="p-2 rounded-lg hover:bg-muted transition-colors disabled:opacity-30"
+            >
+              <RefreshCw size={16} className={`${fetchingRain ? 'animate-spin' : ''} text-muted-foreground`} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: '24 Hours', value: fmtRain(rainStats?.['24h']), unit: '"' },
+              { label: '72 Hours', value: fmtRain(rainStats?.['72h']), unit: '"' },
+              { label: '7 Days', value: fmtRain(rainStats?.['7d']), unit: '"' },
+              { label: 'Planted', value: fmtRain(rainStats?.sincePlanting), sub: 'Since', unit: '"' },
+              { label: 'Sprayed', value: fmtRain(rainStats?.sinceLastSpray), sub: 'Since', unit: '"' },
+              { label: 'Season', value: rainStats?.periodEndUtc ? (() => {
+                const start = latestPlanting?.plantDate ? new Date(latestPlanting.plantDate) : new Date(`${viewingSeason}-03-01`);
+                const end = new Date();
+                const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000);
+                return `${days}d`;})() : '—', unit: '' },
+            ].map((stat, i) => (
+              <div key={i} className="p-3 rounded-2xl bg-muted/50 border border-border/60">
+                <div className="text-xs font-semibold text-muted-foreground mb-1 leading-none">{stat.sub ? `${stat.sub} ${stat.label}` : stat.label}</div>
+                <div className="text-xl font-black font-mono text-foreground leading-none">
+                  {stat.value}
+                  {stat.value !== '—' ? stat.unit : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {rainError && (
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex gap-2">
+              <AlertCircle size={14} className="text-red-500 shrink-0" />
+              <p className="text-xs text-red-600 dark:text-red-400 font-medium leading-tight">{rainError}</p>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground font-medium bg-muted/50 p-2 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Info size={12} />
+              Data updated hourly. {rainStats?.periodEndUtc && `Last synced: ${new Date(rainStats.periodEndUtc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+            </div>
+            {rainStats?.dataWarning && (
+              <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400 font-bold uppercase tracking-tighter bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
+                <AlertCircle size={12} className="mt-0.5 animate-pulse" />
+                <span className="leading-tight">{rainStats.dataWarning}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 7. CLU Summary */}
+        <section className="bg-card border border-border rounded-2xl p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
+                <MapIcon size={14} />
+              </div>
+              <div className="text-xs min-w-0">
+                <div className="font-bold text-foreground truncate">
+                  {fieldClus.length > 0
+                    ? `${fieldClus.length} CLU${fieldClus.length === 1 ? '' : 's'} assigned`
+                    : 'No CLUs assigned'}
+                </div>
+                {fieldClus.length > 0 ? (
+                  <div className="text-muted-foreground font-medium">
+                    {roundTo(fieldCroplandAcres, 1)} ac cropland · {roundTo(fieldNonCroplandAcres, 1)} ac non-crop
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground font-medium">
+                    Import FSA tracts to assign boundaries
+                  </div>
+                )}
+              </div>
+            </div>
+            <Button
+              onClick={() => setIsCluDialogOpen(true)}
+              variant="outline"
+              size="sm"
+              className="h-9 text-xs font-bold px-3 shrink-0"
+            >
+              {fieldClus.length > 0 ? 'Manage' : 'Assign'}
+            </Button>
+          </div>
+        </section>
+
+        {/* 8. Field Details (Meta) */}
         <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
             <MapPin size={16} className="text-primary" />

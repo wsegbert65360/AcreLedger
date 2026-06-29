@@ -201,7 +201,7 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                         <div>
                             <div className="flex items-center gap-2">
                                 <DialogTitle className="text-lg font-bold text-foreground leading-tight">{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'New'} Fertilizer</DialogTitle>
-                                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-lime-600/10 text-lime-600 dark:text-lime-400 border border-lime-600/20">
+                                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-lime-600/10 text-lime-600 border border-lime-600/20">
                                     {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                                 </span>
                             </div>

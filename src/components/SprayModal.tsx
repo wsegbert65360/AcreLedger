@@ -105,9 +105,12 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
       <DialogContent className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between w-full text-spray font-bold flex-wrap gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center flex-wrap gap-2">
               <CloudRain size={20} />
               <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Spray'} — {field.name}</span>
+              <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
+                {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <button
