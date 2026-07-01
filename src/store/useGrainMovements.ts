@@ -15,6 +15,23 @@ interface UseGrainMovementsArgs {
 
 type OpResult = boolean;
 
+/**
+ * Extract the actual PostgREST error details so failures are diagnosable.
+ * Supabase errors carry { code, message, details, hint } — surfacing these
+ * (instead of a generic toast) is what reveals schema/constraint problems
+ * like "PGRST204: Could not find the 'X' column in the schema cache".
+ */
+function describeSupabaseError(error: unknown): { consolePayload: unknown; toastOptions?: { description: string } } {
+  const e = (error ?? {}) as { code?: string; message?: string; details?: string; hint?: string };
+  const code = e.code;
+  const message = e.message;
+  const label = [code, message].filter(Boolean).join(': ') || 'Unknown error';
+  return {
+    consolePayload: { code, message, details: e.details, hint: e.hint },
+    toastOptions: { description: label },
+  };
+}
+
 export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, isOnline, onMutation }: UseGrainMovementsArgs) {
   const isMutating = useRef(false);
   const previousRef = useRef<GrainMovement | undefined>(undefined);
@@ -75,9 +92,10 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
       }
 
       if (error) {
-        console.error('Error adding grain movement record:', error);
+        const { consolePayload, toastOptions } = describeSupabaseError(error);
+        console.error('Error adding grain movement record:', consolePayload);
         setGrainMovements(prev => prev.filter(rec => rec.id !== id));
-        toast.error('Failed to save grain movement.');
+        toast.error('Failed to save grain movement.', toastOptions);
         return false;
       }
 
@@ -151,9 +169,12 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
 
       if (error || affectedRows !== 1) {
         if (error) {
-          console.error('Error updating grain movement:', error);
+          const { consolePayload, toastOptions } = describeSupabaseError(error);
+          console.error('Error updating grain movement:', consolePayload);
+          toast.error('Failed to update record.', toastOptions);
         } else {
           console.warn('Grain update affected zero rows:', r.id);
+          toast.error('Failed to update record.', { description: 'Record was not found or already changed.' });
         }
         const previous = previousRef.current;
         if (previous) {
@@ -161,7 +182,6 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
         } else {
           setGrainMovements(prev => prev.filter(item => item.id !== r.id));
         }
-        toast.error('Failed to update record.');
         return false;
       }
 
@@ -234,9 +254,12 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
 
       if (error || affectedRows !== ids.length) {
         if (error) {
-          console.error('Error deleting grain movements:', error);
+          const { consolePayload, toastOptions } = describeSupabaseError(error);
+          console.error('Error deleting grain movements:', consolePayload);
+          toast.error('Failed to delete records.', toastOptions);
         } else {
           console.warn('Grain delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          toast.error('Failed to delete records.', { description: `${affectedRows ?? 0} of ${ids.length} record(s) were found.` });
         }
         const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
         setGrainMovements(prev => {
@@ -247,7 +270,6 @@ export function useGrainMovements({ farm_id, viewingSeason, setGrainMovements, i
           }
           return restored;
         });
-        toast.error('Failed to delete records.');
         return false;
       }
 
