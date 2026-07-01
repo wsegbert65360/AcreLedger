@@ -63,3 +63,6 @@ website/
 .claude/
 *.log
 acreledger_fields*.csv
+*.codex-tmp
+*.tmp
+.tmp*
