@@ -1,0 +1,35 @@
+# Normalize text file line endings to LF in the repository and working tree,
+# regardless of platform. Git auto-detects binary files; common binaries are
+# marked explicitly below to avoid any misfire.
+* text=auto eol=lf
+
+# Source files (explicit, for editor/IDE consistency)
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.sql  text eol=lf
+*.sh   text eol=lf
+*.swift text eol=lf
+
+# Binary assets — never normalize
+*.png  binary
+*.ico  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.svg  text eol=lf
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.eot  binary
+*.pdf  binary
