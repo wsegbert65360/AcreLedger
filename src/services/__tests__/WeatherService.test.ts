@@ -67,6 +67,27 @@ describe('WeatherService', () => {
             expect(result.isError).toBe(true);
             expect(console.error).toHaveBeenCalledWith(expect.stringContaining('timed out'));
         });
+        it('should encode coordinate paths once for direct Visual Crossing requests', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    currentConditions: {
+                        windspeed: 8,
+                        winddir: 180,
+                        temp: 72,
+                        humidity: 50,
+                    },
+                }),
+            });
+
+            const result = await WeatherService.fetchFieldConditions(40.7, -74.0);
+            const fetchUrl = (global.fetch as any).mock.calls[0][0] as string;
+
+            expect(result.isError).toBe(false);
+            expect(fetchUrl).toContain('/40.7%2C-74/today?');
+            expect(fetchUrl).not.toContain('%252C');
+        });
 
         it('should use cached promise and handle its failure', async () => {
             const { WeatherService } = await import('../WeatherService');
@@ -131,6 +152,35 @@ describe('WeatherService', () => {
             expect(r1.isError).toBe(true);
             expect(r2.isError).toBe(true);
             expect(r2.locationName).toBe('Unknown');
+        });
+        it('should use an absolute weather proxy URL when configured', async () => {
+            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
+            vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
+            vi.resetModules();
+
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: '72301',
+                    currentConditions: {
+                        temp: 72,
+                        humidity: 45,
+                        windspeed: 10,
+                        winddir: 180,
+                    },
+                    days: [{ datetime: '2026-03-25', precip: 0.1 }],
+                }),
+            });
+
+            const result = await WeatherService.fetchCurrentWeather('72301');
+            const [fetchUrl, fetchOptions] = (global.fetch as any).mock.calls[0];
+
+            expect(result.isError).toBe(false);
+            expect(fetchUrl).toMatch(/^https:\/\/acreledger\.example\.vercel\.app\/api\/weather-proxy\?/);
+            expect(fetchUrl).toContain('location=72301');
+            expect(fetchUrl).toContain('endpoint=last3days%2Ftoday');
+            expect(fetchOptions.headers).toEqual(expect.any(Object));
         });
 
         it('should correctly map successful response', async () => {

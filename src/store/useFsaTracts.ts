@@ -205,23 +205,33 @@ export function useFsaTracts({
       }
     }
 
-    const { data, error } = await cluAssignmentService.saveAssignment(
-      id,
-      fieldId,
-      tractKey,
-      cluNumber,
-      acres,
-      landUse,
-      farm_id,
-    );
-    if (error || !data) {
-      console.error('Failed to assign CLU:', error);
+    let savedAssignment: unknown = null;
+    let saveError: unknown = null;
+
+    try {
+      const result = await cluAssignmentService.saveAssignment(
+        id,
+        fieldId,
+        tractKey,
+        cluNumber,
+        acres,
+        landUse,
+        farm_id,
+      );
+      savedAssignment = result.data;
+      saveError = result.error;
+    } catch (error) {
+      saveError = error;
+    }
+
+    if (saveError || !savedAssignment) {
+      console.error('Failed to assign CLU:', saveError);
       setCluAssignments(previousAssignments);
       toast.error('Failed to assign CLU');
       return false;
     }
 
-    const persistedAssignment = mapFieldCluAssignmentFromDb(data as any);
+    const persistedAssignment = mapFieldCluAssignmentFromDb(savedAssignment as any);
     setCluAssignments(prev => [
       ...prev.filter(a => !(a.tractKey === tractKey && a.cluNumber === cluNumber)),
       persistedAssignment,
@@ -262,16 +272,24 @@ export function useFsaTracts({
       }
     }
 
-    const { data, error } = await cluAssignmentService.updateLandUse(assignmentId, landUse, farm_id);
-    if (error || !data) {
-      console.error('Failed to update CLU land use:', error);
+    let updateCount: number | null = null;
+    let updateError: unknown = null;
+
+    try {
+      const result = await cluAssignmentService.updateLandUse(assignmentId, landUse, farm_id);
+      updateCount = result.count;
+      updateError = result.error;
+    } catch (error) {
+      updateError = error;
+    }
+
+    if (updateError || updateCount !== 1) {
+      console.error('Failed to update CLU land use:', updateError);
       setCluAssignments(previousAssignments);
       toast.error('Failed to update CLU land use');
       return false;
     }
 
-    const persistedAssignment = mapFieldCluAssignmentFromDb(data as any);
-    setCluAssignments(prev => prev.map(a => (a.id === assignmentId ? persistedAssignment : a)));
     return true;
   }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
 
@@ -293,6 +311,8 @@ export function useFsaTracts({
       return false;
     }
 
+    const deletedAt = new Date().toISOString();
+
     setCluAssignments(prev => prev.filter(
       a => !(a.fieldId === fieldId && a.tractKey === tractKey && a.cluNumber === cluNumber),
     ));
@@ -301,7 +321,7 @@ export function useFsaTracts({
       try {
         await syncQueue.enqueueMutation('field_clu_assignments', 'soft_delete', {
           id: assignment.id,
-          deleted_at: new Date().toISOString(),
+          deleted_at: deletedAt,
         }, farm_id);
         if (onMutation) await onMutation();
         return true;
@@ -313,9 +333,19 @@ export function useFsaTracts({
       }
     }
 
-    const { error } = await cluAssignmentService.removeAssignment(assignment.id, farm_id);
-    if (error) {
-      console.error('Failed to unassign CLU:', error);
+    let deleteCount: number | null = null;
+    let deleteError: unknown = null;
+
+    try {
+      const result = await cluAssignmentService.removeAssignment(assignment.id, farm_id, deletedAt);
+      deleteCount = result.count;
+      deleteError = result.error;
+    } catch (error) {
+      deleteError = error;
+    }
+
+    if (deleteError || deleteCount !== 1) {
+      console.error('Failed to unassign CLU:', deleteError);
       setCluAssignments(previousAssignments);
       toast.error('Failed to remove CLU assignment');
       return false;
@@ -354,17 +384,23 @@ export function useFsaTracts({
       }
     }
 
-    let allSuccess = true;
-    for (const a of toDelete) {
-      const { error } = await cluAssignmentService.removeAssignment(a.id, farm_id);
-      if (error) {
-        console.error('Failed to unassign CLU on field delete:', error);
-        allSuccess = false;
+    let deleteError: unknown = null;
+    try {
+      for (const a of toDelete) {
+        const result = await cluAssignmentService.removeAssignment(a.id, farm_id, deletedAt);
+        if (result.error || result.count !== 1) {
+          deleteError = result.error ?? new Error(`Expected to remove 1 CLU assignment, removed ${result.count ?? 0}`);
+          break;
+        }
       }
+    } catch (error) {
+      deleteError = error;
     }
 
-    if (!allSuccess) {
+    if (deleteError) {
+      console.error('Failed to unassign CLU on field delete:', deleteError);
       setCluAssignments(previousAssignments);
+      toast.error('Failed to remove CLU assignments');
       return false;
     }
     return true;

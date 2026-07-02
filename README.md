@@ -65,12 +65,13 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOi...
 
 # Weather (Visual Crossing)
 VITE_VISUALCROSSING_KEY=your_visual_crossing_api_key
+VITE_WEATHER_PROXY_URL=https://your-app.vercel.app
 
 # Rain API (optional — RainService falls back to https://rain-api.vercel.app)
 VITE_RAIN_API_URL=https://rain-api.vercel.app
 ```
 
-`VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly.
+`VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly. For iOS/Capacitor weather, provide an absolute `VITE_WEATHER_PROXY_URL` or set `VITE_VISUALCROSSING_KEY`; the proxy URL is preferred when both are set, while the web app can continue using the server-side `/api/weather-proxy`.
 
 ## Deployment
 

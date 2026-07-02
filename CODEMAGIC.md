@@ -58,12 +58,13 @@ In **Settings → Environment variable groups**, create a group called **`appsto
 | `VITE_SUPABASE_URL` | `https://xxxxx.supabase.co` | Yes |
 | `VITE_SUPABASE_ANON_KEY` | `eyJhbGciOi...` | Yes |
 | `VITE_VISUALCROSSING_KEY` | `your-key` | Yes |
+| `VITE_WEATHER_PROXY_URL` | `https://your-app.vercel.app` | No |
 | `VITE_RAIN_API_URL` | `https://rain-api.vercel.app` | No |
 | `APP_STORE_CONNECT_KEY_ID` | `2F8X4G5J3K` | No |
 | `APP_STORE_CONNECT_ISSUER_ID` | `12345678-1234-...` | No |
 | `APP_STORE_CONNECT_PRIVATE_KEY` | `-----BEGIN PRIVATE KEY-----...` | Yes |
 
-The `VITE_*` variables are injected at build time by Vite. The `APP_STORE_CONNECT_*` variables are used for TestFlight publishing via `auth: integration`.
+The `VITE_*` variables are injected at build time by Vite. iOS weather requires either an absolute `VITE_WEATHER_PROXY_URL` pointing to the deployed web proxy or `VITE_VISUALCROSSING_KEY` for direct Visual Crossing requests; the proxy URL is preferred when both are set. The `APP_STORE_CONNECT_*` variables are used for TestFlight publishing via `auth: integration`.
 
 ---
 

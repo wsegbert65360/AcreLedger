@@ -30,20 +30,19 @@ export const cluAssignmentService = {
   async updateLandUse(id: string, landUse: CluLandUse, farmId: string) {
     return await supabase
       .from('field_clu_assignments')
-      .update({ land_use: landUse })
+      .update({ land_use: landUse }, { count: 'exact' })
       .eq('id', id)
       .eq('farm_id', farmId)
-      .select()
-      .single();
+      .is('deleted_at', null);
   },
 
-  async removeAssignment(id: string, farmId: string) {
+  async removeAssignment(id: string, farmId: string, deletedAt = new Date().toISOString()) {
     return await supabase
       .from('field_clu_assignments')
-      .update({ deleted_at: new Date().toISOString() })
+      .update({ deleted_at: deletedAt }, { count: 'exact' })
       .eq('id', id)
       .eq('farm_id', farmId)
-      .select('id');
+      .is('deleted_at', null);
   },
 
   async fetchAssignmentsForFarm(farmId: string) {

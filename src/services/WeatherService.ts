@@ -2,31 +2,75 @@ import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather'
 import { supabase } from '@/lib/supabase';
 
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
-const PROXY_URL = '/api/weather-proxy';
-const VISUAL_CROSSING_KEY = import.meta.env.VITE_VISUALCROSSING_KEY;
+const PROXY_PATH = '/api/weather-proxy';
+
+function cleanEnvValue(value?: string): string {
+    return (value ?? '').trim().replace(/^['"]|['"]$/g, '');
+}
+
+const VISUAL_CROSSING_KEY = cleanEnvValue(import.meta.env.VITE_VISUALCROSSING_KEY);
+const WEATHER_PROXY_URL = cleanEnvValue(import.meta.env.VITE_WEATHER_PROXY_URL);
+const IS_CAPACITOR_BUILD = import.meta.env.MODE === 'capacitor';
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
 const conditionsCache = new Map<string, Promise<any>>();
 const currentWeatherCache = new Map<string, Promise<any>>();
 const extendedCache = new Map<string, Promise<any>>();
 
+function encodeEndpoint(endpoint: string): string {
+    return endpoint
+        .split('/')
+        .filter(Boolean)
+        .map(segment => encodeURIComponent(segment))
+        .join('/');
+}
+
+function resolveWeatherProxyUrl(): string {
+    if (!WEATHER_PROXY_URL) {
+        if (IS_CAPACITOR_BUILD && !VISUAL_CROSSING_KEY) {
+            throw new Error('Capacitor weather requires VITE_VISUALCROSSING_KEY or VITE_WEATHER_PROXY_URL.');
+        }
+        return PROXY_PATH;
+    }
+
+    const normalized = WEATHER_PROXY_URL.replace(/\/+$/, '');
+    const parsedUrl = new URL(normalized);
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+        throw new Error('VITE_WEATHER_PROXY_URL must use HTTPS');
+    }
+
+    return normalized.endsWith(PROXY_PATH) ? normalized : `${normalized}${PROXY_PATH}`;
+}
+
+function isWeatherProxyUrl(url: string): boolean {
+    return url.startsWith(`${PROXY_PATH}?`) || url.includes(`${PROXY_PATH}?`);
+}
+
 function buildWeatherUrl(location: string, endpoint: string, query: Record<string, string>): string {
     const params = new URLSearchParams(query);
 
-    if (import.meta.env.DEV && VISUAL_CROSSING_KEY) {
+    const canUseDirectApi = VISUAL_CROSSING_KEY && (import.meta.env.DEV || (IS_CAPACITOR_BUILD && !WEATHER_PROXY_URL));
+    if (canUseDirectApi) {
         params.set('key', VISUAL_CROSSING_KEY);
-        return `${VC_BASE_URL}/${location}${endpoint ? `/${endpoint}` : ''}?${params.toString()}`;
+        const pathLocation = encodeURIComponent(location);
+        const pathEndpoint = encodeEndpoint(endpoint);
+        return `${VC_BASE_URL}/${pathLocation}${pathEndpoint ? `/${pathEndpoint}` : ''}?${params.toString()}`;
     }
 
-    return `${PROXY_URL}?location=${location}${endpoint ? `&endpoint=${endpoint}` : ''}&${params.toString()}`;
+    params.set('location', location);
+    if (endpoint) params.set('endpoint', endpoint);
+
+    return `${resolveWeatherProxyUrl()}?${params.toString()}`;
 }
 
 async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> {
     const headers: HeadersInit = {};
 
-    if (url.startsWith(PROXY_URL)) {
+    if (isWeatherProxyUrl(url)) {
         const { data: { session } } = await supabase.auth.getSession();
-        headers.Authorization = `Bearer ${session?.access_token}`;
+        if (session?.access_token) {
+            headers.Authorization = `Bearer ${session.access_token}`;
+        }
     }
 
     const res = await fetch(url, { signal, headers });
@@ -36,7 +80,7 @@ async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> 
 
 /**
  * Hardened Weather Service.
- * Fetches real-time conditions and historical rainfall via Supabase Proxy.
+ * Fetches real-time conditions and historical rainfall through Visual Crossing or the weather proxy.
  */
 export const WeatherService = {
     /**
@@ -51,16 +95,17 @@ export const WeatherService = {
         humidity: number | null;
         isError?: boolean;
     }> {
-        const location = encodeURIComponent(`${lat},${lng}`);
+        const location = `${lat},${lng}`;
+        const cacheKey = encodeURIComponent(location);
         // Default values for safety/error cases
         const defaults = { windspeed: null, winddir: null, windcardinal: '—', temp: null, humidity: null, isError: true };
 
         // If a request for this location is already in-flight, return the shared promise
-        if (conditionsCache.has(location)) {
+        if (conditionsCache.has(cacheKey)) {
             try {
-                const data = await conditionsCache.get(location);
+                const data = await conditionsCache.get(cacheKey);
                 return this._mapFieldConditions(data);
-            } catch (_error) {
+            } catch {
                 // If the cached promise fails, we fall through and try again or return defaults
                 return defaults;
             }
@@ -86,7 +131,7 @@ export const WeatherService = {
             const fetchPromise = fetchWeatherJson(url, controller.signal);
 
             // Store the promise in the cache
-            conditionsCache.set(location, fetchPromise);
+            conditionsCache.set(cacheKey, fetchPromise);
 
             const data = await fetchPromise;
             return this._mapFieldConditions(data);
@@ -101,7 +146,7 @@ export const WeatherService = {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
             // Remove from cache after completion so subsequent requests fetch fresh
-            conditionsCache.delete(location);
+            conditionsCache.delete(cacheKey);
         }
     },
 
@@ -125,12 +170,13 @@ export const WeatherService = {
      * Including precip data for the last 24 and 72 hours.
      */
     async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number, precipProb?: number }> {
-        const encLocation = encodeURIComponent(location);
+        const trimmedLocation = location.trim();
+        const encLocation = encodeURIComponent(trimmedLocation);
         if (currentWeatherCache.has(encLocation)) {
             try {
                 const data = await currentWeatherCache.get(encLocation);
                 return this._mapCurrentWeather(data);
-            } catch (_error) {
+            } catch {
                 return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
             }
         }
@@ -146,7 +192,7 @@ export const WeatherService = {
 
         try {
             // Fetch today + last 3 days to calculate accurate 24h/72h rainfall along with current conditions
-            const url = buildWeatherUrl(encLocation, 'last3days/today', {
+            const url = buildWeatherUrl(trimmedLocation, 'last3days/today', {
                 unitGroup: 'us',
                 contentType: 'json',
                 include: 'current,days',
@@ -222,7 +268,8 @@ export const WeatherService = {
             isError: true, forecastDays: [],
         };
 
-        const encLocation = encodeURIComponent(location);
+        const trimmedLocation = location.trim();
+        const encLocation = encodeURIComponent(trimmedLocation);
         if (extendedCache.has(encLocation)) {
             try {
                 const data = await extendedCache.get(encLocation);
@@ -242,7 +289,7 @@ export const WeatherService = {
         }
 
         try {
-            const url = buildWeatherUrl(encLocation, 'last7days/next10days', {
+            const url = buildWeatherUrl(trimmedLocation, 'last7days/next10days', {
                 unitGroup: 'us',
                 contentType: 'json',
                 include: 'current,days',
@@ -361,7 +408,7 @@ export const WeatherService = {
         try {
             // Format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
             const dateTime = timeStr ? `${dateStr}T${timeStr}:00` : dateStr;
-            const location = encodeURIComponent(`${lat},${lng}`);
+            const location = `${lat},${lng}`;
             const url = buildWeatherUrl(location, dateTime, {
                 unitGroup: 'us',
                 contentType: 'json',
