@@ -155,7 +155,12 @@ export function getWindRotation(dir: string): number {
 
 export type SprayStatus = 'go' | 'caution' | 'wait';
 
-const WIND_ALERT_MPH = 10;
+/**
+ * Wind drift warning threshold (mph). The named constant for spray wind-speed
+ * alerts — imported by the conditions step and in-cab quick UI so there is a
+ * single source of truth. (AGENTS.md names this threshold.)
+ */
+export const WIND_ALERT_MPH = 10;
 const INVERSION_MPH = 3;
 const PRECIP_CAUTION_PCT = 30;
 const DELTA_T_MIN_GO = 2;

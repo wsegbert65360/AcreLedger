@@ -7,10 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { WeatherData } from '@/types/weather';
 import { SprayDecisionMatrix } from '@/components/weather/SprayDecisionMatrix';
 import { Loader2, History as HistoryIcon, AlertTriangle } from 'lucide-react';
-
-// Wind drift warning threshold. Local copy matches SprayAuditReport.tsx and
-// weatherHelpers.ts; promote to a shared constants file if a fourth site appears.
-const WIND_ALERT_MPH = 10;
+import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 
 interface SprayWizardConditionsStepProps {
   fieldLat: number | null;

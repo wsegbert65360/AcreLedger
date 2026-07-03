@@ -4,7 +4,24 @@ import { MapPin } from 'lucide-react';
 import { geometryToThumbnailPath } from '@/lib/fieldThumbnail';
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 
+/**
+ * Path cache shared across thumbnail rows so each distinct boundary geometry is
+ * projected at most once per session. Capped to keep memory bounded if boundaries
+ * are edited repeatedly (each revision produces a new key); the oldest entry is
+ * evicted FIFO when the cap is reached.
+ */
+const THUMBNAIL_CACHE_MAX = 256;
 const thumbnailPathCache = new Map<string, string | null>();
+
+function cacheThumbnailPath(key: string, path: string | null): string | null {
+  if (thumbnailPathCache.size >= THUMBNAIL_CACHE_MAX) {
+    // Map iterates in insertion order; drop the oldest entry.
+    const oldestKey = thumbnailPathCache.keys().next().value;
+    if (oldestKey !== undefined) thumbnailPathCache.delete(oldestKey);
+  }
+  thumbnailPathCache.set(key, path);
+  return path;
+}
 
 interface FieldBoundaryThumbnailProps {
   geometry: GeoJSONGeometry | undefined | null;
@@ -19,9 +36,7 @@ export default function FieldBoundaryThumbnail({ geometry }: FieldBoundaryThumbn
       return thumbnailPathCache.get(geometryKey) ?? null;
     }
 
-    const path = geometryToThumbnailPath(geometry);
-    thumbnailPathCache.set(geometryKey, path);
-    return path;
+    return cacheThumbnailPath(geometryKey, geometryToThumbnailPath(geometry));
   }, [geometry]);
 
   if (!pathD) {

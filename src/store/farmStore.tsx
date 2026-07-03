@@ -425,7 +425,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const hayOps = useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
   const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, setFertilizerApplications, isOnline, onMutation: updatePendingSyncCount });
   const tillageOps = useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
-  const grainOps = useGrainMovements({ farm_id, viewingSeason, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
+  const grainOps = useGrainMovements({ farm_id, viewingSeason, grainMovements, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
 
   const tractOps = useFsaTracts({
     farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments,

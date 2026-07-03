@@ -31,14 +31,23 @@ if (import.meta.env.DEV) {
 } else {
   let reloading = false;
   let deferred = false;
+  // Upper bound on how long a pending update waits for open dialogs/forms.
+  // After this many deferrals the update is force-applied even if an overlay is
+  // still open — better to lose a long-idle draft than to never update a stuck
+  // tab. At 30 s per deferral this is ~5 minutes.
+  let deferCount = 0;
+  const MAX_DEFERS = 10;
   const reloadOnce = () => {
     if (reloading || deferred) return;
     // Don't reload while the user is mid-entry in a modal/drawer/sheet — a
     // silent reload would lose unsaved work. Radix overlays expose
     // [data-state="open"] while mounted; retry shortly after they close so the
-    // pending update still applies.
-    if (document.querySelector('[data-state="open"], [role="dialog"], [role="alertdialog"]')) {
+    // pending update still applies. Once we've hit the defer cap, stop waiting
+    // so a long-lived overlay can't block the update indefinitely.
+    const overlayOpen = !!document.querySelector('[data-state="open"], [role="dialog"], [role="alertdialog"]');
+    if (overlayOpen && deferCount < MAX_DEFERS) {
       deferred = true;
+      deferCount += 1;
       window.setTimeout(() => {
         deferred = false;
         reloadOnce();

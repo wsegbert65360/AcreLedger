@@ -132,8 +132,8 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
   const suggestedSpray = useMemo(() => {
     if (initialData) return null;
-    return getLatestForField(sprayRecords, field.id, 'sprayDate');
-  }, [field.id, initialData, sprayRecords]);
+    return getLatestForField(sprayRecords, field.id, 'sprayDate', record => record.seasonYear === viewingSeason);
+  }, [field.id, initialData, sprayRecords, viewingSeason]);
 
   // Reset form when modal opens/closes or record changes
   useEffect(() => {

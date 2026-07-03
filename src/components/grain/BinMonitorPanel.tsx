@@ -153,7 +153,7 @@ export default function BinMonitorPanel({ bin }: { bin: BinMonitorPanelData }) {
             <div className="rounded-2xl border border-border bg-background/60 p-4 dark:border-amber-300/15 dark:bg-[linear-gradient(135deg,rgba(245,158,11,0.12),rgba(15,23,42,0.46)_42%,rgba(2,6,23,0.68))]">
               <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
                 <p className={cn('font-mono text-5xl font-bold leading-none text-harvest sm:text-6xl', DARK_LEVEL_TONE[level])}>
-                  {Math.round(bin.pct)}%
+                  {roundTo(bin.pct, 0)}%
                 </p>
                 <p className="pb-1 text-xl font-bold text-foreground dark:text-slate-100">full</p>
               </div>

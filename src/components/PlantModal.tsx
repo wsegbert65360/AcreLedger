@@ -87,9 +87,9 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       plantRecords,
       field.id,
       'plantDate',
-      record => (record.cropStatus ?? 'Planted') === 'Planted'
+      record => (record.cropStatus ?? 'Planted') === 'Planted' && record.seasonYear === viewingSeason
     );
-  }, [field.id, initialData, plantRecords]);
+  }, [field.id, initialData, plantRecords, viewingSeason]);
 
   useEffect(() => {
     if (!open) return;

@@ -14,12 +14,6 @@ import type { Bin, GrainMovement } from '@/types/farm';
 import { formatShortDate } from '@/utils/dates';
 import { CAPACITY_LEVEL_STYLES, formatMeasurement, getCapacityLevel, getSignedBushels, roundTo } from '@/utils/numbers';
 
-interface BinOverview extends Bin {
-  total: number;
-  pct: number;
-  movementCount: number;
-}
-
 interface BinDetailView extends BinMonitorPanelData {
   recentMovements: GrainMovement[];
 }
@@ -124,26 +118,30 @@ function BinQuickActions({ bin, variant, onAdd, onSell }: BinQuickActionsProps) 
 }
 
 export default function Logistics() {
-  const { bins, getBinTotal, grainMovements, viewingSeason } = useFarm();
+  const { bins, getBinTotal, grainMovements } = useFarm();
   const [managing, setManaging] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
   const [addingBin, setAddingBin] = useState<Bin | null>(null);
   const [selectedBinId, setSelectedBinId] = useState<string | null>(null);
 
-  const seasonMovements = useMemo(
-    () => grainMovements.filter((movement) => !movement.deleted_at && movement.seasonYear === viewingSeason),
-    [grainMovements, viewingSeason],
+  // Bin inventory is continuous physical storage — it carries across seasons,
+  // so this view must NOT filter movements by viewingSeason. The page just shows
+  // what is physically in the bins, regardless of the selected season.
+  const binMovements = useMemo(
+    () => grainMovements.filter((movement) => !movement.deleted_at),
+    [grainMovements],
   );
 
   const { binOverview, totals } = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const movement of seasonMovements) {
+    for (const movement of binMovements) {
       counts.set(movement.binId, (counts.get(movement.binId) ?? 0) + 1);
     }
     let stored = 0;
     let capacity = 0;
     const overview = bins.map((bin) => {
-      const total = roundTo(getBinTotal(bin.id, viewingSeason), 1);
+      // All-season total (binId-all) — bin contents are physical and span seasons.
+      const total = roundTo(getBinTotal(bin.id), 1);
       const pct = bin.capacity > 0 ? Math.min(Math.max((total / bin.capacity) * 100, 0), 100) : 0;
       stored += total;
       capacity += bin.capacity;
@@ -153,14 +151,14 @@ export default function Logistics() {
       binOverview: overview,
       totals: { stored: roundTo(stored, 1), capacity: roundTo(capacity, 1) },
     };
-  }, [bins, getBinTotal, seasonMovements, viewingSeason]);
+  }, [bins, getBinTotal, binMovements]);
 
   const selectedBinDetail = useMemo<BinDetailView | null>(() => {
     if (!selectedBinId) return null;
     const selectedBin = binOverview.find((bin) => bin.id === selectedBinId);
     if (!selectedBin) return null;
 
-    const ascending = seasonMovements
+    const ascending = binMovements
       .filter((movement) => movement.binId === selectedBin.id)
       .sort((a, b) => a.timestamp - b.timestamp);
 
@@ -170,7 +168,7 @@ export default function Logistics() {
       lastFill: [...ascending].reverse().find((movement) => movement.type === 'in'),
       trend: buildBinTrend(ascending),
     };
-  }, [binOverview, selectedBinId, seasonMovements]);
+  }, [binOverview, selectedBinId, binMovements]);
 
   const totalPercent = totals.capacity > 0 ? Math.min((totals.stored / totals.capacity) * 100, 100) : 0;
 
@@ -233,7 +231,12 @@ export default function Logistics() {
                 <div className="space-y-2">
                   {selectedBinDetail.recentMovements.map((movement) => {
                     const signedBushels = getSignedBushels(movement);
-                    const amountClass = signedBushels < 0 ? 'text-destructive' : 'text-primary';
+                    // A negative stored `bushels` is a correction (AGENTS.md), not a
+                    // normal outbound sale — color it amber to match the warning icon.
+                    // `signedBushels < 0` is true for every outbound, so don't use it
+                    // as the error signal.
+                    const isCorrection = movement.bushels < 0;
+                    const amountClass = isCorrection ? 'text-amber-600' : 'text-foreground';
                     const locationLabel = movement.type === 'in'
                       ? movement.sourceFieldName || 'Field transfer'
                       : movement.destination || 'Destination not set';
@@ -270,7 +273,7 @@ export default function Logistics() {
                     <p className="font-mono text-xs text-muted-foreground">{formatMeasurement(selectedBinDetail.total, 'bu', 1)}</p>
                   </div>
                   <span className={cn('font-mono text-sm font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(selectedBinDetail.pct)].tone)}>
-                    {Math.round(selectedBinDetail.pct)}%
+                    {roundTo(selectedBinDetail.pct, 0)}%
                   </span>
                 </div>
                 <CapacityBar pct={selectedBinDetail.pct} className="mt-3 h-2" />
@@ -304,7 +307,7 @@ export default function Logistics() {
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <p className="text-sm font-semibold text-muted-foreground">Overall fill</p>
             <p className={cn('mt-1 font-mono text-2xl font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(totalPercent)].tone)}>
-              {Math.round(totalPercent)}%
+              {roundTo(totalPercent, 0)}%
             </p>
           </div>
         </section>
@@ -338,7 +341,7 @@ export default function Logistics() {
                       </p>
                     </div>
                     <span className={cn('font-mono text-2xl font-bold leading-none', CAPACITY_LEVEL_STYLES[level].tone)}>
-                      {Math.round(bin.pct)}%
+                      {roundTo(bin.pct, 0)}%
                     </span>
                   </div>
 
@@ -368,7 +371,7 @@ export default function Logistics() {
             <div className="min-w-0">
               <h1 className="truncate text-lg font-bold tracking-tight text-foreground">Grain logistics</h1>
               <p className="text-xs text-muted-foreground">
-                {bins.length} bin{bins.length !== 1 ? 's' : ''} - {viewingSeason} season
+                {bins.length} bin{bins.length !== 1 ? 's' : ''} - all-time inventory
               </p>
             </div>
           </div>

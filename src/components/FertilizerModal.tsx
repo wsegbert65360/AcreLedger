@@ -55,6 +55,10 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
 
     const suggestedFertilizer = useMemo(() => {
         if (initialData) return null;
+        // Fertilizer product/formula intentionally prefills across seasons: a
+        // field's fertilizer program carries year over year, unlike crop
+        // rotation or a spray tank-mix. (Other activity modals scope to
+        // viewingSeason; fertilizer is the deliberate exception.)
         return getLatestForField(fertilizerApplications, field.id, 'date');
     }, [field.id, initialData, fertilizerApplications]);
 
@@ -389,7 +393,7 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'flex-[2]'} h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target`}
+                            className="flex-[2] h-16 text-lg font-bold bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20 active:scale-[0.98] transition-all touch-target"
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">

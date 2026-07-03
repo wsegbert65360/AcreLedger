@@ -17,6 +17,7 @@ import { WizardDialogFooter } from '@/components/wizard/WizardDialogFooter';
 import { WizardStepLayout } from '@/components/wizard/WizardNav';
 import { useSprayForm } from '@/hooks/useSprayForm';
 import { generateSprayPDF } from '@/lib/sprayExport';
+import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { useFarm } from '@/store/farmStore';
 import { type Field, type SprayRecord } from '@/types/farm';
 import { native } from '@/lib/native';
@@ -340,11 +341,11 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 ))}
               </div>
 
-              {parseFloat(form.manualWindSpeed) > 10 && (
+              {parseFloat(form.manualWindSpeed) > WIND_ALERT_MPH && (
                 <div className="flex items-start gap-1.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-yellow-600 animate-in fade-in duration-200 mt-1">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <p className="text-[10px] text-yellow-700/80 leading-normal font-semibold">
-                    Warning: Wind ({form.manualWindSpeed} mph) exceeds 10 mph. High drift risk.
+                    Warning: Wind ({form.manualWindSpeed} mph) exceeds {WIND_ALERT_MPH} mph. High drift risk.
                   </p>
                 </div>
               )}

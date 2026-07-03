@@ -35,8 +35,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
 
   const suggestedHarvest = useMemo(() => {
     if (initialData) return null;
-    return getLatestForField(harvestRecords, field.id, 'harvestDate');
-  }, [field.id, initialData, harvestRecords]);
+    return getLatestForField(harvestRecords, field.id, 'harvestDate', record => record.seasonYear === viewingSeason);
+  }, [field.id, initialData, harvestRecords, viewingSeason]);
 
   useEffect(() => {
     if (!open) return;

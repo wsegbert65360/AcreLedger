@@ -27,7 +27,10 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [isSaving, setIsSaving] = useState(false);
 
-    const currentInventory = getBinTotal(bin.id, viewingSeason);
+    // All-season total: bin contents are physical and carry across seasons, so a
+    // sale is validated against the true bin contents, not just this season's
+    // movements. (The sale itself is still recorded under viewingSeason below.)
+    const currentInventory = getBinTotal(bin.id);
 
     const handleSubmit = async () => {
         const amount = parseFloat(bushels);

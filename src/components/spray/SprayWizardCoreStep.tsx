@@ -346,6 +346,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
               accept="image/*"
               capture="environment"
               id="spray-ticket-photo"
+              name="spray-ticket-photo"
               onChange={handlePhotoUpload}
               className="hidden"
             />

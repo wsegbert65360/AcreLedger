@@ -66,6 +66,18 @@ export default function QuickAddDialog() {
     return allRecords[0].fieldId;
   }, [plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords]);
 
+  // Stable primitive signature of the active-fields list. farmStore recreates
+  // these arrays on every fetchData()/reconnect, so depending on `activeFields`
+  // directly would re-fire effects (and re-trigger the GPS lookup) on every
+  // background refresh. The signature only changes when the actual field set or
+  // order changes. (AGENTS.md: effect deps must be primitives, not store entity
+  // array refs.)
+  const activeFieldsKey = activeFields.map(f => f.id).join(',');
+  // Keep the latest array in a ref so the GPS effect can read it without
+  // depending on its identity.
+  const activeFieldsRef = useRef(activeFields);
+  activeFieldsRef.current = activeFields;
+
   // Reset dialog state when opened or closed
   useEffect(() => {
     if (!isQuickAddOpen) {
@@ -91,62 +103,68 @@ export default function QuickAddDialog() {
       // Initial field selection priority:
       // 1. Last used field
       // 2. First alphabetical field
-      if (lastUsedFieldId && activeFields.some(f => f.id === lastUsedFieldId)) {
+      const currentFields = activeFieldsRef.current;
+      if (lastUsedFieldId && currentFields.some(f => f.id === lastUsedFieldId)) {
         setSelectedFieldId(lastUsedFieldId);
-      } else if (activeFields.length > 0) {
-        setSelectedFieldId(activeFields[0].id);
+      } else if (currentFields.length > 0) {
+        setSelectedFieldId(currentFields[0].id);
       }
     }
-  }, [isQuickAddOpen, preselectedType, lastUsedFieldId, activeFields]);
+    // lastUsedFieldId is a string|null primitive; activeFieldsKey captures the
+    // fields set without the array identity churn.
+  }, [isQuickAddOpen, preselectedType, lastUsedFieldId, activeFieldsKey]);
 
   // GPS nearest field lookup
   useEffect(() => {
     let active = true;
 
-    if (isQuickAddOpen && step === 'field' && activeFields.length > 0) {
-      setGpsLoading(true);
-      setGpsError(false);
+    if (isQuickAddOpen && step === 'field') {
+      const currentFields = activeFieldsRef.current;
+      if (currentFields.length > 0) {
+        setGpsLoading(true);
+        setGpsError(false);
 
-      native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 5000 })
-        .then((pos) => {
-          if (!active) return;
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
+        native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 5000 })
+          .then((pos) => {
+            if (!active) return;
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
 
-          let nearestFieldId: string | null = null;
-          let minDistance = Infinity;
+            let nearestFieldId: string | null = null;
+            let minDistance = Infinity;
 
-          activeFields.forEach((f) => {
-            if (f.lat != null && f.lng != null) {
-              const dist = getDistance(lat, lng, f.lat, f.lng);
-              if (dist < minDistance) {
-                minDistance = dist;
-                nearestFieldId = f.id;
+            currentFields.forEach((f) => {
+              if (f.lat != null && f.lng != null) {
+                const dist = getDistance(lat, lng, f.lat, f.lng);
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  nearestFieldId = f.id;
+                }
+              }
+            });
+
+            if (nearestFieldId) {
+              setGpsFieldId(nearestFieldId);
+              if (!hasManuallySelectedFieldRef.current) {
+                setSelectedFieldId(nearestFieldId);
+                native.haptic.light();
               }
             }
+            setGpsLoading(false);
+          })
+          .catch((err) => {
+            if (!active) return;
+            console.warn('[QuickAdd] GPS nearest field lookup failed:', err);
+            setGpsError(true);
+            setGpsLoading(false);
           });
-
-          if (nearestFieldId) {
-            setGpsFieldId(nearestFieldId);
-            if (!hasManuallySelectedFieldRef.current) {
-              setSelectedFieldId(nearestFieldId);
-              native.haptic.light();
-            }
-          }
-          setGpsLoading(false);
-        })
-        .catch((err) => {
-          if (!active) return;
-          console.warn('[QuickAdd] GPS nearest field lookup failed:', err);
-          setGpsError(true);
-          setGpsLoading(false);
-        });
+      }
     }
 
     return () => {
       active = false;
     };
-  }, [isQuickAddOpen, step, activeFields]);
+  }, [isQuickAddOpen, step, activeFieldsKey]);
 
   const handleSelectActivity = (type: QuickAddActivityType) => {
     native.haptic.light();

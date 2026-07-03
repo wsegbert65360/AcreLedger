@@ -112,7 +112,9 @@ export default function DashboardStats() {
     let totalInventory = 0;
     let nearCapacityCount = 0;
     bins.forEach(bin => {
-      const t = getBinTotal(bin.id, season);
+      // On-farm inventory is physical storage that spans seasons; don't scope it
+      // to the viewing season. (The other tiles here are intentionally season-scoped.)
+      const t = getBinTotal(bin.id);
       totalInventory += t;
       if (bin.capacity > 0 && t / bin.capacity > 0.8) nearCapacityCount++;
     });

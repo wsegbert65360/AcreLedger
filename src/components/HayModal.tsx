@@ -34,8 +34,8 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
 
     const suggestedHay = useMemo(() => {
         if (initialData) return null;
-        return getLatestForField(hayHarvestRecords, field.id, 'date');
-    }, [field.id, initialData, hayHarvestRecords]);
+        return getLatestForField(hayHarvestRecords, field.id, 'date', record => record.seasonYear === viewingSeason);
+    }, [field.id, initialData, hayHarvestRecords, viewingSeason]);
 
     useEffect(() => {
         if (!open) return;

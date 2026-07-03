@@ -40,8 +40,8 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
 
     const suggestedTillage = useMemo(() => {
         if (initialData) return null;
-        return getLatestForField(tillageRecords, field.id, 'date');
-    }, [field.id, initialData, tillageRecords]);
+        return getLatestForField(tillageRecords, field.id, 'date', record => record.seasonYear === viewingSeason);
+    }, [field.id, initialData, tillageRecords, viewingSeason]);
     useEffect(() => {
         if (!open) return;
         if (initialData) {
@@ -246,7 +246,7 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
                         <Button
                             type="submit"
                             disabled={isSaving}
-                            className={`${initialData && !isDuplicate ? 'flex-[2]' : 'flex-[2]'} h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target`}
+                            className="flex-[2] h-16 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all touch-target"
                         >
                             {isSaving ? (
                                 <div className="flex items-center gap-2">

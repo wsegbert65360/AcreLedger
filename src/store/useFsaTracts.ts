@@ -290,6 +290,14 @@ export function useFsaTracts({
       return false;
     }
 
+    // updateLandUse writes only the `land_use` column, and `updatedAssignment`
+    // already carries every other field of the row we read at the top of this
+    // function — so the optimistic value is authoritative. We intentionally do
+    // NOT re-fetch or `.select()` after the update: the deleted_at IS NULL RLS
+    // policy would hide a row that a concurrent client soft-deleted, making the
+    // client think the update failed. If a future migration adds a trigger that
+    // normalizes other columns on land_use change, switch to a service_role
+    // re-fetch instead of a client `.select()`.
     return true;
   }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
 

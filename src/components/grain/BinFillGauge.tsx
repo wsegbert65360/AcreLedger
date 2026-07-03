@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { CAPACITY_LEVEL_STYLES, type CapacityLevel, getCapacityLevel } from '@/utils/numbers';
+import { CAPACITY_LEVEL_STYLES, type CapacityLevel, getCapacityLevel, roundTo } from '@/utils/numbers';
 
 interface BinFillGaugeProps {
   bushels: number;
@@ -48,7 +48,7 @@ export default function BinFillGauge({ bushels, capacity, percentFull }: BinFill
     <div
       className="relative mx-auto flex h-[24rem] w-full max-w-[26rem] items-center justify-center overflow-visible sm:h-[28rem]"
       role="img"
-      aria-label={`Bin is ${Math.round(percentFull)} percent full`}
+      aria-label={`Bin holds ${roundTo(bushels, 1)} of ${roundTo(capacity, 1)} bushels (${roundTo(percentFull, 0)} percent full)`}
     >
       <div className="relative flex h-full w-full items-center justify-center pr-16 sm:pr-20">
         
@@ -196,7 +196,7 @@ export default function BinFillGauge({ bushels, capacity, percentFull }: BinFill
             >
               <span className={cn('h-px w-10 sm:w-12', accent.rail)} />
               <span className={cn('rounded-lg border px-2 py-1 font-mono text-xs font-bold shadow-sm backdrop-blur-md bg-white/80 dark:bg-black/60', accent.marker)}>
-                {Math.round(percentFull)}%
+                {roundTo(percentFull, 0)}%
               </span>
             </div>
             
