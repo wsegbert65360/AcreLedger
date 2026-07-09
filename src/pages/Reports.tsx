@@ -4,7 +4,7 @@ import { FileText, Printer, History as HistoryIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useFarm } from '@/store/farmStore';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SeasonSelect from '@/components/SeasonSelect';
 import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import SprayAuditReport from '@/components/reports/SprayAuditReport';
 import FertilizerReport from '@/components/reports/FertilizerReport';
@@ -71,10 +71,7 @@ export default function Reports() {
     cluAssignments,
     fsaTracts,
     farmName,
-    activeSeason,
     viewingSeason,
-    setViewingSeason,
-    seasonOptions,
   } = useFarm();
 
   const [tab, setTab] = useState<ReportTab>('fsa-plant');
@@ -103,8 +100,6 @@ export default function Reports() {
   // O(1) field lookup — built once per fields change, not per row
   const fieldMap = useMemo(() => buildFieldMap(fields), [fields]);
 
-  // Season selector options — read directly from global farmStore context
-  const availableSeasons = seasonOptions;
 
   // Season-filtered record sets — memoized, sorted, non-mutating
   const plantRecords = useMemo(() =>
@@ -418,7 +413,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
+    <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0 print:bg-background print:border-0">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between lg:max-w-6xl lg:px-8">
           <div className="flex items-center gap-3">
@@ -450,27 +445,14 @@ export default function Reports() {
         <div className="flex items-center justify-between gap-4 bg-muted/30 border border-border p-3 rounded-lg print:hidden">
           <div className="flex items-center gap-2">
             <HistoryIcon size={16} className="text-muted-foreground" />
-            <span className="text-xs font-semibold text-muted-foreground">Season View</span>
+            <span className="text-xs font-semibold text-muted-foreground">Season view</span>
           </div>
-          <Select
-            value={viewingSeason.toString()}
-            onValueChange={(v) => setViewingSeason(parseInt(v, 10))}
-          >
-            <SelectTrigger className="w-[120px] h-11 font-mono text-sm bg-background border-border">
-              <SelectValue placeholder="Year" />
-            </SelectTrigger>
-            <SelectContent className="bg-card border-border">
-              {availableSeasons.map(y => (
-                <SelectItem key={y} value={y.toString()} className="font-mono text-xs">
-                  {y}{y === activeSeason ? ' (ACTIVE)' : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SeasonSelect className="w-[5.5rem] bg-background text-sm" />
         </div>
 
         {/* Tab Bar — flex-1 shrink-0 allows tabs to fill screen width equally on desktop, but never shrink below content size on mobile */}
-        <div className="flex overflow-x-auto no-scrollbar gap-1 bg-card border border-border rounded-lg p-1 print:hidden">
+        <div className="relative print:hidden">
+          <div className="flex overflow-x-auto no-scrollbar gap-1 bg-card border border-border rounded-lg p-1 pr-8 lg:pr-1">
           {TABS.map(t => (
             <button
               key={t.key}
@@ -480,9 +462,11 @@ export default function Reports() {
               }`}
             >
               <t.icon size={16} className="shrink-0" />
-              <span className="text-[11px] whitespace-nowrap">{t.label}</span>
+              <span className="text-xs whitespace-nowrap">{t.label}</span>
             </button>
           ))}
+          </div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-lg bg-gradient-to-l from-background via-background/85 to-transparent lg:hidden" />
         </div>
 
         {/* ── FSA Planting Report ─────────────────────────────────────────────── */}

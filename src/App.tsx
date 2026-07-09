@@ -193,6 +193,13 @@ const AppContent = () => {
     return <Navigate to="/onboarding" replace />;
   }
 
+  const hideQuickAddFab =
+    location.pathname === '/activity' ||
+    location.pathname === '/logistics' ||
+    location.pathname === '/onboarding' ||
+    location.pathname === '/privacy' ||
+    location.pathname.startsWith('/field/');
+
   return (
     <>
       <OfflineBanner />
@@ -220,16 +227,18 @@ const AppContent = () => {
       })()}
 
       {/* Global Floating Action Button (FAB) for Mobile Quick Add */}
-      <button
-        onClick={() => {
-          native.haptic.light();
-          openQuickAdd();
-        }}
-        className="fixed z-40 right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center border border-primary-foreground/20 active:scale-95 transition-transform lg:hidden"
-        aria-label="Quick Add Record"
-      >
-        <Plus size={24} strokeWidth={2.5} />
-      </button>
+      {!hideQuickAddFab && (
+        <button
+          onClick={() => {
+            native.haptic.light();
+            openQuickAdd();
+          }}
+          className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-14 w-14 items-center justify-center rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-2xl transition-transform active:scale-95 lg:hidden"
+          aria-label="Quick add record"
+        >
+          <Plus size={24} strokeWidth={2.5} />
+        </button>
+      )}
 
       {coachmarks.isActive && coachmarks.currentStep && (
         <CoachmarkOverlay

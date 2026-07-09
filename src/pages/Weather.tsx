@@ -231,7 +231,7 @@ export default function Weather() {
     : '';
 
   return (
-    <div className={`min-h-screen bg-background pb-20 lg:pb-8 ${bgGradient ? `bg-gradient-to-b ${bgGradient}` : ''}`}>
+    <div className={`min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8 ${bgGradient ? `bg-gradient-to-b ${bgGradient}` : ''}`}>
       {/* ── Sticky Header ── */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between lg:max-w-5xl lg:px-8">

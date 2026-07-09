@@ -225,7 +225,7 @@ export default function Logistics() {
 
               {selectedBinDetail.recentMovements.length === 0 ? (
                 <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                  No grain movement logged for this bin this season.
+                  No grain movement logged for this bin yet.
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -348,7 +348,7 @@ export default function Logistics() {
                   <CapacityBar pct={bin.pct} className="mt-4 h-4 border border-border/50" />
 
                   <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>{bin.movementCount} movement{bin.movementCount !== 1 ? 's' : ''} this season</span>
+                    <span>{bin.movementCount} all-time movement{bin.movementCount !== 1 ? 's' : ''}</span>
                     <span className="font-semibold text-harvest group-hover:text-harvest">View details</span>
                   </div>
                 </button>
@@ -371,7 +371,7 @@ export default function Logistics() {
             <div className="min-w-0">
               <h1 className="truncate text-lg font-bold tracking-tight text-foreground">Grain logistics</h1>
               <p className="text-xs text-muted-foreground">
-                {bins.length} bin{bins.length !== 1 ? 's' : ''} - all-time inventory
+                {bins.length} bin{bins.length !== 1 ? 's' : ''} &middot; all-time inventory
               </p>
             </div>
           </div>

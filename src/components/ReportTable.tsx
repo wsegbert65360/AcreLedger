@@ -17,7 +17,7 @@ export default function ReportTable({
 }: ReportTableProps) {
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-      <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-muted/30 p-4">
         <div>
           <h2 className="text-sm font-bold text-foreground">{title}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
@@ -26,17 +26,17 @@ export default function ReportTable({
           {onExport && (
             <button
               onClick={onExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-lg text-xs font-mono font-bold hover:bg-muted transition-colors"
+              className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-mono font-bold transition-colors hover:bg-muted"
               aria-label={`Export ${exportLabel}`}
             >
               <FileDown size={14} className="text-muted-foreground" />
-              {exportLabel.toUpperCase()}
+              {exportLabel}
             </button>
           )}
           {onExportPdf && (
             <button
               onClick={onExportPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-lg text-xs font-mono font-bold hover:bg-muted transition-colors text-primary"
+              className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-mono font-bold text-primary transition-colors hover:bg-muted"
               aria-label="Export PDF"
             >
               <FileDown size={14} />

@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 
 import { Field } from '@/types/farm';
 import { roundTo } from '@/utils/numbers';
-import { ACTIVITY_ICONS } from '@/lib/activityIcons';
+import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 import FieldBoundaryThumbnail from './FieldBoundaryThumbnail';
 
@@ -72,27 +72,27 @@ export default function FieldCard({ field }: FieldCardProps) {
         <div className="flex items-center -mr-2">
           {summary?.planted && (
             <div
-              className="h-8 w-8 flex items-center justify-center text-primary/40"
-              title="Planting Activity"
+              className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.plant} opacity-80`}
+              title="Planting activity"
             >
               <ACTIVITY_ICONS.plant size={16} />
             </div>
           )}
           {(summary?.sprayed ?? 0) > 0 && (
             <div
-              className="h-8 w-8 flex items-center justify-center text-primary/40"
-              title="Spraying Activity"
+              className={`h-8 w-auto min-w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.spray} opacity-85`}
+              title="Spraying activity"
             >
               <div className="flex items-center">
                 <ACTIVITY_ICONS.spray size={16} />
-                <span className="text-[11px] font-mono font-bold ml-0.5">x{summary?.sprayed}</span>
+                <span className="ml-0.5 rounded-full bg-spray/10 px-1 py-0.5 text-[10px] font-mono font-bold leading-none text-spray">x{summary?.sprayed}</span>
               </div>
             </div>
           )}
           {(summary?.fertilized ?? 0) > 0 && (
             <div
-              className="h-8 w-8 flex items-center justify-center text-primary/40"
-              title="Fertilizer Activity"
+              className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.fertilizer} opacity-80`}
+              title="Fertilizer activity"
             >
               <ACTIVITY_ICONS.fertilizer size={16} />
             </div>

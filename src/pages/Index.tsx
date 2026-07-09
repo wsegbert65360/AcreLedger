@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Settings, Tractor, Search, Plus, X } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SeasonSelect from '@/components/SeasonSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -30,8 +30,6 @@ const Index = () => {
     harvestRecords,
     hayHarvestRecords,
     viewingSeason,
-    setViewingSeason,
-    seasonOptions,
   } = useFarm();
 
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
@@ -128,28 +126,16 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
+    <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border print:hidden pb-0">
-        <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between lg:max-w-5xl lg:px-8">
-          <div className="flex items-center gap-3">
+        <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between gap-2 lg:max-w-5xl lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
             <Logo />
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
-              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                {allFields.length} fields ·
-                <Select
-                  value={viewingSeason.toString()}
-                  onValueChange={(val) => setViewingSeason(parseInt(val, 10))}
-                >
-                  <SelectTrigger className="h-5 py-0 px-1.5 text-xs font-bold border-none bg-transparent hover:bg-muted focus:ring-0 w-fit">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {seasonOptions.map(year => (
-                      <SelectItem key={year} value={year.toString()}>{year} season</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="whitespace-nowrap">{allFields.length} fields</span>
+                <SeasonSelect className="min-w-[4.75rem] border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
               </div>
             </div>
           </div>
@@ -157,18 +143,18 @@ const Index = () => {
             <button
               onClick={() => setAddOpen(true)}
               aria-label="Add new field"
-              className="flex items-center gap-1.5 px-3 py-2 h-11 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-xs font-semibold"
+              className="flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:w-auto sm:px-3"
             >
               <Plus size={16} className="text-primary" />
-              <span>Add Field</span>
+              <span className="hidden sm:inline">Add field</span>
             </button>
             <button
               onClick={() => setManageOpen(true)}
               aria-label="Manage fields"
-              className="flex items-center gap-1.5 px-3 py-2 h-11 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors text-xs font-semibold"
+              className="flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:w-auto sm:px-3"
             >
               <Settings size={16} />
-              <span>Manage</span>
+              <span className="hidden sm:inline">Manage</span>
             </button>
           </div>
         </div>
@@ -182,7 +168,7 @@ const Index = () => {
             {allFields.length > 0 && (
               <div className="bg-muted/10 rounded-2xl border border-border/50 p-3 mb-4 space-y-2 mt-4">
                 <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest text-center">
-                  Total Operation: {formatMeasurement(totalAcres, 'Acres')}
+                  Total operation: {formatMeasurement(totalAcres, 'Acres')}
                 </div>
                 <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
                   {cropTotals.map(([crop, acres]) => {
@@ -265,9 +251,9 @@ const Index = () => {
             {allFields.length === 0 && (
               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">
                 <Tractor size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-bold text-foreground mb-1">No Fields Detected</h3>
+                <h3 className="text-lg font-bold text-foreground mb-1">No fields yet</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px] mx-auto">
-                  Tap <Plus size={12} className="inline mx-0.5" /> Add Field above to create your first field.
+                  Tap <Plus size={12} className="inline mx-0.5" /> Add field above to create your first field.
                 </p>
               </div>
             )}

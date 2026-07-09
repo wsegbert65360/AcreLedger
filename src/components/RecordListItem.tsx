@@ -46,9 +46,9 @@ export default function RecordListItem({
           </div>
           <div className="flex items-center gap-1.5 overflow-hidden">
             {warning && <AlertTriangle size={12} className="text-amber-500 shrink-0" />}
-            <p className="text-[11px] font-medium text-muted-foreground truncate uppercase tracking-tight">{subtitle}</p>
+            <p className="truncate text-xs font-medium text-muted-foreground">{subtitle}</p>
           </div>
-          <p className="text-[11px] text-muted-foreground/70 mt-1 line-clamp-1">{details}</p>
+          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground/70">{details}</p>
         </div>
         <div className="flex flex-col gap-2 items-center justify-center ml-2">
           <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border group-hover:border-muted-foreground'
@@ -59,18 +59,22 @@ export default function RecordListItem({
             {onDuplicate && (
               <button
                 onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
-                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                type="button"
+                aria-label="Duplicate record"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 title="Duplicate record"
               >
-                <Copy size={14} />
+                <Copy size={16} />
               </button>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              type="button"
+              aria-label="Edit record"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Edit record"
             >
-              <Edit2 size={14} />
+              <Edit2 size={16} />
             </button>
           </div>
         </div>

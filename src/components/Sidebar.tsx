@@ -1,7 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useFarm } from '@/store/farmStore';
 import { navTabs } from './navConfig';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SeasonSelect from '@/components/SeasonSelect';
 import { CalendarDays, Sprout, Plus } from 'lucide-react';
 import { useQuickAdd } from '@/context/QuickAddContext';
 import { native } from '@/lib/native';
@@ -10,7 +9,7 @@ import pkg from '../../package.json';
 export default function Sidebar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { activeSeason, viewingSeason, setViewingSeason, seasonOptions } = useFarm();
+
   const { openQuickAdd } = useQuickAdd();
 
   return (
@@ -65,18 +64,7 @@ export default function Sidebar() {
           <CalendarDays size={14} className="text-sidebar-foreground/50" />
           <span className="text-[11px] font-semibold text-sidebar-foreground/50">Season</span>
         </div>
-        <Select value={viewingSeason.toString()} onValueChange={(v) => setViewingSeason(parseInt(v, 10))}>
-          <SelectTrigger className="w-full h-11 bg-sidebar-accent/50 border-sidebar-border text-sidebar-primary text-xs font-mono">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-card border-border">
-            {seasonOptions.map(y => (
-              <SelectItem key={y} value={y.toString()} className="font-mono text-xs">
-                {y}{y === activeSeason ? ' (Active)' : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SeasonSelect variant="sidebar" />
         <p className="text-[11px] font-mono text-sidebar-foreground/40">v{pkg.version}</p>
       </div>
     </nav>

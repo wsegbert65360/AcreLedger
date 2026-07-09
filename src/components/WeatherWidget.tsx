@@ -136,26 +136,26 @@ export default function WeatherBar() {
   return (
     <div
       id="coachmark-weather"
-      className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between min-h-[90px] relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-transform"
+      className="group relative flex min-h-[90px] cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-2xl border border-border bg-card p-3 transition-transform active:scale-[0.98] min-[380px]:p-4"
       onClick={() => navigate('/weather')}
       role="button"
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter') navigate('/weather'); }}
     >
       {/* Left side: Main Temp & Location */}
-      <div className="flex flex-col justify-center">
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div className="flex items-center gap-2">
           <Thermometer size={24} className="text-orange-500" />
           <div className="flex flex-col">
-            <span className="text-3xl font-mono font-bold tracking-tight leading-none">
+            <span className="font-mono text-2xl font-bold leading-none tracking-tight min-[380px]:text-3xl">
               {weather.isError ? '—' : `${weather.temp}°F`}
             </span>
             {weather.isError && <span className="text-xs text-destructive font-bold uppercase tracking-wider">Offline</span>}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 mt-1">
+        <div className="mt-1 flex min-w-0 items-center gap-1.5">
           <MapPin size={12} className="text-emerald-700 dark:text-emerald-400" />
-          <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className="flex items-center">
+          <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className="flex min-w-0 items-center">
             <label htmlFor="weatherZip" className="sr-only">Zip code or coordinates</label>
             <input
               id="weatherZip"
@@ -163,7 +163,7 @@ export default function WeatherBar() {
               value={usingCoords ? (locationName || zip) : inputZip}
               onChange={e => { setInputZip(e.target.value); setZipError(''); setUsingCoords(false); }}
               placeholder={usingCoords ? 'Auto' : 'Zip...'}
-              className="bg-transparent border-none p-0 text-emerald-800 dark:text-emerald-300 font-mono text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0 w-32 truncate"
+              className="bg-transparent border-none p-0 text-emerald-800 dark:text-emerald-300 font-mono text-xs placeholder:text-muted-foreground/60 w-24 truncate focus:outline-none focus:ring-0 min-[380px]:w-32"
               maxLength={40}
             />
           </form>
@@ -171,11 +171,11 @@ export default function WeatherBar() {
       </div>
 
       {/* Right side: Secondary Stats */}
-      <div className="flex items-center gap-3 sm:gap-8">
+      <div className="flex shrink-0 items-center gap-2 min-[420px]:gap-3 sm:gap-8">
         {/* Wind */}
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1 whitespace-nowrap">
-            <span className="text-lg font-mono font-bold">{weather.wind}</span>
+            <span className="font-mono text-base font-bold min-[380px]:text-lg">{weather.wind}</span>
             <span className="text-xs text-muted-foreground/60 font-sans">mph</span>
             {weather.windDirection && weather.windDirection !== '—' && (
               <span className="flex items-center gap-0.5 text-xs text-foreground/80 ml-0.5">
@@ -188,21 +188,21 @@ export default function WeatherBar() {
               </span>
             )}
           </div>
-          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 tracking-wider">WIND</span>
+          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Wind</span>
         </div>
 
         {/* Humidity */}
-        <div className="flex flex-col items-center">
-          <span className="text-lg font-mono font-bold">{weather.humidity}%</span>
-          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 tracking-wider">HUMIDITY</span>
+        <div className="hidden flex-col items-center min-[380px]:flex">
+          <span className="font-mono text-lg font-bold">{weather.humidity}%</span>
+          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Humidity</span>
         </div>
 
         {/* Rain Amount */}
         <div className="flex flex-col items-center">
-          <span className="text-lg font-mono font-bold">
+          <span className="font-mono text-base font-bold min-[380px]:text-lg">
             {weather.precip24h != null ? `${weather.precip24h.toFixed(2)}"` : '0.00"'}
           </span>
-          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 tracking-wider">RAIN</span>
+          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Rain</span>
         </div>
 
         {/* Navigate hint */}

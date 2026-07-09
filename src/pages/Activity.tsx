@@ -28,7 +28,7 @@ import FertilizerModal from '@/components/FertilizerModal';
 import TillageModal from '@/components/TillageModal';
 import GrainMovementModal from '@/components/GrainMovementModal';
 import DeletedFieldFallback from '@/components/DeletedFieldFallback';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import SeasonSelect from '@/components/SeasonSelect';
 import { Label } from '@/components/ui/label';
 
 // Tab Components
@@ -88,8 +88,6 @@ export default function Activity() {
     deleteFertilizerApplications,
     deleteTillageRecords,
     viewingSeason,
-    setViewingSeason,
-    seasonOptions,
     deleteGrainMovements,
     farmName
   } = useFarm();
@@ -253,21 +251,7 @@ export default function Activity() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-foreground tracking-tight">Activity</h1>
-                <Select
-                  value={viewingSeason.toString()}
-                  onValueChange={(v) => setViewingSeason(parseInt(v, 10))}
-                >
-                  <SelectTrigger className="h-7 min-w-[80px] bg-muted border-none font-mono text-xs font-bold py-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {seasonOptions.map(y => (
-                      <SelectItem key={y} value={y.toString()} className="font-mono text-xs">
-                        {y} SEASON
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SeasonSelect className="min-w-[4.75rem] border-none bg-muted/70 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
               </div>
               <p className="text-xs text-muted-foreground">Review & manage</p>
             </div>
@@ -285,7 +269,7 @@ export default function Activity() {
                       : filteredSpray;
                     generateSprayPDF(toExport, farmName);
                   }}
-                  className="p-2.5 rounded-lg bg-spray/10 text-spray hover:bg-spray/20 transition-colors flex items-center gap-2 text-xs font-bold"
+                  className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-spray/10 p-2.5 text-xs font-bold text-spray transition-colors hover:bg-spray/20"
                   title="Export Universal Spray Log PDF"
                 >
                   <FileDown size={16} />
@@ -309,7 +293,7 @@ export default function Activity() {
                       toast.error('Failed to export FSA data. Please try again.');
                     });
                   }}
-                  className="p-2.5 rounded-lg bg-plant/10 text-plant hover:bg-plant/20 transition-colors flex items-center gap-2 text-xs font-bold"
+                  className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-plant/10 p-2.5 text-xs font-bold text-plant transition-colors hover:bg-plant/20"
                   title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
                 >
                   <FileDown size={16} />
@@ -320,7 +304,7 @@ export default function Activity() {
               {tab === 'hay' && (
                 <button
                   onClick={() => navigate('/reports?tab=hay-summary')}
-                  className="p-2.5 rounded-lg bg-harvest/10 text-harvest hover:bg-harvest/20 transition-colors flex items-center gap-2 text-xs font-bold"
+                  className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-harvest/10 p-2.5 text-xs font-bold text-harvest transition-colors hover:bg-harvest/20"
                 >
                   <FileDown size={16} />
                   <span className="hidden sm:inline">HAY SUMMARY</span>
@@ -342,7 +326,7 @@ export default function Activity() {
                     };
                     openQuickAdd(map[tab] || null);
                   }}
-                  className="p-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1.5 text-xs font-bold shadow-sm"
+                  className="flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg bg-primary p-2.5 text-xs font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                 >
                   <Plus size={14} strokeWidth={2.5} />
                   <span>
@@ -363,8 +347,8 @@ export default function Activity() {
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs — grouped pills */}
-        <div className="space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar lg:flex-wrap">
+        <div className="relative -mx-4 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8 lg:flex-wrap lg:pr-0">
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
                 {group.tabs.map((t) => {
@@ -389,7 +373,7 @@ export default function Activity() {
                         setReviewQueueOnly(false);
                         native.haptic.light();
                       }}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-xs font-bold ${isActive
+                      className={`flex min-h-11 items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-xs font-bold ${isActive
                         ? 'ring-2 ring-primary bg-primary/10 text-primary shadow-sm'
                         : 'text-muted-foreground hover:bg-muted/50'
                         }`}
@@ -408,6 +392,7 @@ export default function Activity() {
               </div>
             ))}
           </div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background via-background/85 to-transparent lg:hidden" />
         </div>
 
         {/* Search + Review Queue filter */}
@@ -433,11 +418,11 @@ export default function Activity() {
             }}
             aria-pressed={reviewQueueOnly}
             title="Show only incomplete spray records needing review"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-colors border ${
+            className={`flex min-h-11 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors ${
               reviewQueueOnly
-                ? 'bg-yellow-500 text-white border-yellow-500 shadow-sm'
+                ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
                 : reviewQueueCount > 0
-                  ? 'bg-yellow-500/10 text-yellow-700 border-yellow-500/30 hover:bg-yellow-500/20'
+                  ? 'bg-amber-500/10 text-amber-700 border-amber-500/30 hover:bg-amber-500/20 dark:text-amber-300'
                   : 'bg-card text-muted-foreground border-border hover:bg-muted/50'
             }`}
           >
@@ -446,7 +431,7 @@ export default function Activity() {
             <span className="inline sm:hidden">Review</span>
             {reviewQueueCount > 0 && (
               <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
-                reviewQueueOnly ? 'bg-white/25 text-white' : 'bg-yellow-500/20 text-yellow-700'
+                reviewQueueOnly ? 'bg-white/25 text-white' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
               }`}>
                 {reviewQueueCount}
               </span>
@@ -469,10 +454,10 @@ export default function Activity() {
         <div className="space-y-2">
           {reviewQueueOnly ? (
             <>
-              <div className="flex items-center justify-between rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs">
-                <span className="font-bold text-yellow-700 flex items-center gap-1.5">
+              <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+                <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
                   <AlertTriangle size={12} />
-                  Review Queue — incomplete spray records
+                  Review queue - incomplete spray records
                 </span>
                 <button
                   type="button"
@@ -480,7 +465,7 @@ export default function Activity() {
                     setReviewQueueOnly(false);
                     native.haptic.light();
                   }}
-                  className="text-yellow-700 hover:underline font-bold"
+                  className="font-bold text-amber-700 hover:underline dark:text-amber-300"
                 >
                   Clear filter
                 </button>

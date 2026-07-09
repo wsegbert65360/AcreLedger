@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Sprout, Leaf, Tractor, ArrowLeft,
   Cloud, MapPin, Droplets, RefreshCw,
-  AlertCircle, History as HistoryIcon, Wheat, Package,
+  AlertCircle, AlertTriangle, History as HistoryIcon, Wheat, Package,
   FileText, ExternalLink, Info, CheckCircle2, Map as MapIcon
 } from 'lucide-react';
 
@@ -336,7 +336,7 @@ export default function FieldDetailScreen() {
                 <div className={`p-2 rounded-xl ${action.bg} ${action.color}`}>
                   <action.icon size={20} />
                 </div>
-                <span className="text-xs font-black uppercase tracking-tighter text-muted-foreground">{action.label.split(' ')[1]}</span>
+                <span className="text-xs font-semibold text-muted-foreground">{action.label.replace('Log ', '')}</span>
               </button>
             ))}
           </div>
@@ -455,10 +455,17 @@ export default function FieldDetailScreen() {
                 <Cloud size={16} className="text-spray" />
                 Latest Spray
               </h3>
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                <CheckCircle2 size={12} />
-                {latestSpray.nonCompliant ? 'Attention Needed' : 'Compliant'}
-              </div>
+              {latestSpray.nonCompliant ? (
+                <div className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
+                  <AlertTriangle size={12} />
+                  Needs review
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
+                  <CheckCircle2 size={12} />
+                  Compliant
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-y-4">
@@ -599,9 +606,9 @@ export default function FieldDetailScreen() {
           </div>
 
           {rainError && (
-            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 flex gap-2">
-              <AlertCircle size={14} className="text-red-500 shrink-0" />
-              <p className="text-xs text-red-600 dark:text-red-400 font-medium leading-tight">{rainError}</p>
+            <div className="flex gap-2 rounded-xl border border-destructive/20 bg-destructive/10 p-3">
+              <AlertCircle size={14} className="shrink-0 text-destructive" />
+              <p className="text-xs font-medium leading-tight text-destructive">{rainError}</p>
             </div>
           )}
 
@@ -647,7 +654,7 @@ export default function FieldDetailScreen() {
               onClick={() => setIsCluDialogOpen(true)}
               variant="outline"
               size="sm"
-              className="h-9 text-xs font-bold px-3 shrink-0"
+              className="h-11 shrink-0 px-3 text-xs font-bold"
             >
               {fieldClus.length > 0 ? 'Manage' : 'Assign'}
             </Button>
