@@ -176,6 +176,23 @@ export const hayHarvestRecordSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
+export const customSprayRecordSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  fieldId: z.string(),
+  fieldName: z.string().optional(),
+  date: z.string().optional(),
+  applicator: z.string().optional(),
+  recipe: z.string().optional(),
+  windSpeed: z.number().optional(),
+  windDirection: z.string().optional(),
+  temperature: z.number().optional(),
+  notes: z.string().optional(),
+  seasonYear: z.number(),
+  timestamp: z.number().optional(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
 export const grainMovementSchema = z.object({
   id: z.string(),
   farm_id: z.string(),
@@ -284,6 +301,7 @@ export const backupSchema = z.object({
   sprayRecords: z.array(sprayRecordSchema).optional(),
   harvestRecords: z.array(harvestRecordSchema).optional(),
   hayHarvestRecords: z.array(hayHarvestRecordSchema).optional(),
+  customSprayRecords: z.array(customSprayRecordSchema).optional(),
   fertilizerApplications: z.array(fertilizerApplicationSchema).optional(),
   tillageRecords: z.array(tillageRecordSchema).optional(),
   grainMovements: z.array(grainMovementSchema).optional(),

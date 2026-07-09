@@ -180,7 +180,7 @@ describe('syncQueue web queue management', () => {
   it('accepts all standard tables', async () => {
     const tables = [
       'fields', 'bins', 'plant_records', 'spray_records',
-      'harvest_records', 'hay_harvest_records', 'fertilizer_applications',
+      'harvest_records', 'hay_harvest_records', 'custom_spray_records', 'fertilizer_applications',
       'tillage_records', 'grain_movements', 'saved_seeds',
       'fertilizer_recipes', 'spray_recipes',
     ];

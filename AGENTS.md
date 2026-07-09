@@ -47,6 +47,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/utils.ts` — `cn` Tailwind class merge plus `getLatestForField` generic helper for finding the most recent non-deleted record for a field (used by activity modal suggested-record prefill).
 - `@/lib/activityIcons.ts` — centralized activity type icon and color maps (`ACTIVITY_ICONS`, `ACTIVITY_TEXT_COLORS`, `ACTIVITY_BG_COLORS`).
 - `@/hooks/useSprayForm.ts` — shared spray form state for the SprayWizard step components.
+- `@/components/CustomSprayModal.tsx` + `@/components/SprayTypeChooser.tsx` + `@/store/useCustomSprayRecords.ts` — custom (outside-party) spray modal, the spray-entry chooser, and the CRUD hook (see Custom (Outside-Party) Spray Records).
 - `@/hooks/useUndoDelete.ts` — undo-safe soft-delete pattern for FieldManager and similar bulk-delete UI.
 - `@/hooks/useCoachmarks.ts` + `@/components/CoachmarkOverlay.tsx` — onboarding coachmark overlay system.
 - `@/context/QuickAddContext.tsx` — global Quick Add provider managing modal states, preselected types, and active fields.
@@ -141,6 +142,14 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Keep spray terminology state-neutral unless a specific legal report requires state wording.
 - `WIND_ALERT_MPH = 10` is the named wind alert threshold. Its canonical export is `@/lib/weatherHelpers.ts`; import from there rather than re-declaring a local constant.
 - Past weather recovery uses Visual Crossing based on field location and start time.
+
+### Custom (Outside-Party) Spray Records
+
+- Custom spray records (`custom_spray_records` / `CustomSprayRecord`) are a lightweight log for applications performed by an outside applicator (co-op / custom sprayer), modeled on the hay record — NOT a compliance `SprayRecord`.
+- They are reached from the **Spray** button via `SprayTypeChooser` (`src/components/SprayTypeChooser.tsx`), which offers a full spray entry vs. a custom spray and remembers the last choice (per-user `al_spray_entry_choice_<userId>`). The chooser intercepts the spray click in both `FieldDetailScreen.tsx` (`FIELD_ACTIONS`) and `QuickAddDialog.tsx`.
+- Fields are minimal: `applicator` (who sprayed) and `date` are required; `recipe` (free text), `windSpeed` / `windDirection` / `temperature`, and `notes` are optional. Weather is manual entry only (no Visual Crossing fetch) since the operator usually wasn't on-site.
+- Custom sprays appear in the Spray tab (via `CustomSprayTab`, rendered under the regular `SprayTab`) and in All / field history, but are **excluded** from the universal spray-log PDF (`sprayExport.ts`) and the non-compliant review queue, which stay driven by `SprayRecord`.
+- `customSpray` is a member of `ActivityType` and the `ActivityRecord` union (reuses the spray icon/colors). `custom_spray_records` is in the sync queue `ALLOWED_TABLES` set and in the backup/restore payload + `restore_farm_backup` RPC. Add/update/delete go through `useCustomSprayRecords.ts` with the same farm-scope, season-stamp, soft-delete, and optimistic-update rules as the other activity hooks.
 
 ### FSA Tracts and CLU Assignments
 
@@ -355,7 +364,7 @@ After a successful new spray with a novel mix, `useSprayForm` may prompt to save
 
 ### Activity Record Modals
 
-All 7 activity record modals (`PlantModal`, `SprayModal`, `HarvestModal`, `HayModal`, `FertilizerModal`, `TillageModal`, `GrainMovementModal`) share a common prop and behavior pattern:
+All activity record modals (`PlantModal`, `SprayModal`, `HarvestModal`, `HayModal`, `FertilizerModal`, `TillageModal`, `GrainMovementModal`, and the lightweight `CustomSprayModal`) share a common prop and behavior pattern. `CustomSprayModal` is reached via `SprayTypeChooser` (not a top-level activity button) and its records render inside the Spray tab through `CustomSprayTab`.
 
 - **`mode?: 'edit' | 'duplicate'`** — defaults to `'edit'`. Pass `'duplicate'` to open the modal pre-filled from an existing record but creating a new record on save instead of updating the source.
 - **`isDuplicate = mode === 'duplicate' && !!initialData`** — every modal computes this locally. Duplicate mode without `initialData` falls through to "new" behavior.
@@ -391,7 +400,7 @@ Icon and color mapping for activity types is centralized in `src/lib/activityIco
 - `ACTIVITY_TEXT_COLORS` — Tailwind text color class per type.
 - `ACTIVITY_BG_COLORS` — Tailwind background color class per type.
 
-Replace inline icon/color switch logic in `RecordListItem`, `FieldCard`, `DashboardStats`, and similar components with these maps. `ActivityType` covers: `plant`, `spray`, `harvest`, `grain`, `hay`, `fertilizer`, `tillage`.
+Replace inline icon/color switch logic in `RecordListItem`, `FieldCard`, `DashboardStats`, and similar components with these maps. `ActivityType` covers: `plant`, `spray`, `customSpray`, `harvest`, `grain`, `hay`, `fertilizer`, `tillage`.
 
 ### Coachmarks (Onboarding Overlay)
 
@@ -404,7 +413,7 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 
 - Component testing involving complex map lifecycles (like `MapContainer` or Leaflet) should mock the nested map components (`CluAssignmentMap`, `CluFieldSelector`, etc.) and invoke their callbacks explicitly.
 - Use explicit `await waitFor(...)` assertions when interacting with mocked component state that relies on React's asynchronous render cycle to avoid stale prop values during test execution.
-- When mocking `useFarm` in modal tests, include every collection the modal reads (`plantRecords`, `sprayRecords`, `harvestRecords`, `hayHarvestRecords`, `fertilizerApplications`, `tillageRecords`, `fields`, `cluAssignments`, etc.). Activity modals compute suggested-record prefills via `.filter()` on these arrays, so an `undefined` collection crashes the `useMemo` on mount — see `SprayModal.test.tsx` for the canonical mock shape.
+- When mocking `useFarm` in modal tests, include every collection the modal reads (`plantRecords`, `sprayRecords`, `harvestRecords`, `hayHarvestRecords`, `customSprayRecords`, `fertilizerApplications`, `tillageRecords`, `fields`, `cluAssignments`, etc.). Activity modals compute suggested-record prefills via `.filter()` on these arrays, so an `undefined` collection crashes the `useMemo` on mount — see `SprayModal.test.tsx` for the canonical mock shape.
 
 ### Import Order
 

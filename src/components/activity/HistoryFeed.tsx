@@ -55,6 +55,18 @@ function getRecordInfo(record: ActivityRecord) {
         date: formatIsoDate(r.date) || formatDate(r.timestamp)
       };
     }
+    case 'customSpray': {
+      const r = data;
+      const wind = r.windSpeed != null ? `${r.windSpeed} MPH ${r.windDirection || ''}`.trim() : null;
+      const temp = r.temperature != null ? `${r.temperature}°F` : null;
+      const conditions = [wind, temp].filter(Boolean).join(' · ');
+      return {
+        title: cleanName(r.fieldName),
+        subtitle: r.applicator || 'Custom spray',
+        details: conditions ? `${r.recipe || 'No recipe'} · ${conditions}` : (r.recipe || 'No recipe'),
+        date: formatIsoDate(r.date) || formatDate(r.timestamp)
+      };
+    }
     case 'fertilizer': {
       const r = data;
       return {

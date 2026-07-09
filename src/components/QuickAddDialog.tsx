@@ -8,6 +8,7 @@ import { useQuickAdd, QuickAddActivityType } from '@/context/QuickAddContext';
 import { native } from '@/lib/native';
 import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS, ACTIVITY_BG_COLORS } from '@/lib/activityIcons';
 import { Loader2, Navigation, ClipboardList } from 'lucide-react';
+import SprayTypeChooser from '@/components/SprayTypeChooser';
 
 // Using squared Euclidean distance as a fast, monotonic metric for local field comparison (farm scale only).
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -26,11 +27,13 @@ export default function QuickAddDialog() {
   } = useQuickAdd();
 
   const {
+    session,
     fields,
     plantRecords,
     sprayRecords,
     harvestRecords,
     hayHarvestRecords,
+    customSprayRecords,
     fertilizerApplications,
     tillageRecords
   } = useFarm();
@@ -42,6 +45,7 @@ export default function QuickAddDialog() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsFieldId, setGpsFieldId] = useState<string | null>(null);
   const [gpsError, setGpsError] = useState(false);
+  const [showSprayChooser, setShowSprayChooser] = useState(false);
 
   const hasManuallySelectedFieldRef = useRef(false);
   const hasInitializedRef = useRef(false);
@@ -60,11 +64,12 @@ export default function QuickAddDialog() {
     hayHarvestRecords.forEach(r => { if (!r.deleted_at && r.fieldId) allRecords.push({ timestamp: r.timestamp, fieldId: r.fieldId }); });
     fertilizerApplications.forEach(r => { if (!r.deleted_at && r.fieldId) allRecords.push({ timestamp: r.timestamp, fieldId: r.fieldId }); });
     tillageRecords.forEach(r => { if (!r.deleted_at && r.fieldId) allRecords.push({ timestamp: r.timestamp, fieldId: r.fieldId }); });
+    customSprayRecords.forEach(r => { if (!r.deleted_at && r.fieldId) allRecords.push({ timestamp: r.timestamp, fieldId: r.fieldId }); });
 
     if (allRecords.length === 0) return null;
     allRecords.sort((a, b) => b.timestamp - a.timestamp);
     return allRecords[0].fieldId;
-  }, [plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords]);
+  }, [plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords]);
 
   // Stable primitive signature of the active-fields list. farmStore recreates
   // these arrays on every fetchData()/reconnect, so depending on `activeFields`
@@ -180,7 +185,18 @@ export default function QuickAddDialog() {
 
     native.haptic.medium();
     setSelectedField(fieldObj);
+    if (selectedType === 'spray') {
+      // Ask whether this is a full spray entry or a custom (outside-party) spray.
+      setShowSprayChooser(true);
+      return;
+    }
     setActiveModal(selectedType);
+    closeQuickAdd();
+  };
+
+  const beginSprayEntry = (type: 'spray' | 'customSpray') => {
+    setShowSprayChooser(false);
+    setActiveModal(type);
     closeQuickAdd();
   };
 
@@ -193,7 +209,10 @@ export default function QuickAddDialog() {
     { key: 'hay', label: 'Hay Forage', icon: ACTIVITY_ICONS.hay, colorClass: ACTIVITY_TEXT_COLORS.hay, bgClass: ACTIVITY_BG_COLORS.hay },
   ];
 
+  const chooserField = activeFields.find(f => f.id === selectedFieldId) ?? null;
+
   return (
+    <>
     <Dialog open={isQuickAddOpen} onOpenChange={(open) => { if (!open) closeQuickAdd(); }}>
       <DialogContent className="max-w-md w-[92vw] rounded-2xl bg-card border border-border p-5">
         <DialogHeader>
@@ -296,5 +315,15 @@ export default function QuickAddDialog() {
         )}
       </DialogContent>
     </Dialog>
+    {showSprayChooser && chooserField && (
+      <SprayTypeChooser
+        open={showSprayChooser}
+        field={chooserField}
+        userPrefix={session?.user?.id ?? null}
+        onChoose={beginSprayEntry}
+        onCancel={() => setShowSprayChooser(false)}
+      />
+    )}
+    </>
   );
 }

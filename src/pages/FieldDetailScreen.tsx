@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 import { useFarm } from '@/store/farmStore';
-import { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
+import { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
 import { RainService, type RainfallResult } from '@/services/RainService';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
@@ -25,14 +25,16 @@ import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import TillageModal from '@/components/TillageModal';
+import CustomSprayModal from '@/components/CustomSprayModal';
+import SprayTypeChooser from '@/components/SprayTypeChooser';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
 import FieldBoundaryMap from '@/components/FieldBoundaryMap';
 
-export type ModalType = 'plant' | 'spray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
+export type ModalType = 'plant' | 'spray' | 'customSpray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
 
-type EditingRecordType = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord | null;
+type EditingRecordType = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord | null;
 
 const FIELD_ACTIONS = [
   { id: 'spray', label: 'Log Spray', icon: Cloud, color: 'text-spray', bg: 'bg-spray/10', border: 'border-spray/20' },
@@ -46,12 +48,14 @@ const FIELD_ACTIONS = [
 export default function FieldDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { 
-    fields, 
-    plantRecords, 
-    sprayRecords, 
-    harvestRecords, 
-    hayHarvestRecords, 
+  const {
+    session,
+    fields,
+    plantRecords,
+    sprayRecords,
+    harvestRecords,
+    hayHarvestRecords,
+    customSprayRecords,
     fertilizerApplications,
     tillageRecords,
     cluAssignments,
@@ -71,6 +75,7 @@ export default function FieldDetailScreen() {
   const [fetchingRain, setFetchingRain] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
   const [isCluDialogOpen, setIsCluDialogOpen] = useState(false);
+  const [showSprayChooser, setShowSprayChooser] = useState(false);
 
   const fieldClus = useMemo(() => {
     return cluAssignments.filter(a => a.fieldId === id && !a.deletedAt);
@@ -113,6 +118,7 @@ export default function FieldDetailScreen() {
       ...sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'spray' as const, data: r })),
       ...harvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'harvest' as const, data: r })),
       ...hayHarvestRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'hay' as const, data: r })),
+      ...customSprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'customSpray' as const, data: r })),
       ...fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'fertilizer' as const, data: r })),
       ...tillageRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'tillage' as const, data: r })),
     ];
@@ -122,7 +128,7 @@ export default function FieldDetailScreen() {
       return dateStr ? new Date(dateStr).getTime() : 0;
     };
     return all.sort((a, b) => getTS(b.data) - getTS(a.data));
-  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, fertilizerApplications, tillageRecords, viewingSeason]);
+  }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, viewingSeason]);
 
   const latestActivity = unifiedRecords[0];
 
@@ -320,7 +326,11 @@ export default function FieldDetailScreen() {
             {FIELD_ACTIONS.map((action) => (
               <button
                 key={action.id}
-                onClick={() => { setEditingRecord(null); setModal(action.id as ModalType); }}
+                onClick={() => {
+                  setEditingRecord(null);
+                  if (action.id === 'spray') setShowSprayChooser(true);
+                  else setModal(action.id as ModalType);
+                }}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-card border border-border shadow-sm transition-transform active:scale-95"
               >
                 <div className={`p-2 rounded-xl ${action.bg} ${action.color}`}>
@@ -681,12 +691,24 @@ export default function FieldDetailScreen() {
 
       </main>
 
+      {/* Spray entry type chooser (full record vs. custom/outside-party) */}
+      <SprayTypeChooser
+        open={showSprayChooser}
+        field={field}
+        userPrefix={session?.user?.id ?? null}
+        onChoose={(type) => { setShowSprayChooser(false); setModal(type); }}
+        onCancel={() => setShowSprayChooser(false)}
+      />
+
       {/* Modals - Reusing existing implementation */}
       {modal === 'plant' && (
         <PlantModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'spray' && (
         <SprayModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+      )}
+      {modal === 'customSpray' && (
+        <CustomSprayModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'harvest' && (
         <HarvestModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />

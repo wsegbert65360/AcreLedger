@@ -1,18 +1,18 @@
 import { Edit2 } from 'lucide-react';
 import { ModalType } from '@/pages/FieldDetailScreen';
 
-import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, FertilizerApplication, TillageRecord, ActivityRecordBase } from '@/types/farm';
+import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, FertilizerApplication, TillageRecord, ActivityRecordBase } from '@/types/farm';
 
 interface ActivityFeedProps {
-  records: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }[];
+  records: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord }[];
   year: number;
-  onEdit: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord) => void;
-  onDuplicate?: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord) => void;
+  onEdit: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord) => void;
+  onDuplicate?: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord) => void;
   hideHeader?: boolean;
 }
 
 export default function ActivityFeed({ records, year, onEdit, onDuplicate, hideHeader }: ActivityFeedProps) {
-  const getFeedInfo = (record: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | TillageRecord }) => {
+  const getFeedInfo = (record: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord }) => {
     const { type, data } = record;
 
     switch (type) {
@@ -20,6 +20,8 @@ export default function ActivityFeed({ records, year, onEdit, onDuplicate, hideH
         return { emoji: '🌱', label: 'Plant', detail: data.crop || data.seedVariety };
       case 'spray':
         return { emoji: '☁️', label: 'Spray', detail: data.products?.[0]?.product || 'Herbicide' };
+      case 'customSpray':
+        return { emoji: '👷', label: 'Custom Spray', detail: data.applicator || data.recipe || 'Outside applicator' };
       case 'fertilizer':
         return { emoji: '🧪', label: 'Fertilizer', detail: data.fertilizer_formula };
       case 'harvest':

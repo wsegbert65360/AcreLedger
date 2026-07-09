@@ -254,9 +254,30 @@ export interface TillageRecord {
   deleted_at: string | null;
 }
 
+export interface CustomSprayRecord {
+  id: string;
+  farm_id: string;
+  fieldId: string;
+  fieldName: string;
+  /** ISO date the application was performed. */
+  date: string;
+  /** Who performed the application — outside-party company or person. */
+  applicator: string;
+  /** Free-text tank mix / recipe (e.g. "Roundup 32oz/ac + AMS"). */
+  recipe?: string;
+  windSpeed?: number;
+  windDirection?: string;
+  temperature?: number;
+  notes?: string;
+  seasonYear: number;
+  timestamp: number;
+  deleted_at: string | null;
+}
+
 export type ActivityRecord =
   | { type: 'plant'; data: PlantRecord }
   | { type: 'spray'; data: SprayRecord }
+  | { type: 'customSpray'; data: CustomSprayRecord }
   | { type: 'harvest'; data: HarvestRecord }
   | { type: 'hay'; data: HayHarvestRecord }
   | { type: 'fertilizer'; data: FertilizerApplication }

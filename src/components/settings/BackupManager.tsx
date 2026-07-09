@@ -38,6 +38,7 @@ export default function BackupManager() {
     sprayRecords,
     harvestRecords,
     hayHarvestRecords,
+    customSprayRecords,
     fertilizerApplications,
     tillageRecords,
     grainMovements,
@@ -58,6 +59,7 @@ export default function BackupManager() {
     (sprayRecords?.length ?? 0) +
     (harvestRecords?.length ?? 0) +
     (hayHarvestRecords?.length ?? 0) +
+    (customSprayRecords?.length ?? 0) +
     (fertilizerApplications?.length ?? 0) +
     (tillageRecords?.length ?? 0) +
     (grainMovements?.length ?? 0) +
@@ -87,6 +89,7 @@ export default function BackupManager() {
         sprayRecords,
         harvestRecords,
         hayHarvestRecords,
+        customSprayRecords,
         fertilizerApplications,
         tillageRecords,
         grainMovements,

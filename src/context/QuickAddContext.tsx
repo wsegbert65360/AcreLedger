@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import { Field } from '@/types/farm';
 
-export type QuickAddActivityType = 'plant' | 'spray' | 'fertilizer' | 'tillage' | 'harvest' | 'hay';
+export type QuickAddActivityType = 'plant' | 'spray' | 'customSpray' | 'fertilizer' | 'tillage' | 'harvest' | 'hay';
 
 interface QuickAddContextType {
   isQuickAddOpen: boolean;

@@ -151,6 +151,23 @@ export interface HayHarvestRow {
     deleted_at?: string | null;
 }
 
+export interface CustomSprayRecordRow {
+    id: string;
+    farm_id: string;
+    field_id: string;
+    field_name: string;
+    date: string;
+    applicator: string;
+    recipe?: string | null;
+    wind_speed?: number | null;
+    wind_direction?: string | null;
+    temperature?: number | null;
+    notes?: string | null;
+    season_year: number;
+    timestamp: string;
+    deleted_at?: string | null;
+}
+
 export interface GrainMovementRow {
     id: string;
     farm_id: string;

@@ -14,15 +14,16 @@ import {
 import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
-import type { 
-  PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, 
-  FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord 
+import type {
+  PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
+  FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord
 } from '@/types/farm';
 
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
 import HayModal from '@/components/HayModal';
+import CustomSprayModal from '@/components/CustomSprayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import TillageModal from '@/components/TillageModal';
 import GrainMovementModal from '@/components/GrainMovementModal';
@@ -35,6 +36,7 @@ import PlantTab from '@/components/activity/PlantTab';
 import SprayTab from '@/components/activity/SprayTab';
 import HarvestTab from '@/components/activity/HarvestTab';
 import HayTab from '@/components/activity/HayTab';
+import CustomSprayTab from '@/components/activity/CustomSprayTab';
 import FertilizerTab from '@/components/activity/FertilizerTab';
 import TillageTab from '@/components/activity/TillageTab';
 import GrainTab from '@/components/activity/GrainTab';
@@ -61,7 +63,7 @@ const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; la
 
 
 
-type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | FertilizerApplication | GrainMovement | TillageRecord;
+type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | GrainMovement | TillageRecord;
 
 export default function Activity() {
   const navigate = useNavigate();
@@ -74,6 +76,7 @@ export default function Activity() {
     sprayRecords,
     harvestRecords,
     hayHarvestRecords,
+    customSprayRecords,
     fertilizerApplications,
     tillageRecords,
     grainMovements,
@@ -81,6 +84,7 @@ export default function Activity() {
     deleteSprayRecords,
     deleteHarvestRecords,
     deleteHayHarvestRecords,
+    deleteCustomSprayRecords,
     deleteFertilizerApplications,
     deleteTillageRecords,
     viewingSeason,
@@ -123,6 +127,7 @@ export default function Activity() {
         byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
         byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
         byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
+        byType.customSpray ? deleteCustomSprayRecords(byType.customSpray) : Promise.resolve(true),
         byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
         byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
         byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
@@ -188,6 +193,13 @@ export default function Activity() {
     [hayHarvestRecords, search, viewingSeason]
   );
 
+  const filteredCustomSpray = useMemo(() =>
+    customSprayRecords
+      .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.applicator.toLowerCase().includes(search.toLowerCase()) || (r.recipe || '').toLowerCase().includes(search.toLowerCase())))
+      .sort((a, b) => b.timestamp - a.timestamp),
+    [customSprayRecords, search, viewingSeason]
+  );
+
   const filteredFertilizer = useMemo(() =>
     fertilizerApplications
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.fertilizer_formula.toLowerCase().includes(search.toLowerCase())))
@@ -208,12 +220,13 @@ export default function Activity() {
       ...filteredSpray.map(r => ({ type: 'spray' as const, data: r, timestamp: r.timestamp })),
       ...filteredHarvest.map(r => ({ type: 'harvest' as const, data: r, timestamp: r.timestamp })),
       ...filteredHay.map(r => ({ type: 'hay' as const, data: r, timestamp: r.timestamp })),
+      ...filteredCustomSpray.map(r => ({ type: 'customSpray' as const, data: r, timestamp: r.timestamp })),
       ...filteredFertilizer.map(r => ({ type: 'fertilizer' as const, data: r, timestamp: new Date(r.date).getTime() })),
       ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
     ];
     return all.filter(r => !pendingDeletes.has(r.data.id)).sort((a, b) => b.timestamp - a.timestamp);
-  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
+  }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredCustomSpray, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
 
   const handleDeleteRequest = () => {
     const ids = Array.from(selected);
@@ -357,7 +370,7 @@ export default function Activity() {
                 {group.tabs.map((t) => {
                   const count = t.key === 'all' ? visibleUnifiedRecords.length
                     : t.key === 'plant' ? filteredPlant.filter(r => !pendingDeletes.has(r.id)).length
-                    : t.key === 'spray' ? filteredSpray.filter(r => !pendingDeletes.has(r.id)).length
+                    : t.key === 'spray' ? (filteredSpray.filter(r => !pendingDeletes.has(r.id)).length + filteredCustomSpray.filter(r => !pendingDeletes.has(r.id)).length)
                     : t.key === 'harvest' ? filteredHarvest.filter(r => !pendingDeletes.has(r.id)).length
                     : t.key === 'grain' ? filteredGrain.filter(r => !pendingDeletes.has(r.id)).length
                     : t.key === 'hay' ? filteredHay.filter(r => !pendingDeletes.has(r.id)).length
@@ -484,7 +497,23 @@ export default function Activity() {
             <>
               {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={(r) => openModal(r.type, r.data, 'edit')} onDuplicate={(r) => openModal(r.type, r.data, 'duplicate')} />}
               {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('plant', r, 'edit')} onDuplicate={(r) => openModal('plant', r, 'duplicate')} />}
-              {tab === 'spray' && <SprayTab records={filteredSpray.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('spray', r, 'edit')} onDuplicate={(r) => openModal('spray', r, 'duplicate')} />}
+              {tab === 'spray' && (() => {
+                const regular = filteredSpray.filter(r => !pendingDeletes.has(r.id));
+                const custom = filteredCustomSpray.filter(r => !pendingDeletes.has(r.id));
+                if (regular.length === 0 && custom.length === 0) {
+                  return <p className="text-center text-muted-foreground text-sm py-8">No spray records</p>;
+                }
+                return (
+                  <div className="space-y-3">
+                    {regular.length > 0 && (
+                      <SprayTab records={regular} selected={selected} onToggle={toggle} onEdit={(r) => openModal('spray', r, 'edit')} onDuplicate={(r) => openModal('spray', r, 'duplicate')} />
+                    )}
+                    {custom.length > 0 && (
+                      <CustomSprayTab records={custom} selected={selected} onToggle={toggle} onEdit={(r) => openModal('customSpray', r, 'edit')} onDuplicate={(r) => openModal('customSpray', r, 'duplicate')} />
+                    )}
+                  </div>
+                );
+              })()}
               {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} />}
               {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('hay', r, 'edit')} onDuplicate={(r) => openModal('hay', r, 'duplicate')} />}
               {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('fertilizer', r, 'edit')} onDuplicate={(r) => openModal('fertilizer', r, 'duplicate')} />}
@@ -527,6 +556,20 @@ export default function Activity() {
             onClose={closeModal}
             field={editField}
             initialData={editingRecord as SprayRecord}
+            mode={editingMode}
+          />
+        );
+      })()}
+
+      {editingRecordType === 'customSpray' && editingRecord && (() => {
+        const editField = getEditField((editingRecord as CustomSprayRecord).fieldId);
+        if (!editField) return <DeletedFieldFallback onClose={closeModal} />;
+        return (
+          <CustomSprayModal
+            open={!!editingRecord}
+            onClose={closeModal}
+            field={editField}
+            initialData={editingRecord as CustomSprayRecord}
             mode={editingMode}
           />
         );

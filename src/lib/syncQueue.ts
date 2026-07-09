@@ -10,7 +10,7 @@ let webQueuePromise: Promise<void> = Promise.resolve();
 
 const ALLOWED_TABLES = new Set([
   'fields', 'bins', 'plant_records', 'spray_records',
-  'harvest_records', 'hay_harvest_records', 'fertilizer_applications',
+  'harvest_records', 'hay_harvest_records', 'custom_spray_records', 'fertilizer_applications',
   'tillage_records', 'grain_movements', 'saved_seeds',
   'fertilizer_recipes', 'spray_recipes',
   'fsa_tract_imports', 'field_clu_assignments',

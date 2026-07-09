@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
-import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord } from '@/types/farm';
+import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord } from '@/types/farm';
 import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import { supabase } from '@/lib/supabase';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
-  mapHarvestFromDb, mapHayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
+  mapHarvestFromDb, mapHayFromDb, mapCustomSprayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
   mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb,
   mapFsaTractFromDb, mapFieldCluAssignmentFromDb
 } from '../lib/mappers';
@@ -18,6 +18,7 @@ import { usePlantRecords } from './usePlantRecords';
 import { useSprayRecords } from './useSprayRecords';
 import { useHarvestRecords } from './useHarvestRecords';
 import { useHayRecords } from './useHayRecords';
+import { useCustomSprayRecords } from './useCustomSprayRecords';
 import { useFertilizerRecords } from './useFertilizerRecords';
 import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
@@ -56,6 +57,8 @@ interface FarmState {
   harvestRecords: HarvestRecord[];
   /** Hay and forage harvest records */
   hayHarvestRecords: HayHarvestRecord[];
+  /** Custom (outside-party) spray records */
+  customSprayRecords: CustomSprayRecord[];
   /** Fertilizer application records */
   fertilizerApplications: FertilizerApplication[];
   /** Tillage records */
@@ -98,6 +101,10 @@ interface FarmState {
   addHayHarvestRecord: (r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
   updateHayHarvestRecord: (r: HayHarvestRecord) => Promise<boolean>;
   deleteHayHarvestRecords: (ids: string[]) => Promise<boolean>;
+  /** Operations for managing custom (outside-party) spray records */
+  addCustomSprayRecord: (r: Omit<CustomSprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  updateCustomSprayRecord: (r: CustomSprayRecord) => Promise<boolean>;
+  deleteCustomSprayRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing fertilizer applications */
   addFertilizerApplication: (r: Omit<FertilizerApplication, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'fieldName' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updateFertilizerApplication: (r: FertilizerApplication) => Promise<boolean>;
@@ -181,6 +188,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [sprayRecords, setSprayRecords] = useState<SprayRecord[]>([]);
   const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>([]);
   const [hayHarvestRecords, setHayHarvestRecords] = useState<HayHarvestRecord[]>([]);
+  const [customSprayRecords, setCustomSprayRecords] = useState<CustomSprayRecord[]>([]);
   const [fertilizerApplications, setFertilizerApplications] = useState<FertilizerApplication[]>([]);
   const [tillageRecords, setTillageRecords] = useState<TillageRecord[]>([]);
   const [grainMovements, setGrainMovements] = useState<GrainMovement[]>([]);
@@ -227,7 +235,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     const hydrateCache = async () => {
       try {
         const [
-          fieldsData, binsData, plantData, sprayData, harvestData, hayData,
+          fieldsData, binsData, plantData, sprayData, harvestData, hayData, customSprayData,
           fertilizerData, tillageData, grainData, seedsData, fertilizerRecipesData, recipesData,
           tractsData, assignmentsData
         ] = await Promise.all([
@@ -237,6 +245,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           offlineStorage.loadCache('spray_records', userId),
           offlineStorage.loadCache('harvest_records', userId),
           offlineStorage.loadCache('hay_harvest_records', userId),
+          offlineStorage.loadCache('custom_spray_records', userId),
           offlineStorage.loadCache('fertilizer_applications', userId),
           offlineStorage.loadCache('tillage_records', userId),
           offlineStorage.loadCache('grain_movements', userId),
@@ -253,6 +262,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         if (sprayData) setSprayRecords(sprayData);
         if (harvestData) setHarvestRecords(harvestData);
         if (hayData) setHayHarvestRecords(hayData);
+        if (customSprayData) setCustomSprayRecords(customSprayData);
         if (fertilizerData) setFertilizerApplications(fertilizerData);
         if (tillageData) setTillageRecords(tillageData);
         if (grainData) setGrainMovements(grainData);
@@ -302,6 +312,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         { data: sprayData, error: sprayErr },
         { data: harvestData, error: harvestErr },
         { data: hayData, error: hayErr },
+        { data: customSprayData, error: customSprayErr },
         { data: fertilizerData, error: fertilizerErr },
         { data: tillageData, error: tillageErr },
         { data: grainData, error: grainErr },
@@ -318,6 +329,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         orderedQuery('spray_records'),
         orderedQuery('harvest_records'),
         orderedQuery('hay_harvest_records'),
+        orderedQuery('custom_spray_records'),
         supabase.from('fertilizer_applications')
           .select('*, fields(name)')
           .eq('farm_id', farm_id)
@@ -335,7 +347,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
           const fetchErrors = [
             fieldsErr, binsErr, plantErr, sprayErr, harvestErr,
-            hayErr, fertilizerErr, tillageErr, grainErr, seedsErr,
+            hayErr, customSprayErr, fertilizerErr, tillageErr, grainErr, seedsErr,
             fertilizerRecipesErr, recipesErr, tractsErr, assignmentsErr, farmErr
           ].filter(Boolean);
 
@@ -352,6 +364,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           if (sprayData) setSprayRecords(sprayData.map(mapSprayFromDb));
           if (harvestData) setHarvestRecords(harvestData.map(mapHarvestFromDb));
           if (hayData) setHayHarvestRecords(hayData.map(mapHayFromDb));
+          if (customSprayData) setCustomSprayRecords(customSprayData.map(mapCustomSprayFromDb));
           if (fertilizerData) setFertilizerApplications(fertilizerData.map(mapFertilizerFromDb));
           if (tillageData) setTillageRecords(tillageData.map(mapTillageFromDb));
           if (grainData) setGrainMovements(grainData.map(mapGrainFromDb));
@@ -392,6 +405,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('spray_records', session.user.id, sprayRecords); } }, [sprayRecords, session?.user?.id, cacheHydrated]);
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('harvest_records', session.user.id, harvestRecords); } }, [harvestRecords, session?.user?.id, cacheHydrated]);
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('hay_harvest_records', session.user.id, hayHarvestRecords); } }, [hayHarvestRecords, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('custom_spray_records', session.user.id, customSprayRecords); } }, [customSprayRecords, session?.user?.id, cacheHydrated]);
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('fertilizer_applications', session.user.id, fertilizerApplications); } }, [fertilizerApplications, session?.user?.id, cacheHydrated]);
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('tillage_records', session.user.id, tillageRecords); } }, [tillageRecords, session?.user?.id, cacheHydrated]);
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('grain_movements', session.user.id, grainMovements); } }, [grainMovements, session?.user?.id, cacheHydrated]);
@@ -423,6 +437,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const sprayOps = useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnline, onMutation: updatePendingSyncCount });
   const harvestOps = useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
   const hayOps = useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
+  const customSprayOps = useCustomSprayRecords({ farm_id, viewingSeason, setCustomSprayRecords, isOnline, onMutation: updatePendingSyncCount });
   const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, setFertilizerApplications, isOnline, onMutation: updatePendingSyncCount });
   const tillageOps = useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
   const grainOps = useGrainMovements({ farm_id, viewingSeason, grainMovements, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
@@ -445,11 +460,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const seasonOps = useSeasonManagement({
     session, farm_id,
     fields, bins, plantRecords, sprayRecords, harvestRecords,
-    hayHarvestRecords, fertilizerApplications, tillageRecords, grainMovements,
+    hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
-    setHarvestRecords, setHayHarvestRecords, setFertilizerApplications,
+    setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
     setFsaTracts, setCluAssignments,
     refetchFarmData: fetchData,
@@ -473,6 +488,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     sprayRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
     harvestRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
     hayHarvestRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
+    customSprayRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
     fertilizerApplications.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
     tillageRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
     grainMovements.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
@@ -484,6 +500,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     sprayRecords,
     harvestRecords,
     hayHarvestRecords,
+    customSprayRecords,
     fertilizerApplications,
     tillageRecords,
     grainMovements,
@@ -573,7 +590,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       session, isOnline, pendingSyncCount, loading, initialFetchComplete, fetchError,
       fields: sortedFields,
       bins: filteredBins,
-      plantRecords, sprayRecords, harvestRecords, hayHarvestRecords,
+      plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,
       fertilizerApplications,
       tillageRecords,
       grainMovements,
@@ -588,6 +605,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       ...sprayOps,
       ...harvestOps,
       ...hayOps,
+      ...customSprayOps,
       ...fertilizerOps,
       ...tillageOps,
       ...grainOps,

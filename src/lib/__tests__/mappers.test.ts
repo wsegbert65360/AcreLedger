@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { 
+import {
     mapFieldToDb,
     mapPlantToDb,
     mapSprayFromDb, mapSprayToDb,
+    mapCustomSprayFromDb, mapCustomSprayToDb,
     mapSeedFromDb, mapSeedToDb
 } from '../mappers';
-import { SprayRecord, SavedSeed } from '../../types/farm';
+import { SprayRecord, SavedSeed, CustomSprayRecord } from '../../types/farm';
 
 describe('Mappers Round-Trip', () => {
     it('should maintain SprayRecord integrity through round-trip', () => {
@@ -118,6 +119,59 @@ describe('Mappers Round-Trip', () => {
         expect(result.year).toBe(original.year);
     });
 
+    it('should maintain CustomSprayRecord integrity through round-trip', () => {
+        const original: CustomSprayRecord = {
+            id: 'cs-1',
+            farm_id: 'farm-1',
+            fieldId: 'field-1',
+            fieldName: 'North Field',
+            date: '2026-04-15',
+            applicator: 'Helena',
+            recipe: 'Roundup 32oz/ac + AMS',
+            windSpeed: 7,
+            windDirection: 'NW',
+            temperature: 72,
+            notes: 'See invoice from vendor',
+            seasonYear: 2026,
+            timestamp: Date.now(),
+            deleted_at: null,
+        };
+
+        const db = mapCustomSprayToDb(original) as any;
+        const result = mapCustomSprayFromDb(db);
+
+        expect(result.applicator).toBe(original.applicator);
+        expect(result.recipe).toBe(original.recipe);
+        expect(result.windSpeed).toBe(original.windSpeed);
+        expect(result.windDirection).toBe(original.windDirection);
+        expect(result.temperature).toBe(original.temperature);
+        expect(result.notes).toBe(original.notes);
+        expect(result.date).toBe(original.date);
+    });
+
+    it('should preserve zero weather values and undefined optionals for CustomSprayRecord', () => {
+        const original: CustomSprayRecord = {
+            id: 'cs-2',
+            farm_id: 'farm-1',
+            fieldId: 'field-1',
+            fieldName: 'North Field',
+            date: '2026-04-15',
+            applicator: 'Helena',
+            windSpeed: 0,
+            temperature: 0,
+            seasonYear: 2026,
+            timestamp: Date.now(),
+            deleted_at: null,
+        };
+
+        const db = mapCustomSprayToDb(original) as any;
+        const result = mapCustomSprayFromDb(db);
+
+        expect(result.windSpeed).toBe(0);
+        expect(result.temperature).toBe(0);
+        expect(result.recipe).toBeUndefined();
+    });
+
     describe('Validation Errors', () => {
         it('should throw if mapFieldToDb is missing farm_id', () => {
             const invalidField: any = { id: '1', name: 'Test' };
@@ -132,6 +186,11 @@ describe('Mappers Round-Trip', () => {
         it('should throw if mapFertilizerToDb is missing fieldId', () => {
             const invalidFert: any = { id: '1', farm_id: 'f1', seasonYear: 2026 };
             expect(() => mapPlantToDb(invalidFert)).toThrow('[Mapper Error] mapPlantToDb: Missing required field "fieldId"');
+        });
+
+        it('should throw if mapCustomSprayToDb is missing fieldId', () => {
+            const invalidCustomSpray: any = { id: '1', farm_id: 'f1', seasonYear: 2026 };
+            expect(() => mapCustomSprayToDb(invalidCustomSpray)).toThrow('[Mapper Error] mapCustomSprayToDb: Missing required field "fieldId"');
         });
     });
 });

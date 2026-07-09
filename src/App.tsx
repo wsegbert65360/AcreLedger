@@ -30,6 +30,7 @@ import HarvestModal from "@/components/HarvestModal";
 import HayModal from "@/components/HayModal";
 import FertilizerModal from "@/components/FertilizerModal";
 import TillageModal from "@/components/TillageModal";
+import CustomSprayModal from "@/components/CustomSprayModal";
 
 import Activity from "./pages/Activity";
 import FieldDetailScreen from "./pages/FieldDetailScreen";
@@ -96,6 +97,7 @@ const AnimatedRoutes = () => {
 const ModalMap = {
   plant: PlantModal,
   spray: SprayModal,
+  customSpray: CustomSprayModal,
   harvest: HarvestModal,
   hay: HayModal,
   fertilizer: FertilizerModal,

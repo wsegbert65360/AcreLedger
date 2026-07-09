@@ -1,10 +1,10 @@
 import {
-    PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord,
+    PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
     GrainMovement, Field, Bin, SavedSeed, SprayRecipe, FertilizerApplication,
     SprayRecipeProduct, FertilizerRecipe, TillageRecord
 } from '../types/farm';
 import {
-    PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow,
+    PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow, CustomSprayRecordRow,
     GrainMovementRow, FieldRow, BinRow, SavedSeedRow, SprayRecipeRow,
     FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow,
     FsaTractImportRow, FieldCluAssignmentRow
@@ -12,7 +12,7 @@ import {
 import type { FsaTractImport, FieldCluAssignment } from '../types/fsaTract';
 import {
     fieldSchema, binSchema, plantRecordSchema, sprayRecordSchema,
-    harvestRecordSchema, hayHarvestRecordSchema, grainMovementSchema,
+    harvestRecordSchema, hayHarvestRecordSchema, customSprayRecordSchema, grainMovementSchema,
     savedSeedSchema, fertilizerRecipeSchema, sprayRecipeSchema,
     fertilizerApplicationSchema, tillageRecordSchema,
     fsaTractImportSchema, fieldCluAssignmentSchema
@@ -159,6 +159,23 @@ export const mapHayFromDb = (db: HayHarvestRow): HayHarvestRecord => ({
     seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     farm_id: db.farm_id,
+    deleted_at: db.deleted_at ?? null
+});
+
+export const mapCustomSprayFromDb = (db: CustomSprayRecordRow): CustomSprayRecord => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    fieldId: db.field_id,
+    fieldName: safeStr(db.field_name, 'Unknown Field'),
+    date: safeStr(db.date),
+    applicator: safeStr(db.applicator),
+    recipe: db.recipe || undefined,
+    windSpeed: db.wind_speed != null ? safeNum(db.wind_speed) : undefined,
+    windDirection: db.wind_direction || undefined,
+    temperature: db.temperature != null ? safeNum(db.temperature) : undefined,
+    notes: db.notes || undefined,
+    seasonYear: safeNum(db.season_year, new Date().getFullYear()),
+    timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
 });
 
@@ -444,6 +461,27 @@ export const mapHayToDb = (r: HayHarvestRecord) => {
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
         deleted_at: r.deleted_at
+    };
+};
+
+export const mapCustomSprayToDb = (r: CustomSprayRecord) => {
+    validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapCustomSprayToDb');
+    customSprayRecordSchema.parse(r);
+    return {
+        id: r.id,
+        farm_id: r.farm_id,
+        field_id: r.fieldId,
+        field_name: safeStr(r.fieldName, 'Unknown Field'),
+        date: r.date,
+        applicator: safeStr(r.applicator),
+        recipe: r.recipe || null,
+        wind_speed: r.windSpeed != null ? safeNum(r.windSpeed) : null,
+        wind_direction: r.windDirection || null,
+        temperature: r.temperature != null ? safeNum(r.temperature) : null,
+        notes: r.notes || null,
+        season_year: safeNum(r.seasonYear, new Date().getFullYear()),
+        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
+        deleted_at: r.deleted_at || null
     };
 };
 
