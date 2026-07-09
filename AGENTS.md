@@ -88,6 +88,7 @@ if (!farm_id) {
 - The local storage key `al_viewing_season` (with a user-scoped prefix) stores the current viewing season.
 - On loading or syncing, `viewingSeason` must be validated and clamped to a window of `[activeSeason - 10, activeSeason + 1]`.
 - Dropdown selectors (e.g. sidebar, activity, reports) must fetch dynamic options (`seasonOptions`) computed from `farmStore.tsx` rather than hardcoding options.
+- **Exception — grain bin inventory:** grain movements are still season-stamped on insert (`seasonYear: viewingSeason`), but bin *inventory* is continuous physical state and must be read season-independently via `getBinTotal(binId)` (no season arg → all-season total). Carryover grain vanishes and becomes unsellable if bin contents are scoped to the viewing season. Season-scoped views (history, reports) are fine; the Logistics bin monitor, SellModal inventory check, and DashboardStats bin totals must use the all-season total.
 
 ### Mapper Discipline
 
@@ -128,7 +129,8 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Negative bushels represent estimate-vs-actual corrections.
 - Do not clamp negative grain movement values.
 - Display negative bushels with a warning, not as a validation error.
-- Grain movement edits need a concurrency guard to prevent ghost rows and inventory drift.
+- Bin inventory is season-independent (see Season Scoping). Validate sales against `getBinTotal(bin.id)` (all-season), not just the current season's movements.
+- Grain movement edits need a concurrency guard to prevent ghost rows and inventory drift. `useGrainMovements` enforces this with a module-level `isMutating` lock plus an optimistic-concurrency check on `update`/`delete` keyed on the row's `timestamp` (captured from the closure, not a ref mutated inside the state setter). Legacy rows without a usable timestamp fingerprint fall back to an unlocked update so they self-heal instead of getting stuck. Do not reintroduce a ref-based timestamp capture — the closure form exists specifically to avoid a React eager-update dependency.
 
 ### Spray Compliance
 
@@ -137,7 +139,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Missing `epaRegNumber` marks the record non-compliant.
 - Active ingredients are tracked per product.
 - Keep spray terminology state-neutral unless a specific legal report requires state wording.
-- `WIND_ALERT_MPH = 10` is the named wind alert threshold.
+- `WIND_ALERT_MPH = 10` is the named wind alert threshold. Its canonical export is `@/lib/weatherHelpers.ts`; import from there rather than re-declaring a local constant.
 - Past weather recovery uses Visual Crossing based on field location and start time.
 
 ### FSA Tracts and CLU Assignments
@@ -203,6 +205,9 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
   - Record save/validation success: success notification haptic.
   - Form validation failure: error notification haptic.
 - **Layout Insets**: Use CSS env safe-area variables for header and bottom navigation spacing to prevent content overlaps on notched screens (e.g. Dynamic Island).
+- **PWA / Service Worker** (`src/main.tsx`): In `DEV`, service workers and caches are unregistered/cleared on load so code changes always win. In production, `registerSW` is wired so a waiting worker (`onNeedRefresh`) **and** a `controllerchange` flip both trigger an auto-reload — iOS checks for SW updates only ~daily on its own, so the app also polls `registration.update()` on `visibilitychange`, `focus`, `online`, and every 30 min while visible. Two safety guards must be preserved when touching this code:
+  - The reload is deferred while a Radix overlay is open (`[data-state="open"]`, `[role="dialog"]`, `[role="alertdialog"]`) so unsaved form entries aren't lost; after `MAX_DEFERS` (10 × 30 s ≈ 5 min) it force-reloads so a stuck overlay can't pin the tab to a stale worker forever.
+  - The `controllerchange` handler is guarded on `hadControllerAtLoad` so a first-ever visit (where the new worker claims a previously-uncontrolled page via `clients.claim()`) is **not** reloaded. Don't drop either guard — reloading on first load or mid-entry both wreck UX.
 
 ## UI and Component Rules
 
@@ -300,7 +305,8 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 
 ## Weather and Rainfall Rules
 
-- Weather uses Visual Crossing.
+- Weather uses Visual Crossing, routed through `WeatherService.buildWeatherUrl`. In dev (or Capacitor builds with `VITE_VISUALCROSSING_KEY` set and no proxy), it calls the Visual Crossing API directly; otherwise it goes through the `/api/weather-proxy` edge function (auth bearer header attached when a session token exists). `WeatherService` resolves the proxy base via `resolveWeatherProxyUrl()`.
+- `VITE_WEATHER_PROXY_URL` (optional) overrides the proxy base for Capacitor builds. If set, it must be HTTPS (or `localhost`/`127.0.0.1`), have no surrounding quotes, and not already include the `/api/weather-proxy` path suffix — `WeatherService` appends it. A Capacitor build with neither `VITE_VISUALCROSSING_KEY` nor `VITE_WEATHER_PROXY_URL` throws at URL-build time rather than failing silently. `WeatherService.cleanEnvValue` strips stray quotes/whitespace from these env vars at load.
 - Rainfall uses the Rain API with IEM Stage IV radar plus Supabase RPC merge.
 - Rainfall lookups should use coordinates when available so the radar merge remains active.
 - Lat/lng should be rounded to 4 decimals for radar grid consistency.
@@ -429,10 +435,12 @@ While editing:
 
 After editing:
 
-1. Run the most relevant available checks from `package.json`.
-2. If tests are unavailable, run TypeScript/build checks when possible.
-3. Summarize changed files, behavior changes, and verification results.
-4. Mention any unchecked risk clearly.
+1. Run the most relevant available checks. The repo defines:
+   - `npm run lint` — `eslint .` (fast, run for any source change).
+   - `npm run test` — `vitest run` (run when touching logic with colocated `*.test.*` files).
+   - `npm run build` — `vite build` (the de-facto typecheck; there is no separate `tsc`/`typecheck` script, so `build` is the type gate before merging).
+2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
+3. Mention any unchecked risk clearly.
 
 ## When to Use `BLUEPRINT.md`
 
