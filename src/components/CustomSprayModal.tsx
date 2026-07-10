@@ -9,6 +9,7 @@ import { native } from '@/lib/native';
 import { toast } from 'sonner';
 import { Cloud, User, Thermometer, Wind, FlaskConical, StickyNote, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
+import { WeatherService } from '@/services/WeatherService';
 
 interface CustomSprayModalProps {
     field: Field;
@@ -20,6 +21,7 @@ interface CustomSprayModalProps {
 
 export default function CustomSprayModal({ field, open, onClose, initialData, mode = 'edit' }: CustomSprayModalProps) {
     const isDuplicate = mode === 'duplicate' && !!initialData;
+    const shouldAutoPullWeather = !initialData || isDuplicate;
     const { addCustomSprayRecord, updateCustomSprayRecord, customSprayRecords, viewingSeason } = useFarm();
     const [applicator, setApplicator] = useState(initialData?.applicator || '');
     const [recipe, setRecipe] = useState(initialData?.recipe || '');
@@ -28,6 +30,8 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
     const [windDirection, setWindDirection] = useState(initialData?.windDirection || '');
     const [temperature, setTemperature] = useState(initialData?.temperature?.toString() || '');
     const [notes, setNotes] = useState(initialData?.notes || '');
+    const [loadingWeather, setLoadingWeather] = useState(false);
+    const [weatherRefreshKey, setWeatherRefreshKey] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
 
     const suggested = useMemo(() => {
@@ -56,6 +60,38 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, initialData?.id, isDuplicate]);
+
+    useEffect(() => {
+        if (!open || !shouldAutoPullWeather || field.lat == null || field.lng == null) {
+            if (open) setLoadingWeather(false);
+            return;
+        }
+
+        const controller = new AbortController();
+        setLoadingWeather(true);
+
+        WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`, controller.signal)
+            .then(weather => {
+                if (controller.signal.aborted || !weather || weather.isError) return;
+
+                const resolvedWind = Number.isFinite(weather.wind) ? weather.wind : 0;
+                const resolvedDirection = weather.windDirection && weather.windDirection !== '—'
+                    ? weather.windDirection
+                    : resolvedWind === 0 ? 'CALM' : '';
+
+                setWindSpeed(current => current || String(resolvedWind));
+                setWindDirection(current => current || resolvedDirection);
+                setTemperature(current => current || (Number.isFinite(weather.temp) ? String(weather.temp) : ''));
+            })
+            .catch(() => {
+                // Manual weather entry remains available when the automatic pull fails.
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoadingWeather(false);
+            });
+
+        return () => controller.abort();
+    }, [open, shouldAutoPullWeather, initialData?.id, field.lat, field.lng, weatherRefreshKey]);
 
     const isValid = applicator.trim() !== '' && date !== '';
 
@@ -95,6 +131,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                     setWindDirection('');
                     setTemperature('');
                     setNotes('');
+                    setWeatherRefreshKey(current => current + 1);
                     toast.success('Record saved. Ready for next entry.');
                 } else {
                     onClose();
@@ -180,45 +217,56 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                         />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 border-t border-border/20 pt-3">
-                        <div>
-                            <Label htmlFor="csWind" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1 uppercase">
-                                <Wind size={11} /> Wind
-                            </Label>
-                            <Input
-                                id="csWind"
-                                name="csWind"
-                                type="number"
-                                value={windSpeed}
-                                onChange={e => setWindSpeed(e.target.value)}
-                                placeholder="mph"
-                                className="mt-1 bg-muted border-border font-mono text-foreground"
-                            />
+                    <div className="border-t border-border/20 pt-3" aria-busy={loadingWeather}>
+                        <div className="mb-2 flex min-h-5 items-center justify-between gap-3">
+                            <span className="text-xs font-semibold text-muted-foreground">Weather</span>
+                            {loadingWeather && (
+                                <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    <Loader2 size={13} className="animate-spin" />
+                                    Pulling weather
+                                </span>
+                            )}
                         </div>
-                        <div>
-                            <Label htmlFor="csWindDir" className="text-muted-foreground font-mono text-[11px] uppercase">Dir</Label>
-                            <Input
-                                id="csWindDir"
-                                name="csWindDir"
-                                value={windDirection}
-                                onChange={e => setWindDirection(e.target.value)}
-                                placeholder="NW"
-                                className="mt-1 bg-muted border-border font-mono text-foreground"
-                            />
-                        </div>
-                        <div>
-                            <Label htmlFor="csTemp" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1 uppercase">
-                                <Thermometer size={11} /> °F
-                            </Label>
-                            <Input
-                                id="csTemp"
-                                name="csTemp"
-                                type="number"
-                                value={temperature}
-                                onChange={e => setTemperature(e.target.value)}
-                                placeholder="72"
-                                className="mt-1 bg-muted border-border font-mono text-foreground"
-                            />
+                        <div className="grid grid-cols-3 gap-3">
+                            <div>
+                                <Label htmlFor="csWind" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1 uppercase">
+                                    <Wind size={11} /> Wind
+                                </Label>
+                                <Input
+                                    id="csWind"
+                                    name="csWind"
+                                    type="number"
+                                    value={windSpeed}
+                                    onChange={e => setWindSpeed(e.target.value)}
+                                    placeholder={loadingWeather ? '...' : 'mph'}
+                                    className="mt-1 bg-muted border-border font-mono text-foreground"
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="csWindDir" className="text-muted-foreground font-mono text-[11px] uppercase">Dir</Label>
+                                <Input
+                                    id="csWindDir"
+                                    name="csWindDir"
+                                    value={windDirection}
+                                    onChange={e => setWindDirection(e.target.value)}
+                                    placeholder={loadingWeather ? '...' : 'NW'}
+                                    className="mt-1 bg-muted border-border font-mono text-foreground"
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="csTemp" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1 uppercase">
+                                    <Thermometer size={11} /> °F
+                                </Label>
+                                <Input
+                                    id="csTemp"
+                                    name="csTemp"
+                                    type="number"
+                                    value={temperature}
+                                    onChange={e => setTemperature(e.target.value)}
+                                    placeholder={loadingWeather ? '...' : '72'}
+                                    className="mt-1 bg-muted border-border font-mono text-foreground"
+                                />
+                            </div>
                         </div>
                     </div>
 
