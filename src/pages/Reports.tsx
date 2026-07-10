@@ -16,6 +16,8 @@ import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcre
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
@@ -428,21 +430,28 @@ export default function Reports() {
           {/* Single print button — header only, consistent across all tabs */}
           <div className="flex items-center gap-2">
             <SyncStatusIndicator />
-            <button
+            <Button
+              type="button"
+              variant="outline"
               onClick={handlePrint}
-              className="touch-target flex items-center gap-2 px-4 py-2 bg-muted border border-border rounded-lg text-foreground text-sm hover:bg-muted/80 transition-colors print:hidden"
+              className="h-11 rounded-lg bg-card px-3 text-sm print:hidden"
             >
               <Printer size={16} />
               Print
-            </button>
+            </Button>
           </div>
         </div>
 
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4 lg:max-w-6xl lg:px-8">
+      <main className="max-w-2xl mx-auto px-4 py-4 lg:max-w-6xl lg:px-8">
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as ReportTab)}
+          className="space-y-4"
+        >
         {/* Season Selector */}
-        <div className="flex items-center justify-between gap-4 bg-muted/30 border border-border p-3 rounded-lg print:hidden">
+        <div className="flex min-h-14 items-center justify-between gap-4 rounded-2xl border border-border bg-muted/30 px-3 py-2 print:hidden">
           <div className="flex items-center gap-2">
             <HistoryIcon size={16} className="text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground">Season view</span>
@@ -451,26 +460,26 @@ export default function Reports() {
         </div>
 
         {/* Tab Bar — flex-1 shrink-0 allows tabs to fill screen width equally on desktop, but never shrink below content size on mobile */}
-        <div className="relative print:hidden">
-          <div className="flex overflow-x-auto no-scrollbar gap-1 bg-card border border-border rounded-lg p-1 pr-8 lg:pr-1">
+        <TabsList
+          aria-label="Report type"
+          className="no-scrollbar flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1 print:hidden"
+        >
           {TABS.map(t => (
-            <button
+            <TabsTrigger
               key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex-1 shrink-0 touch-target flex items-center justify-center gap-1.5 rounded-lg py-2.5 px-3 text-sm font-semibold transition-all ${
-                tab === t.key ? `bg-muted ${t.color}` : 'text-muted-foreground'
+              value={t.key}
+              className={`h-11 flex-none shrink-0 gap-2 rounded-lg px-3 text-xs font-semibold shadow-none data-[state=active]:bg-muted data-[state=active]:shadow-none ${
+                tab === t.key ? t.color : 'text-muted-foreground'
               }`}
             >
               <t.icon size={16} className="shrink-0" />
-              <span className="text-xs whitespace-nowrap">{t.label}</span>
-            </button>
+              <span className="whitespace-nowrap">{t.label}</span>
+            </TabsTrigger>
           ))}
-          </div>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-lg bg-gradient-to-l from-background via-background/85 to-transparent lg:hidden" />
-        </div>
+        </TabsList>
 
         {/* ── FSA Planting Report ─────────────────────────────────────────────── */}
-        {tab === 'fsa-plant' && (
+        <TabsContent value="fsa-plant" className="mt-0">
           <FsaPlantReport
             fsaPlantRows={fsaPlantRows}
             totalPlantAcres={totalPlantAcres}
@@ -486,20 +495,20 @@ export default function Reports() {
             }), 'FSA-578 worksheet data')}
             onExportPdf={handleExportFsaPlantPdf}
           />
-        )}
+        </TabsContent>
 
         {/* ── Spray Audit ─────────────────────────────────────────────────────── */}
-        {tab === 'spray-audit' && (
+        <TabsContent value="spray-audit" className="mt-0">
           <SprayAuditReport
             sprayRows={sprayRows}
             reportDate={reportDate}
             onExportCsv={() => safeExport(() => generateMissouriLog(sprayRecords, fields), 'spray log')}
             onExportPdf={handleExportSprayAuditPdf}
           />
-        )}
+        </TabsContent>
 
         {/* ── Fertilizer Summary ──────────────────────────────────────────────── */}
-        {tab === 'fertilizer-summary' && (
+        <TabsContent value="fertilizer-summary" className="mt-0">
           <FertilizerReport
             fertilizerRecords={fertilizerRecords}
             fieldMap={fieldMap}
@@ -508,10 +517,10 @@ export default function Reports() {
             onExportCsv={() => safeExport(() => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
             onExportPdf={handleExportFertilizerPdf}
           />
-        )}
+        </TabsContent>
 
         {/* ── FSA Fall Harvest / Production Report ───────────────────────────── */}
-        {tab === 'fsa-harvest' && (
+        <TabsContent value="fsa-harvest" className="mt-0">
           <FallFsaReport
             fsaFallRows={fsaFallRows}
             totalHarvestBu={totalHarvestBu}
@@ -532,10 +541,10 @@ export default function Reports() {
             }), 'fall production data')}
             onExportPdf={handleExportHarvestPdf}
           />
-        )}
+        </TabsContent>
 
         {/* ── Hay Summary ─────────────────────────────────────────────────────── */}
-        {tab === 'hay-summary' && (
+        <TabsContent value="hay-summary" className="mt-0">
           <HaySummaryReport
             hayRecords={hayRecords}
             fields={fields}
@@ -543,10 +552,10 @@ export default function Reports() {
             reportDate={reportDate}
             onExportPdf={handleExportHayPdf}
           />
-        )}
+        </TabsContent>
 
         {/* ── Landlord Statement ──────────────────────────────────────────────── */}
-        {tab === 'landlord-statement' && (
+        <TabsContent value="landlord-statement" className="mt-0">
           <LandlordStatementReport
             selectedLandlord={selectedLandlord}
             setSelectedLandlord={setSelectedLandlord}
@@ -556,7 +565,8 @@ export default function Reports() {
             onExportCsv={handleExportLandlordCSV}
             onExportPdf={handleExportLandlordPdf}
           />
-        )}
+        </TabsContent>
+        </Tabs>
       </main>
 
     </div>

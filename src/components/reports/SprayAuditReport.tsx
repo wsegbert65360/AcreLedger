@@ -1,9 +1,12 @@
-import { Download } from 'lucide-react';
+import { type ReactNode } from 'react';
+import { AlertTriangle, CircleAlert, Download } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { formatIsoDate } from '@/utils/dates';
 
-const WIND_ALERT_MPH = 10;
+const EMPTY_VALUE = '\u2014';
 
 function fmt(ts: number): string {
   return new Date(ts).toLocaleDateString();
@@ -11,6 +14,23 @@ function fmt(ts: number): string {
 
 function fmtDate(d?: string): string {
   return d ? formatIsoDate(d) : '—';
+}
+
+interface AuditDetailProps {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}
+
+function AuditDetail({ label, children, className }: AuditDetailProps) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className={cn('mt-0.5 break-words font-mono text-sm text-foreground', className)}>
+        {children}
+      </dd>
+    </div>
+  );
 }
 
 interface SprayAuditRow {
@@ -51,27 +71,30 @@ export default function SprayAuditReport({
   onExportPdf,
 }: SprayAuditReportProps) {
   return (
-    <div className="space-y-4">
-      <div className="bg-card border border-border rounded-lg p-4 print:border-foreground/20">
-        <h2 className="font-bold text-foreground text-base mb-1">Pesticide Application Record</h2>
-        <p className="text-xs text-muted-foreground mb-1">
-          Private applicator license compliance audit trail. Generated {reportDate}.
-        </p>
+    <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-foreground">Pesticide Application Record</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            Private applicator license compliance audit trail. Generated {reportDate}.
+          </p>
+        </div>
 
-        <div className="flex gap-2 pb-4 print:hidden">
+        <div className="grid grid-cols-2 gap-2 sm:flex print:hidden">
           <Button
+            type="button"
             size="sm"
             variant="outline"
-            className="h-8 text-[11px] font-mono border-spray/30 text-spray hover:bg-spray/10"
+            className="h-11 rounded-lg border-spray/30 font-mono text-xs text-spray hover:bg-spray/10"
             onClick={onExportCsv}
           >
             <Download size={12} className="mr-1.5" />
             CSV
           </Button>
           <Button
+            type="button"
             size="sm"
             variant="outline"
-            className="h-8 text-[11px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+            className="h-11 rounded-lg border-primary/30 font-mono text-xs text-primary hover:bg-primary/10"
             onClick={onExportPdf}
           >
             <Download size={12} className="mr-1.5" />
@@ -80,56 +103,77 @@ export default function SprayAuditReport({
         </div>
 
         {sprayRows.length === 0 ? (
-          <p className="text-center text-muted-foreground text-sm py-8">
+          <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
             No spray records to report
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {sprayRows.map(r => (
-              <div key={r._rowKey} className="border border-border/50 rounded-lg p-3 space-y-2 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-spray opacity-50" />
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-foreground text-sm tracking-tight">{r.fieldName}</span>
-                  <span className="font-mono text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                    {fmtDate(r.sprayDate) || fmt(r.timestamp)}{r.startTime ? ` @ ${r.startTime}${r.endTime ? '-' + r.endTime : ''}` : ''}
-                  </span>
+              <article key={r._rowKey} className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <h3 className="text-base font-bold tracking-tight text-foreground">{r.fieldName}</h3>
+                  <time className="break-words font-mono text-xs leading-relaxed text-muted-foreground sm:text-right">
+                    {r.sprayDate ? fmtDate(r.sprayDate) : fmt(r.timestamp)}
+                    {r.startTime ? ` at ${r.startTime}${r.endTime ? '-' + r.endTime : ''}` : ''}
+                  </time>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono">
-                  <div><span className="text-muted-foreground uppercase text-[11px]">Crop / Site:</span><div className="text-harvest font-bold">{r.cropOrSiteTreated || '—'}</div></div>
-                  <div><span className="text-muted-foreground uppercase text-[11px]">Target Pest:</span> <span className="text-foreground font-bold">{r.targetPest || '—'}</span></div>
-                  <div><span className="text-muted-foreground uppercase text-[11px]">Product:</span><div className="text-spray font-bold">{r.product}</div></div>
-                  <div><span className="text-muted-foreground uppercase text-[11px]">EPA Reg #:</span><div className="text-foreground">{r.epaRegNumber || '—'}</div></div>
-                  <div><span className="text-muted-foreground uppercase text-[11px]">Rate / Ac:</span><div className="text-foreground">{r.applicationRate ? `${r.applicationRate} ${r.rateUnit || ''}` : '—'}</div></div>
-                  <div><span className="text-muted-foreground uppercase text-[11px]">Total Acres Treated:</span><div className="text-foreground font-bold">{r.treatedAreaSize || '—'}</div></div>
-                  <div><span className="text-muted-foreground uppercase text-[11px]">Total Product:</span><div className="text-foreground font-bold">{r.amountDisplay}</div></div>
-                  <div><span className="text-muted-foreground uppercase text-[11px]">Equipment:</span><div className="text-foreground">{r.equipmentId || '—'}</div></div>
-                  <div className="col-span-2 pt-1 border-t border-border/30 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                    <div><span className="text-muted-foreground uppercase text-[11px]">Applicator:</span> <span className="text-foreground/80">{r.applicatorName || '—'}</span></div>
-                    <div><span className="text-muted-foreground uppercase text-[11px]">License:</span> <span className="text-foreground/80">{r.licenseNumber || '—'}</span></div>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border/60 pt-4">
+                  <AuditDetail label="Crop / site" className="font-bold text-harvest">
+                    {r.cropOrSiteTreated || EMPTY_VALUE}
+                  </AuditDetail>
+                  <AuditDetail label="Target pest" className="font-bold">
+                    {r.targetPest || EMPTY_VALUE}
+                  </AuditDetail>
+                  <AuditDetail label="Product" className="font-bold text-spray">
+                    {r.product}
+                  </AuditDetail>
+                  <AuditDetail label="EPA registration">
+                    {r.epaRegNumber || EMPTY_VALUE}
+                  </AuditDetail>
+                  <AuditDetail label="Rate per acre">
+                    {r.applicationRate != null ? `${r.applicationRate} ${r.rateUnit || ''}`.trim() : EMPTY_VALUE}
+                  </AuditDetail>
+                  <AuditDetail label="Acres treated" className="font-bold">
+                    {r.treatedAreaSize != null ? r.treatedAreaSize : EMPTY_VALUE}
+                  </AuditDetail>
+                  <AuditDetail label="Total product" className="font-bold">
+                    {r.amountDisplay}
+                  </AuditDetail>
+                  <AuditDetail label="Equipment">
+                    {r.equipmentId || EMPTY_VALUE}
+                  </AuditDetail>
+                  <div className="col-span-2 mt-1 grid grid-cols-2 gap-4 border-t border-border/60 pt-3">
+                    <AuditDetail label="Applicator">{r.applicatorName || EMPTY_VALUE}</AuditDetail>
+                    <AuditDetail label="License">{r.licenseNumber || EMPTY_VALUE}</AuditDetail>
                   </div>
-                  <div className="col-span-2 pt-1 flex flex-wrap gap-x-4 text-[11px] opacity-80">
-                    <div><span className="text-muted-foreground uppercase text-[11px]">Wind:</span> <span className="text-foreground">{r.windSpeed} mph {r.windDirection || ''}</span></div>
-                    <div><span className="text-muted-foreground uppercase text-[11px]">Temp:</span> <span className="text-foreground">{r.temperature}°F</span></div>
-                    <div><span className="text-muted-foreground uppercase text-[11px]">Hum:</span> <span className="text-foreground">{r.relativeHumidity != null ? `${r.relativeHumidity}%` : '—'}</span></div>
+                  <div className="col-span-2 grid grid-cols-3 gap-3 border-t border-border/60 pt-3">
+                    <AuditDetail label="Wind">{r.windSpeed} mph {r.windDirection || ''}</AuditDetail>
+                    <AuditDetail label="Temp">
+                      {r.temperature != null ? `${r.temperature}\u00B0F` : EMPTY_VALUE}
+                    </AuditDetail>
+                    <AuditDetail label="Humidity">
+                      {r.relativeHumidity != null ? `${r.relativeHumidity}%` : EMPTY_VALUE}
+                    </AuditDetail>
                   </div>
-                </div>
-                <div className="flex gap-2 flex-wrap pt-1 print:hidden">
+                </dl>
+                <div className="flex flex-wrap gap-2 print:hidden">
                   {r.windSpeed > WIND_ALERT_MPH && (
-                    <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                      ⚠ WIND ALERT
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Wind alert
                     </span>
                   )}
                   {!r.epaRegNumber && (
-                    <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/20">
-                      NON-COMPLIANT: NO EPA #
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/20 bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive">
+                      <CircleAlert className="h-3.5 w-3.5" />
+                      Missing EPA registration
                     </span>
                   )}
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
-      </div>
-    </div>
+    </section>
   );
 }
