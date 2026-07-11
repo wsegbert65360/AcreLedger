@@ -95,11 +95,13 @@ Every page follows the same sticky header structure:
 </header>
 ```
 
-### Field Card Status Dots
-Field cards display a colored dot in the top-right corner:
-- 🟢 Green (`bg-plant`): field has a planting record
-- 🔵 Blue (`bg-spray`): field has activity but no planting record
-- ⚪ Gray (`bg-muted-foreground/30`): no activity this season
+### Field Card Status Pills
+Field cards render a **high-contrast inline labeled pill** next to the field name — not an absolute-positioned corner dot (the old dot pattern was retired because it overlapped thumbnails and failed contrast). The pill maps the field's seasonal activity summary to a label and theme color via `ACTIVITY_TEXT_COLORS`:
+- **Planted** (`bg-plant/10 text-plant border-plant/20`): field has a planting record.
+- **Activity logged** (`bg-spray/10 text-spray border-spray/20`): field has spray/fertilizer activity but no planting record.
+- **No activity** (`bg-muted text-muted-foreground border-border`): no activity this season.
+
+To the right of the card, seasonal activity icons show count-badged sprays (`x<count>`) plus plant/fertilizer markers, colored through the centralized `activityIcons` maps rather than inline classes.
 
 ### Bin Capacity Bar Colors
 Bin fill bars change color by percentage:
@@ -108,9 +110,9 @@ Bin fill bars change color by percentage:
 - `bg-destructive` (red): > 85%
 
 ### Bottom Navigation
-- Active tab: `text-primary`, bold label, `strokeWidth={2.5}`, animated pill background via `layoutId="bottom-nav-pill"`, and a small dot indicator below the label.
+- Active tab: `text-primary`, bold label, `strokeWidth={2.5}`, an absolute-positioned `bg-primary/10 border-primary/20` pill behind the icon (`-z-10`, `animate-in fade-in`), and a small dot indicator below the label.
 - Inactive tab: `text-muted-foreground`, normal weight, `strokeWidth={1.5}`.
-- Bar uses `bg-card/90 backdrop-blur-lg`.
+- Bar uses `bg-card/90 backdrop-blur-lg`. The activity and reports tabs carry stable coachmark `id`s (`coachmark-activity-tab`, `coachmark-reports-tab`).
 
 ### Auth Screen
 Dark background matching the app's default theme. Uses a `Sprout` icon hero with the AcreLedger brand name and tagline. The auth card is `rounded-2xl` with `bg-card border border-border`. Inputs use `bg-background` to stand out from the card surface.
@@ -186,6 +188,31 @@ Hay cutting event. Tracked by cutting number per field per season.
 { id, farm_id, fieldId, fieldName, baleCount, baleType, cuttingNumber,
   timestamp, seasonYear, deleted_at }
 ```
+
+### CustomSprayRecord
+Lightweight log of a spray application performed by an **outside applicator** (co-op / custom
+sprayer). Modeled on the hay record — NOT a compliance `SprayRecord` — so the universal spray-log
+PDF and the non-compliant review queue stay driven by full `SprayRecord`s. Reached from the Spray
+button via `SprayTypeChooser`, not a top-level activity button.
+```ts
+{ id, farm_id, fieldId, fieldName, date, applicationTime, applicator, recipe?,
+  windSpeed?, windDirection?, temperature?, notes?,
+  seasonYear, timestamp, deleted_at }
+```
+- **Required**: `applicator`, `date`, and `applicationTime` (`HH:mm`, local application time).
+- **Optional**: `recipe` (free text), weather (`windSpeed`/`windDirection`/`temperature`), and
+  `notes`. Weather remains manually editable, but the user can explicitly tap **Pull historical
+  weather** after selecting the application date/time. `CustomSprayModal` calls
+  `WeatherService.fetchHistoricalConditions` with the field coordinates and does not auto-fetch or
+  overwrite manual values when the lookup fails or returns no data.
+- **`customSpray`** is a member of `ActivityType` and the `ActivityRecord` union (reuses the spray
+  icon/colors). Records render in the Spray tab via `CustomSprayTab` (under the regular `SprayTab`)
+  and in All / field history, but are excluded from `sprayExport.ts` and the non-compliant review
+  queue.
+- **Persistence**: `custom_spray_records` table, CRUD via `useCustomSprayRecords.ts` following the
+  same farm-scope, season-stamp, soft-delete, and optimistic-update rules as the other activity
+  hooks. In the sync queue `ALLOWED_TABLES` set and in the backup/restore payload +
+  `restore_farm_backup` RPC. Mappers: `mapCustomSprayFromDb` / `mapCustomSprayToDb`.
 
 ### TillageRecord
 Track tillage events (Disk, Cultivation, etc.) per field per season.
@@ -381,13 +408,20 @@ ALTER TABLE public.your_table ENABLE ROW LEVEL SECURITY;
 ```
 
 ### Tenant Isolation (RLS)
-Every table MUST have Row Level Security (RLS) enabled with a policy that restricts access to the user's `farm_id`.
+Every table MUST have Row Level Security enabled with a policy that restricts access to the user's `farm_id`.
 ```sql
 CREATE POLICY "Users can access their farm data" ON public.your_table
   FOR ALL TO authenticated
   USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()))
   WITH CHECK (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()));
 ```
+**Soft-delete enforcement:** farm record tables grant `SELECT, INSERT, UPDATE` to `authenticated`
+and do not grant `DELETE`, since the app never hard-deletes. Core activity tables rely on the
+client `deleted_at IS NULL` filter for reads. Newer tables such as `custom_spray_records` also add
+`AND deleted_at IS NULL` at the SELECT-policy level so soft-deleted rows stay unreadable even if a
+client query forgets the filter. Restore still works through the authenticated
+`restore_farm_backup` `SECURITY DEFINER` wrapper; its internal restore helpers must not be granted
+to `anon` or `authenticated`. Match this stricter table pattern for new farm records.
 
 ### Mapper Pattern
 Every entity has a dedicated mapper in `@/lib/mappers.ts`.
@@ -437,7 +471,18 @@ module level.
 
 ### Universal Spray Log Export
 The `generateSprayPDF` utility (`@/lib/sprayExport.ts`) provides a production-grade, state-neutral
-PDF export for spray records. It handles both single-record and multi-record exports.
+PDF export for spray records. It handles both single-record and multi-record exports. It is driven
+exclusively by full `SprayRecord`s — `CustomSprayRecord`s are intentionally excluded.
+
+### Spray Entry Chooser (`SprayTypeChooser.tsx`)
+Tapping **Spray** does not open `SprayModal` directly. It opens `SprayTypeChooser`
+(`src/components/SprayTypeChooser.tsx`), a two-option prompt: full compliance spray entry vs. a
+lightweight custom (outside-party) spray. It remembers the last choice in per-user localStorage
+(`al_spray_entry_choice_<userId>`, scoped via `userPrefix = session?.user?.id`) so the common path
+stays a single tap. The chooser intercepts the spray click in **both** entry points:
+`FieldDetailScreen.tsx` (`FIELD_ACTIONS`) and `QuickAddDialog.tsx` — keep both interception points
+in sync when changing spray entry wiring. The chosen type flows into `App.tsx`'s `ModalMap`, which
+must keep `customSpray: CustomSprayModal` registered so the Quick Add → custom spray path renders.
 
 ### Field Dashboard (Mobile-First)
 The `FieldDetailScreen` follows a "Daily Status Board" pattern ordered by farmer usage
@@ -464,9 +509,31 @@ inline; that pattern was retired because it pushed actionable content below the 
 The operation-total summary and per-crop filter pills live in a static `rounded-2xl`
 container in the scrollable dashboard body, directly below the `WeatherBar`. They are
 **not** a floating/sticky footer — an earlier floating footer overlapped field cards and
-the OS home indicator and was removed. The page container keeps
-`pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` so the last field card clears
-the fixed `BottomNav` (`.touch-target` ≈ `4rem` + safe-area).
+the OS home indicator and was removed.
+
+### Season Selector (`SeasonSelect.tsx`)
+The viewing-season dropdown is centralized in `src/components/SeasonSelect.tsx` and consumed by
+the Sidebar, Index, Activity, and Reports pages. It reads `activeSeason`, `viewingSeason`,
+`setViewingSeason`, and `seasonOptions` directly from `useFarm()` — **do not** redeclare a local
+`Select` + `seasonOptions.map` inline. It exposes a `variant="sidebar"` mode (full-width, sidebar
+theme) and accepts a `className`/`contentClassName` for per-page sizing. Callers must not hardcode
+season options; they come from the `seasonOptions` computed in `farmStore.tsx`.
+
+### Bottom Padding & FAB Visibility
+Page container bottom padding must clear the fixed `BottomNav` (`.touch-target` ≈ `4rem` +
+`pb-[env(safe-area-inset-bottom)]`). The exact value depends on whether the global Quick Add FAB is
+shown on that page (`App.tsx` → `hideQuickAddFab`):
+- **FAB shown** (Index, Reports, Settings, Weather, and other root pages): the FAB floats at
+  `bottom-[calc(4.5rem+...)]`, so the page container uses
+  `pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` so the last card clears both the nav
+  and the FAB.
+- **FAB hidden** (`/activity`, `/logistics`, `/onboarding`, `/privacy`, and `/field/*`): use
+  `pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` (nav only). `FieldDetailScreen` uses
+  `6rem` because it renders its own in-flow Quick Actions grid and needs a little extra clearance.
+
+Never set page-container bottom padding below the nav height, or the last cards scroll under the
+tab bar. When adding a new top-level route, pick the value that matches whether the FAB renders on
+that route.
 
 ### ReportTable (Mobile Card Stack)
 `ReportTable` (`src/components/ReportTable.tsx`) wraps every report table and applies the
