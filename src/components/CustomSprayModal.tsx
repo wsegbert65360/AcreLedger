@@ -7,7 +7,7 @@ import { useFarm } from '@/store/farmStore';
 import { Field, CustomSprayRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { toast } from 'sonner';
-import { Cloud, User, Thermometer, Wind, FlaskConical, StickyNote, Loader2 } from 'lucide-react';
+import { Cloud, CloudDownload, Clock3, User, Thermometer, Wind, FlaskConical, StickyNote, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
 import { WeatherService } from '@/services/WeatherService';
 
@@ -19,19 +19,31 @@ interface CustomSprayModalProps {
     mode?: 'edit' | 'duplicate';
 }
 
+function getLocalDateValue(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getLocalTimeValue(): string {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
 export default function CustomSprayModal({ field, open, onClose, initialData, mode = 'edit' }: CustomSprayModalProps) {
     const isDuplicate = mode === 'duplicate' && !!initialData;
-    const shouldAutoPullWeather = !initialData || isDuplicate;
     const { addCustomSprayRecord, updateCustomSprayRecord, customSprayRecords, viewingSeason } = useFarm();
     const [applicator, setApplicator] = useState(initialData?.applicator || '');
     const [recipe, setRecipe] = useState(initialData?.recipe || '');
-    const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(initialData?.date || getLocalDateValue());
+    const [applicationTime, setApplicationTime] = useState(initialData?.applicationTime || getLocalTimeValue());
     const [windSpeed, setWindSpeed] = useState(initialData?.windSpeed?.toString() || '');
     const [windDirection, setWindDirection] = useState(initialData?.windDirection || '');
     const [temperature, setTemperature] = useState(initialData?.temperature?.toString() || '');
     const [notes, setNotes] = useState(initialData?.notes || '');
-    const [loadingWeather, setLoadingWeather] = useState(false);
-    const [weatherRefreshKey, setWeatherRefreshKey] = useState(0);
+    const [isRecoveringWeather, setIsRecoveringWeather] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     const suggested = useMemo(() => {
@@ -44,7 +56,8 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
         if (initialData) {
             setApplicator(initialData.applicator || '');
             setRecipe(isDuplicate ? '' : (initialData.recipe || ''));
-            setDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.date || new Date().toISOString().split('T')[0]));
+            setDate(isDuplicate ? getLocalDateValue() : (initialData.date || getLocalDateValue()));
+            setApplicationTime(isDuplicate ? getLocalTimeValue() : (initialData.applicationTime || ''));
             setWindSpeed(isDuplicate ? '' : (initialData.windSpeed?.toString() || ''));
             setWindDirection(isDuplicate ? '' : (initialData.windDirection || ''));
             setTemperature(isDuplicate ? '' : (initialData.temperature?.toString() || ''));
@@ -52,7 +65,8 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
         } else {
             setApplicator(suggested?.applicator || '');
             setRecipe(suggested?.recipe || '');
-            setDate(new Date().toISOString().split('T')[0]);
+            setDate(getLocalDateValue());
+            setApplicationTime(getLocalTimeValue());
             setWindSpeed('');
             setWindDirection('');
             setTemperature('');
@@ -61,39 +75,47 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, initialData?.id, isDuplicate]);
 
-    useEffect(() => {
-        if (!open || !shouldAutoPullWeather || field.lat == null || field.lng == null) {
-            if (open) setLoadingWeather(false);
+    const handleRecoverWeather = async () => {
+        if (field.lat == null || field.lng == null) {
+            toast.error('This field needs a location before weather can be recovered.');
+            return;
+        }
+        if (!date || !applicationTime) {
+            toast.error('Choose the application date and time first.');
             return;
         }
 
-        const controller = new AbortController();
-        setLoadingWeather(true);
+        setIsRecoveringWeather(true);
+        try {
+            const weather = await WeatherService.fetchHistoricalConditions(
+                field.lat,
+                field.lng,
+                date,
+                applicationTime,
+            );
 
-        WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`, controller.signal)
-            .then(weather => {
-                if (controller.signal.aborted || !weather || weather.isError) return;
+            if (!weather) {
+                toast.error('Could not find historical weather for that time.');
+                return;
+            }
 
-                const resolvedWind = Number.isFinite(weather.wind) ? weather.wind : 0;
-                const resolvedDirection = weather.windDirection && weather.windDirection !== '—'
-                    ? weather.windDirection
-                    : resolvedWind === 0 ? 'CALM' : '';
+            const resolvedWind = Number.isFinite(weather.wind) ? weather.wind : 0;
+            const resolvedDirection = weather.windDirection && weather.windDirection !== '—'
+                ? weather.windDirection
+                : resolvedWind === 0 ? 'CALM' : '';
 
-                setWindSpeed(current => current || String(resolvedWind));
-                setWindDirection(current => current || resolvedDirection);
-                setTemperature(current => current || (Number.isFinite(weather.temp) ? String(weather.temp) : ''));
-            })
-            .catch(() => {
-                // Manual weather entry remains available when the automatic pull fails.
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setLoadingWeather(false);
-            });
+            setWindSpeed(String(resolvedWind));
+            setWindDirection(resolvedDirection);
+            setTemperature(Number.isFinite(weather.temp) ? String(weather.temp) : '');
+            toast.success(`Recovered weather for ${date} at ${applicationTime}.`);
+        } catch {
+            toast.error('Historical weather recovery failed.');
+        } finally {
+            setIsRecoveringWeather(false);
+        }
+    };
 
-        return () => controller.abort();
-    }, [open, shouldAutoPullWeather, initialData?.id, field.lat, field.lng, weatherRefreshKey]);
-
-    const isValid = applicator.trim() !== '' && date !== '';
+    const isValid = applicator.trim() !== '' && date !== '' && applicationTime !== '';
 
     const handleSubmit = async (keepOpen = false) => {
         if (!isValid) {
@@ -105,6 +127,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
             fieldId: field.id,
             fieldName: field.name,
             date,
+            applicationTime,
             applicator: applicator.trim(),
             recipe: recipe.trim() || undefined,
             windSpeed: windSpeed !== '' ? Number(windSpeed) : undefined,
@@ -127,11 +150,11 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                 if (keepOpen) {
                     setApplicator('');
                     setRecipe('');
+                    setApplicationTime(getLocalTimeValue());
                     setWindSpeed('');
                     setWindDirection('');
                     setTemperature('');
                     setNotes('');
-                    setWeatherRefreshKey(current => current + 1);
                     toast.success('Record saved. Ready for next entry.');
                 } else {
                     onClose();
@@ -162,7 +185,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                         </span>
                     </DialogTitle>
                     <DialogDescription className="sr-only">
-                        Log a spray application performed by an outside (custom) applicator.
+                        Log an outside applicator spray and recover historical weather for its date and time.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -190,16 +213,33 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                         />
                     </div>
 
-                    <div>
-                        <Label htmlFor="csDate" className="text-muted-foreground font-mono text-[11px] uppercase">Application Date</Label>
-                        <Input
-                            id="csDate"
-                            name="csDate"
-                            type="date"
-                            value={date}
-                            onChange={e => setDate(e.target.value)}
-                            className="mt-1 bg-muted border-border text-foreground font-mono"
-                        />
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label htmlFor="csDate" className="text-muted-foreground font-mono text-[11px] uppercase">
+                                Application Date *
+                            </Label>
+                            <Input
+                                id="csDate"
+                                name="csDate"
+                                type="date"
+                                value={date}
+                                onChange={e => setDate(e.target.value)}
+                                className="mt-1 bg-muted border-border text-foreground font-mono"
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="csTime" className="flex items-center gap-1 text-[11px] font-mono uppercase text-muted-foreground">
+                                <Clock3 size={11} /> Time *
+                            </Label>
+                            <Input
+                                id="csTime"
+                                name="csTime"
+                                type="time"
+                                value={applicationTime}
+                                onChange={e => setApplicationTime(e.target.value)}
+                                className="mt-1 bg-muted border-border text-foreground font-mono"
+                            />
+                        </div>
                     </div>
 
                     <div>
@@ -217,16 +257,29 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                         />
                     </div>
 
-                    <div className="border-t border-border/20 pt-3" aria-busy={loadingWeather}>
-                        <div className="mb-2 flex min-h-5 items-center justify-between gap-3">
-                            <span className="text-xs font-semibold text-muted-foreground">Weather</span>
-                            {loadingWeather && (
-                                <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                    <Loader2 size={13} className="animate-spin" />
-                                    Pulling weather
-                                </span>
-                            )}
+                    <div className="border-t border-border/20 pt-3" aria-busy={isRecoveringWeather}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                            <span className="text-xs font-semibold text-muted-foreground">Weather at application</span>
                         </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleRecoverWeather}
+                            disabled={isRecoveringWeather || !date || !applicationTime}
+                            className="mb-3 h-11 w-full rounded-lg border-spray/30 text-spray hover:bg-spray/10"
+                        >
+                            {isRecoveringWeather ? (
+                                <>
+                                    <Loader2 className="animate-spin" size={16} />
+                                    Pulling historical weather
+                                </>
+                            ) : (
+                                <>
+                                    <CloudDownload size={16} />
+                                    Pull historical weather
+                                </>
+                            )}
+                        </Button>
                         <div className="grid grid-cols-3 gap-3">
                             <div>
                                 <Label htmlFor="csWind" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1 uppercase">
@@ -238,7 +291,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                                     type="number"
                                     value={windSpeed}
                                     onChange={e => setWindSpeed(e.target.value)}
-                                    placeholder={loadingWeather ? '...' : 'mph'}
+                                    placeholder="mph"
                                     className="mt-1 bg-muted border-border font-mono text-foreground"
                                 />
                             </div>
@@ -249,7 +302,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                                     name="csWindDir"
                                     value={windDirection}
                                     onChange={e => setWindDirection(e.target.value)}
-                                    placeholder={loadingWeather ? '...' : 'NW'}
+                                    placeholder="NW"
                                     className="mt-1 bg-muted border-border font-mono text-foreground"
                                 />
                             </div>
@@ -263,7 +316,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                                     type="number"
                                     value={temperature}
                                     onChange={e => setTemperature(e.target.value)}
-                                    placeholder={loadingWeather ? '...' : '72'}
+                                    placeholder="72"
                                     className="mt-1 bg-muted border-border font-mono text-foreground"
                                 />
                             </div>

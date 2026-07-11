@@ -157,6 +157,7 @@ export interface CustomSprayRecordRow {
     field_id: string;
     field_name: string;
     date: string;
+    application_time?: string | null;
     applicator: string;
     recipe?: string | null;
     wind_speed?: number | null;

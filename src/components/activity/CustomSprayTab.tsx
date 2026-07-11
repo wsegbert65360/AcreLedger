@@ -24,7 +24,8 @@ function buildDetails(r: CustomSprayRecord): string {
 }
 
 function buildDate(r: CustomSprayRecord): string {
-  return formatIsoDate(r.date) || formatDate(r.timestamp);
+  const displayDate = formatIsoDate(r.date) || formatDate(r.timestamp);
+  return r.applicationTime ? `${displayDate} ${r.applicationTime}` : displayDate;
 }
 
 export default function CustomSprayTab({ records, selected, onToggle, onEdit, onDuplicate }: CustomSprayTabProps) {

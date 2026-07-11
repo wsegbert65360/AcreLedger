@@ -261,6 +261,8 @@ export interface CustomSprayRecord {
   fieldName: string;
   /** ISO date the application was performed. */
   date: string;
+  /** Local time the application was performed (HH:mm). */
+  applicationTime?: string;
   /** Who performed the application — outside-party company or person. */
   applicator: string;
   /** Free-text tank mix / recipe (e.g. "Roundup 32oz/ac + AMS"). */

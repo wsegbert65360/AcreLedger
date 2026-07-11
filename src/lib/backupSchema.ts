@@ -182,6 +182,7 @@ export const customSprayRecordSchema = z.object({
   fieldId: z.string(),
   fieldName: z.string().optional(),
   date: z.string().optional(),
+  applicationTime: z.string().optional(),
   applicator: z.string().optional(),
   recipe: z.string().optional(),
   windSpeed: z.number().optional(),

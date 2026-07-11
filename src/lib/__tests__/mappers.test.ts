@@ -126,6 +126,7 @@ describe('Mappers Round-Trip', () => {
             fieldId: 'field-1',
             fieldName: 'North Field',
             date: '2026-04-15',
+            applicationTime: '13:45',
             applicator: 'Helena',
             recipe: 'Roundup 32oz/ac + AMS',
             windSpeed: 7,
@@ -147,6 +148,7 @@ describe('Mappers Round-Trip', () => {
         expect(result.temperature).toBe(original.temperature);
         expect(result.notes).toBe(original.notes);
         expect(result.date).toBe(original.date);
+        expect(result.applicationTime).toBe(original.applicationTime);
     });
 
     it('should preserve zero weather values and undefined optionals for CustomSprayRecord', () => {

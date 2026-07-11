@@ -60,11 +60,12 @@ function getRecordInfo(record: ActivityRecord) {
       const wind = r.windSpeed != null ? `${r.windSpeed} MPH ${r.windDirection || ''}`.trim() : null;
       const temp = r.temperature != null ? `${r.temperature}°F` : null;
       const conditions = [wind, temp].filter(Boolean).join(' · ');
+      const displayDate = formatIsoDate(r.date) || formatDate(r.timestamp);
       return {
         title: cleanName(r.fieldName),
         subtitle: r.applicator || 'Custom spray',
         details: conditions ? `${r.recipe || 'No recipe'} · ${conditions}` : (r.recipe || 'No recipe'),
-        date: formatIsoDate(r.date) || formatDate(r.timestamp)
+        date: r.applicationTime ? `${displayDate} ${r.applicationTime}` : displayDate
       };
     }
     case 'fertilizer': {

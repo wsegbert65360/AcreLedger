@@ -27,6 +27,10 @@ ALTER TABLE public.custom_spray_records ENABLE ROW LEVEL SECURITY;
 -- Defense-in-depth: hide soft-deleted rows at the policy level so they stay
 -- unreadable even if a client query forgets the `deleted_at IS NULL` filter.
 -- (Core tables rely on the client filter for reads; this new table enforces it.)
+DROP POLICY IF EXISTS custom_spray_records_select ON public.custom_spray_records;
+DROP POLICY IF EXISTS custom_spray_records_insert ON public.custom_spray_records;
+DROP POLICY IF EXISTS custom_spray_records_update ON public.custom_spray_records;
+
 CREATE POLICY custom_spray_records_select ON public.custom_spray_records
     FOR SELECT TO authenticated USING (
         farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
@@ -43,6 +47,8 @@ CREATE POLICY custom_spray_records_update ON public.custom_spray_records
 
 -- Soft-delete only: the app never hard-deletes farm records, so authenticated
 -- gets SELECT/INSERT/UPDATE only (matches the hardened core tables).
+REVOKE ALL ON TABLE public.custom_spray_records FROM anon;
+REVOKE ALL ON TABLE public.custom_spray_records FROM authenticated;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.custom_spray_records TO authenticated;
 GRANT ALL ON TABLE public.custom_spray_records TO service_role;
 

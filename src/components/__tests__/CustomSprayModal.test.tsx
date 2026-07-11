@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CustomSprayModal from '../CustomSprayModal';
@@ -22,7 +22,14 @@ vi.mock('@/store/farmStore', () => ({
 
 vi.mock('@/services/WeatherService', () => ({
   WeatherService: {
-    fetchCurrentWeather: vi.fn(),
+    fetchHistoricalConditions: vi.fn(),
+  },
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
   },
 }));
 
@@ -57,43 +64,38 @@ describe('CustomSprayModal weather', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue(null);
+    vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
   });
 
-  it('automatically fills weather for a new custom spray record', async () => {
-    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
+  it('pulls historical weather for the selected application date and time', async () => {
+    vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue({
       temp: 74,
       humidity: 48,
       wind: 7,
       windDirection: 'SSE',
-      isError: false,
-      precip24h: 0,
-      precip72h: 0,
-      precipProb: 0,
     });
 
     render(<CustomSprayModal field={field} open={true} onClose={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(WeatherService.fetchCurrentWeather).toHaveBeenCalledWith(
-        '40.25,-93.5',
-        expect.any(AbortSignal),
-      );
-    });
+    expect(WeatherService.fetchHistoricalConditions).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/Application Date/i), { target: { value: '2026-05-18' } });
+    fireEvent.change(screen.getByLabelText(/Time/i), { target: { value: '14:30' } });
+    fireEvent.click(screen.getByRole('button', { name: /Pull historical weather/i }));
 
     await waitFor(() => {
+      expect(WeatherService.fetchHistoricalConditions).toHaveBeenCalledWith(
+        40.25,
+        -93.5,
+        '2026-05-18',
+        '14:30',
+      );
       expect(screen.getByLabelText('Wind', { exact: true })).toHaveValue(7);
       expect(screen.getByLabelText('Dir', { exact: true })).toHaveValue('SSE');
       expect(screen.getByLabelText(/F$/i)).toHaveValue(74);
     });
   });
 
-  it('does not overwrite weather entered before the automatic pull finishes', async () => {
-    let resolveWeather: (value: any) => void = () => {};
-    vi.mocked(WeatherService.fetchCurrentWeather).mockImplementation(
-      () => new Promise(resolve => { resolveWeather = resolve; }),
-    );
-
+  it('keeps manual weather values when historical recovery finds no data', async () => {
     render(<CustomSprayModal field={field} open={true} onClose={vi.fn()} />);
 
     const windInput = screen.getByLabelText('Wind', { exact: true });
@@ -103,20 +105,13 @@ describe('CustomSprayModal weather', () => {
     fireEvent.change(windInput, { target: { value: '12' } });
     fireEvent.change(directionInput, { target: { value: 'NW' } });
     fireEvent.change(temperatureInput, { target: { value: '81' } });
+    fireEvent.click(screen.getByRole('button', { name: /Pull historical weather/i }));
 
-    await act(async () => {
-      resolveWeather({
-        temp: 74,
-        humidity: 48,
-        wind: 7,
-        windDirection: 'SSE',
-        isError: false,
-      });
+    await waitFor(() => {
+      expect(windInput).toHaveValue(12);
+      expect(directionInput).toHaveValue('NW');
+      expect(temperatureInput).toHaveValue(81);
     });
-
-    expect(windInput).toHaveValue(12);
-    expect(directionInput).toHaveValue('NW');
-    expect(temperatureInput).toHaveValue(81);
   });
 
   it('preserves saved weather when editing an existing record', async () => {
@@ -126,6 +121,7 @@ describe('CustomSprayModal weather', () => {
       fieldId: field.id,
       fieldName: field.name,
       date: '2026-07-01',
+      applicationTime: '09:30',
       applicator: 'County Co-op',
       windSpeed: 9,
       windDirection: 'W',
@@ -148,7 +144,27 @@ describe('CustomSprayModal weather', () => {
       expect(screen.getByLabelText('Wind', { exact: true })).toHaveValue(9);
       expect(screen.getByLabelText('Dir', { exact: true })).toHaveValue('W');
       expect(screen.getByLabelText(/F$/i)).toHaveValue(78);
+      expect(screen.getByLabelText(/Time/i)).toHaveValue('09:30');
     });
-    expect(WeatherService.fetchCurrentWeather).not.toHaveBeenCalled();
+    expect(WeatherService.fetchHistoricalConditions).not.toHaveBeenCalled();
+  });
+
+  it('saves the selected application time with the custom spray record', async () => {
+    render(<CustomSprayModal field={field} open={true} onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/Who Sprayed/i), { target: { value: 'County Co-op' } });
+    fireEvent.change(screen.getByLabelText(/Application Date/i), { target: { value: '2026-05-18' } });
+    fireEvent.change(screen.getByLabelText(/Time/i), { target: { value: '14:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Record Custom Spray' }));
+
+    await waitFor(() => {
+      expect(addCustomSprayRecordMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          date: '2026-05-18',
+          applicationTime: '14:30',
+          applicator: 'County Co-op',
+        }),
+      );
+    });
   });
 });
