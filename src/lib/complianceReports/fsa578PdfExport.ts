@@ -15,12 +15,35 @@ interface Fsa578PdfOptions {
 
 type SummaryRow = { label: string; acres: number };
 
+export interface Fsa578Reconciliation {
+  cropTotals: SummaryRow[];
+  tractTotals: SummaryRow[];
+  totalReportedAcres: number;
+}
+
 function sumBy(rows: Fsa578ReportRow[], getLabel: (row: Fsa578ReportRow) => string): SummaryRow[] {
   const totals = new Map<string, number>();
   rows.forEach(row => totals.set(getLabel(row), (totals.get(getLabel(row)) || 0) + row.acreage));
   return [...totals.entries()]
     .map(([label, acres]) => ({ label, acres: roundTo(acres, 2) }))
     .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+}
+
+function cluBoundaryKey(row: Fsa578ReportRow): string {
+  const cluNumber = row.fieldNumber.trim();
+  const boundaryId = cluNumber || `field:${row.fieldName.trim()}`;
+  return [row.farmNumber.trim(), row.tractNumber.trim(), boundaryId].join('|');
+}
+
+export function buildFsa578Reconciliation(rows: Fsa578ReportRow[]): Fsa578Reconciliation {
+  const reportingRows = rows.filter(row => row.landUse === 'Cropland');
+  const uniqueCluRows = [...new Map(reportingRows.map(row => [cluBoundaryKey(row), row])).values()];
+
+  return {
+    cropTotals: sumBy(reportingRows, row => `${display(row.crop)} / ${display(row.intendedUse)}`),
+    tractTotals: sumBy(uniqueCluRows, row => `Farm ${display(row.farmNumber)} / Tract ${display(row.tractNumber)}`),
+    totalReportedAcres: roundTo(uniqueCluRows.reduce((sum, row) => sum + row.acreage, 0), 2),
+  };
 }
 
 function display(value: string | undefined): string {
@@ -43,9 +66,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const reportingRows = rows.filter(row => row.landUse === 'Cropland');
-  const cropTotals = sumBy(reportingRows, row => `${display(row.crop)} / ${display(row.intendedUse)}`);
-  const tractTotals = sumBy(reportingRows, row => `Farm ${display(row.farmNumber)} / Tract ${display(row.tractNumber)}`);
-  const totalReportedAcres = roundTo(reportingRows.reduce((sum, row) => sum + row.acreage, 0), 2);
+  const { cropTotals, tractTotals, totalReportedAcres } = buildFsa578Reconciliation(rows);
 
   const drawHeader = (section: string, firstPage = false) => {
     doc.setTextColor(35, 64, 28);
@@ -98,6 +119,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
   });
 
   doc.addPage('a4', 'landscape');
+  const reconciliationStartPage = doc.getNumberOfPages();
   drawHeader('SECTION 2 - RECONCILIATION TOTALS');
   autoTable(doc, {
     ...tableDefaults,
@@ -106,6 +128,11 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     body: [...cropTotals.map(row => [row.label, row.acres]), ['TOTAL CROPLAND REPORTED', totalReportedAcres]],
     tableWidth: 120,
     columnStyles: { 0: { cellWidth: 85 }, 1: { cellWidth: 35, halign: 'right' } },
+    willDrawPage: () => {
+      if (doc.getCurrentPageInfo().pageNumber > reconciliationStartPage) {
+        drawHeader('SECTION 2 - RECONCILIATION TOTALS (continued)');
+      }
+    },
   });
   const cropFinalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 26;
   autoTable(doc, {
@@ -115,9 +142,15 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     body: tractTotals.map(row => [row.label, row.acres]),
     tableWidth: 120,
     columnStyles: { 0: { cellWidth: 85 }, 1: { cellWidth: 35, halign: 'right' } },
+    willDrawPage: () => {
+      if (doc.getCurrentPageInfo().pageNumber > reconciliationStartPage) {
+        drawHeader('SECTION 2 - RECONCILIATION TOTALS (continued)');
+      }
+    },
   });
 
   doc.addPage('a4', 'landscape');
+  const reviewStartPage = doc.getNumberOfPages();
   drawHeader('SECTION 3 - ITEMS TO REVIEW BEFORE FSA ENTRY');
   autoTable(doc, {
     ...tableDefaults,
@@ -130,6 +163,11 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
         })
       : [['READY', '-', 'No missing required reporting data was detected. FSA office review is still required.']],
     columnStyles: { 0: { cellWidth: 24 }, 1: { cellWidth: 65 }, 2: { cellWidth: 180 } },
+    willDrawPage: () => {
+      if (doc.getCurrentPageInfo().pageNumber > reviewStartPage) {
+        drawHeader('SECTION 3 - ITEMS TO REVIEW BEFORE FSA ENTRY (continued)');
+      }
+    },
   });
   let reviewY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 26) + 10;
   if (reviewY > pageHeight - 55) {
