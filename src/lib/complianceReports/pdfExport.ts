@@ -95,15 +95,22 @@ export function exportToPdf({
 
   if (footerText?.length) {
     const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
-    if (finalY + footerText.length * 6 > pageHeight - 20) {
-      doc.addPage();
-      finalY = 20;
-    }
+    const pageWidth = doc.internal.pageSize.width;
+    // Right margin mirrors the left (14) so text never runs off the page.
+    const maxWidth = pageWidth - 28;
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(40);
-    footerText.forEach((line) => {
+    // `splitTextToSize` wraps each source line to the page width; each wrapped
+    // line becomes its own entry so long footers (e.g. activity timelines)
+    // paginate correctly instead of overflowing the right edge.
+    const wrappedLines = footerText.flatMap(line => doc.splitTextToSize(line, maxWidth));
+    if (finalY + wrappedLines.length * 6 > pageHeight - 20) {
+      doc.addPage();
+      finalY = 20;
+    }
+    wrappedLines.forEach((line) => {
       if (finalY + 6 > pageHeight - 20) {
         doc.addPage();
         finalY = 20;

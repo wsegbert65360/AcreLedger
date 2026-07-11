@@ -51,6 +51,7 @@ export const fieldSchema = z.object({
   fsaTractNumber: z.string().optional(),
   fsaFieldNumber: z.string().optional(),
   producerShare: z.number().optional(),
+  landlordName: z.string().optional(),
   irrigationPractice: z.string().optional(),
   intendedUse: z.string().optional(),
   boundary: geoJsonGeometrySchema.nullable().optional(),

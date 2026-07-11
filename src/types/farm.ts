@@ -18,6 +18,7 @@ export interface Field {
   fsaTractNumber?: string;
   fsaFieldNumber?: string;
   producerShare?: number; // 0 to 100 (%)
+  landlordName?: string; // field-level owner/landlord for landlord summary reporting
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated';
   intendedUse?: string; // e.g. Grain, Forage, Seed
   farm_id: string;

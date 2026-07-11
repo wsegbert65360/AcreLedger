@@ -130,11 +130,14 @@ excluded by RLS policies server-side and by `.filter(r => !r.deleted_at)` client
 Physical farm field. Referenced by `fieldId` on all activity records.
 ```ts
 { id, name, acreage, lat, lng, intendedUse, fsaFarmNumber, fsaTractNumber,
-  irrigationPractice, notes, deleted_at, boundary: { type, coordinates } }
+  fsaFieldNumber, producerShare, landlordName, irrigationPractice, cluNumbers,
+  notes, deleted_at, boundary: { type, coordinates } }
 ```
 `notes` is a TEXT field used for informal scratchpad entries, persisted with auto-save.
 `lat`/`lng` may be null if geocoding was skipped — always guard before calling `.toFixed()`.
 `boundary` is a GeoJSON Polygon for field geometry.
+`producerShare` (0–100%) is the farmer/producer's own share; the harvest modal uses it to pre-suggest the landlord split as `100 - producerShare`.
+`landlordName` is the field-level owner/landlord used by the Landlord Summary report; new harvest records prefill it from the field.
 
 ### Bin
 Grain storage bin. Tracks capacity and identity.
@@ -181,6 +184,7 @@ Grain harvest event.
   timestamp, seasonYear, destination: 'bin' | 'town', landlordSplitPercent,
   landlordName, scaleTicketNumber, deleted_at }
 ```
+`landlordSplitPercent` is the landlord's crop-share % for this load (pre-suggested from the field's `producerShare` as `100 - producerShare`). `landlordName` here is a harvest-time override of the field-level `Field.landlordName`; new harvests prefill it from the field but the value is editable per record.
 
 ### HayHarvestRecord
 Hay cutting event. Tracked by cutting number per field per season.
@@ -546,9 +550,36 @@ restructures the `<table>` into stacked cards:
   the `td[colspan]` rules and render no label.
 
 Consequently every data `<td>` passed to `ReportTable` must include a `data-label` attribute
-matching its header (enforced in `AGENTS.md` → Responsive Tables). Standalone `<table>`s
-(the Landlord statement) do not use `ReportTable` and remain horizontally scrollable by
-design.
+matching its header (enforced in `AGENTS.md` → Responsive Tables). The Landlord report
+(`LandlordSummaryReport`) renders its Fields and Activity Timeline tables via `ReportTable`
+and must keep every cell `data-label`-attributed. The only standalone `<table>` that
+intentionally bypasses `ReportTable` is the Landlord statement's financial detail table.
+
+### Landlord Summary Report
+
+The **Landlord** tab in Reports (`src/components/reports/LandlordSummaryReport.tsx`) is a
+per-landlord overview driven by the field-level `Field.landlordName` (not the legacy
+harvest-only `HarvestRecord.landlordName`). Selecting a landlord shows:
+
+- **Fields overview** — one row per field with acres (CLU-aware via `getDisplayFieldAcres`),
+  crop, total bushels, bu/acre, and landlord crop-share bushels. Totals row uses a weighted
+  average for overall bu/acre.
+- **Activity Timeline** — all season-scoped activity (plant, spray, custom spray, fertilizer,
+  tillage, harvest) across the landlord's fields, sorted by date, with colored activity pills.
+- **Exports** — CSV (per-field summary + totals) and a **Detailed PDF** (landscape, fields
+  table + activity timeline in the footer).
+
+Generation lives in `src/lib/complianceReports/generateLandlordSummary.ts` (pure data builder,
+no React). A landlord appears in the selector only if they own at least one non-deleted field
+(`getFieldLandlordNames` filters on `deleted_at`). The older `LandlordStatementReport` /
+`generateLandlordStatement` (harvest-only crop-share math) is retained for its tests but no
+longer rendered.
+
+**Scope note — grain delivered vs owed:** the **owed** side (landlord crop-share bushels from
+harvest records) is computed and shown. The **delivered** side is **not** modeled because
+`GrainMovement` carries no `fieldId` or landlord link (only an optional `harvestRecordId` that
+`SellModal` doesn't populate). Adding delivered reconciliation would require a schema change to
+grain movements.
 
 ### FieldNotes Component (Auto-Save)
 Persistent scratchpad for field-specific notes. Uses a **2000ms debounce** on the `onChange`

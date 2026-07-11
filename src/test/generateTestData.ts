@@ -94,6 +94,7 @@ const WIND_DIRECTIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const EQUIPMENT_IDS = ['JD 4630', 'Hagie STS 12', 'Apache AS1220', 'Miller Nitro 5240', 'Rogator RG1300'];
 const APPLICATORS = ['John Smith', 'Mike Davis', 'Sarah Johnson', 'Tom Wilson', 'Bill Anderson'];
 const DESTINATIONS_SELL = ['MFA Elevator', 'Cargill', 'ADM', 'Local Co-op', 'River Terminal', 'Scoular Grain'];
+const LANDLORD_NAMES = [undefined, undefined, undefined, undefined, 'Riverside Farms LLC', 'Anderson Trust', 'Prairie Land Co'];
 const BIN_NAMES = [
   'Bin 1', 'Bin 2', 'Bin 3', 'Bin 4', 'Bin 5', 'Bin 6', 'Bin 7', 'Bin 8',
   'Flat Storage', 'Wet Bin', 'Dryer Bin', 'Leg Bin', 'Hopper Bin A', 'Hopper Bin B',
@@ -124,6 +125,7 @@ export function generateFields(count = 100): Field[] {
     fsaTractNumber: `${randInt(100, 999)}`,
     fsaFieldNumber: `${randInt(1, 50)}`,
     producerShare: pick([100, 100, 100, 66, 50, 75]),
+    landlordName: pick(LANDLORD_NAMES),
     irrigationPractice: pick(['Non-Irrigated', 'Non-Irrigated', 'Non-Irrigated', 'Irrigated']) as 'Irrigated' | 'Non-Irrigated',
     intendedUse: pick(INTENDED_USES),
     farm_id: 'test-farm',

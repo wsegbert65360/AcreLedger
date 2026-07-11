@@ -17,6 +17,7 @@ export interface FieldRow {
     fsa_tract_number?: string | null;
     fsa_field_number?: string | null;
     producer_share?: number | null;
+    landlord_name?: string | null;
     irrigation_practice?: string | null;
     intended_use?: string | null;
     boundary?: { type: string; coordinates: number[][][] } | null;

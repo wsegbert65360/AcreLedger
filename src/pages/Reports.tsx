@@ -10,9 +10,9 @@ import SprayAuditReport from '@/components/reports/SprayAuditReport';
 import FertilizerReport from '@/components/reports/FertilizerReport';
 import FallFsaReport from '@/components/reports/FallFsaReport';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
-import LandlordStatementReport from '@/components/reports/LandlordStatementReport';
+import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordStatement, generateLandlordStatementCSV, getUniqueLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
+import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -67,6 +67,8 @@ export default function Reports() {
     sprayRecords:         allSpray,
     harvestRecords:       allHarvest,
     hayHarvestRecords:    allHay,
+    customSprayRecords:   allCustomSpray,
+    tillageRecords:       allTillage,
 
     fertilizerApplications: allFertilizer,
     fields,
@@ -127,6 +129,16 @@ export default function Reports() {
     [...allFertilizer.filter(r => r.seasonYear === viewingSeason)]
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
   [allFertilizer, viewingSeason]);
+
+  const tillageRecords = useMemo(() =>
+    [...allTillage.filter(r => r.seasonYear === viewingSeason)]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+  [allTillage, viewingSeason]);
+
+  const customSprayRecords = useMemo(() =>
+    [...allCustomSpray.filter(r => r.seasonYear === viewingSeason)]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+  [allCustomSpray, viewingSeason]);
 
   // Expanded spray rows — memoized, keyed by index to avoid product-name collisions
   const sprayRows = useMemo(() => sprayRecords.flatMap(r => {
@@ -204,14 +216,25 @@ export default function Reports() {
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
 
-  // Landlord specific logic
+  // Landlord specific logic — driven by field-level landlord assignment
   const [selectedLandlord, setSelectedLandlord] = useState<string>('');
-  const uniqueLandlords = useMemo(() => getUniqueLandlordNames(harvestRecords), [harvestRecords]);
+  const uniqueLandlords = useMemo(() => getFieldLandlordNames(fields), [fields]);
 
-  const landlordStatement = useMemo(() => {
+  const landlordSummary = useMemo(() => {
     if (!selectedLandlord) return null;
-    return generateLandlordStatement(harvestRecords, selectedLandlord);
-  }, [harvestRecords, selectedLandlord]);
+    return generateLandlordSummary({
+      landlordName: selectedLandlord,
+      fields,
+      cluAssignments,
+      plantRecords,
+      sprayRecords,
+      customSprayRecords,
+      fertilizerApplications: fertilizerRecords,
+      tillageRecords,
+      harvestRecords,
+      seasonYear: viewingSeason,
+    });
+  }, [selectedLandlord, fields, cluAssignments, plantRecords, sprayRecords, customSprayRecords, fertilizerRecords, tillageRecords, harvestRecords, viewingSeason]);
 
   const getMergedFsaTractsForExport = async () => {
     if (bundledFsaTracts.length > 0) return mergedFsaTracts;
@@ -230,10 +253,10 @@ export default function Reports() {
   };
 
   const handleExportLandlordCSV = () => {
-    if (!landlordStatement) return;
+    if (!landlordSummary) return;
     safeExport(async () => {
-      const csv = generateLandlordStatementCSV(landlordStatement);
-      const fileName = sanitizeNativeFileName(`${selectedLandlord}_CropShare.csv`);
+      const csv = generateLandlordSummaryCSV(landlordSummary);
+      const fileName = sanitizeNativeFileName(`${selectedLandlord}_Summary_${viewingSeason}.csv`);
 
       if (Capacitor.isNativePlatform()) {
         await native.shareFile({
@@ -254,7 +277,7 @@ export default function Reports() {
       link.click();
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 2000); // Wait 2s to ensure browser starts download
-    }, 'landlord statement');
+    }, 'landlord summary');
   };
 
   const handleExportFsaPlantPdf = () => {
@@ -393,23 +416,30 @@ export default function Reports() {
   };
 
   const handleExportLandlordPdf = () => {
-    if (!landlordStatement) return;
+    if (!landlordSummary) return;
     safeExport(() => {
       exportToPdf({
-        title: 'Landlord Crop Share Statement',
-        subtitle: `Prepared for: ${selectedLandlord}. Generated ${reportDate}.`,
-        headers: ['FIELD', 'CROP', 'DATE', 'TOTAL BU.', 'SPLIT %', 'YOUR SHARE'],
-        rows: landlordStatement.rows.map(r => [
-          r.fieldName,
-          r.crop,
-          r.harvestDate, // already formatted MM/DD/YYYY in the statement generator
-          r.totalBushels.toLocaleString(),
-          `${r.landlordSplitPercent}%`,
-          r.landlordBushels.toLocaleString()
+        title: 'Landlord Summary',
+        subtitle: `${farmName ? farmName + ' — ' : ''}Prepared for: ${selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
+        orientation: 'landscape',
+        headers: ['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'LANDLORD SHARE'],
+        rows: landlordSummary.fields.map(f => [
+          f.fieldName,
+          f.crop ?? '—',
+          f.acres.toLocaleString(),
+          f.totalBushels.toLocaleString(),
+          f.buPerAcre != null ? f.buPerAcre.toLocaleString() : '—',
+          f.landlordShareBushels.toLocaleString(),
         ]),
-        fileName: sanitizeNativeFileName(`${selectedLandlord}_CropShare_${viewingSeason}.pdf`),
+        fileName: sanitizeNativeFileName(`${selectedLandlord}_Summary_${viewingSeason}.pdf`),
         summaryText: 'Total Landlord Share',
-        summaryValue: `${landlordStatement.totalLandlordBushels.toLocaleString()} BU`
+        summaryValue: `${landlordSummary.totals.landlordShareBushels.toLocaleString()} BU`,
+        footerText: landlordSummary.activity.length > 0
+          ? [
+              'Activity Timeline:',
+              ...landlordSummary.activity.map(a => `${a.date} · ${a.fieldName} · ${a.activityType}${a.crop ? ' (' + a.crop + ')' : ''} — ${a.detail}`),
+            ]
+          : undefined,
       });
     }, 'landlord PDF');
   };
@@ -554,13 +584,13 @@ export default function Reports() {
           />
         </TabsContent>
 
-        {/* ── Landlord Statement ──────────────────────────────────────────────── */}
+        {/* ── Landlord Summary ──────────────────────────────────────────────── */}
         <TabsContent value="landlord-statement" className="mt-0">
-          <LandlordStatementReport
+          <LandlordSummaryReport
             selectedLandlord={selectedLandlord}
             setSelectedLandlord={setSelectedLandlord}
             uniqueLandlords={uniqueLandlords}
-            landlordStatement={landlordStatement}
+            landlordSummary={landlordSummary}
             reportDate={reportDate}
             onExportCsv={handleExportLandlordCSV}
             onExportPdf={handleExportLandlordPdf}

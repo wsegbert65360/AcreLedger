@@ -57,12 +57,12 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       setLandlordSplit(field.producerShare ? (100 - field.producerShare).toString() : '0');
       setBushels('');
       setCrop(suggestedHarvest?.crop || field.intendedUse || '');
-      setLandlordName('');
+      setLandlordName(field.landlordName || '');
       setScaleTicketNumber('');
       setHarvestDate(new Date().toISOString().split('T')[0]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.id, field.id, field.producerShare, field.intendedUse, open, isDuplicate]);
+  }, [initialData?.id, field.id, field.producerShare, field.intendedUse, field.landlordName, open, isDuplicate]);
 
   const reset = () => {
     if (!initialData) {

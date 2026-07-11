@@ -57,6 +57,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [fsaTract, setFsaTract] = useState(editField?.fsaTractNumber || '');
   const [fsaField, setFsaField] = useState(editField?.fsaFieldNumber || '');
   const [producerShare, setProducerShare] = useState(editField?.producerShare?.toString() || '100');
+  const [landlord, setLandlord] = useState(editField?.landlordName || '');
   const [irrigation, setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
   const [intendedUse, setIntendedUse] = useState(editField?.intendedUse || 'Grain');
   const [notes, setNotes] = useState(editField?.notes || '');
@@ -82,6 +83,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       setFsaTract(editField.fsaTractNumber || '');
       setFsaField(editField.fsaFieldNumber || '');
       setProducerShare(editField.producerShare?.toString() || '100');
+      setLandlord(editField.landlordName || '');
       setIrrigation(editField.irrigationPractice || 'Non-Irrigated');
       setIntendedUse(editField.intendedUse || 'Grain');
       setNotes(editField.notes || '');
@@ -99,6 +101,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       setFsaTract('');
       setFsaField('');
       setProducerShare('100');
+      setLandlord('');
       setIrrigation('Non-Irrigated');
       setIntendedUse('Grain');
       setNotes('');
@@ -254,6 +257,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       fsaTractNumber: fsaTract.trim() || undefined,
       fsaFieldNumber: fsaField.trim() || undefined,
       producerShare: parseFloat(producerShare) || undefined,
+      landlordName: landlord.trim() || undefined,
       irrigationPractice: irrigation,
       intendedUse: intendedUse.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -522,16 +526,29 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             </div>
           </div>
 
-          <div className="pt-2">
-            <Label htmlFor="fieldProducerShare" className="text-muted-foreground font-mono text-xs uppercase">Producer Share %</Label>
-            <Input
-              id="fieldProducerShare"
-              name="fieldProducerShare"
-              type="number"
-              value={producerShare}
-              onChange={e => setProducerShare(e.target.value)}
-              className="mt-1 bg-muted border-border text-foreground font-mono"
-            />
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div>
+              <Label htmlFor="fieldProducerShare" className="text-muted-foreground font-mono text-xs uppercase">Producer Share %</Label>
+              <Input
+                id="fieldProducerShare"
+                name="fieldProducerShare"
+                type="number"
+                value={producerShare}
+                onChange={e => setProducerShare(e.target.value)}
+                className="mt-1 bg-muted border-border text-foreground font-mono"
+              />
+            </div>
+            <div>
+              <Label htmlFor="fieldLandlord" className="text-muted-foreground font-mono text-xs uppercase">Landlord</Label>
+              <Input
+                id="fieldLandlord"
+                name="fieldLandlord"
+                value={landlord}
+                onChange={e => setLandlord(e.target.value)}
+                placeholder="Optional"
+                className="mt-1 bg-muted border-border text-foreground font-mono"
+              />
+            </div>
           </div>
         </div>
 

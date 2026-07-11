@@ -35,6 +35,8 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/offlineStorage.ts` — offline persistent key-value store.
 - `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
 - `@/lib/complianceReports` — report generation.
+- `@/lib/complianceReports/generateLandlordSummary.ts` — Landlord Summary data builder (field-level landlord grouping, activity timeline, bu/acre + crop-share math, CSV export).
+- `@/components/reports/LandlordSummaryReport.tsx` — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
 - `@/lib/sprayExport.ts` — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
 - `@/types/fsaTract.ts` — canonical FSA tract import and CLU assignment types.
 - `@/lib/cluImport.ts` — CLU/FSA GeoJSON parsing and validation.
@@ -178,6 +180,18 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - FSA PDF output intentionally omits type/variety unless the user asks otherwise; preview/print/CSV may include it for farmer review.
 - FSA compliance reports (both FSA-578 and Fall Production worksheets) must include the farm name in their header subtitles for both on-screen UI preview tables and generated PDF exports.
 
+### Landlord Summary
+
+- The **Landlord** report tab (`LandlordSummaryReport.tsx` + `generateLandlordSummary.ts`) is a per-landlord overview driven by the **field-level** `Field.landlordName`, NOT the legacy harvest-only `HarvestRecord.landlordName`.
+- A landlord is selectable only if at least one non-deleted field carries their name (`getFieldLandlordNames` filters on `deleted_at`). Soft-deleting a landlord's last field removes them from the dropdown.
+- The summary aggregates all season-scoped activity (plant, spray, custom spray, fertilizer, tillage, harvest) across the landlord's fields into a date-sorted timeline, plus a per-field yield summary (acres via `getDisplayFieldAcres`, total bushels, bu/acre, and landlord crop-share bushels computed from each harvest's `landlordSplitPercent`).
+- Acreage must use `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, `field.acreage` fallback) — the canonical display acreage, never a raw `field.acreage` read.
+- Activity dates must format via `parseLocalDate` (from `@/utils/dates`), not `new Date(iso)`, to avoid the one-day-early UTC shift on date-only strings.
+- The report renders through `ReportTable` (mobile-cards); every `<td>` must carry `data-label` matching its header.
+- Exports: CSV (`generateLandlordSummaryCSV`, per-field + totals) and a landscape **Detailed PDF** via `exportToPdf` with the activity timeline in the footer. The PDF subtitle must include the farm name (per the FSA rule above). Long footer lines are wrapped via `doc.splitTextToSize` inside `exportToPdf`.
+- The older `LandlordStatementReport` / `generateLandlordStatement` (harvest-only crop-share statement) is retained for its tests but no longer rendered in the UI. Do not delete it without migrating its coverage.
+- **Grain delivered-vs-owed is intentionally out of scope.** The owed side (crop-share bushels) is computed; the delivered side is not, because `GrainMovement` has no field/landlord link (only an optional `harvestRecordId` that `SellModal` doesn't populate). Adding it is a separate schema change.
+
 ### Backup and Restore
 
 - Backup restore must treat the current selected `farm_id` as authoritative.
@@ -280,7 +294,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - `ReportTable` applies the `mobile-cards` class globally. On screens ≤ 768px each table renders as a stack of bordered cards instead of a horizontally-scrollable grid.
 - Every data `<td>` inside a `ReportTable` MUST carry a `data-label="<HEADER>"` matching its column header. Cells without `data-label` render as unlabeled, right-aligned cards on mobile.
 - Full-width rows (`<td colSpan={n}>` for banners, readiness checks, and empty states) MUST NOT carry `data-label`; they are handled automatically by the `td[colspan]` CSS rules and render full-width.
-- Standalone `<table>`s that bypass `ReportTable` (e.g. the Landlord statement) are excluded from the card layout by design. Do not add `mobile-cards` to them unless every cell also gets `data-label`.
+- Standalone `<table>`s that bypass `ReportTable` are excluded from the card layout by design. Do not add `mobile-cards` to them unless every cell also gets `data-label`. The Landlord Summary report (`LandlordSummaryReport.tsx`) uses `ReportTable` for both its Fields and Activity Timeline tables, so every cell there must carry `data-label`.
 
 ### Icons
 
@@ -443,7 +457,7 @@ While editing:
 
 1. Keep changes minimal and task-scoped.
 2. Preserve existing behavior unless the task explicitly asks to change it.
-3. Update types, mappers, database logic, UI, and reports together when the data model changes.
+3. Update types, mappers, database logic, UI, and reports together when the data model changes. For any new field/table, also update `backupSchema.ts` (the `.strict()` schemas reject unknown keys, so a missing entry throws on every save), add a Supabase migration, and extend `generateTestData.ts`.
 4. Do not leave TODOs in production code unless the user explicitly asks for scaffolding.
 
 After editing:
