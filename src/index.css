@@ -160,10 +160,18 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    background-image:
+      radial-gradient(circle at 12% 0%, hsl(var(--primary) / 0.07), transparent 28rem),
+      radial-gradient(circle at 92% 18%, hsl(var(--secondary) / 0.055), transparent 24rem);
+    background-attachment: fixed;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     padding-top: var(--safe-area-top);
     overscroll-behavior-y: contain;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
   }
 
   /* Scrollbar styling for OLED */

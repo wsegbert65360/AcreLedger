@@ -127,8 +127,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border print:hidden pb-0">
-        <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between gap-2 lg:max-w-5xl lg:px-8">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 shadow-sm backdrop-blur-xl print:hidden">
+        <div className="max-w-lg mx-auto px-4 py-2.5 flex items-center justify-between gap-2 lg:max-w-5xl lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Logo />
             <div className="flex min-w-0 flex-col">
@@ -143,7 +143,7 @@ const Index = () => {
             <button
               onClick={() => setAddOpen(true)}
               aria-label="Add new field"
-              className="flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:w-auto sm:px-3"
+              className="flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 text-xs font-semibold text-primary shadow-sm transition-all hover:bg-primary/15 active:scale-95 sm:w-auto sm:px-3"
             >
               <Plus size={16} className="text-primary" />
               <span className="hidden sm:inline">Add field</span>
@@ -151,7 +151,7 @@ const Index = () => {
             <button
               onClick={() => setManageOpen(true)}
               aria-label="Manage fields"
-              className="flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:w-auto sm:px-3"
+              className="flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/80 bg-card/70 text-xs font-semibold text-muted-foreground shadow-sm transition-all hover:bg-card hover:text-foreground active:scale-95 sm:w-auto sm:px-3"
             >
               <Settings size={16} />
               <span className="hidden sm:inline">Manage</span>
@@ -160,15 +160,21 @@ const Index = () => {
         </div>
 
       </header>
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-3 lg:max-w-5xl lg:px-8">
+      <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8 lg:py-6">
         <ErrorBoundary>
           <WeatherBar />
         </ErrorBoundary>
           <>
             {allFields.length > 0 && (
-              <div className="bg-muted/10 rounded-2xl border border-border/50 p-3 mb-4 space-y-2 mt-4">
-                <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest text-center">
-                  Total operation: {formatMeasurement(totalAcres, 'Acres')}
+              <section className="rounded-2xl border border-border/70 bg-card/75 p-3.5 shadow-sm backdrop-blur-sm space-y-3">
+                <div className="flex items-center justify-between gap-3 px-0.5">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground">Your operation</p>
+                    <p className="font-mono text-lg font-bold tracking-tight text-foreground">{formatMeasurement(totalAcres, 'Acres')}</p>
+                  </div>
+                  <span className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                    {allFields.length} field{allFields.length === 1 ? '' : 's'}
+                  </span>
                 </div>
                 <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
                   {cropTotals.map(([crop, acres]) => {
@@ -227,26 +233,26 @@ const Index = () => {
                     )}
                   </div>
                 )}
-              </div>
+              </section>
             )}
             {filteredRowCrops.length > 0 && (
-              <div className="space-y-1">
+              <section className="space-y-2">
                 {filteredPastureHay.length > 0 && (
-                  <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Row Crops</h2>
+                  <h2 className="px-1 text-sm font-bold tracking-tight text-foreground">Row crops</h2>
                 )}
                 <ErrorBoundary>
                   <FieldList fields={filteredRowCrops} />
                 </ErrorBoundary>
-              </div>
+              </section>
             )}
 
             {filteredPastureHay.length > 0 && (
-              <div className="space-y-1 pt-1">
-                <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Pasture & Hay</h2>
+              <section className="space-y-2 pt-1">
+                <h2 className="px-1 text-sm font-bold tracking-tight text-foreground">Pasture & hay</h2>
                 <ErrorBoundary>
                   <FieldList fields={filteredPastureHay} />
                 </ErrorBoundary>
-              </div>
+              </section>
             )}
             {allFields.length === 0 && (
               <div className="text-center py-12 px-4 border-2 border-dashed border-border rounded-xl bg-muted/30">

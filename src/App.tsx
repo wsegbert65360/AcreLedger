@@ -233,7 +233,7 @@ const AppContent = () => {
             native.haptic.light();
             openQuickAdd();
           }}
-          className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-14 w-14 items-center justify-center rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-2xl transition-transform active:scale-95 lg:hidden"
+          className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-14 w-14 items-center justify-center rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-[0_10px_30px_hsl(var(--primary)/0.35)] transition-all hover:-translate-y-0.5 active:scale-95 lg:hidden"
           aria-label="Quick add record"
         >
           <Plus size={24} strokeWidth={2.5} />

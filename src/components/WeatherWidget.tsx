@@ -136,12 +136,13 @@ export default function WeatherBar() {
   return (
     <div
       id="coachmark-weather"
-      className="group relative flex min-h-[90px] cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-2xl border border-border bg-card p-3 transition-transform active:scale-[0.98] min-[380px]:p-4"
+      className="group relative flex min-h-[96px] cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm transition-all hover:border-primary/20 hover:shadow-md active:scale-[0.985] min-[380px]:p-4"
       onClick={() => navigate('/weather')}
       role="button"
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter') navigate('/weather'); }}
     >
+      <div aria-hidden="true" className="pointer-events-none absolute -left-10 -top-14 h-36 w-36 rounded-full bg-primary/10 blur-2xl" />
       {/* Left side: Main Temp & Location */}
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div className="flex items-center gap-2">
