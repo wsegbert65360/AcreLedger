@@ -468,7 +468,7 @@ describe('FSA 578 report rows', () => {
         expect(rows[0]).toMatchObject({
             fieldName: 'North 80',
             acreage: 3.5,
-            crop: '',
+            crop: 'Non-crop',
             intendedUse: 'Non-cropland',
             landUse: 'Non-cropland',
             farmNumber: '123',
@@ -477,7 +477,7 @@ describe('FSA 578 report rows', () => {
         });
     });
 
-    it('labels pasture and hay ground as the crop on non-cropland FSA worksheet rows', () => {
+    it('labels the crop as non-crop on non-cropland FSA worksheet rows', () => {
         const pastureField: Field = {
             id: 'pasture-1',
             name: 'South Pasture',
@@ -530,7 +530,7 @@ describe('FSA 578 report rows', () => {
         const rows = buildFsa578Rows([], [pastureField, hayField], assignments);
 
         expect(rows).toHaveLength(2);
-        expect(rows.map(row => row.crop)).toEqual(['Pasture', 'Hay Ground']);
+        expect(rows.map(row => row.crop)).toEqual(['Non-crop', 'Non-crop']);
         expect(rows.map(row => row.intendedUse)).toEqual(['Pasture', 'Hay Ground']);
         expect(rows.every(row => row.landUse === 'Non-cropland')).toBe(true);
     });
@@ -591,7 +591,7 @@ describe('FSA 578 report rows', () => {
 
         expect(rows).toEqual(expect.arrayContaining([
             expect.objectContaining({ acreage: 32, landUse: 'Cropland' }),
-            expect.objectContaining({ acreage: 8, landUse: 'Non-cropland', crop: 'Grain' }),
+            expect.objectContaining({ acreage: 8, landUse: 'Non-cropland', crop: 'Non-crop' }),
         ]));
         expect(totals.totalAcres).toBe(32);
         expect(totals.byField).toEqual([{ fieldName: 'Bottom Field', acres: 32 }]);

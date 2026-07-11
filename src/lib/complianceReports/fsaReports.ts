@@ -481,7 +481,7 @@ export function buildFsa578Rows(
                 tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                 fieldNumber: a.cluNumber,
                 acreage: a.acres,
-                crop: field?.intendedUse?.trim() || '',
+                crop: 'Non-crop',
                 seedVariety: '',
                 intendedUse: nonCropUse,
                 irrigationCode: 'NI',
