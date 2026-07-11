@@ -5,6 +5,8 @@ import {
   formatNumber,
   formatUnit,
   getComplianceStatus,
+  getChronologicalDateRange,
+  getRecordOmissions,
   formatTime,
   formatReportDate,
   joinParts,
@@ -47,7 +49,32 @@ export function generateSprayPDF(
 
   const isMulti = records.length > 1;
   const now = new Date().toLocaleDateString();
-  const displayFarmName = farmName || '—';
+  const displayFarmName = farmName || '-';
+  const chronologicalRecords = [...records].sort((a, b) =>
+    (a.sprayDate || '').localeCompare(b.sprayDate || '') || a.timestamp - b.timestamp
+  );
+  const derivedRange = getChronologicalDateRange(chronologicalRecords);
+  const rangeStart = options.startDate || derivedRange.start;
+  const rangeEnd = options.endDate || derivedRange.end;
+
+  const drawRunningHeader = () => {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`AcreLedger Spray Log - ${displayFarmName}`, 14, 10);
+    if (rangeStart || rangeEnd) {
+      doc.text(`${formatReportDate(rangeStart)} to ${formatReportDate(rangeEnd)}`, 196, 10, { align: 'right' });
+    }
+    doc.setDrawColor(220, 220, 220);
+    doc.line(14, 13, 196, 13);
+    doc.setTextColor(0, 0, 0);
+  };
+
+  const addContentPage = () => {
+    doc.addPage();
+    drawRunningHeader();
+    return 22;
+  };
 
   // 1. Report Header
   doc.setFontSize(18);
@@ -58,22 +85,23 @@ export function generateSprayPDF(
   doc.setTextColor(100, 100, 100);
   doc.text(`Farm: ${displayFarmName}`, 14, 28);
 
-  if (isMulti && (options.startDate || options.endDate)) {
-    const range = `${formatReportDate(options.startDate)} to ${formatReportDate(options.endDate)}`;
+  if (isMulti && (rangeStart || rangeEnd)) {
+    const range = `${formatReportDate(rangeStart)} to ${formatReportDate(rangeEnd)}`;
     doc.text(`Date Range: ${range}`, 14, 33);
-    doc.text(`Generated: ${now}`, 14, 38);
+    doc.text(`Applications: ${records.length}`, 14, 38);
+    doc.text(`Generated: ${now}`, 14, 43);
   } else {
     doc.text(`Generated: ${now}`, 14, 33);
   }
 
-  let yPos = isMulti ? 45 : 40;
+  let yPos = isMulti ? 50 : 40;
 
   // 2. Records
-  records.forEach((record, index) => {
-    // Add page if needed (simplified check)
-    if (yPos > 240) {
-      doc.addPage();
-      yPos = 20;
+  chronologicalRecords.forEach((record, index) => {
+    const productRows = Math.max(record.products?.length || 0, 1);
+    const estimatedRecordHeight = 60 + productRows * 11 + (record.notes ? 12 : 0);
+    if (yPos + estimatedRecordHeight > 275) {
+      yPos = addContentPage();
     }
 
     if (isMulti) {
@@ -87,7 +115,7 @@ export function generateSprayPDF(
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
-      doc.text(`${formatReportDate(record.sprayDate)} — ${cleanName(record.fieldName)}`, 14, yPos);
+      doc.text(`${formatReportDate(record.sprayDate)} - ${cleanName(record.fieldName)}`, 14, yPos);
       doc.setFont('helvetica', 'normal');
       yPos += 7;
     } else {
@@ -103,30 +131,36 @@ export function generateSprayPDF(
     doc.setTextColor(0, 0, 0);
 
     const detailsLeft = [
-      `Applicator: ${record.applicatorName || '—'}`,
-      `License #: ${record.licenseNumber || '—'}`,
+      `Applicator: ${record.applicatorName || '-'}`,
+      `License #: ${record.licenseNumber || '-'}`,
       `Date: ${formatReportDate(record.sprayDate)}`,
       `Time: ${formatTime(record.startTime)} to ${formatTime(record.endTime)}`,
     ];
 
     const detailsRight = [
-      `Crop/Site: ${record.cropOrSiteTreated || '—'}`,
-      `Target Pest: ${record.targetPest || '—'}`,
+      `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
+      `Target Pest: ${record.targetPest || '-'}`,
       `Area: ${formatNumber(record.treatedAreaSize)} ${formatUnit(record.treatedAreaUnit) || 'ac'}`,
-      `Method: ${record.applicationMethod || '—'}`,
+      `Method: ${record.applicationMethod || '-'}`,
     ];
 
     const detailsFarRight = [
-      `Equipment: ${record.equipmentId || '—'}`,
-      `REI: ${record.rei || '—'}`,
+      `Equipment: ${record.equipmentId || '-'}`,
+      `REI: ${record.rei || '-'}`,
       `Wind: ${joinParts([record.windSpeed, 'MPH', record.windDirection])}`,
-      `Temp: ${record.temperature ? record.temperature + '°F' : '—'} / RH: ${record.relativeHumidity ? record.relativeHumidity + '%' : '—'}`,
+      `Temp: ${record.temperature != null ? record.temperature + ' F' : '-'} / RH: ${record.relativeHumidity != null ? record.relativeHumidity + '%' : '-'}`,
     ];
 
     const detailY = yPos;
-    detailsLeft.forEach((text, i) => doc.text(text, 14, detailY + i * 5));
-    detailsRight.forEach((text, i) => doc.text(text, 75, detailY + i * 5));
-    detailsFarRight.forEach((text, i) => doc.text(text, 140, detailY + i * 5));
+    const detailColumns = [
+      { items: detailsLeft, x: 14, width: 56 },
+      { items: detailsRight, x: 75, width: 60 },
+      { items: detailsFarRight, x: 140, width: 56 },
+    ];
+    detailColumns.forEach(({ items, x, width }) => items.forEach((text, i) => {
+      const clipped = doc.splitTextToSize(text, width)[0] || '-';
+      doc.text(clipped, x, detailY + i * 5);
+    }));
 
     yPos += 25;
 
@@ -162,9 +196,9 @@ export function generateSprayPDF(
             content: `${p.product}${p.activeIngredients ? '\n' + p.activeIngredients : ''}`,
             styles: { fontStyle: p.activeIngredients ? 'normal' : 'bold' }
           },
-          p.epaRegNumber || '—',
-          `${p.rate || '—'} ${p.rateUnit || ''}`.trim(),
-          `${p.totalProductAmount || '—'} ${p.totalProductUnit || ''}`.trim()
+          p.epaRegNumber || '-',
+          `${p.rate || '-'} ${p.rateUnit || ''}`.trim(),
+          `${p.totalProductAmount || '-'} ${p.totalProductUnit || ''}`.trim()
         ]),
         theme: 'grid',
         headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
@@ -173,6 +207,8 @@ export function generateSprayPDF(
           0: { cellWidth: 80 }
         },
         margin: { left: 14, right: 14 },
+        pageBreak: 'avoid',
+        rowPageBreak: 'avoid',
         didDrawPage: (data) => {
           yPos = data.cursor?.y || yPos;
         }
@@ -187,8 +223,7 @@ export function generateSprayPDF(
     // 4. Notes & Compliance
     // Page break safety for notes
     if (yPos > 260) {
-      doc.addPage();
-      yPos = 20;
+      yPos = addContentPage();
     }
 
     doc.setFontSize(8);
@@ -201,8 +236,7 @@ export function generateSprayPDF(
 
     if (attachmentDataUri) {
       if (yPos > 220) {
-        doc.addPage();
-        yPos = 20;
+        yPos = addContentPage();
       }
       doc.text('Attached Ticket / Label:', 14, yPos);
       yPos += 4;
@@ -217,18 +251,20 @@ export function generateSprayPDF(
     }
 
     if (record.siteAddress) {
-      doc.text(`Site Address: ${record.siteAddress}`, 14, yPos);
+      doc.text(`Field/Site: ${record.siteAddress}`, 14, yPos);
       yPos += 5;
     }
 
     // Compliance line
-    doc.setFont('helvetica', record.nonCompliant ? 'bold' : 'normal');
-    if (record.nonCompliant) {
+    const omissions = getRecordOmissions(record);
+    const needsReview = Boolean(record.nonCompliant || omissions.length);
+    doc.setFont('helvetica', needsReview ? 'bold' : 'normal');
+    if (needsReview) {
       doc.setTextColor(200, 0, 0);
     } else {
       doc.setTextColor(0, 0, 0);
     }
-    doc.text(getComplianceStatus(record.nonCompliant), 14, yPos);
+    doc.text(getComplianceStatus(record.nonCompliant, omissions), 14, yPos);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
     yPos += 12;
@@ -248,8 +284,8 @@ export function generateSprayPDF(
   let finalFilename = options.filename;
   if (!finalFilename) {
     if (isMulti) {
-      const start = options.startDate || records[records.length - 1].sprayDate || 'Start';
-      const end = options.endDate || records[0].sprayDate || 'End';
+      const start = rangeStart || 'Start';
+      const end = rangeEnd || 'End';
       finalFilename = `SprayLog_${sanitizeFilename(displayFarmName)}_${start}_to_${end}.pdf`;
     } else {
       const rec = records[0];
