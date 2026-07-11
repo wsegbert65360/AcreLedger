@@ -35,6 +35,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/offlineStorage.ts` — offline persistent key-value store.
 - `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
 - `@/lib/complianceReports` — report generation.
+- `@/lib/complianceReports/fsa578PdfExport.ts` — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
 - `@/lib/complianceReports/generateLandlordSummary.ts` — Landlord Summary data builder (field-level landlord grouping, activity timeline, bu/acre + crop-share math, CSV export).
 - `@/components/reports/LandlordSummaryReport.tsx` — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
 - `@/lib/sprayExport.ts` — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
@@ -170,8 +171,16 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Persisting assignments back to fields should round computed field acreage for display/state, but not mutate the source CLU feature acres.
 - Use `@/lib/geoHelpers.ts` for converting Polygon and MultiPolygon coordinates for Leaflet map render layers and centroid calculations.
 - FSA CLU assignments automatically synchronize to their associated field's `cluNumbers` and `acreage` properties immediately on each assignment toggle via `syncFieldAcreageAndClus` in `TractAssignmentFlow.tsx`. The sync reads from `displayAssignments` (persisted + legacy) through `getFieldAssignmentsWithDelta`, and includes a no-op guard that skips the Supabase write when the field's `cluNumbers` (compared order-independently via `hasSameCluNumbers`) and rounded acreage already match. This prevents redundant writes on idempotent toggles (e.g., same-field legacy promotion) while still allowing legacy assignments to count toward field acreage.
-- FSA-578 and fall production worksheets are farmer worksheets, not official USDA forms. Preserve the disclaimer wording and keep CSV/PDF exports aligned when changing columns, summaries, footers, or readiness checks.
+- FSA-578 and fall production worksheets are supporting worksheets, not official USDA forms. The FSA-578 PDF is designed to be handed to an FSA employee for crop-acreage entry and reconciliation. Preserve the disclaimer wording and keep CSV/PDF source semantics aligned when changing columns, summaries, footers, or readiness checks.
 - FSA report readiness checks should surface missing farm/tract/CLU/crop/acreage issues without blocking export unless the user explicitly asks for blocking validation.
+- The FSA-578 PDF must use the dedicated `exportFsa578WorksheetPdf` generator in `fsa578PdfExport.ts`, not the generic `exportToPdf` footer mechanism. Its section order is canonical: cropland reporting rows → crop/use and farm/tract reconciliation totals → items to review/FSA correction notes → all-CLU reference.
+- Keep non-cropland CLUs out of the primary crop-entry table. Include them in the all-CLU appendix as boundary-reconciliation rows explicitly labeled reference-only, so they cannot be mistaken for planted acreage.
+- Every FSA-578 PDF page must repeat farm name, crop year, producer and county/state blanks or values, section identity, and `Page X of Y`. Use explicit column widths and render verification so farm/tract/CLU columns never clip on continuation pages.
+- The main FSA-578 PDF table must provide the data needed for FSA entry: farm, tract, CLU, field, crop, crop status, acres, planting date, intended use, irrigation, producer share, crop sequence, and practice/notes. Type/variety remains omitted from the PDF unless explicitly requested; it remains available in preview/CSV.
+- Dated crop rows without an explicit status may display as `Planted`. Undated hay/pasture cropland may display as `Existing stand` and must not generate a missing-status readiness error. Other undated cropland requires an explicit FSA status or a readiness error.
+- Reconciliation totals in the PDF must include crop/intended-use totals, farm/tract cropland totals, and a clearly labeled total cropland acreage. Do not label hay/pasture acreage as “planted acreage” when no planting event exists.
+- Readiness issues must be included inside the exported PDF, followed by usable FSA office correction lines and review/date/producer-initial fields. A clean report must still state that county FSA review is required.
+- Do not call the text-only CLU section a “map appendix.” It is the “All CLU Reference.” If actual maps are added later, they must contain rendered CLU/field geometry rather than text-only assignments.
 - FSA acreage reports must preserve multiple planting records for the same field/CLU as separate rows instead of collapsing to latest-only.
 - Assigned cropland CLUs with no planting record must appear as review rows so missing FSA reporting is visible.
 - If an assigned cropland field is labeled hay or pasture by `intendedUse`, use that hay/pasture label as the FSA crop instead of flagging crop as missing.

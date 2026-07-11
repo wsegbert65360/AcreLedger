@@ -151,8 +151,12 @@ Single planting event on a field. Core FSA 578 source record.
 ```ts
 { id, farm_id, fieldId, fieldName, crop, seedVariety, seedingRate, population,
   acreage, plantDate, timestamp, seasonYear, intendedUse, irrigationPractice,
-  producerShare, fsaFarmNumber, fsaTractNumber, fsaFieldNumber, deleted_at }
+  producerShare, fsaFarmNumber, fsaTractNumber, fsaFieldNumber,
+  cropStatus, cropSequence, plantingPattern, deleted_at }
 ```
+`cropStatus` supports `Planted`, `Prevented Planting`, `Failed`, `Volunteer`, and
+`Cover Crop`. `cropSequence` distinguishes first and second crop. `plantingPattern`
+stores optional FSA practice/pattern notes.
 
 ### SprayRecord (2026 Standards)
 Pesticide/herbicide application. Refactored for universal private-applicator compliance (45+ states).
@@ -554,6 +558,41 @@ matching its header (enforced in `AGENTS.md` → Responsive Tables). The Landlor
 (`LandlordSummaryReport`) renders its Fields and Activity Timeline tables via `ReportTable`
 and must keep every cell `data-label`-attributed. The only standalone `<table>` that
 intentionally bypasses `ReportTable` is the Landlord statement's financial detail table.
+
+### FSA-578 Acreage Reporting Worksheet
+
+The FSA-578 export is a supporting worksheet intended to be handed to an FSA employee for
+crop-acreage entry and reconciliation. It is not an official USDA form. Row construction and
+validation live in `src/lib/complianceReports/fsaReports.ts`; the dedicated PDF layout lives in
+`src/lib/complianceReports/fsa578PdfExport.ts` and is invoked from `Reports.tsx` through
+`exportFsa578WorksheetPdf`. Do not route this export back through the generic `exportToPdf`
+footer flow.
+
+The PDF has four canonical sections:
+
+1. **Cropland reporting rows** — the primary FSA entry table. Columns are farm, tract, CLU,
+   field, crop, status, acres, planting date, intended use, irrigation, producer share, crop
+   sequence, and practice/notes. Non-cropland rows do not appear here.
+2. **Reconciliation totals** — totals by crop/intended use and by farm/tract, plus total
+   cropland reported. Hay and pasture without planting events are acreage/use, not “planted
+   acreage.”
+3. **Items to review** — all readiness errors/warnings followed by FSA office correction lines,
+   reviewer/date fields, and producer initials. Export remains non-blocking.
+4. **All CLU Reference** — cropland and non-cropland boundary reconciliation. Non-cropland is
+   explicitly marked reference-only and must never appear as a planted crop. This is a text
+   reference, not a map appendix.
+
+Every page repeats farm name, crop year, producer and county/state values or writable blanks,
+the current section, and `Page X of Y`. Continuation tables use explicit widths so identifiers
+cannot clip. Visually render the complete PDF after layout changes; checking only extracted text
+does not catch continuation-page clipping.
+
+Status presentation rules are reporting-specific: a dated crop row without an explicit status
+may display as `Planted`; undated hay/pasture cropland may display as `Existing stand`; all other
+undated cropland requires an explicit FSA status and produces a readiness error. Type/variety is
+intentionally omitted from the PDF unless requested, while preview and CSV retain it for farmer
+review. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
+farm/tract/CLU acreage and reporting facts.
 
 ### Landlord Summary Report
 

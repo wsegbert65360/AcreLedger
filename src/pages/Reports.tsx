@@ -12,7 +12,7 @@ import FallFsaReport from '@/components/reports/FallFsaReport';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
 import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
+import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -182,25 +182,6 @@ export default function Reports() {
   const plantedAcreTotals = useMemo(() => calculateFsa578PlantedAcreTotals(fsaPlantRows), [fsaPlantRows]);
   const totalPlantAcres = plantedAcreTotals.totalAcres;
   const plantedAcresByField = plantedAcreTotals.byField;
-  const fsaCluMapAppendix = useMemo(() => {
-    const groups = new Map<string, string[]>();
-
-    cluAssignments
-      .filter(assignment => !assignment.deletedAt)
-      .forEach(assignment => {
-        const field = fieldMap.get(assignment.fieldId);
-        const fieldName = field?.name || 'Unmatched field';
-        const label = `${assignment.tractKey} / CLU ${assignment.cluNumber} - ${roundTo(assignment.acres, 2)} AC - ${assignment.landUse === 'cropland' ? 'Cropland' : 'Non-cropland'}`;
-        groups.set(fieldName, [...(groups.get(fieldName) || []), label]);
-      });
-
-    return [...groups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .flatMap(([fieldName, labels]) => [
-        fieldName,
-        ...labels.sort().map(label => `  ${label}`),
-      ]);
-  }, [cluAssignments, fieldMap]);
   const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
   const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
   const fsaFallReport = useMemo(
@@ -284,47 +265,17 @@ export default function Reports() {
     safeExport(async () => {
       const reportTracts = await getMergedFsaTractsForExport();
       const reportRows = buildFsa578Rows(plantRecords, fields, cluAssignments, reportTracts);
-      const reportTotals = calculateFsa578PlantedAcreTotals(reportRows);
+      const issues = validateFsa578Rows(reportRows);
 
-      exportToPdf({
-        title: 'FSA-578 Acreage Certification Worksheet',
-        subtitle: `Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`,
-        headers: ['FARM #', 'TRACT #', 'CLU/FIELD #', 'LAND USE', 'CROP', 'SEQ', 'ACRES', 'PLANT DATE', 'SHARE %', 'USE', 'IRR', 'FIELD'],
-        rows: reportRows.map(row => [
-          row.farmNumber || '-',
-          row.tractNumber || '-',
-          row.fieldNumber || '-',
-          row.landUse,
-          row.crop || '-',
-          row.cropSequence || '-',
-          row.acreage,
-          row.date ? fmtDate(row.date) : '-',
-          row.producerShare,
-          row.intendedUse || '-',
-          row.irrigationCode,
-          row.fieldName,
-        ]),
+      exportFsa578WorksheetPdf({
+        metadata: {
+          farmName: farmName || 'AcreLedger Farm',
+          cropYear: viewingSeason,
+          reportDate,
+        },
+        rows: reportRows,
+        issues,
         fileName: `FSA_578_Worksheet_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
-        summaryText: 'Total Planted Acreage',
-        summaryValue: `${reportTotals.totalAcres} AC`,
-        footerText: [
-          'Planted Acres by Field:',
-          ...reportTotals.byField.map(row => `${row.fieldName}: ${row.acres} AC`),
-          '',
-          'Farmer Review Worksheet',
-          'Review acreage, crop/use, shares, and maps with your county FSA office before certification.',
-          'Producer Notes: _______________________________',
-          'Review Date: ___________________',
-          'Notes / FSA Office Corrections:',
-          '__________________________________________________',
-          '__________________________________________________',
-          '',
-          'CLU Map Appendix:',
-          ...fsaCluMapAppendix,
-        ],
-        orientation: 'landscape',
-        tableCellPadding: 1.4,
-        tableFontSize: 9,
       });
     }, 'FSA planting PDF');
   };

@@ -534,6 +534,53 @@ export function validateFsa578Rows(rows: Fsa578ReportRow[]): Fsa578ValidationIss
             });
         }
 
+        if (row.landUse === 'Cropland' && isBlank(row.intendedUse)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'warning',
+                field: 'intendedUse',
+                message: `${row.fieldName} is missing intended use.`,
+            });
+        }
+
+        const isEstablishedForage = /^(hay|pasture)$/i.test(row.crop.trim()) || /^(hay|pasture)$/i.test(row.intendedUse.trim());
+        const effectiveStatus = row.cropStatus || (row.date ? 'Planted' : undefined);
+        if (row.landUse === 'Cropland' && !effectiveStatus && !isEstablishedForage) {
+            issues.push({
+                rowId: row.id,
+                severity: 'error',
+                field: 'cropStatus',
+                message: `${row.fieldName} is missing crop status (planted, prevented planting, failed, volunteer, or cover crop).`,
+            });
+        }
+
+        if (row.landUse === 'Cropland' && effectiveStatus === 'Planted' && isBlank(row.date)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'error',
+                field: 'date',
+                message: `${row.fieldName} is marked planted but has no planting date.`,
+            });
+        }
+
+        if (row.landUse === 'Cropland' && isBlank(row.producerShare)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'error',
+                field: 'producerShare',
+                message: `${row.fieldName} is missing producer share.`,
+            });
+        }
+
+        if (row.landUse === 'Cropland' && isBlank(row.irrigationCode)) {
+            issues.push({
+                rowId: row.id,
+                severity: 'warning',
+                field: 'irrigationCode',
+                message: `${row.fieldName} is missing irrigation practice.`,
+            });
+        }
+
         if (!row.acreage || row.acreage <= 0) {
             issues.push({
                 rowId: row.id,
