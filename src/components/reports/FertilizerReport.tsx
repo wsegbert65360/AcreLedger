@@ -2,6 +2,9 @@ import ReportTable from '@/components/ReportTable';
 import { FertilizerApplication } from '@/types/farm';
 import { Field } from '@/types/farm';
 import { formatIsoDate } from '@/utils/dates';
+import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportExportStatus } from '@/lib/reportExportHistory';
+import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 function fmtDate(d?: string): string {
   return d ? formatIsoDate(d) : '—';
@@ -14,6 +17,9 @@ interface FertilizerReportProps {
   reportDate: string;
   onExportCsv: () => void;
   onExportPdf: () => void;
+  readinessSummary: ReportReadinessSummary;
+  onIssueAction?: (issue: ReportReadinessIssue) => void;
+  exportStatus?: ReportExportStatus;
 }
 
 export default function FertilizerReport({
@@ -23,9 +29,24 @@ export default function FertilizerReport({
   reportDate,
   onExportCsv,
   onExportPdf,
+  readinessSummary,
+  onIssueAction,
+  exportStatus,
 }: FertilizerReportProps) {
   return (
-    <ReportTable
+    <>
+      <MobileReportExportPanel
+        title="Fertilizer application summary"
+        description="Review record completeness and export the season application summary."
+        summary={readinessSummary}
+        itemLabel="records"
+        onExportPdf={onExportPdf}
+        onExportData={onExportCsv}
+        onIssueAction={onIssueAction}
+        exportStatus={exportStatus}
+      />
+      <div className="hidden lg:block print:block">
+      <ReportTable
       title="Fertilizer Application Summary"
       subtitle={`Summary of fertilizer applications. Generated ${reportDate}.`}
       headers={['DATE', 'FIELD', 'FORMULA', 'ACRES']}
@@ -56,6 +77,8 @@ export default function FertilizerReport({
           </td>
         </tr>
       )}
-    </ReportTable>
+      </ReportTable>
+      </div>
+    </>
   );
 }

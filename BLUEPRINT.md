@@ -543,7 +543,7 @@ Never set page-container bottom padding below the nav height, or the last cards 
 tab bar. When adding a new top-level route, pick the value that matches whether the FAB renders on
 that route.
 
-### ReportTable (Mobile Card Stack)
+### ReportTable (Responsive Preview Fallback)
 `ReportTable` (`src/components/ReportTable.tsx`) wraps every report table and applies the
 `mobile-cards` class. On screens ≤ 768px a CSS block in `src/index.css` (`@layer utilities`)
 restructures the `<table>` into stacked cards:
@@ -554,10 +554,44 @@ restructures the `<table>` into stacked cards:
   the `td[colspan]` rules and render no label.
 
 Consequently every data `<td>` passed to `ReportTable` must include a `data-label` attribute
-matching its header (enforced in `AGENTS.md` → Responsive Tables). The Landlord report
-(`LandlordSummaryReport`) renders its Fields and Activity Timeline tables via `ReportTable`
-and must keep every cell `data-label`-attributed. The only standalone `<table>` that
-intentionally bypasses `ReportTable` is the Landlord statement's financial detail table.
+matching its header (enforced in `AGENTS.md` → Responsive Tables). On the Reports page, the
+full FSA, spray, fertilizer, hay, and landlord previews are wrapped in
+`hidden lg:block print:block`; mobile users receive the export-first workspace described below.
+The card transformation remains available for other `ReportTable` consumers that are rendered
+below the desktop breakpoint. The Landlord desktop/print preview keeps both its Fields and
+Activity Timeline cells `data-label`-attributed.
+
+### Report Readiness and Mobile Export Workspace
+
+Reports are designed around two different use cases:
+
+- **Mobile (`< lg`)** — validate the selected season, review exceptions, and generate a PDF or
+  CSV for sharing/office use. `MobileReportExportPanel` presents report identity, readiness,
+  grouped issues, large export actions, and last-export/change status. It intentionally does not
+  render the full report document or table.
+- **Desktop and print (`lg` / print)** — show the complete existing report preview and export
+  actions. Printing always includes the full preview, never the mobile workspace.
+
+Shared readiness modeling lives in `src/lib/reportReadiness.ts`. `ReportReadinessPanel` displays
+`ready`, `review`, or `empty` status plus progress and severity counts. `ReportIssueList` groups
+issues by category. Readiness is advisory and exports remain available even when errors exist.
+FSA adapters consume `validateFsa578Rows` and `validateFsaFallProductionRows` so the presentation
+layer cannot drift from the authoritative worksheet validation. Spray readiness counts one item
+per application even when a tank mix produces multiple product issues. Fertilizer, hay, and
+landlord adapters describe record completeness rather than inventing new legal requirements.
+
+Issue actions are actionable rather than passive. Field-level issues navigate to
+`/field/:fieldId`; record-level issues navigate to `/activity` with `tab`, `record`, and `type`
+query parameters. `Activity.tsx` reads those parameters, selects the correct tab, and opens the
+matching editor once. `Reports.tsx` also reads `?tab=` so report deep links select the requested
+report.
+
+Successful exports are fingerprinted by `src/lib/reportExportHistory.ts`. The local-storage key
+is scoped to user, farm, viewing season, and report type. The fingerprint is deterministic and
+uses normalized report source data (not generated timestamps), allowing the mobile panel to show
+"Never exported," the last export date, or "data changed since last export." Export-history
+storage is best-effort local metadata: a storage failure must not fail or block the actual export,
+and the status is device-local rather than cross-device state.
 
 ### FSA-578 Acreage Reporting Worksheet
 

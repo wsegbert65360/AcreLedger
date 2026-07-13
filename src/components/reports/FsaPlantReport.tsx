@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
 import ReportTable from '@/components/ReportTable';
 import { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578FieldAcreTotal } from '@/lib/complianceReports';
+import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { formatIsoDate } from '@/utils/dates';
+import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 function fmtDate(d?: string): string {
   return d ? formatIsoDate(d) : '—';
@@ -12,6 +15,9 @@ interface FsaPlantReportProps {
   totalPlantAcres: number;
   plantedAcresByField: Fsa578FieldAcreTotal[];
   fsaReadinessIssues: Fsa578ValidationIssue[];
+  readinessSummary: ReportReadinessSummary;
+  onIssueAction?: (issue: ReportReadinessIssue) => void;
+  exportStatus?: ReportExportStatus;
   farmName: string;
   viewingSeason: number;
   reportDate: string;
@@ -24,6 +30,9 @@ export default function FsaPlantReport({
   totalPlantAcres,
   plantedAcresByField,
   fsaReadinessIssues,
+  readinessSummary,
+  onIssueAction,
+  exportStatus,
   farmName,
   viewingSeason,
   reportDate,
@@ -34,7 +43,19 @@ export default function FsaPlantReport({
   const fsaReadinessWarnings = useMemo(() => fsaReadinessIssues.filter(issue => issue.severity === 'warning'), [fsaReadinessIssues]);
 
   return (
-    <ReportTable
+    <>
+      <MobileReportExportPanel
+        title="FSA-578 acreage worksheet"
+        description={`Review ${viewingSeason} acreage readiness for ${farmName || 'your farm'}, then export the worksheet for county FSA review.`}
+        summary={readinessSummary}
+        itemLabel="fields"
+        onExportPdf={onExportPdf}
+        onExportData={onExportCsv}
+        onIssueAction={onIssueAction}
+        exportStatus={exportStatus}
+      />
+      <div className="hidden lg:block print:block">
+      <ReportTable
       title="FSA-578 Acreage Certification Worksheet"
       subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
       headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'SEQ', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
@@ -108,6 +129,8 @@ export default function FsaPlantReport({
           </td>
         </tr>
       )}
-    </ReportTable>
+      </ReportTable>
+      </div>
+    </>
   );
 }

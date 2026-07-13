@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
 import ReportTable from '@/components/ReportTable';
 import { FsaFallProductionRow, FsaFallValidationIssue } from '@/lib/complianceReports';
+import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { formatIsoDate } from '@/utils/dates';
+import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 function fmtDate(d?: string): string {
   return d ? formatIsoDate(d) : '—';
@@ -12,6 +15,9 @@ interface FallFsaReportProps {
   totalHarvestBu: number;
   totalFallHayBales: number;
   fsaFallIssues: FsaFallValidationIssue[];
+  readinessSummary: ReportReadinessSummary;
+  onIssueAction?: (issue: ReportReadinessIssue) => void;
+  exportStatus?: ReportExportStatus;
   farmName: string;
   viewingSeason: number;
   reportDate: string;
@@ -24,6 +30,9 @@ export default function FallFsaReport({
   totalHarvestBu,
   totalFallHayBales,
   fsaFallIssues,
+  readinessSummary,
+  onIssueAction,
+  exportStatus,
   farmName,
   viewingSeason,
   reportDate,
@@ -34,7 +43,19 @@ export default function FallFsaReport({
   const fsaFallWarnings = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'warning'), [fsaFallIssues]);
 
   return (
-    <ReportTable
+    <>
+      <MobileReportExportPanel
+        title="Fall production worksheet"
+        description={`Review ${viewingSeason} harvest and hay production readiness for ${farmName || 'your farm'}, then export the worksheet for FSA review.`}
+        summary={readinessSummary}
+        itemLabel="records"
+        onExportPdf={onExportPdf}
+        onExportData={onExportCsv}
+        onIssueAction={onIssueAction}
+        exportStatus={exportStatus}
+      />
+      <div className="hidden lg:block print:block">
+      <ReportTable
       title="FSA Fall Harvest / Production Evidence Worksheet"
       subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
       headers={['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #']}
@@ -91,6 +112,8 @@ export default function FallFsaReport({
           </td>
         </tr>
       )}
-    </ReportTable>
+      </ReportTable>
+      </div>
+    </>
   );
 }

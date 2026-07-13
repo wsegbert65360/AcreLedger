@@ -1,5 +1,8 @@
 import ReportTable from '@/components/ReportTable';
 import { Field, HayHarvestRecord } from '@/types/farm';
+import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportExportStatus } from '@/lib/reportExportHistory';
+import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 interface HaySummaryReportProps {
   hayRecords: HayHarvestRecord[];
@@ -7,6 +10,9 @@ interface HaySummaryReportProps {
   totalHayBales: number;
   reportDate: string;
   onExportPdf: () => void;
+  readinessSummary: ReportReadinessSummary;
+  onIssueAction?: (issue: ReportReadinessIssue) => void;
+  exportStatus?: ReportExportStatus;
 }
 
 export default function HaySummaryReport({
@@ -15,9 +21,23 @@ export default function HaySummaryReport({
   totalHayBales,
   reportDate,
   onExportPdf,
+  readinessSummary,
+  onIssueAction,
+  exportStatus,
 }: HaySummaryReportProps) {
   return (
-    <ReportTable
+    <>
+      <MobileReportExportPanel
+        title="Hay production summary"
+        description="Review harvest record completeness and export the season bale summary."
+        summary={readinessSummary}
+        itemLabel="records"
+        onExportPdf={onExportPdf}
+        onIssueAction={onIssueAction}
+        exportStatus={exportStatus}
+      />
+      <div className="hidden lg:block print:block">
+      <ReportTable
       title="Hay Production Summary"
       subtitle={`Total bale production across all cuttings. Generated ${reportDate}.`}
       headers={['FIELD', 'CUTTING #1', 'CUTTING #2', 'CUTTING #3+', 'TOTAL']}
@@ -57,6 +77,8 @@ export default function HaySummaryReport({
           </td>
         </tr>
       )}
-    </ReportTable>
+      </ReportTable>
+      </div>
+    </>
   );
 }

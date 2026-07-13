@@ -35,6 +35,9 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/offlineStorage.ts` — offline persistent key-value store.
 - `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
 - `@/lib/complianceReports` — report generation.
+- `@/lib/reportReadiness.ts` — shared report-readiness types, summary builder, and FSA/spray/fertilizer/hay/landlord readiness adapters.
+- `@/lib/reportExportHistory.ts` — per-user/farm/season/report local export fingerprints and changed-since-export status.
+- `@/components/reports/MobileReportExportPanel.tsx` + `ReportReadinessPanel.tsx` + `ReportIssueList.tsx` — mobile export-first report workspace, readiness summary, and actionable grouped issues.
 - `@/lib/complianceReports/fsa578PdfExport.ts` — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
 - `@/lib/complianceReports/generateLandlordSummary.ts` — Landlord Summary data builder (field-level landlord grouping, activity timeline, bu/acre + crop-share math, CSV export).
 - `@/components/reports/LandlordSummaryReport.tsx` — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
@@ -173,6 +176,11 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - FSA CLU assignments automatically synchronize to their associated field's `cluNumbers` and `acreage` properties immediately on each assignment toggle via `syncFieldAcreageAndClus` in `TractAssignmentFlow.tsx`. The sync reads from `displayAssignments` (persisted + legacy) through `getFieldAssignmentsWithDelta`, and includes a no-op guard that skips the Supabase write when the field's `cluNumbers` (compared order-independently via `hasSameCluNumbers`) and rounded acreage already match. This prevents redundant writes on idempotent toggles (e.g., same-field legacy promotion) while still allowing legacy assignments to count toward field acreage.
 - FSA-578 and fall production worksheets are supporting worksheets, not official USDA forms. The FSA-578 PDF is designed to be handed to an FSA employee for crop-acreage entry and reconciliation. Preserve the disclaimer wording and keep CSV/PDF source semantics aligned when changing columns, summaries, footers, or readiness checks.
 - FSA report readiness checks should surface missing farm/tract/CLU/crop/acreage issues without blocking export unless the user explicitly asks for blocking validation.
+- All report readiness findings are advisory: errors and warnings must never disable PDF/CSV export. Keep authoritative FSA validation in `validateFsa578Rows` / `validateFsaFallProductionRows`; `reportReadiness.ts` adapts those results for presentation instead of duplicating their rules.
+- The Reports page is export-first on mobile. FSA-578, Fall FSA, Spray Audit, Fertilizer, Hay, and the selected Landlord report render `MobileReportExportPanel` below the `lg` breakpoint; full report previews remain desktop/print-only. Do not reintroduce large report previews as the default mobile experience.
+- Spray readiness headline counts are per application record, not per expanded tank-mix product row. Product-specific issues may be multiple, but `affectedItems` must count the application once.
+- Readiness issue actions route field-setup issues to `/field/:fieldId` and record issues to `/activity?tab=...&record=...&type=...`; `Activity.tsx` must keep query-driven tab selection and one-time editor opening working.
+- Successful report exports record a deterministic fingerprint in local storage, scoped by user ID, farm ID, viewing season, and report type (`al_report_export_<user>_<farm>_<season>_<report>`). Storage failure must never fail the export. Do not include volatile generation timestamps in fingerprints.
 - The FSA-578 PDF must use the dedicated `exportFsa578WorksheetPdf` generator in `fsa578PdfExport.ts`, not the generic `exportToPdf` footer mechanism. Its section order is canonical: cropland reporting rows → crop/use and farm/tract reconciliation totals → items to review/FSA correction notes → all-CLU reference.
 - Keep non-cropland CLUs out of the primary crop-entry table. Include them in the all-CLU appendix as boundary-reconciliation rows explicitly labeled reference-only, so they cannot be mistaken for planted acreage.
 - Every FSA-578 PDF page must repeat farm name, crop year, producer and county/state blanks or values, section identity, and `Page X of Y`. Use explicit column widths and render verification so farm/tract/CLU columns never clip on continuation pages.
@@ -196,7 +204,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - The summary aggregates all season-scoped activity (plant, spray, custom spray, fertilizer, tillage, harvest) across the landlord's fields into a date-sorted timeline, plus a per-field yield summary (acres via `getDisplayFieldAcres`, total bushels, bu/acre, and landlord crop-share bushels computed from each harvest's `landlordSplitPercent`).
 - Acreage must use `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, `field.acreage` fallback) — the canonical display acreage, never a raw `field.acreage` read.
 - Activity dates must format via `parseLocalDate` (from `@/utils/dates`), not `new Date(iso)`, to avoid the one-day-early UTC shift on date-only strings.
-- The report renders through `ReportTable` (mobile-cards); every `<td>` must carry `data-label` matching its header.
+- The desktop/print report renders through `ReportTable`; every `<td>` must carry `data-label` matching its header. Mobile uses the shared export-first workspace after a landlord is selected.
 - Exports: CSV (`generateLandlordSummaryCSV`, per-field + totals) and a landscape **Detailed PDF** via `exportToPdf` with the activity timeline in the footer. The PDF subtitle must include the farm name (per the FSA rule above). Long footer lines are wrapped via `doc.splitTextToSize` inside `exportToPdf`.
 - The older `LandlordStatementReport` / `generateLandlordStatement` (harvest-only crop-share statement) is retained for its tests but no longer rendered in the UI. Do not delete it without migrating its coverage.
 - **Grain delivered-vs-owed is intentionally out of scope.** The owed side (crop-share bushels) is computed; the delivered side is not, because `GrainMovement` has no field/landlord link (only an optional `harvestRecordId` that `SellModal` doesn't populate). Adding it is a separate schema change.
@@ -301,9 +309,10 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 ### Responsive Tables
 
 - `ReportTable` applies the `mobile-cards` class globally. On screens ≤ 768px each table renders as a stack of bordered cards instead of a horizontally-scrollable grid.
+- Reports-page tables are intentionally wrapped in `hidden lg:block print:block`; mobile users receive readiness, issue review, and export controls instead of the full table. `mobile-cards` remains the fallback for `ReportTable` consumers rendered on small screens elsewhere.
 - Every data `<td>` inside a `ReportTable` MUST carry a `data-label="<HEADER>"` matching its column header. Cells without `data-label` render as unlabeled, right-aligned cards on mobile.
 - Full-width rows (`<td colSpan={n}>` for banners, readiness checks, and empty states) MUST NOT carry `data-label`; they are handled automatically by the `td[colspan]` CSS rules and render full-width.
-- Standalone `<table>`s that bypass `ReportTable` are excluded from the card layout by design. Do not add `mobile-cards` to them unless every cell also gets `data-label`. The Landlord Summary report (`LandlordSummaryReport.tsx`) uses `ReportTable` for both its Fields and Activity Timeline tables, so every cell there must carry `data-label`.
+- Standalone `<table>`s that bypass `ReportTable` are excluded from the card layout by design. Do not add `mobile-cards` to them unless every cell also gets `data-label`. The Landlord Summary desktop/print preview (`LandlordSummaryReport.tsx`) uses `ReportTable` for both its Fields and Activity Timeline tables, so every cell there must carry `data-label`.
 
 ### Icons
 

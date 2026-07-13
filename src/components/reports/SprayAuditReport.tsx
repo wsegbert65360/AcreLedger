@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { formatIsoDate } from '@/utils/dates';
+import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportExportStatus } from '@/lib/reportExportHistory';
+import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 const EMPTY_VALUE = '\u2014';
 
@@ -62,6 +65,9 @@ interface SprayAuditReportProps {
   reportDate: string;
   onExportCsv: () => void;
   onExportPdf: () => void;
+  readinessSummary: ReportReadinessSummary;
+  onIssueAction?: (issue: ReportReadinessIssue) => void;
+  exportStatus?: ReportExportStatus;
 }
 
 export default function SprayAuditReport({
@@ -69,9 +75,23 @@ export default function SprayAuditReport({
   reportDate,
   onExportCsv,
   onExportPdf,
+  readinessSummary,
+  onIssueAction,
+  exportStatus,
 }: SprayAuditReportProps) {
   return (
-    <section className="space-y-4">
+    <>
+      <MobileReportExportPanel
+        title="Pesticide application record"
+        description="Review application completeness, then export the spray log for printing, sharing, or an audit."
+        summary={readinessSummary}
+        itemLabel="applications"
+        onExportPdf={onExportPdf}
+        onExportData={onExportCsv}
+        onIssueAction={onIssueAction}
+        exportStatus={exportStatus}
+      />
+      <section className="hidden space-y-4 lg:block print:block">
         <div>
           <h2 className="text-lg font-bold text-foreground">Pesticide Application Record</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
@@ -174,6 +194,7 @@ export default function SprayAuditReport({
             ))}
           </div>
         )}
-    </section>
+      </section>
+    </>
   );
 }

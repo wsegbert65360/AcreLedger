@@ -5,6 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import ReportTable from '@/components/ReportTable';
 import { ACTIVITY_BG_COLORS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import type { LandlordActivityType, LandlordSummary } from '@/lib/complianceReports';
+import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportExportStatus } from '@/lib/reportExportHistory';
+import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 interface LandlordSummaryReportProps {
   selectedLandlord: string;
@@ -14,6 +17,9 @@ interface LandlordSummaryReportProps {
   reportDate: string;
   onExportCsv: () => void;
   onExportPdf: () => void;
+  readinessSummary: ReportReadinessSummary | null;
+  onIssueAction?: (issue: ReportReadinessIssue) => void;
+  exportStatus?: ReportExportStatus;
 }
 
 const ACTIVITY_LABEL: Record<LandlordActivityType, string> = {
@@ -33,6 +39,9 @@ export default function LandlordSummaryReport({
   reportDate,
   onExportCsv,
   onExportPdf,
+  readinessSummary,
+  onIssueAction,
+  exportStatus,
 }: LandlordSummaryReportProps) {
   const seasonLabel = landlordSummary?.seasonYear != null
     ? `${landlordSummary.seasonYear} crop year`
@@ -73,7 +82,7 @@ export default function LandlordSummaryReport({
           </div>
         ) : landlordSummary ? (
           <div className="space-y-6">
-            <div className="flex gap-2 print:hidden">
+            <div className="hidden gap-2 lg:flex print:hidden">
               <Button
                 size="sm"
                 variant="outline"
@@ -94,7 +103,21 @@ export default function LandlordSummaryReport({
               </Button>
             </div>
 
+            {readinessSummary && (
+              <MobileReportExportPanel
+                title={`${selectedLandlord} landlord summary`}
+                description={`Review ${seasonLabel} field activity, yield, and crop-share completeness before exporting.`}
+                summary={readinessSummary}
+                itemLabel="fields"
+                onExportPdf={onExportPdf}
+                onExportData={onExportCsv}
+                onIssueAction={onIssueAction}
+                exportStatus={exportStatus}
+              />
+            )}
+
             {/* Fields overview */}
+            <div className="hidden space-y-6 lg:block print:block">
             <ReportTable
               title="Fields"
               subtitle={`Per-field yield and landlord crop share · ${seasonLabel}`}
@@ -166,6 +189,7 @@ export default function LandlordSummaryReport({
                 })
               )}
             </ReportTable>
+            </div>
           </div>
         ) : null}
       </div>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { FileText, Printer, History as HistoryIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,6 +24,22 @@ import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatTotalAmount } from '@/utils/unitConversion';
 import { Field } from '@/types/farm';
+import {
+  buildFertilizerReadiness,
+  buildFsa578Readiness,
+  buildFsaFallReadiness,
+  buildHayReadiness,
+  buildLandlordReadiness,
+  buildSprayReadiness,
+} from '@/lib/reportReadiness';
+import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
+import {
+  buildReportFingerprint,
+  getReportExportStatus,
+  recordReportExport,
+  type ReportExportType,
+} from '@/lib/reportExportHistory';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,21 +64,11 @@ function buildFieldMap(fields: Field[]): Map<string, Field> {
   return new Map(fields.map(f => [f.id, f]));
 }
 
-function safeExport(fn: () => void | Promise<void>, label: string): void {
-  try {
-    Promise.resolve(fn()).catch((err) => {
-      console.error(`Export failed (${label}):`, err);
-      toast.error(`Failed to export ${label}. Please try again.`);
-    });
-  } catch (err) {
-    console.error(`Export failed (${label}):`, err);
-    toast.error(`Failed to export ${label}. Please try again.`);
-  }
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Reports() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     plantRecords:         allPlant,
     sprayRecords:         allSpray,
@@ -76,10 +83,16 @@ export default function Reports() {
     fsaTracts,
     farmName,
     viewingSeason,
+    session,
+    farm_id,
   } = useFarm();
 
-  const [tab, setTab] = useState<ReportTab>('fsa-plant');
+  const requestedTab = searchParams.get('tab');
+  const [tab, setTab] = useState<ReportTab>(() =>
+    TABS.some(candidate => candidate.key === requestedTab) ? requestedTab as ReportTab : 'fsa-plant',
+  );
   const [bundledFsaTracts, setBundledFsaTracts] = useState<Awaited<ReturnType<typeof loadBundledFsaTracts>>>([]);
+  const [exportHistoryVersion, setExportHistoryVersion] = useState(0);
 
   // Fixed at mount — subtitle dates don't shift on re-render or after midnight
   const reportDateRef = useRef(new Date().toLocaleDateString());
@@ -101,8 +114,13 @@ export default function Reports() {
     return () => { cancelled = true; };
   }, [tab]);
 
+  useEffect(() => {
+    if (TABS.some(candidate => candidate.key === requestedTab)) setTab(requestedTab as ReportTab);
+  }, [requestedTab]);
+
   // O(1) field lookup — built once per fields change, not per row
   const fieldMap = useMemo(() => buildFieldMap(fields), [fields]);
+  const activeFieldIds = useMemo(() => new Set(fields.filter(field => !field.deleted_at).map(field => field.id)), [fields]);
 
 
   // Season-filtered record sets — memoized, sorted, non-mutating
@@ -168,6 +186,10 @@ export default function Reports() {
         : '—',
     }];
   }), [sprayRecords, fieldMap]);
+  const sprayReadinessSummary = useMemo(
+    () => buildSprayReadiness(sprayRecords, WIND_ALERT_MPH),
+    [sprayRecords],
+  );
 
   // Summary totals
   const mergedFsaTracts = useMemo(
@@ -183,6 +205,14 @@ export default function Reports() {
   const totalPlantAcres = plantedAcreTotals.totalAcres;
   const plantedAcresByField = plantedAcreTotals.byField;
   const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
+  const fsaReadinessSummary = useMemo(() => {
+    const summary = buildFsa578Readiness(fsaPlantRows, fsaReadinessIssues);
+    const fieldIdByName = new Map(fields.map(field => [field.name, field.id]));
+    return {
+      ...summary,
+      issues: summary.issues.map(issue => ({ ...issue, fieldId: fieldIdByName.get(issue.itemId ?? '') })),
+    } satisfies ReportReadinessSummary;
+  }, [fsaPlantRows, fsaReadinessIssues, fields]);
   const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
   const fsaFallReport = useMemo(
     () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields }),
@@ -193,9 +223,21 @@ export default function Reports() {
     [fsaFallReport],
   );
   const fsaFallIssues = useMemo(() => validateFsaFallProductionRows(fsaFallRows), [fsaFallRows]);
+  const fsaFallReadinessSummary = useMemo(
+    () => buildFsaFallReadiness(fsaFallRows, fsaFallIssues),
+    [fsaFallRows, fsaFallIssues],
+  );
   const totalFallHayBales = useMemo(() => fsaFallReport.hayRows.reduce((s, row) => s + row.production, 0), [fsaFallReport]);
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
+  const fertilizerReadinessSummary = useMemo(
+    () => buildFertilizerReadiness(fertilizerRecords, activeFieldIds),
+    [fertilizerRecords, activeFieldIds],
+  );
+  const hayReadinessSummary = useMemo(
+    () => buildHayReadiness(hayRecords, activeFieldIds),
+    [hayRecords, activeFieldIds],
+  );
 
   // Landlord specific logic — driven by field-level landlord assignment
   const [selectedLandlord, setSelectedLandlord] = useState<string>('');
@@ -216,6 +258,71 @@ export default function Reports() {
       seasonYear: viewingSeason,
     });
   }, [selectedLandlord, fields, cluAssignments, plantRecords, sprayRecords, customSprayRecords, fertilizerRecords, tillageRecords, harvestRecords, viewingSeason]);
+  const landlordReadinessSummary = useMemo(
+    () => selectedLandlord ? buildLandlordReadiness(landlordSummary, harvestRecords) : null,
+    [selectedLandlord, landlordSummary, harvestRecords],
+  );
+
+  const exportFingerprints = useMemo<Record<ReportTab, string>>(() => ({
+    'fsa-plant': buildReportFingerprint(fsaPlantRows),
+    'spray-audit': buildReportFingerprint(sprayRecords),
+    'fertilizer-summary': buildReportFingerprint(fertilizerRecords),
+    'fsa-harvest': buildReportFingerprint(fsaFallRows),
+    'hay-summary': buildReportFingerprint(hayRecords),
+    'landlord-statement': buildReportFingerprint(landlordSummary ? {
+      fields: landlordSummary.fields,
+      activity: landlordSummary.activity,
+      totals: landlordSummary.totals,
+    } : null),
+  }), [fsaPlantRows, sprayRecords, fertilizerRecords, fsaFallRows, hayRecords, landlordSummary]);
+
+  const getExportStatus = (reportType: ReportExportType) => {
+    void exportHistoryVersion;
+    if (!session?.user.id || !farm_id) return undefined;
+    return getReportExportStatus(
+      { userId: session.user.id, farmId: farm_id, seasonYear: viewingSeason, reportType },
+      exportFingerprints[reportType],
+    );
+  };
+
+  const runTrackedExport = (
+    reportType: ReportExportType,
+    fn: () => void | Promise<void>,
+    label: string,
+  ) => {
+    try {
+      Promise.resolve(fn())
+        .then(() => {
+          if (session?.user.id && farm_id) {
+            recordReportExport(
+              { userId: session.user.id, farmId: farm_id, seasonYear: viewingSeason, reportType },
+              exportFingerprints[reportType],
+            );
+            setExportHistoryVersion(version => version + 1);
+          }
+        })
+        .catch((err) => {
+          console.error(`Export failed (${label}):`, err);
+          toast.error(`Failed to export ${label}. Please try again.`);
+        });
+    } catch (err) {
+      console.error(`Export failed (${label}):`, err);
+      toast.error(`Failed to export ${label}. Please try again.`);
+    }
+  };
+
+  const handleIssueAction = (issue: ReportReadinessIssue) => {
+    if (issue.recordId && issue.recordType && issue.recordType !== 'plant') {
+      const activityTab = issue.recordType === 'customSpray' ? 'spray' : issue.recordType;
+      navigate(`/activity?tab=${encodeURIComponent(activityTab)}&record=${encodeURIComponent(issue.recordId)}&type=${encodeURIComponent(issue.recordType)}`);
+      return;
+    }
+    if (issue.fieldId) {
+      navigate(`/field/${encodeURIComponent(issue.fieldId)}`);
+      return;
+    }
+    navigate('/activity');
+  };
 
   const getMergedFsaTractsForExport = async () => {
     if (bundledFsaTracts.length > 0) return mergedFsaTracts;
@@ -235,7 +342,7 @@ export default function Reports() {
 
   const handleExportLandlordCSV = () => {
     if (!landlordSummary) return;
-    safeExport(async () => {
+    runTrackedExport('landlord-statement', async () => {
       const csv = generateLandlordSummaryCSV(landlordSummary);
       const fileName = sanitizeNativeFileName(`${selectedLandlord}_Summary_${viewingSeason}.csv`);
 
@@ -262,7 +369,7 @@ export default function Reports() {
   };
 
   const handleExportFsaPlantPdf = () => {
-    safeExport(async () => {
+    runTrackedExport('fsa-plant', async () => {
       const reportTracts = await getMergedFsaTractsForExport();
       const reportRows = buildFsa578Rows(plantRecords, fields, cluAssignments, reportTracts);
       const issues = validateFsa578Rows(reportRows);
@@ -281,13 +388,13 @@ export default function Reports() {
   };
 
   const handleExportSprayAuditPdf = () => {
-    safeExport(() => {
+    runTrackedExport('spray-audit', () => {
       generateSprayPDF(sprayRecords, farmName);
     }, 'spray audit PDF');
   };
 
   const handleExportFertilizerPdf = () => {
-    safeExport(() => {
+    runTrackedExport('fertilizer-summary', () => {
       exportToPdf({
         title: 'Fertilizer Application Summary',
         subtitle: `Generated ${reportDate}.`,
@@ -306,7 +413,7 @@ export default function Reports() {
   };
 
   const handleExportHarvestPdf = () => {
-    safeExport(() => {
+    runTrackedExport('fsa-harvest', () => {
       exportToPdf({
         title: 'FSA Fall Harvest / Production Evidence Worksheet',
         subtitle: `Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`,
@@ -342,7 +449,7 @@ export default function Reports() {
   };
 
   const handleExportHayPdf = () => {
-    safeExport(() => {
+    runTrackedExport('hay-summary', () => {
       const records = fields
         .filter(f => hayRecords.some(r => r.fieldId === f.id))
         .map(f => {
@@ -368,7 +475,7 @@ export default function Reports() {
 
   const handleExportLandlordPdf = () => {
     if (!landlordSummary) return;
-    safeExport(() => {
+    runTrackedExport('landlord-statement', () => {
       exportToPdf({
         title: 'Landlord Summary',
         subtitle: `${farmName ? farmName + ' — ' : ''}Prepared for: ${selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
@@ -466,15 +573,18 @@ export default function Reports() {
             totalPlantAcres={totalPlantAcres}
             plantedAcresByField={plantedAcresByField}
             fsaReadinessIssues={fsaReadinessIssues}
+            readinessSummary={fsaReadinessSummary}
+            exportStatus={getExportStatus('fsa-plant')}
             farmName={farmName}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
-            onExportCsv={() => safeExport(async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
+            onExportCsv={() => runTrackedExport('fsa-plant', async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
               farmName,
               cropYear: viewingSeason,
               reportDate: new Date().toISOString().split('T')[0],
             }), 'FSA-578 worksheet data')}
             onExportPdf={handleExportFsaPlantPdf}
+            onIssueAction={handleIssueAction}
           />
         </TabsContent>
 
@@ -482,9 +592,12 @@ export default function Reports() {
         <TabsContent value="spray-audit" className="mt-0">
           <SprayAuditReport
             sprayRows={sprayRows}
+            readinessSummary={sprayReadinessSummary}
+            exportStatus={getExportStatus('spray-audit')}
             reportDate={reportDate}
-            onExportCsv={() => safeExport(() => generateMissouriLog(sprayRecords, fields), 'spray log')}
+            onExportCsv={() => runTrackedExport('spray-audit', () => generateMissouriLog(sprayRecords, fields), 'spray log')}
             onExportPdf={handleExportSprayAuditPdf}
+            onIssueAction={handleIssueAction}
           />
         </TabsContent>
 
@@ -495,8 +608,11 @@ export default function Reports() {
             fieldMap={fieldMap}
             totalFertAcres={totalFertAcres}
             reportDate={reportDate}
-            onExportCsv={() => safeExport(() => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
+            onExportCsv={() => runTrackedExport('fertilizer-summary', () => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
             onExportPdf={handleExportFertilizerPdf}
+            readinessSummary={fertilizerReadinessSummary}
+            exportStatus={getExportStatus('fertilizer-summary')}
+            onIssueAction={handleIssueAction}
           />
         </TabsContent>
 
@@ -507,10 +623,13 @@ export default function Reports() {
             totalHarvestBu={totalHarvestBu}
             totalFallHayBales={totalFallHayBales}
             fsaFallIssues={fsaFallIssues}
+            readinessSummary={fsaFallReadinessSummary}
+            exportStatus={getExportStatus('fsa-harvest')}
+            onIssueAction={handleIssueAction}
             farmName={farmName}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
-            onExportCsv={() => safeExport(() => exportFsaFallProductionData({
+            onExportCsv={() => runTrackedExport('fsa-harvest', () => exportFsaFallProductionData({
               harvestRecords,
               hayRecords,
               fields,
@@ -532,6 +651,9 @@ export default function Reports() {
             totalHayBales={totalHayBales}
             reportDate={reportDate}
             onExportPdf={handleExportHayPdf}
+            readinessSummary={hayReadinessSummary}
+            exportStatus={getExportStatus('hay-summary')}
+            onIssueAction={handleIssueAction}
           />
         </TabsContent>
 
@@ -545,6 +667,9 @@ export default function Reports() {
             reportDate={reportDate}
             onExportCsv={handleExportLandlordCSV}
             onExportPdf={handleExportLandlordPdf}
+            readinessSummary={landlordReadinessSummary}
+            exportStatus={getExportStatus('landlord-statement')}
+            onIssueAction={handleIssueAction}
           />
         </TabsContent>
         </Tabs>

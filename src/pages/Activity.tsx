@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
 import { ClipboardList, Trash2, FileDown, Plus, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -67,6 +67,7 @@ type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestReco
 
 export default function Activity() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { openQuickAdd } = useQuickAdd();
   const {
     fields,
@@ -93,12 +94,16 @@ export default function Activity() {
   } = useFarm();
 
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<Tab>('all');
+  const requestedTab = searchParams.get('tab');
+  const [tab, setTab] = useState<Tab>(() =>
+    TAB_GROUPS.some(group => group.tabs.some(candidate => candidate.key === requestedTab)) ? requestedTab as Tab : 'all',
+  );
   const [reviewQueueOnly, setReviewQueueOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
   const [editingRecordType, setEditingRecordType] = useState<ActivityRecord['type'] | null>(null);
   const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
+  const openedRecordRef = useRef<string | null>(null);
 
   const openModal = (type: ActivityRecord['type'], record: EditableRecord, mode: 'edit' | 'duplicate') => {
     setEditingRecord(record);
@@ -111,6 +116,43 @@ export default function Activity() {
     setEditingRecordType(null);
     setEditingMode('edit');
   };
+
+  useEffect(() => {
+    if (TAB_GROUPS.some(group => group.tabs.some(candidate => candidate.key === requestedTab))) {
+      setTab(requestedTab as Tab);
+    }
+  }, [requestedTab]);
+
+  useEffect(() => {
+    const recordId = searchParams.get('record');
+    const recordType = searchParams.get('type') as ActivityRecord['type'] | null;
+    if (!recordId || !recordType || openedRecordRef.current === `${recordType}:${recordId}`) return;
+
+    const recordsByType: Partial<Record<ActivityRecord['type'], EditableRecord[]>> = {
+      plant: plantRecords,
+      spray: sprayRecords,
+      customSpray: customSprayRecords,
+      fertilizer: fertilizerApplications,
+      tillage: tillageRecords,
+      harvest: harvestRecords,
+      hay: hayHarvestRecords,
+      grain: grainMovements,
+    };
+    const record = recordsByType[recordType]?.find(candidate => candidate.id === recordId);
+    if (!record) return;
+    openedRecordRef.current = `${recordType}:${recordId}`;
+    openModal(recordType, record, 'edit');
+  }, [
+    searchParams,
+    plantRecords,
+    sprayRecords,
+    customSprayRecords,
+    fertilizerApplications,
+    tillageRecords,
+    harvestRecords,
+    hayHarvestRecords,
+    grainMovements,
+  ]);
 
   const { pending: pendingDeletes, requestDelete } = useUndoDelete<ActivityRecord[]>({
     onCommit: async (_ids, toDelete) => {
