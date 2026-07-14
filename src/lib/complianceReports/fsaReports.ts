@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 
 import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
+import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { roundTo } from '../../utils/numbers';
@@ -828,10 +829,10 @@ export async function exportFsaFallProductionData({
     await downloadFile(csvContent, `FSA_Fall_Production_${cropYear}_${today}.csv`, 'text/csv');
 }
 
-export function generateMissouriLogRows(records: SprayRecord[], fields: Field[]): string[] {
+export function generateMissouriLogRows(records: SprayRecord[], fields: Field[], cluAssignments: FieldCluAssignment[] = []): string[] {
     return records.flatMap(r => {
         const field = fields.find(f => f.id === r.fieldId);
-        const treatedArea = r.treatedAreaSize || field?.acreage || '';
+        const treatedArea = r.treatedAreaSize || (field ? getDisplayFieldAcres(field, cluAssignments) : '') || '';
 
         // If there are granular products, create a row for each herbicide in the mix
         if (r.products && r.products.length > 0) {
@@ -896,7 +897,7 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[])
     });
 }
 
-export async function generateMissouriLog(records: SprayRecord[], fields: Field[]): Promise<void> {
+export async function generateMissouriLog(records: SprayRecord[], fields: Field[], cluAssignments: FieldCluAssignment[] = []): Promise<void> {
     const header = [
         'Date', 'Start Time', 'End Time', 'Applicator Name', 'License #', 'Crop/Site Treated', 'Trade Name', 'EPA Reg #',
         'Site/Field', 'Total Acres Treated', 'App Rate (per ac)', 'Total Product Applied',
@@ -905,7 +906,7 @@ export async function generateMissouriLog(records: SprayRecord[], fields: Field[
         'Sensitive Area Check', 'Sensitive Area Notes'
     ].join(',');
 
-    const rows = generateMissouriLogRows(records, fields);
+    const rows = generateMissouriLogRows(records, fields, cluAssignments);
     const csvContent = [header, ...rows].join('\n');
     await downloadFile(csvContent, `Missouri_Spray_Log_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
 }

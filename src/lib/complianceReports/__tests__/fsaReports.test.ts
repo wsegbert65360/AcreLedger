@@ -42,8 +42,8 @@ describe('Missouri Log Generation', () => {
             deleted_at: null
         };
 
-        const rows = generateMissouriLogRows([spray], [field]);
-        
+        const rows = generateMissouriLogRows([spray], [field], []);
+
         // Should have 2 rows for the 2 products
         expect(rows.length).toBe(2);
         
@@ -72,8 +72,36 @@ describe('Missouri Log Generation', () => {
             deleted_at: null
         };
 
-        const rows = generateMissouriLogRows([spray], [field]);
+        const rows = generateMissouriLogRows([spray], [field], []);
         expect(rows[0]).toContain('"50"'); // Should use treatedAreaSize 50, not field acreage 100
+    });
+
+    it('should fall back to CLU cropland display acreage when treatedAreaSize is absent', () => {
+        const field: Field = { id: 'f1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
+        const cluAssignments: FieldCluAssignment[] = [
+            {
+                id: 'clu-1',
+                farmId: 'farm-1',
+                fieldId: 'f1',
+                tractKey: '918-1327',
+                cluNumber: '1',
+                acres: 60,
+                landUse: 'cropland',
+                assignedAt: '2026-06-16T00:00:00.000Z',
+                deletedAt: null,
+            },
+        ];
+        const spray: SprayRecord = {
+            id: 's1', fieldId: 'f1', fieldName: 'F1',
+            products: [{ product: 'P1', rate: '1', rateUnit: 'oz', epaRegNumber: '123' }],
+            windSpeed: 0, temperature: 0, timestamp: 0, seasonYear: 2026,
+            // No treatedAreaSize — should fall back to FSA cropland display acreage (60), not raw field acreage (100)
+            deleted_at: null
+        };
+
+        const rows = generateMissouriLogRows([spray], [field], cluAssignments);
+        expect(rows[0]).toContain('"60"');
+        expect(rows[0]).not.toContain('"100"');
     });
 });
 

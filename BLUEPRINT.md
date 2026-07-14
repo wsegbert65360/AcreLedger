@@ -174,6 +174,7 @@ Supports multiple products per application (tank-mix) and advanced environmental
   deleted_at }
 ```
 - **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph) with manual override.
+- **Treated Area Default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`) use `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, `field.acreage` fallback) — the FSA crop acreage shown on the field, never a raw `field.acreage` read. An explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray) is always preserved; only the default/fallback changes. Historical records were backfilled by migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql`.
 - **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
 - **Non-Compliant Flag**: Triggered if any product is missing an `epaRegNumber`.

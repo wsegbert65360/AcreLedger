@@ -23,6 +23,7 @@ import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatTotalAmount } from '@/utils/unitConversion';
+import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { Field } from '@/types/farm';
 import {
   buildFertilizerReadiness,
@@ -161,7 +162,7 @@ export default function Reports() {
   // Expanded spray rows — memoized, keyed by index to avoid product-name collisions
   const sprayRows = useMemo(() => sprayRecords.flatMap(r => {
     const field = fieldMap.get(r.fieldId);
-    const treatedArea = r.treatedAreaSize ?? field?.acreage ?? 0;
+    const treatedArea = r.treatedAreaSize ?? (field ? getDisplayFieldAcres(field, cluAssignments) : 0) ?? 0;
 
     if (r.products && r.products.length > 0) {
       return r.products.map((p, i) => ({
@@ -185,7 +186,7 @@ export default function Reports() {
         ? `${r.totalAmountApplied} ${r.rateUnit?.replace('/ac', '') || 'gal'}` 
         : '—',
     }];
-  }), [sprayRecords, fieldMap]);
+  }), [sprayRecords, fieldMap, cluAssignments]);
   const sprayReadinessSummary = useMemo(
     () => buildSprayReadiness(sprayRecords, WIND_ALERT_MPH),
     [sprayRecords],
@@ -595,7 +596,7 @@ export default function Reports() {
             readinessSummary={sprayReadinessSummary}
             exportStatus={getExportStatus('spray-audit')}
             reportDate={reportDate}
-            onExportCsv={() => runTrackedExport('spray-audit', () => generateMissouriLog(sprayRecords, fields), 'spray log')}
+            onExportCsv={() => runTrackedExport('spray-audit', () => generateMissouriLog(sprayRecords, fields, cluAssignments), 'spray log')}
             onExportPdf={handleExportSprayAuditPdf}
             onIssueAction={handleIssueAction}
           />

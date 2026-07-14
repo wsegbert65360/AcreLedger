@@ -149,6 +149,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Keep spray terminology state-neutral unless a specific legal report requires state wording.
 - `WIND_ALERT_MPH = 10` is the named wind alert threshold. Its canonical export is `@/lib/weatherHelpers.ts`; import from there rather than re-declaring a local constant.
 - Past weather recovery uses Visual Crossing based on field location and start time.
+- **Treated area default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`) must use `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, `field.acreage` fallback) — the FSA crop acreage, never a raw `field.acreage` read. This matches the acreage shown on the field. An explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray) is always preserved; only the default/fallback changes. Historical records were backfilled to this value by migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql`.
 
 ### Custom (Outside-Party) Spray Records
 

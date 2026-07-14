@@ -6,6 +6,7 @@ import { useFarm } from '@/store/farmStore';
 import { native } from '@/lib/native';
 import { toast } from 'sonner';
 import { calculateTotalAmount } from '@/utils/unitConversion';
+import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { getLatestForField } from '@/lib/utils';
 
 export type SprayWizardStep = 'core' | 'mix' | 'conditions' | 'review';
@@ -48,7 +49,7 @@ function normalizeProducts(initial?: SprayRecord): SprayRecipeProduct[] {
 
 export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' }: UseSprayFormProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { addSprayRecord, updateSprayRecord, addSprayRecipe, sprayRecipes, sprayRecords, session, viewingSeason } = useFarm();
+  const { addSprayRecord, updateSprayRecord, addSprayRecipe, sprayRecipes, sprayRecords, session, viewingSeason, cluAssignments } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || 'local';
 
   const initialDataRef = useRef(initialData);
@@ -91,7 +92,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [isEndTimeManual, setIsEndTimeManual] = useState(!!initialData?.endTime);
   const [involvedTechnicians, setInvolvedTechnicians] = useState(initialData?.involvedTechnicians || '');
   const [siteAddress, setSiteAddress] = useState(initialData?.siteAddress || field.name);
-  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || field?.acreage?.toString() || '');
+  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || getDisplayFieldAcres(field, cluAssignments).toString() || '');
   const [treatedAreaUnit, setTreatedAreaUnit] = useState(initialData?.treatedAreaUnit || 'ac');
   const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied?.toString() || '');
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
@@ -154,7 +155,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setEndTime(initialData.endTime || '');
       setIsEndTimeManual(!!initialData.endTime);
       setSiteAddress(initialData.siteAddress || field.name);
-      setTreatedAreaSize(initialData.treatedAreaSize?.toString() || field?.acreage?.toString() || '');
+      setTreatedAreaSize(initialData.treatedAreaSize?.toString() || getDisplayFieldAcres(field, cluAssignments).toString() || '');
       setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
       setTotalAmountApplied(initialData.totalAmountApplied?.toString() || '');
       setMixtureRate(initialData.mixtureRate || '');
@@ -203,7 +204,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setEndTime('');
       setIsEndTimeManual(false);
       setSiteAddress(field.name);
-      setTreatedAreaSize(field?.acreage?.toString() || '');
+      setTreatedAreaSize(getDisplayFieldAcres(field, cluAssignments).toString() || '');
       setTreatedAreaUnit('ac');
       setTotalAmountApplied('');
       setMixtureRate('');
