@@ -103,6 +103,40 @@ describe('Missouri Log Generation', () => {
         expect(rows[0]).toContain('"60"');
         expect(rows[0]).not.toContain('"100"');
     });
+
+    it('recalculates displayed totals without mutating stored weather or record data', () => {
+        const field: Field = { id: 'f1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
+        const spray: SprayRecord = {
+            id: 's1',
+            fieldId: 'f1',
+            fieldName: 'F1',
+            products: [{
+                product: 'P1',
+                rate: '1',
+                rateUnit: 'qt/ac',
+                totalProductAmount: '25',
+                totalProductUnit: 'gal',
+                epaRegNumber: '123',
+            }],
+            treatedAreaSize: 80,
+            windSpeed: 7,
+            windDirection: 'NW',
+            temperature: 74,
+            relativeHumidity: 61,
+            startTime: '08:00',
+            endTime: '09:39',
+            notes: 'Weather and timing must be preserved.',
+            timestamp: 0,
+            seasonYear: 2026,
+            deleted_at: null,
+        };
+        const original = structuredClone(spray);
+
+        const rows = generateMissouriLogRows([spray], [field], []);
+
+        expect(rows[0]).toContain('"20 gal"');
+        expect(spray).toEqual(original);
+    });
 });
 
 describe('FSA 578 report rows', () => {

@@ -151,7 +151,7 @@ describe('TractAssignmentFlow Legacy Toggling', () => {
         expect.objectContaining({
           id: 'field-1',
           cluNumbers: ['10', '11', '12'],
-          acreage: 13,
+          acreage: 10,
         }),
       );
     });

@@ -11,6 +11,7 @@ export interface FieldRow {
     farm_id: string;
     name: string;
     acreage: number;
+    operational_acreage?: number | null;
     lat: number | null;
     lng: number | null;
     fsa_farm_number?: string | null;

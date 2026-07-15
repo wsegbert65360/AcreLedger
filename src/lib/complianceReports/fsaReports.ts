@@ -6,7 +6,7 @@ import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { roundTo } from '../../utils/numbers';
-import { formatTotalAmount } from '../../utils/unitConversion';
+import { formatSprayProductTotal } from '../../utils/unitConversion';
 
 function sanitizeCsvValue(val: string | number | null | undefined): string {
     if (val === null || val === undefined) return '""';
@@ -842,9 +842,7 @@ export function generateMissouriLogRows(records: SprayRecord[], fields: Field[],
         if (r.products && r.products.length > 0) {
             return r.products.map((p: any) => {
                 const areaNum = parseFloat(treatedArea.toString());
-                const productTotalDisplay = p.totalProductAmount 
-                    ? `${p.totalProductAmount} ${p.totalProductUnit || ''}`.trim()
-                    : formatTotalAmount(p.rate, areaNum, p.rateUnit);
+                const productTotalDisplay = formatSprayProductTotal(p, areaNum);
 
                 return [
                     sanitizeCsvValue(r.sprayDate || new Date(r.timestamp).toLocaleDateString()),

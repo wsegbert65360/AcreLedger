@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
-import { formatTotalAmount } from '@/utils/unitConversion';
+import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { Field } from '@/types/farm';
 import {
@@ -172,9 +172,7 @@ export default function Reports() {
         epaRegNumber: p.epaRegNumber,
         applicationRate: p.rate,
         rateUnit: p.rateUnit,
-        amountDisplay: p.totalProductAmount 
-          ? `${p.totalProductAmount} ${p.totalProductUnit || ''}`.trim()
-          : formatTotalAmount(p.rate, treatedArea, p.rateUnit),
+        amountDisplay: formatSprayProductTotal(p, treatedArea),
       }));
     }
 

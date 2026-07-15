@@ -13,6 +13,7 @@ import {
   sanitizeFilename
 } from './sprayExportFormatters';
 import { cleanName } from '@/utils/text';
+import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
 
@@ -198,7 +199,7 @@ export function generateSprayPDF(
           },
           p.epaRegNumber || '-',
           `${p.rate || '-'} ${p.rateUnit || ''}`.trim(),
-          `${p.totalProductAmount || '-'} ${p.totalProductUnit || ''}`.trim()
+          formatSprayProductTotal(p, record.treatedAreaSize)
         ]),
         theme: 'grid',
         headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },

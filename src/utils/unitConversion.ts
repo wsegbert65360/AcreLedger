@@ -67,6 +67,33 @@ export function formatTotalAmount(rate: string | number, acres: number, rateUnit
 }
 
 /**
+ * Formats a spray product total from its rate and the record's authoritative
+ * treated acreage without mutating the stored product data. Stored totals are
+ * retained only as a fallback for legacy rows that cannot be recalculated.
+ */
+export function formatSprayProductTotal(
+  product: {
+    rate?: string | number;
+    rateUnit?: string;
+    totalProductAmount?: string;
+    totalProductUnit?: string;
+  },
+  treatedAcres?: number | null,
+): string {
+  const rate = typeof product.rate === 'number' ? product.rate : parseFloat(product.rate || '');
+
+  if (Number.isFinite(rate) && rate > 0 && treatedAcres != null && Number.isFinite(treatedAcres) && treatedAcres > 0) {
+    return formatTotalAmount(rate, treatedAcres, product.rateUnit || '');
+  }
+
+  if (product.totalProductAmount) {
+    return `${product.totalProductAmount} ${product.totalProductUnit || ''}`.trim();
+  }
+
+  return '—';
+}
+
+/**
  * Normalizes unit string for display in the UI.
  */
 export function getUnitLabel(unit: string): string {

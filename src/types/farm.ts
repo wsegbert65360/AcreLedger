@@ -12,6 +12,8 @@ export interface Field {
   id: string;
   name: string;
   acreage: number;
+  /** Stable boundary/manual acreage; stored in the legacy operational_acreage DB column. */
+  boundaryAcreage?: number;
   lat: number | null;
   lng: number | null;
   fsaFarmNumber?: string;

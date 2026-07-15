@@ -45,6 +45,7 @@ export const fieldSchema = z.object({
   id: z.string(),
   name: z.string(),
   acreage: z.number(),
+  boundaryAcreage: z.number().positive().optional(),
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
   fsaFarmNumber: z.string().optional(),

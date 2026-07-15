@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    mapFieldToDb,
+    mapFieldFromDb, mapFieldToDb,
     mapPlantToDb,
     mapSprayFromDb, mapSprayToDb,
     mapCustomSprayFromDb, mapCustomSprayToDb,
@@ -9,6 +9,22 @@ import {
 import { SprayRecord, SavedSeed, CustomSprayRecord } from '../../types/farm';
 
 describe('Mappers Round-Trip', () => {
+    it('should preserve boundary acreage through the legacy operational column', () => {
+        const db = mapFieldToDb({
+            id: 'field-1',
+            farm_id: 'farm-1',
+            name: 'Bottom Field',
+            acreage: 32,
+            boundaryAcreage: 40,
+            lat: null,
+            lng: null,
+            deleted_at: null,
+        });
+
+        expect(db.operational_acreage).toBe(40);
+        expect(mapFieldFromDb(db as any).boundaryAcreage).toBe(40);
+    });
+
     it('should maintain SprayRecord integrity through round-trip', () => {
         const original: SprayRecord = {
             id: '123',

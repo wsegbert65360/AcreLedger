@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildDisplayFieldAcreMap, calculateFieldCroplandAcres, getDisplayFieldAcres } from '../fieldAcreage';
+import {
+  buildDisplayFieldAcreMap,
+  calculateFieldCroplandAcres,
+  getBoundaryFieldAcres,
+  getDisplayFieldAcres,
+} from '../fieldAcreage';
 import type { Field } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 
@@ -8,6 +13,7 @@ const field: Field = {
   id: 'field-1',
   name: 'Bottom Field',
   acreage: 40,
+  boundaryAcreage: 40,
   lat: 39,
   lng: -94,
   deleted_at: null,
@@ -47,6 +53,18 @@ describe('field acreage display helpers', () => {
   it('falls back to stored field acreage when no CLUs are assigned', () => {
     expect(calculateFieldCroplandAcres('field-1', [])).toBeNull();
     expect(getDisplayFieldAcres(field, [])).toBe(40);
+  });
+
+  it('keeps boundary acreage separate from assigned FSA crop acreage', () => {
+    expect(getBoundaryFieldAcres(field, assignments)).toBe(40);
+    expect(getDisplayFieldAcres(field, assignments)).toBe(32);
+  });
+
+  it('does not mislabel a legacy CLU-derived acreage as boundary acreage', () => {
+    const legacyField = { ...field, boundaryAcreage: undefined };
+
+    expect(getBoundaryFieldAcres(legacyField, assignments)).toBeNull();
+    expect(getDisplayFieldAcres(legacyField, assignments)).toBe(32);
   });
 
   it('builds display acreage maps by field', () => {

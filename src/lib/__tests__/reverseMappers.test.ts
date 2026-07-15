@@ -292,11 +292,19 @@ describe('Reverse mapper output keys', () => {
     expect(keys).toContain('fsa_farm_number');
     expect(keys).toContain('irrigation_practice');
     expect(keys).toContain('clu_numbers');
+    expect(keys).toContain('operational_acreage');
     expect(keys).toContain('farm_id');
     expect(keys).toContain('deleted_at');
     expect(keys).not.toContain('fsaFarmNumber');
     expect(keys).not.toContain('cluNumbers');
     expect(result.clu_numbers).toEqual(['11', '14']);
+  });
+
+  it('mapFieldToDb preserves boundary acreage in the legacy operational column', () => {
+    const result = mapFieldToDb(makeField({ boundaryAcreage: 42.75 }));
+
+    expect(result.operational_acreage).toBe(42.75);
+    expect(result.acreage).toBe(makeField().acreage);
   });
 
   it('mapPlantToDb outputs snake_case keys', () => {

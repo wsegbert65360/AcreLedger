@@ -18,6 +18,7 @@ import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
 import { Field } from '@/types/farm';
 import { calculateAcreage } from '@/lib/gisService';
+import { getBoundaryFieldAcres } from '@/lib/fieldAcreage';
 import { FsaImportCandidate, parseFsaGeoJson } from '@/lib/fsaImport';
 
 function MapInteraction({ onPointAdd, isCapturing }: { onPointAdd: (latlng: [number, number]) => void; isCapturing: boolean }) {
@@ -47,10 +48,11 @@ interface FieldManageModalProps {
 }
 
 export default function FieldManageModal({ open, onClose, editField }: FieldManageModalProps) {
-  const { addField, updateField } = useFarm();
+  const { addField, updateField, cluAssignments } = useFarm();
+  const editBoundaryAcreage = editField ? getBoundaryFieldAcres(editField, cluAssignments) : null;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState(editField?.name || '');
-  const [acreage, setAcreage] = useState(editField?.acreage?.toString() || '');
+  const [acreage, setAcreage] = useState(editBoundaryAcreage?.toString() || '');
   const [lat, setLat] = useState(editField?.lat?.toString() || '');
   const [lng, setLng] = useState(editField?.lng?.toString() || '');
   const [fsaFarm, setFsaFarm] = useState(editField?.fsaFarmNumber || '');
@@ -76,7 +78,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     if (!open) return;
     if (editField) {
       setName(editField.name || '');
-      setAcreage(editField.acreage?.toString() || '');
+      setAcreage(editBoundaryAcreage?.toString() || '');
       setLat(editField.lat?.toString() || '');
       setLng(editField.lng?.toString() || '');
       setFsaFarm(editField.fsaFarmNumber || '');
@@ -112,7 +114,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     }
     setImportCandidates([]);
     setSelectedImportId('');
-  }, [editField, open]);
+  }, [editBoundaryAcreage, editField, open]);
 
   // Attempt Geolocation on Mount if no field is being edited
   useEffect(() => {
@@ -250,6 +252,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     const fieldData = {
       name: name.trim(),
       acreage: ac,
+      boundaryAcreage: ac,
       lat: la,
       lng: ln,
       boundary: fieldBoundary,
@@ -269,7 +272,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       let success = false;
       if (isEdit) {
         const updatedField: Field = {
-          id: editField.id,
+          ...editField,
           ...fieldData,
           farm_id: editField.farm_id,
           deleted_at: editField.deleted_at ?? null
@@ -413,7 +416,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             </div>
             <div>
               <Label htmlFor="acreage" className="text-muted-foreground font-mono text-xs flex items-center gap-1">
-                ACREAGE {points.length >= 3 && <span className="text-[11px] text-primary">(AUTO)</span>}
+                BOUNDARY ACRES {points.length >= 3 && <span className="text-[11px] text-primary">(AUTO)</span>}
               </Label>
               <Input
                 id="acreage"

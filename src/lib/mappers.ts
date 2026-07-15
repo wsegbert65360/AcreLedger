@@ -39,6 +39,9 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     id: db.id,
     name: safeStr(db.name, 'Unnamed Field'),
     acreage: safeNum(db.acreage),
+    boundaryAcreage: db.operational_acreage != null && safeNum(db.operational_acreage) > 0
+        ? safeNum(db.operational_acreage)
+        : undefined,
     lat: db.lat ?? null,
     lng: db.lng ?? null,
     fsaFarmNumber: safeStr(db.fsa_farm_number),
@@ -307,6 +310,7 @@ export const mapFieldToDb = (f: Field) => {
         farm_id: f.farm_id,
         name: f.name,
         acreage: f.acreage,
+        boundaryAcreage: f.boundaryAcreage,
         lat: f.lat,
         lng: f.lng,
         fsaFarmNumber: f.fsaFarmNumber,
@@ -327,6 +331,7 @@ export const mapFieldToDb = (f: Field) => {
         farm_id: f.farm_id,
         name: f.name,
         acreage: f.acreage,
+        operational_acreage: f.boundaryAcreage ?? 0,
         lat: f.lat ?? null,
         lng: f.lng ?? null,
         fsa_farm_number: f.fsaFarmNumber ?? null,

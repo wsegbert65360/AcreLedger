@@ -4,15 +4,21 @@ import { Field } from '@/types/farm';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUndoDelete } from '@/hooks/useUndoDelete';
+import { buildDisplayFieldAcreMap, getBoundaryFieldAcres } from '@/lib/fieldAcreage';
+import { formatMeasurement, roundTo } from '@/utils/numbers';
 import FieldManageModal from './FieldManageModal';
 
 // ✅ Fix: Extracted shared card component — eliminates duplication
 function FieldCard({
   field,
+  displayAcreage,
+  boundaryAcreage,
   onEdit,
   onDelete,
 }: {
   field: Field;
+  displayAcreage: number;
+  boundaryAcreage: number | null;
   onEdit: (field: Field) => void;
   onDelete: (id: string) => void;
 }) {
@@ -21,14 +27,22 @@ function FieldCard({
     field.lat != null && field.lng != null
       ? `${field.lat.toFixed(3)}, ${field.lng.toFixed(3)}`
       : '—';
+  const roundedDisplayAcreage = roundTo(displayAcreage, 2);
+  const roundedBoundaryAcreage = boundaryAcreage == null ? null : roundTo(boundaryAcreage, 2);
+  const hasDifferentBoundary = roundedBoundaryAcreage != null && roundedDisplayAcreage !== roundedBoundaryAcreage;
 
   return (
     <div className="bg-card border border-border rounded-lg p-3 flex items-center justify-between">
       <div>
         <span className="font-bold text-foreground text-sm">{field.name}</span>
         <div className="text-xs font-mono text-muted-foreground mt-0.5">
-          {field.acreage} ac · {coords}
+          {formatMeasurement(roundedDisplayAcreage, 'ac', 2)} FSA crop · {coords}
         </div>
+        {hasDifferentBoundary && roundedBoundaryAcreage != null && (
+          <div className="mt-0.5 text-xs font-mono text-muted-foreground">
+            Boundary: {formatMeasurement(roundedBoundaryAcreage, 'ac', 2)}
+          </div>
+        )}
       </div>
       <div className="flex gap-1">
         <button
@@ -51,7 +65,7 @@ function FieldCard({
 }
 
 export default function FieldManager() {
-  const { fields: allFields, deleteField, fetchError } = useFarm();
+  const { fields: allFields, cluAssignments, deleteField, fetchError } = useFarm();
 
   const [editField, setEditField] = useState<Field | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -71,6 +85,10 @@ export default function FieldManager() {
   const activeFields = useMemo(() =>
     allFields.filter(f => !f.deleted_at && !pendingDeletes.has(f.id)),
     [allFields, pendingDeletes]
+  );
+  const displayAcreMap = useMemo(
+    () => buildDisplayFieldAcreMap(activeFields, cluAssignments),
+    [activeFields, cluAssignments]
   );
 
   const { rowCrops, pastureHay } = useMemo(() => {
@@ -142,6 +160,8 @@ export default function FieldManager() {
                   <FieldCard
                     key={field.id}
                     field={field}
+                    displayAcreage={displayAcreMap.get(field.id) ?? field.acreage}
+                    boundaryAcreage={getBoundaryFieldAcres(field, cluAssignments)}
                     onEdit={setEditField}
                     onDelete={handleDeleteRequest}
                   />
@@ -160,6 +180,8 @@ export default function FieldManager() {
                   <FieldCard
                     key={field.id}
                     field={field}
+                    displayAcreage={displayAcreMap.get(field.id) ?? field.acreage}
+                    boundaryAcreage={getBoundaryFieldAcres(field, cluAssignments)}
                     onEdit={setEditField}
                     onDelete={handleDeleteRequest}
                   />

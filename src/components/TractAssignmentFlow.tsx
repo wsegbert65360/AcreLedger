@@ -211,17 +211,14 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
     if (!field) return;
 
     const cluNumbers = nextAssignments.map(a => a.cluNumber);
-    const acreage = Math.round(nextAssignments.reduce((sum, a) => sum + a.acres, 0) * 100) / 100;
-    const existingAcreage = Math.round((field.acreage ?? 0) * 100) / 100;
 
-    if (hasSameCluNumbers(field.cluNumbers ?? [], cluNumbers) && existingAcreage === acreage) {
+    if (hasSameCluNumbers(field.cluNumbers ?? [], cluNumbers)) {
       return;
     }
 
     await updateField({
       ...field,
       cluNumbers,
-      acreage,
     });
   }, [updateField]);
 
