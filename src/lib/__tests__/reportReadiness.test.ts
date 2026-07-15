@@ -130,9 +130,9 @@ describe('spray readiness', () => {
 describe('FSA readiness adapters', () => {
   it('counts FSA-578 readiness by field rather than expanded CLU rows', () => {
     const rows = [
-      { id: 'north-clu-1', fieldName: 'North' },
-      { id: 'north-clu-2', fieldName: 'North' },
-      { id: 'south-clu-1', fieldName: 'South' },
+      { id: 'north-clu-1', fieldId: 'field-north', fieldName: 'North' },
+      { id: 'north-clu-2', fieldId: 'field-north', fieldName: 'North' },
+      { id: 'south-clu-1', fieldId: 'field-south', fieldName: 'South' },
     ];
     const summary = buildFsa578Readiness(rows, [
       { rowId: 'north-clu-1', severity: 'error', field: 'farmNumber', message: 'North is missing a farm number.' },
@@ -144,12 +144,26 @@ describe('FSA readiness adapters', () => {
       'Farm, tract, and CLU setup',
       'Farm, tract, and CLU setup',
     ]);
+    expect(summary.issues[0]).toMatchObject({ fieldId: 'field-north', itemId: 'field-north' });
+  });
+
+  it('keeps fields with duplicate names distinct', () => {
+    const rows = [
+      { id: 'north-1', fieldId: 'field-1', fieldName: 'North' },
+      { id: 'north-2', fieldId: 'field-2', fieldName: 'North' },
+    ];
+    const summary = buildFsa578Readiness(rows, [
+      { rowId: 'north-1', severity: 'error', field: 'farmNumber', message: 'North is missing a farm number.' },
+    ]);
+
+    expect(summary).toMatchObject({ totalItems: 2, readyItems: 1, affectedItems: 1 });
+    expect(summary.issues[0]).toMatchObject({ fieldId: 'field-1' });
   });
 
   it('counts Fall FSA readiness by production record', () => {
     const rows = [
-      { id: 'harvest-1', fieldName: 'North' },
-      { id: 'harvest-2', fieldName: 'South' },
+      { id: 'harvest-1', fieldName: 'North', recordType: 'grain' as const },
+      { id: 'harvest-2', fieldName: 'South', recordType: 'hay' as const },
     ];
     const summary = buildFsaFallReadiness(rows, [
       { rowId: 'harvest-1', severity: 'warning', field: 'evidenceReference', message: 'North needs a ticket.' },
@@ -159,7 +173,17 @@ describe('FSA readiness adapters', () => {
     expect(summary.issues[0]).toMatchObject({
       category: 'Destination and evidence',
       recordId: 'harvest-1',
+      recordType: 'harvest',
       actionLabel: 'Review record',
     });
+  });
+
+  it('routes Fall FSA hay rows to hay activity records', () => {
+    const rows = [{ id: 'hay-1', fieldName: 'South', recordType: 'hay' as const }];
+    const summary = buildFsaFallReadiness(rows, [
+      { rowId: 'hay-1', severity: 'warning', field: 'evidenceReference', message: 'South needs evidence.' },
+    ]);
+
+    expect(summary.issues[0]).toMatchObject({ recordId: 'hay-1', recordType: 'hay' });
   });
 });

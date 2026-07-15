@@ -56,7 +56,7 @@ build/
 *.xcarchive
 
 # Website (development only)
-website/
+Website/
 
 # local scratch and assistant files
 .tmp/

@@ -6,6 +6,7 @@ import { buildFsa578Reconciliation } from './fsa578PdfExport';
 function row(overrides: Partial<Fsa578ReportRow>): Fsa578ReportRow {
   return {
     id: 'row-1',
+    fieldId: 'field-1',
     date: '2026-04-15',
     fieldName: 'North 80',
     farmNumber: '100',

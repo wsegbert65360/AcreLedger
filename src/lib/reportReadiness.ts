@@ -75,7 +75,9 @@ interface LandlordReadinessHarvest {
 
 interface FsaReadinessRow {
   id: string;
+  fieldId?: string;
   fieldName: string;
+  recordType?: 'grain' | 'hay';
 }
 
 interface FsaReadinessValidationIssue {
@@ -154,7 +156,7 @@ export function buildFsa578Readiness(
   validationIssues: FsaReadinessValidationIssue[],
 ): ReportReadinessSummary {
   const rowById = new Map(rows.map(row => [row.id, row]));
-  const fieldNames = new Set(rows.map(row => row.fieldName));
+  const fieldIds = new Set(rows.map(row => row.fieldId ?? row.fieldName));
   const issues = validationIssues.map((issue, index): ReportReadinessIssue => {
     const row = rowById.get(issue.rowId);
     return {
@@ -162,14 +164,15 @@ export function buildFsa578Readiness(
       severity: issue.severity,
       category: FSA_578_CATEGORY_BY_FIELD[issue.field] ?? 'Other report details',
       message: issue.message,
-      itemId: row?.fieldName ?? issue.rowId,
+      itemId: row?.fieldId ?? row?.fieldName ?? issue.rowId,
+      fieldId: row?.fieldId,
       recordId: issue.rowId,
       recordType: 'plant',
       actionLabel: row ? 'Open field' : undefined,
     };
   });
 
-  return buildReportReadinessSummary({ totalItems: fieldNames.size, issues });
+  return buildReportReadinessSummary({ totalItems: fieldIds.size, issues });
 }
 
 export function buildFsaFallReadiness(
@@ -186,7 +189,7 @@ export function buildFsaFallReadiness(
       message: issue.message,
       itemId: issue.rowId,
       recordId: issue.rowId,
-      recordType: row && 'recordType' in row ? String(row.recordType) : 'harvest',
+      recordType: row?.recordType === 'hay' ? 'hay' : 'harvest',
       actionLabel: row ? 'Review record' : undefined,
     };
   });

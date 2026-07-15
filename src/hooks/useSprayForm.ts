@@ -51,6 +51,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const isDuplicate = mode === 'duplicate' && !!initialData;
   const { addSprayRecord, updateSprayRecord, addSprayRecipe, sprayRecipes, sprayRecords, session, viewingSeason, cluAssignments } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || 'local';
+  const displayFieldAcres = getDisplayFieldAcres(field, cluAssignments);
 
   const initialDataRef = useRef(initialData);
   useEffect(() => {
@@ -92,7 +93,12 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [isEndTimeManual, setIsEndTimeManual] = useState(!!initialData?.endTime);
   const [involvedTechnicians, setInvolvedTechnicians] = useState(initialData?.involvedTechnicians || '');
   const [siteAddress, setSiteAddress] = useState(initialData?.siteAddress || field.name);
-  const [treatedAreaSize, setTreatedAreaSize] = useState(initialData?.treatedAreaSize?.toString() || getDisplayFieldAcres(field, cluAssignments).toString() || '');
+  const [treatedAreaSize, setTreatedAreaSizeState] = useState(initialData?.treatedAreaSize?.toString() || displayFieldAcres.toString() || '');
+  const treatedAreaEditedRef = useRef(false);
+  const setTreatedAreaSize = useCallback((value: string) => {
+    treatedAreaEditedRef.current = true;
+    setTreatedAreaSizeState(value);
+  }, []);
   const [treatedAreaUnit, setTreatedAreaUnit] = useState(initialData?.treatedAreaUnit || 'ac');
   const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied?.toString() || '');
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
@@ -142,6 +148,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
     setShowValidation(false);
     hasSeenIncompleteWarning.current = false;
+    treatedAreaEditedRef.current = false;
     setStep('core');
     setSelectedRecipeId('');
 
@@ -155,7 +162,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setEndTime(initialData.endTime || '');
       setIsEndTimeManual(!!initialData.endTime);
       setSiteAddress(initialData.siteAddress || field.name);
-      setTreatedAreaSize(initialData.treatedAreaSize?.toString() || getDisplayFieldAcres(field, cluAssignments).toString() || '');
+      setTreatedAreaSizeState(initialData.treatedAreaSize?.toString() || displayFieldAcres.toString() || '');
       setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
       setTotalAmountApplied(initialData.totalAmountApplied?.toString() || '');
       setMixtureRate(initialData.mixtureRate || '');
@@ -204,7 +211,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setEndTime('');
       setIsEndTimeManual(false);
       setSiteAddress(field.name);
-      setTreatedAreaSize(getDisplayFieldAcres(field, cluAssignments).toString() || '');
+      setTreatedAreaSizeState(displayFieldAcres.toString() || '');
       setTreatedAreaUnit('ac');
       setTotalAmountApplied('');
       setMixtureRate('');
@@ -225,6 +232,14 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     // Depend only on open/initialData primitives per AGENTS.md (do not depend on `field` object reference).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData?.id, isDuplicate]);
+
+  // CLU assignments can finish hydrating after a new-record modal opens. Refresh
+  // the default only until the farmer edits it; existing and duplicated records
+  // must preserve their explicitly stored treated acreage.
+  useEffect(() => {
+    if (!open || initialData || treatedAreaEditedRef.current) return;
+    setTreatedAreaSizeState(displayFieldAcres.toString() || '');
+  }, [open, initialData, displayFieldAcres]);
 
   // Auto-fetch current weather for new or duplicate records
   useEffect(() => {

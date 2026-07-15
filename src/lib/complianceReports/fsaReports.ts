@@ -18,6 +18,7 @@ function sanitizeCsvValue(val: string | number | null | undefined): string {
 
 export interface Fsa578ReportRow {
     id: string;
+    fieldId: string;
     date: string;
     fieldName: string;
     farmNumber: string;
@@ -245,7 +246,7 @@ function displayedPlantDate(record: PlantRecord): string {
 
 function fsa578GroupKey(row: Fsa578ReportRow): string {
     return [
-        row.fieldName,
+        row.fieldId,
         row.farmNumber,
         row.tractNumber,
         row.fieldNumber,
@@ -367,6 +368,7 @@ export function buildFsa578Rows(
         const shareDisplay = share.toFixed(0);
 
         const baseRow = {
+            fieldId: r.fieldId,
             date: displayedPlantDate(r),
             fieldName: r.fieldName,
             crop: r.crop || '',
@@ -448,6 +450,7 @@ export function buildFsa578Rows(
 
             return {
                 id: `unreported-cropland-${a.id}`,
+                fieldId: a.fieldId,
                 date: '',
                 fieldName: field?.name || 'Unmatched field',
                 farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
@@ -476,6 +479,7 @@ export function buildFsa578Rows(
 
             return {
                 id: `non-cropland-${a.id}`,
+                fieldId: a.fieldId,
                 date: '',
                 fieldName: field?.name || 'Unmatched field',
                 farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
