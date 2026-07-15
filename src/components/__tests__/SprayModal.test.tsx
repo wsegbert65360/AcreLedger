@@ -471,7 +471,8 @@ describe('SprayModal product deletion', () => {
     act(() => { fireEvent.click(removeBtns[1]); });
 
     // confirm removal
-    await waitFor(() => expect(screen.getByText(/Remove Product/i)).toBeInTheDocument());
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent(/Remove Product/i);
     act(() => { fireEvent.click(screen.getByRole('button', { name: /^Remove$/i })); });
 
     // second product (Dicamba) should be gone, first (Roundup) stays

@@ -3,6 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { SprayRecipe, SprayRecipeProduct } from '@/types/farm';
 import { Plus, X, BookOpen } from 'lucide-react';
 
@@ -28,6 +38,7 @@ export function SprayWizardMixStep({
   removeProduct
 }: SprayWizardMixStepProps) {
   const [indexToDelete, setIndexToDelete] = useState<number | null>(null);
+  const productToDelete = indexToDelete != null ? products[indexToDelete] : null;
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-200">
@@ -175,25 +186,30 @@ export function SprayWizardMixStep({
         </Button>
       </div>
 
-      {indexToDelete != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border-destructive/30 max-w-sm w-full rounded-lg p-4 space-y-3">
-            <h3 className="text-foreground font-bold">Remove Product?</h3>
-            <p className="text-muted-foreground font-mono text-xs">
-              Remove &ldquo;{products[indexToDelete]?.product || 'this product'}&rdquo; from this spray mix?
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIndexToDelete(null)} className="touch-target border-border text-muted-foreground">Cancel</Button>
-              <Button
-                onClick={() => { removeProduct(indexToDelete); setIndexToDelete(null); }}
-                className="touch-target bg-destructive text-destructive-foreground glow-destructive"
-              >
+      <AlertDialog
+        open={indexToDelete != null}
+        onOpenChange={(open) => { if (!open) setIndexToDelete(null); }}
+      >
+        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Remove Product?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
+              Remove &ldquo;{productToDelete?.product || 'this product'}&rdquo; from this spray mix?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (indexToDelete != null) removeProduct(indexToDelete);
+              }}
+              className="touch-target bg-destructive text-destructive-foreground glow-destructive hover:bg-destructive/90"
+            >
                 Remove
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
