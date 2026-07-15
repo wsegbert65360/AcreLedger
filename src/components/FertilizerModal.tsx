@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { FertilizerApplication, Field } from '@/types/farm';
 import { native } from '@/lib/native';
@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { getLatestForField } from '@/lib/utils';
+import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 
 interface FertilizerModalProps {
     field: Field;
@@ -33,19 +34,26 @@ import {
 
 export default function FertilizerModal({ field, open, onClose, initialData, mode = 'edit' }: FertilizerModalProps) {
     const isDuplicate = mode === 'duplicate' && !!initialData;
-    const { 
-        addFertilizerApplication, 
-        updateFertilizerApplication, 
+    const {
+        addFertilizerApplication,
+        updateFertilizerApplication,
         deleteFertilizerApplications,
         addFertilizerRecipe,
         deleteFertilizerRecipe,
         fertilizerRecipes,
         fertilizerApplications,
+        cluAssignments,
         viewingSeason
     } = useFarm();
+    const displayFieldAcres = getDisplayFieldAcres(field, cluAssignments);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [acres, setAcres] = useState(field.acreage.toString());
+    const [acres, setAcresState] = useState(initialData?.acres?.toString() || displayFieldAcres.toString() || '');
+    const acresEditedRef = useRef(false);
+    const setAcres = useCallback((value: string) => {
+        acresEditedRef.current = true;
+        setAcresState(value);
+    }, []);
     const [formula, setFormula] = useState('');
     const [saveAsRecipe, setSaveAsRecipe] = useState(false);
     const [newRecipeName, setNewRecipeName] = useState('');
@@ -64,17 +72,27 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
 
     useEffect(() => {
         if (!open) return;
+        acresEditedRef.current = false;
         if (initialData) {
             setDate(isDuplicate ? new Date().toISOString().split('T')[0] : initialData.date);
-            setAcres(initialData.acres.toString());
+            setAcresState(initialData.acres?.toString() || displayFieldAcres.toString() || '');
             setFormula(initialData.fertilizer_formula);
         } else {
             setDate(new Date().toISOString().split('T')[0]);
-            setAcres(field.acreage.toString());
+            setAcresState(displayFieldAcres.toString() || '');
             setFormula(suggestedFertilizer?.fertilizer_formula || '');
         }
+        // Depend only on open/initialData primitives per AGENTS.md (do not depend on `field` object reference).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialData?.id, field.id, field.acreage, open, isDuplicate]);
+    }, [open, initialData?.id, isDuplicate]);
+
+    // CLU assignments can finish hydrating after a new-record modal opens. Refresh
+    // the default only until the farmer edits it; existing and duplicated records
+    // must preserve their explicitly stored applied acreage.
+    useEffect(() => {
+        if (!open || initialData || acresEditedRef.current) return;
+        setAcresState(displayFieldAcres.toString() || '');
+    }, [open, initialData, displayFieldAcres]);
 
     const handleSave = async (keepOpen = false) => {
         const data = {
