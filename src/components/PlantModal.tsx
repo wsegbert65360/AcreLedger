@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { AlertTriangle, Loader2, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLatestForField } from '@/lib/utils';
+import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 
 import { native } from '@/lib/native';
 
@@ -39,7 +40,8 @@ interface PlantModalProps {
 
 export default function PlantModal({ field, open, onClose, initialData, mode = 'edit' }: PlantModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { addPlantRecord, updatePlantRecord, plantRecords, savedSeeds, viewingSeason } = useFarm();
+  const { addPlantRecord, updatePlantRecord, plantRecords, savedSeeds, cluAssignments, viewingSeason } = useFarm();
+  const displayFieldAcres = getDisplayFieldAcres(field, cluAssignments);
   const fieldIntendedUse = field.intendedUse || '';
   const fieldProducerShare = field.producerShare?.toString() || '100';
   const fieldIrrigationPractice = field.irrigationPractice || 'Non-Irrigated';
@@ -52,7 +54,12 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
   const [cropSequence, setCropSequence] = useState<NonNullable<PlantRecord['cropSequence']>>(initialData?.cropSequence || 'First Crop');
   const [plantingPattern, setPlantingPattern] = useState(initialData?.plantingPattern || '');
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
-  const [acreage, setAcreage] = useState((initialData?.acreage ?? field.acreage).toString());
+  const [acreage, setAcreageState] = useState((initialData?.acreage ?? displayFieldAcres).toString());
+  const acreageEditedRef = useRef(false);
+  const setAcreage = useCallback((value: string) => {
+    acreageEditedRef.current = true;
+    setAcreageState(value);
+  }, []);
   const [memo, setMemo] = useState(initialData?.memo || '');
   const [isSaving, setIsSaving] = useState(false);
   const requiresSeedVariety = cropStatus !== 'Prevented Planting';
@@ -93,6 +100,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
 
   useEffect(() => {
     if (!open) return;
+    acreageEditedRef.current = false;
     if (initialData) {
       setSeedVariety(initialData.seedVariety || '');
       setCrop(initialData.crop || '');
@@ -103,7 +111,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setCropSequence(initialData.cropSequence || 'First Crop');
       setPlantingPattern(initialData.plantingPattern || '');
       setPlantDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.plantDate || new Date().toISOString().split('T')[0]));
-      setAcreage((initialData.acreage ?? field.acreage).toString());
+      setAcreageState((initialData.acreage ?? displayFieldAcres).toString());
       setMemo(initialData.memo || '');
     } else {
       setSeedVariety(suggestedPlanting?.seedVariety || '');
@@ -115,11 +123,20 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setCropSequence('First Crop');
       setPlantingPattern('');
       setPlantDate(new Date().toISOString().split('T')[0]);
-      setAcreage(field.acreage.toString());
+      setAcreageState(displayFieldAcres.toString());
       setMemo('');
     }
+    // Depend only on open/initialData primitives per AGENTS.md (do not depend on `field` object reference).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [field.acreage, initialData?.id, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open, isDuplicate]);
+  }, [initialData?.id, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open, isDuplicate]);
+
+  // CLU assignments can finish hydrating after a new-record modal opens. Refresh
+  // the default only until the farmer edits it; existing and duplicated records
+  // must preserve their explicitly stored planted acreage.
+  useEffect(() => {
+    if (!open || initialData || acreageEditedRef.current) return;
+    setAcreageState(displayFieldAcres.toString());
+  }, [open, initialData, displayFieldAcres]);
 
   const handleSubmit = async (keepOpen = false) => {
     if (requiresSeedVariety && !seedVariety.trim()) {

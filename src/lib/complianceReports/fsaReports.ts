@@ -395,7 +395,7 @@ export function buildFsa578Rows(
                     farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
                     tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                     fieldNumber: cluNumber,
-                    acreage: tractAcres.get(`${tractKey}:${cluNumber}`) ?? (legacyCluNumbers.length === 1 ? (field?.acreage ?? r.acreage) : 0),
+                    acreage: tractAcres.get(`${tractKey}:${cluNumber}`) ?? (legacyCluNumbers.length === 1 ? (field ? getDisplayFieldAcres(field, cluAssignments) : r.acreage) : 0),
                 }));
             });
 
@@ -421,7 +421,7 @@ export function buildFsa578Rows(
                 farmNumber: field?.fsaFarmNumber || '',
                 tractNumber: field?.fsaTractNumber || '',
                 fieldNumber: r.fsaFieldNumber || field?.fsaFieldNumber || '',
-                acreage: field?.acreage ?? r.acreage,
+                acreage: field ? getDisplayFieldAcres(field, cluAssignments) : r.acreage,
             }];
         }
 
