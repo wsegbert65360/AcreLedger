@@ -6,6 +6,7 @@ import {
 import { useFarm } from '@/store/farmStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ACTIVITY_ICONS } from '@/lib/activityIcons';
+import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
 import { roundTo } from '@/utils/numbers';
 
 // ── Shared card shell ────────────────────────────────────────────────────────
@@ -82,12 +83,16 @@ export default function DashboardStats() {
     sprayRecords,
     hayHarvestRecords,
     bins,
+    cluAssignments,
     getBinTotal,
     viewingSeason,
   } = useFarm();
 
   const stats = useMemo(() => {
     const season = viewingSeason;
+    // Display acres use FSA cropland (CLU) acreage, falling back to field.acreage
+    // when no CLUs are assigned -- matches the field cards and Index page totals.
+    const displayAcreMap = buildDisplayFieldAcreMap(fields, cluAssignments);
 
     // Planted acreage & field count
     const seasonPlants = plantRecords.filter(r => r.seasonYear === season);
@@ -128,7 +133,8 @@ export default function DashboardStats() {
       .reduce((s, r) => s + r.baleCount, 0);
 
     return {
-      totalAcres: roundTo(fields.reduce((s, f) => s + f.acreage, 0), 2),
+      totalAcres: roundTo(fields.reduce((s, f) => s + (displayAcreMap.get(f.id) ?? f.acreage), 0), 2),
+      boundaryAcres: roundTo(fields.reduce((s, f) => s + f.acreage, 0), 2),
       fieldCount: fields.length,
       plantedAcres,
       plantedFieldCount: plantedFieldIds.size,
@@ -145,7 +151,7 @@ export default function DashboardStats() {
       unplantedCount,
       totalBales,
     };
-  }, [fields, plantRecords, harvestRecords, sprayRecords, hayHarvestRecords, bins, getBinTotal, viewingSeason]);
+  }, [fields, plantRecords, harvestRecords, sprayRecords, hayHarvestRecords, bins, cluAssignments, getBinTotal, viewingSeason]);
 
   const attentionBadge = stats.unplantedCount > 0
     ? { text: `${stats.unplantedCount} unplanted`, color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' }
@@ -161,9 +167,9 @@ export default function DashboardStats() {
       <StatCard
         icon={MapPin}
         iconColor="text-foreground"
-        label="Total Acreage"
+        label="Crop Acres"
         value={`${stats.totalAcres.toLocaleString()} AC`}
-        subtitle={`${stats.fieldCount} field${stats.fieldCount !== 1 ? 's' : ''}`}
+        subtitle={`${stats.boundaryAcres.toLocaleString()} boundary · ${stats.fieldCount} field${stats.fieldCount !== 1 ? 's' : ''}`}
       />
 
       {/* 2 — Planted */}
