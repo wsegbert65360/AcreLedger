@@ -20,7 +20,7 @@ import {
 
 export default function Settings() {
   return (
-    <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
+    <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between lg:max-w-4xl lg:px-8">
           <div className="flex items-center gap-3">
@@ -28,7 +28,7 @@ export default function Settings() {
               <SettingsIcon size={20} className="text-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">Settings</h1>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">Setup</h1>
               <p className="text-xs text-muted-foreground">App configuration</p>
             </div>
           </div>
@@ -46,10 +46,14 @@ export default function Settings() {
             </AccordionTrigger>
             <AccordionContent>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
-                <SeedManager />
-                <RecipeManager />
-                <FertilizerRecipeManager />
-                <FsaTractManager />
+                <div className="space-y-6">
+                  <SeedManager />
+                  <FertilizerRecipeManager />
+                </div>
+                <div className="space-y-6">
+                  <RecipeManager />
+                  <FsaTractManager />
+                </div>
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -62,7 +66,7 @@ export default function Settings() {
               </div>
             </AccordionTrigger>
             <AccordionContent>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
+              <div className="grid grid-cols-1 gap-6 pb-4">
                 <SyncStatus />
                 <BackupManager />
                 {import.meta.env.DEV && <DevTools />}
@@ -79,9 +83,13 @@ export default function Settings() {
             </AccordionTrigger>
             <AccordionContent>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
-                <AccountManager />
-                <SecurityManager />
-                <DisplayManager />
+                <div className="space-y-6">
+                  <AccountManager />
+                  <DisplayManager />
+                </div>
+                <div className="space-y-6">
+                  <SecurityManager />
+                </div>
               </div>
             </AccordionContent>
           </AccordionItem>

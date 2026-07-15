@@ -41,12 +41,12 @@ export default function RecordListItem({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="font-bold text-sm text-foreground truncate">{title}</h3>
-            <span className="text-[11px] font-mono text-muted-foreground whitespace-nowrap">{date}</span>
+            <h3 className="min-w-0 flex-1 truncate font-bold text-sm text-foreground">{title}</h3>
+            <span className="shrink-0 text-[11px] font-mono text-muted-foreground whitespace-nowrap">{date}</span>
           </div>
           <div className="flex items-center gap-1.5 overflow-hidden">
             {warning && <AlertTriangle size={12} className="text-amber-500 shrink-0" />}
-            <p className="truncate text-xs font-medium text-muted-foreground">{subtitle}</p>
+            <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">{subtitle}</p>
           </div>
           <p className="mt-1 line-clamp-1 text-xs text-muted-foreground/70">{details}</p>
         </div>

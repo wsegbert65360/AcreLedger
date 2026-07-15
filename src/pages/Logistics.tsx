@@ -295,18 +295,18 @@ export default function Logistics() {
   } else {
     mainContent = (
       <>
-        <section className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-sm font-semibold text-muted-foreground">Stored</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-foreground">{formatMeasurement(totals.stored, 'bu', 1)}</p>
+        <section className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+            <p className="text-xs font-semibold text-muted-foreground sm:text-sm">Stored</p>
+            <p className="mt-1 whitespace-nowrap font-mono text-lg font-bold text-foreground lg:text-2xl">{formatMeasurement(totals.stored, 'bu', 1)}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-sm font-semibold text-muted-foreground">Capacity</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-foreground">{formatMeasurement(totals.capacity, 'bu', 1)}</p>
+          <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+            <p className="text-xs font-semibold text-muted-foreground sm:text-sm">Capacity</p>
+            <p className="mt-1 whitespace-nowrap font-mono text-lg font-bold text-foreground lg:text-2xl">{formatMeasurement(totals.capacity, 'bu', 1)}</p>
           </div>
-          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-sm font-semibold text-muted-foreground">Overall fill</p>
-            <p className={cn('mt-1 font-mono text-2xl font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(totalPercent)].tone)}>
+          <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
+            <p className="text-xs font-semibold text-muted-foreground sm:text-sm">Overall fill</p>
+            <p className={cn('mt-1 whitespace-nowrap font-mono text-lg font-bold lg:text-2xl', CAPACITY_LEVEL_STYLES[getCapacityLevel(totalPercent)].tone)}>
               {roundTo(totalPercent, 0)}%
             </p>
           </div>

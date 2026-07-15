@@ -176,6 +176,7 @@ const Index = () => {
                     {allFields.length} field{allFields.length === 1 ? '' : 's'}
                   </span>
                 </div>
+                <div className="relative">
                 <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
                   {cropTotals.map(([crop, acres]) => {
                     const isActive = selectedCrops.includes(crop);
@@ -204,6 +205,11 @@ const Index = () => {
                     <Search size={14} />
                     <span>Search</span>
                   </button>
+                </div>
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card via-card/60 to-transparent"
+                />
                 </div>
                 {searchOpen && (
                   <div className="relative mt-1">

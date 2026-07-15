@@ -26,6 +26,9 @@ export default function WeatherBar() {
   const [locationName, setLocationName] = useState('');
 
   const [loading, setLoading] = useState(false);
+  // True once the first valid weather result has arrived. Stays true across
+  // background refreshes so the bar doesn't flash placeholders every 5 min.
+  const [hasData, setHasData] = useState(false);
 
   useEffect(() => {
     const saved = loadZip(userId);
@@ -91,6 +94,7 @@ export default function WeatherBar() {
         }
 
         setWeather(result);
+        setHasData(true);
         setLocationName(result.locationName || '');
       }
     } finally {
@@ -128,6 +132,7 @@ export default function WeatherBar() {
     setZipError('');
     setLocationName('');
     setWeather(initialWeather());
+    setHasData(false);
     setZip(z);
     setUsingCoords(!!coordsMatch);
     if (!coordsMatch) saveZip(z, userId);
@@ -149,9 +154,12 @@ export default function WeatherBar() {
           <Thermometer size={24} className="text-orange-500" />
           <div className="flex flex-col">
             <span className="font-mono text-2xl font-bold leading-none tracking-tight min-[380px]:text-3xl">
-              {weather.isError ? '—' : `${weather.temp}°F`}
+              {weather.isError || !hasData ? '—' : `${weather.temp}°F`}
             </span>
             {weather.isError && <span className="text-xs text-destructive font-bold uppercase tracking-wider">Offline</span>}
+            {!hasData && !weather.isError && (
+              <span className="text-xs text-muted-foreground font-semibold">Loading…</span>
+            )}
           </div>
         </div>
         <div className="mt-1 flex min-w-0 items-center gap-1.5">
@@ -176,9 +184,11 @@ export default function WeatherBar() {
         {/* Wind */}
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1 whitespace-nowrap">
-            <span className="font-mono text-base font-bold min-[380px]:text-lg">{weather.wind}</span>
-            <span className="text-xs text-muted-foreground/60 font-sans">mph</span>
-            {weather.windDirection && weather.windDirection !== '—' && (
+            <span className="font-mono text-base font-bold min-[380px]:text-lg">
+              {weather.isError || !hasData ? '—' : weather.wind}
+            </span>
+            {hasData && !weather.isError && <span className="text-xs text-muted-foreground/60 font-sans">mph</span>}
+            {hasData && !weather.isError && weather.windDirection && weather.windDirection !== '—' && (
               <span className="flex items-center gap-0.5 text-xs text-foreground/80 ml-0.5">
                 <ArrowUp
                   size={11}
@@ -194,14 +204,20 @@ export default function WeatherBar() {
 
         {/* Humidity */}
         <div className="hidden flex-col items-center min-[380px]:flex">
-          <span className="font-mono text-lg font-bold">{weather.humidity}%</span>
+          <span className="font-mono text-lg font-bold">
+            {weather.isError || !hasData ? '—' : `${weather.humidity}%`}
+          </span>
           <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Humidity</span>
         </div>
 
         {/* Rain Amount */}
         <div className="flex flex-col items-center">
           <span className="font-mono text-base font-bold min-[380px]:text-lg">
-            {weather.precip24h != null ? `${weather.precip24h.toFixed(2)}"` : '0.00"'}
+            {weather.isError || !hasData
+              ? '—'
+              : weather.precip24h != null
+                ? `${weather.precip24h.toFixed(2)}"`
+                : '0.00"'}
           </span>
           <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Rain</span>
         </div>

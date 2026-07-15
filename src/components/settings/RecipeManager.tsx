@@ -63,11 +63,11 @@ export default function RecipeManager() {
                 onCancel={() => setEditingId(null)}
               />
             ) : (
-              <div key={recipe.id} className="bg-muted rounded-lg p-3 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-foreground font-mono font-bold text-sm">{recipe.name}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditingId(recipe.id)} className="text-muted-foreground hover:text-foreground text-xs font-mono underline">Edit</button>
+              <div key={recipe.id} className="rounded-lg border border-border bg-muted/50 p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-foreground font-bold text-sm leading-snug">{recipe.name}</span>
+                  <div className="flex shrink-0 gap-2">
+                    <button onClick={() => setEditingId(recipe.id)} className="text-muted-foreground hover:text-foreground text-xs font-semibold underline">Edit</button>
                     <button
                       onClick={() => setRecipeToDelete({ id: recipe.id, name: recipe.name })}
                       className="text-destructive hover:text-destructive/80"
@@ -78,15 +78,16 @@ export default function RecipeManager() {
                   </div>
                 </div>
                 {recipe.products.map((p) => (
-                  <div key={p.id ?? p.product} className="text-muted-foreground font-mono text-xs pl-2">
-                    • {p.product} — {p.rate} {p.rateUnit}
-                    {p.epaRegNumber && <span className="ml-2 text-[11px] opacity-70">(EPA: {p.epaRegNumber})</span>}
+                  <div key={p.id ?? p.product} className="text-muted-foreground text-xs pl-2 leading-relaxed">
+                    <span>• {p.product} — </span>
+                    <span className="font-mono">{p.rate} {p.rateUnit}</span>
+                    {p.epaRegNumber && <span className="ml-2 font-mono text-[11px] opacity-70">(EPA: {p.epaRegNumber})</span>}
                   </div>
                 ))}
                 {(recipe.applicatorName || recipe.licenseNumber || recipe.targetPest || recipe.epaRegNumber) && (
-                  <div className="text-muted-foreground font-mono text-[11px] pl-2 pt-1 border-t border-border/50 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                    {recipe.applicatorName && <div>Applicator: <span className="text-foreground/70">{recipe.applicatorName}{recipe.licenseNumber ? ` (${recipe.licenseNumber})` : ''}</span></div>}
-                    {recipe.epaRegNumber && <div>Gen EPA: <span className="text-foreground/70">{recipe.epaRegNumber}</span></div>}
+                  <div className="text-muted-foreground text-[11px] pl-2 pt-1 border-t border-border/50 mt-1 flex flex-wrap gap-x-3 gap-y-0.5 leading-relaxed">
+                    {recipe.applicatorName && <div>Applicator: <span className="text-foreground/70">{recipe.applicatorName}<span className="font-mono">{recipe.licenseNumber ? ` (${recipe.licenseNumber})` : ''}</span></span></div>}
+                    {recipe.epaRegNumber && <div>Gen EPA: <span className="font-mono text-foreground/70">{recipe.epaRegNumber}</span></div>}
                     {recipe.targetPest && <div>Target: <span className="text-foreground/70">{recipe.targetPest}</span></div>}
                   </div>
                 )}

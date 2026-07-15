@@ -33,7 +33,7 @@ import {
   buildLandlordReadiness,
   buildSprayReadiness,
 } from '@/lib/reportReadiness';
-import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportReadinessIssue } from '@/lib/reportReadiness';
 import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import {
   buildReportFingerprint,
@@ -206,14 +206,10 @@ export default function Reports() {
   const totalPlantAcres = plantedAcreTotals.totalAcres;
   const plantedAcresByField = plantedAcreTotals.byField;
   const fsaReadinessIssues = useMemo(() => validateFsa578Rows(fsaPlantRows), [fsaPlantRows]);
-  const fsaReadinessSummary = useMemo(() => {
-    const summary = buildFsa578Readiness(fsaPlantRows, fsaReadinessIssues);
-    const fieldIdByName = new Map(fields.map(field => [field.name, field.id]));
-    return {
-      ...summary,
-      issues: summary.issues.map(issue => ({ ...issue, fieldId: fieldIdByName.get(issue.itemId ?? '') })),
-    } satisfies ReportReadinessSummary;
-  }, [fsaPlantRows, fsaReadinessIssues, fields]);
+  const fsaReadinessSummary = useMemo(
+    () => buildFsa578Readiness(fsaPlantRows, fsaReadinessIssues),
+    [fsaPlantRows, fsaReadinessIssues],
+  );
   const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
   const fsaFallReport = useMemo(
     () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields }),
@@ -504,7 +500,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
+    <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0 print:bg-background print:border-0">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between lg:max-w-6xl lg:px-8">
           <div className="flex items-center gap-3">
@@ -523,7 +519,7 @@ export default function Reports() {
               type="button"
               variant="outline"
               onClick={handlePrint}
-              className="h-11 rounded-lg bg-card px-3 text-sm print:hidden"
+              className="hidden h-11 rounded-lg bg-card px-3 text-sm lg:inline-flex print:hidden"
             >
               <Printer size={16} />
               Print
@@ -549,9 +545,10 @@ export default function Reports() {
         </div>
 
         {/* Tab Bar — flex-1 shrink-0 allows tabs to fill screen width equally on desktop, but never shrink below content size on mobile */}
+        <div className="relative print:hidden">
         <TabsList
           aria-label="Report type"
-          className="no-scrollbar flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1 print:hidden"
+          className="no-scrollbar flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1"
         >
           {TABS.map(t => (
             <TabsTrigger
@@ -566,6 +563,11 @@ export default function Reports() {
             </TabsTrigger>
           ))}
         </TabsList>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute right-0 top-1 bottom-1 z-10 w-8 rounded-r-2xl bg-gradient-to-l from-card via-card/60 to-transparent"
+        />
+        </div>
 
         {/* ── FSA Planting Report ─────────────────────────────────────────────── */}
         <TabsContent value="fsa-plant" className="mt-0">

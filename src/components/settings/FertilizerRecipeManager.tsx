@@ -177,13 +177,13 @@ export default function FertilizerRecipeManager() {
                 </div>
               </div>
             ) : (
-              <div key={recipe.id} className="bg-muted/50 rounded-lg p-3 group">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-foreground font-bold text-sm leading-tight">{recipe.name}</div>
+              <div key={recipe.id} className="rounded-lg border border-border bg-muted/50 p-3 group">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-foreground font-bold text-sm leading-snug">{recipe.name}</div>
                     <div className="text-lime-600 dark:text-lime-400 font-mono text-xs mt-0.5">{recipe.npkRatio}</div>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex shrink-0 gap-1 transition-opacity">
                     <Button 
                       variant="ghost" 
                       size="icon" 

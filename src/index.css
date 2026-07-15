@@ -211,6 +211,23 @@
     min-height: 64px;
   }
 
+  /* Subtle right-edge fade overlay on wide, horizontally-scrollable report
+     tables. Applied on desktop above the mobile-cards breakpoint; hidden
+     on mobile where tables become stacked cards. */
+  .report-scroll-fade {
+    background: linear-gradient(
+      to left,
+      hsl(var(--card) / 0.95),
+      hsl(var(--card) / 0.6) 35%,
+      transparent
+    );
+  }
+  @media (max-width: 768px) {
+    .report-scroll-fade {
+      display: none;
+    }
+  }
+
   /* Hide scrollbar for Chrome, Safari and Opera */
   .no-scrollbar::-webkit-scrollbar {
     display: none;

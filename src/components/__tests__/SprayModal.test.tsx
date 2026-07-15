@@ -5,11 +5,13 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import SprayModal from '../SprayModal';
 import { Field, SprayRecord } from '@/types/farm';
+import type { FieldCluAssignment } from '@/types/fsaTract';
 import { WeatherService } from '@/services/WeatherService';
 
 // --- Mocks ---
 const addSprayRecordMock = vi.fn().mockResolvedValue(true);
 const updateSprayRecordMock = vi.fn().mockResolvedValue(true);
+let mockCluAssignments: FieldCluAssignment[] = [];
 
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
@@ -17,7 +19,7 @@ vi.mock('@/store/farmStore', () => ({
     updateSprayRecord: updateSprayRecordMock,
     sprayRecipes: [],
     sprayRecords: [],
-    cluAssignments: [],
+    cluAssignments: mockCluAssignments,
     session: { user: { id: 'test-user-id' } },
     viewingSeason: 2026,
     farmName: 'Test Farm'
@@ -142,6 +144,7 @@ describe('SprayModal Data Retention', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCluAssignments = [];
     vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue(null);
     vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
   });
@@ -299,6 +302,56 @@ describe('SprayModal Data Retention', () => {
     expect(windDirectionSelect.value).toBe('NW');
   });
 
+  it('refreshes untouched treated acreage when CLU assignments load after opening', async () => {
+    const { rerender } = render(
+      <SprayModal field={field} open={true} onClose={vi.fn()} />
+    );
+
+    await navigateToConditions();
+    const treatedAreaInput = screen.getByLabelText(/Treated Area Size/i) as HTMLInputElement;
+    expect(treatedAreaInput.value).toBe('80');
+
+    mockCluAssignments = [{
+      id: 'assignment-1',
+      farmId: 'farm-1',
+      fieldId: field.id,
+      tractKey: '100-200',
+      cluNumber: '1',
+      acres: 55,
+      landUse: 'cropland',
+      assignedAt: '2026-01-01T00:00:00.000Z',
+      deletedAt: null,
+    }];
+    rerender(<SprayModal field={field} open={true} onClose={vi.fn()} />);
+
+    await waitFor(() => expect(treatedAreaInput.value).toBe('55'));
+  });
+
+  it('preserves user-entered treated acreage when CLU assignments load later', async () => {
+    const { rerender } = render(
+      <SprayModal field={field} open={true} onClose={vi.fn()} />
+    );
+
+    await navigateToConditions();
+    const treatedAreaInput = screen.getByLabelText(/Treated Area Size/i) as HTMLInputElement;
+    fireEvent.change(treatedAreaInput, { target: { value: '12.5' } });
+
+    mockCluAssignments = [{
+      id: 'assignment-1',
+      farmId: 'farm-1',
+      fieldId: field.id,
+      tractKey: '100-200',
+      cluNumber: '1',
+      acres: 55,
+      landUse: 'cropland',
+      assignedAt: '2026-01-01T00:00:00.000Z',
+      deletedAt: null,
+    }];
+    rerender(<SprayModal field={field} open={true} onClose={vi.fn()} />);
+
+    await waitFor(() => expect(treatedAreaInput.value).toBe('12.5'));
+  });
+
   it('preserves the original seasonYear when updating an existing spray record', async () => {
     render(
       <SprayModal
@@ -365,5 +418,82 @@ describe('SprayModal Data Retention', () => {
         windSpeed: 0
       })
     );
+  });
+});
+
+describe('SprayModal product deletion', () => {
+  const field: Field = {
+    id: 'field-1',
+    name: 'North Field',
+    acreage: 80,
+    lat: null,
+    lng: null,
+    farm_id: 'farm-1',
+    deleted_at: null
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCluAssignments = [];
+    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue(null);
+    vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
+  });
+
+  const gotoMix = async () => {
+    act(() => {
+      fireEvent.change(screen.getByLabelText(/application date/i), { target: { value: '2026-06-23' } });
+      fireEvent.change(screen.getByLabelText(/start time/i), { target: { value: '08:00' } });
+      fireEvent.change(screen.getByLabelText(/cert\. applicator/i), { target: { value: 'Cert Applicator' } });
+      fireEvent.change(screen.getByLabelText(/license/i), { target: { value: 'L12345' } });
+      fireEvent.change(screen.getByLabelText(/target pest/i), { target: { value: 'Grass' } });
+    });
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /Next/i })); });
+    await waitFor(() => expect(screen.getByText(/Herbicide Mix/i)).toBeInTheDocument());
+  };
+
+  it('can delete the SECOND product from the tank mix', async () => {
+    render(<SprayModal field={field} open={true} onClose={vi.fn()} />);
+    await gotoMix();
+
+    // fill first product
+    const tradeNameInputs = screen.getAllByLabelText(/trade name/i);
+    expect(tradeNameInputs.length).toBe(1);
+    act(() => { fireEvent.change(tradeNameInputs[0], { target: { value: 'Roundup' } }); });
+
+    // add a second product
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /add another product/i })); });
+    await waitFor(() => expect(screen.getAllByLabelText(/trade name/i).length).toBe(2));
+    act(() => { fireEvent.change(screen.getAllByLabelText(/trade name/i)[1], { target: { value: 'Dicamba' } }); });
+
+    // click the Red X on the SECOND product
+    const removeBtns = screen.getAllByRole('button', { name: /remove .+ from spray mix/i });
+    expect(removeBtns.length).toBe(2);
+    act(() => { fireEvent.click(removeBtns[1]); });
+
+    // confirm removal
+    await waitFor(() => expect(screen.getByText(/Remove Product/i)).toBeInTheDocument());
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /^Remove$/i })); });
+
+    // second product (Dicamba) should be gone, first (Roundup) stays
+    await waitFor(() => expect(screen.getAllByLabelText(/trade name/i).length).toBe(1));
+    expect((screen.getByLabelText(/trade name/i) as HTMLInputElement).value).toBe('Roundup');
+  });
+
+  it('can delete the FIRST product when two exist', async () => {
+    render(<SprayModal field={field} open={true} onClose={vi.fn()} />);
+    await gotoMix();
+
+    act(() => { fireEvent.change(screen.getByLabelText(/trade name/i), { target: { value: 'Roundup' } }); });
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /add another product/i })); });
+    await waitFor(() => expect(screen.getAllByLabelText(/trade name/i).length).toBe(2));
+    act(() => { fireEvent.change(screen.getAllByLabelText(/trade name/i)[1], { target: { value: 'Dicamba' } }); });
+
+    const removeBtns = screen.getAllByRole('button', { name: /remove .+ from spray mix/i });
+    act(() => { fireEvent.click(removeBtns[0]); });
+    await waitFor(() => expect(screen.getByText(/Remove Product/i)).toBeInTheDocument());
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /^Remove$/i })); });
+
+    await waitFor(() => expect(screen.getAllByLabelText(/trade name/i).length).toBe(1));
+    expect((screen.getByLabelText(/trade name/i) as HTMLInputElement).value).toBe('Dicamba');
   });
 });

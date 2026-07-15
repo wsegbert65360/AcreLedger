@@ -196,6 +196,8 @@ const AppContent = () => {
   const hideQuickAddFab =
     location.pathname === '/activity' ||
     location.pathname === '/logistics' ||
+    location.pathname === '/reports' ||
+    location.pathname === '/settings' ||
     location.pathname === '/onboarding' ||
     location.pathname === '/privacy' ||
     location.pathname.startsWith('/field/');

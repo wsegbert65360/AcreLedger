@@ -83,10 +83,10 @@ export default function VersionFooter() {
   return (
     <div className="max-w-lg mx-auto w-full py-10 px-6 flex items-center justify-between gap-4 border-t border-border/10 lg:max-w-4xl">
       <div className="flex flex-col">
-        <p className="text-[11px] text-muted-foreground/40 font-bold">
+        <p className="text-[11px] text-muted-foreground font-bold">
           AcreLedger
         </p>
-        <p className="text-[11px] text-muted-foreground/30">
+        <p className="font-mono text-[11px] text-muted-foreground">
           v{version}
         </p>
       </div>
@@ -94,9 +94,9 @@ export default function VersionFooter() {
       <button
         onClick={handleUpdateCheck}
         disabled={checking}
-        className="h-10 px-5 rounded-lg border border-border/40 bg-muted/5 text-[11px] font-mono uppercase tracking-widest text-muted-foreground/50 hover:bg-muted/10 hover:text-muted-foreground transition-all active:scale-95 disabled:opacity-50"
+        className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
       >
-        {checking ? 'Checking...' : 'Check for Updates'}
+        {checking ? 'Checking…' : 'Check for updates'}
       </button>
     </div>
   );

@@ -24,11 +24,18 @@ export default function BottomNav() {
               className={`relative touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-3 transition-all active:scale-95 ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 }`}
               aria-label={label}
+              aria-current={active ? 'page' : undefined}
             >
               <div className="relative">
                 {active && (
                   <div
                     className="absolute -inset-x-3 -inset-y-2 bg-primary/10 border border-primary/15 rounded-xl -z-10 animate-in fade-in duration-200"
+                  />
+                )}
+                {active && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute -top-2.5 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-primary"
                   />
                 )}
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.5} />

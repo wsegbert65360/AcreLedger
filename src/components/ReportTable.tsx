@@ -18,11 +18,11 @@ export default function ReportTable({
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-muted/30 p-4">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-sm font-bold text-foreground">{title}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
-        <div className="flex gap-2 print:hidden">
+        <div className="flex shrink-0 gap-2 print:hidden">
           {onExport && (
             <button
               onClick={onExport}
@@ -46,8 +46,8 @@ export default function ReportTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto mobile-cards">
-        <table className="w-full text-left border-collapse">
+      <div className="relative overflow-x-auto mobile-cards">
+        <table className="w-full min-w-max text-left border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b border-border">
               {headers.map((h, i) => (
@@ -61,6 +61,10 @@ export default function ReportTable({
             {children}
           </tbody>
         </table>
+        <div
+          aria-hidden="true"
+          className="report-scroll-fade pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-8 print:hidden"
+        />
       </div>
 
       {summary && (
