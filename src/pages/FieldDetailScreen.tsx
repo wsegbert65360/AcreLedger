@@ -514,7 +514,7 @@ export default function FieldDetailScreen() {
                 View Record
               </button>
               <button
-                onClick={() => generateSprayPDF([latestSpray], farmName)}
+                onClick={() => generateSprayPDF([latestSpray], farmName, { fields: [field], cluAssignments })}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-spray/10 text-spray text-sm font-semibold hover:bg-spray/20 transition-colors"
               >
                 <ExternalLink size={14} />

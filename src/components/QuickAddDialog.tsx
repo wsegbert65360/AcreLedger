@@ -9,6 +9,8 @@ import { native } from '@/lib/native';
 import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS, ACTIVITY_BG_COLORS } from '@/lib/activityIcons';
 import { Loader2, Navigation, ClipboardList } from 'lucide-react';
 import SprayTypeChooser from '@/components/SprayTypeChooser';
+import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
+import { formatMeasurement } from '@/utils/numbers';
 
 // Using squared Euclidean distance as a fast, monotonic metric for local field comparison (farm scale only).
 const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -29,6 +31,7 @@ export default function QuickAddDialog() {
   const {
     session,
     fields,
+    cluAssignments,
     plantRecords,
     sprayRecords,
     harvestRecords,
@@ -54,6 +57,10 @@ export default function QuickAddDialog() {
   const activeFields = useMemo(() => {
     return fields.filter(f => !f.deleted_at).sort((a, b) => a.name.localeCompare(b.name));
   }, [fields]);
+  const displayAcreMap = useMemo(
+    () => buildDisplayFieldAcreMap(activeFields, cluAssignments),
+    [activeFields, cluAssignments],
+  );
 
   // Track the last used field across all activity types
   const lastUsedFieldId = useMemo(() => {
@@ -276,7 +283,7 @@ export default function QuickAddDialog() {
                     return (
                       <SelectItem key={f.id} value={f.id} className="text-sm">
                         <div className="flex items-center justify-between w-full gap-2">
-                          <span>{f.name} <span className="text-xs text-muted-foreground font-mono">({f.acreage} ac)</span></span>
+                          <span>{f.name} <span className="text-xs text-muted-foreground font-mono">({formatMeasurement(displayAcreMap.get(f.id) ?? 0, 'ac')} FSA crop)</span></span>
                           {isGpsNearest && (
                             <span className="ml-2 bg-plant/10 text-plant border border-plant/20 text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEAREST</span>
                           )}

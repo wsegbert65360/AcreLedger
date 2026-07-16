@@ -170,6 +170,10 @@ export function useFsaTracts({
       toast.error('No farm selected');
       return false;
     }
+    if (!Number.isFinite(acres) || acres <= 0) {
+      toast.error('CLU acreage must be greater than zero');
+      return false;
+    }
 
     const previousAssignments = cluAssignments;
     const existingAssignment = cluAssignments.find(

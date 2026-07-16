@@ -287,6 +287,7 @@ describe('Reverse mapper output keys', () => {
       fsaFarmNumber: '123',
       irrigationPractice: 'Irrigated',
       cluNumbers: ['11', '14'],
+      boundaryAcreage: 80,
     }));
     const keys = Object.keys(result);
     expect(keys).toContain('fsa_farm_number');
@@ -298,6 +299,12 @@ describe('Reverse mapper output keys', () => {
     expect(keys).not.toContain('fsaFarmNumber');
     expect(keys).not.toContain('cluNumbers');
     expect(result.clu_numbers).toEqual(['11', '14']);
+  });
+
+  it('mapFieldToDb omits unknown boundary acreage instead of writing zero', () => {
+    const result = mapFieldToDb(makeField({ boundaryAcreage: undefined }));
+
+    expect(result).not.toHaveProperty('operational_acreage');
   });
 
   it('mapFieldToDb preserves boundary acreage in the legacy operational column', () => {

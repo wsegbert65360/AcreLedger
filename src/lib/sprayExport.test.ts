@@ -85,6 +85,17 @@ describe('sprayExportFormatters', () => {
       } as never;
       expect(getRecordOmissions(record)).toEqual(['relative humidity', 'one or more product totals']);
     });
+
+    it('accepts a product total that can be derived from rate and treated acreage', () => {
+      const record = {
+        temperature: 70,
+        relativeHumidity: 40,
+        treatedAreaSize: 80,
+        products: [{ product: 'Test', rate: '1', rateUnit: 'qt/ac' }],
+      } as never;
+
+      expect(getRecordOmissions(record)).toEqual([]);
+    });
   });
 
   describe('formatReportDate', () => {

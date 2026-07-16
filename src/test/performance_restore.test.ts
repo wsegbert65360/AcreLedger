@@ -9,7 +9,10 @@ vi.mock('../lib/supabase', () => ({
     supabase: {
         from: vi.fn(() => ({
             update: vi.fn(),
-            eq: vi.fn()
+            eq: vi.fn(),
+            select: vi.fn(() => ({
+                eq: vi.fn().mockResolvedValue({ data: [], error: null })
+            }))
         })),
         rpc: vi.fn()
     }

@@ -31,7 +31,7 @@ interface SprayModalProps {
 
 function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { sprayRecipes, farmName, viewingSeason } = useFarm();
+  const { sprayRecipes, farmName, viewingSeason, cluAssignments } = useFarm();
   const form = useSprayForm({ field, open, onClose, initialData, mode });
 
   const [showMissingChecklist, setShowMissingChecklist] = useState(false);
@@ -69,7 +69,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
     const exportBtn = initialData && (
       <Button
         variant="outline"
-        onClick={() => generateSprayPDF([initialData], farmName)}
+        onClick={() => generateSprayPDF([initialData], farmName, { fields: [field], cluAssignments })}
         className="touch-target w-full border-spray/30 py-6 text-base font-bold text-spray hover:bg-spray/10"
       >
         <FileDown size={20} className="mr-2" />
@@ -98,7 +98,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
     }
 
     return undefined;
-  }, [step, initialData, isDuplicate, isSaving, isMinimumValid, farmName, handleSubmit, form.isQuickMode]);
+  }, [step, initialData, isDuplicate, isSaving, isMinimumValid, farmName, handleSubmit, form.isQuickMode, field, cluAssignments]);
 
   return (
     <>

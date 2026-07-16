@@ -129,10 +129,12 @@ excluded by RLS policies server-side and by `.filter(r => !r.deleted_at)` client
 ### Field
 Physical farm field. Referenced by `fieldId` on all activity records.
 ```ts
-{ id, name, acreage, lat, lng, intendedUse, fsaFarmNumber, fsaTractNumber,
+{ id, name, acreage, boundaryAcreage?, lat, lng, intendedUse, fsaFarmNumber, fsaTractNumber,
   fsaFieldNumber, producerShare, landlordName, irrigationPractice, cluNumbers,
   notes, deleted_at, boundary: { type, coordinates } }
 ```
+`acreage` is the field's stored acreage. When CLU assignments exist, display/report code derives the FSA cropland total via `getDisplayFieldAcres` rather than reading this directly.
+`boundaryAcreage` (optional, stored in the legacy `fields.operational_acreage` column) is the stable boundary/manual measurement, never overwritten by CLU assignment sync. `getBoundaryFieldAcres` resolves it from this value, else the `boundary` geometry, else (only when no CLU assignments exist) `acreage`. `getDisplayFieldAcres` prefers cropland CLU sum, then boundary, then `acreage` as the final fallback. Unknown boundary acreage is omitted from ordinary updates rather than written as zero; legacy backup restore preserves the existing database value before considering geometry or an unassigned raw-acreage fallback.
 `notes` is a TEXT field used for informal scratchpad entries, persisted with auto-save.
 `lat`/`lng` may be null if geocoding was skipped — always guard before calling `.toFixed()`.
 `boundary` is a GeoJSON Polygon for field geometry.
@@ -157,6 +159,7 @@ Single planting event on a field. Core FSA 578 source record.
 `cropStatus` supports `Planted`, `Prevented Planting`, `Failed`, `Volunteer`, and
 `Cover Crop`. `cropSequence` distinguishes first and second crop. `plantingPattern`
 stores optional FSA practice/pattern notes.
+- **Acreage default**: `PlantModal`'s "Planted Acres" new-record default and its edit/duplicate fallback use `getDisplayFieldAcres(field, cluAssignments)` — the FSA crop acreage — never a raw `field.acreage` read, mirroring the spray treated-area default below. An edited-ref + CLU-hydration refresh effect preserves manual edits and stored values on edit/duplicate. Historical records were backfilled by migration `20260715130000_backfill_plant_acreage_to_fsa_acreage.sql`. Note the FSA-578 worksheet derives its acreage column from CLU assignments (`buildFsa578Rows`), not this stored `acreage`, so the stored value reconciles on-screen/record totals with what reports already show.
 
 ### SprayRecord (2026 Standards)
 Pesticide/herbicide application. Refactored for universal private-applicator compliance (45+ states).
@@ -237,6 +240,7 @@ Track tillage events (Disk, Cultivation, etc.) per field per season.
 ```
 Note: `date` is an ISO date string; `timestamp` is Unix ms. Both exist on the same record.
 `created_at`/`updated_at` are managed by DB triggers.
+- **Acres default**: `FertilizerModal`'s "Acres Applied" new-record default uses `getDisplayFieldAcres(field, cluAssignments)` — the FSA crop acreage — never a raw `field.acreage` read, mirroring the spray treated-area and plant acreage defaults. An edited-ref + CLU-hydration refresh effect preserves manual edits and stored values on edit/duplicate. Historical records were backfilled by migration `20260715120000_backfill_fertilizer_acres_to_fsa_acreage.sql`.
 
 ### GrainMovement
 Grain in/out of a bin, including sales and contracts.

@@ -6,9 +6,16 @@ type GeoJsonPolygon = {
   coordinates: number[][][];
 };
 
+type GeoJsonMultiPolygon = {
+  type: 'MultiPolygon';
+  coordinates: number[][][][];
+};
+
+type GeoJsonGeometry = GeoJsonPolygon | GeoJsonMultiPolygon;
+
 type GeoJsonFeature = {
   type: 'Feature';
-  geometry?: GeoJsonPolygon | { type?: string; coordinates?: unknown } | null;
+  geometry?: GeoJsonGeometry | { type?: string; coordinates?: unknown } | null;
   properties?: Record<string, unknown> | null;
 };
 
@@ -37,8 +44,9 @@ function readString(value: unknown): string {
 }
 
 function readNumber(value: unknown): number | null {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
+  if (value == null || (typeof value === 'string' && value.trim() === '')) return null;
+  const numeric = Number(typeof value === 'string' ? value.replace(/,/g, '') : value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 }
 
 function parseFarmNumberFromFilename(filename: string): string {
@@ -70,22 +78,42 @@ function normalizeRing(ring: unknown): number[][] | null {
   return closed.length >= 4 ? closed : null;
 }
 
-function normalizePolygon(geometry: GeoJsonFeature['geometry']): Field['boundary'] {
-  if (!geometry || geometry.type !== 'Polygon' || !Array.isArray(geometry.coordinates)) {
+function normalizeGeometry(geometry: GeoJsonFeature['geometry']): Field['boundary'] {
+  if (!geometry || !Array.isArray(geometry.coordinates)) {
     return null;
   }
 
-  const rings = geometry.coordinates
-    .map(normalizeRing)
-    .filter((ring): ring is number[][] => !!ring);
+  if (geometry.type === 'Polygon') {
+    const rings = geometry.coordinates
+      .map(normalizeRing)
+      .filter((ring): ring is number[][] => !!ring);
 
-  return rings.length > 0 ? { type: 'Polygon', coordinates: rings } : null;
+    return rings.length > 0 ? { type: 'Polygon', coordinates: rings } : null;
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    const polygons = geometry.coordinates
+      .map(polygon => polygon
+        .map(normalizeRing)
+        .filter((ring): ring is number[][] => !!ring))
+      .filter(polygon => polygon.length > 0);
+
+    return polygons.length > 0 ? { type: 'MultiPolygon', coordinates: polygons } : null;
+  }
+
+  return null;
 }
 
 function centroidFromBoundary(boundary: Field['boundary']): { lat: number | null; lng: number | null } {
-  const outerRing = boundary?.coordinates?.[0] ?? [];
-  const unclosedRing = outerRing.slice(0, -1);
-  const points = unclosedRing.length > 0 ? unclosedRing : outerRing;
+  if (!boundary) return { lat: null, lng: null };
+  const outerRings = boundary.type === 'Polygon'
+    ? [boundary.coordinates[0]]
+    : boundary.coordinates.map(polygon => polygon[0]);
+  const points = outerRings.flatMap(ring => {
+    if (!ring) return [];
+    const unclosedRing = ring.slice(0, -1);
+    return unclosedRing.length > 0 ? unclosedRing : ring;
+  });
 
   if (points.length === 0) {
     return { lat: null, lng: null };
@@ -119,7 +147,7 @@ function buildNotes(properties: Record<string, unknown>): string {
 }
 
 function candidateFromFeature(feature: GeoJsonFeature, filename: string, index: number): FsaImportCandidate | null {
-  const boundary = normalizePolygon(feature.geometry);
+  const boundary = normalizeGeometry(feature.geometry);
   if (!boundary) return null;
 
   const properties = feature.properties ?? {};

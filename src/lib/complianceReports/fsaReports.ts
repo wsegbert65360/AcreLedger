@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 
 import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
-import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
+import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { roundTo } from '../../utils/numbers';
@@ -836,7 +836,7 @@ export async function exportFsaFallProductionData({
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[], cluAssignments: FieldCluAssignment[] = []): string[] {
     return records.flatMap(r => {
         const field = fields.find(f => f.id === r.fieldId);
-        const treatedArea = r.treatedAreaSize || (field ? getDisplayFieldAcres(field, cluAssignments) : '') || '';
+        const treatedArea = getEffectiveSprayTreatedAcres(r, field, cluAssignments) ?? '';
 
         // If there are granular products, create a row for each herbicide in the mix
         if (r.products && r.products.length > 0) {

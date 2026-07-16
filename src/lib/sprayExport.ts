@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { SprayRecord } from '@/types/farm';
+import { Field, SprayRecord } from '@/types/farm';
+import type { FieldCluAssignment } from '@/types/fsaTract';
 import {
   formatNumber,
   formatUnit,
@@ -16,11 +17,14 @@ import { cleanName } from '@/utils/text';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
+import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 
 interface ExportOptions {
   filename?: string;
   startDate?: string;
   endDate?: string;
+  fields?: Field[];
+  cluAssignments?: FieldCluAssignment[];
 }
 
 function splitAttachmentFromNotes(notes?: string): { cleanNotes: string; attachmentDataUri: string | null } {
@@ -99,6 +103,8 @@ export function generateSprayPDF(
 
   // 2. Records
   chronologicalRecords.forEach((record, index) => {
+    const field = options.fields?.find(candidate => candidate.id === record.fieldId);
+    const treatedArea = getEffectiveSprayTreatedAcres(record, field, options.cluAssignments);
     const productRows = Math.max(record.products?.length || 0, 1);
     const estimatedRecordHeight = 60 + productRows * 11 + (record.notes ? 12 : 0);
     if (yPos + estimatedRecordHeight > 275) {
@@ -141,7 +147,7 @@ export function generateSprayPDF(
     const detailsRight = [
       `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
       `Target Pest: ${record.targetPest || '-'}`,
-      `Area: ${formatNumber(record.treatedAreaSize)} ${formatUnit(record.treatedAreaUnit) || 'ac'}`,
+      `Area: ${formatNumber(treatedArea)} ${formatUnit(record.treatedAreaUnit) || 'ac'}`,
       `Method: ${record.applicationMethod || '-'}`,
     ];
 
@@ -199,7 +205,7 @@ export function generateSprayPDF(
           },
           p.epaRegNumber || '-',
           `${p.rate || '-'} ${p.rateUnit || ''}`.trim(),
-          formatSprayProductTotal(p, record.treatedAreaSize)
+          formatSprayProductTotal(p, treatedArea)
         ]),
         theme: 'grid',
         headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
@@ -257,7 +263,7 @@ export function generateSprayPDF(
     }
 
     // Compliance line
-    const omissions = getRecordOmissions(record);
+    const omissions = getRecordOmissions(record, treatedArea);
     const needsReview = Boolean(record.nonCompliant || omissions.length);
     doc.setFont('helvetica', needsReview ? 'bold' : 'normal');
     if (needsReview) {

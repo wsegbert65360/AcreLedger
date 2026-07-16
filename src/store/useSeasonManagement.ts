@@ -15,6 +15,7 @@ import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
+import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import { setStorageLock } from './storageUtils';
 import { offlineStorage } from '@/lib/offlineStorage';
 
@@ -175,7 +176,29 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     try {
       const backupData = backupSchema.parse(rawData);
 
-      const fieldsToDb      = (backupData.fields               ?? []).map((f) => mapFieldToDb({ ...f, farm_id } as unknown as Field));
+      const { data: existingFieldRows, error: existingFieldsError } = await supabase
+        .from('fields')
+        .select('id, operational_acreage')
+        .eq('farm_id', farm_id);
+      if (existingFieldsError) {
+        throw new Error(`Failed to protect existing boundary acreage: ${existingFieldsError.message}`);
+      }
+      const existingBoundaryByField = new Map(
+        (existingFieldRows ?? []).map(row => [row.id, row.operational_acreage as number | null]),
+      );
+      const restoredAssignments = (backupData.cluAssignments ?? []) as FieldCluAssignment[];
+      const fieldsToDb = (backupData.fields ?? []).map((f) => {
+        const field = { ...f, farm_id } as unknown as Field;
+        const operationalAcreage = resolveRestoredBoundaryAcres(
+          field,
+          restoredAssignments,
+          existingBoundaryByField.get(field.id),
+        );
+        return {
+          ...mapFieldToDb(field),
+          operational_acreage: operationalAcreage,
+        };
+      });
       const binsToDb        = (backupData.bins                 ?? []).map((b) => mapBinToDb({ ...b, farm_id } as unknown as Bin));
       const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => mapPlantToDb({ ...r, farm_id } as unknown as PlantRecord));
       const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => mapSprayToDb({ ...r, farm_id } as unknown as SprayRecord));

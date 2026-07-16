@@ -1,4 +1,5 @@
 import type { TractFeatureCollection } from '@/lib/tractLookup';
+import { calculateAcreage } from '@/lib/gisService';
 
 const WEB_MERCATOR_MAX = 20037508.34;
 
@@ -57,9 +58,11 @@ function getCluNumber(props: Record<string, unknown>): string | undefined {
   return value || undefined;
 }
 
-function getAcres(props: Record<string, unknown>): number {
+function getAcres(props: Record<string, unknown>): number | null {
   const raw = readProperty(props, ['acres', 'clu_acres', 'CLU_ACRES', 'calc_acres', 'calculated acres']);
-  return Number(raw) || 0;
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return null;
+  const numeric = Number(typeof raw === 'string' ? raw.replace(/,/g, '') : raw);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 }
 
 export function parseCluGeoJson(contents: string, filename: string): { tractKey: string; collection: TractFeatureCollection } {
@@ -112,13 +115,15 @@ export function parseCluGeoJson(contents: string, filename: string): { tractKey:
       const props = f.properties as Record<string, unknown>;
       const geom = f.geometry as { type: 'Polygon' | 'MultiPolygon'; coordinates: any };
       const coords = needsProjection ? convertCoordsToWgs84(geom.coordinates) : geom.coordinates;
+      const geometry = { type: geom.type, coordinates: coords } as TractFeatureCollection['features'][number]['geometry'];
+      const statedAcres = getAcres(props);
 
       return {
         type: 'Feature',
-        geometry: { type: geom.type, coordinates: coords } as any,
+        geometry,
         properties: {
           cluNumber: String(getCluNumber(props)),
-          acres: getAcres(props),
+          acres: statedAcres ?? calculateAcreage(geometry),
         },
       };
     }),

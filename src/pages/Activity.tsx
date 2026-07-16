@@ -309,7 +309,7 @@ export default function Activity() {
                     const toExport = selected.size > 0
                       ? filteredSpray.filter(r => selected.has(r.id))
                       : filteredSpray;
-                    generateSprayPDF(toExport, farmName);
+                    generateSprayPDF(toExport, farmName, { fields, cluAssignments });
                   }}
                   className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-spray/10 p-2.5 text-xs font-bold text-spray transition-colors hover:bg-spray/20"
                   title="Export Universal Spray Log PDF"

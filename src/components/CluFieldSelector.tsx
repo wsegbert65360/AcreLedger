@@ -4,6 +4,8 @@ import { Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFarm } from '@/store/farmStore';
+import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
+import { formatMeasurement } from '@/utils/numbers';
 import type { CluLandUse, FieldCluAssignment } from '@/types/fsaTract';
 
 interface CluFieldSelectorProps {
@@ -46,6 +48,10 @@ export default function CluFieldSelector({
     }
     return counts;
   }, [assignments]);
+  const displayAcreMap = useMemo(
+    () => buildDisplayFieldAcreMap(fields, assignments),
+    [fields, assignments],
+  );
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -126,7 +132,7 @@ export default function CluFieldSelector({
               const cluLabel = cluCount > 0 ? ` · ${cluCount} CLU${cluCount !== 1 ? 's' : ''}` : ' · No CLUs';
               return (
                 <option key={f.id} value={f.id}>
-                  {f.name} ({f.acreage} ac{cluLabel})
+                  {f.name} ({formatMeasurement(displayAcreMap.get(f.id) ?? 0, 'ac')} FSA crop{cluLabel})
                 </option>
               );
             })}

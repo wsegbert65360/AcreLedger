@@ -6,7 +6,7 @@ import {
 import { useFarm } from '@/store/farmStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ACTIVITY_ICONS } from '@/lib/activityIcons';
-import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
+import { buildDisplayFieldAcreMap, getBoundaryFieldAcres } from '@/lib/fieldAcreage';
 import { roundTo } from '@/utils/numbers';
 
 // ── Shared card shell ────────────────────────────────────────────────────────
@@ -134,7 +134,10 @@ export default function DashboardStats() {
 
     return {
       totalAcres: roundTo(fields.reduce((s, f) => s + (displayAcreMap.get(f.id) ?? f.acreage), 0), 2),
-      boundaryAcres: roundTo(fields.reduce((s, f) => s + f.acreage, 0), 2),
+      boundaryAcres: roundTo(fields.reduce(
+        (sum, field) => sum + (getBoundaryFieldAcres(field, cluAssignments) ?? 0),
+        0,
+      ), 2),
       fieldCount: fields.length,
       plantedAcres,
       plantedFieldCount: plantedFieldIds.size,

@@ -1,5 +1,6 @@
 import { formatIsoDate } from '@/utils/dates';
 import type { SprayRecord } from '@/types/farm';
+import { formatSprayProductTotal } from '@/utils/unitConversion';
 
 export const MISSING_VALUE = '-';
 
@@ -26,14 +27,14 @@ export function formatUnit(unit: string | undefined | null): string {
 /**
  * Returns a readable compliance status string.
  */
-export function getRecordOmissions(record: SprayRecord): string[] {
+export function getRecordOmissions(record: SprayRecord, treatedArea = record.treatedAreaSize): string[] {
   const omissions: string[] = [];
 
   if (record.temperature == null) omissions.push('temperature');
   if (record.relativeHumidity == null) omissions.push('relative humidity');
   if (!record.products?.length) {
     omissions.push('products');
-  } else if (record.products.some(product => !product.totalProductAmount || !product.totalProductUnit)) {
+  } else if (record.products.some(product => formatSprayProductTotal(product, treatedArea) === '—')) {
     omissions.push('one or more product totals');
   }
 

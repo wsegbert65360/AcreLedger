@@ -20,7 +20,7 @@ const tractFeatureSchema = z.object({
   geometry: geoJsonGeometrySchema,
   properties: z.object({
     cluNumber: z.string(),
-    acres: z.number(),
+    acres: z.number().positive(),
   }),
 });
 
@@ -44,7 +44,7 @@ const sprayProductSchema = z.object({
 export const fieldSchema = z.object({
   id: z.string(),
   name: z.string(),
-  acreage: z.number(),
+  acreage: z.number().nonnegative(),
   boundaryAcreage: z.number().positive().optional(),
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
@@ -75,7 +75,7 @@ export const plantRecordSchema = z.object({
   fieldId: z.string(),
   fieldName: z.string().optional(),
   seedVariety: z.string().optional(),
-  acreage: z.number(),
+  acreage: z.number().positive(),
   crop: z.string().optional(),
   plantDate: z.string().optional(),
   fsaFarmNumber: z.string().optional(),
@@ -115,7 +115,7 @@ export const sprayRecordSchema = z.object({
   targetPest: z.string().optional(),
   windDirection: z.string().optional(),
   relativeHumidity: z.number().optional(),
-  treatedAreaSize: z.number().optional(),
+  treatedAreaSize: z.number().positive().optional(),
   treatedAreaUnit: z.string().optional(),
   totalAmountApplied: z.number().optional(),
   involvedTechnicians: z.string().optional(),
@@ -252,7 +252,7 @@ export const fertilizerApplicationSchema = z.object({
   fieldId: z.string(),
   fieldName: z.string().optional(),
   date: z.string().optional(),
-  acres: z.number(),
+  acres: z.number().positive(),
   fertilizer_formula: z.string().optional(),
   timestamp: z.number().optional(),
   created_at: z.string().optional(),
@@ -291,7 +291,7 @@ export const fieldCluAssignmentSchema = z.object({
   fieldId: z.string(),
   tractKey: z.string(),
   cluNumber: z.string(),
-  acres: z.number(),
+  acres: z.number().positive(),
   landUse: z.enum(['cropland', 'non_cropland']),
   assignedAt: z.string(),
   deletedAt: z.string().nullable().optional(),

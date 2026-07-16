@@ -108,6 +108,23 @@ describe('Backup restore validation (fix #4)', () => {
     expect(result.fsaTracts).toHaveLength(1);
     expect(result.cluAssignments).toHaveLength(1);
   });
+
+  it('rejects non-positive activity and CLU acreage', () => {
+    const invalidPlant = { ...makeValidBackup(), plantRecords: [{
+      id: 'p1', fieldId: 'f1', acreage: -1, seasonYear: 2026, farm_id: 'farm-1', deleted_at: null,
+    }] };
+    const invalidSpray = { ...makeValidBackup(), sprayRecords: [{
+      id: 's1', fieldId: 'f1', treatedAreaSize: 0, seasonYear: 2026, farm_id: 'farm-1', deleted_at: null,
+    }] };
+    const invalidAssignment = { ...makeValidBackup(), cluAssignments: [{
+      id: 'a1', farmId: 'farm-1', fieldId: 'f1', tractKey: '1-1', cluNumber: '1',
+      acres: 0, landUse: 'cropland', assignedAt: '2026-01-01T00:00:00.000Z', deletedAt: null,
+    }] };
+
+    expect(() => backupSchema.parse(invalidPlant)).toThrow();
+    expect(() => backupSchema.parse(invalidSpray)).toThrow();
+    expect(() => backupSchema.parse(invalidAssignment)).toThrow();
+  });
 });
 
 // ─── Season year validation ────────────────────────────────────────────────────

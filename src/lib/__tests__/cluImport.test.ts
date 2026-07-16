@@ -89,7 +89,7 @@ describe('parseCluGeoJson', () => {
     expect(result.collection.features[0].properties.cluNumber).toBe('5');
   });
 
-  it('defaults acres to 0 when missing', () => {
+  it('calculates acres from geometry when the property is missing', () => {
     const noAcres = JSON.stringify({
       type: 'FeatureCollection',
       features: [{
@@ -99,7 +99,20 @@ describe('parseCluGeoJson', () => {
       }],
     });
     const result = parseCluGeoJson(noAcres, 'test.json');
-    expect(result.collection.features[0].properties.acres).toBe(0);
+    expect(result.collection.features[0].properties.acres).toBeGreaterThan(0);
+  });
+
+  it('parses comma-formatted acreage', () => {
+    const input = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+        properties: { cluNumber: '7', acres: '1,234.5' },
+      }],
+    });
+
+    expect(parseCluGeoJson(input, 'test.json').collection.features[0].properties.acres).toBe(1234.5);
   });
 
   it('recognizes clu_number and clu_acres property names', () => {

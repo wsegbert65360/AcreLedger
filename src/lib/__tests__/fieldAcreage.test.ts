@@ -5,6 +5,8 @@ import {
   calculateFieldCroplandAcres,
   getBoundaryFieldAcres,
   getDisplayFieldAcres,
+  getEffectiveSprayTreatedAcres,
+  resolveRestoredBoundaryAcres,
 } from '../fieldAcreage';
 import type { Field } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
@@ -71,5 +73,19 @@ describe('field acreage display helpers', () => {
     const map = buildDisplayFieldAcreMap([field], assignments);
 
     expect(map.get('field-1')).toBe(32);
+  });
+
+  it('uses stored spray acreage and falls back only when it is missing or invalid', () => {
+    expect(getEffectiveSprayTreatedAcres({ treatedAreaSize: 12 }, field, assignments)).toBe(12);
+    expect(getEffectiveSprayTreatedAcres({ treatedAreaSize: undefined }, field, assignments)).toBe(32);
+    expect(getEffectiveSprayTreatedAcres({ treatedAreaSize: 0 }, field, assignments)).toBe(32);
+  });
+
+  it('preserves an existing boundary when restoring a legacy backup', () => {
+    const legacyField = { ...field, boundaryAcreage: undefined };
+
+    expect(resolveRestoredBoundaryAcres(legacyField, assignments, 40)).toBe(40);
+    expect(resolveRestoredBoundaryAcres(legacyField, assignments)).toBe(0);
+    expect(resolveRestoredBoundaryAcres(legacyField, [], null)).toBe(40);
   });
 });

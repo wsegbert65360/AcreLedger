@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseFsaGeoJson, FsaImportCandidate } from '../fsaImport';
+import { parseFsaGeoJson } from '../fsaImport';
 
 function makeFeature(overrides?: Record<string, unknown>) {
   return {
@@ -83,6 +83,37 @@ describe('parseFsaGeoJson', () => {
     const candidates = parseFsaGeoJson(JSON.stringify(input));
     // Boundary is a 1x1 unit square = ~247 acres (1 sq km)
     expect(candidates[0].acreage).toBeGreaterThan(0);
+  });
+
+  it('ignores blank program acres and uses comma-formatted calculated acres', () => {
+    const input = {
+      type: 'FeatureCollection',
+      features: [makeFeature({ properties: { plu_id: '1', prog_acres: ' ', calc_acres: '1,234.5' } })],
+    };
+
+    expect(parseFsaGeoJson(JSON.stringify(input))[0].acreage).toBe(1234.5);
+  });
+
+  it('supports MultiPolygon field boundaries and acreage fallback', () => {
+    const input = {
+      type: 'FeatureCollection',
+      features: [makeFeature({
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: [
+            [[[0, 0], [1, 0], [1, 1], [0, 0]]],
+            [[[2, 2], [3, 2], [3, 3], [2, 2]]],
+          ],
+        },
+        properties: { plu_id: 'multi', plu_name: 'Multi Field' },
+      })],
+    };
+
+    const candidate = parseFsaGeoJson(JSON.stringify(input))[0];
+    expect(candidate.boundary?.type).toBe('MultiPolygon');
+    expect(candidate.acreage).toBeGreaterThan(0);
+    expect(candidate.lat).toBeCloseTo(1.333333, 5);
+    expect(candidate.lng).toBeCloseTo(1.666667, 5);
   });
 
   // ─── Centroid Calculation ──────────────────────────────────────────────────

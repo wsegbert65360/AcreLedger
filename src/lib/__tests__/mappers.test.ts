@@ -25,6 +25,21 @@ describe('Mappers Round-Trip', () => {
         expect(mapFieldFromDb(db as any).boundaryAcreage).toBe(40);
     });
 
+    it('should preserve missing spray acreage as undefined', () => {
+        const result = mapSprayFromDb({
+            id: 'spray-legacy',
+            farm_id: 'farm-1',
+            field_id: 'field-1',
+            field_name: 'Bottom Field',
+            products: [],
+            season_year: 2026,
+            timestamp: new Date().toISOString(),
+            treated_area_size: null,
+        } as any);
+
+        expect(result.treatedAreaSize).toBeUndefined();
+    });
+
     it('should maintain SprayRecord integrity through round-trip', () => {
         const original: SprayRecord = {
             id: '123',
