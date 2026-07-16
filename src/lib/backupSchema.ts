@@ -242,6 +242,7 @@ export const sprayRecipeSchema = z.object({
   licenseNumber: z.string().optional(),
   targetPest: z.string().optional(),
   epaRegNumber: z.string().optional(),
+  cropOrSiteTreated: z.string().optional(),
   farm_id: z.string(),
   deleted_at: z.string().nullable().optional(),
 }).strict();
@@ -298,6 +299,7 @@ export const fieldCluAssignmentSchema = z.object({
 }).strict();
 
 export const backupSchema = z.object({
+  backupVersion: z.number().int().positive().optional(),
   fields: z.array(fieldSchema).optional(),
   bins: z.array(binSchema).optional(),
   plantRecords: z.array(plantRecordSchema).optional(),

@@ -6,6 +6,7 @@ import { Database, Download, Clock, AlertCircle, CalendarDays } from 'lucide-rea
 import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
 import { openSeasonRolloverModal } from '@/utils/seasonRollover';
+import { CURRENT_BACKUP_VERSION } from '@/lib/backupCompatibility';
 
 const LAST_BACKUP_KEY = 'acreledger_last_backup';
 
@@ -83,6 +84,7 @@ export default function BackupManager() {
     setBackingUp(true);
     try {
       const backupData = {
+        backupVersion: CURRENT_BACKUP_VERSION,
         fields,
         bins,
         plantRecords,

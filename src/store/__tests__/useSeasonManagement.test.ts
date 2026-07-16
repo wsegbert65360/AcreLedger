@@ -109,6 +109,11 @@ describe('Backup restore validation (fix #4)', () => {
     expect(result.cluAssignments).toHaveLength(1);
   });
 
+  it('accepts the current versioned backup envelope', () => {
+    const result = backupSchema.parse({ ...makeValidBackup(), backupVersion: 2 });
+    expect(result.backupVersion).toBe(2);
+  });
+
   it('rejects non-positive activity and CLU acreage', () => {
     const invalidPlant = { ...makeValidBackup(), plantRecords: [{
       id: 'p1', fieldId: 'f1', acreage: -1, seasonYear: 2026, farm_id: 'farm-1', deleted_at: null,

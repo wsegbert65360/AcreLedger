@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFarm } from '@/store/farmStore';
+import type { SprayRecipe } from '@/types/farm';
 
 import RecipeForm from './RecipeForm';
 
@@ -36,7 +37,7 @@ export default function RecipeManager() {
         )}
         {adding && (
           <RecipeForm
-            onSave={async (r: any) => {
+            onSave={async (r: Pick<SprayRecipe, 'name' | 'products' | 'applicatorName' | 'licenseNumber' | 'epaRegNumber' | 'targetPest' | 'cropOrSiteTreated'>) => {
               if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
               if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
               await addSprayRecipe(r);
@@ -54,10 +55,10 @@ export default function RecipeManager() {
               <RecipeForm
                 key={recipe.id}
                 initial={recipe}
-                onSave={async (r: any) => {
+                onSave={async (r: Pick<SprayRecipe, 'name' | 'products' | 'applicatorName' | 'licenseNumber' | 'epaRegNumber' | 'targetPest' | 'cropOrSiteTreated'>) => {
                   if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
                   if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
-                  await updateSprayRecipe({ ...r, id: recipe.id });
+                  await updateSprayRecipe({ ...recipe, ...r });
                   setEditingId(null);
                 }}
                 onCancel={() => setEditingId(null)}
@@ -77,6 +78,9 @@ export default function RecipeManager() {
                     </button>
                   </div>
                 </div>
+                {recipe.cropOrSiteTreated && (
+                  <div className="text-muted-foreground text-xs pl-2">Crop/site: <span className="text-foreground/70">{recipe.cropOrSiteTreated}</span></div>
+                )}
                 {recipe.products.map((p) => (
                   <div key={p.id ?? p.product} className="text-muted-foreground text-xs pl-2 leading-relaxed">
                     <span>• {p.product} — </span>

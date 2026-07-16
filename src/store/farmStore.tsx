@@ -131,7 +131,7 @@ interface FarmState {
   addSeed: (name: string) => Promise<boolean>;
   deleteSeed: (id: string) => Promise<boolean>;
   /** Operations for managing spray recipes */
-  addSprayRecipe: (recipe: Omit<SprayRecipe, 'id'>) => Promise<boolean>;
+  addSprayRecipe: (recipe: Omit<SprayRecipe, 'id' | 'farm_id' | 'deleted_at'>) => Promise<boolean>;
   updateSprayRecipe: (recipe: SprayRecipe) => Promise<boolean>;
   deleteSprayRecipe: (id: string) => Promise<boolean>;
   /** Operations for managing fertilizer recipes */
@@ -469,6 +469,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setFsaTracts, setCluAssignments,
     refetchFarmData: fetchData,
     isOnline,
+    initialFetchComplete,
+    fetchError,
+    pendingSyncCount,
   });
 
   // --- Composed signOut (auth + cache clear) ---
@@ -493,7 +496,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     tillageRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
     grainMovements.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
 
-    return Array.from(seasons).sort((a, b) => b - a);
+    return Array.from(seasons)
+      .filter(year => year >= activeSeason - 10 && year <= activeSeason + 1)
+      .sort((a, b) => b - a);
   }, [
     activeSeason,
     plantRecords,
@@ -505,6 +510,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     tillageRecords,
     grainMovements,
   ]);
+
+  const selectViewingSeason = useCallback((year: number) => {
+    if (!Number.isInteger(year) || year < activeSeason - 10 || year > activeSeason + 1) {
+      toast.error(`Season must be between ${activeSeason - 10} and ${activeSeason + 1}.`);
+      return;
+    }
+    setViewingSeason(year);
+  }, [activeSeason, setViewingSeason]);
 
   const sortedFields = useMemo(() =>
     [...fields]
@@ -599,7 +612,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       sprayRecipes,
       fsaTracts,
       cluAssignments,
-      activeSeason, viewingSeason, seasonOptions, setViewingSeason,
+      activeSeason, viewingSeason, seasonOptions, setViewingSeason: selectViewingSeason,
       rolloverToNewSeason: seasonOps.rolloverToNewSeason,
       ...plantOps,
       ...sprayOps,

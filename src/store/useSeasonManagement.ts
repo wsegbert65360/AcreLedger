@@ -15,6 +15,7 @@ import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
+import { CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupCompatibility';
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import { setStorageLock } from './storageUtils';
 import { offlineStorage } from '@/lib/offlineStorage';
@@ -62,6 +63,9 @@ interface UseSeasonManagementArgs {
   /** Reload all farm entities from Supabase after restore (source of truth). */
   refetchFarmData: () => Promise<boolean>;
   isOnline: boolean;
+  initialFetchComplete: boolean;
+  fetchError: boolean;
+  pendingSyncCount: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,14 +94,29 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setTillageRecords, setFsaTracts, setCluAssignments, setFarmId,
     refetchFarmData,
-    isOnline,
+    isOnline, initialFetchComplete, fetchError, pendingSyncCount,
   } = args;
 
   // ─── Rollover ───────────────────────────────────────────────────────────────
 
   const rolloverToNewSeason = useCallback(async (year: number): Promise<boolean> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+
     if (!isOnline) {
       toast.error('Season rollover is not available offline. Please connect to the internet.');
+      return false;
+    }
+
+    if (!session) {
+      toast.error('Season rollover requires a signed-in user.');
+      return false;
+    }
+
+    if (!initialFetchComplete || fetchError || pendingSyncCount > 0) {
+      toast.error('Wait for cloud data and pending changes to finish syncing before rollover.');
       return false;
     }
 
@@ -111,6 +130,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     try {
       // 1. Attempt backup FIRST — do not proceed if it fails
       const backupData = {
+        backupVersion: CURRENT_BACKUP_VERSION,
         fields, bins, plantRecords, sprayRecords, harvestRecords,
         hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
         savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
@@ -126,17 +146,16 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       }
 
       // 2. Update Supabase first — if this fails, don't update local state
-      if (session) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ active_season: year })
-          .eq('id', session.user.id);
+      const { error, count } = await supabase
+        .from('profiles')
+        .update({ active_season: year }, { count: 'exact' })
+        .eq('id', session.user.id)
+        .eq('farm_id', farm_id);
 
-        if (error) {
-          console.error('Error updating active season:', error);
-          toast.error('Failed to save new season to cloud. Season was NOT changed.');
-          return false;
-        }
+      if (error || count !== 1) {
+        console.error('Error updating active season:', error ?? `Expected 1 profile, updated ${count ?? 0}`);
+        toast.error('Failed to save new season to cloud. Season was NOT changed; your backup was downloaded.');
+        return false;
       }
 
       // 3. Both backup and DB succeeded — now update local state
@@ -144,6 +163,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       setViewingSeason(year);
       toast.success(`Season rolled over to ${year}. Backup downloaded.`);
       return true;
+    } catch (err) {
+      console.error('Unexpected season rollover failure:', err);
+      toast.error('Season was NOT changed because the cloud update failed. Your downloaded backup remains safe.');
+      return false;
     } finally {
       setLoading(false);
     }
@@ -151,19 +174,20 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     session, fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
-    isOnline, setActiveSeason, setViewingSeason, setLoading,
+    isOnline, farm_id, initialFetchComplete, fetchError, pendingSyncCount,
+    setActiveSeason, setViewingSeason, setLoading,
   ]);
 
   // ─── Restore ────────────────────────────────────────────────────────────────
 
   const restoreFromBackup = useCallback(async (rawData: unknown): Promise<boolean> => {
-    if (!isOnline) {
-      toast.error('Backup restore is not available offline. Please connect to the internet.');
+    if (!farm_id) {
+      toast.error('No farm selected.');
       return false;
     }
 
-    if (!farm_id) {
-      toast.error('Cannot restore: no farm selected.');
+    if (!isOnline) {
+      toast.error('Backup restore is not available offline. Please connect to the internet.');
       return false;
     }
 
@@ -174,7 +198,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
     setLoading(true);
     try {
-      const backupData = backupSchema.parse(rawData);
+      const backupData = backupSchema.parse(normalizeBackupForRestore(rawData));
 
       const { data: existingFieldRows, error: existingFieldsError } = await supabase
         .from('fields')
@@ -247,17 +271,17 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         throw new Error(`Failed to restore backup: ${error.message}`);
       }
 
-      if (backupData.activeSeason !== undefined) {
-        setActiveSeason(backupData.activeSeason);
-        setViewingSeason(backupData.activeSeason);
-      }
-
       // Hydrate from Supabase (not raw backup) so UI, localStorage, and DB stay aligned.
       const reloaded = await refetchFarmData();
       if (!reloaded) {
         throw new Error(
           'Backup was saved to the cloud, but reload failed. Refresh the page to sync your data.'
         );
+      }
+
+      if (backupData.activeSeason !== undefined) {
+        setActiveSeason(backupData.activeSeason);
+        setViewingSeason(backupData.activeSeason);
       }
 
       toast.success('Backup restored successfully.');

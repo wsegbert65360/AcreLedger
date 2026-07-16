@@ -547,7 +547,7 @@ export function useFieldsAndBins({
   }, [farm_id, setSavedSeeds, isOnline, onMutation]);
 
   // --- Spray Recipes ---
-  const addSprayRecipe = useCallback(async (r: Omit<SprayRecipe, 'id'>): Promise<boolean> => {
+  const addSprayRecipe = useCallback(async (r: Omit<SprayRecipe, 'id' | 'farm_id' | 'deleted_at'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
       return false;
@@ -559,7 +559,7 @@ export function useFieldsAndBins({
     isRecipeMutating.current = true;
 
     const id = crypto.randomUUID();
-    const newRecipe: SprayRecipe = { ...r, id, farm_id };
+    const newRecipe: SprayRecipe = { ...r, id, farm_id, deleted_at: null };
 
     let mapped: ReturnType<typeof mapRecipeToDb>;
     try {

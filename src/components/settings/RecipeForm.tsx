@@ -12,20 +12,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import type { SprayRecipeProduct } from '@/types/farm';
+import type { SprayRecipe, SprayRecipeProduct } from '@/types/farm';
+
+type RecipeFormValue = Pick<
+  SprayRecipe,
+  'name' | 'products' | 'applicatorName' | 'licenseNumber' | 'epaRegNumber' | 'targetPest' | 'cropOrSiteTreated'
+>;
 
 export default function RecipeForm({
   initial,
   onSave,
   onCancel,
 }: {
-  initial?: { name: string; products: SprayRecipeProduct[]; applicatorName?: string; licenseNumber?: string; epaRegNumber?: string; targetPest?: string };
-  onSave: (r: { name: string; products: SprayRecipeProduct[]; applicatorName?: string; licenseNumber?: string; epaRegNumber?: string; targetPest?: string }) => void;
+  initial?: RecipeFormValue;
+  onSave: (r: RecipeFormValue) => void;
   onCancel: () => void;
 }) {
   const { session } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || "local";
   const [name, setName] = useState(initial?.name ?? '');
+  const [cropOrSiteTreated, setCropOrSiteTreated] = useState(initial?.cropOrSiteTreated ?? '');
   const [products, setProducts] = useState<SprayRecipeProduct[]>(
     initial?.products?.length
       ? initial.products.map(p => ({ ...p, id: p.id ?? crypto.randomUUID() }))
@@ -66,6 +72,17 @@ export default function RecipeForm({
           placeholder="e.g. Burndown Mix"
           className="mt-1 bg-muted border-border text-foreground"
           autoFocus
+        />
+      </div>
+      <div>
+        <Label htmlFor="recipeCropOrSite" className="text-muted-foreground font-mono text-xs">CROP / SITE TREATED</Label>
+        <Input
+          id="recipeCropOrSite"
+          name="recipeCropOrSite"
+          value={cropOrSiteTreated}
+          onChange={e => setCropOrSiteTreated(e.target.value)}
+          placeholder="e.g. Corn"
+          className="mt-1 bg-muted border-border text-foreground"
         />
       </div>
       <span className="text-muted-foreground font-mono text-xs block">PRODUCTS</span>
@@ -190,6 +207,7 @@ export default function RecipeForm({
         <Button onClick={() => onSave({
           name: name.trim(),
           products: products.filter(p => p.product.trim()),
+          cropOrSiteTreated: cropOrSiteTreated.trim() || undefined,
           applicatorName: applicatorName.trim() || undefined,
           licenseNumber: licenseNumber.trim() || undefined,
           epaRegNumber: epaRegNumber.trim() || undefined,

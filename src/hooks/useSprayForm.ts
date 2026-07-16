@@ -338,6 +338,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       if (recipe.applicatorName) setApplicatorName(recipe.applicatorName);
       if (recipe.licenseNumber) setLicenseNumber(recipe.licenseNumber);
       if (recipe.targetPest) setTargetPest(recipe.targetPest);
+      if (recipe.cropOrSiteTreated) setCropOrSiteTreated(recipe.cropOrSiteTreated);
     }
   }, [sprayRecipes]);
 

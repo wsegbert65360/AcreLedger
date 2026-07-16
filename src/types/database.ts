@@ -210,6 +210,7 @@ export interface SprayRecipeRow {
     license_number: string;
     target_pest: string;
     epa_reg_number: string;
+    crop_or_site_treated?: string | null;
     deleted_at?: string | null;
 }
 

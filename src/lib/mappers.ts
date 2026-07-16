@@ -230,6 +230,7 @@ export const mapRecipeFromDb = (db: SprayRecipeRow): SprayRecipe => ({
     licenseNumber: safeStr(db.license_number),
     targetPest: safeStr(db.target_pest),
     epaRegNumber: safeStr(db.epa_reg_number),
+    cropOrSiteTreated: safeStr(db.crop_or_site_treated) || undefined,
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
@@ -557,6 +558,7 @@ export const mapRecipeToDb = (r: SprayRecipe) => {
         license_number: r.licenseNumber,
         target_pest: r.targetPest,
         epa_reg_number: r.epaRegNumber,
+        crop_or_site_treated: r.cropOrSiteTreated ?? null,
         deleted_at: r.deleted_at
     };
 };
@@ -585,6 +587,9 @@ export const mapFertilizerToDb = (r: FertilizerApplication) => {
         fertilizer_formula: r.fertilizer_formula,
         acres: r.acres,
         season_year: r.seasonYear,
+        ...(Number.isFinite(r.timestamp) && r.timestamp > 0
+            ? { created_at: new Date(r.timestamp).toISOString() }
+            : {}),
         deleted_at: r.deleted_at
     };
 };

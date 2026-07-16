@@ -4,7 +4,8 @@ import {
     mapPlantToDb,
     mapSprayFromDb, mapSprayToDb,
     mapCustomSprayFromDb, mapCustomSprayToDb,
-    mapSeedFromDb, mapSeedToDb
+    mapSeedFromDb, mapSeedToDb,
+    mapRecipeFromDb, mapRecipeToDb, mapFertilizerToDb,
 } from '../mappers';
 import { SprayRecord, SavedSeed, CustomSprayRecord } from '../../types/farm';
 
@@ -38,6 +39,27 @@ describe('Mappers Round-Trip', () => {
         } as any);
 
         expect(result.treatedAreaSize).toBeUndefined();
+    });
+
+    it('should preserve spray recipe crop/site through the database mapper', () => {
+        const db = mapRecipeToDb({
+            id: 'recipe-1', farm_id: 'farm-1', name: 'Corn post', products: [],
+            cropOrSiteTreated: 'Corn', deleted_at: null,
+        });
+
+        expect(db.crop_or_site_treated).toBe('Corn');
+        expect(mapRecipeFromDb(db as any).cropOrSiteTreated).toBe('Corn');
+    });
+
+    it('should preserve fertilizer creation time when the backup has a timestamp', () => {
+        const timestamp = Date.parse('2025-04-01T12:00:00.000Z');
+        const db = mapFertilizerToDb({
+            id: 'fert-1', farm_id: 'farm-1', fieldId: 'field-1', fieldName: 'North',
+            date: '2025-04-01', acres: 42, fertilizer_formula: '46-0-0', seasonYear: 2025,
+            timestamp, deleted_at: null,
+        });
+
+        expect(db.created_at).toBe('2025-04-01T12:00:00.000Z');
     });
 
     it('should maintain SprayRecord integrity through round-trip', () => {

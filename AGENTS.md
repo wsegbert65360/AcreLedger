@@ -232,6 +232,10 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Backups must preserve CLU setup with `fsaTracts` and `cluAssignments`; the restore RPC payload must send those as `fsa_tract_imports` and `field_clu_assignments`.
 - Do not hydrate React state directly from raw backup arrays.
 - Normalize restored records first.
+- New exports must include `backupVersion`; unversioned backups are legacy and must pass through `normalizeBackupForRestore` before strict schema validation. Known legacy zero acreage may be derived only from matching field/CLU/tract data; negative or unrecoverable acreage must still fail closed.
+- Restore helpers must insert and update only columns present in each payload row. Never enumerate every table column and feed missing JSON properties through `jsonb_populate_record(set)`, because that converts omissions to `NULL`, defeats database defaults, and can erase columns introduced after an older backup was created.
+- Spray recipe backup and mapper paths must preserve `cropOrSiteTreated` / `crop_or_site_treated`.
+- Season rollover must require completed cloud loading with no pending sync mutations, verify exactly one farm-scoped profile row changed, and catch unexpected network exceptions before changing local season state.
 - If the restore RPC fails, do not mutate React state.
 
 ### CI/CD (CodeMagic)

@@ -390,15 +390,24 @@ older exports or pre-fix local cache data. Restore must always treat the current
   `{ ...record, farmId: farm_id }` before calling `mapFsaTractToDb` or
   `mapFieldCluAssignmentToDb`.
 - Backup files must preserve CLU setup with `fsaTracts` and `cluAssignments`; the schema also
-  accepts the Settings export metadata field `backupDate`.
+  accepts the Settings export metadata field `backupDate`. New exports carry `backupVersion`;
+  unversioned legacy exports are normalized before strict validation.
 - The Supabase `restore_farm_backup` RPC payload must send normalized database rows, including
   `fsa_tract_imports` and `field_clu_assignments`, using the same current `farm_id`.
 - Restore SQL must replay `fsa_tract_imports` by `farm_id,tract_key` and
   `field_clu_assignments` by `farm_id,tract_key,clu_number`, while rejecting conflicting row IDs
   that already belong to another farm.
+- Generic restore helpers operate one payload row at a time and include only JSON-present
+  columns in each insert/update. Missing legacy properties therefore use database defaults on
+  new rows and preserve existing values on matching rows instead of becoming `NULL`.
+- Known legacy zero acreage is repaired only from matching backup field/CLU/tract data. Negative
+  or unrecoverable acreage remains a validation error. Spray recipe crop/site is preserved as
+  `cropOrSiteTreated` / `crop_or_site_treated`.
 - Never hydrate React state directly from raw backup arrays after a restore. Normalize records
   first so localStorage, in-memory state, and Supabase stay aligned.
 - Restore must fail without mutating state if the RPC returns an error.
+- Season rollover requires a completed cloud load, no pending sync mutations, and exactly one
+  farm-scoped profile update before local active/viewing seasons change.
 
 ---
 

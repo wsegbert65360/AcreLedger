@@ -134,6 +134,8 @@ describe('Restore Performance Benchmark', () => {
 
         expect(success).toBe(false);
         expect(mockArgs.refetchFarmData).toHaveBeenCalledTimes(1);
+        expect(mockArgs.setActiveSeason).not.toHaveBeenCalled();
+        expect(mockArgs.setViewingSeason).not.toHaveBeenCalled();
         expect(mockArgs.setFields).not.toHaveBeenCalled();
     });
 });
