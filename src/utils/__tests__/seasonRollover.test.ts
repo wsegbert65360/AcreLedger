@@ -4,6 +4,7 @@ import {
   clearRolloverDismiss,
   dismissRolloverPrompt,
   getRolloverDismissKey,
+  getNextRolloverSeason,
   isRolloverDismissed,
   openSeasonRolloverModal,
 } from '../seasonRollover';
@@ -31,5 +32,11 @@ describe('seasonRollover utils', () => {
     window.addEventListener('open-rollover', () => { fired = true; });
     openSeasonRolloverModal();
     expect(fired).toBe(true);
+  });
+
+  it('advances exactly one season and respects the next-year ceiling', () => {
+    expect(getNextRolloverSeason(2024, 2026)).toBe(2025);
+    expect(getNextRolloverSeason(2026, 2026)).toBe(2027);
+    expect(getNextRolloverSeason(2027, 2026)).toBeNull();
   });
 });

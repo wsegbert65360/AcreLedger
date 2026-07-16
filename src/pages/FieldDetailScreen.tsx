@@ -14,6 +14,7 @@ import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { roundTo } from '@/utils/numbers';
+import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -455,7 +456,7 @@ export default function FieldDetailScreen() {
                 <Cloud size={16} className="text-spray" />
                 Latest Spray
               </h3>
-              {latestSpray.nonCompliant ? (
+              {sprayRecordNeedsReview(latestSpray) ? (
                 <div className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-bold text-amber-700 dark:text-amber-300">
                   <AlertTriangle size={12} />
                   Needs review

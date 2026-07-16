@@ -2,6 +2,7 @@ import { SprayRecord } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
 import { formatIsoDate, formatDate } from '@/utils/dates';
 import { cleanName } from '@/utils/text';
+import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
 
 interface SprayTabProps {
   records: SprayRecord[];
@@ -55,7 +56,7 @@ export default function SprayTab({ records, selected, onToggle, onEdit, onDuplic
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
           onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
-          warning={r.nonCompliant}
+          warning={sprayRecordNeedsReview(r)}
         />
       ))}
     </div>

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { SprayRecipe, SprayRecipeProduct } from '@/types/farm';
 import { Plus, X, BookOpen } from 'lucide-react';
+import { hasValidSprayRate } from '@/utils/unitConversion';
 
 interface SprayWizardMixStepProps {
   sprayRecipes: SprayRecipe[];
@@ -138,7 +139,7 @@ export function SprayWizardMixStep({
                       value={p.rate}
                       onChange={e => updateProduct(i, 'rate', e.target.value)}
                       placeholder="22"
-                      className="bg-background border-border text-foreground h-11 px-2 w-20"
+                      className={`bg-background border-border text-foreground h-11 px-2 w-20 ${showValidation && !hasValidSprayRate(p) ? 'border-yellow-500/50' : ''}`}
                     />
                     <Select value={p.rateUnit} onValueChange={(val) => updateProduct(i, 'rateUnit', val)}>
                       <SelectTrigger className="bg-background border-border text-foreground h-11 px-2 flex-1">

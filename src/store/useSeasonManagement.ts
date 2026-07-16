@@ -120,6 +120,11 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
+    if (year <= activeSeason) {
+      toast.error(`The new season must be later than the active ${activeSeason} season.`);
+      return false;
+    }
+
     setLoading(true);
     try {
       // 1. Attempt backup FIRST — do not proceed if it fails

@@ -1,6 +1,16 @@
+import { getMaxActiveSeason } from '@/lib/seasonYears';
+
 /** Dispatches the global event listened to by SeasonRolloverModal. */
 export function openSeasonRolloverModal(): void {
   window.dispatchEvent(new CustomEvent('open-rollover'));
+}
+
+export function getNextRolloverSeason(
+  activeSeason: number,
+  currentYear = new Date().getFullYear(),
+): number | null {
+  const maxSeason = getMaxActiveSeason(currentYear);
+  return activeSeason < maxSeason ? Math.min(activeSeason + 1, maxSeason) : null;
 }
 
 export function getRolloverDismissKey(userId: string | null | undefined, targetYear: number): string {

@@ -41,3 +41,9 @@ Credentials are in `.env.test.local` — see `.env.example` for required keys.
 
 ## Architectural Standards
 All tests must adhere to the "Wait-and-Verify" and "OpResult" patterns defined in the [BLUEPRINT.md](file:///c:/Projects/AcreLedger/BLUEPRINT.md).
+
+## Authentication Email Delivery
+
+- Production signup and password-reset testing requires a configured custom SMTP provider in Supabase Auth. The hosted default mailer is intentionally low-volume and is not suitable for repeated end-to-end account creation.
+- Configure SMTP credentials and review email rate limits in the Supabase Dashboard before a multi-account test run. Never commit SMTP credentials to this repository.
+- The client converts email throttling responses into a retry-later message; it must not report that account verification was sent when Supabase returned an error.

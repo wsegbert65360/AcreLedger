@@ -9,6 +9,18 @@ export type TotalUnit = 'fl oz' | 'pt' | 'qt' | 'gal' | 'oz' | 'lb';
 export const LIQUID_UNITS: SprayUnit[] = ['fl oz/ac', 'pt/ac', 'qt/ac', 'gal/ac'];
 export const DRY_UNITS: SprayUnit[] = ['oz/ac', 'lb/ac'];
 
+export interface SprayProductAmountFields {
+  rate?: string | number;
+  rateUnit?: string;
+  totalProductAmount?: string;
+  totalProductUnit?: string;
+}
+
+export function hasValidSprayRate(product: SprayProductAmountFields): boolean {
+  const rate = typeof product.rate === 'number' ? product.rate : Number(product.rate);
+  return Number.isFinite(rate) && rate > 0 && Boolean(product.rateUnit?.trim());
+}
+
 /**
  * Calculates total amount applied and returns value and most appropriate unit.
  */
@@ -53,6 +65,26 @@ export function calculateTotalAmount(rate: number, acres: number, unit: string):
   }
 
   return { value: Number(rawTotal.toFixed(2)), unit: unit.replace('/ac', '') || 'gal' };
+}
+
+/**
+ * Returns a copy with a canonical calculated total whenever rate and acreage
+ * are usable. Invalid legacy rows are returned unchanged so opening the form
+ * cannot erase a manually stored total.
+ */
+export function calculateSprayProductFields<T extends SprayProductAmountFields>(
+  product: T,
+  acres: number,
+): T {
+  if (!hasValidSprayRate(product) || !Number.isFinite(acres) || acres <= 0) return product;
+
+  const rate = typeof product.rate === 'number' ? product.rate : Number(product.rate);
+  const { value, unit } = calculateTotalAmount(rate, acres, product.rateUnit || '');
+  return {
+    ...product,
+    totalProductAmount: value.toString(),
+    totalProductUnit: unit,
+  };
 }
 
 /**

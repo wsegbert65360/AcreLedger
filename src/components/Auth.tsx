@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Sprout, Mail, ArrowLeft } from 'lucide-react';
+import { getAuthErrorMessage } from '@/lib/authErrors';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'verification_sent';
 
@@ -64,11 +65,7 @@ export function Auth() {
                 toast.success('Logged in successfully!');
             }
         } catch (error) {
-            const rawMessage = error instanceof Error ? error.message : 'Authentication error';
-            const message = rawMessage === 'Load failed'
-                ? 'Could not reach Supabase. Check VITE_SUPABASE_URL and network access.'
-                : rawMessage;
-            toast.error(message);
+            toast.error(getAuthErrorMessage(error));
         } finally {
             setLoading(false);
         }

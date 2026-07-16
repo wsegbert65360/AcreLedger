@@ -147,6 +147,8 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Spray records support multiple products per application.
 - Product identity in tank-mix UI rows must use a temporary `ui_id`, not the array index.
 - Missing `epaRegNumber` marks the record non-compliant.
+- A missing, zero, negative, or unitless per-product application rate also marks the record as needing compliance review. Derive this for legacy rows at read time; do not backfill or rewrite historical spray records merely to change the flag.
+- Per-product chemical totals are canonical and must be recalculated synchronously from the stored rate, rate unit, and treated acreage before save. `totalAmountApplied` is a legacy first-product numeric compatibility summary, not a sum across products with potentially different units.
 - Active ingredients are tracked per product.
 - Keep spray terminology state-neutral unless a specific legal report requires state wording.
 - `WIND_ALERT_MPH = 10` is the named wind alert threshold. Its canonical export is `@/lib/weatherHelpers.ts`; import from there rather than re-declaring a local constant.
@@ -238,6 +240,7 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Restore helpers must insert and update only columns present in each payload row. Never enumerate every table column and feed missing JSON properties through `jsonb_populate_record(set)`, because that converts omissions to `NULL`, defeats database defaults, and can erase columns introduced after an older backup was created.
 - Spray recipe backup and mapper paths must preserve `cropOrSiteTreated` / `crop_or_site_treated`.
 - Season rollover must require completed cloud loading with no pending sync mutations, verify exactly one farm-scoped profile row changed, and catch unexpected network exceptions before changing local season state.
+- Manual season rollover advances exactly one year from `activeSeason`, up to the `[currentYear + 1]` ceiling. Never target `currentYear` unconditionally, and reject no-op or backwards rollovers before creating a backup.
 - Settings and pre-rollover backup objects must pass `backupSchema` before download. Season rollover must stop before changing the profile if its generated backup is not currently restorable.
 - `profiles` must remain in the `supabase_realtime` publication so an active-season rollover reaches other signed-in devices during the same session.
 - If the restore RPC fails, do not mutate React state.

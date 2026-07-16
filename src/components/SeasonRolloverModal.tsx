@@ -21,6 +21,7 @@ import { useFarm } from '@/store/farmStore';
 import {
   clearRolloverDismiss,
   dismissRolloverPrompt,
+  getNextRolloverSeason,
   isRolloverDismissed,
 } from '@/utils/seasonRollover';
 
@@ -33,6 +34,7 @@ export default function SeasonRolloverModal() {
   const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentYear = new Date().getFullYear();
+  const targetSeason = getNextRolloverSeason(activeSeason, currentYear);
   const userId = session?.user?.id ?? null;
   const busy = loading || restoring;
 
@@ -50,20 +52,21 @@ export default function SeasonRolloverModal() {
 
   useEffect(() => {
     if (activeSeason >= currentYear) return;
-    if (isRolloverDismissed(userId, currentYear)) return;
+    if (targetSeason == null || isRolloverDismissed(userId, targetSeason)) return;
     setOpen(true);
-  }, [activeSeason, currentYear, userId]);
+  }, [activeSeason, currentYear, targetSeason, userId]);
 
   const handleNotNow = () => {
-    dismissRolloverPrompt(userId, currentYear);
+    if (targetSeason != null) dismissRolloverPrompt(userId, targetSeason);
     setOpen(false);
   };
 
   const handleRollover = async () => {
-    const success = await rolloverToNewSeason(currentYear);
+    if (targetSeason == null) return;
+    const success = await rolloverToNewSeason(targetSeason);
     if (success) {
       native.haptic.success();
-      clearRolloverDismiss(userId, currentYear);
+      clearRolloverDismiss(userId, targetSeason);
       setOpen(false);
     } else {
       native.haptic.error();
@@ -128,7 +131,7 @@ export default function SeasonRolloverModal() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-500">
               <AlertTriangle size={24} />
-              Season rollover — {currentYear}
+              {targetSeason == null ? 'Season rollover' : `Season rollover — ${targetSeason}`}
             </DialogTitle>
             <DialogDescription className="font-mono text-xs pt-2">
               Start the new crop year when you are ready. A JSON snapshot downloads first so you can keep a safe copy of your records.
@@ -145,7 +148,7 @@ export default function SeasonRolloverModal() {
                 <ArrowRight className="text-muted-foreground" size={20} />
                 <div className="text-center">
                   <div className="text-[11px] text-amber-500 font-mono">New active season</div>
-                  <div className="text-2xl font-bold font-mono text-amber-500">{currentYear}</div>
+                  <div className="text-2xl font-bold font-mono text-amber-500">{targetSeason ?? 'At limit'}</div>
                 </div>
               </div>
             </div>
@@ -160,13 +163,13 @@ export default function SeasonRolloverModal() {
                   <span className="text-foreground">Snapshot download:</span> Saves a JSON backup of your farm before anything changes.
                 </li>
                 <li>
-                  <span className="text-foreground">Active season update:</span> Sets your active season to {currentYear} in the cloud and on this device.
+                  <span className="text-foreground">Active season update:</span> {targetSeason == null ? 'The active season is already at the latest allowed year.' : `Sets your active season to ${targetSeason} in the cloud and on this device.`}
                 </li>
                 <li>
                   <span className="text-foreground">Prior-year records:</span> {activeSeason} activity stays in your database; use the season selector in the sidebar to view it.
                 </li>
                 <li>
-                  <span className="text-foreground">New-year dashboard:</span> Lists and stats default to {currentYear} until you add records for this season. Nothing is deleted.
+                  <span className="text-foreground">New-year dashboard:</span> {targetSeason == null ? 'No season change is available yet. Restore remains available below.' : `Lists and stats default to ${targetSeason} until you add records for this season. Nothing is deleted.`}
                 </li>
               </ul>
             </div>
@@ -223,7 +226,7 @@ export default function SeasonRolloverModal() {
             </Button>
             <Button
               onClick={handleRollover}
-              disabled={busy}
+              disabled={busy || targetSeason == null}
               className="bg-amber-500 text-amber-950 hover:bg-amber-600 font-bold min-w-[140px] min-h-[44px]"
             >
               {loading ? (
@@ -232,7 +235,7 @@ export default function SeasonRolloverModal() {
                   Rolling over…
                 </>
               ) : (
-                `Start ${currentYear} season`
+                targetSeason == null ? 'Latest season active' : `Start ${targetSeason} season`
               )}
             </Button>
           </DialogFooter>

@@ -5,7 +5,7 @@ import { WeatherData } from '@/types/weather';
 import { useFarm } from '@/store/farmStore';
 import { native } from '@/lib/native';
 import { toast } from 'sonner';
-import { calculateTotalAmount } from '@/utils/unitConversion';
+import { calculateSprayProductFields, hasValidSprayRate } from '@/utils/unitConversion';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { getLatestForField } from '@/lib/utils';
 
@@ -273,30 +273,21 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     const acres = parseFloat(treatedAreaSize);
     if (isNaN(acres) || acres <= 0) return;
 
-    let firstProductTotal = 0;
+    const calculatedProducts = products.map(product => calculateSprayProductFields(product, acres));
+    const productsChanged = calculatedProducts.some((product, index) => (
+      product.totalProductAmount !== products[index].totalProductAmount
+      || product.totalProductUnit !== products[index].totalProductUnit
+    ));
+    if (productsChanged) setProducts(calculatedProducts);
 
-    setProducts(prev => {
-      let changed = false;
-      const next = prev.map((p, i) => {
-        const rateValue = parseFloat(p.rate || '0');
-        if (isNaN(rateValue) || rateValue <= 0) return p;
-
-        const { value, unit } = calculateTotalAmount(rateValue, acres, p.rateUnit);
-        if (i === 0) firstProductTotal = value;
-
-        if (p.totalProductAmount !== value.toString() || p.totalProductUnit !== unit) {
-          changed = true;
-          return { ...p, totalProductAmount: value.toString(), totalProductUnit: unit };
-        }
-        return p;
-      });
-      return changed ? next : prev;
-    });
-
-    if (firstProductTotal > 0 && totalAmountApplied !== firstProductTotal.toString()) {
-      setTotalAmountApplied(firstProductTotal.toString());
+    // Compatibility summary only: per-product totals remain authoritative.
+    const firstProductTotal = calculatedProducts[0]?.totalProductAmount;
+    if (hasValidSprayRate(calculatedProducts[0] || {}) && firstProductTotal) {
+      setTotalAmountApplied(firstProductTotal);
     }
-  }, [treatedAreaSize, ratesSignature, totalAmountApplied]);
+    // ratesSignature intentionally limits recalculation to acreage/rate changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treatedAreaSize, ratesSignature]);
 
   // Auto-estimate end time
   useEffect(() => {
@@ -387,7 +378,8 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     cropOrSiteTreated.trim() &&
     applicationMethod.trim() &&
     equipmentId.trim() &&
-    products.every(p => p.epaRegNumber?.trim()),
+    products.every(p => p.epaRegNumber?.trim()) &&
+    products.every(hasValidSprayRate),
   [products, startTime, endTime, weather, applicatorName, licenseNumber, manualWindDirection, cropOrSiteTreated, applicationMethod, equipmentId]);
 
   const missingComplianceFields = useMemo(() => {
@@ -403,6 +395,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     if (!applicationMethod.trim()) missing.push('Application method');
     if (!equipmentId.trim()) missing.push('Equipment ID');
     if (!products.every(p => p.epaRegNumber?.trim())) missing.push('EPA Reg # (one or more products)');
+    if (!products.every(hasValidSprayRate)) missing.push('Application rate (one or more products)');
     return missing;
   }, [products, startTime, endTime, weather, applicatorName, licenseNumber, manualWindDirection, cropOrSiteTreated, applicationMethod, equipmentId]);
 
@@ -480,10 +473,18 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
         finalNotes = `${finalNotes}\n[ATTACHMENT:data:${photoType};base64,${photoBase64}]`.trim();
       }
 
+      const treatedAcres = parseFloat(treatedAreaSize) || 0;
+      const calculatedProducts = products
+        .filter(p => p.product.trim())
+        .map(p => calculateSprayProductFields(p, treatedAcres));
+      const compatibilityTotal = hasValidSprayRate(calculatedProducts[0] || {})
+        ? Number(calculatedProducts[0]?.totalProductAmount) || 0
+        : parseFloat(totalAmountApplied) || 0;
+
       const data = {
         fieldId: field.id,
         fieldName: field.name,
-        products: products.filter(p => p.product.trim()).map(p => ({
+        products: calculatedProducts.map(p => ({
           ...p,
           totalProductAmount: p.totalProductAmount || undefined,
           totalProductUnit: p.totalProductUnit || 'gal'
@@ -502,9 +503,9 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
         siteAddress: siteAddress.trim() || undefined,
         cropOrSiteTreated: cropOrSiteTreated.trim() || undefined,
         applicationMethod: applicationMethod.trim() || undefined,
-        treatedAreaSize: parseFloat(treatedAreaSize) || 0,
+        treatedAreaSize: treatedAcres,
         treatedAreaUnit: treatedAreaUnit || 'ac',
-        totalAmountApplied: parseFloat(totalAmountApplied) || 0,
+        totalAmountApplied: compatibilityTotal,
         mixtureRate: mixtureRate.trim() || undefined,
         totalMixtureVolume: totalMixtureVolume.trim() || undefined,
         involvedTechnicians: involvedTechnicians.trim() || undefined,

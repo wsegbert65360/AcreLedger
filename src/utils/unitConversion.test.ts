@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSprayProductTotal } from './unitConversion';
+import { calculateSprayProductFields, formatSprayProductTotal, hasValidSprayRate } from './unitConversion';
 
 describe('formatSprayProductTotal', () => {
   it.each([
@@ -44,5 +44,27 @@ describe('formatSprayProductTotal', () => {
 
     expect(formatSprayProductTotal(product, 60)).toBe('15 gal');
     expect(product).toEqual(original);
+  });
+});
+
+describe('spray product persistence helpers', () => {
+  it('calculates canonical stored fields without mutating the input', () => {
+    const product = { rate: '16', rateUnit: 'fl oz/ac', totalProductAmount: '', totalProductUnit: 'gal' };
+    const calculated = calculateSprayProductFields(product, 10);
+
+    expect(calculated).toEqual(expect.objectContaining({ totalProductAmount: '1.25', totalProductUnit: 'gal' }));
+    expect(product.totalProductAmount).toBe('');
+  });
+
+  it('requires a positive rate and a unit', () => {
+    expect(hasValidSprayRate({ rate: '', rateUnit: 'qt/ac' })).toBe(false);
+    expect(hasValidSprayRate({ rate: '0', rateUnit: 'qt/ac' })).toBe(false);
+    expect(hasValidSprayRate({ rate: '1', rateUnit: '' })).toBe(false);
+    expect(hasValidSprayRate({ rate: '1', rateUnit: 'qt/ac' })).toBe(true);
+  });
+
+  it('preserves a legacy stored total when rate data is invalid', () => {
+    const product = { rate: '', rateUnit: 'qt/ac', totalProductAmount: '25', totalProductUnit: 'gal' };
+    expect(calculateSprayProductFields(product, 80)).toBe(product);
   });
 });

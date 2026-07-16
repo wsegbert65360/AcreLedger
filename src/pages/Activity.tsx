@@ -14,6 +14,7 @@ import {
 import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
+import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
 import type {
   PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
   FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord
@@ -207,7 +208,7 @@ export default function Activity() {
   );
 
   const reviewQueueSprays = useMemo(
-    () => filteredSpray.filter(r => r.nonCompliant === true),
+    () => filteredSpray.filter(sprayRecordNeedsReview),
     [filteredSpray]
   );
   const reviewQueueCount = reviewQueueSprays.length;

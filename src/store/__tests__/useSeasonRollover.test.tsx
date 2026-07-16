@@ -111,4 +111,12 @@ describe('season rollover safety', () => {
     expect(args.setActiveSeason).not.toHaveBeenCalled();
     expect(args.setViewingSeason).not.toHaveBeenCalled();
   });
+
+  it('rejects a no-op or backwards rollover before creating a backup', async () => {
+    const args = makeArgs({ activeSeason: 2026 });
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(exportDataAsJson).not.toHaveBeenCalled();
+  });
 });

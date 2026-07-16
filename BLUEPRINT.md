@@ -180,7 +180,7 @@ Supports multiple products per application (tank-mix) and advanced environmental
 - **Treated Area Default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`, `sprayExport.ts`) resolve to the FSA crop acreage shown on the field, never a raw `field.acreage` read. Read-time resolution goes through the shared `getEffectiveSprayTreatedAcres(record, field, cluAssignments)` helper: stored `treatedAreaSize` when present and positive, else `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, then boundary, then `field.acreage`). Current form edits preserve an explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray). The one-time migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql` intentionally normalized every active historical treated-area value because legacy automatic defaults could not be distinguished from manual entries. It changes only `treated_area_size` and leaves products, stored totals, weather, wind, temperature, humidity, application times, and notes untouched. Report/export product totals are calculated at read time from rate and normalized acreage when possible, without mutating stored records.
 - **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
-- **Non-Compliant Flag**: Triggered if any product is missing an `epaRegNumber`.
+- **Non-Compliant / Review Status**: Triggered if any product is missing an `epaRegNumber` or lacks a positive application rate and rate unit. Legacy records derive this review status in the UI without a database rewrite. Per-product totals are canonical and are recalculated synchronously from rate × treated acres before saving; the top-level `totalAmountApplied` remains only a legacy first-product numeric compatibility value and must never sum unlike units.
 - **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
 - **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
 - **Weather Recovery**: "Recover Past Weather" feature pulls historical conditions from Visual Crossing based on field location and start time.
@@ -411,6 +411,8 @@ older exports or pre-fix local cache data. Restore must always treat the current
 - Restore must fail without mutating state if the RPC returns an error.
 - Season rollover requires a completed cloud load, no pending sync mutations, and exactly one
   farm-scoped profile update before local active/viewing seasons change.
+- Manual rollover advances exactly one year from the active season, up to the allowed
+  `currentYear + 1` ceiling. The store rejects no-op and backwards requests before backup creation.
 - `profiles.active_season` is constrained in Postgres to `[2000, currentYear + 1]`, and the
   `restore_farm_backup` RPC validates the same range before replaying any entity rows.
 - Active-season changes propagate across devices through a user-filtered Supabase Realtime
