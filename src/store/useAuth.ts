@@ -1,7 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import {
+  isValidActiveSeason,
+  isValidViewingSeason,
+  resolveRemoteViewingSeason,
+} from '@/lib/seasonYears';
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -10,6 +15,27 @@ export function useAuth() {
   const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
   const [viewingSeason, setViewingSeason] = useState<number>(new Date().getFullYear());
   const [onboardingComplete, setOnboardingComplete] = useState<boolean>(false);
+  const activeSeasonRef = useRef(activeSeason);
+
+  useEffect(() => {
+    activeSeasonRef.current = activeSeason;
+  }, [activeSeason]);
+
+  const applyRemoteActiveSeason = useCallback((nextActiveSeason: unknown) => {
+    if (typeof nextActiveSeason !== 'number' || !isValidActiveSeason(nextActiveSeason)) {
+      console.error('Ignored invalid active_season received from profile:', nextActiveSeason);
+      return;
+    }
+
+    const previousActiveSeason = activeSeasonRef.current;
+    activeSeasonRef.current = nextActiveSeason;
+    setActiveSeason(nextActiveSeason);
+    setViewingSeason(current => resolveRemoteViewingSeason(
+      current,
+      previousActiveSeason,
+      nextActiveSeason,
+    ));
+  }, []);
 
   // Initialize Supabase session & handle Auth Changes
   useEffect(() => {
@@ -38,15 +64,17 @@ export function useAuth() {
           if (storedOnboarding === '1') setOnboardingComplete(true);
           if (storedSeason) {
             const active = parseInt(storedSeason, 10);
-            setActiveSeason(active);
-            let viewing = active;
-            if (storedViewingSeason) {
-              const parsedViewing = parseInt(storedViewingSeason, 10);
-              if (!isNaN(parsedViewing) && parsedViewing >= active - 10 && parsedViewing <= active + 1) {
-                viewing = parsedViewing;
+            if (isValidActiveSeason(active)) {
+              setActiveSeason(active);
+              let viewing = active;
+              if (storedViewingSeason) {
+                const parsedViewing = parseInt(storedViewingSeason, 10);
+                if (isValidViewingSeason(parsedViewing, active)) {
+                  viewing = parsedViewing;
+                }
               }
+              setViewingSeason(viewing);
             }
-            setViewingSeason(viewing);
           }
 
           // Priority 2: JWT (Authoritative cloud path)
@@ -108,7 +136,7 @@ export function useAuth() {
               await supabase.auth.refreshSession();
             }
             let active = profileData.active_season;
-            if (!active) {
+            if (!isValidActiveSeason(active)) {
               active = new Date().getFullYear();
               supabase
                 .from('profiles')
@@ -135,7 +163,7 @@ export function useAuth() {
             let viewing = active;
             if (storedViewingSeason) {
               const parsedViewing = parseInt(storedViewingSeason, 10);
-              if (!isNaN(parsedViewing) && parsedViewing >= active - 10 && parsedViewing <= active + 1) {
+              if (isValidViewingSeason(parsedViewing, active)) {
                 viewing = parsedViewing;
               }
             }
@@ -152,7 +180,62 @@ export function useAuth() {
     };
 
     syncAuth();
-  }, [session?.user?.id]); // Only runs when user changes
+  }, [session]); // Also refreshes profile state when Supabase refreshes the session.
+
+  // Keep the active season synchronized across devices. Realtime handles the
+  // normal case; foreground/online refreshes recover from suspended sockets.
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    let cancelled = false;
+    const refreshActiveSeason = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('active_season')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('Failed to refresh active season:', error);
+          return;
+        }
+        if (!cancelled) applyRemoteActiveSeason(data?.active_season);
+      } catch (err) {
+        console.error('Unexpected active season refresh failure:', err);
+      }
+    };
+
+    const channel = supabase
+      .channel(`profile-season-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${userId}`,
+        },
+        payload => applyRemoteActiveSeason(payload.new?.active_season),
+      )
+      .subscribe();
+
+    const refreshWhenActive = () => {
+      if (document.visibilityState === 'visible') void refreshActiveSeason();
+    };
+    document.addEventListener('visibilitychange', refreshWhenActive);
+    window.addEventListener('focus', refreshWhenActive);
+    window.addEventListener('online', refreshWhenActive);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', refreshWhenActive);
+      window.removeEventListener('focus', refreshWhenActive);
+      window.removeEventListener('online', refreshWhenActive);
+      void supabase.removeChannel(channel);
+    };
+  }, [applyRemoteActiveSeason, session?.user?.id]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();

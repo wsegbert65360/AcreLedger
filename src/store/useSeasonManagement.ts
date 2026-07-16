@@ -19,6 +19,7 @@ import { CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupC
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import { setStorageLock } from './storageUtils';
 import { offlineStorage } from '@/lib/offlineStorage';
+import { getMaxActiveSeason, isValidActiveSeason, MIN_SEASON_YEAR } from '@/lib/seasonYears';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,13 +72,6 @@ interface UseSeasonManagementArgs {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const getCurrentYear = () => new Date().getFullYear();
-const MIN_SEASON_YEAR = 2000;
-
-function isValidYear(year: number): boolean {
-  const maxSeasonYear = new Date().getFullYear() + 1;
-  return Number.isInteger(year) && year >= MIN_SEASON_YEAR && year <= maxSeasonYear;
-}
-
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -120,8 +114,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
-    const maxSeasonYear = new Date().getFullYear() + 1;
-    if (!isValidYear(year)) {
+    const maxSeasonYear = getMaxActiveSeason();
+    if (!isValidActiveSeason(year)) {
       toast.error(`Invalid season year: ${year}. Must be between ${MIN_SEASON_YEAR} and ${maxSeasonYear}.`);
       return false;
     }
@@ -136,9 +130,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
         rolloverDate: new Date().toISOString(),
       };
+      const validatedBackup = backupSchema.parse(backupData);
 
       const filename = `Pre_Season_Reset_${new Date().toISOString().split('T')[0]}.json`;
-      const downloaded = await exportDataAsJson(backupData, filename);
+      const downloaded = await exportDataAsJson(validatedBackup, filename);
 
       if (!downloaded) {
         toast.error('Could not create pre-rollover backup. Season was NOT changed.');
@@ -165,7 +160,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return true;
     } catch (err) {
       console.error('Unexpected season rollover failure:', err);
-      toast.error('Season was NOT changed because the cloud update failed. Your downloaded backup remains safe.');
+      toast.error('Season was NOT changed because the backup or cloud update failed.');
       return false;
     } finally {
       setLoading(false);
@@ -257,7 +252,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       };
 
       if (backupData.activeSeason !== undefined) {
-        if (!isValidYear(backupData.activeSeason)) {
+        if (!isValidActiveSeason(backupData.activeSeason)) {
           throw new Error(`Invalid season year in backup: ${backupData.activeSeason}`);
         }
       }

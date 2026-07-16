@@ -101,4 +101,14 @@ describe('season rollover safety', () => {
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
     expect(exportDataAsJson).not.toHaveBeenCalled();
   });
+
+  it('does not roll over when the generated backup fails schema validation', async () => {
+    const args = makeArgs({ fields: [{}] });
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(exportDataAsJson).not.toHaveBeenCalled();
+    expect(args.setActiveSeason).not.toHaveBeenCalled();
+    expect(args.setViewingSeason).not.toHaveBeenCalled();
+  });
 });

@@ -392,6 +392,9 @@ older exports or pre-fix local cache data. Restore must always treat the current
 - Backup files must preserve CLU setup with `fsaTracts` and `cluAssignments`; the schema also
   accepts the Settings export metadata field `backupDate`. New exports carry `backupVersion`;
   unversioned legacy exports are normalized before strict validation.
+- Settings and pre-rollover exports explicitly include every supported collection, including empty
+  arrays, and must pass `backupSchema` before the file is downloaded. A schema-validation failure
+  stops season rollover before `profiles.active_season` or local season state changes.
 - The Supabase `restore_farm_backup` RPC payload must send normalized database rows, including
   `fsa_tract_imports` and `field_clu_assignments`, using the same current `farm_id`.
 - Restore SQL must replay `fsa_tract_imports` by `farm_id,tract_key` and
@@ -408,6 +411,12 @@ older exports or pre-fix local cache data. Restore must always treat the current
 - Restore must fail without mutating state if the RPC returns an error.
 - Season rollover requires a completed cloud load, no pending sync mutations, and exactly one
   farm-scoped profile update before local active/viewing seasons change.
+- `profiles.active_season` is constrained in Postgres to `[2000, currentYear + 1]`, and the
+  `restore_farm_backup` RPC validates the same range before replaying any entity rows.
+- Active-season changes propagate across devices through a user-filtered Supabase Realtime
+  subscription on `profiles`; focus, visibility, and online refreshes recover after socket suspension.
+  A device viewing the previous active season advances to the new active season; an intentionally
+  different historical selection is preserved when valid and otherwise clamped.
 
 ---
 
@@ -541,6 +550,10 @@ the Sidebar, Index, Activity, and Reports pages. It reads `activeSeason`, `viewi
 `Select` + `seasonOptions.map` inline. It exposes a `variant="sidebar"` mode (full-width, sidebar
 theme) and accepts a `className`/`contentClassName` for per-page sizing. Callers must not hardcode
 season options; they come from the `seasonOptions` computed in `farmStore.tsx`.
+Season arithmetic is centralized in `src/lib/seasonYears.ts`. The viewing window is
+`[activeSeason - 10, min(activeSeason + 1, currentYear + 1)]`; `seasonOptions` seeds that allowed
+next season so farmers can enter pre-season plans before rollover, while never exposing a year
+beyond `currentYear + 1`.
 
 ### Bottom Padding & FAB Visibility
 Page container bottom padding must clear the fixed `BottomNav` (`.touch-target` ≈ `4rem` +

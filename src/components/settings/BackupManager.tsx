@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { exportDataAsJson } from '@/utils/backup';
 import { openSeasonRolloverModal } from '@/utils/seasonRollover';
 import { CURRENT_BACKUP_VERSION } from '@/lib/backupCompatibility';
+import { backupSchema } from '@/lib/backupSchema';
 
 const LAST_BACKUP_KEY = 'acreledger_last_backup';
 
@@ -105,7 +106,8 @@ export default function BackupManager() {
       };
       const filename = `acreledger-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-      const success = await exportDataAsJson(backupData, filename);
+      const validatedBackup = backupSchema.parse(backupData);
+      const success = await exportDataAsJson(validatedBackup, filename);
 
       if (!success) {
         throw new Error('Export returned unsuccessful');

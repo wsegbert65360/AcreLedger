@@ -94,8 +94,9 @@ if (!farm_id) {
 - `activeSeason` represents the farm's currently active/current crop year. `viewingSeason` represents the season the user is currently viewing in the sidebar/UI.
 - All record-creation and record-editing forms or modals must indicate their target season year in the title, and write actions must scope to `viewingSeason`.
 - The local storage key `al_viewing_season` (with a user-scoped prefix) stores the current viewing season.
-- On loading or syncing, `viewingSeason` must be validated and clamped to a window of `[activeSeason - 10, activeSeason + 1]`.
-- Dropdown selectors (e.g. sidebar, activity, reports) must fetch dynamic options (`seasonOptions`) computed from `farmStore.tsx` rather than hardcoding options.
+- On loading or syncing, `viewingSeason` must be validated and clamped to `[activeSeason - 10, min(activeSeason + 1, currentYear + 1)]`. Use the shared helpers in `@/lib/seasonYears.ts`; do not duplicate year-window arithmetic.
+- Dropdown selectors (e.g. sidebar, activity, reports) must fetch dynamic options (`seasonOptions`) computed from `farmStore.tsx` rather than hardcoding options. The options must seed the allowed next season for pre-season planning, unless `activeSeason` is already `currentYear + 1`.
+- `profiles.active_season` is synchronized across signed-in devices through a filtered Supabase Realtime subscription in `useAuth.ts`, with foreground/focus/online profile refresh as recovery for suspended sockets. If the device was viewing the previous active season, a remote rollover must advance `viewingSeason` to the new active season; a different historical selection is preserved when it remains valid and otherwise clamped.
 - **Exception — grain bin inventory:** grain movements are still season-stamped on insert (`seasonYear: viewingSeason`), but bin *inventory* is continuous physical state and must be read season-independently via `getBinTotal(binId)` (no season arg → all-season total). Carryover grain vanishes and becomes unsellable if bin contents are scoped to the viewing season. Season-scoped views (history, reports) are fine; the Logistics bin monitor, SellModal inventory check, and DashboardStats bin totals must use the all-season total.
 
 ### Mapper Discipline
@@ -126,6 +127,7 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - **Do not use `.select()` in update or soft-delete mutations** to verify success. The `deleted_at IS NULL` RLS SELECT policy will hide newly soft-deleted rows from the returning clause, making the client think 0 rows were updated (triggering a false rollback). Instead, use `.update(payload, { count: 'exact' })` and verify `count === 1` or `count === ids.length`.
 - Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue and backup restore RPC MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract, reassigning a CLU, or restoring a backup must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
 - New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
+- `profiles.active_season` must remain protected by the database range `[2000, currentYear + 1]`. Any `SECURITY DEFINER` RPC that writes it, including `restore_farm_backup`, must validate the same range before changing farm records.
 - Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
 - Every farm-owned table must have RLS enabled.
 - RLS policies must restrict access by the user's farm through `public.profiles`.
@@ -236,6 +238,8 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Restore helpers must insert and update only columns present in each payload row. Never enumerate every table column and feed missing JSON properties through `jsonb_populate_record(set)`, because that converts omissions to `NULL`, defeats database defaults, and can erase columns introduced after an older backup was created.
 - Spray recipe backup and mapper paths must preserve `cropOrSiteTreated` / `crop_or_site_treated`.
 - Season rollover must require completed cloud loading with no pending sync mutations, verify exactly one farm-scoped profile row changed, and catch unexpected network exceptions before changing local season state.
+- Settings and pre-rollover backup objects must pass `backupSchema` before download. Season rollover must stop before changing the profile if its generated backup is not currently restorable.
+- `profiles` must remain in the `supabase_realtime` publication so an active-season rollover reaches other signed-in devices during the same session.
 - If the restore RPC fails, do not mutate React state.
 
 ### CI/CD (CodeMagic)

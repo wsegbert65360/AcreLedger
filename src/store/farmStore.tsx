@@ -10,6 +10,7 @@ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { buildSeasonOptions, getMaxViewingSeason, isValidViewingSeason } from '@/lib/seasonYears';
 
 import { getSignedBushels } from '@/utils/numbers';
 import { saveToStorage } from './storageUtils';
@@ -482,23 +483,16 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   // --- Derived data ---
   const seasonOptions = useMemo(() => {
-    const seasons = new Set<number>();
-    seasons.add(activeSeason);
-    seasons.add(activeSeason - 1);
-    seasons.add(activeSeason - 2);
-
-    plantRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-    sprayRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-    harvestRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-    hayHarvestRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-    customSprayRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-    fertilizerApplications.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-    tillageRecords.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-    grainMovements.forEach(r => { if (r.seasonYear) seasons.add(r.seasonYear); });
-
-    return Array.from(seasons)
-      .filter(year => year >= activeSeason - 10 && year <= activeSeason + 1)
-      .sort((a, b) => b - a);
+    return buildSeasonOptions(activeSeason, [
+      plantRecords,
+      sprayRecords,
+      harvestRecords,
+      hayHarvestRecords,
+      customSprayRecords,
+      fertilizerApplications,
+      tillageRecords,
+      grainMovements,
+    ]);
   }, [
     activeSeason,
     plantRecords,
@@ -512,8 +506,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   ]);
 
   const selectViewingSeason = useCallback((year: number) => {
-    if (!Number.isInteger(year) || year < activeSeason - 10 || year > activeSeason + 1) {
-      toast.error(`Season must be between ${activeSeason - 10} and ${activeSeason + 1}.`);
+    if (!isValidViewingSeason(year, activeSeason)) {
+      toast.error(`Season must be between ${activeSeason - 10} and ${getMaxViewingSeason(activeSeason)}.`);
       return;
     }
     setViewingSeason(year);
