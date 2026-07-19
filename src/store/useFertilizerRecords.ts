@@ -41,8 +41,6 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
       id,
       farm_id,
       timestamp: now.getTime(),
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
       deleted_at: null,
       fieldName: fieldsRef.current.find(f => f.id === r.fieldId)?.name || 'Unknown Field',
       seasonYear: viewingSeason
@@ -133,12 +131,10 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
     }
 
     previousRef.current = undefined;
-    const updatedAtIso = new Date().toISOString();
     setFertilizerApplications(prev => {
       previousRef.current = prev.find(item => item.id === r.id);
       const updatedRecord: FertilizerApplication = {
         ...r,
-        updated_at: updatedAtIso,
         fieldName: fieldsRef.current.find(f => f.id === r.fieldId)?.name || 'Unknown Field'
       };
       return prev.map(item => item.id === r.id ? updatedRecord : item);

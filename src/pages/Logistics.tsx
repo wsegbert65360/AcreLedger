@@ -64,7 +64,7 @@ function CapacityBar({ pct, className }: { pct: number; className?: string }) {
 }
 
 interface BinQuickActionsProps {
-  bin: Pick<Bin, 'name' | 'total'>;
+  bin: Pick<Bin, 'name'> & { total: number };
   variant: 'compact' | 'full';
   onAdd: () => void;
   onSell: () => void;

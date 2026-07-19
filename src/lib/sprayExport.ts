@@ -263,7 +263,7 @@ export function generateSprayPDF(
     }
 
     // Compliance line
-    const omissions = getRecordOmissions(record, treatedArea);
+    const omissions = getRecordOmissions(record, treatedArea ?? undefined);
     const needsReview = Boolean(record.nonCompliant || omissions.length);
     doc.setFont('helvetica', needsReview ? 'bold' : 'normal');
     if (needsReview) {

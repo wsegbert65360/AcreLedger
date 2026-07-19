@@ -53,7 +53,7 @@ describe('useUndoDelete', () => {
     act(() => result.current.requestDelete(['a'], 'Record deleted', null));
 
     const toastCall = vi.mocked(toast).mock.calls[0];
-    const undoAction = (toastCall[1] as { action: { onClick: () => void } }).action;
+    const undoAction = (toastCall[1] as unknown as { action: { onClick: () => void } }).action;
 
     act(() => undoAction.onClick());
 
@@ -75,7 +75,7 @@ describe('useUndoDelete', () => {
     expect(result.current.pending.has('b')).toBe(true);
 
     const firstToast = vi.mocked(toast).mock.calls[0];
-    const firstUndo = (firstToast[1] as { action: { onClick: () => void } }).action;
+    const firstUndo = (firstToast[1] as unknown as { action: { onClick: () => void } }).action;
 
     act(() => firstUndo.onClick());
 

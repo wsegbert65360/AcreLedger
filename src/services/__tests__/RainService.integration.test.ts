@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RainService } from '../RainService';
 
-describe('RainService - Real API Integration Tests', () => {
+// The whole suite contacts the real Rain API. Gate on the same env var the
+// code reads (import.meta.env.VITE_RAIN_API_URL). When it is unset or a
+// placeholder, describe.skipIf reports every test as skipped — never as a
+// false pass from an early return with no assertions.
+const realApiUrl = import.meta.env.VITE_RAIN_API_URL;
+const isConfigured = !!realApiUrl && !realApiUrl.includes('example.com');
+
+describe.skipIf(!isConfigured)('RainService - Real API Integration Tests', () => {
   const mockFieldId = 'integration-test-field';
   const testCoords = { lat: 38.4627, lng: -93.5374 };
 
@@ -12,114 +19,67 @@ describe('RainService - Real API Integration Tests', () => {
 
   // Test 1: Real API connectivity
   it('should connect to real Rain API and return data', async () => {
-    const realApiUrl = import.meta.env.VITE_RAIN_API_URL;
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: testCoords.lat,
+      lng: testCoords.lng,
+      sincePlantingDate: '2026-03-15',
+      sinceLastSprayDate: '2026-04-01'
+    });
 
-    if (!realApiUrl || realApiUrl.includes('example.com')) {
-      console.log('⚠️  Skipping real API test - VITE_RAIN_API_URL not configured');
-      return;
-    }
+    // Validate response structure
+    expect(result).toHaveProperty('24h');
+    expect(result).toHaveProperty('72h');
+    expect(result).toHaveProperty('7d');
+    expect(result).toHaveProperty('sincePlanting');
+    expect(result).toHaveProperty('sinceLastSpray');
+    expect(result).toHaveProperty('periodEndUtc');
 
-    console.log('🔗 Testing real Rain API connection:', realApiUrl);
+    // Validate data types
+    expect(typeof result['24h']).toBe('number');
+    expect(typeof result['72h']).toBe('number');
+    expect(typeof result['7d']).toBe('number');
+    expect(typeof result.sincePlanting).toBe('number');
+    expect(typeof result.sinceLastSpray).toBe('number');
 
-    try {
-      const result = await RainService.fetchComprehensiveRainfall({
-        fieldId: mockFieldId,
-        lat: testCoords.lat,
-        lng: testCoords.lng,
-        sincePlantingDate: '2026-03-15',
-        sinceLastSprayDate: '2026-04-01'
-      });
-
-      console.log('✅ Real API Response:', result);
-
-      // Validate response structure
-      expect(result).toHaveProperty('24h');
-      expect(result).toHaveProperty('72h');
-      expect(result).toHaveProperty('7d');
-      expect(result).toHaveProperty('sincePlanting');
-      expect(result).toHaveProperty('sinceLastSpray');
-      expect(result).toHaveProperty('periodEndUtc');
-
-      // Validate data types
-      expect(typeof result['24h']).toBe('number');
-      expect(typeof result['72h']).toBe('number');
-      expect(typeof result['7d']).toBe('number');
-      expect(typeof result.sincePlanting).toBe('number');
-      expect(typeof result.sinceLastSpray).toBe('number');
-
-      // Validate value ranges (rainfall can't be negative)
-      expect(result['24h']).toBeGreaterThanOrEqual(0);
-      expect(result['72h']).toBeGreaterThanOrEqual(0);
-      expect(result['7d']).toBeGreaterThanOrEqual(0);
-      expect(result.sincePlanting).toBeGreaterThanOrEqual(0);
-      expect(result.sinceLastSpray).toBeGreaterThanOrEqual(0);
-
-      console.log('✅ All validation checks passed');
-    } catch (error) {
-      console.error('❌ Real API test failed:', error);
-      throw error;
-    }
+    // Validate value ranges (rainfall can't be negative)
+    expect(result['24h']).toBeGreaterThanOrEqual(0);
+    expect(result['72h']).toBeGreaterThanOrEqual(0);
+    expect(result['7d']).toBeGreaterThanOrEqual(0);
+    expect(result.sincePlanting).toBeGreaterThanOrEqual(0);
+    expect(result.sinceLastSpray).toBeGreaterThanOrEqual(0);
   });
 
   // Test 2: Custom range data availability
   it('should fetch custom range data from real API', async () => {
-    const realApiUrl = import.meta.env.VITE_RAIN_API_URL;
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: testCoords.lat,
+      lng: testCoords.lng,
+      sincePlantingDate: '2026-03-01',
+      sinceLastSprayDate: '2026-04-01'
+    });
 
-    if (!realApiUrl || realApiUrl.includes('example.com')) {
-      console.log('⚠️  Skipping custom range test - VITE_RAIN_API_URL not configured');
-      return;
+    // For custom ranges, we expect either:
+    // 1. Actual rainfall data (if available in Supabase)
+    // 2. Zero (if no data available but API is working)
+    const hasData = result.sincePlanting > 0 || result.sinceLastSpray > 0;
+
+    if (hasData) {
+      expect(result.sincePlanting).toBeGreaterThan(0);
+    } else {
+      expect(result.sincePlanting).toBe(0);
+      expect(result.sinceLastSpray).toBe(0);
     }
 
-    console.log('🔗 Testing custom range with real API');
-
-    try {
-      const result = await RainService.fetchComprehensiveRainfall({
-        fieldId: mockFieldId,
-        lat: testCoords.lat,
-        lng: testCoords.lng,
-        sincePlantingDate: '2026-03-01',
-        sinceLastSprayDate: '2026-04-01'
-      });
-
-      console.log('Custom range results:');
-      console.log('  Since planting (2026-03-01):', result.sincePlanting, 'inches');
-      console.log('  Since spray (2026-04-01):', result.sinceLastSpray, 'inches');
-
-      // For custom ranges, we expect either:
-      // 1. Actual rainfall data (if available in Supabase)
-      // 2. Zero (if no data available but API is working)
-
-      const hasData = result.sincePlanting > 0 || result.sinceLastSpray > 0;
-
-      if (hasData) {
-        console.log('✅ Custom range data found in database');
-        expect(result.sincePlanting).toBeGreaterThan(0);
-      } else {
-        console.log('⚠️  No custom range data found (might be normal if no historical data)');
-        expect(result.sincePlanting).toBe(0);
-        expect(result.sinceLastSpray).toBe(0);
-      }
-
-      // Radar data should still work regardless
-      expect(result['24h']).toBeGreaterThanOrEqual(0);
-      expect(result['72h']).toBeGreaterThanOrEqual(0);
-      expect(result['7d']).toBeGreaterThanOrEqual(0);
-
-    } catch (error) {
-      console.error('❌ Custom range test failed:', error);
-      throw error;
-    }
+    // Radar data should still work regardless
+    expect(result['24h']).toBeGreaterThanOrEqual(0);
+    expect(result['72h']).toBeGreaterThanOrEqual(0);
+    expect(result['7d']).toBeGreaterThanOrEqual(0);
   });
 
   // Test 3: Boundary centroid extraction
   it('should work with boundary polygons', async () => {
-    const realApiUrl = import.meta.env.VITE_RAIN_API_URL;
-
-    if (!realApiUrl || realApiUrl.includes('example.com')) {
-      console.log('⚠️  Skipping boundary test - VITE_RAIN_API_URL not configured');
-      return;
-    }
-
     const boundary = {
       type: 'Polygon' as const,
       coordinates: [[
@@ -131,98 +91,57 @@ describe('RainService - Real API Integration Tests', () => {
       ]]
     };
 
-    console.log('🔗 Testing boundary centroid extraction');
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: null,
+      lng: null,
+      boundary
+    });
 
-    try {
-      const result = await RainService.fetchComprehensiveRainfall({
-        fieldId: mockFieldId,
-        lat: null,
-        lng: null,
-        boundary
-      });
-
-      console.log('✅ Boundary centroid extraction worked');
-      expect(result).toHaveProperty('24h');
-      expect(result['24h']).toBeGreaterThanOrEqual(0);
-
-    } catch (error) {
-      console.error('❌ Boundary test failed:', error);
-      throw error;
-    }
+    expect(result).toHaveProperty('24h');
+    expect(result['24h']).toBeGreaterThanOrEqual(0);
   });
 
   // Test 4: Error handling with real API
   it('should handle API errors gracefully', async () => {
-    const realApiUrl = import.meta.env.VITE_RAIN_API_URL;
-
-    if (!realApiUrl || realApiUrl.includes('example.com')) {
-      console.log('⚠️  Skipping error handling test - VITE_RAIN_API_URL not configured');
-      return;
-    }
-
-    console.log('🔗 Testing error handling with invalid coordinates');
-
+    // Test with coordinates outside CONUS (should fail gracefully)
     try {
-      // Test with coordinates outside CONUS (should fail gracefully)
       const result = await RainService.fetchComprehensiveRainfall({
         fieldId: mockFieldId,
         lat: 0, // Outside CONUS
         lng: 0  // Outside CONUS
       });
-
       // API might return 0 rainfall for invalid coordinates
-      console.log('✅ API handled invalid coordinates gracefully');
       expect(result['24h']).toBeGreaterThanOrEqual(0);
-
     } catch (error) {
-      console.log('✅ API properly rejected invalid coordinates:', error);
+      // Or it properly rejects invalid coordinates
       expect(error).toBeDefined();
     }
   });
 
   // Test 5: Cache functionality
   it('should use cache for identical requests', async () => {
-    const realApiUrl = import.meta.env.VITE_RAIN_API_URL;
+    const startTime = Date.now();
 
-    if (!realApiUrl || realApiUrl.includes('example.com')) {
-      console.log('⚠️  Skipping cache test - VITE_RAIN_API_URL not configured');
-      return;
-    }
+    const [result1, result2] = await Promise.all([
+      RainService.fetchComprehensiveRainfall({
+        fieldId: mockFieldId,
+        lat: testCoords.lat,
+        lng: testCoords.lng
+      }),
+      RainService.fetchComprehensiveRainfall({
+        fieldId: mockFieldId,
+        lat: testCoords.lat,
+        lng: testCoords.lng
+      })
+    ]);
 
-    console.log('🔗 Testing request deduplication cache');
+    const duration = Date.now() - startTime;
 
-    try {
-      const startTime = Date.now();
+    // Results should be identical (cached)
+    expect(result1).toEqual(result2);
 
-      const [result1, result2] = await Promise.all([
-        RainService.fetchComprehensiveRainfall({
-          fieldId: mockFieldId,
-          lat: testCoords.lat,
-          lng: testCoords.lng
-        }),
-        RainService.fetchComprehensiveRainfall({
-          fieldId: mockFieldId,
-          lat: testCoords.lat,
-          lng: testCoords.lng
-        })
-      ]);
-
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-
-      console.log('✅ Cache test completed in', duration, 'ms');
-      console.log('  Result 1:', result1['24h'], 'inches');
-      console.log('  Result 2:', result2['24h'], 'inches');
-
-      // Results should be identical (cached)
-      expect(result1).toEqual(result2);
-
-      // Should be fast (cached)
-      expect(duration).toBeLessThan(2000);
-
-    } catch (error) {
-      console.error('❌ Cache test failed:', error);
-      throw error;
-    }
+    // Should be fast (cached)
+    expect(duration).toBeLessThan(2000);
   });
 });

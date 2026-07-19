@@ -9,7 +9,7 @@ import TractAssignmentFlow from '@/components/TractAssignmentFlow';
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { session, farmName, updateFarmName, completeOnboarding } = useFarm();
+  const { farmName, updateFarmName, completeOnboarding } = useFarm();
   const [step, setStep] = useState<'name' | 'fields'>('name');
   const [tempName, setTempName] = useState(farmName || 'My Farm');
   const [isSaving, setIsSaving] = useState(false);

@@ -93,7 +93,7 @@ function normalizeGeometry(geometry: GeoJsonFeature['geometry']): Field['boundar
 
   if (geometry.type === 'MultiPolygon') {
     const polygons = geometry.coordinates
-      .map(polygon => polygon
+      .map((polygon: unknown[]) => polygon
         .map(normalizeRing)
         .filter((ring): ring is number[][] => !!ring))
       .filter(polygon => polygon.length > 0);

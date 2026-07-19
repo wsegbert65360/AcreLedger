@@ -10,7 +10,7 @@ const DRAWABLE = THUMBNAIL_VIEWBOX_SIZE - 2 * THUMBNAIL_PADDING;
 export function geometryToThumbnailPath(
   geometry: GeoJSONGeometry | undefined | null,
 ): string | null {
-  if (!hasValidGeometry(geometry)) return null;
+  if (!hasValidGeometry(geometry ?? undefined)) return null;
 
   try {
     const polygons: number[][][][] =

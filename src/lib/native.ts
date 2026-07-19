@@ -23,7 +23,7 @@ type ShareFileOptions = {
   fileName: string;
   data: string;
   title?: string;
-  encoding?: Encoding | 'utf8' | 'base64' | 'ascii';
+  encoding?: Encoding | 'utf8' | 'ascii';
 };
 
 export const native = {
@@ -115,8 +115,7 @@ export const native = {
     return native.shareFile({
       fileName,
       data: base64Data,
-      title: `AcreLedger Report: ${sanitizeNativeFileName(fileName)}`,
-      encoding: Encoding.Base64
+      title: `AcreLedger Report: ${sanitizeNativeFileName(fileName)}`
     });
   }
 };

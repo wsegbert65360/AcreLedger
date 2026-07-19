@@ -325,7 +325,7 @@ export default function Activity() {
                   onClick={() => {
                     const exportPromise = tab === 'plant'
                       ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {
-                        farmName,
+                        farmName: farmName ?? undefined,
                         cropYear: viewingSeason,
                         reportDate: new Date().toISOString().split('T')[0],
                       }))

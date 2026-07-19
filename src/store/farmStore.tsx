@@ -87,23 +87,23 @@ interface FarmState {
   /** Method to transition the entire farm state to a new season */
   rolloverToNewSeason: (year: number) => Promise<boolean>;
   /** Operations for managing planting records */
-  addPlantRecord: (r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  addPlantRecord: (r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updatePlantRecord: (r: PlantRecord) => Promise<boolean>;
   deletePlantRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing spray application records */
-  addSprayRecord: (r: Omit<SprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  addSprayRecord: (r: Omit<SprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updateSprayRecord: (r: SprayRecord) => Promise<boolean>;
   deleteSprayRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing harvest production records */
-  addHarvestRecord: (r: Omit<HarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  addHarvestRecord: (r: Omit<HarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'> & { id?: string; timestamp?: number }) => Promise<boolean>;
   updateHarvestRecord: (r: HarvestRecord) => Promise<boolean>;
   deleteHarvestRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing hay harvest records */
-  addHayHarvestRecord: (r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  addHayHarvestRecord: (r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updateHayHarvestRecord: (r: HayHarvestRecord) => Promise<boolean>;
   deleteHayHarvestRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing custom (outside-party) spray records */
-  addCustomSprayRecord: (r: Omit<CustomSprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  addCustomSprayRecord: (r: Omit<CustomSprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updateCustomSprayRecord: (r: CustomSprayRecord) => Promise<boolean>;
   deleteCustomSprayRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing fertilizer applications */
@@ -111,7 +111,7 @@ interface FarmState {
   updateFertilizerApplication: (r: FertilizerApplication) => Promise<boolean>;
   deleteFertilizerApplications: (ids: string[]) => Promise<boolean>;
   /** Operations for managing tillage records */
-  addTillageRecord: (r: Omit<TillageRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>) => Promise<boolean>;
+  addTillageRecord: (r: Omit<TillageRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updateTillageRecord: (r: TillageRecord) => Promise<boolean>;
   deleteTillageRecords: (ids: string[]) => Promise<boolean>;
   /** Operations for managing grain inventory */
@@ -121,11 +121,11 @@ interface FarmState {
   /** Calculation utility for bin inventory levels */
   getBinTotal: (binId: string, season?: number) => number;
   /** Operations for managing field definitions */
-  addField: (field: Omit<Field, 'id'>, requestedId?: string) => Promise<boolean>;
+  addField: (field: Omit<Field, 'id' | 'farm_id'>, requestedId?: string) => Promise<boolean>;
   updateField: (field: Field) => Promise<boolean>;
   deleteField: (id: string) => Promise<boolean>;
   /** Operations for managing bin definitions */
-  addBin: (bin: Omit<Bin, 'id'>) => Promise<boolean>;
+  addBin: (bin: Omit<Bin, 'id' | 'farm_id'>) => Promise<boolean>;
   updateBin: (bin: Bin) => Promise<boolean>;
   deleteBin: (id: string) => Promise<boolean>;
   /** Operations for managing seed varieties */
@@ -137,7 +137,7 @@ interface FarmState {
   deleteSprayRecipe: (id: string) => Promise<boolean>;
   /** Operations for managing fertilizer recipes */
   addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id' | 'farm_id'>) => Promise<boolean>;
-  updateFertilizerRecipe: (recipe: FertilizerRecipe) => Promise<boolean>;
+  updateFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'farm_id'>) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
   /** Global sign out and cache clearing */
   signOut: () => void;
@@ -449,7 +449,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   });
 
   const entityOps = useFieldsAndBins({
-    farm_id, setFields, setBins,
+    farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes,
+    setFields, setBins,
     setSavedSeeds,
     setFertilizerRecipes,
     setSprayRecipes,

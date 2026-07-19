@@ -8,19 +8,19 @@ import { HarvestRecord } from '../../types/farm';
 
 const mockRecords: HarvestRecord[] = [
   {
-    id: '1', fieldId: 'f1', fieldName: 'North 40', landlordName: 'John Smith',
+    id: '1', farm_id: 'farm-1', fieldId: 'f1', fieldName: 'North 40', landlordName: 'John Smith',
     crop: 'Corn', harvestDate: '2025-10-01', bushels: 4000,
     landlordSplitPercent: 25, timestamp: Date.now(), seasonYear: 2025,
     destination: 'bin', moisturePercent: 15, scaleTicketNumber: 'TKT-00482', deleted_at: null
   },
   {
-    id: '2', fieldId: 'f2', fieldName: 'South Field', landlordName: 'John Smith',
+    id: '2', farm_id: 'farm-1', fieldId: 'f2', fieldName: 'South Field', landlordName: 'John Smith',
     crop: 'Soybeans', harvestDate: '2025-10-15', bushels: 1200,
     landlordSplitPercent: 25, timestamp: Date.now(), seasonYear: 2025,
     destination: 'bin', moisturePercent: 13, deleted_at: null
   },
   {
-    id: '3', fieldId: 'f3', fieldName: 'East Quarter', landlordName: 'Mary Jones',
+    id: '3', farm_id: 'farm-1', fieldId: 'f3', fieldName: 'East Quarter', landlordName: 'Mary Jones',
     crop: 'Corn', harvestDate: '2025-10-05', bushels: 6000,
     landlordSplitPercent: 33, timestamp: Date.now(), seasonYear: 2025,
     destination: 'bin', moisturePercent: 15, deleted_at: null

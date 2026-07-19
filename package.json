@@ -10,7 +10,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:unit": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc -b",
     "cap:sync": "npx cap sync ios",
     "cap:open": "npx cap open ios",
     "cap:build": "vite build --mode capacitor && npx cap sync ios"

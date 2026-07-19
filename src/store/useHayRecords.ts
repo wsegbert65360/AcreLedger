@@ -22,7 +22,7 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addHayHarvestRecord = useCallback(async (
-    r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
+    r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -89,7 +89,7 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
   }, [viewingSeason, farm_id, setHayHarvestRecords, isOnline, onMutation]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
-  const updateHayRecord = useCallback(async (r: HayHarvestRecord): Promise<OpResult> => {
+  const updateHayHarvestRecord = useCallback(async (r: HayHarvestRecord): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
@@ -173,7 +173,7 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
   }, [farm_id, setHayHarvestRecords, isOnline, onMutation]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
-  const deleteHayRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
+  const deleteHayHarvestRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
@@ -259,5 +259,5 @@ export function useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, is
     }
   }, [farm_id, setHayHarvestRecords, isOnline, onMutation]);
 
-  return { addHayHarvestRecord, updateHayRecord, deleteHayRecords };
+  return { addHayHarvestRecord, updateHayHarvestRecord, deleteHayHarvestRecords };
 }

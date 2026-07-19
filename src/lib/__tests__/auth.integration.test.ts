@@ -1,14 +1,17 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { supabase } from '../supabase';
 
-describe('QA Bot Auth Verification', () => {
-    const botEmail = process.env.VITE_BOT_EMAIL || '';
-    const botPassword = process.env.VITE_BOT_PASSWORD || '';
+// Credentials live in .env.test.local (gitignored) as TEST_BOT_EMAIL /
+// TEST_BOT_PASSWORD and are loaded into process.env by vitest.integration.config.ts.
+const botEmail = process.env.TEST_BOT_EMAIL || '';
+const botPassword = process.env.TEST_BOT_PASSWORD || '';
+
+// Skip cleanly when bot credentials are absent so `npm run test:integration`
+// reports "skipped" rather than failing. Gate on process.env because that is
+// what this module reads.
+describe.skipIf(!botEmail || !botPassword)('QA Bot Auth Verification', () => {
 
     beforeAll(async () => {
-        if (!botEmail || !botPassword) {
-            throw new Error('Bot credentials missing from environment (VITE_BOT_EMAIL, VITE_BOT_PASSWORD)');
-        }
         const { data, error } = await supabase.auth.signInWithPassword({
             email: botEmail,
             password: botPassword,
@@ -17,14 +20,18 @@ describe('QA Bot Auth Verification', () => {
         expect(data.user?.email).toBe(botEmail);
     });
 
+    afterAll(async () => {
+        await supabase.auth.signOut();
+    });
+
     it('should resolve a valid farm_id for the bot', async () => {
         const { data: profile, error } = await supabase
             .from('profiles')
             .select('farm_id')
             .single();
-        
+
         if (error) throw new Error(`Profile fetch failed: ${error.message}`);
-        
+
         expect(profile.farm_id).toBeDefined();
         expect(typeof profile.farm_id).toBe('string');
         console.log(`[QA Sync] Verified Bot Farm ID: ${profile.farm_id}`);

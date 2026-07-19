@@ -138,14 +138,16 @@ export function useAuth() {
             let active = profileData.active_season;
             if (!isValidActiveSeason(active)) {
               active = new Date().getFullYear();
-              supabase
-                .from('profiles')
-                .update({ active_season: active })
-                .eq('id', session.user.id)
+              Promise.resolve(
+                supabase
+                  .from('profiles')
+                  .update({ active_season: active })
+                  .eq('id', session.user.id),
+              )
                 .then(({ error }) => {
                   if (error) console.error('Failed to sync fallback active_season to profile:', error);
                 })
-                .catch((syncErr) => {
+                .catch((syncErr: unknown) => {
                   console.error('Unexpected error syncing active_season:', syncErr);
                 });
             }

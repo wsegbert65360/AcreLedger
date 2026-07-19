@@ -13,6 +13,7 @@ import type { FieldCluAssignment } from '@/types/fsaTract';
 
 const field: Field = {
   id: 'field-1',
+  farm_id: 'farm-1',
   name: 'Bottom Field',
   acreage: 40,
   boundaryAcreage: 40,

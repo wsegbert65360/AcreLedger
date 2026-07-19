@@ -14,6 +14,7 @@ const makeField = (overrides: Partial<Field> = {}): Field => ({
   boundary: null,
   deleted_at: null,
   ...overrides,
+  farm_id: overrides.farm_id ?? 'farm-1',
 });
 
 const makeAssignment = (overrides: Partial<FieldCluAssignment> = {}): FieldCluAssignment => ({

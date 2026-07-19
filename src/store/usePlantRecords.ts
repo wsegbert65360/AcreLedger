@@ -22,7 +22,7 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addPlantRecord = useCallback(async (
-    r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
+    r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');

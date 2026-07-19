@@ -576,11 +576,11 @@ export default function Reports() {
             fsaReadinessIssues={fsaReadinessIssues}
             readinessSummary={fsaReadinessSummary}
             exportStatus={getExportStatus('fsa-plant')}
-            farmName={farmName}
+            farmName={farmName || 'AcreLedger Farm'}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
             onExportCsv={() => runTrackedExport('fsa-plant', async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
-              farmName,
+              farmName: farmName || 'AcreLedger Farm',
               cropYear: viewingSeason,
               reportDate: new Date().toISOString().split('T')[0],
             }), 'FSA-578 worksheet data')}
@@ -627,7 +627,7 @@ export default function Reports() {
             readinessSummary={fsaFallReadinessSummary}
             exportStatus={getExportStatus('fsa-harvest')}
             onIssueAction={handleIssueAction}
-            farmName={farmName}
+            farmName={farmName || 'AcreLedger Farm'}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
             onExportCsv={() => runTrackedExport('fsa-harvest', () => exportFsaFallProductionData({
@@ -635,7 +635,7 @@ export default function Reports() {
               hayRecords,
               fields,
               metadata: {
-                farmName,
+                farmName: farmName || 'AcreLedger Farm',
                 cropYear: viewingSeason,
                 reportDate: new Date().toISOString().split('T')[0],
               },

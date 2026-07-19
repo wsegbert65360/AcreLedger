@@ -710,25 +710,25 @@ export default function FieldDetailScreen() {
 
       {/* Modals - Reusing existing implementation */}
       {modal === 'plant' && (
-        <PlantModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+        <PlantModal field={field} open initialData={editingRecord ? editingRecord as PlantRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'spray' && (
-        <SprayModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+        <SprayModal field={field} open initialData={editingRecord ? editingRecord as SprayRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'customSpray' && (
-        <CustomSprayModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+        <CustomSprayModal field={field} open initialData={editingRecord ? editingRecord as CustomSprayRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'harvest' && (
-        <HarvestModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+        <HarvestModal field={field} open initialData={editingRecord ? editingRecord as HarvestRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'hay' && (
-        <HayModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+        <HayModal field={field} open initialData={editingRecord ? editingRecord as HayHarvestRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'fertilizer' && (
-        <FertilizerModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+        <FertilizerModal field={field} open initialData={editingRecord ? editingRecord as FertilizerApplication : undefined} mode={editingMode} onClose={closeModal} />
       )}
       {modal === 'tillage' && (
-        <TillageModal field={field} open initialData={editingRecord} mode={editingMode} onClose={closeModal} />
+        <TillageModal field={field} open initialData={editingRecord ? editingRecord as TillageRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
 
       {/* Dialog for CLU management */}

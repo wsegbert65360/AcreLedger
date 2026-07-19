@@ -47,7 +47,7 @@ interface SprayAuditRow {
   targetPest?: string;
   product: string;
   epaRegNumber?: string;
-  applicationRate?: number;
+  applicationRate?: string;
   rateUnit?: string;
   treatedAreaSize?: number;
   amountDisplay: string;

@@ -115,9 +115,10 @@ Every add, update, and delete mutation must follow this sequence:
 2. Validate inputs and return `false` on invalid data.
 3. Call mapper before state changes.
 4. Apply optimistic React state update with a functional setter.
-5. Await the Supabase operation inside a `try...catch` block. You MUST catch unexpected fetch exceptions and assign them to an `error` variable so your existing rollback logic triggers gracefully instead of skipping it.
-6. On success (e.g., `error` is null and `{ count: 'exact' }` matches), show success feedback and return `true`.
-7. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
+5. **Capture the rollback snapshot from the render closure *before* the optimistic setter, never by mutating an outer variable inside the state updater.** Each hook receives its current entity array as an argument (e.g. `fields`, `bins`, `grainMovements`) and captures `previous = collection.find(item => item.id === id)` before the `setState` call. Mutating an outer variable inside the updater depends on React's eager-update timing and is the pattern the grain hook was specifically refactored away from. See `useGrainMovements` and `useFieldsAndBins` for the reference implementation.
+6. Await the Supabase operation inside a `try...catch` block. You MUST catch unexpected fetch exceptions and assign them to an `error` variable so your existing rollback logic triggers gracefully instead of skipping it.
+7. On success (e.g., `error` is null and `{ count: 'exact' }` matches), show success feedback and return `true`.
+8. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
 
 All add, update, and delete operations return `Promise<boolean>` — `true` on success, `false` on failure. Never return `undefined`.
 
@@ -172,6 +173,7 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Fields are minimal: `applicator`, `date`, and `applicationTime` (`HH:mm`, local field/application time) are required; `recipe` (free text), `windSpeed` / `windDirection` / `temperature`, and `notes` are optional. `CustomSprayModal` does not fetch weather automatically: the user explicitly selects the application date/time and taps **Pull historical weather**, which calls `WeatherService.fetchHistoricalConditions` with the field coordinates. Recovered values remain editable, and a failed/no-data lookup must preserve manual weather values.
 - Custom sprays appear in the Spray tab (via `CustomSprayTab`, rendered under the regular `SprayTab`) and in All / field history, but are **excluded** from the universal spray-log PDF (`sprayExport.ts`) and the non-compliant review queue, which stay driven by `SprayRecord`.
 - `customSpray` is a member of `ActivityType` and the `ActivityRecord` union (reuses the spray icon/colors). `custom_spray_records` is in the sync queue `ALLOWED_TABLES` set and in the backup/restore payload + `restore_farm_backup` RPC. Add/update/delete go through `useCustomSprayRecords.ts` with the same farm-scope, season-stamp, soft-delete, and optimistic-update rules as the other activity hooks.
+- `ActivityRecord` in `@/types/farm` is a **discriminated union**: each `{ type: '<literal>'; data: <RecordType> }` member pairs a literal with its exact record type, so switching on `type` narrows `data`. Mismatched pairs (e.g. `{ type: 'plant', data: SprayRecord }`) are a compile error. Components that consume the feed use `Exclude<ActivityRecord, { type: 'grain' }>` (grain movements are not shown in the activity feed). Do not loosen this back to a loose `{ type: string; data: SomeUnion }`.
 
 ### FSA Tracts and CLU Assignments
 
@@ -473,6 +475,8 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 
 ### Testing
 
+- The test suite is split into **unit** and **integration**. `npm run test` (and `npm run test:unit`) runs the unit suite, which excludes `**/*.integration.test.{ts,tsx}`. `npm run test:integration` runs the integration suite via `vitest.integration.config.ts` — those tests hit live services and require credentials/network (`RainService.integration.test.ts` for the real Rain API, `auth.integration.test.ts` for bot auth). Integration tests skip cleanly when their env/credentials are absent (`describe.skipIf` / early-return on `import.meta.env`). Do not add live-network tests to the unit suite; name them `*.integration.test.*`.
+- `npm run test:coverage` collects V8 coverage over the production-surface scope defined in the `coverage` block of `vite.config.ts` (tests, generated data, type declarations, shadcn/ui primitives, and entry-point boilerplate are excluded). The baseline is recorded in `TESTING.md`; no thresholds are enforced yet.
 - Component testing involving complex map lifecycles (like `MapContainer` or Leaflet) should mock the nested map components (`CluAssignmentMap`, `CluFieldSelector`, etc.) and invoke their callbacks explicitly.
 - Use explicit `await waitFor(...)` assertions when interacting with mocked component state that relies on React's asynchronous render cycle to avoid stale prop values during test execution.
 - When mocking `useFarm` in modal tests, include every collection the modal reads (`plantRecords`, `sprayRecords`, `harvestRecords`, `hayHarvestRecords`, `customSprayRecords`, `fertilizerApplications`, `tillageRecords`, `fields`, `cluAssignments`, etc.). Activity modals compute suggested-record prefills via `.filter()` on these arrays, so an `undefined` collection crashes the `useMemo` on mount — see `SprayModal.test.tsx` for the canonical mock shape.
@@ -507,9 +511,10 @@ While editing:
 After editing:
 
 1. Run the most relevant available checks. The repo defines:
-   - `npm run lint` — `eslint .` (fast, run for any source change).
-   - `npm run test` — `vitest run` (run when touching logic with colocated `*.test.*` files).
-   - `npm run build` — `vite build` (the de-facto typecheck; there is no separate `tsc`/`typecheck` script, so `build` is the type gate before merging).
+   - `npm run lint` — `eslint .` (fast, run for any source change; the gate is **zero errors** — warnings are tracked, not blocked).
+   - `npm run typecheck` — `tsc -b` (the **authoritative type gate** via project references in `tsconfig.json`). This is the real type check; `vite build` uses SWC and does **not** typecheck, so it cannot substitute for `typecheck`. Run this for any source/type change.
+   - `npm run test` — `vitest run` (the **unit suite**; excludes `*.integration.test.*`). Run when touching logic with colocated `*.test.*` files. See Testing → Unit vs. Integration below.
+   - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
 3. Mention any unchecked risk clearly.
 

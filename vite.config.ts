@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
@@ -128,6 +129,52 @@ export default defineConfig(({ mode }) => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // Unit suite only: keep Vitest's default exclusions (node_modules, dist,
+    // etc.) and additionally exclude integration tests, which require live
+    // credentials/network and are run via `npm run test:integration`.
+    exclude: [
+      ...configDefaults.exclude,
+      "**/*.integration.test.{ts,tsx}",
+    ],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html", "json-summary"],
+      reportsDirectory: "./coverage",
+      // Count untouched production files as 0% rather than omitting them, so
+      // coverage reflects the whole production surface (not just what tests
+      // imported). The `include` below is the authoritative scope.
+      all: true,
+      // Narrow, documented scope of PRODUCTION sources only. Tests, generated
+      // data, type declarations, and entry-point boilerplate are excluded so
+      // the score cannot be inflated by excluding inconvenient production files.
+      include: [
+        "src/components/**/*.{ts,tsx}",
+        "src/context/**/*.{ts,tsx}",
+        "src/hooks/**/*.{ts,tsx}",
+        "src/lib/**/*.{ts,tsx}",
+        "src/pages/**/*.{ts,tsx}",
+        "src/services/**/*.{ts,tsx}",
+        "src/store/**/*.{ts,tsx}",
+        "src/utils/**/*.{ts,tsx}",
+      ],
+      exclude: [
+        // Test files and test scaffolding are never production coverage targets.
+        "src/**/__tests__/**",
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.integration.test.{ts,tsx}",
+        "src/test/**",
+        // Type declarations carry no executable logic.
+        "src/**/*.d.ts",
+        "src/types/**",
+        // Generated/bundled FSA tract data is not authored logic.
+        "src/data/**",
+        // PWA entry-point boilerplate (service worker registration, root mount).
+        "src/main.tsx",
+        "src/sw.ts",
+        // shadcn/ui primitives are vendored, not app logic.
+        "src/components/ui/**",
+      ],
+    },
   },
   resolve: {
     alias: {

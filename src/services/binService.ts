@@ -3,7 +3,7 @@ import { Bin } from '@/types/farm';
 import { mapBinToDb } from '@/lib/mappers';
 
 export const binService = {
-    async createBin(bin: Omit<Bin, 'id'>, id: string, farmId: string) {
+    async createBin(bin: Omit<Bin, 'id' | 'farm_id'>, id: string, farmId: string) {
         const binData = {
             ...mapBinToDb({ ...bin, id, farm_id: farmId }),
             farm_id: farmId
