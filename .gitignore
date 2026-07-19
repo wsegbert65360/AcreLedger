@@ -49,6 +49,7 @@ AcreLedger_UIUX_Recommendations*.md
 
 # AI assistant files
 .gemini/
+.zcode/
 
 # CodeMagic
 build/
