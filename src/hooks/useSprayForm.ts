@@ -367,7 +367,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     products.length > 0 && products.some(p => p.product.trim()) && !!sprayDate,
   [products, sprayDate]);
 
-  const isFullyCompliant = useMemo(() =>
+  const isFullyCompliant = useMemo(() => Boolean(
     products.every(p => p.product.trim()) &&
     startTime.trim() &&
     endTime.trim() &&
@@ -379,7 +379,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     applicationMethod.trim() &&
     equipmentId.trim() &&
     products.every(p => p.epaRegNumber?.trim()) &&
-    products.every(hasValidSprayRate),
+    products.every(hasValidSprayRate)),
   [products, startTime, endTime, weather, applicatorName, licenseNumber, manualWindDirection, cropOrSiteTreated, applicationMethod, equipmentId]);
 
   const missingComplianceFields = useMemo(() => {
@@ -400,7 +400,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   }, [products, startTime, endTime, weather, applicatorName, licenseNumber, manualWindDirection, cropOrSiteTreated, applicationMethod, equipmentId]);
 
   const stepValidation = useMemo(() => ({
-    core: !!sprayDate && startTime.trim() && applicatorName.trim() && licenseNumber.trim() && targetPest.trim(),
+    core: Boolean(sprayDate && startTime.trim() && applicatorName.trim() && licenseNumber.trim() && targetPest.trim()),
     mix: products.some(p => p.product.trim()),
     conditions: true,
     review: true
@@ -618,7 +618,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
         applicatorName: pending.applicatorName,
         licenseNumber: pending.licenseNumber,
         targetPest: pending.targetPest,
-        deleted_at: null,
       });
       if (recSuccess) {
         toast.success(`Recipe "${name}" saved.`);

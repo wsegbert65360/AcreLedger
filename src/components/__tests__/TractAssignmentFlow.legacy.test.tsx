@@ -51,6 +51,8 @@ const makeField = (overrides: Partial<Field> = {}): Field => ({
   cluNumbers: ['10', '11'],
   deleted_at: null,
   ...overrides,
+  lat: overrides.lat ?? null,
+  lng: overrides.lng ?? null,
 });
 
 const makeTracts = () => [{

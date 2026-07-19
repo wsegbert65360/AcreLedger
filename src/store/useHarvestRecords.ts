@@ -22,7 +22,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addHarvestRecord = useCallback(async (
-    r: Omit<HarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'> & { id?: string; timestamp?: number }
+    r: Omit<HarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'> & { id?: string; timestamp?: number }
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');

@@ -342,7 +342,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
     }
 
     const id = crypto.randomUUID();
-    const ok = await addField({ name, acreage: 0, lat, lng, farm_id: '', deleted_at: null }, id);
+    const ok = await addField({ name, acreage: 0, lat, lng, deleted_at: null }, id);
     if (!ok) return null;
 
     return id;

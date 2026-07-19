@@ -40,7 +40,8 @@ export function normalizeBackupForRestore(rawData: unknown): unknown {
       let acres = positiveNumber(feature.properties.acres);
 
       if (feature.properties.acres === 0) {
-        const calculated = calculateAcreage(feature.geometry as Field['boundary']);
+        const geometry = feature.geometry as NonNullable<Field['boundary']>;
+        const calculated = calculateAcreage(geometry);
         if (calculated > 0) {
           feature.properties.acres = calculated;
           acres = calculated;

@@ -22,7 +22,7 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, setCustomSprayRe
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addCustomSprayRecord = useCallback(async (
-    r: Omit<CustomSprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
+    r: Omit<CustomSprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');

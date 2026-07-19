@@ -150,7 +150,12 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     setNotes(candidate.notes || '');
     setBoundary(candidate.boundary);
 
-    const importedPoints: [number, number][] = candidate.boundary?.coordinates?.[0]?.slice(0, -1).map(point => [point[1], point[0]]) || [];
+    const importedRing = candidate.boundary?.type === 'Polygon'
+      ? candidate.boundary.coordinates[0]
+      : candidate.boundary?.coordinates[0]?.[0];
+    const importedPoints: [number, number][] = importedRing
+      ?.slice(0, -1)
+      .map(point => [point[1], point[0]] as [number, number]) ?? [];
     setPoints(importedPoints);
     if (candidate.lat != null && candidate.lng != null) {
       setMapCenter([candidate.lat, candidate.lng]);
@@ -279,7 +284,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         };
         success = await updateField(updatedField);
       } else {
-        const newField: Omit<Field, 'id'> = {
+        const newField: Omit<Field, 'id' | 'farm_id'> = {
           ...fieldData
         };
         success = await addField(newField);

@@ -365,6 +365,16 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+# These are service-to-service endpoints. The Edge gateway JWT check must be
+# disabled because scheduled calls authenticate with a named sb_secret_* key
+# in the apikey header. Each handler validates only the `automations` key via
+# @supabase/server before any privileged work runs.
+[functions.mrms-hourly]
+verify_jwt = false
+
+[functions.mrms-backfill]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

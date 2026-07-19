@@ -365,10 +365,11 @@ Every mutation follows this exact sequence — no exceptions:
 2. Validate inputs → return false on invalid
 3. Call mapper (`mapXToDb`) — **BEFORE** touching state. Ensuring all optional fields default to **`null`** (not `undefined`).
    → mapper throws: toast.error, return false, do NOT touch state or DB
-4. Apply optimistic state update via functional setter
-5. Await Supabase operation
-6a. Success: toast.success, return true
-6b. Error: roll back state to pre-step-4 snapshot, toast.error (with detailed Postgres message), return false
+4. **Capture the rollback snapshot from the render closure *before* the optimistic setter.** Each hook receives its current entity array as an argument and resolves `previous = collection.find(item => item.id === id)` before calling `setState`. Do not mutate an outer variable inside the state updater to capture the snapshot — that depends on React's eager-update timing and is the pattern the grain hook was refactored away from. See `useGrainMovements` / `useFieldsAndBins` for the reference form.
+5. Apply optimistic state update via functional setter
+6. Await Supabase operation
+7a. Success: toast.success, return true
+7b. Error: roll back state to the closure-captured snapshot, toast.error (with detailed Postgres message), return false
 
 ### OpResult Convention
 All add / update / delete operations on every hook return `Promise<boolean>`:

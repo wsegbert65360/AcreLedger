@@ -1,3 +1,6 @@
+import type { GeoJSONGeometry } from '@/lib/geoHelpers';
+import { getCentroid, hasValidGeometry } from '@/lib/geoHelpers';
+
 export type RainfallResult = {
   '24h': number;
   '72h': number;
@@ -42,7 +45,7 @@ export const RainService = {
     fieldId: string;
     lat?: number | null;
     lng?: number | null;
-    boundary?: { type: string; coordinates: number[][][] } | null;
+    boundary?: GeoJSONGeometry | null;
     sincePlantingDate?: string;
     sinceLastSprayDate?: string;
     signal?: AbortSignal;
@@ -62,13 +65,14 @@ export const RainService = {
       let tLat = lat != null ? Math.round(lat * 10000) / 10000 : null;
       let tLng = lng != null ? Math.round(lng * 10000) / 10000 : null;
 
-      if ((tLat == null || tLng == null) && boundary) {
-        const coords = Array.isArray(boundary) ? boundary : boundary?.coordinates?.[0];
-        if (coords && coords.length > 0) {
-          const sumLat = coords.reduce((s: number, c: any) => s + (Array.isArray(c) ? c[1] : c.lat), 0);
-          const sumLng = coords.reduce((s: number, c: any) => s + (Array.isArray(c) ? c[0] : c.lng), 0);
-          tLat = Math.round((sumLat / coords.length) * 10000) / 10000;
-          tLng = Math.round((sumLng / coords.length) * 10000) / 10000;
+      if ((tLat == null || tLng == null) && hasValidGeometry(boundary ?? undefined) && boundary) {
+        // Use the shared centroid helper so a MultiPolygon boundary resolves to
+        // the centroid of the *whole* field, not just its first polygon. The
+        // helper returns [lat, lng] and iterates every polygon's outer ring.
+        const [centroidLat, centroidLng] = getCentroid([{ geometry: boundary }]);
+        if (!Number.isNaN(centroidLat) && !Number.isNaN(centroidLng)) {
+          tLat = Math.round(centroidLat * 10000) / 10000;
+          tLng = Math.round(centroidLng * 10000) / 10000;
         }
       }
 

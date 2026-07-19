@@ -22,7 +22,7 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
 
   // ─── Add ────────────────────────────────────────────────────────────────────
   const addSprayRecord = useCallback(async (
-    r: Omit<SprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
+    r: Omit<SprayRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');

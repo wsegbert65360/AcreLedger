@@ -22,7 +22,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addTillageRecord = useCallback(async (
-    r: Omit<TillageRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear'>
+    r: Omit<TillageRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>
   ): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');

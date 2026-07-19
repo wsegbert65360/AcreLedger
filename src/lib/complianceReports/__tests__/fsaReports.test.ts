@@ -16,6 +16,7 @@ describe('Missouri Log Generation', () => {
     it('should split tank-mix into multiple rows (Missouri Log requirement)', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'North 80',
             acreage: 80,
             lat: 39,
@@ -25,6 +26,7 @@ describe('Missouri Log Generation', () => {
 
         const spray: SprayRecord = {
             id: 'spray-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'North 80',
             products: [
@@ -63,9 +65,9 @@ describe('Missouri Log Generation', () => {
     });
 
     it('should use treatedAreaSize first, then fall back to field acreage', () => {
-        const field: Field = { id: 'f1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
+        const field: Field = { id: 'f1', farm_id: 'farm-1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
         const spray: SprayRecord = {
-            id: 's1', fieldId: 'f1', fieldName: 'F1',
+            id: 's1', farm_id: 'farm-1', fieldId: 'f1', fieldName: 'F1',
             products: [{ product: 'P1', rate: '1', rateUnit: 'oz', epaRegNumber: '123' }],
             windSpeed: 0, temperature: 0, timestamp: 0, seasonYear: 2026,
             treatedAreaSize: 50, // Partial field
@@ -77,7 +79,7 @@ describe('Missouri Log Generation', () => {
     });
 
     it('should fall back to CLU cropland display acreage when treatedAreaSize is absent', () => {
-        const field: Field = { id: 'f1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
+        const field: Field = { id: 'f1', farm_id: 'farm-1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
         const cluAssignments: FieldCluAssignment[] = [
             {
                 id: 'clu-1',
@@ -92,7 +94,7 @@ describe('Missouri Log Generation', () => {
             },
         ];
         const spray: SprayRecord = {
-            id: 's1', fieldId: 'f1', fieldName: 'F1',
+            id: 's1', farm_id: 'farm-1', fieldId: 'f1', fieldName: 'F1',
             products: [{ product: 'P1', rate: '1', rateUnit: 'oz', epaRegNumber: '123' }],
             windSpeed: 0, temperature: 0, timestamp: 0, seasonYear: 2026,
             // No treatedAreaSize — should fall back to FSA cropland display acreage (60), not raw field acreage (100)
@@ -105,9 +107,10 @@ describe('Missouri Log Generation', () => {
     });
 
     it('recalculates displayed totals without mutating stored weather or record data', () => {
-        const field: Field = { id: 'f1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
+        const field: Field = { id: 'f1', farm_id: 'farm-1', name: 'F1', acreage: 100, lat: 0, lng: 0, deleted_at: null };
         const spray: SprayRecord = {
             id: 's1',
+            farm_id: 'farm-1',
             fieldId: 'f1',
             fieldName: 'F1',
             products: [{
@@ -143,6 +146,7 @@ describe('FSA 578 report rows', () => {
     it('splits planted crop acreage by assigned cropland CLU numbers', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Bottom Field',
             acreage: 40,
             lat: 39,
@@ -155,6 +159,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Bottom Field',
             crop: 'Soybeans',
@@ -202,6 +207,7 @@ describe('FSA 578 report rows', () => {
     it('splits legacy planted fields by stored CLU numbers when no assignments exist', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Behind Grandma',
             acreage: 36,
             lat: 39,
@@ -214,6 +220,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Behind Grandma',
             crop: 'Soybeans',
@@ -261,6 +268,7 @@ describe('FSA 578 report rows', () => {
     it('keeps multiple planting records as separate FSA acreage rows', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Hensley',
             acreage: 40,
             lat: 39,
@@ -273,6 +281,7 @@ describe('FSA 578 report rows', () => {
 
         const olderPlantRecord = {
             id: 'plant-old',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Hensley',
             crop: 'Soybeans',
@@ -337,6 +346,7 @@ describe('FSA 578 report rows', () => {
     it('combines split first-crop planting records using the latest planting date', () => {
         const field: Field = {
             id: 'field-behind-grandma',
+            farm_id: 'farm-1',
             name: 'Behind Grandma',
             acreage: 36,
             lat: 39,
@@ -349,6 +359,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord: PlantRecord = {
             id: 'plant-behind-grandma-1',
+            farm_id: 'farm-1',
             fieldId: 'field-behind-grandma',
             fieldName: 'Behind Grandma',
             crop: 'Soybeans',
@@ -405,6 +416,7 @@ describe('FSA 578 report rows', () => {
     it('keeps first crop and second crop plantings as separate FSA rows', () => {
         const field: Field = {
             id: 'field-sequence',
+            farm_id: 'farm-1',
             name: 'Sequence Field',
             acreage: 40,
             lat: 39,
@@ -417,6 +429,7 @@ describe('FSA 578 report rows', () => {
 
         const firstCrop: PlantRecord = {
             id: 'plant-first-crop',
+            farm_id: 'farm-1',
             fieldId: 'field-sequence',
             fieldName: 'Sequence Field',
             crop: 'Soybeans',
@@ -447,6 +460,7 @@ describe('FSA 578 report rows', () => {
     it('infers a single CLU number from the imported tract polygon when legacy fields lack cluNumbers', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Medford',
             acreage: 32,
             lat: 0.5,
@@ -458,6 +472,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Medford',
             crop: 'Soybeans',
@@ -501,6 +516,7 @@ describe('FSA 578 report rows', () => {
     it('includes non-cropland CLU assignments without creating crop rows', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'North 80',
             acreage: 80,
             lat: 39,
@@ -542,6 +558,7 @@ describe('FSA 578 report rows', () => {
     it('labels the crop as non-crop on non-cropland FSA worksheet rows', () => {
         const pastureField: Field = {
             id: 'pasture-1',
+            farm_id: 'farm-1',
             name: 'South Pasture',
             acreage: 20,
             lat: 39,
@@ -554,6 +571,7 @@ describe('FSA 578 report rows', () => {
 
         const hayField: Field = {
             id: 'hay-1',
+            farm_id: 'farm-1',
             name: 'East Hay Ground',
             acreage: 15,
             lat: 39,
@@ -600,6 +618,7 @@ describe('FSA 578 report rows', () => {
     it('calculates planted totals from cropland rows only', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Bottom Field',
             acreage: 40,
             lat: 39,
@@ -612,6 +631,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord: PlantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Bottom Field',
             crop: 'Soybeans',
@@ -662,6 +682,7 @@ describe('FSA 578 report rows', () => {
     it('includes assigned cropland that has no planting record for FSA review', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Unreported North',
             acreage: 24,
             lat: 39,
@@ -702,6 +723,7 @@ describe('FSA 578 report rows', () => {
     it('uses hay or pasture field use as the crop for assigned cropland readiness', () => {
         const pastureField: Field = {
             id: 'pasture-1',
+            farm_id: 'farm-1',
             name: 'South Pasture',
             acreage: 20,
             lat: 39,
@@ -714,6 +736,7 @@ describe('FSA 578 report rows', () => {
 
         const hayField: Field = {
             id: 'hay-1',
+            farm_id: 'farm-1',
             name: 'East Hay Ground',
             acreage: 15,
             lat: 39,
@@ -760,6 +783,7 @@ describe('FSA 578 report rows', () => {
     it('defaults planted rows to planted status without untracked certifications', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Bottom Field',
             acreage: 40,
             lat: 39,
@@ -773,6 +797,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Bottom Field',
             crop: 'Corn',
@@ -798,6 +823,7 @@ describe('FSA 578 report rows', () => {
         const issues = validateFsa578Rows([
             {
                 id: 'row-1',
+                fieldId: 'field-1',
                 date: '2026-05-01',
                 fieldName: 'Problem Field',
                 farmNumber: '',
@@ -826,6 +852,7 @@ describe('FSA 578 report rows', () => {
         const issues = validateFsa578Rows([
             {
                 id: 'row-1',
+                fieldId: 'field-1',
                 date: '2026-05-01',
                 fieldName: 'Whitespace Field',
                 farmNumber: '   ',
@@ -853,6 +880,7 @@ describe('FSA 578 report rows', () => {
         const issues = validateFsa578Rows([
             {
                 id: 'row-1',
+                fieldId: 'field-1',
                 date: '2026-05-01',
                 fieldName: 'Ready Field',
                 farmNumber: '918',
@@ -883,6 +911,7 @@ describe('FSA 578 report rows', () => {
             },
             rows: [{
                 id: 'row-1',
+                fieldId: 'field-1',
                 date: '2026-05-01',
                 fieldName: 'Ready Field',
                 farmNumber: '918',
@@ -917,6 +946,7 @@ describe('FSA 578 report rows', () => {
     it('does not duplicate rows when field CLU numbers are repeated', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Behind Grandma',
             acreage: 36,
             lat: 39,
@@ -929,6 +959,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Behind Grandma',
             crop: 'Soybeans',
@@ -974,6 +1005,7 @@ describe('FSA 578 report rows', () => {
     it('does not duplicate rows when farm/tract numbers are repeated', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Behind Grandma',
             acreage: 36,
             lat: 39,
@@ -986,6 +1018,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Behind Grandma',
             crop: 'Soybeans',
@@ -1031,6 +1064,7 @@ describe('FSA 578 report rows', () => {
     it('does not duplicate rows when active CLU assignments are repeated', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Bottom Field',
             acreage: 40,
             lat: 39,
@@ -1042,6 +1076,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord = {
             id: 'plant-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Bottom Field',
             crop: 'Soybeans',
@@ -1091,6 +1126,7 @@ describe('FSA 578 report rows', () => {
         // only, producing a worksheet row smaller than the CLU polygon.
         const field: Field = {
             id: 'field-fleming',
+            farm_id: 'farm-1',
             name: 'Fleming below Rick',
             // field.acreage is the sum of all assigned CLUs (cropland + non-cropland)
             acreage: 35.81,
@@ -1103,6 +1139,7 @@ describe('FSA 578 report rows', () => {
 
         const plantRecord: PlantRecord = {
             id: 'plant-fleming',
+            farm_id: 'farm-1',
             fieldId: 'field-fleming',
             fieldName: 'Fleming below Rick',
             crop: 'Corn',
@@ -1165,6 +1202,7 @@ describe('FSA fall harvest production report rows', () => {
     it('builds corn soybean wheat production rows with FSA identifiers and evidence fields', () => {
         const field: Field = {
             id: 'field-1',
+            farm_id: 'farm-1',
             name: 'Bottom Field',
             acreage: 40,
             lat: 39,
@@ -1176,6 +1214,7 @@ describe('FSA fall harvest production report rows', () => {
 
         const harvestRecord: HarvestRecord = {
             id: 'harvest-1',
+            farm_id: 'farm-1',
             fieldId: 'field-1',
             fieldName: 'Bottom Field',
             crop: 'Corn',
@@ -1213,6 +1252,7 @@ describe('FSA fall harvest production report rows', () => {
     it('builds hay production rows with bale count and FSA identifiers', () => {
         const field: Field = {
             id: 'hay-field',
+            farm_id: 'farm-1',
             name: 'East Hay Ground',
             acreage: 15,
             lat: 39,
@@ -1225,6 +1265,7 @@ describe('FSA fall harvest production report rows', () => {
 
         const hayRecord: HayHarvestRecord = {
             id: 'hay-1',
+            farm_id: 'farm-1',
             fieldId: 'hay-field',
             fieldName: 'East Hay Ground',
             date: '2026-07-01',
@@ -1335,6 +1376,7 @@ describe('FSA fall harvest production report rows', () => {
     it('does not create fall production rows for pasture without a production record', () => {
         const pastureField: Field = {
             id: 'pasture-1',
+            farm_id: 'farm-1',
             name: 'South Pasture',
             acreage: 20,
             lat: 39,

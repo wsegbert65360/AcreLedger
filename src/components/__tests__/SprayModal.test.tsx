@@ -145,7 +145,9 @@ describe('SprayModal Data Retention', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCluAssignments = [];
-    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue(null);
+    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
+      wind: 0, temp: 0, humidity: 0, windDirection: '—', isError: true,
+    });
     vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
   });
 
@@ -435,7 +437,9 @@ describe('SprayModal product deletion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCluAssignments = [];
-    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue(null);
+    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
+      wind: 0, temp: 0, humidity: 0, windDirection: '—', isError: true,
+    });
     vi.mocked(WeatherService.fetchHistoricalConditions).mockResolvedValue(null);
   });
 

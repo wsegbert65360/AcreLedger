@@ -1,28 +1,20 @@
 /// <reference path="../deno.d.ts" />
-// @ts-ignore: Deno URL import
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-// @ts-ignore: Deno URL import
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { withSupabase } from "npm:@supabase/server@1.4.0"
 import { downloadAndDecompress, MRMS_CONFIG, extractRainfall, validateGridConfig } from '../shared/mrms.ts'
 
 interface FieldCoord { lat: number; lng: number; id: string }
 
-const corsHeaders = {
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+export default {
+  fetch: withSupabase({ auth: 'secret:automations' }, async (req, ctx) => {
+    if (req.method !== 'POST') {
+      return Response.json({ error: 'Method not allowed' }, {
+        status: 405,
+        headers: { Allow: 'POST' },
+      })
+    }
 
-serve(async (req: Request) => {
-  // 0. Handle CORS Preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    try {
+      const supabaseClient = ctx.supabaseAdmin
 
     const now = new Date()
     const hourOffset = parseInt(Deno.env.get('MRMS_HOUR_OFFSET') || '2', 10)
@@ -86,17 +78,14 @@ serve(async (req: Request) => {
     // 5. Success
     console.log(`Successfully processed ${records.length} rainfall records for ${targetTs.toISOString()}`)
 
-    return new Response(JSON.stringify({ success: true, count: records.length }), { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+      return Response.json({ success: true, count: records.length })
 
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error(`[MRMS-Hourly] Edge Function Error: ${msg}`);
-    return new Response(JSON.stringify({ error: msg }), { 
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[MRMS-Hourly] Edge Function Error: ${msg}`)
+      return Response.json({ error: msg }, {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-  }
-})
+      })
+    }
+  }),
+}

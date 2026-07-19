@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encryptData, decryptData, generateKey } from '../crypto';
+import { encryptData, decryptData } from '../crypto';
 
 describe('Crypto Utility', () => {
   const secret = 'test-session-secret';

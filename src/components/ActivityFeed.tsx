@@ -1,18 +1,21 @@
 import { Edit2 } from 'lucide-react';
 import { ModalType } from '@/pages/FieldDetailScreen';
 
-import type { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, FertilizerApplication, TillageRecord, ActivityRecordBase } from '@/types/farm';
+import type { ActivityRecord, ActivityRecordBase } from '@/types/farm';
+
+type FeedRecord = Exclude<ActivityRecord, { type: 'grain' }>;
+type FeedRecordData = FeedRecord['data'];
 
 interface ActivityFeedProps {
-  records: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord }[];
+  records: FeedRecord[];
   year: number;
-  onEdit: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord) => void;
-  onDuplicate?: (type: ModalType, data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord) => void;
+  onEdit: (type: ModalType, data: FeedRecordData) => void;
+  onDuplicate?: (type: ModalType, data: FeedRecordData) => void;
   hideHeader?: boolean;
 }
 
 export default function ActivityFeed({ records, year, onEdit, onDuplicate, hideHeader }: ActivityFeedProps) {
-  const getFeedInfo = (record: { type: string; data: PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | TillageRecord }) => {
+  const getFeedInfo = (record: FeedRecord) => {
     const { type, data } = record;
 
     switch (type) {

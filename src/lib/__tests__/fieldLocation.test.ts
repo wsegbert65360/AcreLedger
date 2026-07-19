@@ -52,6 +52,7 @@ const tractImport: FsaTractImport = {
 
 const baseField: Field = {
   id: 'field-1',
+  farm_id: 'farm-1',
   name: 'Pasture Twyman corner',
   acreage: 8,
   lat: null,

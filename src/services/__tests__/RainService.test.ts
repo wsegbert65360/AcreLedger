@@ -141,6 +141,38 @@ describe('RainService', () => {
     expect(calledUrl).toContain('lon=-93.516');
   });
 
+  it('uses the whole MultiPolygon when deriving a boundary centroid', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.1, '24h': 0.25, '72h': 0.5, '168h': 0.75
+    }));
+
+    await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: null,
+      lng: null,
+      boundary: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [[[-94, 38], [-92, 38], [-92, 40], [-94, 38]]],
+          [[[-90, 42], [-88, 42], [-88, 44], [-90, 42]]],
+        ],
+      },
+    });
+
+    const calledUrl = (fetch as any).mock.calls[0][0];
+    expect(calledUrl).toContain('lat=40.5');
+    expect(calledUrl).toContain('lon=-91');
+  });
+
+  it('rejects an empty boundary instead of using a default coordinate', async () => {
+    await expect(RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: null,
+      lng: null,
+      boundary: { type: 'MultiPolygon', coordinates: [] },
+    })).rejects.toThrow('Missing location data');
+  });
+
   it('throws when no location data at all', async () => {
     await expect(RainService.fetchComprehensiveRainfall({
       fieldId: mockFieldId

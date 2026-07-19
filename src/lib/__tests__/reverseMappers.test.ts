@@ -6,8 +6,7 @@ import {
   mapTillageToDb, mapFsaTractToDb, mapFieldCluAssignmentToDb
 } from '../mappers';
 import type { Field, PlantRecord, SprayRecord, HarvestRecord,
-  HayHarvestRecord, GrainMovement, Bin, SavedSeed, SprayRecipe,
-  FertilizerRecipe, FertilizerApplication, TillageRecord } from '../../types/farm';
+  GrainMovement, TillageRecord } from '../../types/farm';
 import type { FsaTractImport, FieldCluAssignment } from '../../types/fsaTract';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -219,6 +218,9 @@ describe('Reverse mapper Zod schema validation', () => {
       id: 'harvest-1',
       fieldId: 'field-1',
       fieldName: 'North 40',
+      destination: 'bin',
+      moisturePercent: 15,
+      landlordSplitPercent: 0,
       bushels: 150,
       seasonYear: 2026,
       timestamp: Date.now(),
@@ -237,6 +239,7 @@ describe('Reverse mapper Zod schema validation', () => {
       binName: 'Main Bin',
       type: 'in',
       bushels: 1000,
+      moisturePercent: 15,
       seasonYear: 2026,
       timestamp: Date.now(),
       farm_id: farmId,
@@ -251,8 +254,10 @@ describe('Reverse mapper Zod schema validation', () => {
     const grain: GrainMovement = {
       id: 'gm-1',
       binId: 'bin-1',
+      binName: 'Main Bin',
       type: 'out',
       bushels: -50,
+      moisturePercent: 15,
       seasonYear: 2026,
       timestamp: Date.now(),
       farm_id: farmId,
@@ -385,7 +390,10 @@ describe('Reverse mapper output keys', () => {
 
 describe('Reverse mapper optional fields', () => {
   it('mapFieldToDb passes through boundary as-is', () => {
-    const boundary = { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] };
+    const boundary: NonNullable<Field['boundary']> = {
+      type: 'Polygon',
+      coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]],
+    };
     const result = mapFieldToDb(makeField({ boundary }));
     expect(result.boundary).toEqual(boundary);
   });
@@ -419,7 +427,10 @@ describe('Reverse mapper optional fields', () => {
     const result = mapGrainToDb({
       id: 'gm-1',
       binId: 'bin-1',
+      binName: 'Main Bin',
+      type: 'out',
       bushels: 100,
+      moisturePercent: 15,
       seasonYear: 2026,
       timestamp: Date.now(),
       farm_id: farmId,
@@ -432,7 +443,10 @@ describe('Reverse mapper optional fields', () => {
     const result = mapGrainToDb({
       id: 'gm-1',
       binId: 'bin-1',
+      binName: 'Main Bin',
+      type: 'out',
       bushels: 100,
+      moisturePercent: 15,
       price: 0,
       seasonYear: 2026,
       timestamp: Date.now(),
@@ -468,7 +482,7 @@ describe('Reverse mapper timestamp handling', () => {
       timestamp: ts,
       seasonYear: 2026,
       deleted_at: null,
-    } as SprayRecord);
+    } as unknown as SprayRecord);
     expect(new Date(result.timestamp).getTime()).toBe(ts);
   });
 
@@ -495,7 +509,7 @@ describe('Reverse mapper product array handling', () => {
       seasonYear: 2026,
       products: [],
       deleted_at: null,
-    } as SprayRecord);
+    } as unknown as SprayRecord);
     expect(result.products).toEqual([]);
   });
 

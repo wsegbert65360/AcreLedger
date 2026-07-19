@@ -28,7 +28,7 @@ describe('ActivityFeed', () => {
         products: [{ product: 'Enlist One' }],
         timestamp: Date.now()
       } as any
-    };
+    } as const;
 
     render(<ActivityFeed records={[mockRecord]} year={2026} onEdit={onEdit} />);
     
@@ -40,7 +40,7 @@ describe('ActivityFeed', () => {
   });
 
   it('renders correct emoji and details for various record types', () => {
-    const records = [
+    const records: React.ComponentProps<typeof ActivityFeed>['records'] = [
       { type: 'plant', data: { id: 'p1', crop: 'Corn', plantDate: '2026-04-01' } as any },
       { type: 'hay', data: { id: 'h1', baleCount: 50, cuttingNumber: 1, date: '2026-05-20' } as any }
     ];

@@ -9,6 +9,11 @@ import { syncQueue } from '@/lib/syncQueue';
 
 interface UseFieldsAndBinsArgs {
   farm_id: string | null;
+  fields: Field[];
+  bins: Bin[];
+  savedSeeds: SavedSeed[];
+  sprayRecipes: SprayRecipe[];
+  fertilizerRecipes: FertilizerRecipe[];
   setFields: React.Dispatch<React.SetStateAction<Field[]>>;
   setBins: React.Dispatch<React.SetStateAction<Bin[]>>;
   setSavedSeeds: React.Dispatch<React.SetStateAction<SavedSeed[]>>;
@@ -20,7 +25,8 @@ interface UseFieldsAndBinsArgs {
 }
 
 export function useFieldsAndBins({
-  farm_id, setFields, setBins,
+  farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes,
+  setFields, setBins,
   setSavedSeeds, setSprayRecipes,
   setFertilizerRecipes,
   isOnline, onMutation, onFieldDeleted
@@ -32,7 +38,7 @@ export function useFieldsAndBins({
   const isRecipeMutating = useRef(false);
 
   // --- Fields ---
-  const addField = useCallback(async (f: Omit<Field, 'id'>, requestedId?: string): Promise<boolean> => {
+  const addField = useCallback(async (f: Omit<Field, 'id' | 'farm_id'>, requestedId?: string): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
       return false;
@@ -115,11 +121,14 @@ export function useFieldsAndBins({
       return false;
     }
 
-    let previous: Field | undefined = undefined;
-    setFields(prev => {
-      previous = prev.find(item => item.id === f.id);
-      return prev.map(existing => existing.id === f.id ? f : existing);
-    });
+    // Capture the prior record from the current render's state. The hook serializes
+    // mutations (isFieldMutating), so this is the true last-known record at edit
+    // time. Reading it from the closure — instead of mutating a variable inside
+    // the state setter — avoids depending on React's eager-update timing for
+    // rollback correctness (same pattern as useGrainMovements).
+    const previous = fields.find(item => item.id === f.id);
+
+    setFields(prev => prev.map(existing => existing.id === f.id ? f : existing));
 
     try {
       if (!isOnline) {
@@ -159,7 +168,7 @@ export function useFieldsAndBins({
     } finally {
       isFieldMutating.current = false;
     }
-  }, [farm_id, setFields, isOnline, onMutation]);
+  }, [farm_id, fields, setFields, isOnline, onMutation]);
 
   const deleteField = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
@@ -172,14 +181,12 @@ export function useFieldsAndBins({
     }
     isFieldMutating.current = true;
 
-    let previous: Field | undefined = undefined;
+    // Capture the prior record from the closure (see updateField note).
+    const previous = fields.find(f => f.id === id);
     const deletedAt = new Date().toISOString();
-    setFields(prev => {
-      previous = prev.find(f => f.id === id);
-      return prev.map(f =>
-        f.id === id ? { ...f, deleted_at: deletedAt } : f
-      );
-    });
+    setFields(prev => prev.map(f =>
+      f.id === id ? { ...f, deleted_at: deletedAt } : f
+    ));
 
     try {
       if (!isOnline) {
@@ -225,10 +232,10 @@ export function useFieldsAndBins({
     } finally {
       isFieldMutating.current = false;
     }
-  }, [farm_id, setFields, isOnline, onMutation, onFieldDeleted]);
+  }, [farm_id, fields, setFields, isOnline, onMutation, onFieldDeleted]);
 
   // --- Bins ---
-  const addBin = useCallback(async (b: Omit<Bin, 'id'>): Promise<boolean> => {
+  const addBin = useCallback(async (b: Omit<Bin, 'id' | 'farm_id'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
       return false;
@@ -311,11 +318,9 @@ export function useFieldsAndBins({
       return false;
     }
 
-    let previous: Bin | undefined = undefined;
-    setBins(prev => {
-      previous = prev.find(item => item.id === b.id);
-      return prev.map(existing => existing.id === b.id ? b : existing);
-    });
+    // Capture the prior record from the closure (see updateField note).
+    const previous = bins.find(item => item.id === b.id);
+    setBins(prev => prev.map(existing => existing.id === b.id ? b : existing));
 
     try {
       if (!isOnline) {
@@ -355,7 +360,7 @@ export function useFieldsAndBins({
     } finally {
       isBinMutating.current = false;
     }
-  }, [farm_id, setBins, isOnline, onMutation]);
+  }, [farm_id, bins, setBins, isOnline, onMutation]);
 
   const deleteBin = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
@@ -368,14 +373,12 @@ export function useFieldsAndBins({
     }
     isBinMutating.current = true;
 
-    let previous: Bin | undefined = undefined;
+    // Capture the prior record from the closure (see updateField note).
+    const previous = bins.find(b => b.id === id);
     const deletedAt = new Date().toISOString();
-    setBins(prev => {
-      previous = prev.find(b => b.id === id);
-      return prev.map(b =>
-        b.id === id ? { ...b, deleted_at: deletedAt } : b
-      );
-    });
+    setBins(prev => prev.map(b =>
+      b.id === id ? { ...b, deleted_at: deletedAt } : b
+    ));
 
     try {
       if (!isOnline) {
@@ -415,7 +418,7 @@ export function useFieldsAndBins({
     } finally {
       isBinMutating.current = false;
     }
-  }, [farm_id, setBins, isOnline, onMutation]);
+  }, [farm_id, bins, setBins, isOnline, onMutation]);
 
   // --- Seeds ---
   const addSeed = useCallback(async (name: string): Promise<boolean> => {
@@ -495,12 +498,10 @@ export function useFieldsAndBins({
     }
     isSeedMutating.current = true;
 
-    let previous: SavedSeed | undefined = undefined;
+    // Capture the prior record from the closure (see updateField note).
+    const previous = savedSeeds.find(s => s.id === id);
     const deletedAt = new Date().toISOString();
-    setSavedSeeds(prev => {
-      previous = prev.find(s => s.id === id);
-      return prev.filter(s => s.id !== id);
-    });
+    setSavedSeeds(prev => prev.filter(s => s.id !== id));
 
     try {
       if (!isOnline) {
@@ -544,7 +545,7 @@ export function useFieldsAndBins({
     } finally {
       isSeedMutating.current = false;
     }
-  }, [farm_id, setSavedSeeds, isOnline, onMutation]);
+  }, [farm_id, savedSeeds, setSavedSeeds, isOnline, onMutation]);
 
   // --- Spray Recipes ---
   const addSprayRecipe = useCallback(async (r: Omit<SprayRecipe, 'id' | 'farm_id' | 'deleted_at'>): Promise<boolean> => {
@@ -630,11 +631,9 @@ export function useFieldsAndBins({
       return false;
     }
 
-    let previous: SprayRecipe | undefined = undefined;
-    setSprayRecipes(prev => {
-      previous = prev.find(item => item.id === r.id);
-      return prev.map(existing => existing.id === r.id ? r : existing);
-    });
+    // Capture the prior record from the closure (see updateField note).
+    const previous = sprayRecipes.find(item => item.id === r.id);
+    setSprayRecipes(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     try {
       if (!isOnline) {
@@ -679,7 +678,7 @@ export function useFieldsAndBins({
     } finally {
       isRecipeMutating.current = false;
     }
-  }, [farm_id, setSprayRecipes, isOnline, onMutation]);
+  }, [farm_id, sprayRecipes, setSprayRecipes, isOnline, onMutation]);
 
   const deleteSprayRecipe = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
@@ -692,12 +691,10 @@ export function useFieldsAndBins({
     }
     isRecipeMutating.current = true;
 
-    let previous: SprayRecipe | undefined = undefined;
+    // Capture the prior record from the closure (see updateField note).
+    const previous = sprayRecipes.find(r => r.id === id);
     const deletedAt = new Date().toISOString();
-    setSprayRecipes(prev => {
-      previous = prev.find(r => r.id === id);
-      return prev.filter(r => r.id !== id);
-    });
+    setSprayRecipes(prev => prev.filter(r => r.id !== id));
 
     try {
       if (!isOnline) {
@@ -741,7 +738,7 @@ export function useFieldsAndBins({
     } finally {
       isRecipeMutating.current = false;
     }
-  }, [farm_id, setSprayRecipes, isOnline, onMutation]);
+  }, [farm_id, sprayRecipes, setSprayRecipes, isOnline, onMutation]);
 
   // --- Fertilizer Recipes ---
   const addFertilizerRecipe = useCallback(async (r: Omit<FertilizerRecipe, 'id' | 'farm_id'>): Promise<boolean> => {
@@ -806,7 +803,7 @@ export function useFieldsAndBins({
     }
   }, [farm_id, setFertilizerRecipes, isOnline, onMutation]);
 
-  const updateFertilizerRecipe = useCallback(async (r: FertilizerRecipe): Promise<boolean> => {
+  const updateFertilizerRecipe = useCallback(async (r: Omit<FertilizerRecipe, 'farm_id'>): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected');
       return false;
@@ -817,9 +814,10 @@ export function useFieldsAndBins({
     }
     isRecipeMutating.current = true;
 
+    const updatedRecipe: FertilizerRecipe = { ...r, farm_id };
     let mapped: ReturnType<typeof mapFertilizerRecipeToDb>;
     try {
-      mapped = mapFertilizerRecipeToDb({ ...r, farm_id });
+      mapped = mapFertilizerRecipeToDb(updatedRecipe);
     } catch (err) {
       console.error('mapFertilizerRecipeToDb failed:', err);
       toast.error('Failed to prepare recipe — check inputs.');
@@ -827,11 +825,9 @@ export function useFieldsAndBins({
       return false;
     }
 
-    let previous: FertilizerRecipe | undefined = undefined;
-    setFertilizerRecipes(prev => {
-      previous = prev.find(item => item.id === r.id);
-      return prev.map(existing => existing.id === r.id ? r : existing);
-    });
+    // Capture the prior record from the closure (see updateField note).
+    const previous = fertilizerRecipes.find(item => item.id === r.id);
+    setFertilizerRecipes(prev => prev.map(existing => existing.id === r.id ? updatedRecipe : existing));
 
     try {
       if (!isOnline) {
@@ -876,7 +872,7 @@ export function useFieldsAndBins({
     } finally {
       isRecipeMutating.current = false;
     }
-  }, [farm_id, setFertilizerRecipes, isOnline, onMutation]);
+  }, [farm_id, fertilizerRecipes, setFertilizerRecipes, isOnline, onMutation]);
 
   const deleteFertilizerRecipe = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
@@ -889,12 +885,10 @@ export function useFieldsAndBins({
     }
     isRecipeMutating.current = true;
 
-    let previous: FertilizerRecipe | undefined = undefined;
+    // Capture the prior record from the closure (see updateField note).
+    const previous = fertilizerRecipes.find(r => r.id === id);
     const deletedAt = new Date().toISOString();
-    setFertilizerRecipes(prev => {
-      previous = prev.find(r => r.id === id);
-      return prev.filter(r => r.id !== id);
-    });
+    setFertilizerRecipes(prev => prev.filter(r => r.id !== id));
 
     try {
       if (!isOnline) {
@@ -938,7 +932,7 @@ export function useFieldsAndBins({
     } finally {
       isRecipeMutating.current = false;
     }
-  }, [farm_id, setFertilizerRecipes, isOnline, onMutation]);
+  }, [farm_id, fertilizerRecipes, setFertilizerRecipes, isOnline, onMutation]);
 
   return {
     addField, updateField, deleteField,
