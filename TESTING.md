@@ -35,24 +35,56 @@ npm test src/services/__tests__/RainService.test.ts
 npm test src/utils/utils.test.ts
 ```
 
+### Supabase-backed unit tests
+
+Use `src/test/supabaseMock.ts` instead of rebuilding chain mocks in each suite. The
+canonical lifecycle is one stable mock and one dynamic system-under-test import per
+suite:
+
+```ts
+const mock = createSupabaseMock();
+vi.doMock('@/lib/supabase', () => ({ supabase: mock.client }));
+
+let service: typeof import('../fieldService');
+beforeAll(async () => {
+  service = await import('../fieldService');
+});
+beforeEach(() => mock.reset());
+```
+
+- Do not call the imported factory from `vi.hoisted`; it is not initialized at mock-hoist time.
+- Query chains are thenable and resolve through `setResult`/`setThrow`.
+- Every `from(table)` call receives a table-bound builder. `setTableHandler` therefore remains safe when different tables are queried concurrently with `Promise.all`.
+- RPC results and throws are controlled independently with `setRpcResult` and `setRpcThrow`.
+- `reset()` uses `mockReset()` and reinstalls all implementations, clearing queued behavior and terminal state between tests.
+- Add another mocked chain method only when production code under test requires it.
+
+The Phase 1 service suites are:
+
+- `cluAssignmentService.test.ts` — update/remove scoping plus the sanctioned CLU conflict-key upsert.
+- `fsaTractService.test.ts` — import/fetch/delete RPC and the sanctioned tract conflict-key upsert.
+- `fieldAndBinServices.test.ts` — table-driven create, update, and soft-delete query contracts with exact record and farm filters.
+- `supabaseMock.test.ts` — thenable, rejection, RPC independence, reset, and concurrent table-isolation contracts.
+
 ## Coverage Baseline
 
-Captured 2026-07-18 via `npm run test:coverage` (V8 provider). Scope is production
+Updated 2026-07-19 after the Phase 1 service suites via `npm run test:coverage` (V8 provider). Scope is production
 sources only — see the `coverage` block in `vite.config.ts`. No thresholds are set
 yet (Phase 0 records the baseline; a conservative global floor is added after the
 hook/service tests land).
 
 | Metric      | Covered | Total | %     |
 |-------------|---------|-------|-------|
-| Statements  | 7,372   | 23,831| 30.93 |
-| Branches    | 1,555   | 2,277 | 68.29 |
-| Functions   | 291     | 544   | 53.49 |
-| Lines       | 7,372   | 23,831| 30.93 |
+| Statements  | 7,475   | 23,831| 31.36 |
+| Branches    | 1,563   | 2,280 | 68.55 |
+| Functions   | 302     | 544   | 55.51 |
+| Lines       | 7,475   | 23,831| 31.36 |
 
 Observations driving the test roadmap:
 - `src/store/**` is the lowest-covered area by design (mutation hooks untested).
-- `src/services/**` field/bin/FSA tracts are thin untested wrappers (CLU is the exception).
+- `fieldService`, `binService`, `fsaTractService`, and `cluAssignmentService` now have 100% statement/branch/function/line coverage; the services aggregate is 85.97% statements.
 - Strong areas: pure lib (`mappers`, `fieldAcreage`, `geoHelpers`, `crypto`), `utils/`, `RainService`.
+- Current verified unit checkpoint: 53 files and 494 tests passing. Treat the count as a snapshot, not a fixed assertion; the command exit status is the gate.
 
 ## MRMS Edge Function Investigation (Phase 0.5 — historical)
 

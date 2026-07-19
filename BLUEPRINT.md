@@ -716,4 +716,10 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 - **Zero vs Falsy**: `0` is a valid farm value. Use `value != null ? value : '—'`.
 
 ### Verification
-See [TESTING.md](./TESTING.md) for detailed verification protocols and bot credentials.
+
+- The default Vitest suite is offline-only; live Rain API and authentication checks are isolated in `*.integration.test.*` and run through `vitest.integration.config.ts`.
+- Supabase service/store unit tests use the shared `src/test/supabaseMock.ts` factory. It provides reset-safe Vitest spies, thenable query builders, independent table/RPC results, and a separate table-bound builder for every `from(table)` call so concurrent `Promise.all` queries remain isolated.
+- The required consumer lifecycle is one mock per suite, `vi.doMock('@/lib/supabase', ...)`, a dynamic import of the system under test, and `mock.reset()` before each test. The factory must not be constructed through `vi.hoisted`.
+- Query-contract coverage exists for fields, bins, FSA tract imports, and CLU assignments. The tests lock farm/id scoping, exact-count update shapes, soft deletes without returning selects, and the two sanctioned conflict-key upserts. Raw-result interpretation and optimistic rollback are tested at the hook layer rather than duplicated in these thin services.
+
+See [TESTING.md](./TESTING.md) for commands, current coverage measurements, detailed verification protocols, and bot credentials.
