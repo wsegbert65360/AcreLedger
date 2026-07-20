@@ -15,6 +15,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b",
+    "typecheck:api": "tsc -p tsconfig.api.json",
     "cap:sync": "npx cap sync ios",
     "cap:open": "npx cap open ios",
     "cap:build": "vite build --mode capacitor && npx cap sync ios"
@@ -88,6 +89,7 @@
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
+    "@vercel/node": "^5.8.26",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "@vitest/coverage-v8": "^3.2.4",
     "autoprefixer": "^10.4.21",
