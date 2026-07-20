@@ -371,6 +371,8 @@ Every mutation follows this exact sequence — no exceptions:
 7a. Success: toast.success, return true
 7b. Error: roll back state to the closure-captured snapshot, toast.error (with detailed Postgres message), return false
 
+Offline bulk/cascade operations use `syncQueue.enqueueMutations`. Web persists the whole batch in one encrypted localStorage update; native uses transactional SQLite `executeSet`. This is required for bulk activity deletes and offline field/tract deletion cascades so local rollback cannot disagree with a partially persisted queue. Field-delete batches place assignments before the field, and the `fields_cascade_soft_delete_to_clu_assignments` trigger makes direct field replay transactionally cascade any remaining assignments. Online field deletion uses the `SECURITY INVOKER` `soft_delete_field_with_clu_assignments` RPC. Sign-out fails closed unless cache cleanup removes the current farm's pending queue before ending the auth session.
+
 ### OpResult Convention
 All add / update / delete operations on every hook return `Promise<boolean>`:
 - `true` = record committed to DB
@@ -721,5 +723,6 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 - Supabase service/store unit tests use the shared `src/test/supabaseMock.ts` factory. It provides reset-safe Vitest spies, thenable query builders, independent table/RPC results, and a separate table-bound builder for every `from(table)` call so concurrent `Promise.all` queries remain isolated.
 - The required consumer lifecycle is one mock per suite, `vi.doMock('@/lib/supabase', ...)`, a dynamic import of the system under test, and `mock.reset()` before each test. The factory must not be constructed through `vi.hoisted`.
 - Query-contract coverage exists for fields, bins, FSA tract imports, and CLU assignments. The tests lock farm/id scoping, exact-count update shapes, soft deletes without returning selects, and the two sanctioned conflict-key upserts. Raw-result interpretation and optimistic rollback are tested at the hook layer rather than duplicated in these thin services.
+- Hook suites use `src/test/hookTestHarness.tsx` so functional setters run against real React state. Coverage includes fields/bins, grain movements, FSA tract/CLU cascades, all activity-hook rollback/bulk-delete contracts, auth season synchronization, and composed sign-out cleanup.
 
 See [TESTING.md](./TESTING.md) for commands, current coverage measurements, detailed verification protocols, and bot credentials.

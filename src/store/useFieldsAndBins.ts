@@ -6,6 +6,7 @@ import { fieldService } from '@/services/fieldService';
 import { binService } from '@/services/binService';
 import { mapFieldToDb, mapBinToDb, mapSeedToDb, mapRecipeToDb, mapFertilizerRecipeToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import type { FieldCluAssignment } from '@/types/fsaTract';
 
 interface UseFieldsAndBinsArgs {
   farm_id: string | null;
@@ -14,22 +15,23 @@ interface UseFieldsAndBinsArgs {
   savedSeeds: SavedSeed[];
   sprayRecipes: SprayRecipe[];
   fertilizerRecipes: FertilizerRecipe[];
+  cluAssignments: FieldCluAssignment[];
   setFields: React.Dispatch<React.SetStateAction<Field[]>>;
   setBins: React.Dispatch<React.SetStateAction<Bin[]>>;
   setSavedSeeds: React.Dispatch<React.SetStateAction<SavedSeed[]>>;
   setSprayRecipes: React.Dispatch<React.SetStateAction<SprayRecipe[]>>;
   setFertilizerRecipes: React.Dispatch<React.SetStateAction<FertilizerRecipe[]>>;
+  setCluAssignments: React.Dispatch<React.SetStateAction<FieldCluAssignment[]>>;
   isOnline: boolean;
   onMutation?: () => void | Promise<void>;
-  onFieldDeleted?: (fieldId: string) => Promise<boolean>;
 }
 
 export function useFieldsAndBins({
-  farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes,
+  farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes, cluAssignments,
   setFields, setBins,
   setSavedSeeds, setSprayRecipes,
-  setFertilizerRecipes,
-  isOnline, onMutation, onFieldDeleted
+  setFertilizerRecipes, setCluAssignments,
+  isOnline, onMutation
 }: UseFieldsAndBinsArgs) {
   // Guards to prevent double-taps on operations
   const isFieldMutating = useRef(false);
@@ -183,24 +185,40 @@ export function useFieldsAndBins({
 
     // Capture the prior record from the closure (see updateField note).
     const previous = fields.find(f => f.id === id);
+    const previousAssignments = cluAssignments;
+    const assignmentsToDelete = cluAssignments.filter(a => a.fieldId === id && !a.deletedAt);
     const deletedAt = new Date().toISOString();
     setFields(prev => prev.map(f =>
       f.id === id ? { ...f, deleted_at: deletedAt } : f
+    ));
+    setCluAssignments(prev => prev.map(a =>
+      a.fieldId === id && !a.deletedAt ? { ...a, deletedAt } : a
     ));
 
     try {
       if (!isOnline) {
         try {
-          await syncQueue.enqueueMutation('fields', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+          await syncQueue.enqueueMutations([
+            ...assignmentsToDelete.map(a => ({
+              tableName: 'field_clu_assignments',
+              operation: 'soft_delete' as const,
+              payload: { id: a.id, deleted_at: deletedAt },
+              farmId: farm_id,
+            })),
+            {
+              tableName: 'fields',
+              operation: 'soft_delete',
+              payload: { id, deleted_at: deletedAt },
+              farmId: farm_id,
+            },
+          ]);
           if (onMutation) await onMutation();
-          if (onFieldDeleted) {
-            await onFieldDeleted(id);
-          }
           toast.success('Field deleted offline');
           return true;
         } catch (err) {
           console.error('Failed to enqueue delete field offline:', err);
           if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
+          setCluAssignments(previousAssignments);
           toast.error('Failed to delete field offline');
           return false;
         }
@@ -215,24 +233,26 @@ export function useFieldsAndBins({
             console.warn('Field delete affected zero rows:', id);
           }
           if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
+          setCluAssignments(previousAssignments);
           toast.error('Failed to delete field');
           return false;
-        }
-        if (onFieldDeleted) {
-          await onFieldDeleted(id);
         }
         toast.success('Field deleted');
         return true;
       } catch (err) {
         console.error('Network error deleting field:', err);
         if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
+        setCluAssignments(previousAssignments);
         toast.error('Failed to delete field due to a network error');
         return false;
       }
     } finally {
       isFieldMutating.current = false;
     }
-  }, [farm_id, fields, setFields, isOnline, onMutation, onFieldDeleted]);
+  }, [
+    farm_id, fields, cluAssignments, setFields, setCluAssignments,
+    isOnline, onMutation,
+  ]);
 
   // --- Bins ---
   const addBin = useCallback(async (b: Omit<Bin, 'id' | 'farm_id'>): Promise<boolean> => {

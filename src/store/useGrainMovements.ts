@@ -242,9 +242,18 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       if (!isOnline) {
         try {
           const deletedAt = new Date().toISOString();
-          for (const id of ids) {
-            await syncQueue.enqueueMutation('grain_movements', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-          }
+          // Atomic batch: a partial enqueue must not leave some deletions
+          // queued while local state rolls back. enqueueMutations writes all
+          // rows (web: single save; native: transactional executeSet) and rejects on any
+          // failure so the catch below restores the full snapshot.
+          await syncQueue.enqueueMutations(
+            ids.map(id => ({
+              tableName: 'grain_movements',
+              operation: 'soft_delete' as const,
+              payload: { id, deleted_at: deletedAt },
+              farmId: farm_id,
+            }))
+          );
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

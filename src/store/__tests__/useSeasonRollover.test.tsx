@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSeasonManagement } from '@/store/useSeasonManagement';
 import { exportDataAsJson } from '@/utils/backup';
 
+const clearQueue = vi.hoisted(() => vi.fn());
+
 const cloud = vi.hoisted(() => ({
   result: { error: null as { message: string } | null, count: 1 as number | null },
   failure: null as Error | null,
@@ -31,6 +33,8 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 vi.mock('@/utils/backup', () => ({ exportDataAsJson: vi.fn().mockResolvedValue(true) }));
+vi.mock('@/lib/syncQueue', () => ({ syncQueue: { clearQueue } }));
+vi.mock('@/lib/offlineStorage', () => ({ offlineStorage: { clearCache: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function makeArgs(overrides: Record<string, unknown> = {}) {
@@ -60,6 +64,27 @@ describe('season rollover safety', () => {
     vi.clearAllMocks();
     cloud.result = { error: null, count: 1 };
     cloud.failure = null;
+    clearQueue.mockResolvedValue(undefined);
+  });
+
+  it('clears the farm offline queue as part of local sign-out cleanup', async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.clearLocalCache()).resolves.toBe(true);
+
+    expect(clearQueue).toHaveBeenCalledWith('farm-1');
+  });
+
+  it('fails closed without wiping local state when the offline queue cannot be cleared', async () => {
+    clearQueue.mockRejectedValue(new Error('storage locked'));
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.clearLocalCache()).resolves.toBe(false);
+
+    expect(args.setFields).not.toHaveBeenCalled();
+    expect(args.setFarmId).not.toHaveBeenCalled();
   });
 
   it('downloads a versioned backup before changing both seasons', async () => {

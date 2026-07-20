@@ -32,6 +32,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `farmStore.tsx` — global React Context store and CRUD actions.
 - `@/lib/native.ts` — centralized native capabilities (haptics, status bar, geolocation).
 - `@/lib/syncQueue.ts` — local sync queue and transaction retry engine for offline operation.
+- `@/test/hookTestHarness.tsx` — stateful hook-test array harness; use it when optimistic functional setters and rollback state must be asserted.
 - `@/lib/offlineStorage.ts` — offline persistent key-value store.
 - `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
 - `@/lib/complianceReports` — report generation.
@@ -120,6 +121,8 @@ Every add, update, and delete mutation must follow this sequence:
 6. Await the Supabase operation inside a `try...catch` block. You MUST catch unexpected fetch exceptions and assign them to an `error` variable so your existing rollback logic triggers gracefully instead of skipping it.
 7. On success (e.g., `error` is null and `{ count: 'exact' }` matches), show success feedback and return `true`.
 8. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
+
+Bulk or cascading offline mutations must use `syncQueue.enqueueMutations(...)`, never a per-record `enqueueMutation` loop. The batch is a single encrypted localStorage write on web and a transactional SQLite `executeSet` on native. Offline field deletion must batch active `field_clu_assignments` before the field soft-delete; the database `fields_cascade_soft_delete_to_clu_assignments` trigger provides transactional protection when the field row replays. Online field deletion must use the atomic `soft_delete_field_with_clu_assignments` RPC. Sign-out must fail closed unless the selected farm's pending queue is cleared before the auth session is ended.
 
 All add, update, and delete operations return `Promise<boolean>` — `true` on success, `false` on failure. Never return `undefined`.
 
@@ -480,6 +483,7 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 - `npm run test:coverage` collects V8 coverage over the production-surface scope defined in the `coverage` block of `vite.config.ts` (tests, generated data, type declarations, shadcn/ui primitives, and entry-point boilerplate are excluded). The baseline is recorded in `TESTING.md`; no thresholds are enforced yet.
 - For Supabase-backed unit tests, reuse `createSupabaseMock()` from `src/test/supabaseMock.ts`. Create one mock per suite, register it with `vi.doMock('@/lib/supabase', () => ({ supabase: mock.client }))`, dynamically import the system under test in `beforeAll`, and call `mock.reset()` in `beforeEach`. Do not put the imported factory inside `vi.hoisted(...)` and do not replace this lifecycle with per-test imports unless `vi.resetModules()` is also intentional.
 - The shared Supabase mock returns a distinct thenable builder from every `from(table)` call. Preserve that per-query table capture: hooks such as `useFsaTracts` issue different table queries through `Promise.all`, and a global `lastTable` makes concurrent results cross-contaminate. Use `setTableHandler` when concurrent tables need different results; use the independent `setRpcResult`/`setRpcThrow` controls for RPCs. Add new chain methods only when production code under test actually uses them.
+- Hook rollback tests must use `useStatefulArray` from `src/test/hookTestHarness.tsx`; a plain `vi.fn()` setter does not execute functional React state updates and cannot prove optimistic state or rollback behavior.
 - `fieldService`, `binService`, `fsaTractService`, and `cluAssignmentService` have query-contract suites under `src/services/__tests__/`. The field/bin services intentionally return raw Supabase results; success/count interpretation and optimistic rollback remain hook responsibilities. Preserve exact `id` and `farm_id` filter assertions in service tests, and preserve the sanctioned FSA/CLU upsert conflict keys.
 - Component testing involving complex map lifecycles (like `MapContainer` or Leaflet) should mock the nested map components (`CluAssignmentMap`, `CluFieldSelector`, etc.) and invoke their callbacks explicitly.
 - Use explicit `await waitFor(...)` assertions when interacting with mocked component state that relies on React's asynchronous render cycle to avoid stale prop values during test execution.

@@ -22,10 +22,10 @@ export const fieldService = {
     },
 
     async softDeleteField(id: string, farmId: string) {
-        return await supabase
-            .from('fields')
-            .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
-            .eq('id', id)
-            .eq('farm_id', farmId);
+        const { data, error } = await supabase.rpc('soft_delete_field_with_clu_assignments', {
+            p_field_id: id,
+            p_farm_id: farmId,
+        });
+        return { count: data === true ? 1 : 0, error };
     }
 };

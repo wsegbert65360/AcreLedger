@@ -9,6 +9,7 @@ interface UseFertilizerRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
   fields: Field[];
+  fertilizerApplications: FertilizerApplication[];
   setFertilizerApplications: React.Dispatch<React.SetStateAction<FertilizerApplication[]>>;
   isOnline: boolean;
   onMutation: () => void | Promise<void>;
@@ -105,9 +106,8 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
   return { addFertilizerApplication };
 }
 
-function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications, isOnline, onMutation }: Omit<UseFertilizerRecordsArgs, 'viewingSeason'>) {
+function useUpdateFertilizerRecord({ farm_id, fields, fertilizerApplications, setFertilizerApplications, isOnline, onMutation }: Omit<UseFertilizerRecordsArgs, 'viewingSeason'>) {
   const isMutating = useRef(false);
-  const previousRef = useRef<FertilizerApplication | undefined>(undefined);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
@@ -130,15 +130,17 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
       return false;
     }
 
-    previousRef.current = undefined;
-    setFertilizerApplications(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
-      const updatedRecord: FertilizerApplication = {
-        ...r,
-        fieldName: fieldsRef.current.find(f => f.id === r.fieldId)?.name || 'Unknown Field'
-      };
-      return prev.map(item => item.id === r.id ? updatedRecord : item);
-    });
+    const previous = fertilizerApplications.find(item => item.id === r.id);
+    if (!previous) {
+      isMutating.current = false;
+      toast.error('Could not update record — refresh and try again.');
+      return false;
+    }
+    const updatedRecord: FertilizerApplication = {
+      ...r,
+      fieldName: fieldsRef.current.find(f => f.id === r.fieldId)?.name || 'Unknown Field'
+    };
+    setFertilizerApplications(prev => prev.map(item => item.id === r.id ? updatedRecord : item));
 
     try {
       if (!isOnline) {
@@ -151,7 +153,6 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
           return true;
         } catch (err) {
           console.error('Failed to enqueue fertilizer record update offline:', err);
-          const previous = previousRef.current;
           if (previous) {
             setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
           } else {
@@ -184,7 +185,6 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
           console.warn('Fertilizer update affected zero rows:', r.id);
         }
         
-        const previous = previousRef.current;
         if (previous) {
           setFertilizerApplications(prev => prev.map(item => item.id === r.id ? previous : item));
         } else {
@@ -201,7 +201,7 @@ function useUpdateFertilizerRecord({ farm_id, fields, setFertilizerApplications,
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setFertilizerApplications, isOnline, onMutation]);
+  }, [farm_id, fertilizerApplications, setFertilizerApplications, isOnline, onMutation]);
 
   return { updateFertilizerApplication };
 }
@@ -233,9 +233,10 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
       if (!isOnline) {
         try {
           const deletedAt = new Date().toISOString();
-          for (const id of ids) {
-            await syncQueue.enqueueMutation('fertilizer_applications', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-          }
+          await syncQueue.enqueueMutations(ids.map(id => ({
+            tableName: 'fertilizer_applications', operation: 'soft_delete' as const,
+            payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+          })));
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

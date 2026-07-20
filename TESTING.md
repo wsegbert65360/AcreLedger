@@ -59,32 +59,42 @@ beforeEach(() => mock.reset());
 - `reset()` uses `mockReset()` and reinstalls all implementations, clearing queued behavior and terminal state between tests.
 - Add another mocked chain method only when production code under test requires it.
 
+For mutation hooks, use `useStatefulArray` from `src/test/hookTestHarness.tsx` inside the same `renderHook` callback as the hook under test. Plain `vi.fn()` setters do not execute functional updates, so they cannot verify optimistic append, rollback, or original-index restoration.
+
 The Phase 1 service suites are:
 
 - `cluAssignmentService.test.ts` — update/remove scoping plus the sanctioned CLU conflict-key upsert.
 - `fsaTractService.test.ts` — import/fetch/delete RPC and the sanctioned tract conflict-key upsert.
-- `fieldAndBinServices.test.ts` — table-driven create, update, and soft-delete query contracts with exact record and farm filters.
+- `fieldAndBinServices.test.ts` — create/update query contracts, bin soft-delete scoping, and the atomic field/CLU soft-delete RPC contract.
 - `supabaseMock.test.ts` — thenable, rejection, RPC independence, reset, and concurrent table-isolation contracts.
+
+The Phase 2 safety suites include:
+
+- `useFieldsAndBins.test.tsx` — exact-count rollback and atomic field/CLU offline deletion.
+- `useGrainMovements.test.tsx` — insert/update/delete rollback, concurrency fingerprints, locking, and atomic offline deletes.
+- `useFsaTracts.test.tsx` — import/assignment rollback plus tract and CLU cascades.
+- `activityHookConformance.test.tsx` — closure-snapshot rollback and atomic offline bulk-delete behavior across all seven activity hook families.
+- `useAuth.test.tsx` / `useSeasonRollover.test.tsx` — realtime/recovery season synchronization, Supabase sign-out, and queue-aware local cleanup.
 
 ## Coverage Baseline
 
-Updated 2026-07-19 after the Phase 1 service suites via `npm run test:coverage` (V8 provider). Scope is production
+Updated 2026-07-19 after the Phase 2 hook safety suites via `npm run test:coverage` (V8 provider). Scope is production
 sources only — see the `coverage` block in `vite.config.ts`. No thresholds are set
 yet (Phase 0 records the baseline; a conservative global floor is added after the
 hook/service tests land).
 
 | Metric      | Covered | Total | %     |
 |-------------|---------|-------|-------|
-| Statements  | 7,475   | 23,831| 31.36 |
-| Branches    | 1,563   | 2,280 | 68.55 |
-| Functions   | 302     | 544   | 55.51 |
-| Lines       | 7,475   | 23,831| 31.36 |
+| Statements  | 9,139   | 23,963| 38.13 |
+| Branches    | 1,913   | 2,841 | 67.33 |
+| Functions   | 329     | 554   | 59.38 |
+| Lines       | 9,139   | 23,963| 38.13 |
 
 Observations driving the test roadmap:
-- `src/store/**` is the lowest-covered area by design (mutation hooks untested).
+- Mutation hooks now have direct stateful coverage; remaining store coverage gaps should be prioritized by risk rather than file count alone.
 - `fieldService`, `binService`, `fsaTractService`, and `cluAssignmentService` now have 100% statement/branch/function/line coverage; the services aggregate is 85.97% statements.
 - Strong areas: pure lib (`mappers`, `fieldAcreage`, `geoHelpers`, `crypto`), `utils/`, `RainService`.
-- Current verified unit checkpoint: 53 files and 494 tests passing. Treat the count as a snapshot, not a fixed assertion; the command exit status is the gate.
+- The exact file/test count is a moving snapshot; the command exit status is the gate. Update the coverage table only from a completed `npm run test:coverage` run.
 
 ## MRMS Edge Function Investigation (Phase 0.5 — historical)
 

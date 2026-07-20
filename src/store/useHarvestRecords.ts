@@ -8,6 +8,7 @@ import { syncQueue } from '@/lib/syncQueue';
 interface UseHarvestRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
+  harvestRecords: HarvestRecord[];
   setHarvestRecords: React.Dispatch<React.SetStateAction<HarvestRecord[]>>;
   isOnline: boolean;
   onMutation: () => void | Promise<void>;
@@ -15,9 +16,8 @@ interface UseHarvestRecordsArgs {
 
 type OpResult = boolean;
 
-export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, isOnline, onMutation }: UseHarvestRecordsArgs) {
+export function useHarvestRecords({ farm_id, viewingSeason, harvestRecords, setHarvestRecords, isOnline, onMutation }: UseHarvestRecordsArgs) {
   const isMutating = useRef(false);
-  const previousRef = useRef<HarvestRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: HarvestRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
@@ -107,11 +107,13 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       return false;
     }
 
-    previousRef.current = undefined;
-    setHarvestRecords(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
-      return prev.map(item => item.id === r.id ? r : item);
-    });
+    const previous = harvestRecords.find(item => item.id === r.id);
+    if (!previous) {
+      isMutating.current = false;
+      toast.error('Could not update record — refresh and try again.');
+      return false;
+    }
+    setHarvestRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
       if (!isOnline) {
@@ -124,7 +126,6 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
           return true;
         } catch (err) {
           console.error('Failed to enqueue harvest record update offline:', err);
-          const previous = previousRef.current;
           if (previous) {
             setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
           } else {
@@ -155,7 +156,6 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
         } else {
           console.warn('Harvest update affected zero rows:', r.id);
         }
-        const previous = previousRef.current;
         if (previous) {
           setHarvestRecords(prev => prev.map(item => item.id === r.id ? previous : item));
         } else {
@@ -170,7 +170,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setHarvestRecords, isOnline, onMutation]);
+  }, [farm_id, harvestRecords, setHarvestRecords, isOnline, onMutation]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
   const deleteHarvestRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
@@ -194,9 +194,10 @@ export function useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, i
       if (!isOnline) {
         try {
           const deletedAt = new Date().toISOString();
-          for (const id of ids) {
-            await syncQueue.enqueueMutation('harvest_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-          }
+          await syncQueue.enqueueMutations(ids.map(id => ({
+            tableName: 'harvest_records', operation: 'soft_delete' as const,
+            payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+          })));
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

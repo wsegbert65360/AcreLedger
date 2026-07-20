@@ -8,6 +8,7 @@ import { syncQueue } from '@/lib/syncQueue';
 interface UseSprayRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
+  sprayRecords: SprayRecord[];
   setSprayRecords: React.Dispatch<React.SetStateAction<SprayRecord[]>>;
   isOnline: boolean;
   onMutation: () => void | Promise<void>;
@@ -15,9 +16,8 @@ interface UseSprayRecordsArgs {
 
 type OpResult = boolean;
 
-export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnline, onMutation }: UseSprayRecordsArgs) {
+export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSprayRecords, isOnline, onMutation }: UseSprayRecordsArgs) {
   const isMutating = useRef(false);
-  const previousRef = useRef<SprayRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: SprayRecord; index: number }[]>([]);
 
   // ─── Add ────────────────────────────────────────────────────────────────────
@@ -107,11 +107,13 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       return false;
     }
 
-    previousRef.current = undefined;
-    setSprayRecords(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
-      return prev.map(item => item.id === r.id ? r : item);
-    });
+    const previous = sprayRecords.find(item => item.id === r.id);
+    if (!previous) {
+      isMutating.current = false;
+      toast.error('Could not update record — refresh and try again.');
+      return false;
+    }
+    setSprayRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
       if (!isOnline) {
@@ -124,7 +126,6 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
           return true;
         } catch (err) {
           console.error('Failed to enqueue spray record update offline:', err);
-          const previous = previousRef.current;
           if (previous) {
             setSprayRecords(prev => prev.map(item => item.id === r.id ? previous : item));
           } else {
@@ -155,7 +156,6 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
         } else {
           console.warn('Spray update affected zero rows:', r.id);
         }
-        const previous = previousRef.current;
         if (previous) {
           setSprayRecords(prev => prev.map(item => item.id === r.id ? previous : item));
         } else {
@@ -170,7 +170,7 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setSprayRecords, isOnline, onMutation]);
+  }, [farm_id, sprayRecords, setSprayRecords, isOnline, onMutation]);
 
   // ─── Delete ─────────────────────────────────────────────────────────────────
   const deleteSprayRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
@@ -194,9 +194,10 @@ export function useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnl
       if (!isOnline) {
         try {
           const deletedAt = new Date().toISOString();
-          for (const id of ids) {
-            await syncQueue.enqueueMutation('spray_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-          }
+          await syncQueue.enqueueMutations(ids.map(id => ({
+            tableName: 'spray_records', operation: 'soft_delete' as const,
+            payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+          })));
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

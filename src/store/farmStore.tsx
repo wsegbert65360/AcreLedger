@@ -140,9 +140,9 @@ interface FarmState {
   updateFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'farm_id'>) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
   /** Global sign out and cache clearing */
-  signOut: () => void;
+  signOut: () => Promise<void>;
   /** Clears all local application storage */
-  clearLocalCache: () => void;
+  clearLocalCache: () => Promise<boolean>;
   /** Unique ID for the current farm */
   farm_id: string | null;
   /** Display name of the current farm */
@@ -434,13 +434,13 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [isOnline, farm_id, updatePendingSyncCount]);
 
   // --- Compose CRUD hooks ---
-  const plantOps = usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnline, onMutation: updatePendingSyncCount });
-  const sprayOps = useSprayRecords({ farm_id, viewingSeason, setSprayRecords, isOnline, onMutation: updatePendingSyncCount });
-  const harvestOps = useHarvestRecords({ farm_id, viewingSeason, setHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
-  const hayOps = useHayRecords({ farm_id, viewingSeason, setHayHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
-  const customSprayOps = useCustomSprayRecords({ farm_id, viewingSeason, setCustomSprayRecords, isOnline, onMutation: updatePendingSyncCount });
-  const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, setFertilizerApplications, isOnline, onMutation: updatePendingSyncCount });
-  const tillageOps = useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
+  const plantOps = usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlantRecords, isOnline, onMutation: updatePendingSyncCount });
+  const sprayOps = useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSprayRecords, isOnline, onMutation: updatePendingSyncCount });
+  const harvestOps = useHarvestRecords({ farm_id, viewingSeason, harvestRecords, setHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
+  const hayOps = useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHayHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
+  const customSprayOps = useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecords, setCustomSprayRecords, isOnline, onMutation: updatePendingSyncCount });
+  const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, fertilizerApplications, setFertilizerApplications, isOnline, onMutation: updatePendingSyncCount });
+  const tillageOps = useTillageRecords({ farm_id, viewingSeason, tillageRecords, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
   const grainOps = useGrainMovements({ farm_id, viewingSeason, grainMovements, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
 
   const tractOps = useFsaTracts({
@@ -449,14 +449,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   });
 
   const entityOps = useFieldsAndBins({
-    farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes,
+    farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes, cluAssignments,
     setFields, setBins,
     setSavedSeeds,
     setFertilizerRecipes,
     setSprayRecipes,
+    setCluAssignments,
     isOnline,
     onMutation: updatePendingSyncCount,
-    onFieldDeleted: tractOps.unassignAllClusForField,
   });
 
   const seasonOps = useSeasonManagement({
@@ -477,10 +477,13 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   });
 
   // --- Composed signOut (auth + cache clear) ---
+  const clearLocalCache = seasonOps.clearLocalCache;
+  const authSignOut = auth.signOut;
   const signOut = useCallback(async () => {
-    await auth.signOut();
-    await seasonOps.clearLocalCache();
-  }, [auth, seasonOps.clearLocalCache]);
+    const cacheCleared = await clearLocalCache();
+    if (!cacheCleared) return;
+    await authSignOut();
+  }, [authSignOut, clearLocalCache]);
 
   // --- Derived data ---
   const seasonOptions = useMemo(() => {

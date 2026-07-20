@@ -19,6 +19,7 @@ import { CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupC
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import { setStorageLock } from './storageUtils';
 import { offlineStorage } from '@/lib/offlineStorage';
+import { syncQueue } from '@/lib/syncQueue';
 import { getMaxActiveSeason, isValidActiveSeason, MIN_SEASON_YEAR } from '@/lib/seasonYears';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -307,6 +308,17 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     const userId = session?.user?.id;
     const userPrefix = userId ? `${userId}_al_` : null;
 
+    if (farm_id) {
+      try {
+        await syncQueue.clearQueue(farm_id);
+      } catch (err) {
+        console.error('Failed to clear offline sync queue:', err);
+        setStorageLock(false);
+        toast.error('Could not clear pending offline work. Cache was not cleared; please try again.');
+        return false;
+      }
+    }
+
     try {
       await offlineStorage.clearCache(userId ?? null);
     } catch (err) {
@@ -317,26 +329,25 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       key.startsWith('al_') || (userPrefix && key.startsWith(userPrefix))
     );
 
-    const batchRemove = (keys: string[], startIndex: number = 0) => {
-      const BATCH_SIZE = 100;
-      const endIndex = Math.min(startIndex + BATCH_SIZE, keys.length);
+    await new Promise<void>(resolve => {
+      const batchRemove = (startIndex: number) => {
+        const BATCH_SIZE = 100;
+        const endIndex = Math.min(startIndex + BATCH_SIZE, keysToRemove.length);
 
-      for (let i = startIndex; i < endIndex; i++) {
-        localStorage.removeItem(keys[i]);
-      }
+        for (let i = startIndex; i < endIndex; i++) {
+          localStorage.removeItem(keysToRemove[i]);
+        }
 
-      if (endIndex < keys.length) {
-        requestAnimationFrame(() => batchRemove(keys, endIndex));
-      } else {
-        setStorageLock(false);
-      }
-    };
+        if (endIndex < keysToRemove.length) {
+          requestAnimationFrame(() => batchRemove(endIndex));
+        } else {
+          resolve();
+        }
+      };
 
-    if (keysToRemove.length > 0) {
-      batchRemove(keysToRemove);
-    } else {
-      setStorageLock(false);
-    }
+      batchRemove(0);
+    });
+    setStorageLock(false);
 
     setFields([]);
     setBins([]);
@@ -358,8 +369,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setViewingSeason(getCurrentYear());
 
     toast.success(`Local cache cleared (${keysToRemove.length} item${keysToRemove.length !== 1 ? 's' : ''} removed).`);
+    return true;
   }, [
-    session,
+    session, farm_id,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,

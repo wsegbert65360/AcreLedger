@@ -201,4 +201,71 @@ describe('syncQueue web queue management', () => {
     const queue = await syncQueue.getQueue('farm-1');
     expect(queue[0].id).not.toBe(queue[1].id);
   });
+
+  // ─── Persistence Failure Propagation ─────────────────────────────────────
+  // enqueueMutation must reject when persistence fails so hooks can roll back
+  // optimistic state. (Previously it swallowed the error, leaving hook
+  // rollback branches as unreachable dead code.)
+
+  it('enqueueMutation rejects when localStorage persistence fails', async () => {
+    const original = localStorage.setItem;
+    // Simulate a quota / storage failure.
+    localStorage.setItem = vi.fn(() => { throw new Error('QuotaExceededError'); });
+
+    await expect(
+      syncQueue.enqueueMutation('fields', 'insert', { id: 'f1' }, 'farm-1')
+    ).rejects.toThrow('QuotaExceededError');
+
+    // Queue must remain empty — the failed enqueue wrote nothing durable.
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+
+    localStorage.setItem = original;
+  });
+
+  // ─── Atomic Batch (enqueueMutations) ─────────────────────────────────────
+
+  it('enqueueMutations writes all rows on success', async () => {
+    await syncQueue.enqueueMutations([
+      { tableName: 'grain_movements', operation: 'soft_delete', payload: { id: 'g1', deleted_at: 't' }, farmId: 'farm-1' },
+      { tableName: 'grain_movements', operation: 'soft_delete', payload: { id: 'g2', deleted_at: 't' }, farmId: 'farm-1' },
+      { tableName: 'grain_movements', operation: 'soft_delete', payload: { id: 'g3', deleted_at: 't' }, farmId: 'farm-1' },
+    ]);
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(3);
+    expect(queue.map(q => q.payload.id)).toEqual(['g1', 'g2', 'g3']);
+  });
+
+  it('enqueueMutations is atomic — rejects on persistence failure and writes nothing', async () => {
+    const original = localStorage.setItem;
+    localStorage.setItem = vi.fn(() => { throw new Error('QuotaExceededError'); });
+
+    await expect(
+      syncQueue.enqueueMutations([
+        { tableName: 'grain_movements', operation: 'soft_delete', payload: { id: 'g1' }, farmId: 'farm-1' },
+        { tableName: 'grain_movements', operation: 'soft_delete', payload: { id: 'g2' }, farmId: 'farm-1' },
+      ])
+    ).rejects.toThrow('QuotaExceededError');
+
+    // On the web path the batch is a single saveWebQueue, so a failure means
+    // none of the rows were persisted.
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+
+    localStorage.setItem = original;
+  });
+
+  it('enqueueMutations is a no-op for an empty batch', async () => {
+    await syncQueue.enqueueMutations([]);
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('clearQueue removes only the selected farm queue', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'f1' }, 'farm-1');
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'f2' }, 'farm-2');
+
+    await syncQueue.clearQueue('farm-1');
+
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+    expect(await syncQueue.getPendingCount('farm-2')).toBe(1);
+  });
 });

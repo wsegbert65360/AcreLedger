@@ -7,6 +7,8 @@ import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto'
 const isNative = Capacitor.isNativePlatform();
 const WEB_QUEUE_KEY = 'al_sync_queue';
 let webQueuePromise: Promise<void> = Promise.resolve();
+const INSERT_QUEUE_SQL = `INSERT INTO sync_queue (id, table_name, operation, payload, farm_id, created_at, retry_count)
+  VALUES (?, ?, ?, ?, ?, ?, 0);`;
 
 const ALLOWED_TABLES = new Set([
   'fields', 'bins', 'plant_records', 'spray_records',
@@ -44,15 +46,13 @@ async function getWebQueue(): Promise<QueuedMutation[]> {
   }
 }
 
-// Helper: save web queue to localStorage
+// Helper: save web queue to localStorage. Rethrows persistence failures so
+// callers (enqueueMutation / enqueueMutations) can roll back optimistic state
+// instead of silently dropping the mutation.
 async function saveWebQueue(queue: QueuedMutation[]) {
-  try {
-    const secret = await getEncryptionSecret();
-    const encrypted = await encryptData(JSON.stringify(queue), secret);
-    localStorage.setItem(WEB_QUEUE_KEY, encrypted);
-  } catch (err) {
-    console.error('Failed to save web sync queue:', err);
-  }
+  const secret = await getEncryptionSecret();
+  const encrypted = await encryptData(JSON.stringify(queue), secret);
+  localStorage.setItem(WEB_QUEUE_KEY, encrypted);
 }
 
 // Helper: check if a Supabase error is transient (network failure)
@@ -82,18 +82,26 @@ export const syncQueue = {
     if (isNative) {
       try {
         const db = await getDatabase();
-        if (db) {
-          await db.run(
-            `INSERT INTO sync_queue (id, table_name, operation, payload, farm_id, created_at, retry_count)
-             VALUES (?, ?, ?, ?, ?, ?, 0);`,
-            [id, tableName, operation, JSON.stringify(payload), farmId, now]
-          );
-        }
+        if (!db) throw new Error('Offline database unavailable.');
+        await db.run(
+          INSERT_QUEUE_SQL,
+          [id, tableName, operation, JSON.stringify(payload), farmId, now]
+        );
       } catch (err) {
+        // Rethrow so hooks can roll back optimistic state. Previously this was
+        // swallowed, which left the hooks' catch-driven rollback branches as
+        // unreachable dead code (the user would see a "saved offline" success
+        // toast even though nothing was queued).
         console.error('Failed to enqueue native mutation:', err);
+        throw err;
       }
     } else {
-      await (webQueuePromise = webQueuePromise.then(async () => {
+      // Serialize writes through webQueuePromise so concurrent enqueues don't
+      // clobber each other. Errors propagate (no swallowing .catch) so the
+      // hook caller can roll back. Passing `run` as both handlers lets a later
+      // enqueue retry after a transient persistence failure without allowing
+      // concurrent writes to clobber one another.
+      const run = async () => {
         const queue = await getWebQueue();
         queue.push({
           id,
@@ -105,9 +113,67 @@ export const syncQueue = {
           retry_count: 0
         });
         await saveWebQueue(queue);
-      }).catch(err => {
+      };
+      try {
+        await (webQueuePromise = webQueuePromise.then(run, run));
+      } catch (err) {
         console.error('Failed to serialize web sync queue enqueue:', err);
-      }));
+        throw err;
+      }
+    }
+  },
+
+  /**
+   * Atomically enqueue multiple mutations. Used by multi-record offline
+   * operations (bulk delete, tract-delete CLU cascade, field-delete CLU
+   * cascade) so that a partial persistence failure does not leave some
+   * records queued while the hook rolls back its optimistic local state.
+   *
+   * Web writes the entire batch in one encrypted localStorage update. Native
+   * uses SQLite executeSet with a transaction, so both paths are all-or-nothing.
+   */
+  enqueueMutations: async (
+    items: { tableName: string; operation: 'insert' | 'update' | 'soft_delete'; payload: any; farmId: string }[]
+  ): Promise<void> => {
+    if (items.length === 0) return;
+    const now = new Date().toISOString();
+    const rows: QueuedMutation[] = items.map(item => ({
+      id: crypto.randomUUID(),
+      table_name: item.tableName,
+      operation: item.operation,
+      payload: item.payload,
+      farm_id: item.farmId,
+      created_at: now,
+      retry_count: 0,
+    }));
+
+    if (isNative) {
+      try {
+        const db = await getDatabase();
+        if (!db) throw new Error('Offline database unavailable.');
+        await db.executeSet(
+          rows.map(row => ({
+            statement: INSERT_QUEUE_SQL,
+            values: [row.id, row.table_name, row.operation, JSON.stringify(row.payload), row.farm_id, row.created_at],
+          })),
+          true,
+        );
+      } catch (err) {
+        console.error('Failed to enqueue native mutations batch:', err);
+        throw err;
+      }
+    } else {
+      const run = async () => {
+        const queue = await getWebQueue();
+        queue.push(...rows);
+        await saveWebQueue(queue);
+      };
+      try {
+        await (webQueuePromise = webQueuePromise.then(run, run));
+      } catch (err) {
+        console.error('Failed to serialize web sync queue enqueueMutations:', err);
+        throw err;
+      }
     }
   },
 
@@ -143,6 +209,27 @@ export const syncQueue = {
         console.error('Failed to serialize web sync queue getQueue:', err);
       }));
       return result;
+    }
+  },
+
+  /** Removes every queued mutation belonging to a farm (used on sign-out). */
+  clearQueue: async (farmId: string): Promise<void> => {
+    if (isNative) {
+      const db = await getDatabase();
+      if (!db) throw new Error('Offline database unavailable.');
+      await db.run('DELETE FROM sync_queue WHERE farm_id = ?;', [farmId]);
+      return;
+    }
+
+    const run = async () => {
+      const queue = await getWebQueue();
+      await saveWebQueue(queue.filter(item => item.farm_id !== farmId));
+    };
+    try {
+      await (webQueuePromise = webQueuePromise.then(run, run));
+    } catch (err) {
+      console.error('Failed to clear web sync queue:', err);
+      throw err;
     }
   },
 

@@ -31,6 +31,20 @@ describe('supabaseMock', () => {
     expect(mock.fns.eq).toHaveBeenNthCalledWith(2, 'farm_id', 'farm-1');
   });
 
+  it('records .in() array args on the chain (used by bulk delete)', async () => {
+    mock.setResult({ count: 2, data: null, error: null });
+
+    const res = await mock.client
+      .from('grain_movements')
+      .update({ deleted_at: '2026-07-19T00:00:00.000Z' }, { count: 'exact' })
+      .in('id', ['g1', 'g2'])
+      .eq('farm_id', 'farm-1');
+
+    expect(res).toEqual({ count: 2, data: null, error: null });
+    expect(mock.fns.in).toHaveBeenCalledWith('id', ['g1', 'g2']);
+    expect(mock.fns.eq).toHaveBeenCalledWith('farm_id', 'farm-1');
+  });
+
   it('rejects when a throw is set, while still recording the chain calls', async () => {
     mock.setThrow(new Error('boom'));
 

@@ -8,6 +8,7 @@ import { syncQueue } from '@/lib/syncQueue';
 interface UsePlantRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
+  plantRecords: PlantRecord[];
   setPlantRecords: React.Dispatch<React.SetStateAction<PlantRecord[]>>;
   isOnline: boolean;
   onMutation: () => void | Promise<void>;
@@ -15,9 +16,8 @@ interface UsePlantRecordsArgs {
 
 type OpResult = boolean;
 
-export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnline, onMutation }: UsePlantRecordsArgs) {
+export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlantRecords, isOnline, onMutation }: UsePlantRecordsArgs) {
   const isMutating = useRef(false);
-  const previousRef = useRef<PlantRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: PlantRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
@@ -107,11 +107,13 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       return false;
     }
 
-    previousRef.current = undefined;
-    setPlantRecords(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
-      return prev.map(item => item.id === r.id ? r : item);
-    });
+    const previous = plantRecords.find(item => item.id === r.id);
+    if (!previous) {
+      isMutating.current = false;
+      toast.error('Could not update record — refresh and try again.');
+      return false;
+    }
+    setPlantRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
       if (!isOnline) {
@@ -124,7 +126,6 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
           return true;
         } catch (err) {
           console.error('Failed to enqueue plant record update offline:', err);
-          const previous = previousRef.current;
           if (previous) {
             setPlantRecords(prev => prev.map(item => item.id === r.id ? previous : item));
           } else {
@@ -155,7 +156,6 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
         } else {
           console.warn('Plant update affected zero rows:', r.id);
         }
-        const previous = previousRef.current;
         if (previous) {
           setPlantRecords(prev => prev.map(item => item.id === r.id ? previous : item));
         } else {
@@ -171,7 +171,7 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setPlantRecords, isOnline, onMutation]);
+  }, [farm_id, plantRecords, setPlantRecords, isOnline, onMutation]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
   const deletePlantRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
@@ -195,9 +195,10 @@ export function usePlantRecords({ farm_id, viewingSeason, setPlantRecords, isOnl
       if (!isOnline) {
         try {
           const deletedAt = new Date().toISOString();
-          for (const id of ids) {
-            await syncQueue.enqueueMutation('plant_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-          }
+          await syncQueue.enqueueMutations(ids.map(id => ({
+            tableName: 'plant_records', operation: 'soft_delete' as const,
+            payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+          })));
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

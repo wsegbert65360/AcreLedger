@@ -81,25 +81,27 @@ export function useFsaTracts({
       }
     }
 
-    const { data, error } = await fsaTractService.importTract(
-      id,
-      tractKey,
-      filename,
-      geojson,
-      featureCount,
-      farm_id,
-    );
-    if (error || !data) {
+    try {
+      const { data, error } = await fsaTractService.importTract(
+        id,
+        tractKey,
+        filename,
+        geojson,
+        featureCount,
+        farm_id,
+      );
+      if (error || !data) throw error ?? new Error('No tract returned.');
+
+      const persistedTract = mapFsaTractFromDb(data as any);
+      setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), persistedTract]);
+      toast.success(`Tract ${tractKey} imported (${featureCount} CLUs)`);
+      return true;
+    } catch (error) {
       console.error('Failed to import tract:', error);
       setFsaTracts(previousTracts);
       toast.error('Failed to import tract');
       return false;
     }
-
-    const persistedTract = mapFsaTractFromDb(data as any);
-    setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), persistedTract]);
-    toast.success(`Tract ${tractKey} imported (${featureCount} CLUs)`);
-    return true;
   }, [farm_id, fsaTracts, setFsaTracts, isOnline, onMutation]);
 
   const deleteTract = useCallback(async (id: string): Promise<boolean> => {
@@ -121,15 +123,27 @@ export function useFsaTracts({
 
     if (!isOnline) {
       try {
-        await syncQueue.enqueueMutation('fsa_tract_imports', 'soft_delete', {
-          id, deleted_at: new Date().toISOString(),
-        }, farm_id);
-        for (const a of previousAssignments.filter(a => a.tractKey === tract.tractKey)) {
-          await syncQueue.enqueueMutation('field_clu_assignments', 'soft_delete', {
-            id: a.id,
-            deleted_at: new Date().toISOString(),
-          }, farm_id);
-        }
+        const deletedAt = new Date().toISOString();
+        // Atomic batch: the tract soft-delete plus all of its CLU assignment
+        // soft-deletes enqueue together. A partial failure must not leave the
+        // tract queued while its assignments are not (or vice versa).
+        const batch = [
+          {
+            tableName: 'fsa_tract_imports',
+            operation: 'soft_delete' as const,
+            payload: { id, deleted_at: deletedAt },
+            farmId: farm_id,
+          },
+          ...previousAssignments
+            .filter(a => a.tractKey === tract.tractKey)
+            .map(a => ({
+              tableName: 'field_clu_assignments',
+              operation: 'soft_delete' as const,
+              payload: { id: a.id, deleted_at: deletedAt },
+              farmId: farm_id,
+            })),
+        ];
+        await syncQueue.enqueueMutations(batch);
         if (onMutation) await onMutation();
         toast.success('Tract deleted offline');
         return true;
@@ -142,17 +156,18 @@ export function useFsaTracts({
       }
     }
 
-    const { data, error } = await fsaTractService.deleteTract(id, farm_id);
-    if (error || data !== true) {
+    try {
+      const { data, error } = await fsaTractService.deleteTract(id, farm_id);
+      if (error || data !== true) throw error ?? new Error('Tract was not deleted.');
+      toast.success('Tract deleted');
+      return true;
+    } catch (error) {
       console.error('Failed to delete tract:', error);
       setFsaTracts(previousTracts);
       setCluAssignments(previousAssignments);
       toast.error('Failed to delete tract');
       return false;
     }
-
-    toast.success('Tract deleted');
-    return true;
   }, [
     farm_id,
     fsaTracts,
@@ -381,12 +396,16 @@ export function useFsaTracts({
 
     if (!isOnline) {
       try {
-        for (const a of toDelete) {
-          await syncQueue.enqueueMutation('field_clu_assignments', 'soft_delete', {
-            id: a.id,
-            deleted_at: deletedAt,
-          }, farm_id);
-        }
+        // Atomic batch: all field CLU assignments enqueue together so a partial
+        // failure rolls back the whole cascade rather than leaving some queued.
+        await syncQueue.enqueueMutations(
+          toDelete.map(a => ({
+            tableName: 'field_clu_assignments',
+            operation: 'soft_delete' as const,
+            payload: { id: a.id, deleted_at: deletedAt },
+            farmId: farm_id,
+          }))
+        );
         if (onMutation) await onMutation();
         return true;
       } catch (err) {

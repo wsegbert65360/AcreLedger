@@ -8,6 +8,7 @@ import { syncQueue } from '@/lib/syncQueue';
 interface UseTillageRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
+  tillageRecords: TillageRecord[];
   setTillageRecords: React.Dispatch<React.SetStateAction<TillageRecord[]>>;
   isOnline: boolean;
   onMutation: () => void | Promise<void>;
@@ -15,9 +16,8 @@ interface UseTillageRecordsArgs {
 
 type OpResult = boolean;
 
-export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, isOnline, onMutation }: UseTillageRecordsArgs) {
+export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setTillageRecords, isOnline, onMutation }: UseTillageRecordsArgs) {
   const isMutating = useRef(false);
-  const previousRef = useRef<TillageRecord | undefined>(undefined);
   const snapshotRef = useRef<{ record: TillageRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
@@ -107,11 +107,13 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       return false;
     }
 
-    previousRef.current = undefined;
-    setTillageRecords(prev => {
-      previousRef.current = prev.find(item => item.id === r.id);
-      return prev.map(item => item.id === r.id ? r : item);
-    });
+    const previous = tillageRecords.find(item => item.id === r.id);
+    if (!previous) {
+      isMutating.current = false;
+      toast.error('Could not update record — refresh and try again.');
+      return false;
+    }
+    setTillageRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
       if (!isOnline) {
@@ -124,7 +126,6 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
           return true;
         } catch (err) {
           console.error('Failed to enqueue tillage record update offline:', err);
-          const previous = previousRef.current;
           if (previous) {
             setTillageRecords(prev => prev.map(item => item.id === r.id ? previous : item));
           } else {
@@ -155,7 +156,6 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
         } else {
           console.warn('Tillage update affected zero rows:', r.id);
         }
-        const previous = previousRef.current;
         if (previous) {
           setTillageRecords(prev => prev.map(item => item.id === r.id ? previous : item));
         } else {
@@ -170,7 +170,7 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setTillageRecords, isOnline, onMutation]);
+  }, [farm_id, tillageRecords, setTillageRecords, isOnline, onMutation]);
 
   // ─── Delete ───────────────────────────────────────────────────────────────
   const deleteTillageRecords = useCallback(async (ids: string[]): Promise<OpResult> => {
@@ -194,9 +194,10 @@ export function useTillageRecords({ farm_id, viewingSeason, setTillageRecords, i
       if (!isOnline) {
         try {
           const deletedAt = new Date().toISOString();
-          for (const id of ids) {
-            await syncQueue.enqueueMutation('tillage_records', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
-          }
+          await syncQueue.enqueueMutations(ids.map(id => ({
+            tableName: 'tillage_records', operation: 'soft_delete' as const,
+            payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+          })));
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

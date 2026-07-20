@@ -93,6 +93,20 @@ describe.each([
   });
 
   it('softDelete sets deleted_at via a count-exact update scoped to id + farm_id', async () => {
+    if (table === 'fields') {
+      mock.setRpcResult({ data: true, error: null });
+
+      const result = await softDelete();
+
+      expect(mock.fns.rpc).toHaveBeenCalledWith('soft_delete_field_with_clu_assignments', {
+        p_field_id: recordId,
+        p_farm_id: farmId,
+      });
+      expect(result).toEqual({ count: 1, error: null });
+      expect(mock.fns.update).not.toHaveBeenCalled();
+      return;
+    }
+
     mock.setResult({ count: 1, data: null, error: null });
 
     await softDelete();
@@ -104,5 +118,14 @@ describe.each([
     expect(mock.fns.eq).toHaveBeenNthCalledWith(1, 'id', recordId);
     expect(mock.fns.eq).toHaveBeenNthCalledWith(2, 'farm_id', farmId);
     expect(mock.fns.select).not.toHaveBeenCalled();
+  });
+});
+
+describe('fieldService atomic delete result', () => {
+  beforeEach(() => mock.reset());
+
+  it('normalizes an RPC false result to count zero for hook rollback', async () => {
+    mock.setRpcResult({ data: false, error: null });
+    await expect(fieldService.softDeleteField('f1', farmId)).resolves.toEqual({ count: 0, error: null });
   });
 });

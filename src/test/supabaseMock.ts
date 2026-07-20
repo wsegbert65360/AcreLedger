@@ -36,6 +36,7 @@ export interface SupabaseMock {
     update: ReturnType<typeof vi.fn>;
     select: ReturnType<typeof vi.fn>;
     eq: ReturnType<typeof vi.fn>;
+    in: ReturnType<typeof vi.fn>;
     is: ReturnType<typeof vi.fn>;
     order: ReturnType<typeof vi.fn>;
     single: ReturnType<typeof vi.fn>;
@@ -78,7 +79,7 @@ export function createSupabaseMock(): SupabaseMock {
     tableHandlers: {},
   };
 
-  const chainMethods = ['insert', 'upsert', 'update', 'select', 'eq', 'is', 'order', 'single'] as const;
+  const chainMethods = ['insert', 'upsert', 'update', 'select', 'eq', 'in', 'is', 'order', 'single'] as const;
   const fns = {
     from: vi.fn(),
     rpc: vi.fn(),
@@ -87,6 +88,7 @@ export function createSupabaseMock(): SupabaseMock {
     update: vi.fn(),
     select: vi.fn(),
     eq: vi.fn(),
+    in: vi.fn(),
     is: vi.fn(),
     order: vi.fn(),
     single: vi.fn(),
