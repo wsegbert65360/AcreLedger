@@ -7,6 +7,11 @@ const botEmail = process.env.TEST_BOT_EMAIL || '';
 const botPassword = process.env.TEST_BOT_PASSWORD || '';
 const hasAuthCreds = Boolean(botEmail && botPassword);
 
+function expectPermissionDenied(error: { code?: string; message: string } | null) {
+  expect(error).not.toBeNull();
+  expect(error?.code).toBe('42501');
+}
+
 // Skip cleanly when bot credentials are absent so `npm run test:integration`
 // reports "skipped" rather than failing.
 describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
@@ -43,18 +48,7 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
   });
 
   afterAll(async () => {
-    // Restore the mutable fields that tests may have changed.
-    // farm_id and id are unreachable via the Data API (intentional), so if the
-    // protection was somehow absent the restore silently fails—the test failure
-    // is the important signal.
-    await supabase
-      .from('profiles')
-      .update({
-        active_season: originalProfile.active_season,
-        onboarding_complete: originalProfile.onboarding_complete,
-      } as Record<string, unknown>, { count: 'exact' })
-      .eq('id', botUserId);
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
   });
 
   it('should resolve a valid farm_id for the bot', async () => {
@@ -103,13 +97,11 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
   });
 
   it('user can update active_season', async () => {
-    const currentYear = new Date().getFullYear();
-    const testSeason =
-      originalProfile.active_season === currentYear ? currentYear - 1 : currentYear;
-
+    // A same-value UPDATE proves both the column grant and row policy without
+    // changing shared QA state if the runner exits unexpectedly.
     const { error, count } = await supabase
       .from('profiles')
-      .update({ active_season: testSeason }, { count: 'exact' })
+      .update({ active_season: originalProfile.active_season }, { count: 'exact' })
       .eq('id', botUserId);
     expect(error).toBeNull();
     expect(count).toBe(1);
@@ -119,21 +111,14 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
       .select('active_season')
       .eq('id', botUserId)
       .single();
-    expect(data?.active_season).toBe(testSeason);
-
-    // Restore immediately so afterAll state is consistent.
-    await supabase
-      .from('profiles')
-      .update({ active_season: originalProfile.active_season })
-      .eq('id', botUserId);
+    expect(data?.active_season).toBe(originalProfile.active_season);
   });
 
   it('user can update onboarding_complete', async () => {
-    const flipped = !(originalProfile.onboarding_complete ?? false);
-
+    // Same-value update: exercises the real grant with no state transition.
     const { error, count } = await supabase
       .from('profiles')
-      .update({ onboarding_complete: flipped }, { count: 'exact' })
+      .update({ onboarding_complete: originalProfile.onboarding_complete }, { count: 'exact' })
       .eq('id', botUserId);
     expect(error).toBeNull();
     expect(count).toBe(1);
@@ -143,25 +128,17 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
       .select('onboarding_complete')
       .eq('id', botUserId)
       .single();
-    expect(data?.onboarding_complete).toBe(flipped);
-
-    await supabase
-      .from('profiles')
-      .update({ onboarding_complete: originalProfile.onboarding_complete })
-      .eq('id', botUserId);
+    expect(data?.onboarding_complete).toBe(originalProfile.onboarding_complete);
   });
 
   it('user cannot update farm_id', async () => {
-    // Use a well-formed UUID so that any blocking is due to column-privilege
-    // revocation, not UUID-parsing failure.
-    const { error, count } = await supabase
+    // A no-op value keeps the shared QA profile safe even if the grant regresses.
+    const { error } = await supabase
       .from('profiles')
-      .update({ farm_id: '00000000-0000-4000-8000-0000000000f1' }, { count: 'exact' })
+      .update({ farm_id: originalProfile.farm_id } as never, { count: 'exact' })
       .eq('id', botUserId);
 
-    // Must be blocked — either PostgREST returns an error (42501 column
-    // privilege) or count is 0 if RLS alone blocked it.
-    expect(count === 0 || error != null).toBe(true);
+    expectPermissionDenied(error);
 
     const { data } = await supabase
       .from('profiles')
@@ -172,12 +149,12 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
   });
 
   it('user cannot update id', async () => {
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('profiles')
-      .update({ id: '00000000-0000-4000-8000-0000000000id' } as never, { count: 'exact' })
+      .update({ id: botUserId } as never, { count: 'exact' })
       .eq('id', botUserId);
 
-    expect(count === 0 || error != null).toBe(true);
+    expectPermissionDenied(error);
 
     const { data } = await supabase
       .from('profiles')
@@ -188,21 +165,24 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
   });
 
   it('user cannot insert or delete a profile', async () => {
-    // Attempt INSERT — must fail because authenticated lacks table-level INSERT.
-    const { error: insertError, count: insertCount } = await supabase
+    // An existing primary key makes the probe harmless if INSERT is restored;
+    // requiring 42501 prevents a duplicate-key error from passing the test.
+    const { error: insertError } = await supabase
       .from('profiles')
       .insert({
-        id: '00000000-0000-4000-8000-0000000000in',
+        id: botUserId,
         farm_id: originalProfile.farm_id,
       } as never, { count: 'exact' });
-    expect(insertCount === 0 || insertCount == null || insertError != null).toBe(true);
+    expectPermissionDenied(insertError);
 
-    // Attempt DELETE — must fail.
-    const { error: deleteError, count: deleteCount } = await supabase
+    // Contradictory id filters guarantee the DELETE cannot match any row if
+    // permissions regress. It then affects zero rows and fails this assertion.
+    const { error: deleteError } = await supabase
       .from('profiles')
       .delete({ count: 'exact' })
-      .eq('id', botUserId);
-    expect(deleteCount === 0 || deleteCount == null || deleteError != null).toBe(true);
+      .eq('id', botUserId)
+      .eq('id', '00000000-0000-4000-8000-000000000001');
+    expectPermissionDenied(deleteError);
 
     // Confirm the bot profile is intact.
     const { data } = await supabase
@@ -218,11 +198,11 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
     const botFarmBefore = originalProfile.farm_id;
     expect(botFarmBefore).toBeTruthy();
 
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('profiles')
-      .update({ farm_id: '00000000-0000-4000-8000-0000000000f2' }, { count: 'exact' })
+      .update({ farm_id: botFarmBefore } as never, { count: 'exact' })
       .eq('id', botUserId);
-    expect(count === 0 || error != null).toBe(true);
+    expectPermissionDenied(error);
 
     // Confirm farm_id unaffected.
     const { data: botProfile } = await supabase

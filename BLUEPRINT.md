@@ -39,7 +39,7 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Icons | Lucide React | All iconography — no other icon lib |
 | Toasts | Sonner | User feedback — success / error / warning / info |
 | Validation | Zod (`@/lib/backupSchema`) | Backup file schema validation on restore |
-| Weather | Visual Crossing API | Current conditions, extended data (gusts, dew point, feels-like), 10-day forecast |
+| Weather | Visual Crossing API via authenticated Vercel Function | Current conditions, extended data (gusts, dew point, feels-like), 10-day forecast |
 | Rainfall | IEM Stage IV + Supabase RPC | Dual-source precipitation tracking (Radar + DB) |
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
@@ -317,6 +317,13 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 - **Data Warning**: The API includes `dataWarning` when >10% of hourly data is missing or when Supabase merge adds rain beyond IEM. Passed through to UI.
 - **API Fallback**: Custom range calls return `0` gracefully on failure to prevent UI crashes.
 
+### Weather Proxy (`api/weather-proxy.ts`)
+Production web and configured Capacitor weather traffic uses an authenticated Vercel Function so the Visual Crossing key never reaches the client. `WeatherService` sends the current Supabase access token; the function validates it with `auth.getUser`, validates the requested timeline endpoint, location, and query allowlist, then safely builds the upstream request. Only `GET` and `OPTIONS` are supported, and the upstream request times out after 10 seconds.
+
+The function requires the server-only Vercel variables `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VISUALCROSSING_API_KEY`, and `ALLOWED_ORIGINS`. CORS uses exact comma-separated origins and fails closed for requests carrying an unknown origin; deployed web aliases and `capacitor://localhost` must be listed explicitly. Environment changes require a new Vercel deployment.
+
+Per-user quotas are enforced by `consume_weather_proxy_request()` from migration `20260721211903_add_weather_proxy_rate_limit.sql`: 30 calls per authenticated user per fixed one-minute window. The counter table is isolated in the non-exposed `weather_proxy_private` schema. The public wrapper is `SECURITY DEFINER`, has an empty `search_path`, derives the user from `auth.uid()`, and is executable only by `authenticated` and `service_role`. Quota exhaustion returns `429`; database/RPC failure fails closed with `503`.
+
 ### Weather Page (`/weather`)
 Full-page weather dashboard accessible by tapping the WeatherBar on the Index page. Provides agricultural weather intelligence beyond the summary bar.
 
@@ -458,6 +465,11 @@ client `deleted_at IS NULL` filter for reads. Newer tables such as `custom_spray
 client query forgets the filter. Restore still works through the authenticated
 `restore_farm_backup` `SECURITY DEFINER` wrapper; its internal restore helpers must not be granted
 to `anon` or `authenticated`. Match this stricter table pattern for new farm records.
+
+### Profile Membership Protection
+`public.profiles` is the farm-membership security boundary used by RLS. Authenticated clients may select only their own profile and directly update only `active_season` and `onboarding_complete`. They must not be granted direct authority to change `id` or `farm_id`, insert a profile, or delete one; trusted farm assignment remains behind the `ensure_user_farm` security-definer flow. Migration `20260720165352_protect_profile_farm_membership.sql` owns these column grants and policies.
+
+The live auth integration suite verifies forbidden operations by asserting PostgreSQL code `42501`. Its probes must be harmless: same-value protected-column updates, duplicate-ID insert attempts, and delete queries with contradictory filters. Successful preference checks also use same-value writes so verification cannot alter the QA account.
 
 ### Mapper Pattern
 Every entity has a dedicated mapper in `@/lib/mappers.ts`.
@@ -694,6 +706,7 @@ event to automatically sync content to Supabase.
 ### PWA & Bundling
 - **Vite Configuration**: `manualChunks` should be avoided for UI libraries (Lucide, Radix, Framer Motion) to prevent initialization order artifacts. Use Vite's default strategy for these.
 - **Service Worker**: `sw.js` handles navigation routing to `index.html`.
+- **Weather deployment order**: Apply `20260721211903_add_weather_proxy_rate_limit.sql`, configure the four server-only proxy variables in Vercel, then create a new deployment. Updating Vercel variables alone does not modify an existing deployment.
 
 ---
 
@@ -724,5 +737,7 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 - The required consumer lifecycle is one mock per suite, `vi.doMock('@/lib/supabase', ...)`, a dynamic import of the system under test, and `mock.reset()` before each test. The factory must not be constructed through `vi.hoisted`.
 - Query-contract coverage exists for fields, bins, FSA tract imports, and CLU assignments. The tests lock farm/id scoping, exact-count update shapes, soft deletes without returning selects, and the two sanctioned conflict-key upserts. Raw-result interpretation and optimistic rollback are tested at the hook layer rather than duplicated in these thin services.
 - Hook suites use `src/test/hookTestHarness.tsx` so functional setters run against real React state. Coverage includes fields/bins, grain movements, FSA tract/CLU cascades, all activity-hook rollback/bulk-delete contracts, auth season synchronization, and composed sign-out cleanup.
+- Weather-proxy tests live in `src/test/weatherProxy.test.ts`; no test file belongs under `api/` because Vercel deploys TypeScript files there as functions. Proxy changes require both the unit suite and `npm run typecheck:api`.
+- Live auth security checks use non-mutating probes and require exact `42501` failures for forbidden profile membership writes.
 
 See [TESTING.md](./TESTING.md) for commands, current coverage measurements, detailed verification protocols, and bot credentials.

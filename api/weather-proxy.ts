@@ -1,5 +1,19 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+
+type QueryValue = string | string[] | undefined;
+
+interface ApiRequest {
+  method?: string;
+  headers: Record<string, string | string[] | undefined>;
+  query: Record<string, QueryValue>;
+}
+
+interface ApiResponse {
+  setHeader(name: string, value: string): ApiResponse;
+  status(code: number): ApiResponse;
+  json(body: unknown): ApiResponse;
+  end(): void;
+}
 
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 
@@ -11,28 +25,24 @@ const MAX_ENDPOINT_LENGTH = 200;
 const VC_TIMEOUT_MS = 10_000;
 const ENDPOINT_RE = /^[a-zA-Z0-9\-/]+$/;
 
-function getAllowedOrigins(): string[] {
+function getAllowedOrigins(): Set<string> {
   const raw = process.env.ALLOWED_ORIGINS;
-  if (!raw) return [];
-  return raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (!raw) return new Set();
+  return new Set(raw.split(',').map(s => s.trim()).filter(Boolean));
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   // ---------- CORS ----------
-  const origin = req.headers.origin;
+  const originHeader = req.headers.origin;
+  const origin = Array.isArray(originHeader) ? originHeader[0] : originHeader;
   const allowedOrigins = getAllowedOrigins();
 
-  if (origin && allowedOrigins.length > 0) {
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
+  if (origin) {
+    res.setHeader('Vary', 'Origin');
+    if (!allowedOrigins.has(origin)) {
+      return res.status(403).json({ error: 'Origin not allowed' });
     }
-    // Not in the allowlist → omit the header so the browser rejects the response.
-  } else if (origin && allowedOrigins.length === 0) {
-    // ALLOWED_ORIGINS not yet configured → backward-compatible echo (transition safety).
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (!origin) {
-    // No origin header (native apps, server-to-server, same-origin) → allow all.
-    res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -49,7 +59,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // ---------- Auth ----------
-  const authHeader = req.headers.authorization;
+  const authorizationHeader = req.headers.authorization;
+  const authHeader = Array.isArray(authorizationHeader)
+    ? authorizationHeader[0]
+    : authorizationHeader;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
@@ -58,13 +71,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
 
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return res.status(500).json({ error: 'Server configuration error: missing Supabase credentials' });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return res.status(500).json({ error: 'Server configuration error: missing Supabase credentials' });
-    }
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
       return res.status(401).json({ error: 'Invalid or expired token' });
@@ -100,6 +122,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: `Unknown query parameters: ${unknownParams.join(', ')}` });
   }
 
+  const invalidParams = Object.entries(restParams)
+    .filter(([, value]) => typeof value !== 'string')
+    .map(([key]) => key);
+  if (invalidParams.length > 0) {
+    return res.status(400).json({ error: `Invalid query parameters: ${invalidParams.join(', ')}` });
+  }
+
+  // ---------- Durable per-user quota ----------
+  const { data: rateLimitAllowed, error: rateLimitError } = await supabase
+    .rpc('consume_weather_proxy_request');
+  if (rateLimitError) {
+    console.error('Weather proxy rate-limit error:', rateLimitError);
+    return res.status(503).json({ error: 'Weather service temporarily unavailable' });
+  }
+  if (rateLimitAllowed !== true) {
+    res.setHeader('Retry-After', '60');
+    return res.status(429).json({ error: 'Weather request limit exceeded' });
+  }
+
   // ---------- Build target URL ----------
   const VC_KEY = process.env.VISUALCROSSING_API_KEY;
   if (!VC_KEY) {
@@ -129,8 +170,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const fetchRes = await fetch(targetUrl, { signal: controller.signal });
     const data = await fetchRes.json();
     return res.status(fetchRes.status).json(data);
-  } catch (err: any) {
-    if (err.name === 'AbortError') {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
       return res.status(504).json({ error: 'Weather API request timed out' });
     }
     console.error('Weather Proxy Error:', err);

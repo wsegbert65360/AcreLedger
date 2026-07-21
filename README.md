@@ -69,6 +69,12 @@ VITE_WEATHER_PROXY_URL=https://your-app.vercel.app
 
 # Rain API (optional — RainService falls back to https://rain-api.vercel.app)
 VITE_RAIN_API_URL=https://rain-api.vercel.app
+
+# Server-only weather proxy variables (configure in Vercel)
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOi...
+VISUALCROSSING_API_KEY=your_visual_crossing_api_key
+ALLOWED_ORIGINS=https://your-app.vercel.app,capacitor://localhost
 ```
 
 `VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly. For iOS/Capacitor weather, provide an absolute `VITE_WEATHER_PROXY_URL` or set `VITE_VISUALCROSSING_KEY`; the proxy URL is preferred when both are set, while the web app can continue using the server-side `/api/weather-proxy`.
@@ -77,6 +83,8 @@ VITE_RAIN_API_URL=https://rain-api.vercel.app
 
 ### Web (Vercel)
 The frontend deploys to **Vercel**. Vercel is linked to the GitLab remote and auto-deploys on pushes to `main` / `master`. `vercel.json` configures cache headers for `index.html`, `/`, and the service worker.
+
+The `/api/weather-proxy` function requires the four server-only variables shown above in every Vercel environment. `ALLOWED_ORIGINS` is an exact, comma-separated allowlist and fails closed for browser/native requests that send an unlisted origin. Apply Supabase migrations before deploying the function. Environment-variable changes apply only to new deployments, so redeploy after changing them. The proxy verifies the caller's Supabase access token and enforces a database-backed limit of 30 weather requests per user per one-minute window.
 
 ### iOS (CodeMagic → TestFlight)
 `codemagic.yaml` defines the `acreledger-ios` workflow that runs on push to `main`: lint → unit tests → `cap:build` → `pod install` → Xcode build → IPA → App Store Connect upload. See **[CODEMAGIC.md](./CODEMAGIC.md)** for signing credentials, environment variable groups, and troubleshooting, and **[Macinstructions.md](./Macinstructions.md)** for local macOS compilation and distribution.

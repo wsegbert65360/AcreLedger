@@ -26,6 +26,8 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 
 - `BLUEPRINT.md` — full authoritative architecture, data model, conventions, and domain rules.
 - `TESTING.md` — verification protocols and test credentials.
+- `api/weather-proxy.ts` — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
+- `src/test/weatherProxy.test.ts` — weather-proxy contract tests; keep API tests outside `api/` so Vercel does not deploy them as functions.
 - `@/types/farm.ts` — canonical TypeScript entity definitions.
 - `@/lib/mappers.ts` — entity to database row translation.
 - `@/lib/backupSchema.ts` — strict backup/restore validation schema.
@@ -133,6 +135,9 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue and backup restore RPC MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract, reassigning a CLU, or restoring a backup must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
 - New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
 - `profiles.active_season` must remain protected by the database range `[2000, currentYear + 1]`. Any `SECURITY DEFINER` RPC that writes it, including `restore_farm_backup`, must validate the same range before changing farm records.
+- `profiles` is a security boundary, not a normal farm-owned CRUD table. Authenticated clients may select their own profile and update only `active_season` and `onboarding_complete`; they must not receive direct grants to update `id` or `farm_id`, insert profiles, or delete profiles. Farm membership is assigned by the trusted `ensure_user_farm` path. Preserve migration `20260720165352_protect_profile_farm_membership.sql` and its column-level grants.
+- Live profile-security tests must assert PostgreSQL `42501` for forbidden operations and use non-mutating probes: same-value updates for protected columns, an existing ID for an insert-denial probe, and contradictory filters for delete-denial probes. Never risk changing or deleting the QA profile while testing grants.
+- Weather-proxy quota state belongs in the non-exposed `weather_proxy_private` schema. The public `consume_weather_proxy_request()` wrapper must remain `SECURITY DEFINER`, derive identity from `auth.uid()`, use an empty `search_path`, and deny `PUBLIC`/`anon`; only `authenticated` and `service_role` may execute it. Preserve migration `20260721211903_add_weather_proxy_rate_limit.sql`.
 - Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
 - Every farm-owned table must have RLS enabled.
 - RLS policies must restrict access by the user's farm through `public.profiles`.
@@ -382,8 +387,12 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 
 ## Weather and Rainfall Rules
 
-- Weather uses Visual Crossing, routed through `WeatherService.buildWeatherUrl`. In dev (or Capacitor builds with `VITE_VISUALCROSSING_KEY` set and no proxy), it calls the Visual Crossing API directly; otherwise it goes through the `/api/weather-proxy` edge function (auth bearer header attached when a session token exists). `WeatherService` resolves the proxy base via `resolveWeatherProxyUrl()`.
+- Weather uses Visual Crossing, routed through `WeatherService.buildWeatherUrl`. In dev (or Capacitor builds with `VITE_VISUALCROSSING_KEY` set and no proxy), it calls the Visual Crossing API directly; otherwise it goes through the `/api/weather-proxy` Vercel Function. Production proxy requests require a Supabase bearer token, validated server-side with `auth.getUser(token)`. `WeatherService` resolves the proxy base via `resolveWeatherProxyUrl()`.
 - `VITE_WEATHER_PROXY_URL` (optional) overrides the proxy base for Capacitor builds. If set, it must be HTTPS (or `localhost`/`127.0.0.1`), have no surrounding quotes, and not already include the `/api/weather-proxy` path suffix — `WeatherService` appends it. A Capacitor build with neither `VITE_VISUALCROSSING_KEY` nor `VITE_WEATHER_PROXY_URL` throws at URL-build time rather than failing silently. `WeatherService.cleanEnvValue` strips stray quotes/whitespace from these env vars at load.
+- The deployed function requires server-only `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VISUALCROSSING_API_KEY`, and `ALLOWED_ORIGINS`. `ALLOWED_ORIGINS` is a comma-separated exact allowlist and must include each deployed web origin plus `capacitor://localhost` when native builds use the proxy. Never use a wildcard or silently allow an origin when configuration is missing; requests carrying a disallowed `Origin` fail before authentication or upstream work.
+- The proxy accepts only `GET` and `OPTIONS`, allowlisted Visual Crossing timeline endpoints/query keys, and safely encoded locations. It has a 10-second upstream timeout and returns generic errors rather than leaking credentials or upstream internals.
+- Authenticated weather requests are limited to 30 requests per user per fixed one-minute window through `consume_weather_proxy_request`. Rate-limit RPC failure must fail closed with `503`; quota exhaustion returns `429` with `Retry-After`.
+- Apply the rate-limit migration before deploying proxy code. Vercel environment-variable changes affect only new deployments, so redeploy after adding or changing any proxy variable.
 - Rainfall uses the Rain API with IEM Stage IV radar plus Supabase RPC merge.
 - Rainfall lookups should use coordinates when available so the radar merge remains active.
 - Lat/lng should be rounded to 4 decimals for radar grid consistency.
@@ -481,6 +490,8 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 
 - The test suite is split into **unit** and **integration**. `npm run test` (and `npm run test:unit`) runs the unit suite, which excludes `**/*.integration.test.{ts,tsx}`. `npm run test:integration` runs the integration suite via `vitest.integration.config.ts` — those tests hit live services and require credentials/network (`RainService.integration.test.ts` for the real Rain API, `auth.integration.test.ts` for bot auth). Integration tests skip cleanly when their env/credentials are absent (`describe.skipIf` / early-return on `import.meta.env`). Do not add live-network tests to the unit suite; name them `*.integration.test.*`.
 - `npm run test:coverage` collects V8 coverage over the production-surface scope defined in the `coverage` block of `vite.config.ts` (tests, generated data, type declarations, shadcn/ui primitives, and entry-point boilerplate are excluded). The baseline is recorded in `TESTING.md`; no thresholds are enforced yet.
+- Keep Vercel Function unit tests in `src/test/weatherProxy.test.ts`, never under `api/`; Vercel treats TypeScript files under `api/` as deployable functions. Run `npm run typecheck:api` whenever the proxy changes.
+- Authentication integration tests must keep forbidden profile-write probes non-mutating and assert the exact `42501` authorization code. Positive profile-update checks should use same-value writes unless the test explicitly owns and restores the changed value.
 - For Supabase-backed unit tests, reuse `createSupabaseMock()` from `src/test/supabaseMock.ts`. Create one mock per suite, register it with `vi.doMock('@/lib/supabase', () => ({ supabase: mock.client }))`, dynamically import the system under test in `beforeAll`, and call `mock.reset()` in `beforeEach`. Do not put the imported factory inside `vi.hoisted(...)` and do not replace this lifecycle with per-test imports unless `vi.resetModules()` is also intentional.
 - The shared Supabase mock returns a distinct thenable builder from every `from(table)` call. Preserve that per-query table capture: hooks such as `useFsaTracts` issue different table queries through `Promise.all`, and a global `lastTable` makes concurrent results cross-contaminate. Use `setTableHandler` when concurrent tables need different results; use the independent `setRpcResult`/`setRpcThrow` controls for RPCs. Add new chain methods only when production code under test actually uses them.
 - Hook rollback tests must use `useStatefulArray` from `src/test/hookTestHarness.tsx`; a plain `vi.fn()` setter does not execute functional React state updates and cannot prove optimistic state or rollback behavior.
@@ -521,6 +532,7 @@ After editing:
 1. Run the most relevant available checks. The repo defines:
    - `npm run lint` — `eslint .` (fast, run for any source change; the gate is **zero errors** — warnings are tracked, not blocked).
    - `npm run typecheck` — `tsc -b` (the **authoritative type gate** via project references in `tsconfig.json`). This is the real type check; `vite build` uses SWC and does **not** typecheck, so it cannot substitute for `typecheck`. Run this for any source/type change.
+   - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts` or its imports change.
    - `npm run test` — `vitest run` (the **unit suite**; excludes `*.integration.test.*`). Run when touching logic with colocated `*.test.*` files. See Testing → Unit vs. Integration below.
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
