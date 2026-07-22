@@ -274,4 +274,18 @@ describe('RainService', () => {
     const calledUrl = (fetch as any).mock.calls[0][0];
     expect(calledUrl).toContain(`field_id=${mockFieldId}`);
   });
+
+  it('rounds coordinates to 4 decimal places in API requests', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0, '24h': 0, '72h': 0, '168h': 0
+    }));
+
+    await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: 38.4627123, lng: -93.5374567
+    });
+
+    const calledUrl = (fetch as any).mock.calls[0][0];
+    expect(calledUrl).toContain('lat=38.4627');
+    expect(calledUrl).toContain('lon=-93.5375');
+  });
 });

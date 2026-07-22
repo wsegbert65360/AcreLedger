@@ -214,6 +214,8 @@ describe('SprayModal Data Retention', () => {
         onClose={vi.fn()}
       />
     );
+    // Flush the mount-time weather fetch (useSprayForm auto-fetch effect) inside act
+    await act(async () => {});
 
     await navigateToConditions();
 
@@ -247,6 +249,8 @@ describe('SprayModal Data Retention', () => {
         onClose={vi.fn()}
       />
     );
+    // Flush the mount-time weather fetch (useSprayForm auto-fetch effect) inside act
+    await act(async () => {});
 
     await navigateToConditions();
 
@@ -286,16 +290,18 @@ describe('SprayModal Data Retention', () => {
       fireEvent.change(windDirectionSelect, { target: { value: 'NW' } });
     });
 
-    // Now weather arrives
-    resolveWeather!({
-      temp: 72,
-      humidity: 45,
-      wind: 8,
-      windDirection: 'SSE',
-      isError: false,
-      precip24h: 0,
-      precip72h: 0,
-      precipProb: 0
+    // Now weather arrives (resolve inside act so the hook's state updates are wrapped)
+    await act(async () => {
+      resolveWeather!({
+        temp: 72,
+        humidity: 45,
+        wind: 8,
+        windDirection: 'SSE',
+        isError: false,
+        precip24h: 0,
+        precip72h: 0,
+        precipProb: 0
+      });
     });
 
     await waitFor(() => {
