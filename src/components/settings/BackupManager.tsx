@@ -49,6 +49,7 @@ export default function BackupManager() {
     sprayRecipes,
     fsaTracts,
     cluAssignments,
+    workRequests,
     activeSeason,
   } = useFarm();
   const [backingUp, setBackingUp] = useState(false);
@@ -69,7 +70,8 @@ export default function BackupManager() {
     (fertilizerRecipes?.length ?? 0) +
     (sprayRecipes?.length ?? 0) +
     (fsaTracts?.length ?? 0) +
-    (cluAssignments?.length ?? 0);
+    (cluAssignments?.length ?? 0) +
+    (workRequests?.length ?? 0);
 
   const hasData = recordCount > 0;
   const backupIsStale = lastBackup
@@ -101,6 +103,7 @@ export default function BackupManager() {
         sprayRecipes,
         fsaTracts,
         cluAssignments,
+        workRequests,
         activeSeason,
         backupDate: new Date().toISOString(),
       };
@@ -183,6 +186,9 @@ export default function BackupManager() {
             </div>
             <div className="flex justify-between">
               <span>CLU Assignments</span><span className="text-foreground">{cluAssignments?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Work Requests</span><span className="text-foreground">{workRequests?.length ?? 0}</span>
             </div>
             <div className="flex justify-between pt-1 border-t border-border font-bold">
               <span>Total Records</span><span className="text-foreground">{recordCount}</span>

@@ -1,14 +1,15 @@
 import { useCallback, useMemo } from 'react';
 import {
   Field, Bin, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
-  FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe, FertilizerRecipe, TillageRecord
+  FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe, FertilizerRecipe, TillageRecord,
+  WorkRequest
 } from '@/types/farm';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import {
   mapFieldToDb, mapBinToDb, mapPlantToDb, mapSprayToDb,
   mapHarvestToDb, mapHayToDb, mapCustomSprayToDb, mapGrainToDb, mapSeedToDb,
   mapRecipeToDb, mapFertilizerToDb, mapFertilizerRecipeToDb, mapTillageToDb,
-  mapFsaTractToDb, mapFieldCluAssignmentToDb
+  mapFsaTractToDb, mapFieldCluAssignmentToDb, mapWorkRequestToDb
 } from '@/lib/mappers';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -42,6 +43,7 @@ interface UseSeasonManagementArgs {
   tillageRecords: TillageRecord[];
   fsaTracts: FsaTractImport[];
   cluAssignments: FieldCluAssignment[];
+  workRequests: WorkRequest[];
   activeSeason: number;
   setActiveSeason: React.Dispatch<React.SetStateAction<number>>;
   setViewingSeason: React.Dispatch<React.SetStateAction<number>>;
@@ -61,6 +63,7 @@ interface UseSeasonManagementArgs {
   setTillageRecords: React.Dispatch<React.SetStateAction<TillageRecord[]>>;
   setFsaTracts: React.Dispatch<React.SetStateAction<FsaTractImport[]>>;
   setCluAssignments: React.Dispatch<React.SetStateAction<FieldCluAssignment[]>>;
+  setWorkRequests: React.Dispatch<React.SetStateAction<WorkRequest[]>>;
   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
   /** Reload all farm entities from Supabase after restore (source of truth). */
   refetchFarmData: () => Promise<boolean>;
@@ -82,12 +85,12 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords,
-    fsaTracts, cluAssignments, activeSeason,
+    fsaTracts, cluAssignments, workRequests, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
-    setTillageRecords, setFsaTracts, setCluAssignments, setFarmId,
+    setTillageRecords, setFsaTracts, setCluAssignments, setWorkRequests, setFarmId,
     refetchFarmData,
     isOnline, initialFetchComplete, fetchError, pendingSyncCount,
   } = args;
@@ -133,7 +136,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         backupVersion: CURRENT_BACKUP_VERSION,
         fields, bins, plantRecords, sprayRecords, harvestRecords,
         hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
-        savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
+        savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests, activeSeason,
         rolloverDate: new Date().toISOString(),
       };
       const validatedBackup = backupSchema.parse(backupData);
@@ -174,7 +177,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
   }, [
     session, fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
-    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
+    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests, activeSeason,
     isOnline, farm_id, initialFetchComplete, fetchError, pendingSyncCount,
     setActiveSeason, setViewingSeason, setLoading,
   ]);
@@ -238,6 +241,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDb({ ...r, farm_id } as unknown as SprayRecipe));
       const tractsToDb      = (backupData.fsaTracts            ?? []).map((t) => mapFsaTractToDb({ ...t, farmId: farm_id } as FsaTractImport));
       const assignmentsToDb = (backupData.cluAssignments       ?? []).map((a) => mapFieldCluAssignmentToDb({ ...a, farmId: farm_id } as FieldCluAssignment));
+      const workRequestsToDb = (backupData.workRequests        ?? []).map((w) => mapWorkRequestToDb({ ...w, farm_id } as unknown as WorkRequest));
 
       const payload = {
         fields: fieldsToDb,
@@ -255,6 +259,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         spray_recipes: recipesToDb,
         fsa_tract_imports: tractsToDb,
         field_clu_assignments: assignmentsToDb,
+        work_requests: workRequestsToDb,
       };
 
       if (backupData.activeSeason !== undefined) {
@@ -364,6 +369,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setTillageRecords([]);
     setFsaTracts([]);
     setCluAssignments([]);
+    setWorkRequests([]);
     setFarmId(null);
     setActiveSeason(getCurrentYear());
     setViewingSeason(getCurrentYear());
@@ -375,7 +381,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
-    setFsaTracts, setCluAssignments, setFarmId, setActiveSeason, setViewingSeason,
+    setFsaTracts, setCluAssignments, setWorkRequests, setFarmId, setActiveSeason, setViewingSeason,
   ]);
 
   return useMemo(() => ({

@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
-import { FileText, Printer, History as HistoryIcon } from 'lucide-react';
+import { FileText, Printer, History as HistoryIcon, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useFarm } from '@/store/farmStore';
@@ -12,6 +12,7 @@ import FertilizerReport from '@/components/reports/FertilizerReport';
 import FallFsaReport from '@/components/reports/FallFsaReport';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
 import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
+import WorkRequestsTab from './workRequests/WorkRequestsTab';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
@@ -44,7 +45,7 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harvest' | 'hay-summary' | 'landlord-statement';
+type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harvest' | 'hay-summary' | 'landlord-statement' | 'work-requests';
 
 const TABS: { key: ReportTab; icon: typeof ACTIVITY_ICONS.plant; label: string; color: string }[] = [
   { key: 'fsa-plant',          icon: ACTIVITY_ICONS.plant,      label: 'FSA-578',     color: ACTIVITY_TEXT_COLORS.plant },
@@ -53,6 +54,7 @@ const TABS: { key: ReportTab; icon: typeof ACTIVITY_ICONS.plant; label: string; 
   { key: 'fsa-harvest',        icon: ACTIVITY_ICONS.harvest,    label: 'Fall FSA',    color: ACTIVITY_TEXT_COLORS.harvest },
   { key: 'hay-summary',        icon: ACTIVITY_ICONS.hay,        label: 'Hay Summary', color: ACTIVITY_TEXT_COLORS.hay },
   { key: 'landlord-statement', icon: FileText,                  label: 'Landlord',    color: 'text-blue-600' },
+  { key: 'work-requests',      icon: Send,                      label: 'Work Reqs',   color: 'text-primary' },
 ];
 
 // ─── Pure helpers (module-level — not recreated on every render) ──────────────
@@ -258,7 +260,7 @@ export default function Reports() {
     [selectedLandlord, landlordSummary, harvestRecords],
   );
 
-  const exportFingerprints = useMemo<Record<ReportTab, string>>(() => ({
+  const exportFingerprints = useMemo<Partial<Record<ReportTab, string>>>(() => ({
     'fsa-plant': buildReportFingerprint(fsaPlantRows),
     'spray-audit': buildReportFingerprint(sprayRecords),
     'fertilizer-summary': buildReportFingerprint(fertilizerRecords),
@@ -276,7 +278,7 @@ export default function Reports() {
     if (!session?.user.id || !farm_id) return undefined;
     return getReportExportStatus(
       { userId: session.user.id, farmId: farm_id, seasonYear: viewingSeason, reportType },
-      exportFingerprints[reportType],
+      exportFingerprints[reportType] ?? '',
     );
   };
 
@@ -291,7 +293,7 @@ export default function Reports() {
           if (session?.user.id && farm_id) {
             recordReportExport(
               { userId: session.user.id, farmId: farm_id, seasonYear: viewingSeason, reportType },
-              exportFingerprints[reportType],
+              exportFingerprints[reportType] ?? '',
             );
             setExportHistoryVersion(version => version + 1);
           }
@@ -672,6 +674,11 @@ export default function Reports() {
             exportStatus={getExportStatus('landlord-statement')}
             onIssueAction={handleIssueAction}
           />
+        </TabsContent>
+
+        {/* ── Work Requests ─────────────────────────────────────────────────── */}
+        <TabsContent value="work-requests" className="mt-0">
+          <WorkRequestsTab />
         </TabsContent>
         </Tabs>
       </main>

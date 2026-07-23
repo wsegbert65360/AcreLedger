@@ -280,6 +280,93 @@ export interface CustomSprayRecord {
   deleted_at: string | null;
 }
 
+// ─── Work Requests ────────────────────────────────────────────────────────────
+// A Work Request is an outbound service request sent to a provider/applicator
+// (spraying, fertilizer, lime, planting, harvesting, or other). It is NOT a
+// season-scoped activity record — it is status-driven (Draft/Sent/Completed/
+// Canceled) and is intentionally excluded from the ActivityRecord union and
+// season partitioning. `cropYear` is plain validated data; the saved list is
+// not filtered by viewingSeason.
+
+export type WorkRequestStatus = 'Draft' | 'Sent' | 'Completed' | 'Canceled';
+
+export type WorkType = 'spraying' | 'fertilizer' | 'lime' | 'planting' | 'harvesting' | 'other';
+
+/** Product applied as part of a work request (applies to all fields by default). */
+export interface WorkRequestProduct {
+  productName: string;
+  applicationRate?: string;
+  rateUnit?: string;
+  carrierVolume?: string;
+  carrierVolumeUnit?: string;
+  applicationMethod?: string;
+  /** Who provides the product to be applied. */
+  supplier?: 'farmer' | 'applicator';
+}
+
+/** Per-field entry within a work request. Snapshot of field data at creation time. */
+export interface WorkRequestFieldEntry {
+  fieldId: string;
+  /** Snapshot of farm name at creation time (for stable PDF/email output). */
+  farmName: string;
+  /** Snapshot of field name at creation time. */
+  fieldName: string;
+  /** Snapshot of display acreage (getDisplayFieldAcres) at creation time. */
+  acreage: number;
+  /** Snapshot of crop info at creation time. */
+  crop?: string;
+  /** Snapshot of field GPS coordinates at creation time. */
+  gpsLat?: number;
+  gpsLng?: number;
+  /** Chosen navigation point (entrance / nearest boundary vertex / field coords / centroid). */
+  navigationLat?: number;
+  navigationLng?: number;
+  /** Auto-filled via reverse geocode, user-editable. */
+  nearbyRoad?: string;
+  roadSource?: 'nominatim' | 'manual';
+  /** Optional per-field deviation from the request defaults. */
+  overrides?: {
+    crop?: string;
+    products?: WorkRequestProduct[];
+    notes?: string;
+  };
+}
+
+export interface WorkRequest {
+  id: string;
+  farm_id: string;
+  /** Human-readable, unique-per-farm request number (e.g. WR-2026-AB12CD). */
+  requestNumber: string;
+  status: WorkRequestStatus;
+  /** ISO date the request was created. */
+  createdAt: string;
+  /** ISO date of last modification. */
+  updatedAt: string;
+  // Customer / landowner
+  customerName: string;
+  customerPhone?: string;
+  customerBillingAddress?: string;
+  // Provider / applicator
+  providerName?: string;
+  providerEmail?: string;
+  // Work details
+  workType: WorkType;
+  requestedCompletionDate?: string;
+  crop?: string;
+  /** Defaulted from viewingSeason on creation; validated to [2000, currentYear + 1]. */
+  cropYear: number;
+  currentCropStage?: string;
+  previousCrop?: string;
+  nextPlannedCrop?: string;
+  notes?: string;
+  // Sub-entities stored as JSONB columns on the row
+  products: WorkRequestProduct[];
+  fields: WorkRequestFieldEntry[];
+  // Standard
+  timestamp: number;
+  deleted_at: string | null;
+}
+
 export type ActivityRecord =
   | { type: 'plant'; data: PlantRecord }
   | { type: 'spray'; data: SprayRecord }

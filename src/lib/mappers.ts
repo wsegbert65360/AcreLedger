@@ -1,21 +1,24 @@
 import {
     PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
     GrainMovement, Field, Bin, SavedSeed, SprayRecipe, FertilizerApplication,
-    SprayRecipeProduct, FertilizerRecipe, TillageRecord
+    SprayRecipeProduct, FertilizerRecipe, TillageRecord,
+    WorkRequest, WorkRequestProduct, WorkRequestFieldEntry, WorkRequestStatus, WorkType
 } from '../types/farm';
 import {
     PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow, CustomSprayRecordRow,
     GrainMovementRow, FieldRow, BinRow, SavedSeedRow, SprayRecipeRow,
     FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow,
-    FsaTractImportRow, FieldCluAssignmentRow
+    FsaTractImportRow, FieldCluAssignmentRow,
+    WorkRequestRow, WorkRequestProductEntry, WorkRequestFieldEntryRow
 } from '../types/database';
-import type { FsaTractImport, FieldCluAssignment } from '../types/fsaTract';
+import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import {
     fieldSchema, binSchema, plantRecordSchema, sprayRecordSchema,
     harvestRecordSchema, hayHarvestRecordSchema, customSprayRecordSchema, grainMovementSchema,
     savedSeedSchema, fertilizerRecipeSchema, sprayRecipeSchema,
     fertilizerApplicationSchema, tillageRecordSchema,
-    fsaTractImportSchema, fieldCluAssignmentSchema
+    fsaTractImportSchema, fieldCluAssignmentSchema,
+    workRequestSchema
 } from './backupSchema';
 
 // --- Safe Mapping Helpers (Runtime Validation) ---
@@ -182,6 +185,64 @@ export const mapCustomSprayFromDb = (db: CustomSprayRecordRow): CustomSprayRecor
     seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
     deleted_at: db.deleted_at ?? null
+});
+
+const mapWorkRequestProductFromDb = (p: WorkRequestProductEntry): WorkRequestProduct => ({
+    productName: safeStr(p.product_name),
+    applicationRate: p.application_rate || undefined,
+    rateUnit: p.rate_unit || undefined,
+    carrierVolume: p.carrier_volume || undefined,
+    carrierVolumeUnit: p.carrier_volume_unit || undefined,
+    applicationMethod: p.application_method || undefined,
+    supplier: p.supplier ?? undefined,
+});
+
+const mapWorkRequestFieldEntryFromDb = (f: WorkRequestFieldEntryRow): WorkRequestFieldEntry => {
+    const overrides = f.overrides;
+    return {
+        fieldId: safeStr(f.field_id),
+        farmName: safeStr(f.farm_name, 'Unknown Farm'),
+        fieldName: safeStr(f.field_name, 'Unknown Field'),
+        acreage: safeNum(f.acreage),
+        crop: f.crop || undefined,
+        gpsLat: f.gps_lat != null ? safeNum(f.gps_lat) : undefined,
+        gpsLng: f.gps_lng != null ? safeNum(f.gps_lng) : undefined,
+        navigationLat: f.navigation_lat != null ? safeNum(f.navigation_lat) : undefined,
+        navigationLng: f.navigation_lng != null ? safeNum(f.navigation_lng) : undefined,
+        nearbyRoad: f.nearby_road || undefined,
+        roadSource: f.road_source ?? undefined,
+        overrides: overrides ? {
+            crop: overrides.crop || undefined,
+            products: Array.isArray(overrides.products) ? overrides.products.map(mapWorkRequestProductFromDb) : undefined,
+            notes: overrides.notes || undefined,
+        } : undefined,
+    };
+};
+
+export const mapWorkRequestFromDb = (db: WorkRequestRow): WorkRequest => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    requestNumber: safeStr(db.request_number),
+    status: (db.status as WorkRequestStatus) || 'Draft',
+    createdAt: safeStr(db.created_at),
+    updatedAt: safeStr(db.updated_at),
+    customerName: safeStr(db.customer_name),
+    customerPhone: db.customer_phone || undefined,
+    customerBillingAddress: db.customer_billing_address || undefined,
+    providerName: db.provider_name || undefined,
+    providerEmail: db.provider_email || undefined,
+    workType: (db.work_type as WorkType) || 'other',
+    requestedCompletionDate: db.requested_completion_date || undefined,
+    crop: db.crop || undefined,
+    cropYear: safeNum(db.crop_year, new Date().getFullYear()),
+    currentCropStage: db.current_crop_stage || undefined,
+    previousCrop: db.previous_crop || undefined,
+    nextPlannedCrop: db.next_planned_crop || undefined,
+    notes: db.notes || undefined,
+    products: Array.isArray(db.products) ? db.products.map(mapWorkRequestProductFromDb) : [],
+    fields: Array.isArray(db.fields) ? db.fields.map(mapWorkRequestFieldEntryFromDb) : [],
+    timestamp: safeTimestamp(db.timestamp),
+    deleted_at: db.deleted_at ?? null,
 });
 
 export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
@@ -493,6 +554,68 @@ export const mapCustomSprayToDb = (r: CustomSprayRecord) => {
         season_year: safeNum(r.seasonYear, new Date().getFullYear()),
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
         deleted_at: r.deleted_at || null
+    };
+};
+
+const mapWorkRequestProductToDb = (p: WorkRequestProduct): WorkRequestProductEntry => ({
+    product_name: safeStr(p.productName),
+    application_rate: p.applicationRate || null,
+    rate_unit: p.rateUnit || null,
+    carrier_volume: p.carrierVolume || null,
+    carrier_volume_unit: p.carrierVolumeUnit || null,
+    application_method: p.applicationMethod || null,
+    supplier: p.supplier ?? null,
+});
+
+const mapWorkRequestFieldEntryToDb = (f: WorkRequestFieldEntry): WorkRequestFieldEntryRow => {
+    const overrides = f.overrides;
+    return {
+        field_id: safeStr(f.fieldId),
+        farm_name: safeStr(f.farmName, 'Unknown Farm'),
+        field_name: safeStr(f.fieldName, 'Unknown Field'),
+        acreage: safeNum(f.acreage),
+        crop: f.crop || null,
+        gps_lat: f.gpsLat != null ? safeNum(f.gpsLat) : null,
+        gps_lng: f.gpsLng != null ? safeNum(f.gpsLng) : null,
+        navigation_lat: f.navigationLat != null ? safeNum(f.navigationLat) : null,
+        navigation_lng: f.navigationLng != null ? safeNum(f.navigationLng) : null,
+        nearby_road: f.nearbyRoad || null,
+        road_source: f.roadSource ?? null,
+        overrides: overrides ? {
+            crop: overrides.crop || null,
+            products: Array.isArray(overrides.products) ? overrides.products.map(mapWorkRequestProductToDb) : undefined,
+            notes: overrides.notes || null,
+        } : null,
+    };
+};
+
+export const mapWorkRequestToDb = (r: WorkRequest) => {
+    validateRequired(r, ['id', 'farm_id', 'requestNumber', 'customerName', 'workType', 'cropYear'], 'mapWorkRequestToDb');
+    workRequestSchema.parse(r);
+    return {
+        id: r.id,
+        farm_id: r.farm_id,
+        request_number: safeStr(r.requestNumber),
+        status: r.status || 'Draft',
+        created_at: r.createdAt || new Date().toISOString(),
+        updated_at: r.updatedAt || new Date().toISOString(),
+        customer_name: safeStr(r.customerName),
+        customer_phone: r.customerPhone || null,
+        customer_billing_address: r.customerBillingAddress || null,
+        provider_name: r.providerName || null,
+        provider_email: r.providerEmail || null,
+        work_type: r.workType || 'other',
+        requested_completion_date: r.requestedCompletionDate || null,
+        crop: r.crop || null,
+        crop_year: safeNum(r.cropYear, new Date().getFullYear()),
+        current_crop_stage: r.currentCropStage || null,
+        previous_crop: r.previousCrop || null,
+        next_planned_crop: r.nextPlannedCrop || null,
+        notes: r.notes || null,
+        products: (r.products ?? []).map(mapWorkRequestProductToDb),
+        fields: (r.fields ?? []).map(mapWorkRequestFieldEntryToDb),
+        timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
+        deleted_at: r.deleted_at || null,
     };
 };
 

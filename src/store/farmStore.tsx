@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
-import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord } from '@/types/farm';
+import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord, WorkRequest } from '@/types/farm';
 import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import { supabase } from '@/lib/supabase';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
   mapHarvestFromDb, mapHayFromDb, mapCustomSprayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
   mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb,
-  mapFsaTractFromDb, mapFieldCluAssignmentFromDb
+  mapFsaTractFromDb, mapFieldCluAssignmentFromDb, mapWorkRequestFromDb
 } from '../lib/mappers';
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
@@ -25,6 +25,7 @@ import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
 import { useSeasonManagement } from './useSeasonManagement';
 import { useTillageRecords } from './useTillageRecords';
+import { useWorkRequests } from './useWorkRequests';
 import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { offlineStorage } from '../lib/offlineStorage';
@@ -76,6 +77,8 @@ interface FarmState {
   fsaTracts: FsaTractImport[];
   /** CLU-to-field assignment records */
   cluAssignments: FieldCluAssignment[];
+  /** Outbound work requests (status-driven, not season-scoped) */
+  workRequests: WorkRequest[];
   /** The current chronological season year */
   activeSeason: number;
   /** The season year currently being viewed/edited */
@@ -164,6 +167,13 @@ interface FarmState {
   assignClu: (fieldId: string, tractKey: string, cluNumber: string, acres: number, landUse?: CluLandUse) => Promise<boolean>;
   updateCluLandUse: (assignmentId: string, landUse: CluLandUse) => Promise<boolean>;
   unassignClu: (fieldId: string, tractKey: string, cluNumber: string) => Promise<boolean>;
+  /** Operations for managing outbound work requests */
+  addWorkRequest: (
+    r: Omit<WorkRequest, 'id' | 'timestamp' | 'deleted_at' | 'farm_id'>,
+    onCreated?: (record: WorkRequest) => void,
+  ) => Promise<boolean>;
+  updateWorkRequest: (r: WorkRequest) => Promise<boolean>;
+  deleteWorkRequests: (ids: string[]) => Promise<boolean>;
 }
 
 const FarmContext = createContext<FarmState | null>(null);
@@ -198,6 +208,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>([]);
   const [fsaTracts, setFsaTracts] = useState<FsaTractImport[]>([]);
   const [cluAssignments, setCluAssignments] = useState<FieldCluAssignment[]>([]);
+  const [workRequests, setWorkRequests] = useState<WorkRequest[]>([]);
 
   // --- Network & Offline State ---
   const { isOnline } = useNetworkStatus();
@@ -238,7 +249,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         const [
           fieldsData, binsData, plantData, sprayData, harvestData, hayData, customSprayData,
           fertilizerData, tillageData, grainData, seedsData, fertilizerRecipesData, recipesData,
-          tractsData, assignmentsData
+          tractsData, assignmentsData, workRequestsData
         ] = await Promise.all([
           offlineStorage.loadCache('fields', userId),
           offlineStorage.loadCache('bins', userId),
@@ -255,6 +266,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           offlineStorage.loadCache('spray_recipes', userId),
           offlineStorage.loadCache('fsa_tract_imports', userId),
           offlineStorage.loadCache('field_clu_assignments', userId),
+          offlineStorage.loadCache('work_requests', userId),
         ]);
 
         if (fieldsData) setFields(fieldsData);
@@ -277,6 +289,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             landUse: assignment.landUse ?? 'cropland',
           })));
         }
+        if (workRequestsData) setWorkRequests(workRequestsData);
       } catch (err) {
         console.error('Failed to hydrate store from offline cache:', err);
       } finally {
@@ -322,6 +335,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         { data: recipesData, error: recipesErr },
         { data: tractsData, error: tractsErr },
         { data: assignmentsData, error: assignmentsErr },
+        { data: workRequestsData, error: workRequestsErr },
         { data: farmData, error: farmErr }
       ] = await Promise.all([
         query('fields'),
@@ -343,13 +357,18 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         query('spray_recipes'),
         query('fsa_tract_imports'),
         query('field_clu_assignments'),
+        supabase.from('work_requests')
+          .select('*')
+          .eq('farm_id', farm_id)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
         supabase.from('farms').select('name').eq('id', farm_id).single()
       ]);
 
           const fetchErrors = [
             fieldsErr, binsErr, plantErr, sprayErr, harvestErr,
             hayErr, customSprayErr, fertilizerErr, tillageErr, grainErr, seedsErr,
-            fertilizerRecipesErr, recipesErr, tractsErr, assignmentsErr, farmErr
+            fertilizerRecipesErr, recipesErr, tractsErr, assignmentsErr, workRequestsErr, farmErr
           ].filter(Boolean);
 
           if (fetchErrors.length > 0) {
@@ -374,6 +393,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           if (recipesData) setSprayRecipes(recipesData.map(mapRecipeFromDb));
           if (tractsData) setFsaTracts(tractsData.map(mapFsaTractFromDb));
           if (assignmentsData) setCluAssignments(assignmentsData.map(mapFieldCluAssignmentFromDb));
+          if (workRequestsData) setWorkRequests(workRequestsData.map(mapWorkRequestFromDb));
           
           if (farmData && farmData.name) {
             setFarmName(farmData.name);
@@ -415,6 +435,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('spray_recipes', session.user.id, sprayRecipes); } }, [sprayRecipes, session?.user?.id, cacheHydrated]);
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('fsa_tract_imports', session.user.id, fsaTracts); } }, [fsaTracts, session?.user?.id, cacheHydrated]);
   useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('field_clu_assignments', session.user.id, cluAssignments); } }, [cluAssignments, session?.user?.id, cacheHydrated]);
+  useEffect(() => { if (session?.user?.id && cacheHydrated) { offlineStorage.saveCache('work_requests', session.user.id, workRequests); } }, [workRequests, session?.user?.id, cacheHydrated]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
@@ -442,6 +463,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const fertilizerOps = useFertilizerRecords({ farm_id, viewingSeason, fields, fertilizerApplications, setFertilizerApplications, isOnline, onMutation: updatePendingSyncCount });
   const tillageOps = useTillageRecords({ farm_id, viewingSeason, tillageRecords, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
   const grainOps = useGrainMovements({ farm_id, viewingSeason, grainMovements, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
+  const workRequestOps = useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnline, onMutation: updatePendingSyncCount });
 
   const tractOps = useFsaTracts({
     farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments,
@@ -463,12 +485,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     session, farm_id,
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
-    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, activeSeason,
+    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
-    setFsaTracts, setCluAssignments,
+    setFsaTracts, setCluAssignments, setWorkRequests,
     refetchFarmData: fetchData,
     isOnline,
     initialFetchComplete,
@@ -610,6 +632,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       sprayRecipes,
       fsaTracts,
       cluAssignments,
+      workRequests,
       activeSeason, viewingSeason, seasonOptions, setViewingSeason: selectViewingSeason,
       rolloverToNewSeason: seasonOps.rolloverToNewSeason,
       ...plantOps,
@@ -620,6 +643,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       ...fertilizerOps,
       ...tillageOps,
       ...grainOps,
+      ...workRequestOps,
       getBinTotal,
       ...entityOps,
       signOut,

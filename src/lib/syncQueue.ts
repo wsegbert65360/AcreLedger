@@ -16,6 +16,7 @@ const ALLOWED_TABLES = new Set([
   'tillage_records', 'grain_movements', 'saved_seeds',
   'fertilizer_recipes', 'spray_recipes',
   'fsa_tract_imports', 'field_clu_assignments',
+  'work_requests',
 ]);
 
 export interface QueuedMutation {

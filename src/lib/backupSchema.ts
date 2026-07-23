@@ -298,6 +298,61 @@ export const fieldCluAssignmentSchema = z.object({
   deletedAt: z.string().nullable().optional(),
 }).strict();
 
+const workRequestProductSchema = z.object({
+  productName: z.string(),
+  applicationRate: z.string().optional(),
+  rateUnit: z.string().optional(),
+  carrierVolume: z.string().optional(),
+  carrierVolumeUnit: z.string().optional(),
+  applicationMethod: z.string().optional(),
+  supplier: z.enum(['farmer', 'applicator']).optional(),
+});
+
+const workRequestFieldEntrySchema = z.object({
+  fieldId: z.string(),
+  farmName: z.string(),
+  fieldName: z.string(),
+  acreage: z.number().nonnegative(),
+  crop: z.string().optional(),
+  gpsLat: z.number().optional(),
+  gpsLng: z.number().optional(),
+  navigationLat: z.number().optional(),
+  navigationLng: z.number().optional(),
+  nearbyRoad: z.string().optional(),
+  roadSource: z.enum(['nominatim', 'manual']).optional(),
+  overrides: z.object({
+    crop: z.string().optional(),
+    products: z.array(workRequestProductSchema).optional(),
+    notes: z.string().optional(),
+  }).optional(),
+});
+
+export const workRequestSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  requestNumber: z.string(),
+  status: z.enum(['Draft', 'Sent', 'Completed', 'Canceled']),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  customerName: z.string(),
+  customerPhone: z.string().optional(),
+  customerBillingAddress: z.string().optional(),
+  providerName: z.string().optional(),
+  providerEmail: z.string().optional(),
+  workType: z.enum(['spraying', 'fertilizer', 'lime', 'planting', 'harvesting', 'other']),
+  requestedCompletionDate: z.string().optional(),
+  crop: z.string().optional(),
+  cropYear: z.number(),
+  currentCropStage: z.string().optional(),
+  previousCrop: z.string().optional(),
+  nextPlannedCrop: z.string().optional(),
+  notes: z.string().optional(),
+  products: z.array(workRequestProductSchema),
+  fields: z.array(workRequestFieldEntrySchema),
+  timestamp: z.number().optional(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
 export const backupSchema = z.object({
   backupVersion: z.number().int().positive().optional(),
   fields: z.array(fieldSchema).optional(),
@@ -315,6 +370,7 @@ export const backupSchema = z.object({
   sprayRecipes: z.array(sprayRecipeSchema).optional(),
   fsaTracts: z.array(fsaTractImportSchema).optional(),
   cluAssignments: z.array(fieldCluAssignmentSchema).optional(),
+  workRequests: z.array(workRequestSchema).optional(),
   activeSeason: z.number().optional(),
   backupDate: z.string().optional(),
   rolloverDate: z.string().optional(),

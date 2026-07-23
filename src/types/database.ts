@@ -272,3 +272,60 @@ export interface FieldCluAssignmentRow {
     assigned_at: string;
     deleted_at?: string | null;
 }
+
+// ─── Work Requests ────────────────────────────────────────────────────────────
+
+export interface WorkRequestProductEntry {
+    product_name: string;
+    application_rate?: string | null;
+    rate_unit?: string | null;
+    carrier_volume?: string | null;
+    carrier_volume_unit?: string | null;
+    application_method?: string | null;
+    supplier?: 'farmer' | 'applicator' | null;
+}
+
+export interface WorkRequestFieldEntryRow {
+    field_id: string;
+    farm_name: string;
+    field_name: string;
+    acreage: number;
+    crop?: string | null;
+    gps_lat?: number | null;
+    gps_lng?: number | null;
+    navigation_lat?: number | null;
+    navigation_lng?: number | null;
+    nearby_road?: string | null;
+    road_source?: 'nominatim' | 'manual' | null;
+    overrides?: {
+        crop?: string | null;
+        products?: WorkRequestProductEntry[];
+        notes?: string | null;
+    } | null;
+}
+
+export interface WorkRequestRow {
+    id: string;
+    farm_id: string;
+    request_number: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    customer_name: string;
+    customer_phone?: string | null;
+    customer_billing_address?: string | null;
+    provider_name?: string | null;
+    provider_email?: string | null;
+    work_type: string;
+    requested_completion_date?: string | null;
+    crop?: string | null;
+    crop_year: number;
+    current_crop_stage?: string | null;
+    previous_crop?: string | null;
+    next_planned_crop?: string | null;
+    notes?: string | null;
+    products?: WorkRequestProductEntry[] | null;
+    fields?: WorkRequestFieldEntryRow[] | null;
+    timestamp: string;
+    deleted_at?: string | null;
+}
