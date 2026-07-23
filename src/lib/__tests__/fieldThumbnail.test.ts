@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { geometryToThumbnailPath, getFieldThumbnailGeometry } from '../fieldThumbnail';
+import { loadBundledFsaTracts } from '../bundledFsaTracts';
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 import type { Field } from '@/types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
@@ -181,5 +182,21 @@ describe('getFieldThumbnailGeometry', () => {
     );
 
     expect(geometry).toBeNull();
+  });
+
+  it('resolves assigned geometry from the bundled tract used by work requests', async () => {
+    const bundledTracts = await loadBundledFsaTracts();
+    const geometry = getFieldThumbnailGeometry(
+      makeField({
+        fsaFarmNumber: '6418',
+        fsaTractNumber: '1417',
+        cluNumbers: ['6'],
+      }),
+      [makeAssignment({ tractKey: '6418-1417', cluNumber: '6' })],
+      bundledTracts,
+    );
+
+    expect(geometry?.type).toBe('MultiPolygon');
+    expect(geometry?.coordinates.length).toBeGreaterThan(0);
   });
 });

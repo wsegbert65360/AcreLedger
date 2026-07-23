@@ -177,29 +177,32 @@ function FieldReviewCard({ entry, draft, lookupInProgress, navUrl, resolve, onRe
   return (
     <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
       <div>
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-bold text-foreground">{entry.fieldName}</h4>
-          <span className="text-xs font-mono text-muted-foreground">{entry.farmName} · {entry.acreage.toLocaleString()} ac</span>
+        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <h4 className="min-w-0 break-words text-sm font-bold text-foreground">{entry.fieldName}</h4>
+          <span className="break-words text-xs font-mono text-muted-foreground sm:text-right">{entry.farmName} · {entry.acreage.toLocaleString()} ac</span>
         </div>
         <p className="text-xs text-muted-foreground">Crop: {effectiveCrop || '—'}</p>
       </div>
 
       {/* Map preview */}
-      <div className="rounded-xl border border-border overflow-hidden bg-white" dangerouslySetInnerHTML={{ __html: svg }} />
+      <div
+        className="max-w-full overflow-hidden rounded-xl border border-border bg-white [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
 
       {/* GPS + navigation */}
       <div className="space-y-2 rounded-xl bg-muted/30 p-3">
-        <div className="flex items-center gap-2 text-xs">
-          <MapPin size={14} className="text-muted-foreground" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+          <MapPin size={14} className="shrink-0 text-muted-foreground" />
           <span className="text-muted-foreground">Field GPS:</span>
           <span className="font-mono text-foreground">
             {entry.gpsLat != null && entry.gpsLng != null ? `${entry.gpsLat.toFixed(5)}, ${entry.gpsLng.toFixed(5)}` : 'unavailable'}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <NavIcon size={14} className="text-muted-foreground" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+          <NavIcon size={14} className="shrink-0 text-muted-foreground" />
           <span className="text-muted-foreground">Navigation point:</span>
-          <span className="font-mono text-foreground">{formatNavigationCoords(entry.navigationLat, entry.navigationLng)}</span>
+            <span className="break-all font-mono text-foreground">{formatNavigationCoords(entry.navigationLat, entry.navigationLng)}</span>
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
           <Button type="button" variant="outline" size="sm" onClick={onApplyFieldCoords} disabled={entry.gpsLat == null}>

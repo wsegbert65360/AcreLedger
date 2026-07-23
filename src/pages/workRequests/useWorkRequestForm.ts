@@ -5,6 +5,7 @@ import type {
   WorkRequestProduct,
 } from '@/types/farm';
 import type { WorkType } from '@/types/farm';
+import type { FsaTractImport } from '@/types/fsaTract';
 import { useFarm } from '@/store/farmStore';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { generateRequestNumber } from '@/lib/workRequests/requestNumber';
@@ -68,10 +69,13 @@ interface UseWorkRequestFormArgs {
   /** 'edit' | 'duplicate' | 'new'. Duplicate stamps a new request number + Draft. */
   mode?: 'edit' | 'duplicate' | 'new';
   open: boolean;
+  /** Imported + bundled tracts supplied by the parent when available. */
+  fsaTracts?: FsaTractImport[];
 }
 
-export function useWorkRequestForm({ initial, mode = 'new', open }: UseWorkRequestFormArgs) {
+export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: providedFsaTracts }: UseWorkRequestFormArgs) {
   const { fields, cluAssignments, fsaTracts, farmName, viewingSeason, workRequests } = useFarm();
+  const resolvedFsaTracts = providedFsaTracts ?? fsaTracts;
   const isDuplicate = mode === 'duplicate' && !!initial;
 
   const [step, setStep] = useState<WorkRequestStep>('fields');
@@ -89,9 +93,9 @@ export function useWorkRequestForm({ initial, mode = 'new', open }: UseWorkReque
   // Geometry lookup helper (closure so step components resolve consistently).
   const resolve = useCallback((fieldId: string) => {
     const field = fields.find(f => f.id === fieldId);
-    const geometry = field ? getFieldThumbnailGeometry(field, cluAssignments, fsaTracts) : null;
+    const geometry = field ? getFieldThumbnailGeometry(field, cluAssignments, resolvedFsaTracts) : null;
     return { field, geometry };
-  }, [fields, cluAssignments, fsaTracts]);
+  }, [fields, cluAssignments, resolvedFsaTracts]);
 
   // ── Selection helpers (Fields step) ───────────────────────────────────────
   const selectedFieldIds = useMemo(() => new Set(draft.fields.map(f => f.fieldId)), [draft.fields]);

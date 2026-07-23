@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFarm } from '@/store/farmStore';
 import type { WorkRequest, WorkRequestFieldEntry, WorkRequestProduct, WorkType } from '@/types/farm';
+import type { FsaTractImport } from '@/types/fsaTract';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +11,12 @@ import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { workTypeLabel, farmNamesForRequest } from '@/lib/workRequests/workRequestEmail';
 import { downloadWorkRequestPdf, sendWorkRequestEmail } from '@/lib/workRequests/sendWorkRequest';
+import {
+  performWorkRequestPostSaveAction,
+  type WorkRequestSaveOptions,
+} from '@/lib/workRequests/postSaveAction';
 import { getFieldThumbnailGeometry } from '@/lib/fieldThumbnail';
+import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { useWorkRequestForm, WIZARD_STEPS } from './useWorkRequestForm';
 import FieldSelectionStep from './FieldSelectionStep';
 import DetailsStep from './DetailsStep';
@@ -31,6 +37,26 @@ export default function WorkRequestsTab() {
   const [editing, setEditing] = useState<WorkRequest | null>(null);
   const [mode, setMode] = useState<'new' | 'edit' | 'duplicate'>('new');
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [bundledFsaTracts, setBundledFsaTracts] = useState<FsaTractImport[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadBundledFsaTracts()
+      .then(tracts => {
+        if (!cancelled) setBundledFsaTracts(tracts);
+      })
+      .catch(error => {
+        console.error('Failed to load bundled FSA tracts for work requests:', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const mergedFsaTracts = useMemo(
+    () => mergeBundledFsaTracts(fsaTracts, bundledFsaTracts),
+    [fsaTracts, bundledFsaTracts],
+  );
 
   const sorted = useMemo(
     () => [...workRequests].filter(r => !r.deleted_at).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -43,8 +69,8 @@ export default function WorkRequestsTab() {
 
   const getGeometry = useCallback((fieldId: string) => {
     const field = fields.find(f => f.id === fieldId);
-    return field ? getFieldThumbnailGeometry(field, cluAssignments, fsaTracts) : null;
-  }, [fields, cluAssignments, fsaTracts]);
+    return field ? getFieldThumbnailGeometry(field, cluAssignments, mergedFsaTracts) : null;
+  }, [fields, cluAssignments, mergedFsaTracts]);
 
   const handleDownload = async (req: WorkRequest) => {
     setExportingId(req.id);
@@ -119,11 +145,23 @@ export default function WorkRequestsTab() {
         onClose={() => setWizardOpen(false)}
         initial={editing}
         mode={mode}
+        fsaTracts={mergedFsaTracts}
         onSave={async (draft, opts) => {
           if (mode === 'edit' && editing) {
-            const ok = await updateWorkRequest({ ...editing, ...draft, id: editing.id, farm_id: editing.farm_id, timestamp: editing.timestamp, deleted_at: editing.deleted_at });
+            const savedRequest: WorkRequest = {
+              ...editing,
+              ...draft,
+              id: editing.id,
+              farm_id: editing.farm_id,
+              timestamp: editing.timestamp,
+              deleted_at: editing.deleted_at,
+            };
+            const ok = await updateWorkRequest(savedRequest);
             if (ok) {
-              if (opts.sendEmail) await handleResend({ ...editing, ...draft, id: editing.id } as WorkRequest);
+              await performWorkRequestPostSaveAction(savedRequest, opts, {
+                sendEmail: handleResend,
+                downloadPdf: handleDownload,
+              });
               setWizardOpen(false);
             }
           } else {
@@ -132,7 +170,12 @@ export default function WorkRequestsTab() {
               added = record;
             });
             if (!ok) return;
-            if (opts.sendEmail && added) await handleResend(added);
+            if (added) {
+              await performWorkRequestPostSaveAction(added, opts, {
+                sendEmail: handleResend,
+                downloadPdf: handleDownload,
+              });
+            }
             setWizardOpen(false);
           }
         }}
@@ -194,11 +237,15 @@ interface WorkRequestWizardProps {
   onClose: () => void;
   initial: WorkRequest | null;
   mode: 'new' | 'edit' | 'duplicate';
-  onSave: (draft: Omit<WorkRequest, 'id' | 'timestamp' | 'deleted_at' | 'farm_id'>, opts: { sendEmail: boolean }) => Promise<void>;
+  fsaTracts: FsaTractImport[];
+  onSave: (
+    draft: Omit<WorkRequest, 'id' | 'timestamp' | 'deleted_at' | 'farm_id'>,
+    opts: WorkRequestSaveOptions,
+  ) => Promise<void>;
 }
 
-function WorkRequestWizard({ open, onClose, initial, mode, onSave }: WorkRequestWizardProps) {
-  const form = useWorkRequestForm({ initial, mode, open });
+function WorkRequestWizard({ open, onClose, initial, mode, fsaTracts, onSave }: WorkRequestWizardProps) {
+  const form = useWorkRequestForm({ initial, mode, open, fsaTracts });
   const [exporting, setExporting] = useState(false);
 
   const handlePrimary = async () => {
@@ -218,8 +265,8 @@ function WorkRequestWizard({ open, onClose, initial, mode, onSave }: WorkRequest
     if (!form.canGenerate) return;
     setExporting(true);
     try {
-      // Save first so the record persists, then export.
-      await onSave(form.draft, { sendEmail: false });
+      // Save first, then export the authoritative persisted record.
+      await onSave(form.draft, { sendEmail: false, downloadPdf: true });
     } finally {
       setExporting(false);
     }
@@ -239,7 +286,7 @@ function WorkRequestWizard({ open, onClose, initial, mode, onSave }: WorkRequest
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] w-[calc(100%-1rem)] max-w-2xl overflow-x-hidden overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {mode === 'edit' ? 'Edit work request' : mode === 'duplicate' ? 'Duplicate work request' : 'New work request'}
@@ -342,14 +389,14 @@ function WorkRequestWizard({ open, onClose, initial, mode, onSave }: WorkRequest
             </div>
           )}
           {isFinal && (
-            <div className="flex w-full gap-2">
-              <Button type="button" variant="outline" onClick={form.goBack} className="flex-1 py-6 text-base font-bold">
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
+              <Button type="button" variant="outline" onClick={form.goBack} className="w-full py-6 text-base font-bold">
                 Back
               </Button>
-              <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={form.isSaving} className="flex-1 py-6 text-base font-bold">
+              <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={form.isSaving} className="w-full py-6 text-base font-bold">
                 Save as draft
               </Button>
-              <Button type="button" onClick={handlePrimary} disabled={form.isSaving} className="flex-1 py-6 text-base font-bold">
+              <Button type="button" onClick={handlePrimary} disabled={form.isSaving} className="w-full py-6 text-base font-bold">
                 Save & Close
               </Button>
             </div>
