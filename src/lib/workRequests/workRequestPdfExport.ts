@@ -4,7 +4,10 @@ import type { WorkRequest, WorkRequestFieldEntry, WorkRequestProduct } from '@/t
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { buildNavigationUrl, formatNavigationCoords } from './navigation';
-import { buildFieldMapSvg, rasterizeSvgToPng } from './fieldMapImage';
+import {
+  ESRI_STREET_MAP_ATTRIBUTION,
+  rasterizeFieldMapToPng,
+} from './fieldMapImage';
 import { workTypeLabel, farmNamesForRequest } from './workRequestEmail';
 import { NOMINATIM_ATTRIBUTION } from './roadLookup';
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
@@ -63,8 +66,8 @@ function effectiveNotes(field: WorkRequestFieldEntry, request: WorkRequest): str
  *     `Page X of Y` footer.
  *   - Final line: the required verification disclaimer.
  *
- * Map images are rasterized from self-contained SVGs (no tiles) so each field
- * starts cleanly on its own page without split/clip risk.
+ * Map images use a labeled Esri street-map export with the crop geometry
+ * highlighted. A self-contained boundary image remains the offline fallback.
  */
 export async function exportWorkRequestPdf({
   request,
@@ -84,11 +87,13 @@ export async function exportWorkRequestPdf({
       ? { lat: entry.navigationLat, lng: entry.navigationLng }
       : null;
     const roadLabel = entry.nearbyRoad ? `Nearby road: ${entry.nearbyRoad}` : 'Field boundary';
-    const svg = buildFieldMapSvg({ geometry, navPoint, roadLabel });
     try {
-      const image = await rasterizeSvgToPng(svg, 1000);
-      // jsPDF's built-in addImage does not support SVG. Keep this guard even
-      // though browser rasterization now has a PNG fallback.
+      const image = await rasterizeFieldMapToPng({
+        geometry,
+        navPoint,
+        roadLabel,
+        pixelWidth: 1000,
+      });
       return image.startsWith('data:image/png') ? image : null;
     } catch {
       return null;
@@ -236,6 +241,13 @@ export async function exportWorkRequestPdf({
       const imgX = (pageWidth - imgSize) / 2;
       const format = dataUri.startsWith('data:image/svg') ? 'SVG' : 'PNG';
       doc.addImage(dataUri, format, imgX, 36, imgSize, imgSize);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5.5);
+      doc.setTextColor(105);
+      doc.text(ESRI_STREET_MAP_ATTRIBUTION, pageWidth / 2, 158.5, {
+        align: 'center',
+        maxWidth: pageWidth - 2 * margin,
+      });
     } else {
       doc.setFontSize(9);
       doc.setTextColor(110);

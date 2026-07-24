@@ -69,7 +69,12 @@ export default function WorkRequestsTab() {
 
   const getGeometry = useCallback((fieldId: string) => {
     const field = fields.find(f => f.id === fieldId);
-    return field ? getFieldThumbnailGeometry(field, cluAssignments, mergedFsaTracts) : null;
+    return field
+      ? getFieldThumbnailGeometry(field, cluAssignments, mergedFsaTracts, {
+          preferAssignments: true,
+          croplandOnly: true,
+        })
+      : null;
   }, [fields, cluAssignments, mergedFsaTracts]);
 
   const handleDownload = async (req: WorkRequest) => {

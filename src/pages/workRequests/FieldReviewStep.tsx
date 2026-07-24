@@ -6,11 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Navigation as NavIcon, RefreshCw, MapPin } from 'lucide-react';
-import { buildFieldMapSvg } from '@/lib/workRequests/fieldMapImage';
 import { lookupNearbyRoad } from '@/lib/workRequests/roadLookup';
 import { resolveDefaultNavPoint } from '@/lib/workRequests/navPoint';
 import { formatNavigationCoords } from '@/lib/workRequests/navigation';
 import { NOMINATIM_ATTRIBUTION } from '@/lib/workRequests/roadLookup';
+import WorkRequestFieldMap from './WorkRequestFieldMap';
 
 interface FieldReviewStepProps {
   draft: WorkRequestDraft;
@@ -167,8 +167,9 @@ interface FieldReviewCardProps {
 function FieldReviewCard({ entry, draft, lookupInProgress, navUrl, resolve, onRelookup, onRoadChange, onApplyFieldCoords, onApplyCentroid, onOverrideCrop, onOverrideNotes }: FieldReviewCardProps) {
   const { geometry } = resolve(entry.fieldId);
   const navPoint = entry.navigationLat != null && entry.navigationLng != null ? { lat: entry.navigationLat, lng: entry.navigationLng } : null;
-  const roadLabel = entry.nearbyRoad ? `Nearby road: ${entry.nearbyRoad}` : 'Field boundary';
-  const svg = buildFieldMapSvg({ geometry, navPoint, roadLabel });
+  const fallbackPoint = entry.gpsLat != null && entry.gpsLng != null
+    ? { lat: entry.gpsLat, lng: entry.gpsLng }
+    : null;
 
   const overrideCrop = entry.overrides?.crop ?? '';
   const overrideNotes = entry.overrides?.notes ?? '';
@@ -185,9 +186,10 @@ function FieldReviewCard({ entry, draft, lookupInProgress, navUrl, resolve, onRe
       </div>
 
       {/* Map preview */}
-      <div
-        className="max-w-full overflow-hidden rounded-xl border border-border bg-white [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
-        dangerouslySetInnerHTML={{ __html: svg }}
+      <WorkRequestFieldMap
+        geometry={geometry}
+        navPoint={navPoint}
+        fallbackPoint={fallbackPoint}
       />
 
       {/* GPS + navigation */}

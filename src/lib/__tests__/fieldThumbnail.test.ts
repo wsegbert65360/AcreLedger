@@ -160,6 +160,41 @@ describe('getFieldThumbnailGeometry', () => {
     });
   });
 
+  it('prefers cropland CLUs over the broader saved boundary for work-request maps', () => {
+    const boundary: GeoJSONGeometry = {
+      type: 'Polygon',
+      coordinates: [[[0, 0], [5, 0], [5, 5], [0, 0]]],
+    };
+
+    const geometry = getFieldThumbnailGeometry(
+      makeField({ boundary }),
+      [makeAssignment()],
+      [makeTract()],
+      { preferAssignments: true, croplandOnly: true },
+    );
+
+    expect(geometry).toEqual({
+      type: 'MultiPolygon',
+      coordinates: [cluPolygon],
+    });
+  });
+
+  it('excludes non-cropland CLUs from work-request maps', () => {
+    const geometry = getFieldThumbnailGeometry(
+      makeField({
+        boundary: {
+          type: 'Polygon',
+          coordinates: [[[0, 0], [5, 0], [5, 5], [0, 0]]],
+        },
+      }),
+      [makeAssignment({ landUse: 'non_cropland' })],
+      [makeTract()],
+      { preferAssignments: true, croplandOnly: true },
+    );
+
+    expect(geometry).toBeNull();
+  });
+
   it('falls back to legacy field CLU numbers when persisted assignments are not present', () => {
     const field = makeField({
       fsaFarmNumber: '6418',

@@ -5,6 +5,19 @@ export interface GpsPoint {
   lng: number;
 }
 
+export interface FieldMapBounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+export const ESRI_STREET_MAP_ATTRIBUTION =
+  'Road map sources: Esri, HERE, Garmin, USGS, OpenStreetMap contributors, and the GIS user community.';
+
+const ESRI_STREET_MAP_EXPORT_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/export';
+
 export interface BuildFieldMapSvgOptions {
   geometry: GeoJSONGeometry | null | undefined;
   /** Chosen navigation point to mark on the map. */
@@ -153,6 +166,180 @@ export function svgToDataUri(svg: string): string {
       ? Buffer.from(svg).toString('base64')
       : encodeURIComponent(svg);
   return `data:image/svg+xml;base64,${encoded}`;
+}
+
+/**
+ * Return a square, padded geographic extent with enough surrounding context
+ * for nearby road names to be useful. The source geometry remains the only
+ * highlighted acreage.
+ */
+export function getFieldMapBounds(
+  geometry: GeoJSONGeometry | null | undefined,
+): FieldMapBounds | null {
+  if (!hasValidGeometry(geometry ?? undefined) || !geometry) return null;
+
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      for (const [lng, lat] of ring) {
+        west = Math.min(west, lng);
+        south = Math.min(south, lat);
+        east = Math.max(east, lng);
+        north = Math.max(north, lat);
+      }
+    }
+  }
+
+  if (![west, south, east, north].every(Number.isFinite)) return null;
+
+  const centerLng = (west + east) / 2;
+  const centerLat = (south + north) / 2;
+  // Roughly double the field extent so adjacent named roads stay visible.
+  // The minimum span is about 440m north/south at Missouri latitudes.
+  const span = Math.max(east - west, north - south, 0.004) * 2;
+  return {
+    west: centerLng - span / 2,
+    south: centerLat - span / 2,
+    east: centerLng + span / 2,
+    north: centerLat + span / 2,
+  };
+}
+
+export function buildStreetMapExportUrl(
+  bounds: FieldMapBounds,
+  pixelSize = 1000,
+): string {
+  const size = Math.max(256, Math.min(Math.round(pixelSize), 2000));
+  const params = new URLSearchParams({
+    bbox: `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`,
+    bboxSR: '4326',
+    imageSR: '4326',
+    size: `${size},${size}`,
+    format: 'png32',
+    transparent: 'false',
+    f: 'image',
+  });
+  return `${ESRI_STREET_MAP_EXPORT_URL}?${params.toString()}`;
+}
+
+export interface RasterizeFieldMapOptions {
+  geometry: GeoJSONGeometry | null | undefined;
+  navPoint?: GpsPoint | null;
+  roadLabel?: string;
+  pixelWidth?: number;
+}
+
+/**
+ * Create the PDF map PNG from Esri's labeled street-map export, then draw only
+ * the supplied crop geometry and navigation point over it. If the basemap is
+ * unavailable, retain the printable self-contained boundary-map fallback.
+ */
+export async function rasterizeFieldMapToPng({
+  geometry,
+  navPoint,
+  roadLabel,
+  pixelWidth = 1000,
+}: RasterizeFieldMapOptions): Promise<string> {
+  const bounds = getFieldMapBounds(geometry);
+  if (!bounds || typeof window === 'undefined' || typeof document === 'undefined' || typeof Image === 'undefined') {
+    return rasterizeSvgToPng(buildFieldMapSvg({ geometry, navPoint, roadLabel }), pixelWidth);
+  }
+
+  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
+  if (isJsdom) {
+    return rasterizeSvgToPng(buildFieldMapSvg({ geometry, navPoint, roadLabel }), pixelWidth);
+  }
+
+  try {
+    const image = await loadCorsImage(buildStreetMapExportUrl(bounds, pixelWidth));
+    const canvas = document.createElement('canvas');
+    canvas.width = pixelWidth;
+    canvas.height = pixelWidth;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas unavailable');
+
+    ctx.drawImage(image, 0, 0, pixelWidth, pixelWidth);
+    drawMapOverlay(ctx, bounds, geometry!, navPoint ?? null, roadLabel, pixelWidth);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return rasterizeSvgToPng(buildFieldMapSvg({ geometry, navPoint, roadLabel }), pixelWidth);
+  }
+}
+
+function loadCorsImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const timeout = setTimeout(() => reject(new Error('Map image timed out')), 10000);
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      clearTimeout(timeout);
+      resolve(image);
+    };
+    image.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error('Map image failed to load'));
+    };
+    image.src = src;
+  });
+}
+
+function drawMapOverlay(
+  ctx: CanvasRenderingContext2D,
+  bounds: FieldMapBounds,
+  geometry: GeoJSONGeometry,
+  navPoint: GpsPoint | null,
+  roadLabel: string | undefined,
+  size: number,
+) {
+  const project = (lng: number, lat: number): [number, number] => [
+    ((lng - bounds.west) / (bounds.east - bounds.west)) * size,
+    ((bounds.north - lat) / (bounds.north - bounds.south)) * size,
+  ];
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+
+  ctx.save();
+  ctx.beginPath();
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      ring.forEach(([lng, lat], index) => {
+        const [x, y] = project(lng, lat);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+    }
+  }
+  ctx.fillStyle = 'rgba(34, 197, 94, 0.32)';
+  ctx.strokeStyle = '#14532d';
+  ctx.lineWidth = Math.max(4, size / 160);
+  ctx.lineJoin = 'round';
+  ctx.fill('evenodd');
+  ctx.stroke();
+
+  if (navPoint) {
+    const [x, y] = project(navPoint.lng, navPoint.lat);
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(9, size / 70), 0, Math.PI * 2);
+    ctx.fillStyle = '#dc2626';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(3, size / 250);
+    ctx.stroke();
+  }
+
+  const footerHeight = Math.max(34, size / 20);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.fillRect(0, size - footerHeight, size, footerHeight);
+  ctx.fillStyle = '#1e3a2b';
+  ctx.font = `bold ${Math.max(14, size / 45)}px sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(roadLabel || 'Crop acres', size / 45, size - footerHeight / 2);
+  ctx.restore();
 }
 
 /**

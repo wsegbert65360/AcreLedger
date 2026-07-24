@@ -1,5 +1,10 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { buildFieldMapSvg, rasterizeSvgToPng } from './fieldMapImage';
+import {
+  buildFieldMapSvg,
+  buildStreetMapExportUrl,
+  getFieldMapBounds,
+  rasterizeSvgToPng,
+} from './fieldMapImage';
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 
 const POLYGON: GeoJSONGeometry = {
@@ -72,6 +77,31 @@ describe('buildFieldMapSvg', () => {
     const svg = buildFieldMapSvg({ geometry: POLYGON, size: 600, padding: 50 });
     expect(svg).toContain('width="600"');
     expect(svg).toContain('height="600"');
+  });
+});
+
+describe('street map extent', () => {
+  it('pads the crop geometry so surrounding roads can be labeled', () => {
+    const bounds = getFieldMapBounds(POLYGON);
+
+    expect(bounds).not.toBeNull();
+    expect(bounds!.west).toBeLessThan(-93);
+    expect(bounds!.east).toBeGreaterThan(-92.9);
+    expect(bounds!.south).toBeLessThan(38);
+    expect(bounds!.north).toBeGreaterThan(38.1);
+    expect(bounds!.east - bounds!.west).toBeCloseTo(bounds!.north - bounds!.south);
+  });
+
+  it('builds a labeled Esri street-map PNG export request', () => {
+    const bounds = getFieldMapBounds(POLYGON)!;
+    const url = new URL(buildStreetMapExportUrl(bounds, 1200));
+
+    expect(url.hostname).toBe('server.arcgisonline.com');
+    expect(url.pathname).toContain('/World_Street_Map/MapServer/export');
+    expect(url.searchParams.get('bboxSR')).toBe('4326');
+    expect(url.searchParams.get('size')).toBe('1200,1200');
+    expect(url.searchParams.get('format')).toBe('png32');
+    expect(url.searchParams.get('f')).toBe('image');
   });
 });
 

@@ -7,6 +7,13 @@ export const THUMBNAIL_VIEWBOX_SIZE = 44;
 export const THUMBNAIL_PADDING = 5;
 const DRAWABLE = THUMBNAIL_VIEWBOX_SIZE - 2 * THUMBNAIL_PADDING;
 
+export interface FieldGeometryOptions {
+  /** Resolve CLU geometry before falling back to the saved field boundary. */
+  preferAssignments?: boolean;
+  /** Include only assignments explicitly marked as cropland. */
+  croplandOnly?: boolean;
+}
+
 export function geometryToThumbnailPath(
   geometry: GeoJSONGeometry | undefined | null,
 ): string | null {
@@ -81,8 +88,9 @@ export function getFieldThumbnailGeometry(
   field: Pick<Field, 'id' | 'boundary' | 'cluNumbers' | 'fsaFarmNumber' | 'fsaTractNumber'>,
   assignments: FieldCluAssignment[],
   tracts: FsaTractImport[],
+  options: FieldGeometryOptions = {},
 ): GeoJSONGeometry | null {
-  if (hasValidGeometry(field.boundary ?? undefined)) {
+  if (!options.preferAssignments && hasValidGeometry(field.boundary ?? undefined)) {
     return field.boundary ?? null;
   }
 
@@ -91,20 +99,23 @@ export function getFieldThumbnailGeometry(
       .filter(tract => !tract.deletedAt)
       .map(tract => [tract.tractKey, tract] as const),
   );
-  const activeAssignments = assignments.filter(
+  const allActiveAssignments = assignments.filter(
     assignment => assignment.fieldId === field.id && !assignment.deletedAt,
   );
+  const activeAssignments = options.croplandOnly
+    ? allActiveAssignments.filter(assignment => assignment.landUse === 'cropland')
+    : allActiveAssignments;
   const assignmentKeys = new Set(activeAssignments.map(assignment => `${assignment.tractKey}:${assignment.cluNumber}`));
 
-  if (activeAssignments.length === 0 && field.cluNumbers?.length) {
+  // Legacy fields do not store land use per CLU. Treat their saved CLU list as
+  // cropland only when no explicit assignment records exist.
+  if (allActiveAssignments.length === 0 && field.cluNumbers?.length) {
     for (const tractKey of parseTractKeys(field.fsaFarmNumber, field.fsaTractNumber)) {
       for (const cluNumber of field.cluNumbers) {
         assignmentKeys.add(`${tractKey}:${cluNumber}`);
       }
     }
   }
-
-  if (assignmentKeys.size === 0) return null;
 
   const polygons: number[][][][] = [];
   for (const key of assignmentKeys) {
@@ -122,5 +133,15 @@ export function getFieldThumbnailGeometry(
     }
   }
 
-  return polygons.length > 0 ? { type: 'MultiPolygon', coordinates: polygons } : null;
+  if (polygons.length > 0) {
+    return { type: 'MultiPolygon', coordinates: polygons };
+  }
+
+  // When explicit assignments exist, a cropland-only request must not fall
+  // back to a boundary that can include non-cropland acres.
+  if (options.croplandOnly && allActiveAssignments.length > 0) {
+    return null;
+  }
+
+  return hasValidGeometry(field.boundary ?? undefined) ? field.boundary ?? null : null;
 }

@@ -94,7 +94,12 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
   // Geometry lookup helper (closure so step components resolve consistently).
   const resolve = useCallback((fieldId: string) => {
     const field = fields.find(f => f.id === fieldId);
-    const geometry = field ? getFieldThumbnailGeometry(field, cluAssignments, resolvedFsaTracts) : null;
+    const geometry = field
+      ? getFieldThumbnailGeometry(field, cluAssignments, resolvedFsaTracts, {
+          preferAssignments: true,
+          croplandOnly: true,
+        })
+      : null;
     return { field, geometry };
   }, [fields, cluAssignments, resolvedFsaTracts]);
 
