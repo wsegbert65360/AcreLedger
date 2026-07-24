@@ -39,11 +39,12 @@ function todayIso(): string {
 function buildEntryFromField(
   fieldId: string,
   farmName: string,
+  cluAssignments: import('@/types/fsaTract').FieldCluAssignment[],
   resolve: (id: string) => { field: import('@/types/farm').Field | undefined; geometry: import('@/lib/geoHelpers').GeoJSONGeometry | null },
 ): WorkRequestFieldEntry | null {
   const { field, geometry } = resolve(fieldId);
   if (!field) return null;
-  const acreage = getDisplayFieldAcres(field, []);
+  const acreage = getDisplayFieldAcres(field, cluAssignments);
   // Default nav point uses field coords / centroid — nearest-vertex-to-road is
   // applied later after road lookup runs in FieldReviewStep.
   const navPoint = resolveDefaultNavPoint(field, geometry, null);
@@ -110,13 +111,13 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
         if (kept) {
           next.push(kept);
         } else {
-          const entry = buildEntryFromField(id, farmNameCurrent || 'Farm', resolve);
+          const entry = buildEntryFromField(id, farmNameCurrent || 'Farm', cluAssignments, resolve);
           if (entry) next.push(entry);
         }
       }
       return { ...prev, fields: next };
     });
-  }, [resolve, farmName]);
+  }, [resolve, farmName, cluAssignments]);
 
   const totalSelectedAcres = useMemo(
     () => draft.fields.reduce((sum, f) => sum + (f.acreage || 0), 0),

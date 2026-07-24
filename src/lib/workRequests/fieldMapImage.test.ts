@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { buildFieldMapSvg } from './fieldMapImage';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { buildFieldMapSvg, rasterizeSvgToPng } from './fieldMapImage';
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 
 const POLYGON: GeoJSONGeometry = {
@@ -72,5 +72,68 @@ describe('buildFieldMapSvg', () => {
     const svg = buildFieldMapSvg({ geometry: POLYGON, size: 600, padding: 50 });
     expect(svg).toContain('width="600"');
     expect(svg).toContain('height="600"');
+  });
+});
+
+describe('rasterizeSvgToPng', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('waits for a slow SVG decode and returns PNG data instead of SVG', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('navigator', { userAgent: 'Chrome' });
+
+    class SlowImage {
+      naturalWidth = 400;
+      naturalHeight = 400;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      set src(_value: string) {
+        setTimeout(() => this.onload?.(), 300);
+      }
+    }
+
+    const realCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+      if (tagName !== 'canvas') return realCreateElement(tagName);
+      return {
+        width: 0,
+        height: 0,
+        getContext: () => ({
+          fillStyle: '',
+          fillRect: vi.fn(),
+          drawImage: vi.fn(),
+        }),
+        toDataURL: () => 'data:image/png;base64,slow-image',
+      } as unknown as HTMLCanvasElement;
+    }) as typeof document.createElement);
+    vi.stubGlobal('Image', SlowImage);
+
+    const resultPromise = rasterizeSvgToPng(buildFieldMapSvg({ geometry: POLYGON }));
+    await vi.advanceTimersByTimeAsync(300);
+
+    await expect(resultPromise).resolves.toBe('data:image/png;base64,slow-image');
+  });
+
+  it('uses a valid PNG fallback when SVG decoding fails', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Chrome' });
+    class BrokenImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      set src(_value: string) {
+        this.onerror?.();
+      }
+    }
+    vi.stubGlobal('Image', BrokenImage);
+
+    const result = await rasterizeSvgToPng(buildFieldMapSvg({ geometry: POLYGON }));
+
+    expect(result).toMatch(/^data:image\/png;base64,/);
+    expect(result).not.toContain('image/svg');
   });
 });

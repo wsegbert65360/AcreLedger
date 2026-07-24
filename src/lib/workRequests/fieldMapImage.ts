@@ -159,31 +159,35 @@ export function svgToDataUri(svg: string): string {
  * Rasterize a self-contained SVG string to a PNG data URI via an off-DOM Image
  * + canvas. Safe from canvas tainting because the SVG has no external refs.
  *
- * `pixelWidth` sets the raster width (height follows the SVG aspect — square by
+ * `pixelWidth` sets the raster width (height follows the SVG aspect - square by
  * default). Returns a `data:image/png;base64,...` URI suitable for jsPDF
- * `addImage`. Falls back to a base64 SVG data URI in headless/jsdom environments.
+ * `addImage`. Falls back to a valid transparent PNG when SVG decoding is
+ * unavailable, because jsPDF cannot embed SVG without an extra plugin.
  */
 export function rasterizeSvgToPng(svg: string, pixelWidth = 800): Promise<string> {
-  if (typeof window === 'undefined' || typeof document === 'undefined' || typeof HTMLCanvasElement === 'undefined' || typeof Image === 'undefined') {
-    return Promise.resolve(svgToDataUri(svg));
+  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
+  if (isJsdom || typeof window === 'undefined' || typeof document === 'undefined' || typeof HTMLCanvasElement === 'undefined' || typeof Image === 'undefined') {
+    return Promise.resolve(transparentPngDataUri());
   }
 
   return new Promise((resolve) => {
     let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const fallback = () => {
       if (!settled) {
         settled = true;
-        resolve(svgToDataUri(svg));
+        // jsPDF cannot add SVG images without an extra plugin. Return a tiny
+        // valid PNG instead so a slow or unsupported SVG decode never aborts
+        // the entire work-request PDF.
+        resolve(transparentPngDataUri());
       }
     };
 
     try {
-      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
       const img = new Image();
 
       const cleanup = () => {
-        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+        if (timeoutId !== undefined) clearTimeout(timeoutId);
       };
 
       img.onload = () => {
@@ -217,10 +221,17 @@ export function rasterizeSvgToPng(svg: string, pixelWidth = 800): Promise<string
         fallback();
       };
 
-      img.src = url;
-      setTimeout(fallback, 200);
+      // A data URI is more reliable than a blob URL in iOS WKWebView and does
+      // not require an asynchronous object-URL fetch before the 5-second guard.
+      img.src = svgToDataUri(svg);
+      timeoutId = setTimeout(fallback, 5000);
     } catch {
       fallback();
     }
   });
+}
+
+/** 1x1 transparent PNG used only when SVG decoding is unavailable. */
+function transparentPngDataUri(): string {
+  return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+AvnXAAAAAElFTkSuQmCC';
 }

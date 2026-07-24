@@ -86,7 +86,10 @@ export async function exportWorkRequestPdf({
     const roadLabel = entry.nearbyRoad ? `Nearby road: ${entry.nearbyRoad}` : 'Field boundary';
     const svg = buildFieldMapSvg({ geometry, navPoint, roadLabel });
     try {
-      return await rasterizeSvgToPng(svg, 1000);
+      const image = await rasterizeSvgToPng(svg, 1000);
+      // jsPDF's built-in addImage does not support SVG. Keep this guard even
+      // though browser rasterization now has a PNG fallback.
+      return image.startsWith('data:image/png') ? image : null;
     } catch {
       return null;
     }
