@@ -97,16 +97,22 @@ describe('exportWorkRequestPdf', () => {
     expect(breakdownTable!.body.length).toBe(2); // two fields
   });
 
-  it('starts each field on its own page with the map image', async () => {
+  it('keeps field blocks compact so multiple fields can share a page', async () => {
     await exportWorkRequestPdf({ request: makeRequest(2) });
-    // One map image per field.
     expect(pdf.images().length).toBe(2);
-    // Field pages are added (1 summary + 2 field + 1 disclaimer = 4 pages,
-    // so addPage is called 3 times after the first).
-    expect(pdf.addPageCount()).toBeGreaterThanOrEqual(3);
+    // The compact fields fit on the summary page in the deterministic mock;
+    // the former layout always added three pages for these two fields.
+    expect(pdf.addPageCount()).toBe(0);
     const text = pdf.allText();
     expect(text).toContain('Field 1 of 2: Field 1');
     expect(text).toContain('Field 2 of 2: Field 2');
+  });
+
+  it('does not add a dedicated verification page', async () => {
+    await exportWorkRequestPdf({ request: makeRequest(1) });
+
+    expect(pdf.addPageCount()).toBe(0);
+    expect(pdf.allText()).toContain(WORK_REQUEST_DISCLAIMER);
   });
 
   it('includes GPS coordinates and nearby road per field', async () => {
