@@ -81,10 +81,19 @@ describe('buildWorkRequestMailto', () => {
     expect(buildWorkRequestMailto(req).subject).toBe('Work Request – Spraying – Alpha, Beta');
   });
 
-  it('includes the request number, customer, and phone in the body', () => {
+  it('omits the work-type segment from the subject when the type is "other"', () => {
+    const req = makeRequest({
+      workType: 'other',
+      fields: [{ fieldId: '1', farmName: 'Alpha', fieldName: 'A', acreage: 10 }],
+    });
+    expect(buildWorkRequestMailto(req).subject).toBe('Work Request – Alpha');
+  });
+
+  it('includes the request number, farm, requested work, and phone in the body', () => {
     const { body } = buildWorkRequestMailto(makeRequest());
     expect(body).toContain('WR-2026-AB12CD');
-    expect(body).toContain('Customer: Jane Farmer');
+    expect(body).toContain('Farm: Jane Farmer');
+    expect(body).toContain('Requested work: Avoid the creek crossing.');
     expect(body).toContain('Phone: 555-1234');
   });
 

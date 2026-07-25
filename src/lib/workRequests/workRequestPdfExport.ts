@@ -126,48 +126,46 @@ export async function exportWorkRequestPdf({
 
   let y = 30;
 
-  // Compact customer / provider / work-details row.
+  // Compact farm / requested-work row. Older requests may still carry the
+  // optional contact and scheduling fields, so include those when present.
   const summaryColumnGap = 6;
-  const summaryColumnWidth = (pageWidth - 2 * margin - summaryColumnGap * 2) / 3;
+  const farmColumnWidth = 58;
+  const workColumnWidth = pageWidth - 2 * margin - summaryColumnGap - farmColumnWidth;
   const summaryX = [
     margin,
-    margin + summaryColumnWidth + summaryColumnGap,
-    margin + (summaryColumnWidth + summaryColumnGap) * 2,
+    margin + farmColumnWidth + summaryColumnGap,
   ];
-  const wrapSummaryLines = (lines: string[]) =>
-    lines.flatMap(line => doc.splitTextToSize(line, summaryColumnWidth) as string[]);
-  const customerLines = wrapSummaryLines([
+  const wrapSummaryLines = (lines: string[], width: number) =>
+    lines.flatMap(line => doc.splitTextToSize(line, width) as string[]);
+  const farmLines = wrapSummaryLines([
     request.customerName,
     request.customerPhone ? `Phone: ${request.customerPhone}` : '',
     request.customerBillingAddress ? request.customerBillingAddress : '',
-  ].filter(Boolean));
-  const providerLines = wrapSummaryLines([
-    request.providerName ? request.providerName : '—',
+    request.providerName ? `Provider: ${request.providerName}` : '',
     request.providerEmail ? request.providerEmail : '',
-  ].filter(Boolean));
+  ].filter(Boolean), farmColumnWidth);
   const workLines = wrapSummaryLines([
-    `Type: ${workTypeLabel(request.workType)}`,
-    `Due: ${formatDate(request.requestedCompletionDate)}`,
+    request.notes || 'No description provided.',
+    request.workType !== 'other' ? `Type: ${workTypeLabel(request.workType)}` : '',
+    request.requestedCompletionDate ? `Due: ${formatDate(request.requestedCompletionDate)}` : '',
     request.crop ? `Crop: ${request.crop}` : '',
     request.currentCropStage ? `Stage: ${request.currentCropStage}` : '',
     request.previousCrop ? `Previous: ${request.previousCrop}` : '',
     request.nextPlannedCrop ? `Next: ${request.nextPlannedCrop}` : '',
-  ].filter(Boolean));
+  ].filter(Boolean), workColumnWidth);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(40);
-  doc.text('Customer', summaryX[0], y);
-  doc.text('Provider', summaryX[1], y);
-  doc.text('Work details', summaryX[2], y);
+  doc.text('Farm', summaryX[0], y);
+  doc.text('Requested work', summaryX[1], y);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(70);
   y += 4.5;
-  doc.text(customerLines, summaryX[0], y);
-  doc.text(providerLines, summaryX[1], y);
-  doc.text(workLines, summaryX[2], y);
-  y += Math.max(customerLines.length, providerLines.length, workLines.length) * 3.6 + 5;
+  doc.text(farmLines, summaryX[0], y);
+  doc.text(workLines, summaryX[1], y);
+  y += Math.max(farmLines.length, workLines.length) * 3.6 + 5;
 
   // Products autotable
   if (request.products.length > 0) {

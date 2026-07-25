@@ -331,7 +331,7 @@ function WorkRequestWizard({ open, onClose, initial, mode, fsaTracts, onSave }: 
             />
           )}
           {form.step === 'details' && (
-            <DetailsStep draft={form.draft} patchDraft={form.patchDraft} setWorkType={form.setWorkType} />
+            <DetailsStep draft={form.draft} patchDraft={form.patchDraft} />
           )}
           {form.step === 'products' && (
             <ProductsStep

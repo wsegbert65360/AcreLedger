@@ -29,23 +29,30 @@ export interface WorkRequestMailto {
 /**
  * Build the email subject/body for a work request.
  *
- * Subject: `Work Request – [Work Type] – [Farm Name(s)]`
- * Body includes request number, customer name + phone, work type, requested
- * date, selected farms/fields, per-field acreage, total acreage, a concise
- * product/application summary, notes, a statement that the PDF has the full
- * field info + maps, and the required verification disclaimer.
+ * Subject: `Work Request – [Work Type] – [Farm Name(s)]` (the work-type segment
+ * is omitted when the request is the generic `'other'` type, so a simplified
+ * request does not read "Work Request – Work – ...").
+ * Body includes request number, farm name + phone, requested-work description,
+ * optional work type and requested date, selected farms/fields, per-field
+ * acreage, total acreage, a concise product/application summary, a statement
+ * that the PDF has the full field info + maps, and the required verification
+ * disclaimer.
  */
 export function buildWorkRequestMailto(request: WorkRequest): WorkRequestMailto {
   const farms = farmNamesForRequest(request);
   const farmsLabel = farms.length > 0 ? farms.join(', ') : 'Farm';
-  const subject = `Work Request – ${workTypeLabel(request.workType)} – ${farmsLabel}`;
+  const typeLabel = request.workType !== 'other' ? workTypeLabel(request.workType) : '';
+  const subject = typeLabel
+    ? `Work Request – ${typeLabel} – ${farmsLabel}`
+    : `Work Request – ${farmsLabel}`;
 
   const lines: string[] = [];
   lines.push(`Work Request ${request.requestNumber}`);
   lines.push('');
-  lines.push(`Customer: ${request.customerName}`);
+  lines.push(`Farm: ${request.customerName}`);
   if (request.customerPhone) lines.push(`Phone: ${request.customerPhone}`);
-  lines.push(`Work type: ${workTypeLabel(request.workType)}`);
+  if (request.notes) lines.push(`Requested work: ${request.notes}`);
+  if (request.workType !== 'other') lines.push(`Work type: ${workTypeLabel(request.workType)}`);
   if (request.requestedCompletionDate) {
     lines.push(`Requested completion: ${formatIsoDate(request.requestedCompletionDate)}`);
   }
@@ -70,11 +77,6 @@ export function buildWorkRequestMailto(request: WorkRequest): WorkRequestMailto 
       const parts = [product.productName, rate ? `@ ${rate}` : '', carrier ? `carrier ${carrier}` : '', product.applicationMethod ? `via ${product.applicationMethod}` : '', supplier ? `provided by ${supplier}` : ''].filter(Boolean);
       lines.push(`  • ${parts.join(' · ')}`);
     }
-    lines.push('');
-  }
-
-  if (request.notes) {
-    lines.push(`Notes: ${request.notes}`);
     lines.push('');
   }
 

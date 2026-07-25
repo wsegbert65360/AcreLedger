@@ -78,13 +78,14 @@ describe('exportWorkRequestPdf', () => {
     expect(text).toContain('Status: Draft');
   });
 
-  it('renders customer and provider blocks', async () => {
+  it('renders the farm and requested-work blocks with legacy provider details when present', async () => {
     await exportWorkRequestPdf({ request: makeRequest(1) });
     const text = pdf.allText();
-    expect(text).toContain('Customer');
-    expect(text).toContain('Provider');
+    expect(text).toContain('Farm');
+    expect(text).toContain('Requested work');
     expect(text).toContain('Jane Farmer');
     expect(text).toContain('Acme Spraying');
+    expect(text).toContain('Avoid the creek.');
   });
 
   it('renders the products and acreage autotables', async () => {

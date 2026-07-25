@@ -41,26 +41,26 @@ export default function ReviewStep({ draft, issues, canGenerate, goToStep, onDow
         </div>
       )}
 
-      {/* Customer & provider */}
-      <ReviewSection title="Customer & provider" onEdit={() => goToStep('details')}>
-        <ReviewRow label="Customer" value={draft.customerName || '—'} />
-        <ReviewRow label="Phone" value={draft.customerPhone || '—'} />
+      <ReviewSection title="Request details" onEdit={() => goToStep('details')}>
+        <ReviewRow label="Farm" value={draft.customerName || '—'} />
+        <ReviewRow label="Requested work" value={draft.notes || '—'} />
+        {draft.customerPhone && <ReviewRow label="Phone" value={draft.customerPhone} />}
         {draft.customerBillingAddress && <ReviewRow label="Billing address" value={draft.customerBillingAddress} />}
-        <ReviewRow label="Provider" value={draft.providerName || '—'} />
-        <ReviewRow label="Provider email" value={draft.providerEmail || '—'} />
+        {draft.providerName && <ReviewRow label="Provider" value={draft.providerName} />}
+        {draft.providerEmail && <ReviewRow label="Provider email" value={draft.providerEmail} />}
       </ReviewSection>
 
-      {/* Work details */}
-      <ReviewSection title="Work details" onEdit={() => goToStep('details')}>
-        <ReviewRow label="Work type" value={workTypeLabel(draft.workType)} />
-        <ReviewRow label="Requested completion" value={formatIsoDate(draft.requestedCompletionDate)} />
+      {(draft.workType !== 'other' || draft.requestedCompletionDate || draft.crop || draft.currentCropStage || draft.previousCrop || draft.nextPlannedCrop) && (
+        <ReviewSection title="Additional details" onEdit={() => goToStep('details')}>
+        {draft.workType !== 'other' && <ReviewRow label="Work type" value={workTypeLabel(draft.workType)} />}
+        {draft.requestedCompletionDate && <ReviewRow label="Requested completion" value={formatIsoDate(draft.requestedCompletionDate)} />}
         <ReviewRow label="Crop year" value={String(draft.cropYear)} />
         {draft.crop && <ReviewRow label="Crop" value={draft.crop} />}
         {draft.currentCropStage && <ReviewRow label="Current stage" value={draft.currentCropStage} />}
         {draft.previousCrop && <ReviewRow label="Previous crop" value={draft.previousCrop} />}
         {draft.nextPlannedCrop && <ReviewRow label="Next planned crop" value={draft.nextPlannedCrop} />}
-        {draft.notes && <ReviewRow label="Notes" value={draft.notes} />}
-      </ReviewSection>
+        </ReviewSection>
+      )}
 
       {/* Products */}
       <ReviewSection title="Products" onEdit={() => goToStep('products')}>

@@ -4,7 +4,6 @@ import type {
   WorkRequestFieldEntry,
   WorkRequestProduct,
 } from '@/types/farm';
-import type { WorkType } from '@/types/farm';
 import type { FsaTractImport } from '@/types/fsaTract';
 import { useFarm } from '@/store/farmStore';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
@@ -14,8 +13,6 @@ import { getFieldThumbnailGeometry } from '@/lib/fieldThumbnail';
 import { buildNavigationUrl } from '@/lib/workRequests/navigation';
 
 export type WorkRequestStep = 'fields' | 'details' | 'products' | 'field-review' | 'review';
-
-export type { WorkType } from '@/types/farm';
 
 export const WIZARD_STEPS: { key: WorkRequestStep; label: string }[] = [
   { key: 'fields', label: 'Fields' },
@@ -80,13 +77,13 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
   const isDuplicate = mode === 'duplicate' && !!initial;
 
   const [step, setStep] = useState<WorkRequestStep>('fields');
-  const [draft, setDraft] = useState<WorkRequestDraft>(() => buildInitialDraft(initial, mode, viewingSeason, workRequests));
+  const [draft, setDraft] = useState<WorkRequestDraft>(() => buildInitialDraft(initial, mode, viewingSeason, workRequests, farmName));
   const [isSaving, setIsSaving] = useState(false);
 
   // Reset the draft whenever the wizard (re)opens for a different target.
   useEffect(() => {
     if (!open) return;
-    setDraft(buildInitialDraft(initial, mode, viewingSeason, workRequests));
+    setDraft(buildInitialDraft(initial, mode, viewingSeason, workRequests, farmName));
     setStep('fields');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial?.id, mode]);
@@ -134,8 +131,6 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
     setDraft(prev => ({ ...prev, ...patch }));
   }, []);
 
-  const setWorkType = useCallback((workType: WorkType) => patchDraft({ workType }), [patchDraft]);
-
   const setProducts = useCallback((products: WorkRequestProduct[]) => patchDraft({ products }), [patchDraft]);
 
   const addProduct = useCallback(() => {
@@ -164,15 +159,13 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
   const issues = useMemo(() => {
     const list: string[] = [];
     if (draft.fields.length === 0) list.push('Select at least one field.');
-    if (!draft.customerName.trim()) list.push('Enter the customer/landowner name.');
-    if (!draft.providerName?.trim()) list.push('Enter the provider/applicator name.');
-    if (!draft.providerEmail?.trim()) list.push('Enter the provider email (required to email).');
-    if (!draft.requestedCompletionDate) list.push('Choose a requested completion date.');
+    if (!draft.customerName.trim()) list.push('Enter the farm name.');
+    if (!draft.notes?.trim()) list.push('Describe what needs to be done.');
     return list;
   }, [draft]);
 
   const canProceedFields = draft.fields.length > 0;
-  const canProceedDetails = !!draft.customerName.trim() && !!draft.providerName?.trim() && !!draft.providerEmail?.trim() && !!draft.requestedCompletionDate;
+  const canProceedDetails = !!draft.customerName.trim() && !!draft.notes?.trim();
   const canGenerate = issues.length === 0;
 
   // ── Navigation ────────────────────────────────────────────────────────────
@@ -210,7 +203,6 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
     totalSelectedAcres,
     // details/products
     patchDraft,
-    setWorkType,
     setProducts,
     addProduct,
     updateProduct,
@@ -231,11 +223,12 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
   };
 }
 
-function buildInitialDraft(
+export function buildInitialDraft(
   initial: WorkRequest | null | undefined,
   mode: 'edit' | 'duplicate' | 'new',
   viewingSeason: number,
   existing: WorkRequest[],
+  farmName: string | null,
 ): WorkRequestDraft {
   if (initial && mode === 'edit') {
     const { id: _id, timestamp: _t, deleted_at: _d, farm_id: _f, ...rest } = initial;
@@ -259,20 +252,20 @@ function buildInitialDraft(
     status: 'Draft',
     createdAt: nowIso,
     updatedAt: nowIso,
-    customerName: '',
+    customerName: farmName || '',
     customerPhone: '',
     customerBillingAddress: '',
     providerName: '',
     providerEmail: '',
-    workType: 'spraying',
-    requestedCompletionDate: todayIso(),
+    workType: 'other',
+    requestedCompletionDate: undefined,
     crop: '',
     cropYear: viewingSeason,
     currentCropStage: '',
     previousCrop: '',
     nextPlannedCrop: '',
     notes: '',
-    products: [emptyProduct()],
+    products: [],
     fields: [],
   };
 }
