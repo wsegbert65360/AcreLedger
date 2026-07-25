@@ -123,6 +123,14 @@ describe('exportWorkRequestPdf', () => {
     expect(text).toMatch(/38\.50\d{3}, -93\.20\d{3}/);
   });
 
+  it('includes each field crop in the PDF output', async () => {
+    const request = makeRequest(1);
+    request.fields[0].crop = 'Soybeans';
+    await exportWorkRequestPdf({ request });
+
+    expect(pdf.allText()).toContain('Crop: Soybeans');
+  });
+
   it('includes the required verification disclaimer', async () => {
     await exportWorkRequestPdf({ request: makeRequest(1) });
     expect(pdf.allText()).toContain(WORK_REQUEST_DISCLAIMER);

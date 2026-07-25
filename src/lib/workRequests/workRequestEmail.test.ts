@@ -105,8 +105,8 @@ describe('buildWorkRequestMailto', () => {
 
   it('lists each selected field with its acreage', () => {
     const { body } = buildWorkRequestMailto(makeRequest());
-    expect(body).toContain('Home Farm — North 40 (40 ac)');
-    expect(body).toContain('Home Farm — South 80 (80 ac)');
+    expect(body).toContain('Home Farm — North 40 (40 ac, Corn)');
+    expect(body).toContain('Home Farm — South 80 (80 ac, Corn)');
   });
 
   it('includes the total acreage', () => {

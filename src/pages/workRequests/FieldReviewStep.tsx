@@ -244,10 +244,17 @@ function FieldReviewCard({ entry, draft, lookupInProgress, navUrl, resolve, onRe
 
       {/* Per-field overrides */}
       <div className="space-y-3 border-t border-border pt-3">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Per-field overrides (optional)</p>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Field details</p>
         <div className="space-y-1.5">
-          <Label htmlFor={`crop-${entry.fieldId}`} className="text-xs">Crop for this field</Label>
-          <Input id={`crop-${entry.fieldId}`} className="h-11" value={overrideCrop} onChange={e => onOverrideCrop(e.target.value)} placeholder="Leave blank to use the request crop" />
+          <Label htmlFor={`crop-${entry.fieldId}`} className="text-xs">Crop</Label>
+          <Input
+            id={`crop-${entry.fieldId}`}
+            className="h-11"
+            value={effectiveCrop}
+            onChange={e => onOverrideCrop(e.target.value)}
+            placeholder="Enter the crop"
+          />
+          <p className="text-[10px] text-muted-foreground">Defaulted from this field's current planting record. Change it here if needed.</p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`notes-${entry.fieldId}`} className="text-xs">Notes for this field</Label>

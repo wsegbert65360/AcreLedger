@@ -89,9 +89,11 @@ export default function ReviewStep({ draft, issues, canGenerate, goToStep, onDow
             const navUrl = entry.navigationLat != null && entry.navigationLng != null
               ? buildNavigationUrl(entry.navigationLat, entry.navigationLng, 'app')
               : null;
+            const crop = entry.overrides?.crop || entry.crop || draft.crop;
             return (
               <li key={entry.fieldId} className="font-mono text-foreground">
                 {entry.fieldName} — {entry.acreage.toLocaleString()} ac
+                {crop && ` · ${crop}`}
                 {entry.nearbyRoad && ` · ${entry.nearbyRoad}`}
                 {navUrl && (
                   <>

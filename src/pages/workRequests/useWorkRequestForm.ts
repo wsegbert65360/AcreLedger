@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
+  Field,
+  PlantRecord,
   WorkRequest,
   WorkRequestFieldEntry,
   WorkRequestProduct,
@@ -11,6 +13,7 @@ import { generateRequestNumber } from '@/lib/workRequests/requestNumber';
 import { resolveDefaultNavPoint } from '@/lib/workRequests/navPoint';
 import { getFieldThumbnailGeometry } from '@/lib/fieldThumbnail';
 import { buildNavigationUrl } from '@/lib/workRequests/navigation';
+import { getLatestForField } from '@/lib/utils';
 
 export type WorkRequestStep = 'fields' | 'details' | 'products' | 'field-review' | 'review';
 
@@ -37,6 +40,8 @@ function buildEntryFromField(
   fieldId: string,
   farmName: string,
   cluAssignments: import('@/types/fsaTract').FieldCluAssignment[],
+  plantRecords: PlantRecord[],
+  viewingSeason: number,
   resolve: (id: string) => { field: import('@/types/farm').Field | undefined; geometry: import('@/lib/geoHelpers').GeoJSONGeometry | null },
 ): WorkRequestFieldEntry | null {
   const { field, geometry } = resolve(fieldId);
@@ -50,7 +55,7 @@ function buildEntryFromField(
     farmName,
     fieldName: field.name,
     acreage,
-    crop: undefined,
+    crop: resolveWorkRequestFieldCrop(field, plantRecords, viewingSeason),
     gpsLat: field.lat ?? undefined,
     gpsLng: field.lng ?? undefined,
     navigationLat: navPoint?.lat,
@@ -59,6 +64,21 @@ function buildEntryFromField(
     roadSource: undefined,
     overrides: undefined,
   };
+}
+
+/** Match the field screen: current-season planting first, then intended use. */
+export function resolveWorkRequestFieldCrop(
+  field: Field,
+  plantRecords: PlantRecord[],
+  viewingSeason: number,
+): string | undefined {
+  const latestPlanting = getLatestForField(
+    plantRecords,
+    field.id,
+    'plantDate',
+    record => record.seasonYear === viewingSeason,
+  );
+  return latestPlanting?.crop?.trim() || field.intendedUse?.trim() || undefined;
 }
 
 interface UseWorkRequestFormArgs {
@@ -72,7 +92,7 @@ interface UseWorkRequestFormArgs {
 }
 
 export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: providedFsaTracts }: UseWorkRequestFormArgs) {
-  const { fields, cluAssignments, fsaTracts, farmName, viewingSeason, workRequests } = useFarm();
+  const { fields, cluAssignments, fsaTracts, farmName, viewingSeason, workRequests, plantRecords } = useFarm();
   const resolvedFsaTracts = providedFsaTracts ?? fsaTracts;
   const isDuplicate = mode === 'duplicate' && !!initial;
 
@@ -113,13 +133,20 @@ export function useWorkRequestForm({ initial, mode = 'new', open, fsaTracts: pro
         if (kept) {
           next.push(kept);
         } else {
-          const entry = buildEntryFromField(id, farmNameCurrent || 'Farm', cluAssignments, resolve);
+          const entry = buildEntryFromField(
+            id,
+            farmNameCurrent || 'Farm',
+            cluAssignments,
+            plantRecords,
+            viewingSeason,
+            resolve,
+          );
           if (entry) next.push(entry);
         }
       }
       return { ...prev, fields: next };
     });
-  }, [resolve, farmName, cluAssignments]);
+  }, [resolve, farmName, cluAssignments, plantRecords, viewingSeason]);
 
   const totalSelectedAcres = useMemo(
     () => draft.fields.reduce((sum, f) => sum + (f.acreage || 0), 0),

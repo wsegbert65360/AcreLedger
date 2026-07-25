@@ -60,7 +60,8 @@ export function buildWorkRequestMailto(request: WorkRequest): WorkRequestMailto 
 
   lines.push('Selected farms and fields:');
   for (const entry of request.fields) {
-    lines.push(`  • ${entry.farmName} — ${entry.fieldName} (${entry.acreage} ac)`);
+    const crop = entry.overrides?.crop || entry.crop || request.crop;
+    lines.push(`  • ${entry.farmName} — ${entry.fieldName} (${entry.acreage} ac${crop ? `, ${crop}` : ''})`);
   }
   lines.push('');
 
