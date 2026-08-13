@@ -151,6 +151,62 @@
     --sidebar-border: 240 4% 14%;
     --sidebar-ring: 142 72% 50%;
   }
+
+  .color {
+    --background: 48 55% 96%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 142 90% 34%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 188 100% 36%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 100 30% 90%;
+    --muted-foreground: 222 20% 32%;
+
+    --accent: 38 100% 46%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 85% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 200 25% 78%;
+    --input: 200 25% 78%;
+    --ring: 188 100% 36%;
+
+    --hue-lime: 142 90% 34%;
+    --hue-cyan: 188 100% 36%;
+    --hue-sky: 210 100% 44%;
+    --hue-violet: 262 72% 48%;
+    --hue-gold: 46 100% 44%;
+    --hue-orange: 24 100% 48%;
+
+    --plant: 142 100% 36%;
+    --plant-foreground: 0 0% 100%;
+    --spray: 210 100% 44%;
+    --spray-foreground: 0 0% 100%;
+    --harvest: 32 100% 48%;
+    --harvest-foreground: 222 47% 11%;
+    --neon-glow-plant: 0 0 24px hsl(142 100% 36% / 0.45);
+    --neon-glow-spray: 0 0 24px hsl(210 100% 44% / 0.45);
+    --neon-glow-harvest: 0 0 24px hsl(32 100% 48% / 0.45);
+
+    --sidebar-background: 100 35% 93%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 142 90% 34%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 188 50% 90%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 160 25% 78%;
+    --sidebar-ring: 188 100% 36%;
+  }
 }
 
 @layer base {
@@ -168,6 +224,16 @@
     -webkit-touch-callout: none;
     padding-top: var(--safe-area-top);
     overscroll-behavior-y: contain;
+  }
+
+  html.color body {
+    background-image:
+      radial-gradient(circle at 6% -6%, hsl(var(--hue-lime) / 0.28), transparent 22rem),
+      radial-gradient(circle at 94% 4%, hsl(var(--hue-cyan) / 0.26), transparent 22rem),
+      radial-gradient(circle at 12% 92%, hsl(var(--hue-gold) / 0.24), transparent 24rem),
+      radial-gradient(circle at 88% 86%, hsl(var(--hue-orange) / 0.20), transparent 20rem),
+      radial-gradient(circle at 52% 42%, hsl(var(--hue-violet) / 0.12), transparent 26rem),
+      radial-gradient(circle at 38% 18%, hsl(var(--hue-sky) / 0.14), transparent 20rem);
   }
 
   ::selection {
@@ -305,4 +371,157 @@
       display: none;
     }
   }
+}
+
+/* Color mode: paint more chrome with distinct hues (no pink). */
+html.color header.sticky::after,
+html.color nav.fixed.bottom-0::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--hue-lime)),
+    hsl(var(--hue-cyan)),
+    hsl(var(--hue-sky)),
+    hsl(var(--hue-violet)),
+    hsl(var(--hue-gold)),
+    hsl(var(--hue-orange)),
+    hsl(var(--hue-lime))
+  );
+  pointer-events: none;
+}
+
+html.color header.sticky::after {
+  bottom: 0;
+}
+
+html.color nav.fixed.bottom-0::before {
+  top: 0;
+}
+
+html.color ::selection {
+  background: hsl(var(--hue-cyan) / 0.28);
+}
+
+html.color button.bg-primary,
+html.color a.bg-primary,
+html.color button.quick-add-trigger,
+html.color button.bg-primary.quick-add-trigger,
+html.color button.bg-primary:hover,
+html.color button.quick-add-trigger:hover,
+html.color button.quick-add-trigger:focus-visible {
+  background-image: none !important;
+  background-color: #14261a !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+html.color button.bg-primary svg,
+html.color button.quick-add-trigger svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+html.color nav.fixed.bottom-0 > div > button:nth-child(1),
+html.color nav.fixed.left-0 .space-y-1 > button:nth-child(1) {
+  --primary: var(--hue-lime);
+  --sidebar-primary: var(--hue-lime);
+  color: hsl(var(--hue-lime));
+}
+
+html.color nav.fixed.bottom-0 > div > button:nth-child(2),
+html.color nav.fixed.left-0 .space-y-1 > button:nth-child(2) {
+  --primary: var(--hue-gold);
+  --sidebar-primary: var(--hue-gold);
+  color: hsl(var(--hue-gold));
+}
+
+html.color nav.fixed.bottom-0 > div > button:nth-child(3),
+html.color nav.fixed.left-0 .space-y-1 > button:nth-child(3) {
+  --primary: var(--hue-sky);
+  --sidebar-primary: var(--hue-sky);
+  color: hsl(var(--hue-sky));
+}
+
+html.color nav.fixed.bottom-0 > div > button:nth-child(4),
+html.color nav.fixed.left-0 .space-y-1 > button:nth-child(4) {
+  --primary: var(--hue-orange);
+  --sidebar-primary: var(--hue-orange);
+  color: hsl(var(--hue-orange));
+}
+
+html.color nav.fixed.bottom-0 > div > button:nth-child(5),
+html.color nav.fixed.left-0 .space-y-1 > button:nth-child(5) {
+  --primary: var(--hue-violet);
+  --sidebar-primary: var(--hue-violet);
+  color: hsl(var(--hue-violet));
+}
+
+html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+1),
+html.color .grid > .rounded-2xl:nth-child(6n+1),
+html.color .overflow-x-auto > button:nth-child(6n+1) {
+  --primary: var(--hue-lime);
+  border-color: hsl(var(--hue-lime) / 0.45);
+}
+
+html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+2),
+html.color .grid > .rounded-2xl:nth-child(6n+2),
+html.color .overflow-x-auto > button:nth-child(6n+2) {
+  --primary: var(--hue-cyan);
+  border-color: hsl(var(--hue-cyan) / 0.45);
+}
+
+html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+3),
+html.color .grid > .rounded-2xl:nth-child(6n+3),
+html.color .overflow-x-auto > button:nth-child(6n+3) {
+  --primary: var(--hue-sky);
+  border-color: hsl(var(--hue-sky) / 0.45);
+}
+
+html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+4),
+html.color .grid > .rounded-2xl:nth-child(6n+4),
+html.color .overflow-x-auto > button:nth-child(6n+4) {
+  --primary: var(--hue-gold);
+  border-color: hsl(var(--hue-gold) / 0.5);
+}
+
+html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+5),
+html.color .grid > .rounded-2xl:nth-child(6n+5),
+html.color .overflow-x-auto > button:nth-child(6n+5) {
+  --primary: var(--hue-orange);
+  border-color: hsl(var(--hue-orange) / 0.45);
+}
+
+html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n),
+html.color .grid > .rounded-2xl:nth-child(6n),
+html.color .overflow-x-auto > button:nth-child(6n) {
+  --primary: var(--hue-violet);
+  border-color: hsl(var(--hue-violet) / 0.45);
+}
+
+html.color [data-orientation="vertical"] > *:nth-child(3n+1) {
+  border-color: hsl(var(--hue-lime) / 0.5);
+}
+
+html.color [data-orientation="vertical"] > *:nth-child(3n+2) {
+  border-color: hsl(var(--hue-sky) / 0.5);
+}
+
+html.color [data-orientation="vertical"] > *:nth-child(3n) {
+  border-color: hsl(var(--hue-gold) / 0.55);
+}
+
+html.color [data-theme-choice="color"] {
+  background-image: linear-gradient(
+    135deg,
+    hsl(var(--hue-lime) / 0.18),
+    hsl(var(--hue-cyan) / 0.18),
+    hsl(var(--hue-violet) / 0.18),
+    hsl(var(--hue-gold) / 0.18)
+  );
+  border-color: hsl(var(--hue-cyan) / 0.55);
 }

@@ -76,6 +76,20 @@ Dark mode uses near-black with a subtle blue undertone — never pure `#000000`.
 --sidebar-bg:   240 6% 3%
 ```
 
+### Color Mode Palette
+Color mode (`html.color`) is a bright rainbow/neon theme, not a dark variant and not a pink theme. Do not apply `.dark` when it is active.
+```
+--background:  48 55% 96%
+--foreground:  222 47% 11%
+--primary:     142 90% 34%
+--secondary:   188 100% 36%
+--accent:      38 100% 46%
+--plant:       142 100% 36%
+--spray:       210 100% 44%
+--harvest:     32 100% 48%
+--hue-lime / cyan / sky / violet / gold / orange
+```
+
 ### Border Radius Standard
 One consistent radius per element type — no mixing on the same page:
 | Element | Radius |

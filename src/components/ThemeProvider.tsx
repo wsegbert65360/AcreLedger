@@ -2,7 +2,22 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import { native } from "@/lib/native";
 
-type Theme = "dark" | "light" | "system";
+export const THEMES = ["light", "dark", "color", "system"] as const;
+export type Theme = (typeof THEMES)[number];
+type ResolvedTheme = Exclude<Theme, "system">;
+
+const THEME_CLASSES: ResolvedTheme[] = ["light", "dark", "color"];
+
+// Background tokens from index.css, converted for the theme-color meta tag.
+const THEME_COLOR_HEX: Record<ResolvedTheme, string> = {
+    light: "#dfe7f1", // hsl(212 40% 91%)
+    dark: "#000000",
+    color: "#faf8ef", // hsl(48 55% 96%)
+};
+
+function isTheme(value: string | null): value is Theme {
+    return THEMES.includes(value as Theme);
+}
 
 interface ThemeProviderState {
     theme: Theme;
@@ -27,22 +42,25 @@ export function ThemeProvider({
     storageKey?: string;
 }) {
     const [theme, setTheme] = useState<Theme>(
-        () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+        () => {
+            const stored = localStorage.getItem(storageKey);
+            return isTheme(stored) ? stored : defaultTheme;
+        }
     );
 
     useEffect(() => {
         const root = window.document.documentElement;
 
-        root.classList.remove("light", "dark");
+        const applyResolvedTheme = (resolved: ResolvedTheme) => {
+            root.classList.remove(...THEME_CLASSES);
+            root.classList.add(resolved);
 
-        const updateMetaThemeColor = (isDark: boolean) => {
             const metaThemeColor = document.querySelector('meta[name="theme-color"]');
             if (metaThemeColor) {
-                // Background colors from index.css translated to hex/rgb for meta tag
-                const color = isDark ? "#000000" : "#dfe7f1"; // #dfe7f1 approx hsl(212 40% 91%)
-                metaThemeColor.setAttribute("content", color);
+                metaThemeColor.setAttribute("content", THEME_COLOR_HEX[resolved]);
             }
-            if (isDark) {
+
+            if (resolved === "dark") {
                 native.statusBar.setLight();
             } else {
                 native.statusBar.setDark();
@@ -53,15 +71,11 @@ export function ThemeProvider({
             const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
             const applySystemTheme = (e: MediaQueryListEvent | MediaQueryList) => {
-                const isDark = e.matches;
-                root.classList.remove("light", "dark");
-                root.classList.add(isDark ? "dark" : "light");
-                updateMetaThemeColor(isDark);
+                applyResolvedTheme(e.matches ? "dark" : "light");
             };
 
             applySystemTheme(mediaQuery);
 
-            // Modern browsers
             mediaQuery.addEventListener("change", applySystemTheme);
 
             return () => {
@@ -69,9 +83,7 @@ export function ThemeProvider({
             };
         }
 
-        const isDark = theme === "dark";
-        root.classList.add(theme);
-        updateMetaThemeColor(isDark);
+        applyResolvedTheme(theme);
     }, [theme]);
 
     const value = {

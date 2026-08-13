@@ -306,6 +306,17 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Outlines and borders use defined slate-denim gray (`212 25% 78%`).
 - Muted helper/secondary text uses a darker slate-denim gray (`212 25% 30%`) to meet WCAG AA contrast guidelines.
 
+### Color Mode Theme
+- Color mode is a bright rainbow/neon alternative to light and dark. The stored theme key is `color` (html class `.color`).
+- Do not use pink or magenta as the dominant wash. Background is a warm cream (`48 55% 96%`) plus lime, cyan, sky, violet, gold, and orange page gradients.
+- Cards stay white. Foreground is deep navy (`222 47% 11%`) for contrast.
+- Chrome accents are lime primary (`142 90% 34%`), cyan secondary (`188 100% 36%`), and gold accent (`38 100% 46%`). Extra hues live on `--hue-lime`, `--hue-cyan`, `--hue-sky`, `--hue-violet`, `--hue-gold`, and `--hue-orange`.
+- Color-mode CSS paints nav tabs, field cards, stat cards, crop chips, settings accordions, and headers with those distinct hues. Keep that variety; do not collapse back to one accent.
+- Primary action buttons stay high-contrast in color mode: dark forest fill (`#14261a`), white label/icon, white outline. Do not put rainbow or neon fills on text-bearing buttons.
+- Farm tokens stay recognizable but neon: plant lime (`142 100% 36%`), spray sky (`210 100% 44%`), harvest orange (`32 100% 48%`).
+- Muted helper text uses `222 20% 32%` to stay WCAG AA.
+- Color mode is light-based: do not add `.dark` or rely on `dark:` variants. Status bar uses dark icons.
+
 ### Typography
 
 - Use Inter through `font-sans` for normal labels, headings, body text, buttons, navigation, empty states, and descriptions.

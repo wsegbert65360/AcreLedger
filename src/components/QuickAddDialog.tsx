@@ -312,7 +312,7 @@ export default function QuickAddDialog() {
               <Button
                 type="button"
                 onClick={handleStartActivity}
-                className="flex-grow sm:flex-initial bg-primary hover:bg-primary/90 text-primary-foreground h-11 text-xs font-bold"
+                className="quick-add-trigger flex-grow sm:flex-initial bg-primary hover:bg-primary/90 text-primary-foreground h-11 text-xs font-bold"
                 disabled={!selectedFieldId}
               >
                 Log {ACTIVITIES.find(a => a.key === selectedType)?.label || 'Activity'}

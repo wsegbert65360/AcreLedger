@@ -369,7 +369,7 @@ export default function Activity() {
                     };
                     openQuickAdd(map[tab] || null);
                   }}
-                  className="flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg bg-primary p-2.5 text-xs font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                  className="quick-add-trigger flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg bg-primary p-2.5 text-xs font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                 >
                   <Plus size={14} strokeWidth={2.5} />
                   <span>

@@ -32,7 +32,7 @@ export default function Sidebar() {
             native.haptic.light();
             openQuickAdd();
           }}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-bold shadow-md active:scale-95 transition-transform"
+          className="quick-add-trigger w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-bold shadow-md active:scale-95 transition-transform"
         >
           <Plus size={16} strokeWidth={2.5} />
           <span>Quick Add Record</span>

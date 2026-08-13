@@ -1,7 +1,7 @@
 import { useTheme } from '@/components/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sun, Moon, Laptop } from 'lucide-react';
+import { Laptop, Moon, Palette, Sun } from 'lucide-react';
 
 export default function DisplayManager() {
   const { theme, setTheme } = useTheme();
@@ -15,7 +15,7 @@ export default function DisplayManager() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Button
             variant={theme === "light" ? "default" : "outline"}
             size="sm"
@@ -33,6 +33,16 @@ export default function DisplayManager() {
           >
             <Moon size={20} />
             <span className="text-xs font-mono">Dark</span>
+          </Button>
+          <Button
+            variant={theme === "color" ? "default" : "outline"}
+            size="sm"
+            data-theme-choice="color"
+            className="flex flex-col h-20 gap-2"
+            onClick={() => setTheme("color")}
+          >
+            <Palette size={20} />
+            <span className="text-xs font-mono">Color</span>
           </Button>
           <Button
             variant={theme === "system" ? "default" : "outline"}
