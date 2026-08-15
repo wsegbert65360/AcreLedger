@@ -271,6 +271,35 @@ describe('useFsaTracts — deleteTract (corrected cascade)', () => {
     });
   });
 
+  it('online: rollback preserves unrelated assignments persisted while the delete was in flight', async () => {
+    let resolveDelete!: (v: { data: boolean; error: unknown }) => void;
+    fsaTractService.deleteTract.mockImplementation(
+      () => new Promise(res => { resolveDelete = res; })
+    );
+    const tract = makeTract();
+    const a1 = makeAssignment({ id: 'a1', tractKey: 'TK1' });
+    const unrelated = makeAssignment({ id: 'a-other', tractKey: 'TK9', cluNumber: '99', fieldId: 'f9' });
+    const { result } = renderFsaHook({ tracts: [tract], assignments: [a1] });
+
+    let okPromise!: Promise<boolean>;
+    act(() => { okPromise = result.current.ops.deleteTract(tract.id); });
+    // A concurrent flow (e.g. useFsaTracts on another screen) persists an
+    // unrelated assignment while the delete RPC is still awaiting.
+    act(() => result.current.assignState.setValue(prev => [...prev, unrelated]));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      resolveDelete({ data: false, error: { message: 'rpc failed' } });
+      ok = await okPromise;
+    });
+
+    expect(ok).toBe(false);
+    // The rollback restores the cascade's rows without clobbering the
+    // unrelated assignment a whole-array snapshot restore would have wiped.
+    expect(result.current.tractState.value.map(t => t.id)).toEqual(['tract-1']);
+    expect(result.current.assignState.value.map(a => a.id).sort()).toEqual(['a-other', 'a1']);
+  });
+
   it('online: rolls back both collections when the RPC rejects unexpectedly', async () => {
     fsaTractService.deleteTract.mockRejectedValue(new Error('network'));
     const tract = makeTract();

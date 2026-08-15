@@ -185,7 +185,6 @@ export function useFieldsAndBins({
 
     // Capture the prior record from the closure (see updateField note).
     const previous = fields.find(f => f.id === id);
-    const previousAssignments = cluAssignments;
     const assignmentsToDelete = cluAssignments.filter(a => a.fieldId === id && !a.deletedAt);
     const deletedAt = new Date().toISOString();
     setFields(prev => prev.map(f =>
@@ -194,6 +193,13 @@ export function useFieldsAndBins({
     setCluAssignments(prev => prev.map(a =>
       a.fieldId === id && !a.deletedAt ? { ...a, deletedAt } : a
     ));
+    // Restore only this field's rows: a whole-array snapshot would also revert
+    // CLU assignments that a concurrent useFsaTracts mutation persisted while
+    // this delete was awaiting its request.
+    const rollbackAssignments = () => setCluAssignments(prev => prev.map(a => {
+      const original = assignmentsToDelete.find(t => t.id === a.id);
+      return original ?? a;
+    }));
 
     try {
       if (!isOnline) {
@@ -218,7 +224,7 @@ export function useFieldsAndBins({
         } catch (err) {
           console.error('Failed to enqueue delete field offline:', err);
           if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
-          setCluAssignments(previousAssignments);
+          rollbackAssignments();
           toast.error('Failed to delete field offline');
           return false;
         }
@@ -233,7 +239,7 @@ export function useFieldsAndBins({
             console.warn('Field delete affected zero rows:', id);
           }
           if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
-          setCluAssignments(previousAssignments);
+          rollbackAssignments();
           toast.error('Failed to delete field');
           return false;
         }
@@ -242,7 +248,7 @@ export function useFieldsAndBins({
       } catch (err) {
         console.error('Network error deleting field:', err);
         if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
-        setCluAssignments(previousAssignments);
+        rollbackAssignments();
         toast.error('Failed to delete field due to a network error');
         return false;
       }
