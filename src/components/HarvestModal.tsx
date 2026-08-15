@@ -21,7 +21,7 @@ interface HarvestModalProps {
 
 export default function HarvestModal({ field, open, onClose, initialData, mode = 'edit' }: HarvestModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, grainMovements, harvestRecords, bins, viewingSeason } = useFarm();
+  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, deleteGrainMovements, grainMovements, harvestRecords, bins, viewingSeason } = useFarm();
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -115,20 +115,36 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
           return;
         }
 
-        // Sync linked grain movement
-        if (initialData.destination === 'bin') {
-          const movement = grainMovements.find(gm =>
-            gm.harvestRecordId === initialData.id || (
-              !gm.harvestRecordId &&
-              gm.sourceFieldName === field.name &&
-              gm.timestamp === initialData.timestamp &&
-              gm.type === 'in'
+        // Sync the linked grain movement across all destination transitions.
+        // The matcher accepts both explicit links (harvestRecordId) and legacy
+        // rows that only carry field name + timestamp + type 'in'.
+        const linkedMovement = initialData.destination === 'bin'
+          ? grainMovements.find(gm =>
+              gm.harvestRecordId === initialData.id || (
+                !gm.harvestRecordId &&
+                gm.sourceFieldName === field.name &&
+                gm.timestamp === initialData.timestamp &&
+                gm.type === 'in'
+              )
             )
-          );
-          if (movement) {
+          : undefined;
+
+        if (initialData.destination === 'bin' && destination !== 'bin') {
+          // Bin → town: the grain is sold, so the bin movement must not keep
+          // counting it toward the (season-independent) bin inventory.
+          if (linkedMovement) {
+            const gmSuccess = await deleteGrainMovements([linkedMovement.id]);
+            if (!gmSuccess) {
+              toast.error('Harvest saved but linked grain movement removal failed.');
+              native.haptic.error();
+              return;
+            }
+          }
+        } else if (initialData.destination === 'bin') {
+          if (linkedMovement) {
             const bin = bins.find(b => b.id === binId);
             const gmSuccess = await updateGrainMovement({
-              ...movement,
+              ...linkedMovement,
               binId: binId,
               binName: bin?.name || 'Unknown',
               bushels: bu,
