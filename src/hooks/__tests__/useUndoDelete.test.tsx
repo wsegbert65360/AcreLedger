@@ -111,4 +111,47 @@ describe('useUndoDelete', () => {
 
     await waitFor(() => expect(onCommit).toHaveBeenCalledWith(['a'], context));
   });
+
+  it('keeps the undo window open when the parent re-renders with a new onCommit identity', async () => {
+    const firstCommit = vi.fn().mockResolvedValue(undefined);
+    const { result, rerender } = renderHook(
+      ({ cb }) => useUndoDelete<string>({ onCommit: cb }),
+      { initialProps: { cb: firstCommit } },
+    );
+
+    act(() => result.current.requestDelete(['a'], 'Record deleted', 'ctx'));
+
+    // Parent re-render with a brand-new inline callback — the Activity.tsx
+    // pattern that used to flush the commit synchronously in the effect cleanup.
+    const secondCommit = vi.fn().mockResolvedValue(undefined);
+    act(() => rerender({ cb: secondCommit }));
+
+    expect(firstCommit).not.toHaveBeenCalled();
+    expect(secondCommit).not.toHaveBeenCalled();
+    expect(result.current.pending.has('a')).toBe(true);
+
+    act(() => vi.advanceTimersByTime(10000));
+    await waitFor(() => expect(secondCommit).toHaveBeenCalledWith(['a'], 'ctx'));
+    expect(firstCommit).not.toHaveBeenCalled();
+  });
+
+  it('does not mutate the caller-provided ids array', () => {
+    const onCommit = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useUndoDelete({ onCommit }));
+
+    const ids = ['b', 'a'];
+    act(() => result.current.requestDelete(ids, 'Records deleted', null));
+
+    expect(ids).toEqual(['b', 'a']);
+  });
+
+  it('flushes pending commits on unmount', () => {
+    const onCommit = vi.fn().mockResolvedValue(undefined);
+    const { result, unmount } = renderHook(() => useUndoDelete({ onCommit }));
+
+    act(() => result.current.requestDelete(['a'], 'Record deleted', null));
+    act(() => unmount());
+
+    expect(onCommit).toHaveBeenCalledWith(['a'], null);
+  });
 });

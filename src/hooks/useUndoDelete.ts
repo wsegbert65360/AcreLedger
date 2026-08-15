@@ -21,6 +21,18 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
   const pendingCommitsRef = useRef<Map<string, { timer: ReturnType<typeof setTimeout>, ids: string[], context: TContext }>>(new Map());
   const counterRef = useRef(0);
 
+  // Timers and the unmount flush must fire with the freshest callback closure,
+  // but callback identity must never re-arm pending commits — callers pass
+  // inline arrows (or memoized callbacks invalidated by store refreshes), and
+  // keying the flush effect on `onCommit` collapsed the undo window to the next
+  // render. Same latest-ref idiom as fetchDataRef in farmStore.tsx.
+  const onCommitRef = useRef(onCommit);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onCommitRef.current = onCommit;
+    onErrorRef.current = onError;
+  });
+
   const clearBatch = useCallback((key: string, ids: string[]) => {
     const entry = pendingCommitsRef.current.get(key);
     if (entry) {
@@ -39,7 +51,7 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
     (ids: string[], displayName: string, context: TContext) => {
       if (ids.length === 0) return;
 
-      const key = `${++counterRef.current}-${ids.sort().join(',')}`;
+      const key = `${++counterRef.current}-${[...ids].sort().join(',')}`;
 
       setPending(prev => {
         const next = new Set(prev);
@@ -50,10 +62,10 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
       const timer = setTimeout(async () => {
         pendingCommitsRef.current.delete(key);
         try {
-          await onCommit(ids, context);
+          await onCommitRef.current(ids, context);
         } catch (err) {
           console.error('Undo delete commit failed:', err);
-          onError?.(err);
+          onErrorRef.current?.(err);
         } finally {
           setPending(prev => {
             if (prev.size === 0) return prev;
@@ -78,16 +90,18 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
         duration: UNDO_DELAY_MS,
       });
     },
-    [onCommit, onError, clearBatch]
+    [clearBatch]
   );
 
+  // Flush pending commits only on real unmount. Intentionally keyed on nothing:
+  // see the onCommitRef note above.
   useEffect(() => {
     const pendingCommits = pendingCommitsRef.current;
     return () => {
       pendingCommits.forEach(({ timer, ids, context }) => {
         clearTimeout(timer);
         // Flush on unmount
-        const promise = onCommit(ids, context);
+        const promise = onCommitRef.current(ids, context);
         if (promise) {
           promise.catch((err: any) => {
             console.error('Undo delete unmount commit failed:', err);
@@ -96,7 +110,7 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
       });
       pendingCommits.clear();
     };
-  }, [onCommit]);
+  }, []);
 
   return { pending, requestDelete };
 }
