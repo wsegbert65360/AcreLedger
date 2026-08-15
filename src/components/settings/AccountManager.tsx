@@ -3,11 +3,16 @@ import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function AccountManager() {
-  const { session, farmName, updateFarmName, signOut } = useFarm();
+  const { session, farmName, updateFarmName, signOut, pendingSyncCount } = useFarm();
   const [name, setName] = useState(farmName || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   useEffect(() => {
     if (farmName) {
@@ -25,6 +30,16 @@ export default function AccountManager() {
   };
 
   const hasChanges = name.trim() !== '' && name.trim() !== farmName;
+
+  const handleSignOutClick = () => {
+    // Signing out clears the local sync queue; queued offline changes that
+    // have not synced yet would be permanently lost, so require confirmation.
+    if (pendingSyncCount > 0) {
+      setConfirmSignOut(true);
+      return;
+    }
+    signOut();
+  };
 
   return (
     <Card className="border-border/30">
@@ -76,12 +91,31 @@ export default function AccountManager() {
           <Button
             variant="destructive"
             className="w-full h-10"
-            onClick={signOut}
+            onClick={handleSignOutClick}
           >
             Sign Out
           </Button>
         </div>
       </CardContent>
+
+      <AlertDialog open={confirmSignOut} onOpenChange={(open) => { if (!open) setConfirmSignOut(false); }}>
+        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsynced changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {pendingSyncCount} offline change{pendingSyncCount !== 1 ? 's' : ''} still waiting to sync.
+              Signing out now permanently deletes {pendingSyncCount !== 1 ? 'them' : 'it'} from this device.
+              Reconnect and let the app sync first to keep {pendingSyncCount !== 1 ? 'them' : 'it'}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Stay signed in</AlertDialogCancel>
+            <AlertDialogAction onClick={() => signOut()}>
+              Sign out and discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
