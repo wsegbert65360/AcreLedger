@@ -423,7 +423,7 @@ describe('Reverse mapper optional fields', () => {
     expect(result.temperature).toBe(0);
   });
 
-  it('mapGrainToDb handles optional price field', () => {
+  it('mapGrainToDb serializes a missing optional price as null (not dropped)', () => {
     const result = mapGrainToDb({
       id: 'gm-1',
       binId: 'bin-1',
@@ -436,7 +436,7 @@ describe('Reverse mapper optional fields', () => {
       farm_id: farmId,
       deleted_at: null,
     } as GrainMovement);
-    expect(result.price).toBeUndefined();
+    expect(result.price).toBeNull();
   });
 
   it('mapGrainToDb handles zero price', () => {

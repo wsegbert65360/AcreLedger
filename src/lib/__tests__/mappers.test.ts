@@ -6,6 +6,7 @@ import {
     mapCustomSprayFromDb, mapCustomSprayToDb,
     mapSeedFromDb, mapSeedToDb,
     mapRecipeFromDb, mapRecipeToDb, mapFertilizerToDb,
+    mapHarvestToDb, mapHayToDb, mapHayFromDb, mapGrainToDb,
 } from '../mappers';
 import { SprayRecord, SavedSeed, CustomSprayRecord } from '../../types/farm';
 
@@ -247,5 +248,65 @@ describe('Mappers Round-Trip', () => {
             const invalidCustomSpray: any = { id: '1', farm_id: 'f1', seasonYear: 2026 };
             expect(() => mapCustomSprayToDb(invalidCustomSpray)).toThrow('[Mapper Error] mapCustomSprayToDb: Missing required field "fieldId"');
         });
+    });
+});
+
+describe('Optional column null semantics', () => {
+    // Optional columns must serialize as null, not undefined: JSON.stringify
+    // drops undefined keys, so a Supabase .update() built from these rows can
+    // never clear a previously stored value (e.g. removing a landlord name).
+    it('sends cleared plant optionals as null', () => {
+        const db = mapPlantToDb({
+            id: 'plant-1', farm_id: 'farm-1', fieldId: 'field-1', fieldName: 'North',
+            seedVariety: 'DKC62-89', acreage: 80, timestamp: Date.now(),
+            seasonYear: 2026, deleted_at: null,
+        });
+
+        expect(db.plant_date).toBeNull();
+        expect(db.crop).toBeNull();
+        expect(db.fsa_farm_number).toBeNull();
+        expect(db.fsa_field_number).toBeNull();
+        expect(db.intended_use).toBeNull();
+        expect(db.producer_share).toBeNull();
+        expect(db.deleted_at).toBeNull();
+    });
+
+    it('sends cleared harvest optionals as null', () => {
+        const db = mapHarvestToDb({
+            id: 'harvest-1', farm_id: 'farm-1', fieldId: 'field-1', fieldName: 'North',
+            destination: 'town', moisturePercent: 15.5, landlordSplitPercent: 0,
+            bushels: 4200, timestamp: Date.now(), seasonYear: 2026, deleted_at: null,
+        });
+
+        expect(db.bin_id).toBeNull();
+        expect(db.landlord_name).toBeNull();
+        expect(db.scale_ticket_number).toBeNull();
+        expect(db.harvest_date).toBeNull();
+        expect(db.crop).toBeNull();
+        expect(db.fsa_tract_number).toBeNull();
+    });
+
+    it('sends cleared grain optionals as null', () => {
+        const db = mapGrainToDb({
+            id: 'gm-1', farm_id: 'farm-1', binId: 'bin-1', binName: 'Big Bin',
+            type: 'out', bushels: 900, moisturePercent: 14, timestamp: Date.now(),
+            seasonYear: 2026, deleted_at: null,
+        });
+
+        expect(db.source_field_name).toBeNull();
+        expect(db.destination).toBeNull();
+        expect(db.price).toBeNull();
+        expect(db.harvest_record_id).toBeNull();
+    });
+
+    it('preserves a hay temperature of 0 through the round trip', () => {
+        const db = mapHayToDb({
+            id: 'hay-1', farm_id: 'farm-1', fieldId: 'field-1', fieldName: 'North',
+            date: '2026-06-01', baleCount: 40, cuttingNumber: 1, baleType: 'Round',
+            temperature: 0, seasonYear: 2026, timestamp: Date.now(), deleted_at: null,
+        });
+
+        expect(db.temperature).toBe(0);
+        expect(mapHayFromDb(db as any).temperature).toBe(0);
     });
 });

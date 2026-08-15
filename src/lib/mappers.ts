@@ -161,7 +161,7 @@ export const mapHayFromDb = (db: HayHarvestRow): HayHarvestRecord => ({
     baleCount: safeNum(db.bale_count),
     cuttingNumber: safeNum(db.cutting_number, 1),
     baleType: (db.bale_type || 'Round') as 'Round' | 'Square',
-    temperature: db.temperature || undefined,
+    temperature: db.temperature != null ? db.temperature : undefined,
     conditions: db.conditions || undefined,
     seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
@@ -420,20 +420,20 @@ export const mapPlantToDb = (r: PlantRecord) => {
         field_name: r.fieldName,
         seed_variety: r.seedVariety,
         acreage: r.acreage,
-        crop: r.crop,
-        plant_date: r.plantDate,
-        fsa_farm_number: r.fsaFarmNumber,
-        fsa_tract_number: r.fsaTractNumber,
-        fsa_field_number: r.fsaFieldNumber,
-        intended_use: r.intendedUse,
-        producer_share: r.producerShare,
-        irrigation_practice: r.irrigationPractice,
+        crop: r.crop ?? null,
+        plant_date: r.plantDate ?? null,
+        fsa_farm_number: r.fsaFarmNumber ?? null,
+        fsa_tract_number: r.fsaTractNumber ?? null,
+        fsa_field_number: r.fsaFieldNumber ?? null,
+        intended_use: r.intendedUse ?? null,
+        producer_share: r.producerShare ?? null,
+        irrigation_practice: r.irrigationPractice ?? null,
         crop_status: r.cropStatus ?? 'Planted',
         crop_sequence: r.cropSequence ?? 'First Crop',
         planting_pattern: r.plantingPattern ?? null,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at,
+        deleted_at: r.deleted_at ?? null,
         memo: r.memo || null
     };
 };
@@ -499,19 +499,19 @@ export const mapHarvestToDb = (r: HarvestRecord) => {
         field_id: r.fieldId,
         field_name: r.fieldName,
         destination: r.destination,
-        bin_id: r.binId,
+        bin_id: r.binId ?? null,
         bushels: r.bushels,
         moisture_percent: r.moisturePercent,
         landlord_split_percent: r.landlordSplitPercent,
-        landlord_name: r.landlordName,
-        scale_ticket_number: r.scaleTicketNumber,
-        harvest_date: r.harvestDate,
-        fsa_farm_number: r.fsaFarmNumber,
-        fsa_tract_number: r.fsaTractNumber,
+        landlord_name: r.landlordName ?? null,
+        scale_ticket_number: r.scaleTicketNumber ?? null,
+        harvest_date: r.harvestDate ?? null,
+        fsa_farm_number: r.fsaFarmNumber ?? null,
+        fsa_tract_number: r.fsaTractNumber ?? null,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        crop: r.crop,
-        deleted_at: r.deleted_at
+        crop: r.crop ?? null,
+        deleted_at: r.deleted_at ?? null
     };
 };
 
@@ -527,11 +527,11 @@ export const mapHayToDb = (r: HayHarvestRecord) => {
         bale_count: r.baleCount,
         cutting_number: r.cuttingNumber,
         bale_type: r.baleType,
-        temperature: r.temperature,
-        conditions: r.conditions,
+        temperature: r.temperature ?? null,
+        conditions: r.conditions ?? null,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
+        deleted_at: r.deleted_at ?? null
     };
 };
 
@@ -630,13 +630,13 @@ export const mapGrainToDb = (m: GrainMovement) => {
         type: m.type,
         bushels: m.bushels,
         moisture_percent: m.moisturePercent,
-        source_field_name: m.sourceFieldName,
-        destination: m.destination,
-        price: m.price,
+        source_field_name: m.sourceFieldName ?? null,
+        destination: m.destination ?? null,
+        price: m.price ?? null,
         season_year: m.seasonYear,
         timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: m.deleted_at,
-        harvest_record_id: m.harvestRecordId
+        deleted_at: m.deleted_at ?? null,
+        harvest_record_id: m.harvestRecordId ?? null
     };
 };
 
@@ -665,7 +665,7 @@ export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
         year: s.year,
         notes: s.notes,
         farm_id: s.farm_id,
-        deleted_at: s.deleted_at
+        deleted_at: s.deleted_at ?? null
     };
 };
 
