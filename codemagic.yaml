@@ -47,6 +47,13 @@ workflows:
         script: |
           npm run lint
 
+      # vite build uses SWC and does not typecheck, so this is the
+      # authoritative gate keeping type errors out of TestFlight builds.
+      - name: Typecheck
+        script: |
+          npm run typecheck
+          npm run typecheck:api
+
       - name: Unit tests
         script: |
           npm run test
