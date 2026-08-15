@@ -236,14 +236,21 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [farm_id, updatePendingSyncCount]);
 
   // Hydrate local cache only after auth state is resolved.
+  // Keyed on primitives only: TOKEN_REFRESHED delivers a new session object for
+  // the same user roughly hourly, and keying on the object re-ran this effect,
+  // re-hydrated state from a possibly stale cache snapshot, and permanently
+  // reset initialFetchComplete (the fetch effect below does not re-run on a
+  // token refresh, so nothing restored the flag).
+  const sessionResolved = session !== undefined;
+  const sessionUserId = session?.user?.id ?? null;
   useEffect(() => {
-    if (session === undefined) return;
+    if (!sessionResolved) return;
 
     // Reset load-settled flag on session/user change so initial-load-sensitive
     // decisions (e.g. the onboarding gate) don't act on stale signals.
     setCacheHydrated(false);
     setInitialFetchComplete(false);
-    const userId = session?.user?.id ?? null;
+    const userId = sessionUserId;
     const hydrateCache = async () => {
       try {
         const [
@@ -301,7 +308,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     };
     hydrateCache();
     updatePendingSyncCount();
-  }, [session?.user?.id, session, updatePendingSyncCount]);
+  }, [sessionResolved, sessionUserId, updatePendingSyncCount]);
 
   // --- Fetch data when farm_id is stable ---
   const fetchData = useCallback(async (): Promise<boolean> => {
