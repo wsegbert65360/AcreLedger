@@ -1397,3 +1397,31 @@ describe('FSA fall harvest production report rows', () => {
         expect(rows.hayRows).toEqual([]);
     });
 });
+
+describe('established forage labels', () => {
+    it('accepts undated cropland labeled with descriptive hay/pasture uses', () => {
+        const issues = validateFsa578Rows([
+            {
+                id: 'row-hay',
+                fieldId: 'field-hay',
+                date: '',
+                fieldName: 'East Hay Ground',
+                farmNumber: '918',
+                tractNumber: '1327',
+                fieldNumber: '2',
+                acreage: 18.5,
+                crop: 'Hay Ground',
+                seedVariety: '',
+                intendedUse: 'Hay Ground',
+                irrigationCode: 'NI',
+                producerShare: '100%',
+                landUse: 'Cropland',
+            }
+        ]);
+
+        // Undated hay/pasture cropland displays as an existing stand and must
+        // not generate a missing-crop-status error, even when the label is
+        // descriptive ("Hay Ground") rather than the bare word.
+        expect(issues.filter(issue => issue.field === 'cropStatus')).toEqual([]);
+    });
+});

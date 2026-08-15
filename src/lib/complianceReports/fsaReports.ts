@@ -5,6 +5,7 @@ import { parseTractKeys } from '@/lib/tractLookup';
 import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
+import { toLocalIsoDate } from '../../utils/dates';
 import { roundTo } from '../../utils/numbers';
 import { formatSprayProductTotal } from '../../utils/unitConversion';
 
@@ -241,7 +242,7 @@ function displayedPlantDate(record: PlantRecord): string {
     const ms = new Date(record.timestamp).getTime();
     // Guard against corrupted/invalid timestamps so one bad cached record
     // can't RangeError-crash the whole FSA-578 render.
-    return Number.isFinite(ms) ? new Date(ms).toISOString().split('T')[0] : '';
+    return Number.isFinite(ms) ? toLocalIsoDate(ms) : '';
 }
 
 function fsa578GroupKey(row: Fsa578ReportRow): string {
@@ -299,13 +300,26 @@ function isPlantedCroplandRow(row: Fsa578ReportRow): boolean {
         && row.cropStatus !== 'Prevented Planting';
 }
 
+/**
+ * Established-forage matcher shared by the row builder, row validation, and
+ * the PDF status column. Accepts word matches inside labels like "Hay Ground"
+ * or "Pasture ground" because cropFromFieldUse uses that same contains logic
+ * for the crop label — undated hay/pasture cropland must display as an
+ * existing stand and must not raise a missing-crop-status error.
+ */
+export function isEstablishedForageLabel(...values: Array<string | undefined>): boolean {
+    return values.some(value => {
+        const label = value?.trim().toLowerCase();
+        if (!label) return false;
+        return /\bhay\b|\bpasture\b/.test(label);
+    });
+}
+
 function cropFromFieldUse(field: Field | undefined): string {
     const intendedUse = field?.intendedUse?.trim();
     if (!intendedUse) return '';
 
-    const use = intendedUse.toLowerCase();
-    if (use.includes('hay')) return intendedUse;
-    if (use.includes('pasture')) return intendedUse;
+    if (isEstablishedForageLabel(intendedUse)) return intendedUse;
 
     return '';
 }
@@ -548,7 +562,7 @@ export function validateFsa578Rows(rows: Fsa578ReportRow[]): Fsa578ValidationIss
             });
         }
 
-        const isEstablishedForage = /^(hay|pasture)$/i.test(row.crop.trim()) || /^(hay|pasture)$/i.test(row.intendedUse.trim());
+        const isEstablishedForage = isEstablishedForageLabel(row.crop, row.intendedUse);
         const effectiveStatus = row.cropStatus || (row.date ? 'Planted' : undefined);
         if (row.landUse === 'Cropland' && !effectiveStatus && !isEstablishedForage) {
             issues.push({
@@ -684,7 +698,7 @@ export function buildFsaFallProductionRows({
             crop: record.crop || '',
             farmNumber: record.fsaFarmNumber || field?.fsaFarmNumber || '',
             tractNumber: record.fsaTractNumber || field?.fsaTractNumber || '',
-            harvestDate: record.harvestDate || new Date(record.timestamp).toISOString().split('T')[0],
+            harvestDate: record.harvestDate || toLocalIsoDate(record.timestamp),
             production: record.bushels || 0,
             productionUnit: 'bu',
             moisturePercent: record.moisturePercent,
@@ -706,7 +720,7 @@ export function buildFsaFallProductionRows({
             crop: field?.intendedUse?.trim() || 'Hay Ground',
             farmNumber: field?.fsaFarmNumber || '',
             tractNumber: field?.fsaTractNumber || '',
-            harvestDate: record.date || new Date(record.timestamp).toISOString().split('T')[0],
+            harvestDate: record.date || toLocalIsoDate(record.timestamp),
             production: record.baleCount || 0,
             productionUnit: 'bales',
             destination: 'On-Farm / Hay Storage',
@@ -818,7 +832,7 @@ export async function exportFsaFallProductionData({
     fields: Field[];
     metadata?: Partial<FsaFallProductionMetadata>;
 }): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalIsoDate(Date.now());
     const report = buildFsaFallProductionRows({ harvestRecords, hayRecords, fields });
     const cropYear = metadata?.cropYear ?? harvestRecords[0]?.seasonYear ?? hayRecords[0]?.seasonYear ?? new Date().getFullYear();
     const csvContent = buildFsaFallProductionCsv({
@@ -910,7 +924,7 @@ export async function generateMissouriLog(records: SprayRecord[], fields: Field[
 
     const rows = generateMissouriLogRows(records, fields, cluAssignments);
     const csvContent = [header, ...rows].join('\n');
-    await downloadFile(csvContent, `Missouri_Spray_Log_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `Missouri_Spray_Log_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
 }
 
 export async function exportFsa578Data(
@@ -920,7 +934,7 @@ export async function exportFsa578Data(
     fsaTracts: FsaTractImport[] = [],
     metadata?: Partial<Fsa578WorksheetMetadata>,
 ): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalIsoDate(Date.now());
     const rows = buildFsa578Rows(plantRecords, fields, cluAssignments, fsaTracts);
     const cropYear = metadata?.cropYear ?? plantRecords[0]?.seasonYear ?? new Date().getFullYear();
     const csvContent = buildFsa578WorksheetCsv({
@@ -971,7 +985,7 @@ export async function exportHarvestData(harvestRecords: HarvestRecord[], fields:
     });
 
     const csvContent = [header, ...rows].join('\n');
-    await downloadFile(csvContent, `FSA_Harvest_Report_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `FSA_Harvest_Report_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
 }
 
 export async function exportFertilizerData(records: FertilizerApplication[], fields: Field[]): Promise<void> {
@@ -995,7 +1009,7 @@ export async function exportFertilizerData(records: FertilizerApplication[], fie
     });
 
     const csvContent = [header, ...rows].join('\n');
-    await downloadFile(csvContent, `Fertilizer_Report_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+    await downloadFile(csvContent, `Fertilizer_Report_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
 }
 
 async function downloadFile(content: string, fileName: string, contentType: string): Promise<void> {

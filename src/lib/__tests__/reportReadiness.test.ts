@@ -93,8 +93,8 @@ describe('spray readiness', () => {
       fieldId: 'field-1',
       fieldName: 'North',
       products: [
-        { product: 'Product A', rate: '1', epaRegNumber: '' },
-        { product: 'Product B', rate: '0', epaRegNumber: '' },
+        { product: 'Product A', rate: '1', rateUnit: 'oz/ac', epaRegNumber: '' },
+        { product: 'Product B', rate: '0', rateUnit: 'oz/ac', epaRegNumber: '' },
       ],
       applicatorName: '',
       licenseNumber: '',
@@ -116,7 +116,7 @@ describe('spray readiness', () => {
       id: 'spray-1',
       fieldId: 'field-1',
       fieldName: 'North',
-      products: [{ product: 'Product A', rate: '1', epaRegNumber: '100-200' }],
+      products: [{ product: 'Product A', rate: '1', rateUnit: 'oz/ac', epaRegNumber: '100-200' }],
       applicatorName: 'Operator',
       licenseNumber: 'ABC123',
       treatedAreaSize: 20,
@@ -124,6 +124,55 @@ describe('spray readiness', () => {
     }], 10);
 
     expect(summary).toMatchObject({ status: 'ready', readyItems: 1, errors: 0, warnings: 0 });
+  });
+
+  it('flags a unitless rate like the canonical compliance rule', () => {
+    const summary = buildSprayReadiness([{
+      id: 'spray-1',
+      fieldId: 'field-1',
+      fieldName: 'North',
+      products: [{ product: 'Product A', rate: '1', epaRegNumber: '100-200' }],
+      applicatorName: 'Operator',
+      licenseNumber: 'ABC123',
+      treatedAreaSize: 20,
+      windSpeed: 7,
+    }], 10);
+
+    expect(summary).toMatchObject({ status: 'review', errors: 1 });
+    expect(summary.issues.some(i => i.id === 'spray-spray-1-rate-0')).toBe(true);
+  });
+
+  it('does not flag a missing treated area when the field acreage fallback resolves', () => {
+    const summary = buildSprayReadiness([{
+      id: 'spray-1',
+      fieldId: 'field-1',
+      fieldName: 'North',
+      products: [{ product: 'Product A', rate: '1', rateUnit: 'oz/ac', epaRegNumber: '100-200' }],
+      applicatorName: 'Operator',
+      licenseNumber: 'ABC123',
+      treatedAreaSize: undefined,
+      windSpeed: 7,
+    }], 10, [
+      { id: 'field-1', name: 'North', acreage: 40, farm_id: 'farm-1', deleted_at: null, lat: null, lng: null },
+    ] as never[]);
+
+    expect(summary).toMatchObject({ status: 'ready', errors: 0, warnings: 0 });
+  });
+
+  it('warns (not errors) when no treated area and no resolvable field acreage exist', () => {
+    const summary = buildSprayReadiness([{
+      id: 'spray-1',
+      fieldId: 'field-1',
+      fieldName: 'North',
+      products: [{ product: 'Product A', rate: '1', rateUnit: 'oz/ac', epaRegNumber: '100-200' }],
+      applicatorName: 'Operator',
+      licenseNumber: 'ABC123',
+      treatedAreaSize: undefined,
+      windSpeed: 7,
+    }], 10);
+
+    expect(summary).toMatchObject({ status: 'review', errors: 0, warnings: 1 });
+    expect(summary.issues.some(i => i.id === 'spray-spray-1-area' && i.severity === 'warning')).toBe(true);
   });
 });
 

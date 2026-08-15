@@ -8,6 +8,18 @@ export function parseLocalDate(iso: string): Date {
 }
 
 /**
+ * Render an epoch timestamp as a local YYYY-MM-DD string. Complements
+ * parseLocalDate: `toISOString().split('T')[0]` renders UTC and shifts
+ * evening entries to the next day in western timezones.
+ */
+export function toLocalIsoDate(ts: number): string {
+    const d = new Date(ts);
+    const month = `${d.getMonth() + 1}`.padStart(2, '0');
+    const day = `${d.getDate()}`.padStart(2, '0');
+    return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/**
  * Format a Date for display using the user's local timezone.
  */
 export function formatDisplayDate(date: Date): string {

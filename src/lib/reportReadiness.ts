@@ -1,3 +1,8 @@
+import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
+import type { Field } from '@/types/farm';
+import type { FieldCluAssignment } from '@/types/fsaTract';
+import { hasValidSprayRate } from '@/utils/unitConversion';
+
 export type ReportReadinessStatus = 'ready' | 'review' | 'empty';
 
 export type ReportIssueSeverity = 'error' | 'warning' | 'info';
@@ -28,6 +33,7 @@ export interface ReportReadinessSummary {
 interface SprayReadinessProduct {
   product: string;
   rate: string;
+  rateUnit?: string;
   epaRegNumber?: string;
 }
 
@@ -200,8 +206,11 @@ export function buildFsaFallReadiness(
 export function buildSprayReadiness(
   records: SprayReadinessRecord[],
   windAlertMph: number,
+  fields: Field[] = [],
+  cluAssignments: FieldCluAssignment[] = [],
 ): ReportReadinessSummary {
   const issues: ReportReadinessIssue[] = [];
+  const fieldById = new Map(fields.map(f => [f.id, f]));
 
   for (const record of records) {
     const baseIssue = {
@@ -242,7 +251,9 @@ export function buildSprayReadiness(
             message: `${record.fieldName}: ${productLabel} is missing an EPA registration number.`,
           });
         }
-        if (!product.rate?.trim() || Number(product.rate) <= 0) {
+        // Canonical rule (sprayCompliance): a missing, zero, negative, or
+        // unitless rate all mark the record for compliance review.
+        if (!hasValidSprayRate(product)) {
           issues.push({
             ...baseIssue,
             id: `spray-${record.id}-rate-${productIndex}`,
@@ -254,13 +265,22 @@ export function buildSprayReadiness(
       });
     }
 
-    if (record.treatedAreaSize == null || record.treatedAreaSize <= 0) {
+    // Exports resolve the treated area through the same effective-acreage
+    // fallback the spray log uses (stored value, then CLU cropland, boundary,
+    // raw acreage), so a missing stored value is advisory: only flag it when
+    // the fallback cannot resolve a positive acreage either.
+    const effectiveAcres = getEffectiveSprayTreatedAcres(
+      record,
+      fieldById.get(record.fieldId),
+      cluAssignments,
+    );
+    if (effectiveAcres == null || effectiveAcres <= 0) {
       issues.push({
         ...baseIssue,
         id: `spray-${record.id}-area`,
-        severity: 'error',
+        severity: 'warning',
         category: 'Application details',
-        message: `${record.fieldName} is missing a valid treated area.`,
+        message: `${record.fieldName} has no stored treated area and no resolvable field acreage.`,
       });
     }
     if (!record.applicatorName?.trim() || !record.licenseNumber?.trim()) {

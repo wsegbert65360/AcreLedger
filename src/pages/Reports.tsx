@@ -188,8 +188,8 @@ export default function Reports() {
     }];
   }), [sprayRecords, fieldMap, cluAssignments]);
   const sprayReadinessSummary = useMemo(
-    () => buildSprayReadiness(sprayRecords, WIND_ALERT_MPH),
-    [sprayRecords],
+    () => buildSprayReadiness(sprayRecords, WIND_ALERT_MPH, fields, cluAssignments),
+    [sprayRecords, fields, cluAssignments],
   );
 
   // Summary totals

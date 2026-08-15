@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
+import { isEstablishedForageLabel } from './fsaReports';
 import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata } from './fsaReports';
 
 interface Fsa578PdfOptions {
@@ -57,7 +58,7 @@ function formatDate(value: string): string {
 function displayStatus(row: Fsa578ReportRow): string {
   if (row.cropStatus) return row.cropStatus;
   if (row.date) return 'Planted';
-  if (/^(hay|pasture)$/i.test(row.crop.trim()) || /^(hay|pasture)$/i.test(row.intendedUse.trim())) return 'Existing stand';
+  if (isEstablishedForageLabel(row.crop, row.intendedUse)) return 'Existing stand';
   return '-';
 }
 
