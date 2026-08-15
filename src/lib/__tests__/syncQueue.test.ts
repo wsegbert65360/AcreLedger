@@ -28,6 +28,14 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), {
+    error: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  }),
+}));
+
 import { syncQueue } from '../syncQueue';
 
 describe('syncQueue web queue management', () => {
@@ -164,6 +172,36 @@ describe('syncQueue web queue management', () => {
 
     // farm-2 mutations should still be queued
     expect(await syncQueue.getPendingCount('farm-2')).toBe(1);
+  });
+
+  it('drains a trailing replay requested while a replay is in flight', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'f1' }, 'farm-1');
+    await syncQueue.enqueueMutation('bins', 'insert', { id: 'b1' }, 'farm-2');
+
+    // Do not await: the first replay is still draining when the second call
+    // arrives (the reconnect/farm-switch overlap that used to double-apply).
+    const first = syncQueue.replayQueue('farm-1');
+    const second = await syncQueue.replayQueue('farm-2');
+    expect(second).toBe(true);
+    await first;
+
+    expect(await syncQueue.getPendingCount('farm-1')).toBe(0);
+    expect(await syncQueue.getPendingCount('farm-2')).toBe(0);
+  });
+
+  // ─── Corruption Quarantine ─────────────────────────────────────────────────
+
+  it('quarantines an unreadable queue blob instead of silently wiping it', async () => {
+    localStorage.setItem('al_sync_queue', 'not-valid-queue-json');
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toEqual([]);
+    expect(localStorage.getItem('al_sync_queue_corrupt')).toBe('not-valid-queue-json');
+
+    // The next enqueue starts a fresh queue without touching the quarantine copy.
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'f1' }, 'farm-1');
+    expect(await syncQueue.getPendingCount('farm-1')).toBe(1);
+    expect(localStorage.getItem('al_sync_queue_corrupt')).toBe('not-valid-queue-json');
   });
 
   // ─── Retry Count ──────────────────────────────────────────────────────────

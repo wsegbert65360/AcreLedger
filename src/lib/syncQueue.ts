@@ -6,7 +6,11 @@ import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto'
 
 const isNative = Capacitor.isNativePlatform();
 const WEB_QUEUE_KEY = 'al_sync_queue';
+const CORRUPT_QUEUE_KEY = 'al_sync_queue_corrupt';
 let webQueuePromise: Promise<void> = Promise.resolve();
+// Set after the first corruption toast so repeated getWebQueue calls while the
+// blob is still broken don't re-toast on every enqueue/read.
+let corruptQueueToastShown = false;
 const INSERT_QUEUE_SQL = `INSERT INTO sync_queue (id, table_name, operation, payload, farm_id, created_at, retry_count)
   VALUES (?, ?, ?, ?, ?, ?, 0);`;
 
@@ -43,6 +47,21 @@ async function getWebQueue(): Promise<QueuedMutation[]> {
     return JSON.parse(decrypted);
   } catch (err) {
     console.error('Failed to parse web sync queue:', err);
+    // Quarantine the unreadable blob instead of silently treating the queue as
+    // empty — the next enqueue would otherwise overwrite it, destroying every
+    // queued offline mutation with no trace and no user signal.
+    try {
+      const raw = localStorage.getItem(WEB_QUEUE_KEY);
+      if (raw) localStorage.setItem(CORRUPT_QUEUE_KEY, raw);
+    } catch (quarantineErr) {
+      console.error('Failed to quarantine corrupt sync queue blob:', quarantineErr);
+    }
+    if (!corruptQueueToastShown) {
+      corruptQueueToastShown = true;
+      toast.error('Offline sync queue was unreadable and has been reset.', {
+        description: 'Queued changes may not sync. A copy was preserved locally for support.',
+      });
+    }
     return [];
   }
 }
@@ -317,13 +336,45 @@ export const syncQueue = {
   /**
    * Replays the queued mutations to Supabase in FIFO order.
    * Returns true if the entire queue was processed, false if paused due to a network error.
+   *
+   * Concurrency-guarded: overlapping replays (reconnect during a long drain,
+   * farm switch) would read overlapping queue snapshots and double-apply
+   * inserts, then treat the duplicate-key error as permanent. A concurrent
+   * caller records its farmId and the in-flight loop drains again instead of
+   * silently dropping the request.
    */
   replayQueue: async (farmId: string): Promise<boolean> => {
+    if (replayInProgress) {
+      trailingReplayFarmId = farmId;
+      return true;
+    }
+    replayInProgress = true;
+    try {
+      let currentFarmId: string | null = farmId;
+      let result = true;
+      while (currentFarmId) {
+        trailingReplayFarmId = null;
+        result = await replayQueueOnce(currentFarmId);
+        currentFarmId = trailingReplayFarmId;
+      }
+      return result;
+    } finally {
+      replayInProgress = false;
+    }
+  }
+};
+
+let replayInProgress = false;
+let trailingReplayFarmId: string | null = null;
+
+async function replayQueueOnce(farmId: string): Promise<boolean> {
     const queue = await syncQueue.getQueue(farmId);
     if (queue.length === 0) return true;
 
     console.log(`Replaying sync queue: ${queue.length} mutations pending.`);
-    
+    let discardedCount = 0;
+    let pendingRetryCount = 0;
+
     for (const mutation of queue) {
       if (!ALLOWED_TABLES.has(mutation.table_name)) {
         console.warn(`Discarding sync mutation: invalid table name ${mutation.table_name}`);
@@ -380,9 +431,11 @@ export const syncQueue = {
             if (nextRetries >= 3) {
               console.warn(`Discarding sync mutation ${mutation.id} after 3 failed attempts.`);
               toast.error(`Offline ${mutation.operation} to ${mutation.table_name} failed after 3 tries and was discarded.`);
+              discardedCount++;
               await syncQueue.dequeueMutation(mutation.id);
             } else {
               await syncQueue.incrementRetry(mutation.id, mutation.retry_count);
+              pendingRetryCount++;
               // Intentional choice to continue processing so a poisoned or invalid mutation
               // (e.g., RLS or schema constraint violation) does not block unrelated queue items indefinitely.
               // Note: Dependent mutations in a chain (like insert -> update on the same row) will also
@@ -400,7 +453,15 @@ export const syncQueue = {
       }
     }
 
-    toast.success('Sync complete. All offline changes uploaded.');
+    // The completion toast must not claim everything uploaded when items were
+    // skipped or discarded mid-drain.
+    if (discardedCount > 0 || pendingRetryCount > 0) {
+      const parts: string[] = [];
+      if (pendingRetryCount > 0) parts.push(`${pendingRetryCount} still pending retry`);
+      if (discardedCount > 0) parts.push(`${discardedCount} discarded after repeated failures`);
+      toast.warning('Sync finished with unfinished items.', { description: `${parts.join('; ')}. They will retry on the next sync.` });
+    } else {
+      toast.success('Sync complete. All offline changes uploaded.');
+    }
     return true;
-  }
-};
+}
