@@ -18,7 +18,6 @@ type OpResult = boolean;
 
 export function useHarvestRecords({ farm_id, viewingSeason, harvestRecords, setHarvestRecords, isOnline, onMutation }: UseHarvestRecordsArgs) {
   const isMutating = useRef(false);
-  const snapshotRef = useRef<{ record: HarvestRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addHarvestRecord = useCallback(async (
@@ -182,13 +181,10 @@ export function useHarvestRecords({ farm_id, viewingSeason, harvestRecords, setH
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    snapshotRef.current = [];
-    setHarvestRecords(prev => {
-      snapshotRef.current = prev
-        .map((record, index) => ({ record, index }))
-        .filter(({ record }) => ids.includes(record.id));
-      return prev.filter(r => !ids.includes(r.id));
-    });
+    const snapshot = harvestRecords
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => ids.includes(record.id));
+    setHarvestRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
       if (!isOnline) {
@@ -206,10 +202,10 @@ export function useHarvestRecords({ farm_id, viewingSeason, harvestRecords, setH
           return true;
         } catch (err) {
           console.error('Failed to enqueue harvest record delete offline:', err);
-          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
           setHarvestRecords(prev => {
             const restored = [...prev];
-            for (const { record, index } of snapshot) {
+            for (const { record, index } of rollbackSnapshot) {
               const insertAt = Math.min(index, restored.length);
               restored.splice(insertAt, 0, record);
             }
@@ -239,10 +235,10 @@ export function useHarvestRecords({ farm_id, viewingSeason, harvestRecords, setH
         } else {
           console.warn('Harvest delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
         }
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setHarvestRecords(prev => {
           const restored = [...prev];
-          for (const { record, index } of snapshot) {
+          for (const { record, index } of rollbackSnapshot) {
             const insertAt = Math.min(index, restored.length);
             restored.splice(insertAt, 0, record);
           }
@@ -258,7 +254,7 @@ export function useHarvestRecords({ farm_id, viewingSeason, harvestRecords, setH
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setHarvestRecords, isOnline, onMutation]);
+  }, [farm_id, harvestRecords, setHarvestRecords, isOnline, onMutation]);
 
   return { addHarvestRecord, updateHarvestRecord, deleteHarvestRecords };
 }

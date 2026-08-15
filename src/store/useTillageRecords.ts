@@ -18,7 +18,6 @@ type OpResult = boolean;
 
 export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setTillageRecords, isOnline, onMutation }: UseTillageRecordsArgs) {
   const isMutating = useRef(false);
-  const snapshotRef = useRef<{ record: TillageRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addTillageRecord = useCallback(async (
@@ -182,13 +181,10 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    snapshotRef.current = [];
-    setTillageRecords(prev => {
-      snapshotRef.current = prev
-        .map((record, index) => ({ record, index }))
-        .filter(({ record }) => ids.includes(record.id));
-      return prev.filter(r => !ids.includes(r.id));
-    });
+    const snapshot = tillageRecords
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => ids.includes(record.id));
+    setTillageRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
       if (!isOnline) {
@@ -206,10 +202,10 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
           return true;
         } catch (err) {
           console.error('Failed to enqueue tillage record delete offline:', err);
-          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
           setTillageRecords(prev => {
             const restored = [...prev];
-            for (const { record, index } of snapshot) {
+            for (const { record, index } of rollbackSnapshot) {
               const insertAt = Math.min(index, restored.length);
               restored.splice(insertAt, 0, record);
             }
@@ -239,10 +235,10 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
         } else {
           console.warn('Tillage delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
         }
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setTillageRecords(prev => {
           const restored = [...prev];
-          for (const { record, index } of snapshot) {
+          for (const { record, index } of rollbackSnapshot) {
             const insertAt = Math.min(index, restored.length);
             restored.splice(insertAt, 0, record);
           }
@@ -258,7 +254,7 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setTillageRecords, isOnline, onMutation]);
+  }, [farm_id, tillageRecords, setTillageRecords, isOnline, onMutation]);
 
   return { addTillageRecord, updateTillageRecord, deleteTillageRecords };
 }

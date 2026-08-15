@@ -206,9 +206,8 @@ function useUpdateFertilizerRecord({ farm_id, fields, fertilizerApplications, se
   return { updateFertilizerApplication };
 }
 
-function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnline, onMutation }: Pick<UseFertilizerRecordsArgs, 'farm_id' | 'setFertilizerApplications' | 'isOnline' | 'onMutation'>) {
+function useDeleteFertilizerRecord({ farm_id, fertilizerApplications, setFertilizerApplications, isOnline, onMutation }: Pick<UseFertilizerRecordsArgs, 'farm_id' | 'fertilizerApplications' | 'setFertilizerApplications' | 'isOnline' | 'onMutation'>) {
   const isMutating = useRef(false);
-  const snapshotRef = useRef<{ record: FertilizerApplication; index: number }[]>([]);
 
   const deleteFertilizerApplications = useCallback(async (ids: string[]): Promise<OpResult> => {
     if (!farm_id) {
@@ -221,13 +220,10 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    snapshotRef.current = [];
-    setFertilizerApplications(prev => {
-      snapshotRef.current = prev
-        .map((record, index) => ({ record, index }))
-        .filter(({ record }) => ids.includes(record.id));
-      return prev.filter(r => !ids.includes(r.id));
-    });
+    const snapshot = fertilizerApplications
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => ids.includes(record.id));
+    setFertilizerApplications(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
       if (!isOnline) {
@@ -245,10 +241,10 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
           return true;
         } catch (err) {
           console.error('Failed to enqueue fertilizer record delete offline:', err);
-          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
           setFertilizerApplications(prev => {
             const restored = [...prev];
-            for (const { record, index } of snapshot) {
+            for (const { record, index } of rollbackSnapshot) {
               const insertAt = Math.min(index, restored.length);
               restored.splice(insertAt, 0, record);
             }
@@ -279,10 +275,10 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
           console.warn('Fertilizer delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
         }
 
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setFertilizerApplications(prev => {
           const restored = [...prev];
-          for (const { record, index } of snapshot) {
+          for (const { record, index } of rollbackSnapshot) {
             const insertAt = Math.min(index, restored.length);
             restored.splice(insertAt, 0, record);
           }
@@ -299,7 +295,7 @@ function useDeleteFertilizerRecord({ farm_id, setFertilizerApplications, isOnlin
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setFertilizerApplications, isOnline, onMutation]);
+  }, [farm_id, fertilizerApplications, setFertilizerApplications, isOnline, onMutation]);
 
   return { deleteFertilizerApplications };
 }

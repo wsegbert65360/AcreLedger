@@ -18,7 +18,6 @@ type OpResult = boolean;
 
 export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecords, setCustomSprayRecords, isOnline, onMutation }: UseCustomSprayRecordsArgs) {
   const isMutating = useRef(false);
-  const snapshotRef = useRef<{ record: CustomSprayRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addCustomSprayRecord = useCallback(async (
@@ -182,13 +181,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    snapshotRef.current = [];
-    setCustomSprayRecords(prev => {
-      snapshotRef.current = prev
-        .map((record, index) => ({ record, index }))
-        .filter(({ record }) => ids.includes(record.id));
-      return prev.filter(r => !ids.includes(r.id));
-    });
+    const snapshot = customSprayRecords
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => ids.includes(record.id));
+    setCustomSprayRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
       if (!isOnline) {
@@ -206,10 +202,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
           return true;
         } catch (err) {
           console.error('Failed to enqueue custom spray record delete offline:', err);
-          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
           setCustomSprayRecords(prev => {
             const restored = [...prev];
-            for (const { record, index } of snapshot) {
+            for (const { record, index } of rollbackSnapshot) {
               const insertAt = Math.min(index, restored.length);
               restored.splice(insertAt, 0, record);
             }
@@ -239,10 +235,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
         } else {
           console.warn('Custom spray delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
         }
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setCustomSprayRecords(prev => {
           const restored = [...prev];
-          for (const { record, index } of snapshot) {
+          for (const { record, index } of rollbackSnapshot) {
             const insertAt = Math.min(index, restored.length);
             restored.splice(insertAt, 0, record);
           }
@@ -258,7 +254,7 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setCustomSprayRecords, isOnline, onMutation]);
+  }, [farm_id, customSprayRecords, setCustomSprayRecords, isOnline, onMutation]);
 
   return { addCustomSprayRecord, updateCustomSprayRecord, deleteCustomSprayRecords };
 }

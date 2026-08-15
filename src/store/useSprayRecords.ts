@@ -18,7 +18,6 @@ type OpResult = boolean;
 
 export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSprayRecords, isOnline, onMutation }: UseSprayRecordsArgs) {
   const isMutating = useRef(false);
-  const snapshotRef = useRef<{ record: SprayRecord; index: number }[]>([]);
 
   // ─── Add ────────────────────────────────────────────────────────────────────
   const addSprayRecord = useCallback(async (
@@ -182,13 +181,10 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    snapshotRef.current = [];
-    setSprayRecords(prev => {
-      snapshotRef.current = prev
-        .map((record, index) => ({ record, index }))
-        .filter(({ record }) => ids.includes(record.id));
-      return prev.filter(r => !ids.includes(r.id));
-    });
+    const snapshot = sprayRecords
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => ids.includes(record.id));
+    setSprayRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
       if (!isOnline) {
@@ -206,10 +202,10 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
           return true;
         } catch (err) {
           console.error('Failed to enqueue spray record delete offline:', err);
-          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
           setSprayRecords(prev => {
             const restored = [...prev];
-            for (const { record, index } of snapshot) {
+            for (const { record, index } of rollbackSnapshot) {
               const insertAt = Math.min(index, restored.length);
               restored.splice(insertAt, 0, record);
             }
@@ -239,10 +235,10 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
         } else {
           console.warn('Spray delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
         }
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setSprayRecords(prev => {
           const restored = [...prev];
-          for (const { record, index } of snapshot) {
+          for (const { record, index } of rollbackSnapshot) {
             const insertAt = Math.min(index, restored.length);
             restored.splice(insertAt, 0, record);
           }
@@ -258,7 +254,7 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setSprayRecords, isOnline, onMutation]);
+  }, [farm_id, sprayRecords, setSprayRecords, isOnline, onMutation]);
 
   return { addSprayRecord, updateSprayRecord, deleteSprayRecords };
 }

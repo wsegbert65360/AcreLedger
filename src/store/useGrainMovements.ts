@@ -35,7 +35,6 @@ function describeSupabaseError(error: unknown): { consolePayload: unknown; toast
 
 export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setGrainMovements, isOnline, onMutation }: UseGrainMovementsArgs) {
   const isMutating = useRef(false);
-  const snapshotRef = useRef<{ record: GrainMovement; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addGrainMovement = useCallback(async (
@@ -230,13 +229,10 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    snapshotRef.current = [];
-    setGrainMovements(prev => {
-      snapshotRef.current = prev
-        .map((record, index) => ({ record, index }))
-        .filter(({ record }) => ids.includes(record.id));
-      return prev.filter(r => !ids.includes(r.id));
-    });
+    const snapshot = grainMovements
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => ids.includes(record.id));
+    setGrainMovements(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
       if (!isOnline) {
@@ -262,10 +258,10 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           return true;
         } catch (err) {
           console.error('Failed to enqueue grain movement record delete offline:', err);
-          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
           setGrainMovements(prev => {
             const restored = [...prev];
-            for (const { record, index } of snapshot) {
+            for (const { record, index } of rollbackSnapshot) {
               const insertAt = Math.min(index, restored.length);
               restored.splice(insertAt, 0, record);
             }
@@ -298,10 +294,10 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           console.warn('Grain delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
           toast.error('Failed to delete records.', { description: `${affectedRows ?? 0} of ${ids.length} record(s) were found.` });
         }
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setGrainMovements(prev => {
           const restored = [...prev];
-          for (const { record, index } of snapshot) {
+          for (const { record, index } of rollbackSnapshot) {
             const insertAt = Math.min(index, restored.length);
             restored.splice(insertAt, 0, record);
           }
@@ -316,7 +312,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setGrainMovements, isOnline, onMutation]);
+  }, [farm_id, grainMovements, setGrainMovements, isOnline, onMutation]);
 
   return { addGrainMovement, updateGrainMovement, deleteGrainMovements };
 }

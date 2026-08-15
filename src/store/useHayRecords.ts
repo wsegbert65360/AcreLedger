@@ -18,7 +18,6 @@ type OpResult = boolean;
 
 export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHayHarvestRecords, isOnline, onMutation }: UseHayRecordsArgs) {
   const isMutating = useRef(false);
-  const snapshotRef = useRef<{ record: HayHarvestRecord; index: number }[]>([]);
 
   // ─── Add ──────────────────────────────────────────────────────────────────
   const addHayHarvestRecord = useCallback(async (
@@ -182,13 +181,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
     if (isMutating.current) return false;
     isMutating.current = true;
 
-    snapshotRef.current = [];
-    setHayHarvestRecords(prev => {
-      snapshotRef.current = prev
-        .map((record, index) => ({ record, index }))
-        .filter(({ record }) => ids.includes(record.id));
-      return prev.filter(r => !ids.includes(r.id));
-    });
+    const snapshot = hayHarvestRecords
+      .map((record, index) => ({ record, index }))
+      .filter(({ record }) => ids.includes(record.id));
+    setHayHarvestRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
       if (!isOnline) {
@@ -206,10 +202,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
           return true;
         } catch (err) {
           console.error('Failed to enqueue hay harvest record delete offline:', err);
-          const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+          const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
           setHayHarvestRecords(prev => {
             const restored = [...prev];
-            for (const { record, index } of snapshot) {
+            for (const { record, index } of rollbackSnapshot) {
               const insertAt = Math.min(index, restored.length);
               restored.splice(insertAt, 0, record);
             }
@@ -239,10 +235,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
         } else {
           console.warn('Hay delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
         }
-        const snapshot = [...snapshotRef.current].sort((a, b) => b.index - a.index);
+        const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setHayHarvestRecords(prev => {
           const restored = [...prev];
-          for (const { record, index } of snapshot) {
+          for (const { record, index } of rollbackSnapshot) {
             const insertAt = Math.min(index, restored.length);
             restored.splice(insertAt, 0, record);
           }
@@ -258,7 +254,7 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, setHayHarvestRecords, isOnline, onMutation]);
+  }, [farm_id, hayHarvestRecords, setHayHarvestRecords, isOnline, onMutation]);
 
   return { addHayHarvestRecord, updateHayHarvestRecord, deleteHayHarvestRecords };
 }
