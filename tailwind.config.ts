@@ -66,6 +66,15 @@ export default {
           DEFAULT: "hsl(var(--harvest))",
           foreground: "hsl(var(--harvest-foreground))",
         },
+        crop: {
+          corn: "hsl(var(--crop-corn))",
+          soybean: "hsl(var(--crop-soybean))",
+          wheat: "hsl(var(--crop-wheat))",
+          sorghum: "hsl(var(--crop-sorghum))",
+          cotton: "hsl(var(--crop-cotton))",
+          hay: "hsl(var(--crop-hay))",
+          other: "hsl(var(--crop-other))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

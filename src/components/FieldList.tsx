@@ -1,12 +1,13 @@
 import { useMemo, useCallback, useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 
-import { useFarm } from '@/store/farmStore';
-import { Field } from '@/types/farm';
+import { usePullToRefresh } from '@/hooks/use-pull-refresh';
+import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
+import { getFieldPlantedCrop } from '@/lib/cropColors';
 import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
 import { getFieldThumbnailGeometry } from '@/lib/fieldThumbnail';
-import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { usePullToRefresh } from '@/hooks/use-pull-refresh';
+import { useFarm } from '@/store/farmStore';
+import { Field } from '@/types/farm';
 
 import FieldCard from './FieldCard';
 
@@ -42,6 +43,7 @@ export default function FieldList({ fields }: FieldListProps) {
     return fields.map(field => {
       const summary = {
         planted: plantRecords.some(r => r.fieldId === field.id && r.seasonYear === viewingSeason),
+        crop: getFieldPlantedCrop(plantRecords, field.id, viewingSeason),
         sprayed: sprayRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).length,
         fertilized: fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).length,
       };

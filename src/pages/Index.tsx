@@ -12,12 +12,14 @@ import FieldManager from '@/components/FieldManager';
 import FieldManageModal from '@/components/FieldManageModal';
 import Logo from '@/components/Logo';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { getCropColorStyles } from '@/lib/cropColors';
 import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
 import {
   buildFieldActivityStatusMap,
   parseSearchQuery,
   fieldMatchesQuery,
 } from '@/lib/fieldSearch';
+import { cn } from '@/lib/utils';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
 
 const Index = () => {
@@ -180,14 +182,21 @@ const Index = () => {
                 <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
                   {cropTotals.map(([crop, acres]) => {
                     const isActive = selectedCrops.includes(crop);
+                    const cropStyles = getCropColorStyles(crop);
                     return (
                       <button
                         key={crop}
+                        type="button"
+                        data-crop={cropStyles?.key}
                         onClick={() => toggleCrop(crop)}
-                        className={`flex-none flex items-center justify-center h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold whitespace-nowrap ${isActive
-                          ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
-                          : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50'
-                          }`}
+                        className={cn(
+                          'flex-none flex items-center justify-center h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold whitespace-nowrap',
+                          cropStyles
+                            ? (isActive ? cropStyles.chipActive : cropStyles.chip)
+                            : isActive
+                              ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
+                              : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50',
+                        )}
                       >
                         {crop}: {formatMeasurement(acres, 'AC')}
                       </button>

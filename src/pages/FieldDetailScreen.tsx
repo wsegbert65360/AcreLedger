@@ -10,8 +10,10 @@ import {
 import { useFarm } from '@/store/farmStore';
 import { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
 import { RainService, type RainfallResult } from '@/services/RainService';
+import { getPlantedCropColorStyles } from '@/lib/cropColors';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
+import { cn } from '@/lib/utils';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { roundTo } from '@/utils/numbers';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
@@ -146,6 +148,7 @@ export default function FieldDetailScreen() {
   , [sprayRecords, field?.id, viewingSeason]);
 
   const crop = latestPlanting?.crop || field?.intendedUse || 'No Crop Logged';
+  const cropStyles = getPlantedCropColorStyles(latestPlanting?.crop);
 
   /** Format rainfall to 2 decimal places; null/undefined fallback to '0.00' */
   const fmtRain = (val: number | undefined | null) =>
@@ -299,8 +302,14 @@ export default function FieldDetailScreen() {
             <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{displayFieldAcres} ac</span>
           </div>
           <div className="flex flex-wrap gap-2 items-center text-muted-foreground">
-            <div className="flex items-center gap-1.5 bg-muted px-2 py-0.5 rounded text-xs font-bold uppercase tracking-tight">
-              <Sprout size={12} className="text-primary" />
+            <div
+              data-crop={cropStyles?.key}
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-tight border',
+                cropStyles ? cropStyles.pill : 'bg-muted text-muted-foreground border-transparent',
+              )}
+            >
+              <Sprout size={12} className={cropStyles ? 'text-current' : 'text-primary'} />
               {crop}
             </div>
             {(field.fsaFarmNumber || field.fsaTractNumber) && (

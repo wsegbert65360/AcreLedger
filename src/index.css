@@ -86,6 +86,13 @@
     --spray-foreground: 0 0% 100%;
     --harvest: 36 95% 44%;
     --harvest-foreground: 212 80% 6%;
+    --crop-corn: 46 96% 44%;
+    --crop-soybean: 142 72% 30%;
+    --crop-wheat: 28 48% 36%;
+    --crop-sorghum: 18 75% 40%;
+    --crop-cotton: 38 18% 40%;
+    --crop-hay: 40 50% 36%;
+    --crop-other: 210 32% 36%;
     --neon-glow-plant: 0 0 20px hsl(142 90% 28% / 0.2);
     --neon-glow-spray: 0 0 20px hsl(212 100% 36% / 0.2);
     --neon-glow-harvest: 0 0 20px hsl(36 95% 44% / 0.2);
@@ -138,6 +145,13 @@
     --spray-foreground: 0 0% 100%;
     --harvest: 45 100% 55%;
     --harvest-foreground: 0 0% 0%;
+    --crop-corn: 46 95% 56%;
+    --crop-soybean: 142 72% 50%;
+    --crop-wheat: 32 48% 62%;
+    --crop-sorghum: 18 80% 58%;
+    --crop-cotton: 40 16% 72%;
+    --crop-hay: 40 52% 58%;
+    --crop-other: 210 40% 68%;
     --neon-glow-plant: 0 0 20px hsl(142 72% 50% / 0.4);
     --neon-glow-spray: 0 0 20px hsl(210 100% 55% / 0.4);
     --neon-glow-harvest: 0 0 20px hsl(45 100% 55% / 0.4);
@@ -194,6 +208,13 @@
     --spray-foreground: 0 0% 100%;
     --harvest: 32 100% 48%;
     --harvest-foreground: 222 47% 11%;
+    --crop-corn: 46 100% 44%;
+    --crop-soybean: 142 100% 32%;
+    --crop-wheat: 28 55% 36%;
+    --crop-sorghum: 18 90% 44%;
+    --crop-cotton: 40 22% 38%;
+    --crop-hay: 40 60% 36%;
+    --crop-other: 210 50% 38%;
     --neon-glow-plant: 0 0 24px hsl(142 100% 36% / 0.45);
     --neon-glow-spray: 0 0 24px hsl(210 100% 44% / 0.45);
     --neon-glow-harvest: 0 0 24px hsl(32 100% 48% / 0.45);
@@ -461,44 +482,44 @@ html.color nav.fixed.left-0 .space-y-1 > button:nth-child(5) {
   color: hsl(var(--hue-violet));
 }
 
-html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+1),
+html.color .space-y-2 > [role="button"].rounded-2xl:not([data-crop]):nth-child(6n+1),
 html.color .grid > .rounded-2xl:nth-child(6n+1),
-html.color .overflow-x-auto > button:nth-child(6n+1) {
+html.color .overflow-x-auto > button:not([data-crop]):nth-child(6n+1) {
   --primary: var(--hue-lime);
   border-color: hsl(var(--hue-lime) / 0.45);
 }
 
-html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+2),
+html.color .space-y-2 > [role="button"].rounded-2xl:not([data-crop]):nth-child(6n+2),
 html.color .grid > .rounded-2xl:nth-child(6n+2),
-html.color .overflow-x-auto > button:nth-child(6n+2) {
+html.color .overflow-x-auto > button:not([data-crop]):nth-child(6n+2) {
   --primary: var(--hue-cyan);
   border-color: hsl(var(--hue-cyan) / 0.45);
 }
 
-html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+3),
+html.color .space-y-2 > [role="button"].rounded-2xl:not([data-crop]):nth-child(6n+3),
 html.color .grid > .rounded-2xl:nth-child(6n+3),
-html.color .overflow-x-auto > button:nth-child(6n+3) {
+html.color .overflow-x-auto > button:not([data-crop]):nth-child(6n+3) {
   --primary: var(--hue-sky);
   border-color: hsl(var(--hue-sky) / 0.45);
 }
 
-html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+4),
+html.color .space-y-2 > [role="button"].rounded-2xl:not([data-crop]):nth-child(6n+4),
 html.color .grid > .rounded-2xl:nth-child(6n+4),
-html.color .overflow-x-auto > button:nth-child(6n+4) {
+html.color .overflow-x-auto > button:not([data-crop]):nth-child(6n+4) {
   --primary: var(--hue-gold);
   border-color: hsl(var(--hue-gold) / 0.5);
 }
 
-html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n+5),
+html.color .space-y-2 > [role="button"].rounded-2xl:not([data-crop]):nth-child(6n+5),
 html.color .grid > .rounded-2xl:nth-child(6n+5),
-html.color .overflow-x-auto > button:nth-child(6n+5) {
+html.color .overflow-x-auto > button:not([data-crop]):nth-child(6n+5) {
   --primary: var(--hue-orange);
   border-color: hsl(var(--hue-orange) / 0.45);
 }
 
-html.color .space-y-2 > [role="button"].rounded-2xl:nth-child(6n),
+html.color .space-y-2 > [role="button"].rounded-2xl:not([data-crop]):nth-child(6n),
 html.color .grid > .rounded-2xl:nth-child(6n),
-html.color .overflow-x-auto > button:nth-child(6n) {
+html.color .overflow-x-auto > button:not([data-crop]):nth-child(6n) {
   --primary: var(--hue-violet);
   border-color: hsl(var(--hue-violet) / 0.45);
 }

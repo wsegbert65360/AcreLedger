@@ -1,10 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 
+import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
+import { getPlantedCropColorStyles } from '@/lib/cropColors';
+import type { GeoJSONGeometry } from '@/lib/geoHelpers';
+import { cn } from '@/lib/utils';
 import { Field } from '@/types/farm';
 import { roundTo } from '@/utils/numbers';
-import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
-import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 import FieldBoundaryThumbnail from './FieldBoundaryThumbnail';
 
 interface FieldCardProps {
@@ -18,23 +20,25 @@ export default function FieldCard({ field }: FieldCardProps) {
   const navigate = useNavigate();
   const summary = field.activitySummary;
   const displayAcreage = roundTo(field.displayAcreage ?? field.acreage, 0);
+  const cropStyles = summary?.planted ? getPlantedCropColorStyles(summary.crop) : null;
 
   const openField = () => {
     navigate(`/field/${field.id}`);
   };
 
-  // Determine status: green if planted, blue if any activity, gray if none
   const hasActivity = summary?.planted || (summary?.sprayed ?? 0) > 0 || (summary?.fertilized ?? 0) > 0;
   const statusLabel = summary?.planted
-    ? 'Planted'
+    ? (summary.crop || 'Planted')
     : hasActivity
       ? 'Activity logged'
       : 'No activity';
-  const statusPillClass = summary?.planted
-    ? 'bg-plant/10 text-plant border-plant/20'
-    : hasActivity
-      ? 'bg-spray/10 text-spray border-spray/20'
-      : 'bg-muted text-muted-foreground border-border';
+  const statusPillClass = cropStyles
+    ? cropStyles.pill
+    : summary?.planted
+      ? 'bg-plant/10 text-plant border-plant/20'
+      : hasActivity
+        ? 'bg-spray/10 text-spray border-spray/20'
+        : 'bg-muted text-muted-foreground border-border';
 
   return (
     <div
@@ -47,11 +51,20 @@ export default function FieldCard({ field }: FieldCardProps) {
       }}
       role="button"
       tabIndex={0}
-      aria-label={`Open ${field.name} details`}
-      className="group relative flex min-h-[72px] cursor-pointer items-center justify-between rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      data-crop={cropStyles?.key}
+      aria-label={summary?.crop ? `Open ${field.name} details, ${summary.crop}` : `Open ${field.name} details`}
+      className={cn(
+        'group relative flex min-h-[72px] cursor-pointer items-center justify-between rounded-2xl border bg-card/90 p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+        cropStyles ? cropStyles.card : 'border-border/70 hover:border-primary/25',
+      )}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 p-1.5 text-primary transition-colors group-hover:bg-primary/15">
+        <div
+          className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border p-1.5 transition-colors',
+            cropStyles ? cropStyles.thumb : 'border-primary/15 bg-primary/10 text-primary group-hover:bg-primary/15',
+          )}
+        >
           <FieldBoundaryThumbnail geometry={field.thumbnailGeometry ?? field.boundary} />
         </div>
         <div className="min-w-0">
@@ -98,7 +111,7 @@ export default function FieldCard({ field }: FieldCardProps) {
             </div>
           )}
         </div>
-        <ChevronRight size={20} className="text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+        <ChevronRight size={20} className={cn('text-muted-foreground/40 transition-transform group-hover:translate-x-0.5', cropStyles ? 'group-hover:text-current' : 'group-hover:text-primary')} />
       </div>
     </div>
   );
