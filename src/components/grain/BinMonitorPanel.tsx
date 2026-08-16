@@ -157,7 +157,7 @@ export default function BinMonitorPanel({ bin }: { bin: BinMonitorPanelData }) {
                 </p>
                 <p className="pb-1 text-xl font-bold text-foreground dark:text-slate-100">full</p>
               </div>
-              <div className={cn('mt-3 flex items-center gap-2 text-sm font-semibold', level === 'ok' ? 'text-primary dark:text-emerald-200' : status.tone, DARK_LEVEL_TONE[level])}>
+              <div className={cn('mt-3 flex items-center gap-2 text-sm font-semibold', status.tone, DARK_LEVEL_TONE[level])}>
                 {level !== 'ok' ? <AlertTriangle size={16} /> : <TrendingUp size={16} />}
                 <span>{statusPrefix}: {status.statusLabel}</span>
               </div>

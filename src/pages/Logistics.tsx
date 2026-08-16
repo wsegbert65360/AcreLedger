@@ -1,10 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
-import { AlertTriangle, ArrowLeft, Banknote, Plus, Settings, Warehouse, Wheat } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, Plus, Settings, Wheat } from 'lucide-react';
 
 import AddGrainModal from '@/components/AddGrainModal';
 import { BinManager } from '@/components/BinManageModal';
 import BinMonitorPanel, { BinMonitorPanelData, BinTrendPoint } from '@/components/grain/BinMonitorPanel';
+import BinSiloThumb from '@/components/grain/BinSiloThumb';
 import SellModal from '@/components/SellModal';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
@@ -49,18 +50,6 @@ function buildBinTrend(movementsForBin: GrainMovement[]): BinTrendPoint[] {
   }
 
   return points;
-}
-
-function CapacityBar({ pct, className }: { pct: number; className?: string }) {
-  const level = getCapacityLevel(pct);
-  return (
-    <div className={cn('overflow-hidden rounded-full bg-muted', className)}>
-      <div
-        className={cn('h-full rounded-full transition-all', CAPACITY_LEVEL_STYLES[level].bar)}
-        style={{ width: `${Math.min(pct, 100)}%` }}
-      />
-    </div>
-  );
 }
 
 interface BinQuickActionsProps {
@@ -186,7 +175,9 @@ export default function Logistics() {
   } else if (binOverview.length === 0) {
     mainContent = (
       <div className="rounded-2xl border-2 border-dashed border-border bg-card p-8 text-center shadow-sm">
-        <Warehouse size={48} className="mx-auto mb-4 text-muted-foreground/40" />
+        <div className="mx-auto mb-3 flex justify-center text-muted-foreground">
+          <BinSiloThumb id="empty-storage" percentFull={0} />
+        </div>
         <h3 className="mb-1 text-lg font-bold text-foreground">No storage bins</h3>
         <p className="mx-auto max-w-[16rem] text-sm leading-relaxed text-muted-foreground">
           Add your first bin to start monitoring capacity, inventory, and grain movement.
@@ -266,17 +257,15 @@ export default function Logistics() {
           <aside className="space-y-3">
             <section className="rounded-2xl border border-border bg-card p-3 shadow-sm">
               <h2 className="mb-3 px-1 text-sm font-bold text-foreground">Selected bin</h2>
-              <div className="rounded-lg border border-harvest/50 bg-harvest/10 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-foreground">{selectedBinDetail.name}</p>
-                    <p className="font-mono text-xs text-muted-foreground">{formatMeasurement(selectedBinDetail.total, 'bu', 1)}</p>
-                  </div>
-                  <span className={cn('font-mono text-sm font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(selectedBinDetail.pct)].tone)}>
+              <div className="flex items-center gap-3 rounded-xl border border-harvest/40 bg-harvest/10 p-3">
+                <BinSiloThumb id={`selected-${selectedBinDetail.id}`} percentFull={selectedBinDetail.pct} className="h-20 w-14" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-foreground">{selectedBinDetail.name}</p>
+                  <p className="font-mono text-xs text-muted-foreground">{formatMeasurement(selectedBinDetail.total, 'bu', 1)}</p>
+                  <span className={cn('mt-1 inline-block font-mono text-sm font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(selectedBinDetail.pct)].tone)}>
                     {roundTo(selectedBinDetail.pct, 0)}%
                   </span>
                 </div>
-                <CapacityBar pct={selectedBinDetail.pct} className="mt-3 h-2" />
               </div>
             </section>
 
@@ -323,33 +312,39 @@ export default function Logistics() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {binOverview.map((bin) => {
               const level = getCapacityLevel(bin.pct);
+              const status = CAPACITY_LEVEL_STYLES[level];
               return (
                 <button
                   key={bin.id}
                   type="button"
                   onClick={() => setSelectedBinId(bin.id)}
-                  className="group rounded-2xl border border-border bg-background/60 p-4 text-left transition-colors hover:border-harvest/50 hover:bg-harvest/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`${bin.name}, ${roundTo(bin.pct, 0)} percent full, ${formatMeasurement(bin.total, 'bu', 1)} of ${formatMeasurement(bin.capacity, 'bu', 1)}, ${status.statusLabel}`}
+                  className="group relative overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-harvest/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Warehouse size={17} className="text-harvest" />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-harvest/15 via-harvest/5 to-transparent"
+                  />
+                  <div className="relative flex items-center gap-3">
+                    <BinSiloThumb id={bin.id} percentFull={bin.pct} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
                         <h3 className="truncate text-base font-bold text-foreground">{bin.name}</h3>
+                        <span className={cn('shrink-0 font-mono text-2xl font-bold leading-none', status.tone)}>
+                          {roundTo(bin.pct, 0)}%
+                        </span>
                       </div>
                       <p className="mt-1 font-mono text-sm text-muted-foreground">
                         {formatMeasurement(bin.total, 'bu', 1)} of {formatMeasurement(bin.capacity, 'bu', 1)}
                       </p>
+                      <span className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold', status.statusClassName)}>
+                        {status.statusLabel}
+                      </span>
                     </div>
-                    <span className={cn('font-mono text-2xl font-bold leading-none', CAPACITY_LEVEL_STYLES[level].tone)}>
-                      {roundTo(bin.pct, 0)}%
-                    </span>
                   </div>
-
-                  <CapacityBar pct={bin.pct} className="mt-4 h-4 border border-border/50" />
-
-                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <div className="relative mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>{bin.movementCount} all-time movement{bin.movementCount !== 1 ? 's' : ''}</span>
-                    <span className="font-semibold text-harvest group-hover:text-harvest">View details</span>
+                    <span className="font-semibold text-harvest">View details</span>
                   </div>
                 </button>
               );

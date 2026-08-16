@@ -9,9 +9,9 @@ interface BinFillGaugeProps {
 
 const LEVEL_ACCENT: Record<CapacityLevel, { rail: string; marker: string; glow: string }> = {
   ok: {
-    rail: 'bg-primary dark:bg-emerald-400',
-    marker: 'border-primary/50 bg-primary/10 text-primary dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-400',
-    glow: 'stroke-primary/80 dark:stroke-emerald-400/80',
+    rail: 'bg-plant dark:bg-emerald-400',
+    marker: 'border-plant/50 bg-plant/10 text-plant dark:border-emerald-400/50 dark:bg-emerald-400/10 dark:text-emerald-400',
+    glow: 'stroke-plant/80 dark:stroke-emerald-400/80',
   },
   warning: {
     rail: 'bg-amber-500 dark:bg-amber-400',

@@ -24,6 +24,7 @@ export function getSignedBushels(movement: { type: 'in' | 'out'; bushels: number
 
 // 85/60 thresholds match the gauge gradient and status badge bands across the grain UI.
 export function getCapacityLevel(percentFull: number): CapacityLevel {
+    if (!Number.isFinite(percentFull)) return 'ok';
     if (percentFull > 85) return 'critical';
     if (percentFull > 60) return 'warning';
     return 'ok';
@@ -36,10 +37,12 @@ export const CAPACITY_LEVEL_STYLES: Record<CapacityLevel, {
     statusClassName: string;
 }> = {
     ok: {
-        tone: 'text-primary',
+        // Use --plant, not --primary. Color mode remaps --primary on each
+        // `.grid > .rounded-2xl` card, which made empty bins look like warnings.
+        tone: 'text-plant',
         bar: 'bg-harvest',
         statusLabel: 'Room available',
-        statusClassName: 'border-primary/30 bg-primary/10 text-primary',
+        statusClassName: 'border-plant/30 bg-plant/10 text-plant',
     },
     warning: {
         tone: 'text-amber-700 dark:text-amber-300',
