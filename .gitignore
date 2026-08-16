@@ -61,6 +61,7 @@ Website/
 
 # local scratch and assistant files
 .tmp/
+tmp/
 .claude/
 *.log
 acreledger_fields*.csv
