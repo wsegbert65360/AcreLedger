@@ -10,9 +10,9 @@ export const MISSING_VALUE = '-';
  */
 export function formatNumber(val: number | undefined | null): string {
   if (val == null) return MISSING_VALUE;
-  return val.toLocaleString(undefined, { 
-    minimumFractionDigits: 0, 
-    maximumFractionDigits: 2 
+  return val.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
   });
 }
 
@@ -30,8 +30,18 @@ export function formatUnit(unit: string | undefined | null): string {
 export function getRecordOmissions(record: SprayRecord, treatedArea = record.treatedAreaSize): string[] {
   const omissions: string[] = [];
 
-  if (record.temperature == null) omissions.push('temperature');
-  if (record.relativeHumidity == null) omissions.push('relative humidity');
+  if (record.temperature == null) {
+    omissions.push('temperature');
+  } else if (!Number.isFinite(record.temperature) || record.temperature < -40 || record.temperature > 130) {
+    omissions.push('valid temperature');
+  }
+
+  if (record.relativeHumidity == null) {
+    omissions.push('relative humidity');
+  } else if (!Number.isFinite(record.relativeHumidity) || record.relativeHumidity <= 0 || record.relativeHumidity > 100) {
+    omissions.push('valid relative humidity');
+  }
+
   if (!record.products?.length) {
     omissions.push('products');
   } else if (record.products.some(product => formatSprayProductTotal(product, treatedArea) === '—')) {
@@ -46,7 +56,7 @@ export function getComplianceStatus(nonCompliant?: boolean, omissions: string[] 
     return 'Compliance Warning: Some recommended record details are missing.';
   }
   if (omissions.length > 0) {
-    return `Record Status: Review needed - missing ${omissions.join(', ')}.`;
+    return `Record Status: Review needed - missing or invalid ${omissions.join(', ')}.`;
   }
   return 'Compliance Status: Complete';
 }
@@ -56,8 +66,7 @@ export function getComplianceStatus(nonCompliant?: boolean, omissions: string[] 
  */
 export function formatTime(timeStr?: string | null): string {
   if (!timeStr) return MISSING_VALUE;
-  
-  // If it's just HH:mm (e.g. "08:30")
+
   if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(timeStr)) {
     const [h, m] = timeStr.split(':').map(Number);
     const suffix = h >= 12 ? 'PM' : 'AM';
@@ -65,7 +74,6 @@ export function formatTime(timeStr?: string | null): string {
     return `${hour}:${m.toString().padStart(2, '0')} ${suffix}`;
   }
 
-  // If it's a full Date object or ISO string
   try {
     const d = new Date(timeStr);
     if (!isNaN(d.getTime())) {
