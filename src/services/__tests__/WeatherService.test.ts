@@ -212,6 +212,45 @@ describe('WeatherService', () => {
             expect((global.fetch as any).mock.calls[0][0]).toContain('weather.visualcrossing.com');
             expect((global.fetch as any).mock.calls[0][0]).toContain('key=test-api-key');
         });
+
+        it('should flag an error instead of zero weather when currentConditions is missing temp/humidity', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: 'New York',
+                    currentConditions: {
+                        windspeed: 5,
+                        winddir: 270,
+                    },
+                    days: [],
+                }),
+            });
+
+            const result = await WeatherService.fetchCurrentWeather('New York');
+            expect(result.isError).toBe(true);
+            expect(result.locationName).toBe('New York');
+        });
+
+        it('should flag an error when currentConditions carries JSON null readings', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: 'New York',
+                    currentConditions: {
+                        temp: null,
+                        humidity: 45,
+                        windspeed: 5,
+                        winddir: 270,
+                    },
+                    days: [],
+                }),
+            });
+
+            const result = await WeatherService.fetchCurrentWeather('New York');
+            expect(result.isError).toBe(true);
+        });
     });
 
     describe('fetchExtendedWeather', () => {
@@ -304,6 +343,28 @@ describe('WeatherService', () => {
                     currentConditions: {
                         windspeed: 5,
                         winddir: 270,
+                    },
+                }),
+            });
+
+            await expect(WeatherService.fetchHistoricalConditions(
+                38.465385,
+                -93.544197,
+                '2026-06-15',
+                '17:17',
+            )).resolves.toBeNull();
+        });
+
+        it('returns null when a historical reading is JSON null rather than missing', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    currentConditions: {
+                        temp: null,
+                        humidity: 34.3,
+                        windspeed: 1.7,
+                        winddir: 340,
                     },
                 }),
             });

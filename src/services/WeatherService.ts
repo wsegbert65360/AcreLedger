@@ -246,14 +246,27 @@ export const WeatherService = {
             precip72h = sortedDays.slice(0, 3).reduce((sum, day) => sum + (day.precip || 0), 0);
         }
 
-        const windSpeed = current.windspeed != null ? Math.round(current.windspeed) : 0;
-        const windDirDeg = current.winddir != null ? current.winddir : null;
+        // A partial currentConditions payload must not seed 0°F / 0% RH into a
+        // saved spray record — reject it the way fetchHistoricalConditions does.
+        // Callers already treat the isError shape as "no data" and keep prior values.
+        const temp = current.temp == null ? NaN : Number(current.temp);
+        const humidity = current.humidity == null ? NaN : Number(current.humidity);
+        const wind = current.windspeed == null ? NaN : Number(current.windspeed);
+        const dirDeg = current.winddir == null ? null : Number(current.winddir);
+        if (
+            !Number.isFinite(temp) ||
+            !Number.isFinite(humidity) ||
+            !Number.isFinite(wind) ||
+            (wind !== 0 && !Number.isFinite(dirDeg))
+        ) {
+            return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: data.address || 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
+        }
 
         return {
-            temp: current.temp != null ? Math.round(current.temp) : 0,
-            humidity: current.humidity != null ? Math.round(current.humidity) : 0,
-            wind: windSpeed,
-            windDirection: windDirDeg != null ? this.degreesToDirection(windDirDeg) : (windSpeed === 0 ? 'CALM' : '—'),
+            temp: Math.round(temp),
+            humidity: Math.round(humidity),
+            wind: Math.round(wind),
+            windDirection: dirDeg != null ? this.degreesToDirection(dirDeg) : 'CALM',
             locationName: data.address,
             isError: false,
             precip24h: Math.round(precip24h * 100) / 100,
@@ -432,9 +445,10 @@ export const WeatherService = {
             const target = data.currentConditions || data.days?.[0];
             if (!target) return null;
 
-            const temp = Number(target.temp);
-            const humidity = Number(target.humidity);
-            const wind = Number(target.windspeed);
+            // Number(null) is 0, so treat an explicit JSON null as missing too.
+            const temp = target.temp == null ? NaN : Number(target.temp);
+            const humidity = target.humidity == null ? NaN : Number(target.humidity);
+            const wind = target.windspeed == null ? NaN : Number(target.windspeed);
             const windDirection = target.winddir == null ? null : Number(target.winddir);
             if (
                 !Number.isFinite(temp) ||
