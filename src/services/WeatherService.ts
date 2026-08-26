@@ -8,9 +8,18 @@ function cleanEnvValue(value?: string): string {
     return (value ?? '').trim().replace(/^['"]|['"]$/g, '');
 }
 
-const VISUAL_CROSSING_KEY = cleanEnvValue(import.meta.env.VITE_VISUALCROSSING_KEY);
-const WEATHER_PROXY_URL = cleanEnvValue(import.meta.env.VITE_WEATHER_PROXY_URL);
 const IS_CAPACITOR_BUILD = import.meta.env.MODE === 'capacitor';
+
+function readBundledVisualCrossingKey(): string {
+    // Production web requests must use the authenticated proxy. Keeping the
+    // VITE_ value behind a compile-time-false branch lets Vite remove the key
+    // from production bundles even if the deployment environment defines it.
+    if (!import.meta.env.DEV && !IS_CAPACITOR_BUILD) return '';
+    return cleanEnvValue(import.meta.env.VITE_VISUALCROSSING_KEY);
+}
+
+const VISUAL_CROSSING_KEY = readBundledVisualCrossingKey();
+const WEATHER_PROXY_URL = cleanEnvValue(import.meta.env.VITE_WEATHER_PROXY_URL);
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
 const conditionsCache = new Map<string, Promise<any>>();
