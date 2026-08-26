@@ -76,7 +76,7 @@ export interface SprayRecordRow {
     field_name: string;
     products?: ProductEntry[] | null;
     wind_speed: number;
-    temperature: number;
+    temperature: number | null;
     spray_date: string | null;
     start_time: string | null;
     end_time: string | null;

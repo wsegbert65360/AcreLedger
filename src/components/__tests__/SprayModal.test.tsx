@@ -427,6 +427,46 @@ describe('SprayModal Data Retention', () => {
       })
     );
   });
+
+  it('does not manufacture zero temperature or humidity when saved weather is missing', async () => {
+    const dataWithMissingWeather: SprayRecord = {
+      ...fullyCompliantData,
+      temperature: undefined,
+      relativeHumidity: undefined,
+      windSpeed: 5,
+      windDirection: 'W',
+    };
+
+    render(
+      <SprayModal
+        field={field}
+        open={true}
+        onClose={vi.fn()}
+        initialData={dataWithMissingWeather}
+      />
+    );
+
+    fillCoreStep();
+    await clickNext();
+    await waitFor(() => expect(screen.getByText(/Herbicide Mix/i)).toBeInTheDocument());
+    fillMixStep();
+    await clickNext();
+    await waitFor(() => expect(screen.getByLabelText(/Wind Speed/i)).toBeInTheDocument());
+    await clickNext();
+    const updateBtn = await screen.findByRole('button', { name: /Update \(Incomplete\)/i });
+    fireEvent.click(updateBtn);
+    fireEvent.click(updateBtn);
+
+    await waitFor(() => expect(updateSprayRecordMock).toHaveBeenCalledTimes(1));
+    expect(updateSprayRecordMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        windSpeed: 5,
+        windDirection: 'W',
+        temperature: undefined,
+        relativeHumidity: undefined,
+      })
+    );
+  });
 });
 
 describe('SprayModal product deletion', () => {

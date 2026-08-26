@@ -420,7 +420,7 @@ describe('Reverse mapper optional fields', () => {
     expect(result.start_time).toBeNull();
     expect(result.end_time).toBeNull();
     expect(result.wind_speed).toBe(0);
-    expect(result.temperature).toBe(0);
+    expect(result.temperature).toBeNull();
   });
 
   it('mapGrainToDb serializes a missing optional price as null (not dropped)', () => {
