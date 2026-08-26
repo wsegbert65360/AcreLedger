@@ -423,11 +423,26 @@ export const WeatherService = {
             const target = data.currentConditions || data.days?.[0];
             if (!target) return null;
 
+            const temp = Number(target.temp);
+            const humidity = Number(target.humidity);
+            const wind = Number(target.windspeed);
+            const windDirection = target.winddir == null ? null : Number(target.winddir);
+            if (
+                !Number.isFinite(temp) ||
+                !Number.isFinite(humidity) ||
+                !Number.isFinite(wind) ||
+                (wind !== 0 && !Number.isFinite(windDirection))
+            ) {
+                return null;
+            }
+
             return {
-                temp: Math.round(target.temp),
-                humidity: Math.round(target.humidity),
-                wind: Math.round(target.windspeed),
-                windDirection: this.degreesToDirection(target.winddir)
+                temp: Math.round(temp),
+                humidity: Math.round(humidity),
+                wind: Math.round(wind),
+                windDirection: wind === 0 && windDirection == null
+                    ? 'CALM'
+                    : this.degreesToDirection(windDirection as number)
             };
         } catch (error: any) {
             if (error.name === 'AbortError') {

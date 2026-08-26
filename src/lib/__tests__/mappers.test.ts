@@ -148,6 +148,30 @@ describe('Mappers Round-Trip', () => {
         expect(result.relativeHumidity).toBe(0);
     });
 
+    it('preserves missing spray weather as null in the database and undefined in the app', () => {
+        const record = {
+            id: 'spray-missing-weather',
+            farm_id: 'farm-1',
+            fieldId: 'field-1',
+            fieldName: 'North Field',
+            products: [],
+            windSpeed: 5,
+            timestamp: Date.now(),
+            seasonYear: 2026,
+            deleted_at: null,
+        } as SprayRecord;
+
+        const db = mapSprayToDb(record);
+        expect(db.wind_speed).toBe(5);
+        expect(db.temperature).toBeNull();
+        expect(db.relative_humidity).toBeNull();
+
+        const result = mapSprayFromDb(db as any);
+        expect(result.windSpeed).toBe(5);
+        expect(result.temperature).toBeUndefined();
+        expect(result.relativeHumidity).toBeUndefined();
+    });
+
     it('should handle SavedSeed new fields in round-trip', () => {
         const original: SavedSeed = {
             id: 'seed-1',

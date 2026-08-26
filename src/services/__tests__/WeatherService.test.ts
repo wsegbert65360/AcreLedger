@@ -267,4 +267,53 @@ describe('WeatherService', () => {
             expect(result.forecastDays[0].tempLowF).toBe(60);
         });
     });
+
+    describe('fetchHistoricalConditions', () => {
+        it('rounds a complete historical response', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    currentConditions: {
+                        temp: 79,
+                        humidity: 34.3,
+                        windspeed: 1.7,
+                        winddir: 340,
+                    },
+                }),
+            });
+
+            await expect(WeatherService.fetchHistoricalConditions(
+                38.465385,
+                -93.544197,
+                '2026-06-15',
+                '17:17',
+            )).resolves.toEqual({
+                temp: 79,
+                humidity: 34,
+                wind: 2,
+                windDirection: 'NNW',
+            });
+        });
+
+        it('returns null instead of zero weather when required values are missing', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    currentConditions: {
+                        windspeed: 5,
+                        winddir: 270,
+                    },
+                }),
+            });
+
+            await expect(WeatherService.fetchHistoricalConditions(
+                38.465385,
+                -93.544197,
+                '2026-06-15',
+                '17:17',
+            )).resolves.toBeNull();
+        });
+    });
 });

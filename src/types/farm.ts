@@ -73,7 +73,7 @@ export interface SprayRecord {
   fieldName: string;
   products?: SprayRecipeProduct[];
   windSpeed: number;
-  temperature: number;
+  temperature?: number;
   timestamp: number;
   seasonYear: number;
   farm_id: string;

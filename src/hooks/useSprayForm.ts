@@ -185,15 +185,13 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
       if (
         !isDuplicate &&
-        (initialData.windSpeed !== undefined ||
-        initialData.temperature !== undefined ||
-        initialData.relativeHumidity !== undefined ||
-        initialData.windDirection)
+        initialData.temperature !== undefined &&
+        initialData.relativeHumidity !== undefined
       ) {
         setWeather({
           wind: initialData.windSpeed ?? 0,
-          temp: initialData.temperature ?? 0,
-          humidity: initialData.relativeHumidity ?? 0,
+          temp: initialData.temperature,
+          humidity: initialData.relativeHumidity,
           windDirection: initialData.windDirection ?? '',
           isError: false
         });
@@ -490,13 +488,13 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
           totalProductUnit: p.totalProductUnit || 'gal'
         })),
         windSpeed: !isNaN(parseFloat(manualWindSpeed)) ? parseFloat(manualWindSpeed) : (weather ? weather.wind : (initialDataRef.current?.windSpeed ?? 0)),
-        temperature: weather ? weather.temp : (initialDataRef.current?.temperature ?? 0),
+        temperature: weather ? weather.temp : initialDataRef.current?.temperature,
         applicatorName: applicatorName.trim(),
         licenseNumber: licenseNumber.trim(),
         epaRegNumber: products[0]?.epaRegNumber,
         targetPest: targetPest.trim() || undefined,
         windDirection: manualWindDirection || weather?.windDirection || initialDataRef.current?.windDirection,
-        relativeHumidity: weather ? weather.humidity : (initialDataRef.current?.relativeHumidity ?? 0),
+        relativeHumidity: weather ? weather.humidity : initialDataRef.current?.relativeHumidity,
         sprayDate: sprayDate || undefined,
         startTime: startTime || undefined,
         endTime: endTime || undefined,
