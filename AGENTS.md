@@ -144,6 +144,19 @@ All add, update, and delete operations return `Promise<boolean>` — `true` on s
 - RLS policies must restrict access by the user's farm through `public.profiles`.
 - Do not bypass RLS assumptions in client code.
 
+### AI Assistant / Ask the Book
+
+- The assistant is intentionally **read-only**. It may answer from every allowlisted active farm record across all available seasons, but it must never add, edit, delete, restore, or otherwise mutate farm data.
+- `server/ai-assistant-tools.ts` is the single allowlisted database-read registry. The model receives named tools only—never raw SQL, caller-selected table names, a Supabase service-role/secret key, or a generic database client.
+- Every read must use the authenticated caller's JWT and the publishable/anon key so Supabase RLS remains active. Resolve the authoritative `farm_id` from the caller's profile and also apply it explicitly to every direct or joined farm query. Request input may never select or override a farm.
+- The registry covers farm/profile context, fields, bins, planting, spray, custom spray, fertilizer, tillage, harvest, hay, grain movements, saved seeds, spray/fertilizer recipes, FSA tract imports, CLU assignments, work requests, and stored rainfall. Exclude soft-deleted rows, other farms, auth data, private quota/audit state, and infrastructure schemas.
+- When a user-facing farm table is added or renamed, update the assistant registry and its catalog-isolation tests in the same change, or document why it is intentionally unavailable to the assistant. Filters, aggregate fields, grouping fields, and search targets must remain hardcoded and fail closed.
+- Preserve data minimization at the model boundary: strip embedded base64 image payloads and summarize raw geometry coordinate arrays. Ordinary permitted scalar fields, notes, product details, and other record JSON remain readable so the assistant can answer detailed farm questions.
+- `OPENROUTER_API_KEY` is server-only. Never expose it through a `VITE_*` variable or client bundle. Native Capacitor builds instead require the public HTTPS base URL in `VITE_AI_ASSISTANT_URL`; `codemagic.yaml` must validate that the value is embedded in the production bundle.
+- Keep the bounded tool loop, query/result budgets, daily database-backed quota, exact origin allowlist, provider `data_collection: "deny"`, and `require_parameters: true` controls described in `BLUEPRINT.md`.
+- **Intentional product decision:** Ask the Book has no persistent AI disclaimer, compliance warning, verification reminder, or retention footer beneath answers. Future reviews must not reintroduce recurring disclaimer copy unless the product owner explicitly reverses this decision. Factual data-handling information belongs in the privacy policy and project documentation.
+- Keep function contract tests outside `api/`; Vercel deploys TypeScript files under that directory as functions. Run the assistant unit tests, live RLS integration coverage when credentials are available, `typecheck:api`, and a Vercel build whenever the read registry or endpoint changes.
+
 ### Grain Movement
 
 - `bushels` may be negative.

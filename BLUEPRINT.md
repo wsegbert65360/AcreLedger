@@ -492,6 +492,16 @@ The registry covers all active user-facing farm records across every season: far
 
 Whenever a new user-facing farm table is added, update the assistant registry and its catalog-isolation test in the same change, or document why the table is intentionally excluded. Generic query filters, aggregate fields, and grouping fields remain hardcoded per entity and fail closed when unsupported.
 
+The public tool surface consists of flexible full-farm tools (`farm_overview`, `query_farm_records`, `get_record_details`, `search_farm_records`, `aggregate_farm_records`, and `activity_timeline`) plus optimized helpers for common planting, spray, bin, and seed questions. The flexible tools may read any valid historical season; omitting a season means all seasons where that operation supports it. All arguments are validated again before a Supabase query runs, LIKE wildcards are escaped, and unsupported entities, fields, filters, or unexpected keys fail closed.
+
+The assistant remains read-only at every layer. It has no mutation tool, no restore path, no arbitrary RPC execution, and no client capable of bypassing RLS. `api/ai-assistant.ts` runs a bounded named-tool loop through OpenRouter: at most four tool-capable rounds, eight tool executions, 1,000 rows per database page, ten pages, 12,000 serialized tool-result characters, a 45-second handler abort, and one answer-only synthesis round after tool access ends. These limits prevent open-ended model-driven queries and partial aggregate answers.
+
+Ask the Book uses the database-backed `ai_assistant_private` quota/audit flow. The public wrappers derive identity from `auth.uid()`, use an empty `search_path`, and deny `PUBLIC`/`anon`; private operational data is not part of the farm read catalog or backup/restore. OpenRouter requests must keep `data_collection: "deny"` and `require_parameters: true`, and account-level prompt logging must stay disabled.
+
+The web client calls the same-origin `/api/ai-assistant` endpoint. Capacitor builds cannot rely on that relative Vercel route and require the public HTTPS deployment base in `VITE_AI_ASSISTANT_URL`; CodeMagic validates that the production bundle contains the configured endpoint. `OPENROUTER_API_KEY` remains server-only and must never appear in a `VITE_*` variable or compiled client asset.
+
+**Intentional product decision:** the Ask the Book interface does not display a persistent AI disclaimer, compliance warning, verification reminder, or retention footer beneath its answers. Do not reintroduce recurring disclaimer text during future reviews unless the product owner explicitly reverses this decision. Keep factual provider and data-handling disclosures in the privacy policy and project documentation. This decision applies to Ask the Book only and does not remove required wording from compliance reports or work-request exports.
+
 ### Mapper Pattern
 Every entity has a dedicated mapper in `@/lib/mappers.ts`.
 - **CamelCase to SnakeCase**: Mappers handle all translation.
