@@ -28,6 +28,9 @@
       ]
     }
   ],
+  "functions": {
+    "api/ai-assistant.ts": { "maxDuration": 60 }
+  },
   "rewrites": [
     {
       "source": "/((?!api/).*)",

@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { navTabs } from './navConfig';
 import SeasonSelect from '@/components/SeasonSelect';
-import { CalendarDays, Sprout, Plus } from 'lucide-react';
+import { CalendarDays, MessageCircle, Sprout, Plus } from 'lucide-react';
+import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
 import { useQuickAdd } from '@/context/QuickAddContext';
 import { native } from '@/lib/native';
 import pkg from '../../package.json';
@@ -11,6 +12,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
 
   const { openQuickAdd } = useQuickAdd();
+  const { openAsk } = useAskAcreLedger();
 
   return (
     <nav className="fixed left-0 top-0 bottom-0 w-60 z-30 bg-sidebar border-r border-sidebar-border flex-col hidden lg:flex print:hidden">
@@ -36,6 +38,18 @@ export default function Sidebar() {
         >
           <Plus size={16} strokeWidth={2.5} />
           <span>Quick Add Record</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            native.haptic.light();
+            openAsk();
+          }}
+          className="w-full h-11 flex items-center justify-center gap-2 px-3 rounded-lg border border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent/70 transition-colors text-sm font-medium"
+        >
+          <MessageCircle size={16} strokeWidth={2} />
+          <span>Ask the book</span>
         </button>
 
         <div className="space-y-1">

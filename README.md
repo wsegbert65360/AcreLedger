@@ -75,6 +75,11 @@ SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOi...
 VISUALCROSSING_API_KEY=your_visual_crossing_api_key
 ALLOWED_ORIGINS=https://your-app.vercel.app,capacitor://localhost
+
+# Ask the book (server-only; never VITE_OPENROUTER_API_KEY)
+OPENROUTER_API_KEY=sk-or-v1-...
+AI_MODEL=openai/gpt-oss-120b:free
+VITE_AI_ASSISTANT_URL=https://your-app.vercel.app
 ```
 
 `VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly. For iOS/Capacitor weather, provide an absolute `VITE_WEATHER_PROXY_URL` or set `VITE_VISUALCROSSING_KEY`; the proxy URL is preferred when both are set, while the web app can continue using the server-side `/api/weather-proxy`.
@@ -85,6 +90,8 @@ ALLOWED_ORIGINS=https://your-app.vercel.app,capacitor://localhost
 The frontend deploys to **Vercel**. Vercel is linked to the GitLab remote and auto-deploys on pushes to `main` / `master`. `vercel.json` configures cache headers for `index.html`, `/`, and the service worker.
 
 The `/api/weather-proxy` function requires the four server-only variables shown above in every Vercel environment. `ALLOWED_ORIGINS` is an exact, comma-separated allowlist and fails closed for browser/native requests that send an unlisted origin. Apply Supabase migrations before deploying the function. Environment-variable changes apply only to new deployments, so redeploy after changing them. The proxy verifies the caller's Supabase access token and enforces a database-backed limit of 30 weather requests per user per one-minute window.
+
+`/api/ai-assistant` is the Ask the book endpoint. It uses the same `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `ALLOWED_ORIGINS` values plus server-only `OPENROUTER_API_KEY` (optional `AI_MODEL`, default `openai/gpt-oss-120b:free`). Native builds call the deployed function through `VITE_AI_ASSISTANT_URL` — do not put `OPENROUTER_API_KEY` in any `VITE_*` variable. Apply the AI assistant quota migration before use; quota RPC failure returns 503. Questions are answered from named farm-scoped read tools only. OpenRouter requests deny providers that collect user data and require support for every requested parameter; prompt logging must remain disabled in the OpenRouter account. Local Ask-the-book audit rows are retained for 30 days. Free-model availability and account-wide limits are controlled by OpenRouter.
 
 ### iOS (CodeMagic → TestFlight)
 `codemagic.yaml` defines the `acreledger-ios` workflow that runs on push to `main`: lint → unit tests → `cap:build` → `pod install` → Xcode build → IPA → App Store Connect upload. See **[CODEMAGIC.md](./CODEMAGIC.md)** for signing credentials, environment variable groups, and troubleshooting, and **[Macinstructions.md](./Macinstructions.md)** for local macOS compilation and distribution.

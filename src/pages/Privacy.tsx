@@ -24,7 +24,7 @@ export default function Privacy() {
                             </div>
                             <div>
                                 <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">Last updated: March 4, 2026</p>
+                                <p className="text-xs text-muted-foreground mt-1">Last updated: August 26, 2026</p>
                             </div>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
@@ -103,6 +103,14 @@ export default function Privacy() {
                                         <p className="text-sm font-bold text-foreground">Vercel</p>
                                     </div>
                                     <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">Hosting/SSL</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
+                                    <div>
+                                        <p className="text-sm font-bold text-foreground">OpenRouter (Ask the book)</p>
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                            Questions you ask about your records are sent through OpenRouter to an eligible model provider to draft an answer from this farm’s data only. AcreLedger requests only providers marked as not collecting user data, and OpenRouter prompt logging must remain disabled. AcreLedger keeps a 30-day operational log of questions and answers.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </section>

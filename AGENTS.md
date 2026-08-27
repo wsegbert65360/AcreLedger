@@ -28,6 +28,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `TESTING.md` — verification protocols and test credentials.
 - `api/weather-proxy.ts` — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
 - `src/test/weatherProxy.test.ts` — weather-proxy contract tests; keep API tests outside `api/` so Vercel does not deploy them as functions.
+- `api/ai-assistant.ts` — weather-proxy-style Vercel Function for Ask the book. Named read tools only (no SQL, no writes). Uses the caller’s JWT so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
 - `@/types/farm.ts` — canonical TypeScript entity definitions.
 - `@/lib/mappers.ts` — entity to database row translation.
 - `@/lib/backupSchema.ts` — strict backup/restore validation schema.
@@ -501,7 +502,7 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 
 - The test suite is split into **unit** and **integration**. `npm run test` (and `npm run test:unit`) runs the unit suite, which excludes `**/*.integration.test.{ts,tsx}`. `npm run test:integration` runs the integration suite via `vitest.integration.config.ts` — those tests hit live services and require credentials/network (`RainService.integration.test.ts` for the real Rain API, `auth.integration.test.ts` for bot auth). Integration tests skip cleanly when their env/credentials are absent (`describe.skipIf` / early-return on `import.meta.env`). Do not add live-network tests to the unit suite; name them `*.integration.test.*`.
 - `npm run test:coverage` collects V8 coverage over the production-surface scope defined in the `coverage` block of `vite.config.ts` (tests, generated data, type declarations, shadcn/ui primitives, and entry-point boilerplate are excluded). The baseline is recorded in `TESTING.md`; no thresholds are enforced yet.
-- Keep Vercel Function unit tests in `src/test/weatherProxy.test.ts`, never under `api/`; Vercel treats TypeScript files under `api/` as deployable functions. Run `npm run typecheck:api` whenever the proxy changes.
+- Keep Vercel Function unit tests in `src/test/weatherProxy.test.ts` and `src/test/aiAssistant.test.ts`, never under `api/`; Vercel treats TypeScript files under `api/` as deployable functions. Run `npm run typecheck:api` whenever the weather proxy or AI assistant function changes.
 - Authentication integration tests must keep forbidden profile-write probes non-mutating and assert the exact `42501` authorization code. Positive profile-update checks should use same-value writes unless the test explicitly owns and restores the changed value.
 - For Supabase-backed unit tests, reuse `createSupabaseMock()` from `src/test/supabaseMock.ts`. Create one mock per suite, register it with `vi.doMock('@/lib/supabase', () => ({ supabase: mock.client }))`, dynamically import the system under test in `beforeAll`, and call `mock.reset()` in `beforeEach`. Do not put the imported factory inside `vi.hoisted(...)` and do not replace this lifecycle with per-test imports unless `vi.resetModules()` is also intentional.
 - The shared Supabase mock returns a distinct thenable builder from every `from(table)` call. Preserve that per-query table capture: hooks such as `useFsaTracts` issue different table queries through `Promise.all`, and a global `lastTable` makes concurrent results cross-contaminate. Use `setTableHandler` when concurrent tables need different results; use the independent `setRpcResult`/`setRpcThrow` controls for RPCs. Add new chain methods only when production code under test actually uses them.
@@ -543,7 +544,7 @@ After editing:
 1. Run the most relevant available checks. The repo defines:
    - `npm run lint` — `eslint .` (fast, run for any source change; the gate is **zero errors** — warnings are tracked, not blocked).
    - `npm run typecheck` — `tsc -b` (the **authoritative type gate** via project references in `tsconfig.json`). This is the real type check; `vite build` uses SWC and does **not** typecheck, so it cannot substitute for `typecheck`. Run this for any source/type change.
-   - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts` or its imports change.
+   - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts`, `api/ai-assistant.ts`, `api/ai-assistant-tools.ts`, or their imports change.
    - `npm run test` — `vitest run` (the **unit suite**; excludes `*.integration.test.*`). Run when touching logic with colocated `*.test.*` files. See Testing → Unit vs. Integration below.
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.

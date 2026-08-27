@@ -19,7 +19,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { syncQueue } from "@/lib/syncQueue";
 import { FarmProvider, useFarm } from "@/store/farmStore";
+import { AskAcreLedgerProvider } from "@/context/AskAcreLedgerContext";
 import { QuickAddProvider, useQuickAdd } from "@/context/QuickAddContext";
+import AskAcreLedger from "@/components/AskAcreLedger";
 import QuickAddDialog from "@/components/QuickAddDialog";
 import { native } from "@/lib/native";
 import { Plus } from "lucide-react";
@@ -214,6 +216,7 @@ const AppContent = () => {
 
       {/* Global Quick Add Dialog */}
       <QuickAddDialog />
+      <AskAcreLedger />
 
       {/* Global Modals triggered from Quick Add */}
       {selectedField && (() => {
@@ -265,8 +268,10 @@ const App = () => (
         <TooltipProvider>
             <FarmProvider>
               <QuickAddProvider>
-                <Sonner />
-                <AppContent />
+                <AskAcreLedgerProvider>
+                  <Sonner />
+                  <AppContent />
+                </AskAcreLedgerProvider>
               </QuickAddProvider>
             </FarmProvider>
         </TooltipProvider>
