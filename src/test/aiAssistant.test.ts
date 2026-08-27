@@ -298,6 +298,35 @@ describe('ai assistant proxy', () => {
     expect(consumeRpc).toHaveBeenCalled();
   });
 
+  it('accepts prior assistant answers up to the response limit on later questions', async () => {
+    const longAnswer = 'a'.repeat(2000);
+    const accepted = await invoke({
+      body: {
+        question: 'What about soybeans?',
+        viewingSeason: 2026,
+        history: [
+          { role: 'user', content: 'Tell me about corn.' },
+          { role: 'assistant', content: longAnswer },
+        ],
+      },
+    });
+    expect(accepted.state.status).toBe(200);
+
+    consumeRpc.mockClear();
+    const oversized = await invoke({
+      body: {
+        question: 'What about soybeans?',
+        viewingSeason: 2026,
+        history: [
+          { role: 'user', content: 'Tell me about corn.' },
+          { role: 'assistant', content: `${longAnswer}a` },
+        ],
+      },
+    });
+    expect(oversized.state.status).toBe(400);
+    expect(consumeRpc).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when no farm is selected without consuming quota', async () => {
     profilesMaybeSingle.mockResolvedValue({ data: { farm_id: null, active_season: 2026 }, error: null });
     const { state } = await invoke();

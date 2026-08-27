@@ -30,11 +30,11 @@ interface HistoryTurn {
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_MESSAGES = 6;
-const MAX_HISTORY_ITEM_LENGTH = 500;
+const MAX_HISTORY_ASSISTANT_LENGTH = 2_000;
 const MAX_TOOL_ROUNDS = 4;
 const MAX_TOOL_EXECUTIONS = 8;
 const MAX_OUTPUT_TOKENS = 2048;
-const MAX_ANSWER_CHARS = 2000;
+const MAX_ANSWER_CHARS = MAX_HISTORY_ASSISTANT_LENGTH;
 const HANDLER_TIMEOUT_MS = 45_000;
 const FALLBACK_ANSWER = "I couldn't look that up from your records just now. Try asking again.";
 const WRITE_REFUSAL_RE =
@@ -121,7 +121,10 @@ function validateHistory(value: unknown): HistoryTurn[] | { error: string } {
       return { error: 'Invalid history' };
     }
     const trimmed = item.content.trim();
-    if (trimmed.length < 1 || trimmed.length > MAX_HISTORY_ITEM_LENGTH) {
+    const maxLength = expected === 'user'
+      ? MAX_QUESTION_LENGTH
+      : MAX_HISTORY_ASSISTANT_LENGTH;
+    if (trimmed.length < 1 || trimmed.length > maxLength) {
       return { error: 'Invalid history' };
     }
     turns.push({ role: expected, content: trimmed });
