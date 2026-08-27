@@ -119,10 +119,18 @@ function linkedMovement(overrides: Partial<GrainMovement> = {}): GrainMovement {
   };
 }
 
+function townHarvest(overrides: Partial<HarvestRecord> = {}): HarvestRecord {
+  return binHarvest({ destination: 'town', binId: undefined, ...overrides });
+}
+
 describe('HarvestModal linked grain movement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.grainMovements = [];
+    state.updateHarvestRecord.mockResolvedValue(true);
+    state.addGrainMovement.mockResolvedValue(true);
+    state.updateGrainMovement.mockResolvedValue(true);
+    state.deleteGrainMovements.mockResolvedValue(true);
   });
 
   it('deletes the linked movement when destination changes from bin to town', () => {
@@ -180,6 +188,194 @@ describe('HarvestModal linked grain movement', () => {
       });
       expect(state.deleteGrainMovements).not.toHaveBeenCalled();
       expect(state.addGrainMovement).not.toHaveBeenCalled();
+    });
+  });
+
+  it('updates a leftover movement when a town harvest is switched back to a bin', () => {
+    state.grainMovements = [linkedMovement()];
+
+    render(
+      <HarvestModal
+        field={field}
+        open
+        onClose={() => {}}
+        initialData={townHarvest()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /bin/i }));
+    fireEvent.change(screen.getByTestId('select'), { target: { value: 'bin-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    return waitFor(() => {
+      expect(state.updateGrainMovement).toHaveBeenCalledTimes(1);
+      expect(state.updateGrainMovement.mock.calls[0][0]).toMatchObject({
+        id: 'gm-1',
+        binId: 'bin-1',
+        bushels: 5000,
+        harvestRecordId: 'harvest-1',
+      });
+      expect(state.addGrainMovement).not.toHaveBeenCalled();
+      expect(state.deleteGrainMovements).not.toHaveBeenCalled();
+    });
+  });
+
+  it('prefers the explicitly-linked movement over a legacy field+timestamp match', () => {
+    // Pre-index doubles: a legacy unlinked leftover plus a linked row for the
+    // same harvest. Updating the legacy row would stamp harvestRecordId onto
+    // it and collide with the linked row's unique active-per-harvest index.
+    const legacy = linkedMovement({ id: 'gm-legacy', harvestRecordId: undefined });
+    state.grainMovements = [legacy, linkedMovement()];
+
+    render(
+      <HarvestModal
+        field={field}
+        open
+        onClose={() => {}}
+        initialData={binHarvest()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    return waitFor(() => {
+      expect(state.updateGrainMovement).toHaveBeenCalledTimes(1);
+      expect(state.updateGrainMovement.mock.calls[0][0]).toMatchObject({
+        id: 'gm-1',
+        harvestRecordId: 'harvest-1',
+      });
+      expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-legacy']);
+      expect(state.addGrainMovement).not.toHaveBeenCalled();
+    });
+  });
+
+  it('deletes both the linked movement and leftover when destination changes to town', () => {
+    const legacy = linkedMovement({ id: 'gm-legacy', harvestRecordId: undefined });
+    state.grainMovements = [legacy, linkedMovement()];
+
+    render(
+      <HarvestModal
+        field={field}
+        open
+        onClose={() => {}}
+        initialData={binHarvest()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /town/i }));
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    return waitFor(() => {
+      expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-1', 'gm-legacy']);
+      expect(state.updateGrainMovement).not.toHaveBeenCalled();
+      expect(state.addGrainMovement).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not restore the harvest when leftover grain cannot be removed after a successful bin update', () => {
+    const legacy = linkedMovement({ id: 'gm-legacy', harvestRecordId: undefined });
+    state.grainMovements = [legacy, linkedMovement()];
+    state.deleteGrainMovements.mockResolvedValue(false);
+
+    render(
+      <HarvestModal
+        field={field}
+        open
+        onClose={() => {}}
+        initialData={binHarvest({ bushels: 4600 })}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '4200' } });
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    return waitFor(() => {
+      expect(state.updateGrainMovement).toHaveBeenCalledTimes(1);
+      expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-legacy']);
+      expect(state.updateHarvestRecord).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('asks addGrainMovement to create the link when no leftover is in memory', () => {
+    // Empty local snapshot: the hook (not the modal) is responsible for
+    // remote leftover lookup / dedupe before insert.
+    state.grainMovements = [];
+
+    render(
+      <HarvestModal
+        field={field}
+        open
+        onClose={() => {}}
+        initialData={townHarvest()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /bin/i }));
+    fireEvent.change(screen.getByTestId('select'), { target: { value: 'bin-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    return waitFor(() => {
+      expect(state.addGrainMovement).toHaveBeenCalledTimes(1);
+      expect(state.addGrainMovement.mock.calls[0][0]).toMatchObject({
+        binId: 'bin-1',
+        type: 'in',
+        harvestRecordId: 'harvest-1',
+      });
+      expect(state.updateGrainMovement).not.toHaveBeenCalled();
+    });
+  });
+
+  it('deletes a leftover movement when a town harvest stays in town', () => {
+    state.grainMovements = [linkedMovement()];
+
+    render(
+      <HarvestModal
+        field={field}
+        open
+        onClose={() => {}}
+        initialData={townHarvest()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '4800' } });
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    return waitFor(() => {
+      expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-1']);
+      expect(state.addGrainMovement).not.toHaveBeenCalled();
+      expect(state.updateGrainMovement).not.toHaveBeenCalled();
+    });
+  });
+
+  it('restores the harvest when bin-to-town grain removal fails', () => {
+    state.grainMovements = [linkedMovement()];
+    state.deleteGrainMovements.mockResolvedValue(false);
+
+    const original = binHarvest();
+    render(
+      <HarvestModal
+        field={field}
+        open
+        onClose={() => {}}
+        initialData={original}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /town/i }));
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    return waitFor(() => {
+      expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-1']);
+      expect(state.updateHarvestRecord).toHaveBeenCalledTimes(2);
+      expect(state.updateHarvestRecord.mock.calls[0][0]).toMatchObject({
+        id: 'harvest-1',
+        destination: 'town',
+      });
+      expect(state.updateHarvestRecord.mock.calls[1][0]).toEqual(original);
     });
   });
 });

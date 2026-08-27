@@ -181,12 +181,14 @@ describe('syncQueue web queue management', () => {
     // Do not await: the first replay is still draining when the second call
     // arrives (the reconnect/farm-switch overlap that used to double-apply).
     const first = syncQueue.replayQueue('farm-1');
-    const second = await syncQueue.replayQueue('farm-2');
-    expect(second).toBe(true);
-    await first;
-
+    const second = syncQueue.replayQueue('farm-2');
+    const secondResult = await second;
+    expect(secondResult).toBe(true);
+    // Concurrent callers must not resolve until the owner (including the
+    // trailing farm) has finished — otherwise farmStore fetchData() races.
     expect(await syncQueue.getPendingCount('farm-1')).toBe(0);
     expect(await syncQueue.getPendingCount('farm-2')).toBe(0);
+    await expect(first).resolves.toBe(true);
   });
 
   // ─── Corruption Quarantine ─────────────────────────────────────────────────

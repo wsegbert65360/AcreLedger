@@ -124,7 +124,7 @@ const AppContent = () => {
       if (import.meta.env.DEV) console.log('App state changed:', state.isActive ? 'active' : 'inactive');
       if (state.isActive && isOnline && farm_id) {
         if (import.meta.env.DEV) console.log('App active, triggering sync queue replay.');
-        syncQueue.replayQueue(farm_id);
+        syncQueue.replayQueue(farm_id).catch(err => console.error('Sync queue replay failed:', err));
       }
     });
 

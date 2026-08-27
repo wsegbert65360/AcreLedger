@@ -5,11 +5,45 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFarm } from '@/store/farmStore';
-import { Field, HarvestRecord } from '@/types/farm';
+import { Field, GrainMovement, HarvestRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { toast } from 'sonner';
 import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
+
+function isUnlinkedHarvestLeftover(
+  gm: GrainMovement,
+  harvest: HarvestRecord,
+  fieldName: string,
+): boolean {
+  return !gm.deleted_at &&
+    !gm.harvestRecordId &&
+    gm.sourceFieldName === fieldName &&
+    gm.timestamp === harvest.timestamp &&
+    gm.type === 'in';
+}
+
+/** Prefer an explicit harvestRecordId match so a leftover is not retargeted onto a harvest that already has a linked row. */
+function findLinkedHarvestMovement(
+  movements: GrainMovement[],
+  harvest: HarvestRecord,
+  fieldName: string,
+): GrainMovement | undefined {
+  const linked = movements.find(gm => !gm.deleted_at && gm.harvestRecordId === harvest.id);
+  if (linked) return linked;
+  return movements.find(gm => isUnlinkedHarvestLeftover(gm, harvest, fieldName));
+}
+
+function findUnlinkedHarvestLeftoverIds(
+  movements: GrainMovement[],
+  harvest: HarvestRecord,
+  fieldName: string,
+  excludeId?: string,
+): string[] {
+  return movements
+    .filter(gm => gm.id !== excludeId && isUnlinkedHarvestLeftover(gm, harvest, fieldName))
+    .map(gm => gm.id);
+}
 
 interface HarvestModalProps {
   field: Field;
@@ -115,48 +149,59 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
           return;
         }
 
-        // Sync the linked grain movement across all destination transitions.
-        // The matcher accepts both explicit links (harvestRecordId) and legacy
-        // rows that only carry field name + timestamp + type 'in'.
-        const linkedMovement = initialData.destination === 'bin'
-          ? grainMovements.find(gm =>
-              gm.harvestRecordId === initialData.id || (
-                !gm.harvestRecordId &&
-                gm.sourceFieldName === field.name &&
-                gm.timestamp === initialData.timestamp &&
-                gm.type === 'in'
-              )
-            )
-          : undefined;
+        const linkedMovement = findLinkedHarvestMovement(grainMovements, initialData, field.name);
+        const leftoverIds = findUnlinkedHarvestLeftoverIds(
+          grainMovements,
+          initialData,
+          field.name,
+          linkedMovement?.id,
+        );
 
-        if (initialData.destination === 'bin' && destination !== 'bin') {
-          // Bin → town: the grain is sold, so the bin movement must not keep
-          // counting it toward the (season-independent) bin inventory.
-          if (linkedMovement) {
-            const gmSuccess = await deleteGrainMovements([linkedMovement.id]);
+        const rollbackHarvest = async (grainError: string) => {
+          const restored = await updateHarvestRecord(initialData);
+          toast.error(restored
+            ? `${grainError} The harvest record was restored.`
+            : `${grainError} Retry the save.`);
+          native.haptic.error();
+        };
+
+        const removeLeftovers = async (): Promise<boolean> => {
+          if (leftoverIds.length === 0) return true;
+          const cleaned = await deleteGrainMovements(leftoverIds);
+          if (cleaned) return true;
+          toast.error('Harvest saved, but leftover grain could not be removed from the bin.');
+          native.haptic.error();
+          return false;
+        };
+
+        if (destination !== 'bin') {
+          const idsToDelete = [
+            ...(linkedMovement ? [linkedMovement.id] : []),
+            ...leftoverIds,
+          ];
+          if (idsToDelete.length > 0) {
+            const gmSuccess = await deleteGrainMovements(idsToDelete);
             if (!gmSuccess) {
-              toast.error('Harvest saved but linked grain movement removal failed.');
-              native.haptic.error();
+              await rollbackHarvest('Could not remove the linked grain movement.');
               return;
             }
           }
-        } else if (initialData.destination === 'bin') {
-          if (linkedMovement) {
-            const bin = bins.find(b => b.id === binId);
-            const gmSuccess = await updateGrainMovement({
-              ...linkedMovement,
-              binId: binId,
-              binName: bin?.name || 'Unknown',
-              bushels: bu,
-              moisturePercent: m,
-            });
-            if (!gmSuccess) {
-              toast.error('Harvest saved but grain movement update failed.');
-              native.haptic.error();
-              return;
-            }
+        } else if (linkedMovement) {
+          const bin = bins.find(b => b.id === binId);
+          const gmSuccess = await updateGrainMovement({
+            ...linkedMovement,
+            binId: binId,
+            binName: bin?.name || 'Unknown',
+            bushels: bu,
+            moisturePercent: m,
+            harvestRecordId: initialData.id,
+          });
+          if (!gmSuccess) {
+            await rollbackHarvest('Could not update the linked grain movement.');
+            return;
           }
-        } else if (destination === 'bin') {
+          if (!(await removeLeftovers())) return;
+        } else {
           const bin = bins.find(b => b.id === binId);
           const gmSuccess = await addGrainMovement({
             binId,
@@ -169,10 +214,10 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             harvestRecordId: initialData.id,
           });
           if (!gmSuccess) {
-            toast.error('Harvest saved but grain movement addition failed.');
-            native.haptic.error();
+            await rollbackHarvest('Could not add the linked grain movement.');
             return;
           }
+          if (!(await removeLeftovers())) return;
         }
       } else {
         const harvestId = crypto.randomUUID();

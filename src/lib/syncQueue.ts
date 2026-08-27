@@ -337,34 +337,38 @@ export const syncQueue = {
    * Replays the queued mutations to Supabase in FIFO order.
    * Returns true if the entire queue was processed, false if paused due to a network error.
    *
-   * Concurrency-guarded: overlapping replays (reconnect during a long drain,
-   * farm switch) would read overlapping queue snapshots and double-apply
-   * inserts, then treat the duplicate-key error as permanent. A concurrent
-   * caller records its farmId and the in-flight loop drains again instead of
-   * silently dropping the request.
+   * Overlapping replays (reconnect during a long drain, farm switch) would
+   * otherwise double-apply inserts. A concurrent caller records its farmId
+   * and awaits the in-flight drain — including that trailing farm — so
+   * farmStore does not fetchData() against a still-queued local snapshot.
    */
   replayQueue: async (farmId: string): Promise<boolean> => {
-    if (replayInProgress) {
+    if (inFlightReplay) {
       trailingReplayFarmId = farmId;
-      return true;
+      return inFlightReplay;
     }
-    replayInProgress = true;
-    try {
-      let currentFarmId: string | null = farmId;
-      let result = true;
-      while (currentFarmId) {
-        trailingReplayFarmId = null;
-        result = await replayQueueOnce(currentFarmId);
-        currentFarmId = trailingReplayFarmId;
+
+    const run = (async () => {
+      try {
+        let currentFarmId: string | null = farmId;
+        let result = true;
+        while (currentFarmId) {
+          trailingReplayFarmId = null;
+          result = await replayQueueOnce(currentFarmId);
+          currentFarmId = trailingReplayFarmId;
+        }
+        return result;
+      } finally {
+        inFlightReplay = null;
       }
-      return result;
-    } finally {
-      replayInProgress = false;
-    }
+    })();
+
+    inFlightReplay = run;
+    return run;
   }
 };
 
-let replayInProgress = false;
+let inFlightReplay: Promise<boolean> | null = null;
 let trailingReplayFarmId: string | null = null;
 
 async function replayQueueOnce(farmId: string): Promise<boolean> {

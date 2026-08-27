@@ -457,7 +457,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         }
         updatePendingSyncCount();
       };
-      runReplay();
+      // replayQueue shares its in-flight promise with concurrent callers, so a
+      // queue-storage failure reaches every caller — never leave it unhandled.
+      runReplay().catch(err => {
+        console.error('Sync queue replay failed:', err);
+        updatePendingSyncCount();
+      });
     }
   }, [isOnline, farm_id, updatePendingSyncCount]);
 

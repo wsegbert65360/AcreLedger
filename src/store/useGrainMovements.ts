@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { GrainMovement } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { mapGrainToDb } from '@/lib/mappers';
+import { mapGrainFromDb, mapGrainToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
 
 interface UseGrainMovementsArgs {
@@ -33,80 +33,60 @@ function describeSupabaseError(error: unknown): { consolePayload: unknown; toast
   };
 }
 
+/**
+ * Prefer an in-memory active IN linked to this harvest; when online and missing
+ * locally, look up the authoritative leftover so a town→bin re-link updates
+ * instead of inserting a second inventory row.
+ */
+async function resolveActiveHarvestInMovement(
+  farmId: string,
+  harvestRecordId: string,
+  localMovements: GrainMovement[],
+  isOnline: boolean,
+): Promise<{ movement: GrainMovement | null; lookupFailed: boolean }> {
+  const local = localMovements.find(gm =>
+    !gm.deleted_at &&
+    gm.type === 'in' &&
+    gm.harvestRecordId === harvestRecordId
+  );
+  if (local) return { movement: local, lookupFailed: false };
+  if (!isOnline) return { movement: null, lookupFailed: false };
+
+  let data: unknown = null;
+  let error: unknown = null;
+  try {
+    const res = await supabase
+      .from('grain_movements')
+      .select('*')
+      .eq('farm_id', farmId)
+      .eq('harvest_record_id', harvestRecordId)
+      .is('deleted_at', null);
+    data = res.data;
+    error = res.error;
+  } catch (err) {
+    error = err;
+  }
+
+  if (error) {
+    const { consolePayload } = describeSupabaseError(error);
+    console.error('Failed to look up linked grain movement for harvest:', consolePayload);
+    return { movement: null, lookupFailed: true };
+  }
+
+  const rows = Array.isArray(data) ? data : data ? [data] : [];
+  const row = rows.find((item: { type?: string }) => item.type === 'in') ?? rows[0];
+  if (!row) return { movement: null, lookupFailed: false };
+  return { movement: mapGrainFromDb(row as Parameters<typeof mapGrainFromDb>[0]), lookupFailed: false };
+}
+
 export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setGrainMovements, isOnline, onMutation }: UseGrainMovementsArgs) {
   const isMutating = useRef(false);
 
-  // ─── Add ──────────────────────────────────────────────────────────────────
-  const addGrainMovement = useCallback(async (
-    r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear' | 'farm_id'> & { timestamp?: number }
+  // ─── Update (shared by public update + harvest-link dedupe on add) ────────
+  const applyGrainUpdate = useCallback(async (
+    r: GrainMovement,
+    previous: GrainMovement,
   ): Promise<OpResult> => {
-    if (!farm_id) {
-      toast.error('No farm selected.');
-      return false;
-    }
-    if (isMutating.current) return false;
-    isMutating.current = true;
-
-    const id = crypto.randomUUID();
-    const timestamp = r.timestamp || Date.now();
-    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
-
-    let mapped: ReturnType<typeof mapGrainToDb>;
-    try {
-      mapped = mapGrainToDb(newRecord);
-    } catch (err) {
-      console.error('mapGrainToDb failed:', err);
-      isMutating.current = false;
-      toast.error('Failed to prepare record — check your inputs.');
-      return false;
-    }
-
-    setGrainMovements(prev => [...prev, newRecord]);
-
-    try {
-      if (!isOnline) {
-        try {
-          await syncQueue.enqueueMutation('grain_movements', 'insert', { ...mapped, farm_id }, farm_id);
-          if (onMutation) await onMutation();
-          toast.success('Grain movement recorded offline.', {
-            description: 'Queued locally — will sync automatically when connection is restored.',
-          });
-          return true;
-        } catch (err) {
-          console.error('Failed to enqueue grain movement record offline:', err);
-          setGrainMovements(prev => prev.filter(rec => rec.id !== id));
-          toast.error('Failed to save record offline.');
-          return false;
-        }
-      }
-
-      let error;
-      try {
-        const res = await supabase
-          .from('grain_movements')
-          .insert([{ ...mapped, farm_id }]);
-        error = res.error;
-      } catch (err) {
-        error = err;
-      }
-
-      if (error) {
-        const { consolePayload, toastOptions } = describeSupabaseError(error);
-        console.error('Error adding grain movement record:', consolePayload);
-        setGrainMovements(prev => prev.filter(rec => rec.id !== id));
-        toast.error('Failed to save grain movement.', toastOptions);
-        return false;
-      }
-
-      toast.success('Grain movement recorded.');
-      return true;
-    } finally {
-      isMutating.current = false;
-    }
-  }, [viewingSeason, farm_id, setGrainMovements, isOnline, onMutation]);
-
-  // ─── Update ───────────────────────────────────────────────────────────────
-  const updateGrainMovement = useCallback(async (r: GrainMovement): Promise<OpResult> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
@@ -124,23 +104,25 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       return false;
     }
 
-    // Capture the prior row from the current render's state. The hook serializes
-    // mutations (isMutating), so this is the true last-known row at edit time.
-    // Reading it from the closure — instead of mutating a ref inside the state
-    // setter — avoids depending on React's eager-update timing for correctness.
-    const previous = grainMovements.find(item => item.id === r.id) ?? null;
+    // Leftover INs discovered via harvest_record_id may not be in the local
+    // snapshot yet. Seed on success path; on failure remove the hydrate.
+    const wasLocal = grainMovements.some(item => item.id === previous.id);
 
-    if (!previous) {
-      // Record isn't in local state — can't optimistically update, lock, or roll
-      // back safely. Abort rather than fabricate state.
-      console.warn('Grain update aborted: record not present in local snapshot.', { id: r.id });
-      isMutating.current = false;
-      toast.error('Could not update record — refresh and try again.');
-      return false;
-    }
+    setGrainMovements(prev => {
+      if (!prev.some(item => item.id === previous.id)) {
+        return [...prev, r];
+      }
+      return prev.map(item => item.id === r.id ? r : item);
+    });
 
-    // Optimistic update (previous is guaranteed non-null below).
-    setGrainMovements(prev => prev.map(item => item.id === r.id ? r : item));
+    const rollback = () => {
+      setGrainMovements(prev => {
+        if (!wasLocal) {
+          return prev.filter(item => item.id !== r.id);
+        }
+        return prev.map(item => item.id === r.id ? previous : item);
+      });
+    };
 
     // Concurrency guard: grain_movements has no version/updated_at column, so the
     // row's timestamp is the only last-known-state fingerprint. Only enforce it
@@ -164,7 +146,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           return true;
         } catch (err) {
           console.error('Failed to enqueue grain movement record update offline:', err);
-          setGrainMovements(prev => prev.map(item => item.id === r.id ? previous : item));
+          rollback();
           toast.error('Failed to update record offline.');
           return false;
         }
@@ -208,7 +190,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           console.warn('Grain update affected zero rows (no fingerprint guard).', { id: r.id });
           toast.error('This movement could not be found. Please refresh and try again.');
         }
-        setGrainMovements(prev => prev.map(item => item.id === r.id ? previous : item));
+        rollback();
         return false;
       }
 
@@ -313,6 +295,140 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       isMutating.current = false;
     }
   }, [farm_id, grainMovements, setGrainMovements, isOnline, onMutation]);
+
+  // ─── Add ──────────────────────────────────────────────────────────────────
+  const addGrainMovement = useCallback(async (
+    r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear' | 'farm_id'> & { timestamp?: number }
+  ): Promise<OpResult> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+
+    // One active IN per harvest: divert to update when a leftover already exists
+    // (stale/empty local snapshot must not double bin inventory).
+    if (r.harvestRecordId) {
+      const { movement: existing, lookupFailed } = await resolveActiveHarvestInMovement(
+        farm_id,
+        r.harvestRecordId,
+        grainMovements,
+        isOnline,
+      );
+      if (lookupFailed) {
+        toast.error('Could not verify linked grain movement. Try again.');
+        return false;
+      }
+      if (existing) {
+        const updated = await applyGrainUpdate({
+          ...existing,
+          binId: r.binId,
+          binName: r.binName,
+          bushels: r.bushels,
+          moisturePercent: r.moisturePercent,
+          sourceFieldName: r.sourceFieldName ?? existing.sourceFieldName,
+          timestamp: r.timestamp ?? existing.timestamp,
+          harvestRecordId: r.harvestRecordId,
+          type: 'in',
+        }, existing);
+        if (!updated) return false;
+        const leftoverTimestamp = r.timestamp ?? existing.timestamp;
+        const leftoverSource = r.sourceFieldName ?? existing.sourceFieldName;
+        const leftoverIds = leftoverSource == null ? [] : grainMovements
+          .filter(gm =>
+            gm.id !== existing.id &&
+            !gm.deleted_at &&
+            gm.type === 'in' &&
+            !gm.harvestRecordId &&
+            gm.sourceFieldName === leftoverSource &&
+            gm.timestamp === leftoverTimestamp
+          )
+          .map(gm => gm.id);
+        if (leftoverIds.length > 0) {
+          await deleteGrainMovements(leftoverIds);
+        }
+        return true;
+      }
+    }
+
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
+    const id = crypto.randomUUID();
+    const timestamp = r.timestamp || Date.now();
+    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
+
+    let mapped: ReturnType<typeof mapGrainToDb>;
+    try {
+      mapped = mapGrainToDb(newRecord);
+    } catch (err) {
+      console.error('mapGrainToDb failed:', err);
+      isMutating.current = false;
+      toast.error('Failed to prepare record — check your inputs.');
+      return false;
+    }
+
+    setGrainMovements(prev => [...prev, newRecord]);
+
+    try {
+      if (!isOnline) {
+        try {
+          await syncQueue.enqueueMutation('grain_movements', 'insert', { ...mapped, farm_id }, farm_id);
+          if (onMutation) await onMutation();
+          toast.success('Grain movement recorded offline.', {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue grain movement record offline:', err);
+          setGrainMovements(prev => prev.filter(rec => rec.id !== id));
+          toast.error('Failed to save record offline.');
+          return false;
+        }
+      }
+
+      let error;
+      try {
+        const res = await supabase
+          .from('grain_movements')
+          .insert([{ ...mapped, farm_id }]);
+        error = res.error;
+      } catch (err) {
+        error = err;
+      }
+
+      if (error) {
+        const { consolePayload, toastOptions } = describeSupabaseError(error);
+        console.error('Error adding grain movement record:', consolePayload);
+        setGrainMovements(prev => prev.filter(rec => rec.id !== id));
+        toast.error('Failed to save grain movement.', toastOptions);
+        return false;
+      }
+
+      toast.success('Grain movement recorded.');
+      return true;
+    } finally {
+      isMutating.current = false;
+    }
+  }, [viewingSeason, farm_id, grainMovements, setGrainMovements, isOnline, onMutation, applyGrainUpdate, deleteGrainMovements]);
+
+  // ─── Update ───────────────────────────────────────────────────────────────
+  const updateGrainMovement = useCallback(async (r: GrainMovement): Promise<OpResult> => {
+    // Capture the prior row from the current render's state. The hook serializes
+    // mutations (isMutating), so this is the true last-known row at edit time.
+    // Reading it from the closure — instead of mutating a ref inside the state
+    // setter — avoids depending on React's eager-update timing for correctness.
+    const previous = grainMovements.find(item => item.id === r.id) ?? null;
+
+    if (!previous) {
+      // Record isn't in local state — can't optimistically update, lock, or roll
+      // back safely. Abort rather than fabricate state.
+      console.warn('Grain update aborted: record not present in local snapshot.', { id: r.id });
+      toast.error('Could not update record — refresh and try again.');
+      return false;
+    }
+
+    return applyGrainUpdate(r, previous);
+  }, [grainMovements, applyGrainUpdate]);
 
   return { addGrainMovement, updateGrainMovement, deleteGrainMovements };
 }

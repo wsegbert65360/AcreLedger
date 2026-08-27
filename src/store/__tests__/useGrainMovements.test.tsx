@@ -10,14 +10,18 @@ import { useStatefulArray } from '@/test/hookTestHarness';
 // --- Mocks (established before the dynamic hook import) -------------------
 // The mapper is mocked so the mapper-throws contract can be driven via
 // mockImplementationOnce. Otherwise valid grain records would never make
-// mapGrainToDb throw naturally.
+// mapGrainToDb throw naturally. mapGrainFromDb stays real for harvest-link
+// leftover hydration from DB rows.
 const mapGrainToDb = vi.fn();
 const supabaseMock = createSupabaseMock();
 const enqueueMutation = vi.fn();
 const enqueueMutations = vi.fn();
 
 vi.doMock('@/lib/supabase', () => ({ supabase: supabaseMock.client }));
-vi.doMock('@/lib/mappers', () => ({ mapGrainToDb }));
+vi.doMock('@/lib/mappers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/mappers')>();
+  return { ...actual, mapGrainToDb };
+});
 vi.doMock('@/lib/syncQueue', () => ({
   syncQueue: { enqueueMutation, enqueueMutations },
 }));
@@ -176,6 +180,141 @@ describe('useGrainMovements — addGrainMovement', () => {
 
     expect(ok).toBe(false);
     await waitFor(() => expect(result.current.grains.value).toHaveLength(0));
+  });
+
+  it('updates a local leftover IN instead of inserting when harvestRecordId matches', async () => {
+    supabaseMock.setResult({ count: 1, data: null, error: null });
+    const leftover = existingMovement({
+      id: 'g-leftover',
+      harvestRecordId: 'harvest-1',
+      bushels: 1000,
+    });
+    const { result } = renderGrainHook({ initial: [leftover] });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.ops.addGrainMovement({
+        ...addInput,
+        bushels: 4200,
+        harvestRecordId: 'harvest-1',
+      });
+    });
+
+    expect(ok).toBe(true);
+    expect(supabaseMock.fns.insert).not.toHaveBeenCalled();
+    expect(supabaseMock.fns.update).toHaveBeenCalled();
+    expect(result.current.grains.value).toHaveLength(1);
+    expect(result.current.grains.value[0]).toMatchObject({
+      id: 'g-leftover',
+      bushels: 4200,
+      harvestRecordId: 'harvest-1',
+    });
+  });
+
+  it('hydrates a remote leftover IN and updates it when local snapshot missed it', async () => {
+    // select(*) then update(...) both await the same mock terminal result.
+    supabaseMock.setResult({
+      data: [{
+        id: 'g-remote',
+        farm_id: FARM,
+        bin_id: 'b1',
+        bin_name: 'Bin A',
+        type: 'in',
+        bushels: 1000,
+        moisture_percent: 15,
+        timestamp: new Date(1700000000000).toISOString(),
+        season_year: SEASON,
+        deleted_at: null,
+        harvest_record_id: 'harvest-1',
+      }],
+      error: null,
+      count: 1,
+    });
+    const { result } = renderGrainHook({ initial: [] });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.ops.addGrainMovement({
+        ...addInput,
+        bushels: 4800,
+        harvestRecordId: 'harvest-1',
+      });
+    });
+
+    expect(ok).toBe(true);
+    expect(supabaseMock.fns.select).toHaveBeenCalled();
+    expect(supabaseMock.fns.insert).not.toHaveBeenCalled();
+    expect(supabaseMock.fns.update).toHaveBeenCalled();
+    expect(result.current.grains.value).toHaveLength(1);
+    expect(result.current.grains.value[0]).toMatchObject({
+      id: 'g-remote',
+      bushels: 4800,
+      harvestRecordId: 'harvest-1',
+    });
+  });
+
+  it('soft-deletes a local unlinked leftover after updating a remote linked IN', async () => {
+    supabaseMock.setResult({
+      data: [{
+        id: 'g-remote',
+        farm_id: FARM,
+        bin_id: 'b1',
+        bin_name: 'Bin A',
+        type: 'in',
+        bushels: 1000,
+        moisture_percent: 15,
+        timestamp: new Date(1700000000000).toISOString(),
+        season_year: SEASON,
+        deleted_at: null,
+        harvest_record_id: 'harvest-1',
+      }],
+      error: null,
+      count: 1,
+    });
+    const leftover = existingMovement({
+      id: 'g-unlinked',
+      harvestRecordId: undefined,
+      sourceFieldName: 'Home Place',
+      timestamp: 1700000000000,
+    });
+    const { result } = renderGrainHook({ initial: [leftover] });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.ops.addGrainMovement({
+        ...addInput,
+        bushels: 4800,
+        sourceFieldName: 'Home Place',
+        harvestRecordId: 'harvest-1',
+      });
+    });
+
+    expect(ok).toBe(true);
+    expect(supabaseMock.fns.insert).not.toHaveBeenCalled();
+    expect(supabaseMock.fns.in).toHaveBeenCalledWith('id', ['g-unlinked']);
+    expect(result.current.grains.value.map(g => g.id)).toEqual(['g-remote']);
+    expect(result.current.grains.value[0]).toMatchObject({
+      id: 'g-remote',
+      bushels: 4800,
+      harvestRecordId: 'harvest-1',
+    });
+  });
+
+  it('fails closed (no insert) when the harvest-link lookup errors', async () => {
+    supabaseMock.setResult({ data: null, error: { message: 'lookup failed' }, count: null });
+    const { result } = renderGrainHook({ initial: [] });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.ops.addGrainMovement({
+        ...addInput,
+        harvestRecordId: 'harvest-1',
+      });
+    });
+
+    expect(ok).toBe(false);
+    expect(supabaseMock.fns.insert).not.toHaveBeenCalled();
+    expect(result.current.grains.value).toHaveLength(0);
   });
 });
 
