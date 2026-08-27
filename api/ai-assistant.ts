@@ -7,7 +7,7 @@ import {
   TOOL_DEFINITIONS,
   UNKNOWN_TOOL_ERROR,
   type ToolResult,
-} from './ai-assistant-tools';
+} from './ai-assistant-tools.js';
 
 interface ApiRequest {
   method?: string;
