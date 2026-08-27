@@ -96,6 +96,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function getOpenRouterErrorMessage(payload: unknown): string | null {
+  if (!isPlainObject(payload)) return null;
+  const error = payload.error;
+  if (typeof error === 'string') return error.slice(0, 300);
+  if (!isPlainObject(error) || typeof error.message !== 'string') return null;
+  return error.message.slice(0, 300);
+}
+
 function validateHistory(value: unknown): HistoryTurn[] | { error: string } {
   if (value === undefined) return [];
   if (!Array.isArray(value)) return { error: 'Invalid history' };
@@ -351,7 +359,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HANDLER_TIMEOUT_MS);
-  const model = process.env.AI_MODEL ?? 'openai/gpt-oss-120b:free';
+  const model = process.env.AI_MODEL ?? 'openrouter/free';
   const lookups: string[] = [];
 
   const messages: Array<Record<string, unknown>> = [
@@ -415,7 +423,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
 
       if (!openRouterRes.ok || !isPlainObject(resp)) {
-        console.error('AI assistant OpenRouter error:', openRouterRes.status);
+        console.error(
+          'AI assistant OpenRouter error:',
+          openRouterRes.status,
+          getOpenRouterErrorMessage(resp) ?? 'No provider error message',
+        );
         await finalizeBestEffort(FALLBACK_ANSWER, lookups);
         return res.status(502).json({ error: 'Assistant is unavailable.' });
       }

@@ -4,7 +4,7 @@
 
 **Architecture:** `api/ai-assistant.ts` is a Vercel Function that validates the caller’s Supabase bearer token, resolves the caller’s current farm, applies a database-backed daily quota, and runs a bounded named-tool loop through OpenRouter Chat Completions. Every database read uses the caller’s JWT, so existing farm RLS remains the authorization boundary.
 
-**Default model:** `openai/gpt-oss-120b:free`, configurable through server-only `AI_MODEL`.
+**Default model:** `openrouter/free`, configurable through server-only `AI_MODEL`.
 
 > **Intentional product decision — preserve in future reviews:** Ask the Book does not show a persistent AI disclaimer, compliance warning, verification reminder, or retention footer beneath its answers. This omission is deliberate. Do not reintroduce recurring disclaimer copy unless the product owner explicitly reverses this decision. Keep factual vendor and local data-handling details in README and the privacy policy.
 
@@ -24,7 +24,7 @@
 
 - Endpoint: `POST https://openrouter.ai/api/v1/chat/completions`
 - Authorization: `Bearer ${OPENROUTER_API_KEY}`
-- Model: `AI_MODEL` or `openai/gpt-oss-120b:free`
+- Model: `AI_MODEL` or `openrouter/free`
 - Output budget: `max_tokens: 2048`
 - Provider controls: `data_collection: "deny"` and `require_parameters: true`
 - Tool schemas use `{ type: "function", function: { name, description, parameters } }`.

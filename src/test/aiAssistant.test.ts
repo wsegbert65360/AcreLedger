@@ -459,7 +459,7 @@ describe('ai assistant proxy', () => {
     await invoke();
     const bodies = fetchBodies();
     expect(bodies).toHaveLength(2);
-    expect(bodies[0].model).toBe('openai/gpt-oss-120b:free');
+    expect(bodies[0].model).toBe('openrouter/free');
     expect(bodies[0].max_tokens).toBe(2048);
     expect(bodies[0].provider).toEqual({ data_collection: 'deny', require_parameters: true });
     expect(bodies[0].tool_choice).toBe('auto');
