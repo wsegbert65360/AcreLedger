@@ -36,6 +36,7 @@ export async function askAcreLedger(
   accessToken: string,
   viewingSeason: number,
   history: AiHistoryTurn[] = [],
+  signal?: AbortSignal,
 ): Promise<AiAnswer> {
   const url = resolveAiAssistantUrl();
   const res = await fetch(url, {
@@ -45,6 +46,7 @@ export async function askAcreLedger(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ question, viewingSeason, history }),
+    signal,
   });
 
   let payload: unknown = null;

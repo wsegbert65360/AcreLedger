@@ -43,6 +43,22 @@ describe('askAcreLedger', () => {
     expect(result).toEqual({ answer: 'April 12, Pioneer.', lookups: ['Earliest corn'] });
   });
 
+  it('forwards an abort signal to fetch', async () => {
+    vi.resetModules();
+    const { askAcreLedger } = await import('../aiAssistantService');
+    const controller = new AbortController();
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ answer: 'April 12, Pioneer.', lookups: [] }),
+    } as Response);
+
+    await askAcreLedger('When was corn planted?', 'access-token', 2026, [], controller.signal);
+
+    expect(fetch).toHaveBeenCalledWith('/api/ai-assistant', expect.objectContaining({
+      signal: controller.signal,
+    }));
+  });
+
   it('throws the server error message on 429', async () => {
     vi.resetModules();
     const { askAcreLedger } = await import('../aiAssistantService');

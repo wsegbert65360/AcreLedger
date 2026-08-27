@@ -28,6 +28,9 @@ workflows:
         BUNDLE_ID: "com.wsegbert.acreledger"
         XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
+        # Public build-time endpoint for the Capacitor bundle. This is not a
+        # secret; Vite embeds it in the shipped JavaScript.
+        VITE_AI_ASSISTANT_URL: "https://acreledger.vercel.app"
 
       groups:
         - appstore
@@ -60,7 +63,15 @@ workflows:
 
       - name: Build web bundle and sync to iOS
         script: |
+          case "$VITE_AI_ASSISTANT_URL" in
+            https://*) ;;
+            *) echo "VITE_AI_ASSISTANT_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
+          esac
           npm run cap:build
+          if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
+            echo "Capacitor bundle is missing the Ask the book endpoint" >&2
+            exit 1
+          fi
 
       - name: Install CocoaPods dependencies
         script: |

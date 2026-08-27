@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { supabase } from '../supabase';
+import {
+  executeNamedTool,
+  FARM_ENTITY_NAMES,
+  type ToolContext,
+} from '../../../server/ai-assistant-tools';
 
 // Credentials live in .env.test.local (gitignored) as TEST_BOT_EMAIL /
 // TEST_BOT_PASSWORD and are loaded into process.env by vitest.integration.config.ts.
@@ -219,6 +224,21 @@ describe.skipIf(!hasAuthCreds)('QA Bot Auth Verification', () => {
       .limit(5);
     for (const row of botFields ?? []) {
       expect(row.farm_id).toBe(botFarmBefore);
+    }
+  });
+
+  it('Ask the Book can read every allowlisted entity through the caller JWT and RLS', async () => {
+    expect(originalProfile.farm_id).toBeTruthy();
+    const ctx: ToolContext = {
+      supabase,
+      farmId: originalProfile.farm_id!,
+      seasonYear: originalProfile.active_season ?? new Date().getFullYear(),
+    };
+
+    for (const entity of FARM_ENTITY_NAMES) {
+      const result = await executeNamedTool('query_farm_records', { entity, limit: 1 }, ctx);
+      expect(result.error, `${entity}: ${result.error ?? ''}`).toBeUndefined();
+      expect(Array.isArray(result.rows), entity).toBe(true);
     }
   });
 });

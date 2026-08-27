@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const askState = vi.hoisted(() => ({
@@ -177,5 +177,72 @@ describe('AskAcreLedger', () => {
     fireEvent.click(screen.getByText('Close drawer'));
     expect(askState.closeAsk).toHaveBeenCalled();
     expect(screen.queryByText('April 12 on Home Place.')).toBeNull();
+  });
+
+  it('ignores a late answer after the drawer closes', async () => {
+    let resolveAsk!: (value: { answer: string; lookups: string[] }) => void;
+    askState.askAcreLedger.mockImplementation(
+      () => new Promise(resolve => { resolveAsk = resolve; }),
+    );
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'How many acres of corn?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('Checking your records…')).toBeTruthy();
+
+    const signal = askState.askAcreLedger.mock.calls[0][4] as AbortSignal;
+    fireEvent.click(screen.getByText('Close drawer'));
+    expect(signal.aborted).toBe(true);
+    expect(screen.queryByText('Checking your records…')).toBeNull();
+
+    await act(async () => {
+      resolveAsk({
+        answer: 'April 12 on Home Place.',
+        lookups: ['Earliest dated corn plantings in 2026'],
+      });
+    });
+
+    expect(screen.queryByText('April 12 on Home Place.')).toBeNull();
+    expect(screen.queryByText('How many acres of corn?')).toBeNull();
+  });
+
+  it('does not append a stale answer onto a new question', async () => {
+    let resolveFirst!: (value: { answer: string; lookups: string[] }) => void;
+    let resolveSecond!: (value: { answer: string; lookups: string[] }) => void;
+    askState.askAcreLedger
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve; }));
+
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'How many acres of corn?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByText('Close drawer'));
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'What is in my bins?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      resolveFirst({ answer: 'Stale first answer.', lookups: [] });
+    });
+    expect(screen.queryByText('Stale first answer.')).toBeNull();
+    expect(screen.getByText('What is in my bins?')).toBeTruthy();
+
+    await act(async () => {
+      resolveSecond({
+        answer: 'North bin has 500 bushels.',
+        lookups: ['Physical grain bin inventory across every season'],
+      });
+    });
+    expect(screen.getByText('North bin has 500 bushels.')).toBeTruthy();
+    expect(screen.queryByText('Stale first answer.')).toBeNull();
+    expect(askState.askAcreLedger.mock.calls[1][3]).toEqual([]);
   });
 });

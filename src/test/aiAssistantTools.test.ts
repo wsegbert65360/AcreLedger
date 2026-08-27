@@ -5,13 +5,15 @@ import {
   applyResultBudget,
   escapeIlike,
   executeNamedTool,
+  FARM_ENTITY_NAMES,
   INVALID_ARGS_ERROR,
   MAX_PAGES,
   PAGE_SIZE,
+  TOOL_DEFINITIONS,
   TOO_MANY_ROWS_ERROR,
   UNKNOWN_TOOL_ERROR,
   type ToolContext,
-} from '../../api/ai-assistant-tools';
+} from '../../server/ai-assistant-tools';
 
 interface CallLog {
   table: string;
@@ -19,6 +21,10 @@ interface CallLog {
   eq: Array<[string, unknown]>;
   is: Array<[string, unknown]>;
   ilike: Array<[string, string]>;
+  in: Array<[string, readonly string[]]>;
+  gte: Array<[string, string]>;
+  lte: Array<[string, string]>;
+  gt: Array<[string, string]>;
   not: Array<[string, string, unknown]>;
   or: string[];
   order: Array<[string, unknown?]>;
@@ -36,6 +42,10 @@ function createFakeSupabase(handlers: Record<string, TableHandler> = {}) {
       eq: [],
       is: [],
       ilike: [],
+      in: [],
+      gte: [],
+      lte: [],
+      gt: [],
       not: [],
       or: [],
       order: [],
@@ -57,6 +67,22 @@ function createFakeSupabase(handlers: Record<string, TableHandler> = {}) {
     };
     builder.ilike = (column: string, value: string) => {
       call.ilike.push([column, value]);
+      return self();
+    };
+    builder.in = (column: string, values: readonly string[]) => {
+      call.in.push([column, values]);
+      return self();
+    };
+    builder.gte = (column: string, value: string) => {
+      call.gte.push([column, value]);
+      return self();
+    };
+    builder.lte = (column: string, value: string) => {
+      call.lte.push([column, value]);
+      return self();
+    };
+    builder.gt = (column: string, value: string) => {
+      call.gt.push([column, value]);
       return self();
     };
     builder.not = (column: string, operator: string, value: unknown) => {
@@ -168,6 +194,213 @@ describe('executeNamedTool validation', () => {
     });
 
     expect(fake.from).not.toHaveBeenCalled();
+  });
+});
+
+describe('full farm read catalog', () => {
+  it('publishes every active farm record area and no mutation tools', () => {
+    expect(FARM_ENTITY_NAMES).toEqual([
+      'farm', 'profile', 'fields', 'bins', 'plant_records', 'spray_records',
+      'custom_spray_records', 'fertilizer_applications', 'tillage_records',
+      'harvest_records', 'hay_harvest_records', 'grain_movements', 'saved_seeds',
+      'fertilizer_recipes', 'spray_recipes', 'fsa_tract_imports',
+      'field_clu_assignments', 'work_requests', 'field_rainfall_hourly',
+      'field_rainfall_coverage', 'farm_rainfall_daily',
+    ]);
+    const toolNames = TOOL_DEFINITIONS.map(tool => tool.name);
+    expect(toolNames).toEqual(expect.arrayContaining([
+      'farm_overview', 'query_farm_records', 'get_record_details',
+      'search_farm_records', 'aggregate_farm_records', 'activity_timeline',
+    ]));
+    expect(toolNames.some(name => /insert|update|delete|write|save|upsert/i.test(name))).toBe(false);
+  });
+
+  it('scopes every catalog entity to the authoritative farm and excludes soft-deleted rows', async () => {
+    const expectedTables: Record<string, string> = {
+      farm: 'farms',
+      profile: 'profiles',
+    };
+    const softDeleted = new Set([
+      'fields', 'bins', 'plant_records', 'spray_records', 'custom_spray_records',
+      'fertilizer_applications', 'tillage_records', 'harvest_records',
+      'hay_harvest_records', 'grain_movements', 'saved_seeds', 'fertilizer_recipes',
+      'spray_recipes', 'fsa_tract_imports', 'field_clu_assignments', 'work_requests',
+    ]);
+
+    for (const entity of FARM_ENTITY_NAMES) {
+      const fake = createFakeSupabase();
+      const result = await executeNamedTool('query_farm_records', { entity, limit: 1 }, ctxFor(fake.client));
+      expect(result.error, entity).toBeUndefined();
+      const call = fake.calls.find(item => item.table === (expectedTables[entity] ?? entity));
+      expect(call, entity).toBeTruthy();
+      if (entity === 'farm') expect(call?.eq).toContainEqual(['id', 'farm-1']);
+      else if (entity === 'field_rainfall_hourly' || entity === 'field_rainfall_coverage') {
+        expect(call?.eq).toContainEqual(['fields.farm_id', 'farm-1']);
+      } else {
+        expect(call?.eq).toContainEqual(['farm_id', 'farm-1']);
+      }
+      if (softDeleted.has(entity)) expect(call?.is).toContainEqual(['deleted_at', null]);
+    }
+  });
+
+  it('rejects unknown entities, unsupported filters, invalid years, and extra keys before querying', async () => {
+    const fake = createFakeSupabase();
+    const ctx = ctxFor(fake.client);
+    expect(await executeNamedTool('query_farm_records', { entity: 'auth.users' }, ctx)).toEqual({ error: INVALID_ARGS_ERROR });
+    expect(await executeNamedTool('query_farm_records', { entity: 'bins', seasonYear: 2026 }, ctx)).toEqual({ error: INVALID_ARGS_ERROR });
+    expect(await executeNamedTool('query_farm_records', { entity: 'fields', dateFrom: '2026-01-01' }, ctx)).toEqual({ error: INVALID_ARGS_ERROR });
+    expect(await executeNamedTool('query_farm_records', { entity: 'plant_records', seasonYear: 1999 }, ctx)).toEqual({ error: INVALID_ARGS_ERROR });
+    expect(await executeNamedTool('query_farm_records', { entity: 'plant_records', write: true }, ctx)).toEqual({ error: INVALID_ARGS_ERROR });
+    expect(fake.from).not.toHaveBeenCalled();
+  });
+
+  it('returns full spray details but removes embedded image bytes before model exposure', async () => {
+    const fake = createFakeSupabase({
+      spray_records: () => [{
+        id: 'spray-1',
+        field_name: 'Home',
+        notes: 'Ticket attached [ATTACHMENT:data:image/png;base64,ABC123] done',
+        products: [{ product: 'Roundup', rate: '32', rateUnit: 'oz/ac' }],
+      }],
+    });
+    const result = await executeNamedTool('get_record_details', {
+      entity: 'spray_records', recordId: 'spray-1',
+    }, ctxFor(fake.client));
+    const rows = result.rows as Array<Record<string, unknown>>;
+    expect(fake.calls[0].select).toBe('*');
+    expect(fake.calls[0].eq).toContainEqual(['id', 'spray-1']);
+    expect(rows[0].products).toEqual([{ product: 'Roundup', rate: '32', rateUnit: 'oz/ac' }]);
+    expect(rows[0].notes).toContain('[image attachment present; binary omitted]');
+    expect(JSON.stringify(rows)).not.toContain('ABC123');
+  });
+
+  it('supports season, field, date, and cursor filters with deterministic ID ordering', async () => {
+    const fake = createFakeSupabase({ plant_records: () => [] });
+    await executeNamedTool('query_farm_records', {
+      entity: 'plant_records', seasonYear: 2026, fieldName: 'Home%',
+      dateFrom: '2026-04-01', dateTo: '2026-05-01', afterId: 'record-10', limit: 20,
+    }, ctxFor(fake.client));
+    const call = fake.calls[0];
+    expect(call.eq).toContainEqual(['farm_id', 'farm-1']);
+    expect(call.eq).toContainEqual(['season_year', 2026]);
+    expect(call.ilike).toContainEqual(['field_name', '%Home\\%%']);
+    expect(call.gte).toContainEqual(['plant_date', '2026-04-01']);
+    expect(call.lte).toContainEqual(['plant_date', '2026-05-01']);
+    expect(call.gt).toContainEqual(['id', 'record-10']);
+    expect(call.order[0]).toEqual(['id', { ascending: true }]);
+    expect(call.limit).toBe(21);
+  });
+
+  it('resolves field-only foreign keys inside the current farm before reading applications', async () => {
+    const fake = createFakeSupabase({
+      fields: () => [{ id: 'field-1' }],
+      fertilizer_applications: () => [{ id: 'fert-1', field_id: 'field-1', acres: 40 }],
+    });
+    const result = await executeNamedTool('query_farm_records', {
+      entity: 'fertilizer_applications', fieldName: 'North', limit: 10,
+    }, ctxFor(fake.client));
+    expect(result.error).toBeUndefined();
+    expect(fake.calls[0].table).toBe('fields');
+    expect(fake.calls[0].eq).toContainEqual(['farm_id', 'farm-1']);
+    expect(fake.calls[1].in).toContainEqual(['field_id', ['field-1']]);
+    expect(fake.calls[1].eq).toContainEqual(['farm_id', 'farm-1']);
+  });
+
+  it('returns a discovery catalog with supported filters and aggregate fields', async () => {
+    const fake = createFakeSupabase({
+      farms: () => [{ id: 'farm-1', name: 'Test Farm' }],
+      profiles: () => [{ id: 'user-1', farm_id: 'farm-1', active_season: 2026 }],
+      fields: () => [{ id: 'field-1', name: 'Home', acreage: 40 }],
+      bins: () => [{ id: 'bin-1', name: 'North', capacity: 10000 }],
+    });
+    const result = await executeNamedTool('farm_overview', {}, ctxFor(fake.client));
+    const overview = result.rows as {
+      availableRecordTypes: Array<{ entity: string; numericFields: string[]; supportsFieldName: boolean }>;
+    };
+    expect(result.error).toBeUndefined();
+    expect(overview.availableRecordTypes).toHaveLength(FARM_ENTITY_NAMES.length);
+    expect(overview.availableRecordTypes).toContainEqual(expect.objectContaining({
+      entity: 'harvest_records',
+      numericFields: expect.arrayContaining(['bushels']),
+      supportsFieldName: true,
+    }));
+  });
+
+  it('returns a cursor matching the last row actually retained by the response budget', async () => {
+    const fake = createFakeSupabase({
+      plant_records: () => Array.from({ length: 100 }, (_, index) => ({
+        id: `record-${String(index).padStart(3, '0')}`,
+        crop: 'Corn',
+        memo: 'x'.repeat(500),
+      })),
+    });
+    const result = await executeNamedTool('query_farm_records', {
+      entity: 'plant_records', limit: 100,
+    }, ctxFor(fake.client));
+    const rows = result.rows as Array<{ id: string }>;
+    expect(result.truncated).toBe(true);
+    expect(rows.length).toBeLessThan(100);
+    expect(result.nextCursor).toBe(rows.at(-1)?.id);
+  });
+});
+
+describe('flexible farm tools', () => {
+  it('searches nested products and notes across selected record types', async () => {
+    const fake = createFakeSupabase({
+      spray_records: () => [{ id: 's1', products: [{ product: 'Liberty' }], notes: 'North fence' }],
+      spray_recipes: () => [{ id: 'r1', name: 'Burndown', products: [{ product: 'Roundup' }] }],
+    });
+    const result = await executeNamedTool('search_farm_records', {
+      query: 'liberty', entities: ['spray_records', 'spray_recipes'],
+    }, ctxFor(fake.client));
+    const rows = result.rows as Array<{ entity: string }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].entity).toBe('spray_records');
+    expect(fake.calls.every(call => call.eq.some(([column, value]) => column === 'farm_id' && value === 'farm-1'))).toBe(true);
+  });
+
+  it('calculates grouped sums from every matching row rather than a display slice', async () => {
+    const fake = createFakeSupabase({
+      harvest_records: () => [
+        { crop: 'Corn', bushels: 100 },
+        { crop: 'Corn', bushels: 50 },
+        { crop: 'Soybeans', bushels: 80 },
+      ],
+    });
+    const result = await executeNamedTool('aggregate_farm_records', {
+      entity: 'harvest_records', operation: 'sum', numericField: 'bushels',
+      groupBy: 'crop', seasonYear: 2026,
+    }, ctxFor(fake.client));
+    expect(result.rows).toEqual(expect.arrayContaining([
+      { group: 'Corn', value: 150, recordCount: 2, numericValueCount: 2 },
+      { group: 'Soybeans', value: 80, recordCount: 1, numericValueCount: 1 },
+    ]));
+    expect(fake.calls[0].range).toEqual([0, PAGE_SIZE - 1]);
+    expect(fake.calls[0].eq).toContainEqual(['season_year', 2026]);
+  });
+
+  it('fails closed for non-allowlisted aggregate fields', async () => {
+    const fake = createFakeSupabase();
+    const result = await executeNamedTool('aggregate_farm_records', {
+      entity: 'harvest_records', operation: 'sum', numericField: 'farm_id',
+    }, ctxFor(fake.client));
+    expect(result).toEqual({ error: INVALID_ARGS_ERROR });
+    expect(fake.from).not.toHaveBeenCalled();
+  });
+
+  it('builds a cross-type timeline in newest-first order', async () => {
+    const fake = createFakeSupabase({
+      plant_records: () => [{ id: 'p1', plant_date: '2026-04-10', field_name: 'Home' }],
+      spray_records: () => [{ id: 's1', spray_date: '2026-05-10', field_name: 'Home' }],
+    });
+    const result = await executeNamedTool('activity_timeline', { seasonYear: 2026, limit: 10 }, ctxFor(fake.client));
+    const rows = result.rows as Array<{ entity: string }>;
+    expect(rows[0].entity).toBe('spray_records');
+    expect(rows[1].entity).toBe('plant_records');
+    expect(fake.calls.filter(call => call.table !== 'fields').every(call => (
+      call.eq.some(([column, value]) => column === 'farm_id' && value === 'farm-1')
+      && call.eq.some(([column, value]) => column === 'season_year' && value === 2026)
+    ))).toBe(true);
   });
 });
 
@@ -349,7 +582,8 @@ describe('seed_library', () => {
     });
     const result = await executeNamedTool('seed_library', '{}', ctxFor(fake.client));
     expect(fake.calls[0].is).toContainEqual(['deleted_at', null]);
-    expect(fake.calls[0].limit).toBe(100);
+    expect(fake.calls[0].limit).toBe(101);
+    expect(fake.calls[0].order[0]).toEqual(['id', { ascending: true }]);
     expect(result.lookup).toMatch(/seed library/i);
     expect(result.error).toBeUndefined();
   });

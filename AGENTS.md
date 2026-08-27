@@ -28,7 +28,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `TESTING.md` — verification protocols and test credentials.
 - `api/weather-proxy.ts` — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
 - `src/test/weatherProxy.test.ts` — weather-proxy contract tests; keep API tests outside `api/` so Vercel does not deploy them as functions.
-- `api/ai-assistant.ts` — weather-proxy-style Vercel Function for Ask the book. Named read tools only (no SQL, no writes). Uses the caller’s JWT so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
+- `api/ai-assistant.ts` + `server/ai-assistant-tools.ts` — weather-proxy-style Vercel Function and centralized allowlisted read catalog for Ask the book. Named read tools only (no raw SQL, no writes). Uses the caller’s JWT plus explicit farm filters so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
 - `@/types/farm.ts` — canonical TypeScript entity definitions.
 - `@/lib/mappers.ts` — entity to database row translation.
 - `@/lib/backupSchema.ts` — strict backup/restore validation schema.
@@ -544,7 +544,7 @@ After editing:
 1. Run the most relevant available checks. The repo defines:
    - `npm run lint` — `eslint .` (fast, run for any source change; the gate is **zero errors** — warnings are tracked, not blocked).
    - `npm run typecheck` — `tsc -b` (the **authoritative type gate** via project references in `tsconfig.json`). This is the real type check; `vite build` uses SWC and does **not** typecheck, so it cannot substitute for `typecheck`. Run this for any source/type change.
-   - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts`, `api/ai-assistant.ts`, `api/ai-assistant-tools.ts`, or their imports change.
+   - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts`, `api/ai-assistant.ts`, `server/ai-assistant-tools.ts`, or their imports change.
    - `npm run test` — `vitest run` (the **unit suite**; excludes `*.integration.test.*`). Run when touching logic with colocated `*.test.*` files. See Testing → Unit vs. Integration below.
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.

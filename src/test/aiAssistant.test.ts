@@ -16,8 +16,8 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: (...args: unknown[]) => createClientMock(...args),
 }));
 
-vi.mock('../../api/ai-assistant-tools', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../api/ai-assistant-tools')>();
+vi.mock('../../server/ai-assistant-tools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/ai-assistant-tools')>();
   toolMocks.actualExecute = actual.executeNamedTool as typeof toolMocks.actualExecute;
   toolMocks.executeNamedTool.mockImplementation(actual.executeNamedTool);
   return {

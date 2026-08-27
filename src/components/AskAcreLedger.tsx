@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 
 import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
@@ -33,8 +33,13 @@ export default function AskAcreLedger() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookupsOpen, setLookupsOpen] = useState<Record<number, boolean>>({});
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const resetConversation = () => {
+    requestIdRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setQuestion('');
     setMessages([]);
     setLoading(false);
@@ -51,7 +56,11 @@ export default function AskAcreLedger() {
 
   const sendQuestion = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || loading || !isOnline) return;
+    if (!trimmed || loading || abortRef.current || !isOnline) return;
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const requestId = ++requestIdRef.current;
 
     setError(null);
     setQuestion('');
@@ -62,17 +71,21 @@ export default function AskAcreLedger() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if (requestId !== requestIdRef.current) return;
       const token = session?.access_token;
       if (!token) {
         throw new Error('The assistant is unavailable right now.');
       }
-      const result = await askAcreLedger(trimmed, token, viewingSeason, history);
+      const result = await askAcreLedger(trimmed, token, viewingSeason, history, abort.signal);
+      if (requestId !== requestIdRef.current) return;
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content: result.answer, lookups: result.lookups },
       ]);
       native.haptic.success();
     } catch (err: unknown) {
+      if (requestId !== requestIdRef.current) return;
+      if (err instanceof Error && err.name === 'AbortError') return;
       native.haptic.error();
       const message = err instanceof Error ? err.message : 'The assistant is unavailable right now.';
       setMessages(prev => {
@@ -82,7 +95,10 @@ export default function AskAcreLedger() {
       setQuestion(trimmed);
       setError(message);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        abortRef.current = null;
+      }
     }
   };
 

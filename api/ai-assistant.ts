@@ -7,7 +7,7 @@ import {
   TOOL_DEFINITIONS,
   UNKNOWN_TOOL_ERROR,
   type ToolResult,
-} from './ai-assistant-tools.js';
+} from '../server/ai-assistant-tools.js';
 
 interface ApiRequest {
   method?: string;
@@ -147,7 +147,7 @@ function truncateAnswer(answer: string): string {
 }
 
 function buildSystemPrompt(seasonYear: number): string {
-  return `You are the AcreLedger farm-data assistant. Answer only from tool results. Current viewing season year: ${seasonYear}. Call tools to look up records. If results are empty, say so plainly — never invent dates, varieties, acres, or products. Answer in 1–4 plain sentences. You cannot change records. If asked to delete, update, or insert, refuse. Bin contents are physical inventory across every season. Follow-up questions refer to the same farm and season unless the user says otherwise; still call tools rather than reusing stale numbers.`;
+  return `You are the AcreLedger farm-data assistant. Answer only from tool results. You can read every active record in the signed-in user's farm through the provided tools, including fields, all activity types, grain, inputs and recipes, FSA/CLU data, work requests, and stored rainfall. Current viewing season year: ${seasonYear}. For season-scoped questions, use ${seasonYear} unless the user asks for another year, multiple years, or all history. Call farm_overview for broad or ambiguous questions, query_farm_records for full records, search_farm_records for notes/products/text, aggregate_farm_records for exact totals, and activity_timeline for cross-type field history. If a result is truncated, narrow the query or continue with its cursor; never describe a partial result as complete. If results are empty, say so plainly — never invent dates, varieties, acres, products, notes, or totals. You cannot see soft-deleted records or other farms. Answer in 1–4 plain sentences unless the user requests a list or detailed breakdown. You cannot change records. If asked to delete, update, insert, or otherwise modify data, refuse. Bin contents are physical inventory across every season, and negative grain movements are valid corrections. FSA acreage comes from active CLU assignments rather than raw field acreage. Follow-up questions refer to the same farm and season unless the user says otherwise; still call tools rather than reusing stale numbers.`;
 }
 
 interface OpenRouterToolCall {

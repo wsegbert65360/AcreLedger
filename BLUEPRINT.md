@@ -485,6 +485,13 @@ to `anon` or `authenticated`. Match this stricter table pattern for new farm rec
 
 The live auth integration suite verifies forbidden operations by asserting PostgreSQL code `42501`. Its probes must be harmless: same-value protected-column updates, duplicate-ID insert attempts, and delete queries with contradictory filters. Successful preference checks also use same-value writes so verification cannot alter the QA account.
 
+### Ask the Book Read Registry
+`server/ai-assistant-tools.ts` is the only database read catalog exposed to the AI assistant. It uses the authenticated caller's JWT and publishable/anon key, keeps RLS as the primary tenant boundary, and adds the authoritative current `farm_id` to every direct or joined query. It must never use a service-role/secret key, raw SQL, caller-provided table names, or mutation methods.
+
+The registry covers all active user-facing farm records across every season: farm/profile context, fields, bins, planting, spray/custom spray, fertilizer, tillage, harvest, hay, grain movements, saved seeds, spray/fertilizer recipes, FSA tracts, CLU assignments, work requests, and stored rainfall. Soft-deleted records, other farms, `auth`, and private operational schemas are excluded. Binary image payloads and raw geometry coordinate arrays are summarized before model exposure; the rest of each permitted record remains readable.
+
+Whenever a new user-facing farm table is added, update the assistant registry and its catalog-isolation test in the same change, or document why the table is intentionally excluded. Generic query filters, aggregate fields, and grouping fields remain hardcoded per entity and fail closed when unsupported.
+
 ### Mapper Pattern
 Every entity has a dedicated mapper in `@/lib/mappers.ts`.
 - **CamelCase to SnakeCase**: Mappers handle all translation.
