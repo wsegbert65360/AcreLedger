@@ -50,6 +50,16 @@ vi.mock('@/lib/native', () => ({
   },
 }));
 
+vi.mock('@/lib/askSuggestions', () => ({
+  getSeasonalAskSuggestions: (viewingSeason: number) => [
+    'How much grain is still in my bins?',
+    `How many bushels of corn did we harvest in ${viewingSeason}?`,
+    `What did each field grow in ${viewingSeason}?`,
+    `How much rain did we get in ${viewingSeason}?`,
+    `What soybean varieties did I plant in ${viewingSeason}?`,
+  ],
+}));
+
 vi.mock('@/components/ui/drawer', () => ({
   Drawer: ({ children, open, onOpenChange }: { children: unknown; open: boolean; onOpenChange: (open: boolean) => void }) => (
     open
@@ -89,6 +99,19 @@ describe('AskAcreLedger', () => {
     render(<AskAcreLedger />);
     expect(screen.getByText('Ask the book needs a connection.')).toBeTruthy();
     expect(screen.getByLabelText('Send question')).toHaveProperty('disabled', true);
+    expect(screen.queryByText('Try a question from this farm’s book')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'How much grain is still in my bins?' })).toBeNull();
+  });
+
+  it('sends a suggestion chip immediately', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByRole('button', { name: 'How much grain is still in my bins?' }));
+
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+    expect(askState.askAcreLedger.mock.calls[0][0]).toBe('How much grain is still in my bins?');
+    expect(askState.askAcreLedger.mock.calls[0][2]).toBe(2026);
+    expect(screen.getByText('How much grain is still in my bins?')).toBeTruthy();
+    expect(screen.queryByText('Try a question from this farm’s book')).toBeNull();
   });
 
   it('does not render a persistent disclaimer or retention footer', () => {

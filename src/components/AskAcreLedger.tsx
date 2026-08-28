@@ -1,7 +1,8 @@
-import { FormEvent, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
 
 import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
+import { getSeasonalAskSuggestions } from '@/lib/askSuggestions';
 import { native } from '@/lib/native';
 import { supabase } from '@/lib/supabase';
 import { askAcreLedger, type AiHistoryTurn } from '@/services/aiAssistantService';
@@ -17,8 +18,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const EXAMPLE_QUESTION = 'What date was my earliest corn planted this season?';
-
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -33,8 +32,36 @@ export default function AskAcreLedger() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookupsOpen, setLookupsOpen] = useState<Record<number, boolean>>({});
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+
+  const suggestions = getSeasonalAskSuggestions(viewingSeason);
+
+  // iOS keeps the layout viewport full-height behind the software keyboard, so
+  // the fixed-bottom drawer input ends up covered. The visual viewport does
+  // shrink, so lift the composer by however much of the layout viewport the
+  // keyboard currently covers. Keep the home-indicator inset in the same calc
+  // so browser chrome cannot replace it.
+  useEffect(() => {
+    if (!isAskOpen) {
+      setKeyboardPadding(0);
+      return;
+    }
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const update = () => {
+      const covered = Math.round(window.innerHeight - viewport.height - viewport.offsetTop);
+      setKeyboardPadding(Math.max(0, covered));
+    };
+    update();
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    return () => {
+      viewport.removeEventListener('resize', update);
+      viewport.removeEventListener('scroll', update);
+    };
+  }, [isAskOpen]);
 
   const resetConversation = () => {
     requestIdRef.current += 1;
@@ -117,18 +144,28 @@ export default function AskAcreLedger() {
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+        <div
+          className="flex min-h-0 flex-1 flex-col px-4"
+          style={{
+            paddingBottom: `calc(1rem + env(safe-area-inset-bottom, 0px) + ${keyboardPadding}px)`,
+          }}
+        >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-            {messages.length === 0 && !loading && (
-              <div className="rounded-2xl border border-border/70 bg-card p-4">
+            {messages.length === 0 && !loading && isOnline && (
+              <div>
                 <p className="text-sm text-muted-foreground">Try a question from this farm’s book:</p>
-                <button
-                  type="button"
-                  className="mt-3 min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground"
-                  onClick={() => setQuestion(EXAMPLE_QUESTION)}
-                >
-                  {EXAMPLE_QUESTION}
-                </button>
+                <div className="mt-3 space-y-2">
+                  {suggestions.map(suggestion => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      className="min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground"
+                      onClick={() => void sendQuestion(suggestion)}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
