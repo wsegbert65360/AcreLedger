@@ -172,7 +172,13 @@ export default function WeatherBar() {
       role="button"
       tabIndex={0}
       aria-label={weatherUnavailable ? 'Weather unavailable, tap to retry' : 'Open weather'}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleBarActivate(); } }}
+      onKeyDown={e => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleBarActivate();
+        }
+      }}
     >
       <div aria-hidden="true" className="pointer-events-none absolute -left-10 -top-14 h-36 w-36 rounded-full bg-primary/10 blur-2xl" />
       {/* Left side: Main Temp & Location */}

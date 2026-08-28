@@ -70,4 +70,25 @@ describe('WeatherBar', () => {
     await waitFor(() => expect(fetchCurrentWeather.mock.calls.length).toBeGreaterThan(callsBeforeRetry));
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  it('does not activate the weather card when Space is typed in the location input', async () => {
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 4,
+      temp: 72,
+      humidity: 55,
+      windDirection: 'S',
+      locationName: 'Warrensburg',
+      isError: false,
+    });
+
+    render(<WeatherBar />);
+    await screen.findByText('72°F');
+
+    const callsBeforeSpace = fetchCurrentWeather.mock.calls.length;
+    const locationInput = screen.getByLabelText(/Zip code or coordinates/i);
+    fireEvent.keyDown(locationInput, { key: ' ' });
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(fetchCurrentWeather).toHaveBeenCalledTimes(callsBeforeSpace);
+  });
 });

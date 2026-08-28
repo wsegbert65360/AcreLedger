@@ -37,7 +37,9 @@ function ForecastDayRow({
   const precipIn = day.precipIn ?? 0;
   const windSpeed = day.windSpeed ?? 0;
   const isHighWind = windSpeed >= 10; // WIND_ALERT_MPH = 10
-  const rainActive = rainChance > 20 || precipIn > 0;
+  const hasRainChance = rainChance > 0;
+  const highRainChance = rainChance >= 40;
+  const rainActive = hasRainChance || precipIn > 0;
   const WeatherIcon = getWeatherLucideIcon(day.icon, day.rainChance ?? 0, false);
 
   // Range bar positioning
@@ -49,85 +51,82 @@ function ForecastDayRow({
 
   return (
     <div
-      className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-colors ${
-        isToday
-          ? 'bg-blue-500/10 border border-blue-500/20'
-          : rainActive
-            ? 'bg-blue-500/5 border border-blue-500/10'
-            : 'hover:bg-muted/30 border border-transparent'
+      className={`grid grid-cols-[3.5rem_minmax(0,1fr)_5rem] items-center gap-x-2 gap-y-2 rounded-xl border px-3 py-3 transition-colors ${
+        highRainChance
+          ? 'border-blue-500/40 bg-blue-500/15'
+          : isToday
+            ? 'border-blue-500/20 bg-blue-500/10'
+            : rainActive
+              ? 'border-cyan-500/20 bg-cyan-500/5'
+              : 'border-transparent hover:bg-muted/30'
       }`}
     >
       {/* 1. Day & Date */}
-      <div className="w-14 shrink-0 flex flex-col">
-        <span className={`text-xs font-bold leading-tight ${isToday ? 'text-blue-400' : 'text-foreground'}`}>
+      <div className="flex min-w-0 flex-col">
+        <span className={`text-sm font-bold leading-tight ${isToday ? 'text-blue-600 dark:text-blue-300' : 'text-foreground'}`}>
           {dayName}
         </span>
-        <span className="text-[9px] font-mono text-muted-foreground/80 leading-none mt-0.5">
+        <span className="mt-1 font-mono text-xs leading-none text-muted-foreground">
           {dateStr}
         </span>
       </div>
 
       {/* 2. Condition Icon & Description */}
-      <div className="flex-1 flex items-center gap-2 min-w-0 px-1">
+      <div className="flex min-w-0 items-center gap-2">
         <WeatherIcon
-          size={16}
+          size={20}
           className={`shrink-0 ${
-            isToday
-              ? 'text-blue-400'
+            highRainChance
+              ? 'text-blue-600 dark:text-blue-300'
               : rainActive
-                ? 'text-blue-400'
+                ? 'text-cyan-700 dark:text-cyan-300'
+                : isToday
+                  ? 'text-blue-600 dark:text-blue-300'
                 : 'text-muted-foreground/80'
           }`}
         />
-        <span className="text-[10px] text-muted-foreground/80 font-medium capitalize truncate hidden min-[360px]:inline">
+        <span className="line-clamp-2 text-xs font-medium capitalize leading-snug text-muted-foreground min-[380px]:text-sm">
           {day.conditions || '—'}
         </span>
       </div>
 
-      {/* 3. Ag Compliance Metrics (Rain & Wind) */}
-      <div className="flex items-center gap-2 shrink-0 px-2">
-        {/* Rain Chance */}
-        <div className="flex items-center gap-0.5 w-10 justify-end">
-          {rainChance > 0 ? (
-            <>
-              <CloudRain size={10} className={rainActive ? 'text-blue-400' : 'text-muted-foreground/50'} />
-              <span className={`text-[10px] font-mono font-bold ${rainActive ? 'text-blue-400' : 'text-muted-foreground/70'}`}>
-                {rainChance}%
-              </span>
-            </>
-          ) : (
-            <span className="text-[10px] font-mono text-muted-foreground/30">—</span>
-          )}
-        </div>
-
-        {/* Wind Speed (Agricultural application warning threshold) */}
-        <div className="flex items-center gap-0.5 w-14 justify-end">
-          {windSpeed > 0 ? (
-            <>
-              <Wind size={10} className={isHighWind ? 'text-amber-500' : 'text-muted-foreground/50'} />
-              <span
-                className={`text-[10px] font-mono font-bold ${
-                  isHighWind ? 'text-amber-500 font-semibold' : 'text-muted-foreground/70'
-                }`}
-                title={isHighWind ? 'Wind is above 10 mph (spraying warning)' : undefined}
-              >
-                {windSpeed} mph
-              </span>
-            </>
-          ) : (
-            <span className="text-[10px] font-mono text-muted-foreground/30">—</span>
-          )}
-        </div>
-      </div>
-
-      {/* 4. Temps & Apple-style Temperature Range Track */}
-      <div className="flex items-center gap-1.5 shrink-0 w-24 sm:w-44 justify-end">
-        <span className="text-[11px] font-mono font-medium text-muted-foreground w-7 text-right">
+      {/* 3. Temperatures */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="font-mono text-sm font-medium text-muted-foreground">
           {day.tempLowF != null ? `${day.tempLowF}°` : '--'}
         </span>
+        <span className="font-mono text-base font-bold text-foreground">
+          {day.tempHighF != null ? `${day.tempHighF}°` : '--'}
+        </span>
+      </div>
+
+      {/* 4. Rain, Wind & Temperature Range */}
+      <div className="col-span-3 flex min-w-0 items-center gap-2 border-t border-border/40 pt-2">
+        <div
+          data-rain-tier={highRainChance ? 'high' : hasRainChance ? 'low' : 'none'}
+          className={`flex min-h-8 items-center gap-1 rounded-lg border px-2 font-mono text-xs font-bold ${
+            highRainChance
+              ? 'border-blue-500/50 bg-blue-500/25 text-blue-800 shadow-sm dark:text-blue-200'
+              : hasRainChance
+                ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-800 dark:text-cyan-200'
+                : 'border-border/50 bg-muted/30 text-muted-foreground'
+          }`}
+        >
+          <CloudRain size={14} />
+          <span>{hasRainChance ? `${rainChance}% rain` : 'No rain'}</span>
+        </div>
+
+        <div className={`flex min-h-8 items-center gap-1 rounded-lg border border-border/50 bg-muted/30 px-2 font-mono text-xs font-bold ${
+          isHighWind ? 'text-amber-600 dark:text-amber-300' : 'text-muted-foreground'
+        }`}>
+          <Wind size={14} />
+          <span title={isHighWind ? 'Wind is at or above 10 mph (spraying warning)' : undefined}>
+            {windSpeed > 0 ? `${windSpeed} mph` : 'No wind'}
+          </span>
+        </div>
 
         {/* Apple Weather Style Range Bar */}
-        <div className="relative flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden shrink-0 hidden sm:block">
+        <div className="relative ml-auto hidden h-2 min-w-20 flex-1 overflow-hidden rounded-full bg-muted/60 sm:block">
           <div
             className="absolute h-full rounded-full bg-gradient-to-r from-blue-400 via-amber-400 to-orange-400"
             style={{
@@ -136,10 +135,6 @@ function ForecastDayRow({
             }}
           />
         </div>
-
-        <span className="text-[11px] font-mono font-bold text-foreground w-7 text-right">
-          {day.tempHighF != null ? `${day.tempHighF}°` : '--'}
-        </span>
       </div>
     </div>
   );
@@ -163,7 +158,7 @@ export default function ForecastGrid({ days }: ForecastGridProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
           <Cloud size={14} className="text-muted-foreground" />
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
             {displayDays.length}-Day Forecast
           </h2>
         </div>
