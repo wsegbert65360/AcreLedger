@@ -447,6 +447,14 @@ html.color button.quick-add-trigger svg {
   stroke: #ffffff !important;
 }
 
+html.color button.bg-primary:disabled {
+  background-color: #14261a !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+  border: 2px solid rgba(255, 255, 255, 0.35) !important;
+  opacity: 1;
+  box-shadow: none;
+}
+
 html.color nav.fixed.bottom-0 > div > button:nth-child(1),
 html.color nav.fixed.left-0 .space-y-1 > button:nth-child(1) {
   --primary: var(--hue-lime);

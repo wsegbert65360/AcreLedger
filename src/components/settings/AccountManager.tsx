@@ -68,8 +68,7 @@ export default function AccountManager() {
           </div>
           <Button
             type="submit"
-            size="sm"
-            className="w-full h-10"
+            className="w-full h-11 bg-primary text-primary-foreground"
             disabled={isSaving || !hasChanges}
           >
             {isSaving ? 'Saving...' : 'Rename Farm'}

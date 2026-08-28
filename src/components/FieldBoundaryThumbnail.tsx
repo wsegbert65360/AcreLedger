@@ -40,7 +40,7 @@ export default function FieldBoundaryThumbnail({ geometry }: FieldBoundaryThumbn
   }, [geometry]);
 
   if (!pathD) {
-    return <MapPin size={12} />;
+    return <MapPin size={12} className="text-foreground" />;
   }
 
   return (
@@ -49,16 +49,15 @@ export default function FieldBoundaryThumbnail({ geometry }: FieldBoundaryThumbn
       preserveAspectRatio="xMidYMid meet"
       width="100%"
       height="100%"
-      className="w-full h-full"
+      className="w-full h-full text-foreground"
       aria-hidden="true"
     >
       <path
         d={pathD}
         fillRule="evenodd"
-        fill="currentColor"
-        fillOpacity={0.35}
-        stroke="currentColor"
-        strokeWidth={1.5}
+        fill="hsl(var(--foreground) / 0.18)"
+        stroke="hsl(var(--foreground))"
+        strokeWidth={2}
         strokeLinejoin="round"
       />
     </svg>

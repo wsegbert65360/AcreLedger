@@ -14,9 +14,10 @@ import { getPlantedCropColorStyles } from '@/lib/cropColors';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
 import { cn } from '@/lib/utils';
-import { generateSprayPDF } from '@/lib/sprayExport';
-import { roundTo } from '@/utils/numbers';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
+import { generateSprayPDF } from '@/lib/sprayExport';
+import { compareWorkDateDesc } from '@/utils/dates';
+import { roundTo } from '@/utils/numbers';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -125,12 +126,7 @@ export default function FieldDetailScreen() {
       ...fertilizerApplications.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'fertilizer' as const, data: r })),
       ...tillageRecords.filter(r => r.fieldId === field.id && r.seasonYear === viewingSeason).map(r => ({ type: 'tillage' as const, data: r })),
     ];
-    const getTS = (r: any) => {
-      if (r.timestamp) return r.timestamp;
-      const dateStr = r.date || r.plantDate || r.sprayDate || r.harvestDate || r.date;
-      return dateStr ? new Date(dateStr).getTime() : 0;
-    };
-    return all.sort((a, b) => getTS(b.data) - getTS(a.data));
+    return all.sort((a, b) => compareWorkDateDesc(a.data, b.data));
   }, [field, plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, viewingSeason]);
 
   const latestActivity = unifiedRecords[0];

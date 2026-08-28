@@ -453,7 +453,7 @@ describe('SprayModal Data Retention', () => {
     await clickNext();
     await waitFor(() => expect(screen.getByLabelText(/Wind Speed/i)).toBeInTheDocument());
     await clickNext();
-    const updateBtn = await screen.findByRole('button', { name: /Update \(Incomplete\)/i });
+    const updateBtn = await screen.findByRole('button', { name: /Update anyway/i });
     fireEvent.click(updateBtn);
     fireEvent.click(updateBtn);
 

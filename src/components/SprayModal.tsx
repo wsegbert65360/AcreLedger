@@ -559,7 +559,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 !isMinimumValid
                   ? 'Enter Product Name to Save'
                   : !isFullyCompliant
-                    ? (isDuplicate ? 'Log Duplicate (Incomplete)' : initialData ? 'Update (Incomplete)' : 'Save (Incomplete)')
+                    ? (isDuplicate ? 'Log anyway' : initialData ? 'Update anyway' : 'Save anyway')
                     : (isDuplicate ? 'Log Duplicate' : initialData ? 'Update Spray Record' : 'Save Spray Record')
               }
               showFinalWarningIcon={step === 'review' && isMinimumValid && !isFullyCompliant}

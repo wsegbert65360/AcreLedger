@@ -57,10 +57,10 @@ export default function SeedManager() {
                 <span className="text-foreground font-mono text-sm">{seed.name}</span>
                 <button
                   onClick={() => setSeedToDelete({ id: seed.id, name: seed.name })}
-                  className="text-destructive hover:text-destructive/80"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive/80"
                   aria-label={`Delete ${seed.name}`}
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={16} />
                 </button>
               </div>
             ))}

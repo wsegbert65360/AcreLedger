@@ -40,15 +40,15 @@ export default function RecordListItem({
           <Icon size={16} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="min-w-0 flex-1 truncate font-bold text-sm text-foreground">{title}</h3>
-            <span className="shrink-0 text-[11px] font-mono text-muted-foreground whitespace-nowrap">{date}</span>
-          </div>
+          <h3 className="line-clamp-2 font-bold text-sm text-foreground">{title}</h3>
           <div className="flex items-center gap-1.5 overflow-hidden">
             {warning && <AlertTriangle size={12} className="text-amber-500 shrink-0" />}
             <p className="min-w-0 truncate text-xs font-medium text-muted-foreground">{subtitle}</p>
           </div>
           <p className="mt-1 line-clamp-1 text-xs text-muted-foreground/70">{details}</p>
+          {date && (
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{date}</p>
+          )}
         </div>
         <div className="flex flex-col gap-2 items-center justify-center ml-2">
           <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border group-hover:border-muted-foreground'

@@ -67,14 +67,19 @@ export default function RecipeManager() {
               <div key={recipe.id} className="rounded-lg border border-border bg-muted/50 p-3 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-foreground font-bold text-sm leading-snug">{recipe.name}</span>
-                  <div className="flex shrink-0 gap-2">
-                    <button onClick={() => setEditingId(recipe.id)} className="text-muted-foreground hover:text-foreground text-xs font-semibold underline">Edit</button>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => setEditingId(recipe.id)}
+                      className="flex min-h-11 items-center justify-center rounded-lg px-2 text-xs font-semibold text-muted-foreground underline hover:bg-muted hover:text-foreground"
+                    >
+                      Edit
+                    </button>
                     <button
                       onClick={() => setRecipeToDelete({ id: recipe.id, name: recipe.name })}
-                      className="text-destructive hover:text-destructive/80"
+                      className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive/80"
                       aria-label={`Delete ${recipe.name}`}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>

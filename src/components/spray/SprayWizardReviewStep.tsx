@@ -83,7 +83,7 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
           <div key={p.ui_id || i} className="text-xs font-mono space-y-0.5">
             <div className="font-bold text-foreground">{p.product}</div>
             <div className="text-muted-foreground">
-              {p.rate} {p.rateUnit} &middot; EPA {p.epaRegNumber || '—'} &middot; Total {p.totalProductAmount || '—'} {p.totalProductUnit}
+              {p.rate?.trim() || '—'} {p.rateUnit} &middot; EPA {p.epaRegNumber || '—'} &middot; Total {p.totalProductAmount || '—'} {p.totalProductUnit}
             </div>
           </div>
         ))}

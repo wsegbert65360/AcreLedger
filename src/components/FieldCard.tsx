@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
 
 import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import { getPlantedCropColorStyles } from '@/lib/cropColors';
@@ -58,7 +57,7 @@ export default function FieldCard({ field }: FieldCardProps) {
         cropStyles ? cropStyles.card : 'border-border/70 hover:border-primary/25',
       )}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <div
           className={cn(
             'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border p-1.5 transition-colors',
@@ -67,51 +66,47 @@ export default function FieldCard({ field }: FieldCardProps) {
         >
           <FieldBoundaryThumbnail geometry={field.thumbnailGeometry ?? field.boundary} />
         </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="truncate font-bold leading-tight text-foreground">{field.name}</h3>
+        <div className="min-w-0 flex-1">
+          <h3 className="line-clamp-2 font-bold leading-tight text-foreground">{field.name}</h3>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border leading-none whitespace-nowrap ${statusPillClass}`}>
               {statusLabel}
             </span>
-          </div>
-          <div className="mt-1.5 flex items-center gap-1 font-mono text-xs font-medium text-muted-foreground">
-            {displayAcreage} AC
+            <span className="font-mono text-xs font-medium text-muted-foreground">
+              {displayAcreage} AC
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-1">
-        {/* Seasonal Activity Icons */}
-        <div className="flex items-center -mr-2">
-          {summary?.planted && (
-            <div
-              className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.plant} opacity-80`}
-              title="Planting activity"
-            >
-              <ACTIVITY_ICONS.plant size={16} />
+      <div className="flex shrink-0 items-center gap-1 self-center">
+        {summary?.planted && (
+          <div
+            className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.plant} opacity-80`}
+            title="Planting activity"
+          >
+            <ACTIVITY_ICONS.plant size={16} />
+          </div>
+        )}
+        {(summary?.sprayed ?? 0) > 0 && (
+          <div
+            className={`h-8 w-auto min-w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.spray} opacity-85`}
+            title="Spraying activity"
+          >
+            <div className="flex items-center">
+              <ACTIVITY_ICONS.spray size={16} />
+              <span className="ml-0.5 rounded-full bg-spray/10 px-1 py-0.5 text-[10px] font-mono font-bold leading-none text-spray">x{summary?.sprayed}</span>
             </div>
-          )}
-          {(summary?.sprayed ?? 0) > 0 && (
-            <div
-              className={`h-8 w-auto min-w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.spray} opacity-85`}
-              title="Spraying activity"
-            >
-              <div className="flex items-center">
-                <ACTIVITY_ICONS.spray size={16} />
-                <span className="ml-0.5 rounded-full bg-spray/10 px-1 py-0.5 text-[10px] font-mono font-bold leading-none text-spray">x{summary?.sprayed}</span>
-              </div>
-            </div>
-          )}
-          {(summary?.fertilized ?? 0) > 0 && (
-            <div
-              className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.fertilizer} opacity-80`}
-              title="Fertilizer activity"
-            >
-              <ACTIVITY_ICONS.fertilizer size={16} />
-            </div>
-          )}
-        </div>
-        <ChevronRight size={20} className={cn('text-muted-foreground/40 transition-transform group-hover:translate-x-0.5', cropStyles ? 'group-hover:text-current' : 'group-hover:text-primary')} />
+          </div>
+        )}
+        {(summary?.fertilized ?? 0) > 0 && (
+          <div
+            className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.fertilizer} opacity-80`}
+            title="Fertilizer activity"
+          >
+            <ACTIVITY_ICONS.fertilizer size={16} />
+          </div>
+        )}
       </div>
     </div>
   );

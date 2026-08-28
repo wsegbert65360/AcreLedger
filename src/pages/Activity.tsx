@@ -15,6 +15,7 @@ import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
+import { compareWorkDateDesc } from '@/utils/dates';
 import type {
   PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
   FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord
@@ -196,14 +197,14 @@ export default function Activity() {
   const filteredPlant = useMemo(() =>
     plantRecords
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.seedVariety.toLowerCase().includes(search.toLowerCase())))
-      .sort((a, b) => b.timestamp - a.timestamp),
+      .sort(compareWorkDateDesc),
     [plantRecords, search, viewingSeason]
   );
 
   const filteredSpray = useMemo(() =>
     sprayRecords
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.products?.some(p => p.product.toLowerCase().includes(search.toLowerCase()))))
-      .sort((a, b) => b.timestamp - a.timestamp),
+      .sort(compareWorkDateDesc),
     [sprayRecords, search, viewingSeason]
   );
 
@@ -216,42 +217,42 @@ export default function Activity() {
   const filteredHarvest = useMemo(() =>
     harvestRecords
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && r.fieldName.toLowerCase().includes(search.toLowerCase()))
-      .sort((a, b) => b.timestamp - a.timestamp),
+      .sort(compareWorkDateDesc),
     [harvestRecords, search, viewingSeason]
   );
 
   const filteredGrain = useMemo(() =>
     grainMovements
       .filter(m => !m.deleted_at && m.seasonYear === viewingSeason && (m.binName.toLowerCase().includes(search.toLowerCase()) || (m.sourceFieldName || '').toLowerCase().includes(search.toLowerCase()) || (m.destination || '').toLowerCase().includes(search.toLowerCase())))
-      .sort((a, b) => b.timestamp - a.timestamp),
+      .sort(compareWorkDateDesc),
     [grainMovements, search, viewingSeason]
   );
 
   const filteredHay = useMemo(() =>
     hayHarvestRecords
       .filter(m => !m.deleted_at && m.seasonYear === viewingSeason && (m.fieldName.toLowerCase().includes(search.toLowerCase()) || m.baleType.toLowerCase().includes(search.toLowerCase())))
-      .sort((a, b) => b.timestamp - a.timestamp),
+      .sort(compareWorkDateDesc),
     [hayHarvestRecords, search, viewingSeason]
   );
 
   const filteredCustomSpray = useMemo(() =>
     customSprayRecords
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.applicator.toLowerCase().includes(search.toLowerCase()) || (r.recipe || '').toLowerCase().includes(search.toLowerCase())))
-      .sort((a, b) => b.timestamp - a.timestamp),
+      .sort(compareWorkDateDesc),
     [customSprayRecords, search, viewingSeason]
   );
 
   const filteredFertilizer = useMemo(() =>
     fertilizerApplications
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.fertilizer_formula.toLowerCase().includes(search.toLowerCase())))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      .sort(compareWorkDateDesc),
     [fertilizerApplications, search, viewingSeason]
   );
 
   const filteredTillage = useMemo(() =>
     tillageRecords
       .filter(r => !r.deleted_at && r.seasonYear === viewingSeason && (r.fieldName.toLowerCase().includes(search.toLowerCase()) || r.implementType.toLowerCase().includes(search.toLowerCase())))
-      .sort((a, b) => b.timestamp - a.timestamp),
+      .sort(compareWorkDateDesc),
     [tillageRecords, search, viewingSeason]
   );
 
@@ -266,7 +267,7 @@ export default function Activity() {
       ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
     ];
-    return all.filter(r => !pendingDeletes.has(r.data.id)).sort((a, b) => b.timestamp - a.timestamp);
+    return all.filter(r => !pendingDeletes.has(r.data.id)).sort((a, b) => compareWorkDateDesc(a.data, b.data));
   }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredCustomSpray, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
 
   const handleDeleteRequest = () => {

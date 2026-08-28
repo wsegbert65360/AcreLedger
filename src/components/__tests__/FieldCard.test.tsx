@@ -68,4 +68,19 @@ describe('FieldCard', () => {
     expect(screen.getByRole('button')).not.toHaveAttribute('data-crop');
     expect(screen.getByText('No activity')).toBeTruthy();
   });
+
+  it('lets a long field name wrap instead of cutting it off', () => {
+    render(
+      <FieldCard
+        field={field({
+          name: 'Behind Mefford on corner',
+          activitySummary: { planted: true, crop: 'Corn', sprayed: 2, fertilized: 1 },
+        })}
+      />,
+    );
+
+    const title = screen.getByText('Behind Mefford on corner');
+    expect(title.className).toContain('line-clamp-2');
+    expect(title.className).not.toContain('truncate');
+  });
 });

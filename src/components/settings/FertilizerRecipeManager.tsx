@@ -187,18 +187,18 @@ export default function FertilizerRecipeManager() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      className="min-h-11 min-w-11 text-muted-foreground hover:text-foreground"
                       onClick={() => startEdit(recipe)}
                     >
-                      <span className="text-[10px] font-mono underline">Edit</span>
+                      <span className="text-xs font-semibold underline">Edit</span>
                     </Button>
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                      className="min-h-11 min-w-11 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setRecipeToDelete({ id: recipe.id, name: recipe.name })}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                     </Button>
                   </div>
                 </div>

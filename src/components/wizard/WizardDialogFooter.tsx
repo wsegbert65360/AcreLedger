@@ -58,7 +58,11 @@ export function WizardDialogFooter({
         <Button
           onClick={onPrimary}
           disabled={isSaving || !canContinue}
-          className={cn('touch-target flex-1 py-6 text-base font-bold disabled:opacity-50 disabled:grayscale', primaryClassName)}
+          className={cn(
+            'touch-target flex-1 py-6 text-base font-bold disabled:opacity-50 disabled:grayscale',
+            isFinalStep && 'whitespace-normal leading-tight',
+            primaryClassName,
+          )}
         >
           {isSaving ? (
             <div className="flex items-center gap-2">

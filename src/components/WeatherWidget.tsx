@@ -29,6 +29,7 @@ export default function WeatherBar() {
   // True once the first valid weather result has arrived. Stays true across
   // background refreshes so the bar doesn't flash placeholders every 5 min.
   const [hasData, setHasData] = useState(false);
+  const hasDataRef = useRef(false);
 
   useEffect(() => {
     const saved = loadZip(userId);
@@ -57,45 +58,59 @@ export default function WeatherBar() {
     setLoading(true);
     try {
       const result = await WeatherService.fetchCurrentWeather(z.trim(), controller.signal);
-      if (!controller.signal.aborted) {
-        // Resolve coordinates from input string or fields fallback
-        let lat: number | null = null;
-        let lng: number | null = null;
+      if (controller.signal.aborted) return;
 
-        const coordsMatch = z.trim().match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
-        if (coordsMatch) {
-          lat = parseFloat(coordsMatch[1]);
-          lng = parseFloat(coordsMatch[2]);
-        } else {
-          // If zip code is used, fall back to first field with coordinates
-          const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
-          if (fieldWithCoords) {
-            lat = fieldWithCoords.lat;
-            lng = fieldWithCoords.lng;
-          }
+      if (result.isError) {
+        if (!hasDataRef.current) {
+          setWeather(result);
+          setLocationName('');
         }
+        return;
+      }
 
-        if (lat != null && lng != null) {
-          try {
-            const fieldId = matchFieldByCoords(fields, lat, lng);
+      // Resolve coordinates from input string or fields fallback
+      let lat: number | null = null;
+      let lng: number | null = null;
 
-            const rainData = await RainService.fetchComprehensiveRainfall({
-              fieldId,
-              lat,
-              lng,
-              signal: controller.signal,
-            });
-
-            result.precip24h = rainData['24h'];
-            result.precip72h = rainData['72h'];
-          } catch (rainErr) {
-            console.error('[WeatherWidget] Failed to fetch high-res radar rainfall:', rainErr);
-          }
+      const coordsMatch = z.trim().match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+      if (coordsMatch) {
+        lat = parseFloat(coordsMatch[1]);
+        lng = parseFloat(coordsMatch[2]);
+      } else {
+        // If zip code is used, fall back to first field with coordinates
+        const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+        if (fieldWithCoords) {
+          lat = fieldWithCoords.lat;
+          lng = fieldWithCoords.lng;
         }
+      }
 
-        setWeather(result);
-        setHasData(true);
-        setLocationName(result.locationName || '');
+      if (lat != null && lng != null) {
+        try {
+          const fieldId = matchFieldByCoords(fields, lat, lng);
+
+          const rainData = await RainService.fetchComprehensiveRainfall({
+            fieldId,
+            lat,
+            lng,
+            signal: controller.signal,
+          });
+
+          result.precip24h = rainData['24h'];
+          result.precip72h = rainData['72h'];
+        } catch (rainErr) {
+          console.error('[WeatherWidget] Failed to fetch high-res radar rainfall:', rainErr);
+        }
+      }
+
+      setWeather(result);
+      setHasData(true);
+      hasDataRef.current = true;
+      setLocationName(result.locationName || '');
+    } catch {
+      if (!controller.signal.aborted && !hasDataRef.current) {
+        setWeather({ ...initialWeather(), isError: true });
+        setLocationName('');
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -133,30 +148,46 @@ export default function WeatherBar() {
     setLocationName('');
     setWeather(initialWeather());
     setHasData(false);
+    hasDataRef.current = false;
     setZip(z);
     setUsingCoords(!!coordsMatch);
     if (!coordsMatch) saveZip(z, userId);
+  };
+
+  const weatherUnavailable = Boolean(weather.isError && !hasData);
+
+  const handleBarActivate = () => {
+    if (weatherUnavailable) {
+      load(zip);
+      return;
+    }
+    navigate('/weather');
   };
 
   return (
     <div
       id="coachmark-weather"
       className="group relative flex min-h-[96px] cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm transition-all hover:border-primary/20 hover:shadow-md active:scale-[0.985] min-[380px]:p-4"
-      onClick={() => navigate('/weather')}
+      onClick={handleBarActivate}
       role="button"
       tabIndex={0}
-      onKeyDown={e => { if (e.key === 'Enter') navigate('/weather'); }}
+      aria-label={weatherUnavailable ? 'Weather unavailable, tap to retry' : 'Open weather'}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleBarActivate(); } }}
     >
       <div aria-hidden="true" className="pointer-events-none absolute -left-10 -top-14 h-36 w-36 rounded-full bg-primary/10 blur-2xl" />
       {/* Left side: Main Temp & Location */}
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <div className="flex items-center gap-2">
           <Thermometer size={24} className="text-orange-500" />
-          <div className="flex flex-col">
+          <div className="flex min-w-0 flex-col">
             <span className="font-mono text-2xl font-bold leading-none tracking-tight min-[380px]:text-3xl">
               {weather.isError || !hasData ? '—' : `${weather.temp}°F`}
             </span>
-            {weather.isError && <span className="text-xs text-destructive font-bold uppercase tracking-wider">Offline</span>}
+            {weatherUnavailable && (
+              <span className="text-xs font-medium leading-snug text-muted-foreground">
+                Weather unavailable · tap to retry
+              </span>
+            )}
             {!hasData && !weather.isError && (
               <span className="text-xs text-muted-foreground font-semibold">Loading…</span>
             )}
