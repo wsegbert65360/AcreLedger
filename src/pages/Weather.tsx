@@ -72,7 +72,7 @@ export default function Weather() {
             const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
 
             const rainData = await RainService.fetchComprehensiveRainfall({
-              fieldId,
+              ...(fieldId ? { fieldId } : {}),
               lat,
               lng,
               signal: controller.signal,

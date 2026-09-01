@@ -13,6 +13,7 @@ import {
   resolveCoords,
   getWeatherLucideIcon,
   getConditionGradient,
+  matchFieldByCoords,
 } from '../weatherHelpers';
 
 vi.mock('@/lib/native', () => ({
@@ -164,6 +165,17 @@ describe('weatherHelpers', () => {
 
     it('should return default gradient for clear conditions', () => {
       expect(getConditionGradient('clear-day', false)).toContain('from-amber-400/10');
+    });
+  });
+
+  describe('matchFieldByCoords', () => {
+    it('returns null when no field matches', () => {
+      expect(matchFieldByCoords([], 40.1, -90.2)).toBeNull();
+    });
+
+    it('returns the matching field id', () => {
+      const fields = [{ id: 'field-1', lat: 40.1234, lng: -90.5678 }];
+      expect(matchFieldByCoords(fields, 40.1234, -90.5678)).toBe('field-1');
     });
   });
 });

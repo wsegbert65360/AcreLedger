@@ -90,7 +90,7 @@ export default function WeatherBar() {
           const fieldId = matchFieldByCoords(fields, lat, lng);
 
           const rainData = await RainService.fetchComprehensiveRainfall({
-            fieldId,
+            ...(fieldId ? { fieldId } : {}),
             lat,
             lng,
             signal: controller.signal,

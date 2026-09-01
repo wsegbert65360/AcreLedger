@@ -107,7 +107,7 @@ export function matchFieldByCoords(
   fields: { id: string; lat: number | null; lng: number | null }[],
   lat: number,
   lng: number,
-): string {
+): string | null {
   const matched = fields.find(
     f =>
       f.lat != null &&
@@ -115,7 +115,7 @@ export function matchFieldByCoords(
       Math.abs(f.lat - lat) < 0.0001 &&
       Math.abs(f.lng - lng) < 0.0001,
   );
-  return matched?.id || 'weather-overview';
+  return matched?.id ?? null;
 }
 
 /** Map Visual Crossing icon/conditions to a Lucide icon component */

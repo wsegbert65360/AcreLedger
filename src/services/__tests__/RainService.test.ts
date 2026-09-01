@@ -288,4 +288,60 @@ describe('RainService', () => {
     expect(calledUrl).toContain('lat=38.4627');
     expect(calledUrl).toContain('lon=-93.5375');
   });
+
+  it('omits field_id when no field matches on weather overview', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.1, '24h': 0.2, '72h': 0.3, '168h': 0.4
+    }));
+
+    await RainService.fetchComprehensiveRainfall({
+      lat: 38.4627,
+      lng: -93.5374,
+    });
+
+    const calledUrl = (fetch as any).mock.calls[0][0];
+    expect(calledUrl).toContain('lat=38.4627');
+    expect(calledUrl).toContain('lon=-93.5374');
+    expect(calledUrl).not.toContain('field_id=');
+  });
+
+  it('still sends a real field UUID for field detail requests', async () => {
+    (fetch as any).mockResolvedValue(buildApiResponse({
+      '12h': 0.1, '24h': 0.2, '72h': 0.3, '168h': 0.4
+    }));
+
+    await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: 38.4627,
+      lng: -93.5374,
+    });
+
+    const calledUrl = (fetch as any).mock.calls[0][0];
+    expect(calledUrl).toContain(`field_id=${mockFieldId}`);
+  });
+
+  it('passes through custom-range API warnings', async () => {
+    (fetch as any)
+      .mockResolvedValueOnce(buildApiResponse({
+        '12h': 0, '24h': 0, '72h': 0, '168h': 0
+      }))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          rain: { total: 2.5 },
+          dataWarning: 'Radar verification covers only part of the range.',
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rain: { total: 0.75 } }) });
+
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: 38.46,
+      lng: -93.53,
+      sincePlantingDate: daysAgo(30),
+      sinceLastSprayDate: daysAgo(14),
+    });
+
+    expect(result.dataWarning).toContain('Radar verification covers only part of the range.');
+  });
 });

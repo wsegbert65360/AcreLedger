@@ -42,7 +42,7 @@ function resolveRainApiBaseUrl(): string {
 
 export const RainService = {
   async fetchComprehensiveRainfall(args: {
-    fieldId: string;
+    fieldId?: string | null;
     lat?: number | null;
     lng?: number | null;
     boundary?: GeoJSONGeometry | null;
@@ -52,7 +52,7 @@ export const RainService = {
   }): Promise<RainfallResult> {
     const { fieldId, lat, lng, boundary, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
-    const cacheKey = `${fieldId}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
+    const cacheKey = `${fieldId ?? ''}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
 
     const existing = promiseCache.get(cacheKey);
     if (existing) {
@@ -80,9 +80,15 @@ export const RainService = {
         throw new Error('Missing location data (lat/lng or boundary) for rainfall lookup.');
       }
 
-      // GET /rain?lat=X&lon=Y&field_id=Z — IEM Stage IV radar data
+      const mainParams = new URLSearchParams({
+        lat: String(tLat),
+        lon: String(tLng),
+      });
+      if (fieldId) {
+        mainParams.set('field_id', fieldId);
+      }
       const mainResponse = await fetch(
-        `${baseUrl}/rain?lat=${tLat}&lon=${tLng}&field_id=${encodeURIComponent(fieldId)}`,
+        `${baseUrl}/rain?${mainParams.toString()}`,
         { signal }
       );
 
@@ -96,34 +102,49 @@ export const RainService = {
       const periodEndUtc = mainData.periodEndUtc || new Date().toISOString();
 
       // --- Custom range via Rain API (field-based historical lookup) ---
-      const fetchCustomRange = async (startDate: string): Promise<number> => {
+      const fetchCustomRange = async (startDate: string): Promise<{ total: number; dataWarning?: string }> => {
+        if (!fieldId) {
+          return { total: 0 };
+        }
         try {
           const today = new Date().toISOString().split('T')[0];
-          // Use hybrid Mode D: includes coordinates for radar data merge
+          const rangeParams = new URLSearchParams({
+            field_id: fieldId,
+            lat: String(tLat),
+            lon: String(tLng),
+            start_date: startDate,
+            end_date: today,
+          });
           const response = await fetch(
-            `${baseUrl}/rain?field_id=${encodeURIComponent(fieldId)}&lat=${tLat}&lon=${tLng}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(today)}`,
+            `${baseUrl}/rain?${rangeParams.toString()}`,
             { signal }
           );
-          if (!response.ok) return 0;
+          if (!response.ok) return { total: 0 };
           const data = await response.json();
-          return Math.round(Number(data.rain?.total || 0) * 1000) / 1000;
-        } catch { return 0; }
+          return {
+            total: Math.round(Number(data.rain?.total || 0) * 1000) / 1000,
+            dataWarning: data.dataWarning || undefined,
+          };
+        } catch { return { total: 0 }; }
       };
 
-      const [sincePlanting, sinceLastSpray] = await Promise.all([
-        sincePlantingDate ? fetchCustomRange(sincePlantingDate) : Promise.resolve(0),
-        sinceLastSprayDate ? fetchCustomRange(sinceLastSprayDate) : Promise.resolve(0),
+      const [plantingResult, sprayResult] = await Promise.all([
+        sincePlantingDate ? fetchCustomRange(sincePlantingDate) : Promise.resolve({ total: 0 as number, dataWarning: undefined as string | undefined }),
+        sinceLastSprayDate ? fetchCustomRange(sinceLastSprayDate) : Promise.resolve({ total: 0 as number, dataWarning: undefined as string | undefined }),
       ]);
+
+      const rangeWarnings = [plantingResult.dataWarning, sprayResult.dataWarning].filter(Boolean);
+      const combinedWarning = [mainData.dataWarning, ...rangeWarnings].filter(Boolean).join(' ') || undefined;
 
       return {
         '24h': Math.round(Number(rain['24h'] || 0) * 1000) / 1000,
         '72h': Math.round(Number(rain['72h'] || 0) * 1000) / 1000,
         '168h': Math.round(Number(rain['168h'] || 0) * 1000) / 1000,
         '7d': Math.round(Number(rain['168h'] || 0) * 1000) / 1000,
-        sincePlanting,
-        sinceLastSpray,
+        sincePlanting: plantingResult.total,
+        sinceLastSpray: sprayResult.total,
         periodEndUtc,
-        dataWarning: mainData.dataWarning || undefined,
+        dataWarning: combinedWarning,
       };
     })();
 
