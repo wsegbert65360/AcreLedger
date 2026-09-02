@@ -4,7 +4,7 @@
 
 **Architecture:** `api/ai-assistant.ts` is a Vercel Function that validates the caller’s Supabase bearer token, resolves the caller’s current farm, applies a database-backed daily quota, and runs a bounded named-tool loop through OpenRouter Chat Completions. Every database read uses the caller’s JWT, so existing farm RLS remains the authorization boundary.
 
-**Default model:** `openrouter/free`, configurable through server-only `AI_MODEL`.
+**Default model:** MiniMax M3 Free (`minimax/minimax-m3:free`), with OpenRouter `models` fallback to OpenRouter Free Tool Call (`openrouter/free`) on unavailable/rate-limit. `AI_MODEL` overrides the primary only.
 
 > **Intentional product decision — preserve in future reviews:** Ask the Book does not show a persistent AI disclaimer, compliance warning, verification reminder, or retention footer beneath its answers. This omission is deliberate. Do not reintroduce recurring disclaimer copy unless the product owner explicitly reverses this decision. Keep factual vendor and local data-handling details in README and the privacy policy.
 
@@ -24,7 +24,8 @@
 
 - Endpoint: `POST https://openrouter.ai/api/v1/chat/completions`
 - Authorization: `Bearer ${OPENROUTER_API_KEY}`
-- Model: `AI_MODEL` or `openrouter/free`
+- Model: `AI_MODEL` or `minimax/minimax-m3:free`
+- Fallback models: `["openrouter/free"]` unless the primary is already `openrouter/free`
 - Output budget: `max_tokens: 2048`
 - Provider controls: `data_collection: "deny"` and `require_parameters: true`
 - Tool schemas use `{ type: "function", function: { name, description, parameters } }`.
@@ -32,7 +33,7 @@
 - Returned `reasoning_details` or string `reasoning` fields are replayed unchanged during the same request’s tool loop.
 - OpenRouter account-level prompt logging must remain disabled.
 
-Free-model availability and account-wide rate limits are controlled by OpenRouter. Upstream failures return the existing generic unavailable message so provider details are not leaked to clients.
+Free-model availability and account-wide rate limits are controlled by OpenRouter. If the primary model is unavailable or rate-limited (HTTP 429, 502, 503, or matching error text), that tool round retries once with `openrouter/free` and no `models` array, without consuming a second quota token. Upstream failures return the existing generic unavailable message so provider details are not leaked to clients.
 
 ## Named read tools
 
@@ -83,12 +84,13 @@ The quota/audit schema is operational infrastructure and is intentionally exclud
 ## Client behavior
 
 - The drawer is available from the sidebar and mobile dashboard.
+- Tap-to-start/tap-to-stop microphone with live transcript, auto-send on stop, and a 30-second safety cap; typed questions stay silent unless the answer is replayed, and speech stops on typing, sending, or drawer close.
 - It is disabled offline and does not query stale local records.
 - Conversations are in-memory and reset when the drawer closes.
 - Only three complete prior exchanges are sent to the server.
 - A failed request removes its optimistic user message and restores the question, preventing malformed history on retry.
 - Successful responses expose a collapsible plain-text “How I looked it up” list.
-- The assistant cannot add, edit, or delete records.
+- Voice ask-and-answer is implemented (previously deferred) with on-device/OS speech: `src/lib/speech.ts` adapts the Capacitor community plugins on iOS and the browser Web Speech API on the web, `src/hooks/useAskVoice.ts` drives the drawer mic, the transcribed text question flows through the same endpoint/quota/farm scope, only voice-originated answers are spoken, and the assistant cannot add, edit, or delete records. Audio never leaves the device.
 
 ## Environment variables
 
@@ -116,7 +118,6 @@ Environment changes require a new deployment. CodeMagic must receive `VITE_AI_AS
 
 ## Deferred work
 
-- Audio input and speech-to-text.
 - Write tools or record mutations.
 - Offline answers.
 - Cross-device conversation persistence.

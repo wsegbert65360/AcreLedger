@@ -37,6 +37,8 @@ const MAX_OUTPUT_TOKENS = 2048;
 const MAX_ANSWER_CHARS = MAX_HISTORY_ASSISTANT_LENGTH;
 const HANDLER_TIMEOUT_MS = 45_000;
 const FALLBACK_ANSWER = "I couldn't look that up from your records just now. Try asking again.";
+const DEFAULT_PRIMARY_MODEL = 'minimax/minimax-m3:free';
+const FALLBACK_MODEL = 'openrouter/free';
 const WRITE_REFUSAL_RE =
   /\b(can(?:not|'t)|will not|won't|unable to|do not|don't)\b[\s\S]{0,80}\b(delete|update|insert|change|modify|remove|write)\b/i;
 
@@ -102,6 +104,42 @@ function getOpenRouterErrorMessage(payload: unknown): string | null {
   if (typeof error === 'string') return error.slice(0, 300);
   if (!isPlainObject(error) || typeof error.message !== 'string') return null;
   return error.message.slice(0, 300);
+}
+
+function resolvePrimaryModel(): string {
+  const override = process.env.AI_MODEL?.trim();
+  return override || DEFAULT_PRIMARY_MODEL;
+}
+
+function looksLikeModelUnavailableOrRateLimit(status: number, payload: unknown): boolean {
+  if (status === 429 || status === 502 || status === 503) return true;
+  const message = (getOpenRouterErrorMessage(payload) ?? '').toLowerCase();
+  return message.includes('unavailable') || message.includes('rate');
+}
+
+async function postOpenRouter(
+  body: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<{ response: Response; payload: unknown; jsonFailed: boolean }> {
+  const response = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'X-OpenRouter-Title': 'AcreLedger',
+    },
+    signal,
+    body: JSON.stringify(body),
+  });
+
+  let payload: unknown;
+  let jsonFailed = false;
+  try {
+    payload = JSON.parse(await response.text()) as unknown;
+  } catch {
+    jsonFailed = true;
+  }
+  return { response, payload, jsonFailed };
 }
 
 function validateHistory(value: unknown): HistoryTurn[] | { error: string } {
@@ -362,7 +400,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HANDLER_TIMEOUT_MS);
-  const model = process.env.AI_MODEL ?? 'openrouter/free';
+  const model = resolvePrimaryModel();
+  const fallbackModels = model === FALLBACK_MODEL ? undefined : [FALLBACK_MODEL];
   const lookups: string[] = [];
 
   const messages: Array<Record<string, unknown>> = [
@@ -400,27 +439,34 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           require_parameters: true,
         },
       };
+      if (fallbackModels) {
+        requestBody.models = fallbackModels;
+      }
       if (allowTools) {
         requestBody.tools = OPENROUTER_TOOLS;
         requestBody.tool_choice = 'auto';
       }
 
-      const openRouterRes = await fetch(OPENROUTER_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'X-OpenRouter-Title': 'AcreLedger',
-        },
-        signal: controller.signal,
-        body: JSON.stringify(requestBody),
-      });
+      let { response: openRouterRes, payload: resp, jsonFailed } = await postOpenRouter(
+        requestBody,
+        controller.signal,
+      );
 
-      let resp: unknown;
-      try {
-        const text = await openRouterRes.text();
-        resp = JSON.parse(text) as unknown;
-      } catch {
+      const canRetryFallback =
+        model !== FALLBACK_MODEL
+        && (!openRouterRes.ok || jsonFailed || !isPlainObject(resp))
+        && looksLikeModelUnavailableOrRateLimit(openRouterRes.status, resp);
+
+      if (canRetryFallback) {
+        const retryBody: Record<string, unknown> = { ...requestBody, model: FALLBACK_MODEL };
+        delete retryBody.models;
+        ({ response: openRouterRes, payload: resp, jsonFailed } = await postOpenRouter(
+          retryBody,
+          controller.signal,
+        ));
+      }
+
+      if (jsonFailed) {
         await finalizeBestEffort(FALLBACK_ANSWER, lookups);
         return res.status(502).json({ error: 'Assistant is unavailable.' });
       }

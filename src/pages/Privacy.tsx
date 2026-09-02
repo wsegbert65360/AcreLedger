@@ -24,7 +24,7 @@ export default function Privacy() {
                             </div>
                             <div>
                                 <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">Last updated: August 26, 2026</p>
+                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 1, 2026</p>
                             </div>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
@@ -109,6 +109,14 @@ export default function Privacy() {
                                         <p className="text-sm font-bold text-foreground">OpenRouter (Ask the book)</p>
                                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                                             Questions you ask about your records are sent through OpenRouter to an eligible model provider to draft an answer from this farm’s data only. AcreLedger requests only providers marked as not collecting user data, and OpenRouter prompt logging must remain disabled. AcreLedger keeps a 30-day operational log of questions and answers.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
+                                    <div>
+                                        <p className="text-sm font-bold text-foreground">Voice questions (Ask the book)</p>
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                            Voice questions use this device’s microphone. The phone or browser turns your speech into words — Apple (iPhone) or the browser vendor (often Google in Chrome) may process that audio as part of OS/browser speech. AcreLedger servers receive only the text question, the same payload as a typed question. Audio is not stored in the farm book.
                                         </p>
                                     </div>
                                 </div>

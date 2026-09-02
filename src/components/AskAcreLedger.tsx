@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { Send } from 'lucide-react';
+import { Mic, Send, Square, Volume2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
+import { useAskVoice } from '@/hooks/useAskVoice';
 import { getSeasonalAskSuggestions } from '@/lib/askSuggestions';
 import { native } from '@/lib/native';
 import { supabase } from '@/lib/supabase';
@@ -24,6 +26,11 @@ interface ChatMessage {
   lookups?: string[];
 }
 
+interface SendQuestionOptions {
+  /** Speak the answer aloud after a successful response (voice-originated questions). */
+  speakAnswer?: boolean;
+}
+
 export default function AskAcreLedger() {
   const { isAskOpen, closeAsk } = useAskAcreLedger();
   const { isOnline, viewingSeason } = useFarm();
@@ -33,10 +40,21 @@ export default function AskAcreLedger() {
   const [error, setError] = useState<string | null>(null);
   const [lookupsOpen, setLookupsOpen] = useState<Record<number, boolean>>({});
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
   const suggestions = getSeasonalAskSuggestions(viewingSeason);
+
+  const voice = useAskVoice({
+    onTranscript: text => setQuestion(text),
+    onEndOfSpeech: text => {
+      if (text) void sendQuestion(text, { speakAnswer: true });
+    },
+    onPermissionDenied: () => {
+      toast.error('The book needs microphone permission to ask by voice. Typing still works.');
+    },
+  });
 
   // iOS keeps the layout viewport full-height behind the software keyboard, so
   // the fixed-bottom drawer input ends up covered. The visual viewport does
@@ -72,6 +90,8 @@ export default function AskAcreLedger() {
     setLoading(false);
     setError(null);
     setLookupsOpen({});
+    setSpeakingMessageIndex(null);
+    voice.reset();
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -81,9 +101,14 @@ export default function AskAcreLedger() {
     }
   };
 
-  const sendQuestion = async (text: string) => {
+  const sendQuestion = async (text: string, options?: SendQuestionOptions) => {
+    const { speakAnswer = false } = options ?? {};
     const trimmed = text.trim();
     if (!trimmed || loading || abortRef.current || !isOnline) return;
+
+    // Sending another question stops whatever is being read out.
+    voice.stopSpeaking();
+    setSpeakingMessageIndex(null);
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -93,6 +118,8 @@ export default function AskAcreLedger() {
     setQuestion('');
     const history: AiHistoryTurn[] = messages.slice(-6).map(({ role, content }) => ({ role, content }));
     const userMessage: ChatMessage = { role: 'user', content: trimmed };
+    // The assistant message will land at messages.length + 1 once appended.
+    const assistantIndex = messages.length + 1;
     setMessages(prev => [...prev, userMessage]);
     setLoading(true);
 
@@ -110,6 +137,10 @@ export default function AskAcreLedger() {
         { role: 'assistant', content: result.answer, lookups: result.lookups },
       ]);
       native.haptic.success();
+      if (speakAnswer && voice.speakerAvailable) {
+        voice.speak(result.answer);
+        setSpeakingMessageIndex(assistantIndex);
+      }
     } catch (err: unknown) {
       if (requestId !== requestIdRef.current) return;
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -131,8 +162,36 @@ export default function AskAcreLedger() {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    if (voice.status === 'listening' || voice.status === 'stopping') {
+      native.haptic.medium();
+      voice.stopListening();
+      return;
+    }
     void sendQuestion(question);
   };
+
+  const handleMicClick = () => {
+    if (voice.status === 'listening') {
+      native.haptic.medium();
+      voice.stopListening();
+    } else {
+      native.haptic.light();
+      setSpeakingMessageIndex(null);
+      void voice.startListening();
+    }
+  };
+
+  const handleSpeakerClick = (index: number, text: string) => {
+    if (voice.speaking && speakingMessageIndex === index) {
+      voice.stopSpeaking();
+      setSpeakingMessageIndex(null);
+    } else {
+      voice.speak(text);
+      setSpeakingMessageIndex(index);
+    }
+  };
+
+  const listening = voice.status === 'listening' || voice.status === 'stopping';
 
   return (
     <Drawer open={isAskOpen} onOpenChange={handleOpenChange}>
@@ -179,23 +238,44 @@ export default function AskAcreLedger() {
                 }`}
               >
                 <p className="whitespace-pre-wrap">{message.content}</p>
-                {message.role === 'assistant' && message.lookups && message.lookups.length > 0 && (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
-                      onClick={() => setLookupsOpen(prev => ({ ...prev, [index]: !prev[index] }))}
-                    >
-                      How I looked it up
-                    </button>
-                    {lookupsOpen[index] && (
-                      <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
-                        {message.lookups.map(lookup => (
-                          <li key={lookup}>{lookup}</li>
-                        ))}
-                      </ul>
+                {message.role === 'assistant' && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {voice.speakerAvailable && (
+                      <button
+                        type="button"
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        aria-label={
+                          voice.speaking && speakingMessageIndex === index
+                            ? 'Stop reading'
+                            : 'Read answer'
+                        }
+                        onClick={() => handleSpeakerClick(index, message.content)}
+                      >
+                        {voice.speaking && speakingMessageIndex === index ? (
+                          <Square className="size-3.5" />
+                        ) : (
+                          <Volume2 className="size-3.5" />
+                        )}
+                        {voice.speaking && speakingMessageIndex === index ? 'Stop reading' : 'Read answer'}
+                      </button>
+                    )}
+                    {message.lookups && message.lookups.length > 0 && (
+                      <button
+                        type="button"
+                        className="min-h-11 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+                        onClick={() => setLookupsOpen(prev => ({ ...prev, [index]: !prev[index] }))}
+                      >
+                        How I looked it up
+                      </button>
                     )}
                   </div>
+                )}
+                {lookupsOpen[index] && (
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                    {message.lookups?.map(lookup => (
+                      <li key={lookup}>{lookup}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
             ))}
@@ -211,6 +291,9 @@ export default function AskAcreLedger() {
           {!isOnline && (
             <p className="mt-3 text-sm text-muted-foreground">Ask the book needs a connection.</p>
           )}
+          {voice.didNotCatch && (
+            <p className="mt-3 text-sm text-destructive">I didn’t catch that. Try again.</p>
+          )}
 
           <form onSubmit={handleSubmit} className="mt-3 flex items-end gap-2">
             <div className="min-w-0 flex-1">
@@ -219,13 +302,37 @@ export default function AskAcreLedger() {
                 id="ask-the-book-question"
                 name="question"
                 value={question}
-                onChange={event => setQuestion(event.target.value)}
+                onChange={event => {
+                  // Typing cancels listening and keeps the typed words — it
+                  // does not auto-send anything that was already heard.
+                  voice.cancelListening();
+                  setQuestion(event.target.value);
+                }}
                 maxLength={500}
                 disabled={!isOnline || loading}
-                placeholder="Ask about this farm’s records"
+                placeholder={listening && isOnline ? 'Listening…' : 'Ask about this farm’s records'}
                 autoComplete="off"
               />
             </div>
+            {voice.micAvailable && (
+              <Button
+                type="button"
+                variant={voice.status === 'listening' ? 'default' : 'outline'}
+                className="h-11 w-11 shrink-0"
+                disabled={
+                  !isOnline ||
+                  loading ||
+                  voice.status === 'requesting' ||
+                  voice.status === 'stopping'
+                }
+                aria-label={voice.status === 'listening' ? 'Stop listening' : 'Ask by voice'}
+                aria-pressed={voice.status === 'listening'}
+                onClick={handleMicClick}
+                title={voice.status === 'listening' ? 'Stop listening' : 'Ask by voice'}
+              >
+                <Mic />
+              </Button>
+            )}
             <Button
               type="submit"
               className="h-11 shrink-0"

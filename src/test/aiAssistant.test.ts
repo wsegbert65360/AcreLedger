@@ -139,6 +139,7 @@ describe('ai assistant proxy', () => {
     process.env.SUPABASE_ANON_KEY = 'anon-key';
     process.env.OPENROUTER_API_KEY = 'openrouter-key';
     process.env.ALLOWED_ORIGINS = 'https://acreledger.example,capacitor://localhost';
+    delete process.env.AI_MODEL;
     authGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
     consumeRpc.mockResolvedValue({ data: { allowed: true, turn_id: 'turn-1' }, error: null });
     finalizeRpc.mockResolvedValue({ data: true, error: null });
@@ -488,7 +489,8 @@ describe('ai assistant proxy', () => {
     await invoke();
     const bodies = fetchBodies();
     expect(bodies).toHaveLength(2);
-    expect(bodies[0].model).toBe('openrouter/free');
+    expect(bodies[0].model).toBe('minimax/minimax-m3:free');
+    expect(bodies[0].models).toEqual(['openrouter/free']);
     expect(bodies[0].max_tokens).toBe(2048);
     expect(bodies[0].provider).toEqual({ data_collection: 'deny', require_parameters: true });
     expect(bodies[0].tool_choice).toBe('auto');
@@ -505,6 +507,42 @@ describe('ai assistant proxy', () => {
     const [url, init] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer openrouter-key');
+  });
+
+  it('lets AI_MODEL override the primary while keeping the openrouter/free fallback', async () => {
+    process.env.AI_MODEL = 'custom/test-model';
+    await invoke();
+    const body = fetchBodies()[0];
+    expect(body.model).toBe('custom/test-model');
+    expect(body.models).toEqual(['openrouter/free']);
+  });
+
+  it('omits the models fallback when AI_MODEL is already openrouter/free', async () => {
+    process.env.AI_MODEL = 'openrouter/free';
+    await invoke();
+    const body = fetchBodies()[0];
+    expect(body.model).toBe('openrouter/free');
+    expect(body.models).toBeUndefined();
+  });
+
+  it('retries openrouter/free when MiniMax is rate-limited and still returns an answer', async () => {
+    executeNamedTool.mockResolvedValue({ lookup: 'Looked up bin inventory', rows: [] });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(openRouterJson({ error: { message: 'Rate limit exceeded' } }, 429))
+      .mockResolvedValueOnce(openRouterToolCalls([{ id: 'c1', name: 'bin_inventory' }]))
+      .mockResolvedValueOnce(openRouterMessage('Bins hold 1,200 bushels of corn.'));
+
+    const { state } = await invoke();
+    expect(state.status).toBe(200);
+    expect((state.body as { answer: string }).answer).toBe('Bins hold 1,200 bushels of corn.');
+    expect(consumeRpc).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+
+    const bodies = fetchBodies();
+    expect(bodies[0].model).toBe('minimax/minimax-m3:free');
+    expect(bodies[0].models).toEqual(['openrouter/free']);
+    expect(bodies[1].model).toBe('openrouter/free');
+    expect(bodies[1].models).toBeUndefined();
   });
 
   it('replays reasoning details and assistant tool calls unchanged before tool results', async () => {

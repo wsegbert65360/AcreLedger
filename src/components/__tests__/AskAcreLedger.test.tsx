@@ -44,6 +44,8 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('@/lib/native', () => ({
   native: {
     haptic: {
+      light: vi.fn(),
+      medium: vi.fn(),
       success: vi.fn(),
       error: vi.fn(),
     },
@@ -77,6 +79,37 @@ vi.mock('@/components/ui/drawer', () => ({
   DrawerDescription: ({ children }: { children: unknown }) => <p>{children as never}</p>,
 }));
 
+interface MockSpeechEvents {
+  onPartial: (text: string) => void;
+  onEnd: () => void;
+  onError: (code: string) => void;
+}
+
+const speechState = vi.hoisted(() => ({
+  canListen: vi.fn<() => boolean>(() => true),
+  canSpeak: vi.fn<() => boolean>(() => true),
+  startListening: vi.fn<(events: MockSpeechEvents) => Promise<void>>(),
+  stopListening: vi.fn<() => Promise<void>>(async () => {}),
+  speak: vi.fn<(text: string, onDone?: () => void) => void>(),
+  stopSpeaking: vi.fn<() => void>(),
+  lastEvents: null as MockSpeechEvents | null,
+}));
+
+vi.mock('@/lib/speech', () => ({
+  MAX_TRANSCRIPT_LENGTH: 500,
+  canListen: () => speechState.canListen(),
+  canSpeak: () => speechState.canSpeak(),
+  startListening: (events: MockSpeechEvents) => speechState.startListening(events),
+  stopListening: () => speechState.stopListening(),
+  speak: (text: string, onDone?: () => void) => speechState.speak(text, onDone),
+  stopSpeaking: () => speechState.stopSpeaking(),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() },
+}));
+
+import { toast } from 'sonner';
 import AskAcreLedger from '../AskAcreLedger';
 
 describe('AskAcreLedger', () => {
@@ -92,6 +125,19 @@ describe('AskAcreLedger', () => {
       answer: 'April 12 on Home Place.',
       lookups: ['Earliest dated corn plantings in 2026'],
     });
+    speechState.canListen.mockReturnValue(true);
+    speechState.canSpeak.mockReturnValue(true);
+    speechState.startListening.mockReset();
+    speechState.startListening.mockImplementation(events => {
+      speechState.lastEvents = events;
+      return Promise.resolve();
+    });
+    speechState.stopListening.mockReset();
+    speechState.stopListening.mockResolvedValue(undefined);
+    speechState.speak.mockReset();
+    speechState.stopSpeaking.mockReset();
+    speechState.lastEvents = null;
+    vi.mocked(toast.error).mockReset();
   });
 
   it('disables send offline and shows the connection message', () => {
@@ -267,5 +313,175 @@ describe('AskAcreLedger', () => {
     expect(screen.getByText('North bin has 500 bushels.')).toBeTruthy();
     expect(screen.queryByText('Stale first answer.')).toBeNull();
     expect(askState.askAcreLedger.mock.calls[1][3]).toEqual([]);
+  });
+
+  it('hides the mic when speech recognition is unavailable', () => {
+    speechState.canListen.mockReturnValue(false);
+    render(<AskAcreLedger />);
+    expect(screen.queryByLabelText('Ask by voice')).toBeNull();
+    expect(screen.queryByLabelText('Stop listening')).toBeNull();
+    expect(screen.getByLabelText('Send question')).toBeTruthy();
+  });
+
+  it('disables the mic offline', () => {
+    askState.isOnline = false;
+    render(<AskAcreLedger />);
+    expect(screen.getByLabelText('Ask by voice')).toHaveProperty('disabled', true);
+  });
+
+  it('disables the mic while an answer is loading', async () => {
+    let resolveAsk!: (value: { answer: string; lookups: string[] }) => void;
+    askState.askAcreLedger.mockImplementation(() => new Promise(resolve => { resolveAsk = resolve; }));
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'How many acres of corn?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Ask by voice')).toHaveProperty('disabled', true);
+      expect(screen.getByText('Checking your records…')).toBeTruthy();
+    });
+    await act(async () => {
+      resolveAsk({ answer: '80 acres.', lookups: [] });
+    });
+  });
+
+  it('streams a partial transcript into the input while listening', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByLabelText('Ask by voice'));
+    await waitFor(() => expect(screen.getByLabelText('Stop listening')).toBeTruthy());
+    expect(screen.getByLabelText('Question')).toHaveProperty('placeholder', 'Listening…');
+
+    act(() => {
+      speechState.lastEvents?.onPartial('North bin has 400 bushels');
+    });
+    expect(screen.getByLabelText('Question')).toHaveProperty('value', 'North bin has 400 bushels');
+
+    fireEvent.click(screen.getByLabelText('Stop listening'));
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+    expect(askState.askAcreLedger.mock.calls[0][0]).toBe('North bin has 400 bushels');
+  });
+
+  it('sends the voice question and speaks the answer on stop', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByLabelText('Ask by voice'));
+    await waitFor(() => expect(screen.getByLabelText('Stop listening')).toBeTruthy());
+    act(() => {
+      speechState.lastEvents?.onPartial('How much grain is left in the bins?');
+    });
+    fireEvent.click(screen.getByLabelText('Stop listening'));
+
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+    expect(askState.askAcreLedger.mock.calls[0][0]).toBe('How much grain is left in the bins?');
+
+    await waitFor(() => expect(speechState.speak).toHaveBeenCalledTimes(1));
+    expect(speechState.speak.mock.calls[0][0]).toBe('April 12 on Home Place.');
+    expect(screen.getByRole('button', { name: 'Stop reading' })).toBeTruthy();
+  });
+
+  it('does not send when nothing was heard', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByLabelText('Ask by voice'));
+    await waitFor(() => expect(screen.getByLabelText('Stop listening')).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('Stop listening'));
+
+    await waitFor(() => {
+      expect(screen.getByText('I didn’t catch that. Try again.')).toBeTruthy();
+    });
+    expect(askState.askAcreLedger).not.toHaveBeenCalled();
+    expect(speechState.speak).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet for typed questions but replays on demand', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'When was corn planted?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+    await waitFor(() => expect(screen.getByText('April 12 on Home Place.')).toBeTruthy());
+    expect(speechState.speak).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read answer' }));
+    expect(speechState.speak).toHaveBeenCalledTimes(1);
+    expect(speechState.speak.mock.calls[0][0]).toBe('April 12 on Home Place.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop reading' }));
+    expect(speechState.stopSpeaking).toHaveBeenCalled();
+  });
+
+  it('stays quiet for suggestion chips', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByRole('button', { name: 'How much grain is still in my bins?' }));
+    await waitFor(() => expect(screen.getByText('April 12 on Home Place.')).toBeTruthy());
+    expect(speechState.speak).not.toHaveBeenCalled();
+  });
+
+  it('stops listening and speaking when the drawer closes', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByLabelText('Ask by voice'));
+    await waitFor(() => expect(screen.getByLabelText('Stop listening')).toBeTruthy());
+
+    fireEvent.click(screen.getByText('Close drawer'));
+    expect(speechState.stopListening).toHaveBeenCalled();
+    expect(speechState.stopSpeaking).toHaveBeenCalled();
+  });
+
+  it('toasts when microphone permission is denied', async () => {
+    speechState.startListening.mockRejectedValueOnce(new Error('speech-permission-denied'));
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByLabelText('Ask by voice'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'The book needs microphone permission to ask by voice. Typing still works.',
+      );
+    });
+    expect(askState.askAcreLedger).not.toHaveBeenCalled();
+  });
+
+  it('cancels listening when the user types and does not send', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByLabelText('Ask by voice'));
+    await waitFor(() => expect(screen.getByLabelText('Stop listening')).toBeTruthy());
+    act(() => {
+      speechState.lastEvents?.onPartial('How much grain');
+    });
+
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'How much grain did I type' },
+    });
+
+    expect(speechState.stopListening).toHaveBeenCalled();
+    expect(askState.askAcreLedger).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Question')).toHaveProperty('value', 'How much grain did I type');
+  });
+
+  it('sends a voice question when Send is tapped while listening', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.click(screen.getByLabelText('Ask by voice'));
+    await waitFor(() => expect(screen.getByLabelText('Stop listening')).toBeTruthy());
+    act(() => {
+      speechState.lastEvents?.onPartial('How much grain is left in the bins?');
+    });
+
+    fireEvent.click(screen.getByLabelText('Send question'));
+
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+    expect(askState.askAcreLedger.mock.calls[0][0]).toBe('How much grain is left in the bins?');
+    await waitFor(() => expect(speechState.speak).toHaveBeenCalledTimes(1));
+  });
+
+  it('stops in-flight speech when the drawer closes', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'When was corn planted?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+    await waitFor(() => expect(screen.getByText('April 12 on Home Place.')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Read answer' }));
+    expect(speechState.speak).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByText('Close drawer'));
+    expect(speechState.stopSpeaking).toHaveBeenCalled();
   });
 });
