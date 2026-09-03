@@ -64,38 +64,42 @@ export default function Weather() {
     setLoading(true);
     try {
       const result = await WeatherService.fetchExtendedWeather(loc.trim(), controller.signal);
-      if (!controller.signal.aborted) {
-        const lat = result.latitude;
-        const lng = result.longitude;
-        if (lat != null && lng != null) {
-          try {
-            const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
+      if (controller.signal.aborted) return;
 
-            const rainData = await RainService.fetchComprehensiveRainfall({
-              ...(fieldId ? { fieldId } : {}),
-              lat,
-              lng,
-              signal: controller.signal,
-            });
+      const lat = result.latitude;
+      const lng = result.longitude;
+      if (lat != null && lng != null) {
+        try {
+          const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
 
-            result.precip24h = rainData['24h'];
-            result.precip72h = rainData['72h'];
-            result.precip168h = rainData['168h'];
-          } catch (rainErr) {
-            console.error('[Weather] Failed to fetch high-res radar rainfall:', rainErr);
-          }
-        }
+          const rainData = await RainService.fetchComprehensiveRainfall({
+            ...(fieldId ? { fieldId } : {}),
+            lat,
+            lng,
+            signal: controller.signal,
+          });
 
-        setWeather(result);
-        setLastUpdated(formatTime());
-        if (result.latitude != null && result.longitude != null) {
-          setCoords({ lat: result.latitude, lng: result.longitude });
+          if (controller.signal.aborted) return;
+
+          result.precip24h = rainData['24h'];
+          result.precip72h = rainData['72h'];
+          result.precip168h = rainData['168h'];
+        } catch (rainErr) {
+          if ((rainErr as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
+          console.error('[Weather] Failed to fetch high-res radar rainfall:', rainErr);
         }
       }
-    } catch {
-      if (!controller.signal.aborted) {
-        setWeather(null);
+
+      if (controller.signal.aborted) return;
+
+      setWeather(result);
+      setLastUpdated(formatTime());
+      if (result.latitude != null && result.longitude != null) {
+        setCoords({ lat: result.latitude, lng: result.longitude });
       }
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
+      setWeather(null);
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
@@ -103,32 +107,38 @@ export default function Weather() {
     }
   }, []);
 
-  // Sync initial location input when fields or saved location changes
+  const firstFieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+  const fieldCoordsKey = firstFieldWithCoords && firstFieldWithCoords.lat != null && firstFieldWithCoords.lng != null
+    ? `${firstFieldWithCoords.lat},${firstFieldWithCoords.lng}`
+    : '';
+  const savedLoc = loadZip(userId).trim();
+  const locationEffectKey = savedLoc ? `zip:${savedLoc}` : `fields:${fieldCoordsKey}`;
+
+  // Sync initial location input when saved location or field coords appear
   useEffect(() => {
     const saved = loadZip(userId);
     if (saved) {
       setInputLoc(saved);
-    } else {
-      const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
-      if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
-        setInputLoc(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
+    } else if (fieldCoordsKey) {
+      const [lat, lng] = fieldCoordsKey.split(',').map(Number);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        setInputLoc(`${lat.toFixed(4)},${lng.toFixed(4)}`);
       }
     }
-  }, [userId, fields]);
+  }, [userId, fieldCoordsKey]);
 
   // Resolve location when fields load (fields start as [] then populate from Supabase)
   useEffect(() => {
     let cancelled = false;
     const saved = loadZip(userId);
-    const hasSavedOrFields = saved.trim() !== '' || fields.some(f => f.lat != null && f.lng != null);
+    const hasSavedOrFields = saved.trim() !== '' || Boolean(fieldCoordsKey);
 
     setLoading(true);
     setUsingGps(!hasSavedOrFields);
 
-    resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
+    resolveCoords(fieldsRef.current, saved).then(({ lat, lng, locationString }) => {
       if (cancelled) return;
 
-      // Accept any valid coords — GPS, field coords, or parsed lat,lng string
       const hasCoords = lat !== 0 && lng !== 0;
       setCoords(hasCoords ? { lat, lng } : null);
       setUsingGps(false);
@@ -141,7 +151,7 @@ export default function Weather() {
     });
 
     return () => { cancelled = true; };
-  }, [userId, fields, loadWeather]);
+  }, [userId, locationEffectKey, loadWeather]);
 
   useEffect(() => {
     return () => {
@@ -153,14 +163,14 @@ export default function Weather() {
   useEffect(() => {
     const interval = setInterval(() => {
       const saved = loadZip(userId);
-      resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
+      resolveCoords(fieldsRef.current, saved).then(({ lat, lng, locationString }) => {
         const hasCoords = lat !== 0 && lng !== 0;
         setCoords(hasCoords ? { lat, lng } : null);
         if (locationString) loadWeather(locationString);
       });
     }, 300_000);
     return () => clearInterval(interval);
-  }, [userId, fields, loadWeather]);
+  }, [userId, loadWeather]);
 
   const handleLocationSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -388,7 +398,7 @@ export default function Weather() {
 
 // ── Current Conditions Card ──
 
-function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeatherData; lastUpdated: string }) {
+export function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeatherData; lastUpdated: string }) {
   const isRain = weather.isRainingNow;
   const ConditionIcon = getWeatherLucideIcon(weather.icon, weather.precipProb, weather.isRainingNow);
 
@@ -437,6 +447,7 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
             icon={<Wind size={12} className="text-foreground/50" />}
             label="Wind"
             value={
+              weather.isError ? '—' : (
               <span className="flex items-center gap-0.5">
                 <span>{weather.wind}</span>
                 {weather.windDirection && weather.windDirection !== '—' && (
@@ -448,12 +459,13 @@ function CurrentConditionsCard({ weather, lastUpdated }: { weather: ExtendedWeat
                 )}
                 <span>{weather.windDirection}</span>
               </span>
+              )
             }
           />
           <MiniStat
             icon={<Wind size={12} className="text-foreground/50" />}
             label="Gust"
-            value={`${weather.gusts}`}
+            value={weather.isError ? '—' : `${weather.gusts}`}
           />
           <MiniStat
             icon={<CloudRain size={12} className={isRain ? 'text-blue-400' : 'text-foreground/50'} />}
