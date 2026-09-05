@@ -345,7 +345,7 @@ export const WeatherService = {
                 unitGroup: 'us',
                 contentType: 'json',
                 include: 'current,days',
-                elements: 'datetime,tempmax,tempmin,temp,feelslike,humidity,dew,windspeed,windgusts,winddir,precip,precipprob,cloudcover,conditions,icon,sunrise,sunset',
+                elements: 'datetime,tempmax,tempmin,temp,feelslike,humidity,dew,windspeed,windgust,winddir,precip,precipprob,cloudcover,conditions,icon,sunrise,sunset',
             });
 
             fetchPromise = fetchWeatherJson(url, controller.signal);
@@ -418,7 +418,8 @@ export const WeatherService = {
         const humidity = finiteOrNaN(current.humidity);
         const wind = finiteOrNaN(current.windspeed);
         const dirDeg = current.winddir == null ? null : Number(current.winddir);
-        const gustsSource = current.windgusts == null ? wind : finiteOrNaN(current.windgusts);
+        const gustRaw = current.windgust ?? current.windgusts;
+        const gustsSource = gustRaw == null ? wind : finiteOrNaN(gustRaw);
         if (
             !Number.isFinite(temp) ||
             !Number.isFinite(humidity) ||

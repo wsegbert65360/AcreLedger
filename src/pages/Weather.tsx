@@ -470,32 +470,32 @@ export function CurrentConditionsCard({ weather, lastUpdated }: { weather: Exten
           <MiniStat
             icon={<CloudRain size={12} className={isRain ? 'text-blue-400' : 'text-foreground/50'} />}
             label="Rain"
-            value={isRain ? 'Active' : 'None'}
+            value={weather.isError ? '—' : (isRain ? 'Active' : 'None')}
             highlight={isRain}
           />
           <MiniStat
             icon={<Droplets size={12} className="text-foreground/50" />}
             label="Humid"
-            value={`${weather.humidity}%`}
+            value={weather.isError ? '—' : `${weather.humidity}%`}
           />
           <MiniStat
             icon={<Thermometer size={12} className="text-foreground/50" />}
             label="Dew"
-            value={`${weather.dewPoint}°`}
+            value={weather.isError ? '—' : `${weather.dewPoint}°`}
           />
           <MiniStat
             icon={<CloudRain size={12} className="text-foreground/50" />}
             label="Chance"
-            value={`${weather.precipProb}%`}
+            value={weather.isError ? '—' : `${weather.precipProb}%`}
           />
         </div>
       </div>
 
       {/* Rainfall strip */}
       <div className="mx-4 mb-2.5 flex items-center divide-x divide-border/50 rounded-lg bg-muted/30">
-        <RainCell label="24h" value={weather.precip24h} />
-        <RainCell label="72h" value={weather.precip72h} />
-        <RainCell label="7d" value={weather.precip168h} />
+        <RainCell label="24h" value={weather.precip24h} isError={!!weather.isError} />
+        <RainCell label="72h" value={weather.precip72h} isError={!!weather.isError} />
+        <RainCell label="7d" value={weather.precip168h} isError={!!weather.isError} />
       </div>
 
       {/* Sunrise / Sunset strip */}
@@ -529,11 +529,11 @@ function MiniStat({ icon, label, value, highlight = false }: {
   );
 }
 
-function RainCell({ label, value, suffix = '"' }: { label: string; value: number; suffix?: string }) {
+function RainCell({ label, value, suffix = '"', isError = false }: { label: string; value: number; suffix?: string; isError?: boolean }) {
   return (
     <div className="flex-1 text-center py-2">
       <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider">{label}</p>
-      <p className="text-[11px] font-bold font-mono text-foreground">{value}{suffix}</p>
+      <p className="text-[11px] font-bold font-mono text-foreground">{isError ? '—' : `${value}${suffix}`}</p>
     </div>
   );
 }
