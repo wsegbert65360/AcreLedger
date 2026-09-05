@@ -6,20 +6,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigate = vi.fn();
 const fetchCurrentWeather = vi.fn();
+const fetchComprehensiveRainfall = vi.fn();
+
+const farmState = vi.hoisted(() => ({
+  fields: [{ id: 'f1', lat: 39.1234, lng: -93.5678 }] as { id: string; lat: number | null; lng: number | null }[],
+}));
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
 }));
 
-vi.mock('@/store/farmStore', () => {
-  const fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
-  return {
-    useFarm: () => ({
-      session: { user: { id: 'user-1' } },
-      fields,
-    }),
-  };
-});
+vi.mock('@/store/farmStore', () => ({
+  useFarm: () => ({
+    session: { user: { id: 'user-1' } },
+    fields: farmState.fields,
+  }),
+}));
 
 vi.mock('@/lib/weatherHelpers', async () => {
   const actual = await vi.importActual<typeof import('@/lib/weatherHelpers')>('@/lib/weatherHelpers');
@@ -37,7 +39,7 @@ vi.mock('@/services/WeatherService', () => ({
 
 vi.mock('@/services/RainService', () => ({
   RainService: {
-    fetchComprehensiveRainfall: vi.fn().mockResolvedValue({ '24h': 0, '72h': 0 }),
+    fetchComprehensiveRainfall: (...args: unknown[]) => fetchComprehensiveRainfall(...args),
   },
 }));
 
@@ -47,6 +49,9 @@ describe('WeatherBar', () => {
   beforeEach(() => {
     navigate.mockReset();
     fetchCurrentWeather.mockReset();
+    fetchComprehensiveRainfall.mockReset();
+    fetchComprehensiveRainfall.mockResolvedValue({ '24h': 0, '72h': 0, '168h': 0, '7d': 0, sincePlanting: 0, sinceLastSpray: 0, periodEndUtc: '2026-09-02T00:00:00Z' });
+    farmState.fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
   });
 
   it('shows a muted retry state instead of Offline when weather fails', async () => {
@@ -90,5 +95,59 @@ describe('WeatherBar', () => {
 
     expect(navigate).not.toHaveBeenCalled();
     expect(fetchCurrentWeather).toHaveBeenCalledTimes(callsBeforeSpace);
+  });
+
+  it('overlays radar rain when fields arrive after the first zip load without a tap', async () => {
+    farmState.fields = [];
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 8,
+      temp: 72,
+      humidity: 55,
+      windDirection: 'S',
+      locationName: 'Warrensburg',
+      isError: false,
+      precip24h: 0,
+      precip72h: 0,
+    });
+    fetchComprehensiveRainfall.mockResolvedValue({
+      '24h': 0.42,
+      '72h': 1.1,
+      '168h': 1.1,
+      '7d': 1.1,
+      sincePlanting: 0,
+      sinceLastSpray: 0,
+      periodEndUtc: '2026-09-02T00:00:00Z',
+    });
+
+    const { rerender } = render(<WeatherBar />);
+    await screen.findByText(/72\u00b0F/);
+    expect(fetchComprehensiveRainfall).not.toHaveBeenCalled();
+    expect(screen.getByText('0.00"')).toBeTruthy();
+
+    farmState.fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
+    rerender(<WeatherBar />);
+
+    await waitFor(() => expect(fetchComprehensiveRainfall).toHaveBeenCalled());
+    expect(await screen.findByText('0.42"')).toBeTruthy();
+  });
+
+  it('does not commit aborted radar rain as 0.00 success', async () => {
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 8,
+      temp: 72,
+      humidity: 55,
+      windDirection: 'S',
+      locationName: 'Warrensburg',
+      isError: false,
+      precip24h: 0.25,
+      precip72h: 0.4,
+    });
+    const abortErr = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    fetchComprehensiveRainfall.mockRejectedValue(abortErr);
+
+    render(<WeatherBar />);
+    await screen.findByText(/72\u00b0F/);
+    expect(await screen.findByText('0.25"')).toBeTruthy();
+    expect(screen.queryByText('0.00"')).toBeNull();
   });
 });

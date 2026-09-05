@@ -46,6 +46,14 @@ export default function WeatherBar() {
     }
   }, [userId, fields]);
 
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+
+  const firstFieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+  const fieldCoordsKey = firstFieldWithCoords && firstFieldWithCoords.lat != null && firstFieldWithCoords.lng != null
+    ? `${firstFieldWithCoords.lat},${firstFieldWithCoords.lng}`
+    : '';
+
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async (z: string) => {
@@ -68,7 +76,14 @@ export default function WeatherBar() {
         return;
       }
 
-      // Resolve coordinates from input string or fields fallback
+      if (controller.signal.aborted) return;
+
+      // Commit Visual Crossing weather first so a zip load is not blocked on fields/radar.
+      setWeather(result);
+      setHasData(true);
+      hasDataRef.current = true;
+      setLocationName(result.locationName || '');
+
       let lat: number | null = null;
       let lng: number | null = null;
 
@@ -77,38 +92,36 @@ export default function WeatherBar() {
         lat = parseFloat(coordsMatch[1]);
         lng = parseFloat(coordsMatch[2]);
       } else {
-        // If zip code is used, fall back to first field with coordinates
-        const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+        const fieldWithCoords = fieldsRef.current.find(f => f.lat != null && f.lng != null);
         if (fieldWithCoords) {
           lat = fieldWithCoords.lat;
           lng = fieldWithCoords.lng;
         }
       }
 
-      if (lat != null && lng != null) {
-        try {
-          const fieldId = matchFieldByCoords(fields, lat, lng);
+      if (lat == null || lng == null) return;
 
-          const rainData = await RainService.fetchComprehensiveRainfall({
-            ...(fieldId ? { fieldId } : {}),
-            lat,
-            lng,
-            signal: controller.signal,
-          });
-
-          result.precip24h = rainData['24h'];
-          result.precip72h = rainData['72h'];
-        } catch (rainErr) {
-          console.error('[WeatherWidget] Failed to fetch high-res radar rainfall:', rainErr);
-        }
+      try {
+        const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
+        const rainData = await RainService.fetchComprehensiveRainfall({
+          ...(fieldId ? { fieldId } : {}),
+          lat,
+          lng,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        setWeather(prev => ({
+          ...prev,
+          precip24h: rainData['24h'],
+          precip72h: rainData['72h'],
+        }));
+      } catch (rainErr) {
+        if ((rainErr as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
+        console.error('[WeatherWidget] Failed to fetch high-res radar rainfall:', rainErr);
       }
-
-      setWeather(result);
-      setHasData(true);
-      hasDataRef.current = true;
-      setLocationName(result.locationName || '');
-    } catch {
-      if (!controller.signal.aborted && !hasDataRef.current) {
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
+      if (!hasDataRef.current) {
         setWeather({ ...initialWeather(), isError: true });
         setLocationName('');
       }
@@ -117,7 +130,7 @@ export default function WeatherBar() {
         setLoading(false);
       }
     }
-  }, [fields]);
+  }, []);
 
   useEffect(() => {
     if (!zip) return;
@@ -128,6 +141,39 @@ export default function WeatherBar() {
       abortRef.current?.abort();
     };
   }, [zip, load]);
+
+  // Overlay radar rain once field coords exist for a zip-code location, without
+  // aborting/restarting the weather fetch just because fields[] got a new reference.
+  useEffect(() => {
+    if (!hasData || !zip.trim()) return;
+    if (/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/.test(zip.trim())) return;
+    if (!fieldCoordsKey) return;
+
+    const [lat, lng] = fieldCoordsKey.split(',').map(Number);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const controller = new AbortController();
+    const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
+
+    RainService.fetchComprehensiveRainfall({
+      ...(fieldId ? { fieldId } : {}),
+      lat,
+      lng,
+      signal: controller.signal,
+    }).then((rainData) => {
+      if (controller.signal.aborted) return;
+      setWeather(prev => ({
+        ...prev,
+        precip24h: rainData['24h'],
+        precip72h: rainData['72h'],
+      }));
+    }).catch((rainErr) => {
+      if ((rainErr as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
+      console.error('[WeatherWidget] Failed to fetch high-res radar rainfall:', rainErr);
+    });
+
+    return () => controller.abort();
+  }, [zip, fieldCoordsKey, hasData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -26,6 +26,21 @@ const conditionsCache = new Map<string, Promise<any>>();
 const currentWeatherCache = new Map<string, Promise<any>>();
 const extendedCache = new Map<string, Promise<any>>();
 
+function finiteOrNaN(value: unknown): number {
+    if (value == null) return NaN;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : NaN;
+}
+
+function isAbortError(error: unknown): boolean {
+    return typeof error === 'object' && error !== null && (error as { name?: string }).name === 'AbortError';
+}
+
+function dropCacheEntry<T>(cache: Map<string, Promise<T>>, key: string, pending?: Promise<T>): void {
+    if (!pending || cache.get(key) === pending) cache.delete(key);
+}
+
+
 function encodeEndpoint(endpoint: string): string {
     return endpoint
         .split('/')
@@ -114,9 +129,13 @@ export const WeatherService = {
             try {
                 const data = await conditionsCache.get(cacheKey);
                 return this._mapFieldConditions(data);
-            } catch {
-                // If the cached promise fails, we fall through and try again or return defaults
-                return defaults;
+            } catch (error: any) {
+                if (isAbortError(error)) {
+                    dropCacheEntry(conditionsCache, cacheKey);
+                    // Fall through so a newer caller can start a fresh request.
+                } else {
+                    return defaults;
+                }
             }
         }
 
@@ -129,6 +148,7 @@ export const WeatherService = {
             signal.addEventListener('abort', abortListener);
         }
 
+        let fetchPromise: Promise<any> | undefined;
         try {
             const url = buildWeatherUrl(location, 'today', {
                 unitGroup: 'us',
@@ -137,7 +157,7 @@ export const WeatherService = {
                 elements: 'windspeed,winddir,temp,humidity',
             });
             
-            const fetchPromise = fetchWeatherJson(url, controller.signal);
+            fetchPromise = fetchWeatherJson(url, controller.signal);
 
             // Store the promise in the cache
             conditionsCache.set(cacheKey, fetchPromise);
@@ -145,7 +165,9 @@ export const WeatherService = {
             const data = await fetchPromise;
             return this._mapFieldConditions(data);
         } catch (error: any) {
-            if (error.name === 'AbortError') {
+            dropCacheEntry(conditionsCache, cacheKey, fetchPromise);
+            if (isAbortError(error)) {
+                if (signal?.aborted) throw error;
                 console.error('[WeatherService] Fetch conditions timed out');
             } else {
                 console.error('[WeatherService] Error fetching field conditions:', error);
@@ -154,8 +176,7 @@ export const WeatherService = {
         } finally {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
-            // Remove from cache after completion so subsequent requests fetch fresh
-            conditionsCache.delete(cacheKey);
+            dropCacheEntry(conditionsCache, cacheKey, fetchPromise);
         }
     },
 
@@ -179,26 +200,32 @@ export const WeatherService = {
      * Including precip data for the last 24 and 72 hours.
      */
     async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number, precipProb?: number }> {
+        const errorPayload = { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true as const, precip24h: 0, precip72h: 0, precipProb: 0 };
         const trimmedLocation = location.trim();
         const encLocation = encodeURIComponent(trimmedLocation);
         if (currentWeatherCache.has(encLocation)) {
             try {
                 const data = await currentWeatherCache.get(encLocation);
                 return this._mapCurrentWeather(data);
-            } catch {
-                return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
+            } catch (error: any) {
+                if (isAbortError(error)) {
+                    dropCacheEntry(currentWeatherCache, encLocation);
+                } else {
+                    return errorPayload;
+                }
             }
         }
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         let abortListener: (() => void) | undefined;
-        
+
         if (signal) {
             abortListener = () => controller.abort();
             signal.addEventListener('abort', abortListener);
         }
 
+        let fetchPromise: Promise<any> | undefined;
         try {
             // Fetch today + last 3 days to calculate accurate 24h/72h rainfall along with current conditions
             const url = buildWeatherUrl(trimmedLocation, 'last3days/today', {
@@ -207,30 +234,29 @@ export const WeatherService = {
                 include: 'current,days',
                 elements: 'datetime,temp,humidity,windspeed,winddir,precip,precipprob',
             });
-            
-            const fetchPromise = fetchWeatherJson(url, controller.signal);
-                
+
+            fetchPromise = fetchWeatherJson(url, controller.signal);
             currentWeatherCache.set(encLocation, fetchPromise);
-            
+
             const data = await fetchPromise;
             return this._mapCurrentWeather(data);
         } catch (error: any) {
-            if (error.name === 'AbortError') {
+            dropCacheEntry(currentWeatherCache, encLocation, fetchPromise);
+            if (isAbortError(error)) {
+                if (signal?.aborted) throw error;
                 console.error('[WeatherService] Fetch current weather timed out');
             } else {
                 console.error('[WeatherService] Error fetching current weather:', error);
             }
-            return {
-                temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0
-            };
+            return errorPayload;
         } finally {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
-            currentWeatherCache.delete(encLocation);
+            dropCacheEntry(currentWeatherCache, encLocation, fetchPromise);
         }
     },
 
-    _mapCurrentWeather(data: any) {
+        _mapCurrentWeather(data: any) {
         const current = data.currentConditions;
         if (!current) {
             return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: data.address || 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
@@ -249,9 +275,9 @@ export const WeatherService = {
         // A partial currentConditions payload must not seed 0°F / 0% RH into a
         // saved spray record — reject it the way fetchHistoricalConditions does.
         // Callers already treat the isError shape as "no data" and keep prior values.
-        const temp = current.temp == null ? NaN : Number(current.temp);
-        const humidity = current.humidity == null ? NaN : Number(current.humidity);
-        const wind = current.windspeed == null ? NaN : Number(current.windspeed);
+        const temp = finiteOrNaN(current.temp);
+        const humidity = finiteOrNaN(current.humidity);
+        const wind = finiteOrNaN(current.windspeed);
         const dirDeg = current.winddir == null ? null : Number(current.winddir);
         if (
             !Number.isFinite(temp) ||
@@ -296,8 +322,11 @@ export const WeatherService = {
             try {
                 const data = await extendedCache.get(encLocation);
                 return this._mapExtendedWeather(data, location);
-            } catch {
-                // fall through and retry
+            } catch (error: any) {
+                dropCacheEntry(extendedCache, encLocation);
+                if (!isAbortError(error)) {
+                    return defaults;
+                }
             }
         }
 
@@ -310,6 +339,7 @@ export const WeatherService = {
             signal.addEventListener('abort', abortListener);
         }
 
+        let fetchPromise: Promise<any> | undefined;
         try {
             const url = buildWeatherUrl(trimmedLocation, 'last7days/next10days', {
                 unitGroup: 'us',
@@ -318,13 +348,14 @@ export const WeatherService = {
                 elements: 'datetime,tempmax,tempmin,temp,feelslike,humidity,dew,windspeed,windgusts,winddir,precip,precipprob,cloudcover,conditions,icon,sunrise,sunset',
             });
 
-            const fetchPromise = fetchWeatherJson(url, controller.signal);
-
+            fetchPromise = fetchWeatherJson(url, controller.signal);
             extendedCache.set(encLocation, fetchPromise);
             const data = await fetchPromise;
             return this._mapExtendedWeather(data, location);
         } catch (error: any) {
-            if (error.name === 'AbortError') {
+            dropCacheEntry(extendedCache, encLocation, fetchPromise);
+            if (isAbortError(error)) {
+                if (signal?.aborted) throw error;
                 console.error('[WeatherService] Extended weather fetch timed out');
             } else {
                 console.error('[WeatherService] Error fetching extended weather:', error);
@@ -333,11 +364,11 @@ export const WeatherService = {
         } finally {
             clearTimeout(timeoutId);
             if (abortListener && signal) signal.removeEventListener('abort', abortListener);
-            extendedCache.delete(encLocation);
+            dropCacheEntry(extendedCache, encLocation, fetchPromise);
         }
     },
 
-    _mapExtendedWeather(data: any, location: string): ExtendedWeatherData {
+        _mapExtendedWeather(data: any, location: string): ExtendedWeatherData {
         const current = data.currentConditions;
         if (!current) {
             return {
@@ -383,21 +414,47 @@ export const WeatherService = {
                 windSpeed: d.windspeed != null ? Math.round(d.windspeed) : undefined,
             }));
 
+        const temp = finiteOrNaN(current.temp);
+        const humidity = finiteOrNaN(current.humidity);
+        const wind = finiteOrNaN(current.windspeed);
+        const dirDeg = current.winddir == null ? null : Number(current.winddir);
+        const gustsSource = current.windgusts == null ? wind : finiteOrNaN(current.windgusts);
+        if (
+            !Number.isFinite(temp) ||
+            !Number.isFinite(humidity) ||
+            !Number.isFinite(wind) ||
+            (wind !== 0 && !Number.isFinite(dirDeg))
+        ) {
+            return {
+                temp: 0, feelsLike: 0, humidity: 0, wind: 0, gusts: 0,
+                windDirection: '—', dewPoint: 0, precipProb: 0,
+                precip24h: 0, precip72h: 0, precip168h: 0,
+                isRainingNow: false, locationName: data.address || location || 'Unknown',
+                cloudCover: 0, conditions: '', icon: 'clear-day',
+                sunrise: '', sunset: '',
+                isError: true, forecastDays: [],
+                latitude: data.latitude,
+                longitude: data.longitude,
+            };
+        }
+
+        const feelsLike = Number.isFinite(finiteOrNaN(current.feelslike)) ? finiteOrNaN(current.feelslike) : temp;
+
         return {
-            temp: Math.round(current.temp),
-            feelsLike: Math.round(current.feelslike ?? current.temp),
-            humidity: Math.round(current.humidity),
-            wind: Math.round(current.windspeed),
-            gusts: Math.round(current.windgusts ?? current.windspeed),
-            windDirection: current.winddir != null ? this.degreesToDirection(current.winddir) : '—',
-            dewPoint: Math.round(current.dew ?? 0),
+            temp: Math.round(temp),
+            feelsLike: Math.round(feelsLike),
+            humidity: Math.round(humidity),
+            wind: Math.round(wind),
+            gusts: Math.round(Number.isFinite(gustsSource) ? gustsSource : wind),
+            windDirection: Number.isFinite(dirDeg as number) ? this.degreesToDirection(dirDeg as number) : (wind === 0 ? 'CALM' : '—'),
+            dewPoint: Math.round(Number.isFinite(finiteOrNaN(current.dew)) ? finiteOrNaN(current.dew) : 0),
             precipProb: Math.round(current.precipprob || 0),
             precip24h: Math.round(precip24h * 100) / 100,
             precip72h: Math.round(precip72h * 100) / 100,
             precip168h: Math.round(precip168h * 100) / 100,
             isRainingNow: (current.precip || 0) > 0,
             locationName: data.address || 'Unknown',
-            cloudCover: Math.round(current.cloudcover ?? 0),
+            cloudCover: Math.round(Number.isFinite(finiteOrNaN(current.cloudcover)) ? finiteOrNaN(current.cloudcover) : 0),
             conditions: current.conditions || '',
             icon: current.icon || 'clear-day',
             sunrise: current.sunrise ? (current.sunrise as string).slice(0, 5) : '',
