@@ -265,7 +265,7 @@ describe('WeatherService', () => {
                     feelslike: 71.2,
                     humidity: 45,
                     windspeed: 10,
-                    windgusts: 15,
+                    windgust: 15,
                     winddir: 180,
                     dew: 50.5,
                     precipprob: 20,
@@ -304,6 +304,27 @@ describe('WeatherService', () => {
             expect(result.forecastDays.length).toBe(1);
             expect(result.forecastDays[0].tempHighF).toBe(80);
             expect(result.forecastDays[0].tempLowF).toBe(60);
+            expect(result.gusts).toBe(15);
+        });
+
+        it('requests Visual Crossing windgust element (not windgusts)', async () => {
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: 'New York',
+                    currentConditions: {
+                        temp: 70, feelslike: 70, humidity: 40, windspeed: 8, windgust: 14, winddir: 90,
+                        dew: 40, precipprob: 0, precip: 0, cloudcover: 0, conditions: 'Clear', icon: 'clear-day',
+                        sunrise: '06:00:00', sunset: '20:00:00',
+                    },
+                    days: [],
+                }),
+            });
+            await WeatherService.fetchExtendedWeather('New York');
+            const calledUrl = String((global.fetch as any).mock.calls[0][0]);
+            expect(calledUrl).toContain('windgust');
+            expect(calledUrl).not.toContain('windgusts');
         });
 
         it('does not map missing/null windspeed to 0 with isError false', async () => {
@@ -317,7 +338,7 @@ describe('WeatherService', () => {
                     feelslike: 71.2,
                     humidity: 45,
                     windspeed: null,
-                    windgusts: null,
+                    windgust: null,
                     winddir: 180,
                     dew: 50.5,
                     precipprob: 20,
@@ -343,7 +364,7 @@ describe('WeatherService', () => {
                     temp: 72,
                     humidity: 45,
                     windspeed: 0,
-                    windgusts: 0,
+                    windgust: 0,
                     winddir: null,
                     precipprob: 0,
                     precip: 0,
@@ -379,7 +400,7 @@ describe('WeatherService', () => {
                             feelslike: 71.2,
                             humidity: 45,
                             windspeed: 12,
-                            windgusts: 18,
+                            windgust: 18,
                             winddir: 180,
                             dew: 50.5,
                             precipprob: 20,
