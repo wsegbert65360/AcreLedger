@@ -102,6 +102,27 @@ async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> 
     return res.json();
 }
 
+/** Completed local calendar days only; today's daily total can contain forecast rain. */
+function calendarRainfall(data: any): { precip24h: number | null; precip72h: number | null; precip168h: number | null } {
+    const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: data.timezone || undefined, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const part = (type: string) => today.find(p => p.type === type)?.value;
+    const midnight = Date.parse(`${part('year')}-${part('month')}-${part('day')}T00:00:00Z`);
+    const days = new Map<string, any>((data.days || []).map((day: any) => [day.datetime, day]));
+    const sum = (count: number): number | null => {
+        let total = 0;
+        for (let offset = 1; offset <= count; offset++) {
+            const date = new Date(midnight - offset * 86400000).toISOString().slice(0, 10);
+            const precip = days.get(date)?.precip;
+            if (typeof precip !== 'number' || !Number.isFinite(precip) || precip < 0) return null;
+            total += precip;
+        }
+        return Math.round(total * 100) / 100;
+    };
+    return { precip24h: sum(1), precip72h: sum(3), precip168h: sum(7) };
+}
+
 /**
  * Hardened Weather Service.
  * Fetches real-time conditions and historical rainfall through Visual Crossing or the weather proxy.
@@ -197,9 +218,9 @@ export const WeatherService = {
 
     /**
      * Fetches current weather data for the Weather Bar via Visual Crossing.
-     * Including precip data for the last 24 and 72 hours.
+     * Includes completed calendar-day rainfall, labeled separately from radar rolling totals.
      */
-    async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number, precip72h?: number, precipProb?: number }> {
+    async fetchCurrentWeather(location: string, signal?: AbortSignal): Promise<WeatherData & { locationName?: string, isError?: boolean, precip24h?: number | null, precip72h?: number | null, precipProb?: number }> {
         const errorPayload = { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: 'Unknown', isError: true as const, precip24h: 0, precip72h: 0, precipProb: 0 };
         const trimmedLocation = location.trim();
         const encLocation = encodeURIComponent(trimmedLocation);
@@ -227,7 +248,7 @@ export const WeatherService = {
 
         let fetchPromise: Promise<any> | undefined;
         try {
-            // Fetch today + last 3 days to calculate accurate 24h/72h rainfall along with current conditions
+            // Fetch current conditions plus completed calendar-day rainfall as a labeled fallback.
             const url = buildWeatherUrl(trimmedLocation, 'last3days/today', {
                 unitGroup: 'us',
                 contentType: 'json',
@@ -261,17 +282,6 @@ export const WeatherService = {
         if (!current) {
             return { temp: 0, humidity: 0, wind: 0, windDirection: '—', locationName: data.address || 'Unknown', isError: true, precip24h: 0, precip72h: 0, precipProb: 0 };
         }
-        const days = data.days || [];
-        
-        let precip24h = 0;
-        let precip72h = 0;
-        
-        if (days.length > 0) {
-            const sortedDays = [...days].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime());
-            precip24h = sortedDays[0]?.precip || 0;
-            precip72h = sortedDays.slice(0, 3).reduce((sum, day) => sum + (day.precip || 0), 0);
-        }
-
         // A partial currentConditions payload must not seed 0°F / 0% RH into a
         // saved spray record — reject it the way fetchHistoricalConditions does.
         // Callers already treat the isError shape as "no data" and keep prior values.
@@ -293,10 +303,12 @@ export const WeatherService = {
             humidity: Math.round(humidity),
             wind: Math.round(wind),
             windDirection: dirDeg != null ? this.degreesToDirection(dirDeg) : 'CALM',
+            latitude: data.latitude,
+            longitude: data.longitude,
             locationName: data.address,
             isError: false,
-            precip24h: Math.round(precip24h * 100) / 100,
-            precip72h: Math.round(precip72h * 100) / 100,
+            ...calendarRainfall(data),
+            rainfallBasis: 'calendar' as const,
             precipProb: Math.round(current.precipprob || 0)
         };
     },
@@ -389,15 +401,6 @@ export const WeatherService = {
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-        // Historical days for rainfall (up to and including today)
-        const pastDays = [...days]
-            .filter(d => d.datetime <= todayStr)
-            .sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime());
-
-        const precip24h = pastDays[0]?.precip || 0;
-        const precip72h = pastDays.slice(0, 3).reduce((sum, d) => sum + (d.precip || 0), 0);
-        const precip168h = pastDays.slice(0, 7).reduce((sum, d) => sum + (d.precip || 0), 0);
-
         // Forecast days (today + future, up to 10)
         const forecastDays: ForecastDay[] = days
             .filter(d => d.datetime >= todayStr)
@@ -450,9 +453,8 @@ export const WeatherService = {
             windDirection: Number.isFinite(dirDeg as number) ? this.degreesToDirection(dirDeg as number) : (wind === 0 ? 'CALM' : '—'),
             dewPoint: Math.round(Number.isFinite(finiteOrNaN(current.dew)) ? finiteOrNaN(current.dew) : 0),
             precipProb: Math.round(current.precipprob || 0),
-            precip24h: Math.round(precip24h * 100) / 100,
-            precip72h: Math.round(precip72h * 100) / 100,
-            precip168h: Math.round(precip168h * 100) / 100,
+            ...calendarRainfall(data),
+            rainfallBasis: 'calendar' as const,
             isRainingNow: (current.precip || 0) > 0,
             locationName: data.address || 'Unknown',
             cloudCover: Math.round(Number.isFinite(finiteOrNaN(current.cloudcover)) ? finiteOrNaN(current.cloudcover) : 0),

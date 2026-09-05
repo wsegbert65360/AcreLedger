@@ -97,7 +97,7 @@ describe('WeatherBar', () => {
     expect(fetchCurrentWeather).toHaveBeenCalledTimes(callsBeforeSpace);
   });
 
-  it('overlays radar rain when fields arrive after the first zip load without a tap', async () => {
+  it('uses resolved ZIP coordinates even when unrelated fields arrive later', async () => {
     farmState.fields = [];
     fetchCurrentWeather.mockResolvedValue({
       wind: 8,
@@ -106,6 +106,8 @@ describe('WeatherBar', () => {
       windDirection: 'S',
       locationName: 'Warrensburg',
       isError: false,
+      latitude: 40.7128,
+      longitude: -74.006,
       precip24h: 0,
       precip72h: 0,
     });
@@ -121,13 +123,14 @@ describe('WeatherBar', () => {
 
     const { rerender } = render(<WeatherBar />);
     await screen.findByText(/72\u00b0F/);
-    expect(fetchComprehensiveRainfall).not.toHaveBeenCalled();
-    expect(screen.getByText('0.00"')).toBeTruthy();
+    await screen.findByText('0.42"');
+    expect(fetchComprehensiveRainfall).toHaveBeenCalledWith(expect.objectContaining({ lat: 40.7128, lng: -74.006 }));
 
     farmState.fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
     rerender(<WeatherBar />);
 
-    await waitFor(() => expect(fetchComprehensiveRainfall).toHaveBeenCalled());
+    expect(fetchComprehensiveRainfall).toHaveBeenCalledTimes(1);
+    expect(fetchComprehensiveRainfall.mock.calls[0][0].fieldId).toBeUndefined();
     expect(await screen.findByText('0.42"')).toBeTruthy();
   });
 
@@ -139,6 +142,8 @@ describe('WeatherBar', () => {
       windDirection: 'S',
       locationName: 'Warrensburg',
       isError: false,
+      latitude: 40.7128,
+      longitude: -74.006,
       precip24h: 0.25,
       precip72h: 0.4,
     });

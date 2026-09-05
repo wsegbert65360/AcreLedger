@@ -379,3 +379,17 @@ describe('HarvestModal linked grain movement', () => {
     });
   });
 });
+
+it('saves a selected local harvest time to the harvest and linked bin movement', async () => {
+  vi.clearAllMocks();
+  state.grainMovements = [linkedMovement()];
+  state.updateHarvestRecord.mockResolvedValue(true);
+  state.updateGrainMovement.mockResolvedValue(true);
+  render(<HarvestModal field={field} open onClose={() => {}} initialData={binHarvest()} />);
+  fireEvent.change(screen.getByLabelText('HARVEST DATE'), { target: { value: '2026-09-03' } });
+  fireEvent.change(screen.getByLabelText('HARVEST TIME'), { target: { value: '19:45' } });
+  fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+  const timestamp = new Date(2026, 8, 3, 19, 45).getTime();
+  await waitFor(() => expect(state.updateGrainMovement).toHaveBeenCalledWith(expect.objectContaining({ timestamp })));
+  expect(state.updateHarvestRecord).toHaveBeenCalledWith(expect.objectContaining({ harvestDate: '2026-09-03', timestamp }));
+});

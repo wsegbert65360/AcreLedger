@@ -193,6 +193,23 @@ describe('SprayModal Data Retention', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Spray Record/i })).toBeInTheDocument());
   };
 
+  it('ignores a previous field response after switching entries', async () => {
+    let resolveOld!: (value: Awaited<ReturnType<typeof WeatherService.fetchCurrentWeather>>) => void;
+    vi.mocked(WeatherService.fetchCurrentWeather)
+      .mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+      .mockResolvedValueOnce({ temp: 70, humidity: 50, wind: 6, windDirection: 'N' });
+    const props = { open: true, onClose: vi.fn() };
+    const { rerender } = render(<SprayModal {...props} field={{ ...field, lat: 41, lng: -93 }} />);
+    const oldSignal = vi.mocked(WeatherService.fetchCurrentWeather).mock.calls[0][1];
+    rerender(<SprayModal {...props} field={{ ...field, id: 'second-field', lat: 42, lng: -94 }} />);
+    await act(async () => {});
+    expect(oldSignal?.aborted).toBe(true);
+    await act(async () => { resolveOld({ temp: 95, humidity: 20, wind: 25, windDirection: 'S' }); });
+    await navigateToConditions();
+    expect((screen.getByLabelText(/Wind Speed/i) as HTMLInputElement).value).toBe('6');
+    expect((screen.getByLabelText(/Wind Direction/i) as HTMLSelectElement).value).toBe('N');
+  });
+
   it('auto-populates wind direction and speed when weather fetch succeeds for a new record', async () => {
     vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
       temp: 72,

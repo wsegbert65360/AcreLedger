@@ -42,18 +42,20 @@ export function fallbackToFields(
   fields: { lat: number | null; lng: number | null }[],
   savedZip: string,
 ): { lat: number; lng: number; locationString: string } {
+  // Explicit saved selection always wins over field defaults.
+  const match = savedZip.trim().match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
+  if (match) {
+    return { lat: parseFloat(match[1]), lng: parseFloat(match[2]), locationString: savedZip.trim() };
+  }
+
+  if (savedZip.trim()) return { lat: 0, lng: 0, locationString: savedZip.trim() };
+
   // First field with coords
   const field = fields.find(f => f.lat != null && f.lng != null);
   if (field && field.lat != null && field.lng != null) {
     const lat = Math.round(field.lat * 10000) / 10000;
     const lng = Math.round(field.lng * 10000) / 10000;
     return { lat, lng, locationString: `${lat},${lng}` };
-  }
-
-  // Parse saved zip if it's already coords
-  const match = savedZip.trim().match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
-  if (match) {
-    return { lat: parseFloat(match[1]), lng: parseFloat(match[2]), locationString: savedZip.trim() };
   }
 
   // No coords available — return 0s, locationString will be the zip for weather API

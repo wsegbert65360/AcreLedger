@@ -9,7 +9,8 @@ const realApiUrl = import.meta.env.VITE_RAIN_API_URL;
 const isConfigured = !!realApiUrl && !realApiUrl.includes('example.com');
 
 describe.skipIf(!isConfigured)('RainService - Real API Integration Tests', () => {
-  const mockFieldId = 'integration-test-field';
+  // A valid, unassigned UUID exercises the radar fallback without touching farm data.
+  const mockFieldId = '00000000-0000-4000-8000-000000000001';
   const testCoords = { lat: 38.4627, lng: -93.5374 };
 
   beforeEach(() => {
@@ -60,16 +61,9 @@ describe.skipIf(!isConfigured)('RainService - Real API Integration Tests', () =>
       sinceLastSprayDate: '2026-04-01'
     });
 
-    // For custom ranges, we expect either:
-    // 1. Actual rainfall data (if available in Supabase)
-    // 2. Zero (if no data available but API is working)
-    const hasData = result.sincePlanting > 0 || result.sinceLastSpray > 0;
-
-    if (hasData) {
-      expect(result.sincePlanting).toBeGreaterThan(0);
-    } else {
-      expect(result.sincePlanting).toBe(0);
-      expect(result.sinceLastSpray).toBe(0);
+    for (const total of [result.sincePlanting, result.sinceLastSpray]) {
+      if (total === null) expect(result.dataWarning).toBeTruthy();
+      else expect(total).toBeGreaterThanOrEqual(0);
     }
 
     // Radar data should still work regardless

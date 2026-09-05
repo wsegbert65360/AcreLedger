@@ -9,6 +9,7 @@ import { Field, GrainMovement, HarvestRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { toast } from 'sonner';
 import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
+import { localDateTimeMs, toLocalIsoDate, toLocalTime } from '@/utils/dates';
 import { getLatestForField } from '@/lib/utils';
 
 function isUnlinkedHarvestLeftover(
@@ -64,7 +65,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
   const [crop, setCrop] = useState(initialData?.crop || '');
   const [landlordName, setLandlordName] = useState(initialData?.landlordName || '');
   const [scaleTicketNumber, setScaleTicketNumber] = useState(initialData?.scaleTicketNumber || '');
-  const [harvestDate, setHarvestDate] = useState(initialData?.harvestDate || new Date().toISOString().split('T')[0]);
+  const [harvestDate, setHarvestDate] = useState(initialData?.harvestDate || toLocalIsoDate(Date.now()));
+  const [harvestTime, setHarvestTime] = useState(() => toLocalTime(initialData?.timestamp ?? Date.now()));
   const [isSaving, setIsSaving] = useState(false);
 
   const suggestedHarvest = useMemo(() => {
@@ -74,6 +76,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
 
   useEffect(() => {
     if (!open) return;
+    setHarvestTime(toLocalTime(initialData && !isDuplicate ? initialData.timestamp : Date.now()));
     if (initialData) {
       setDestination(initialData.destination || null);
       setBinId(initialData.binId || '');
@@ -83,7 +86,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       setCrop(initialData.crop || '');
       setLandlordName(initialData.landlordName || '');
       setScaleTicketNumber(initialData.scaleTicketNumber || '');
-      setHarvestDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.harvestDate || new Date().toISOString().split('T')[0]));
+      setHarvestDate(isDuplicate ? toLocalIsoDate(Date.now()) : (initialData.harvestDate || toLocalIsoDate(initialData.timestamp)));
     } else {
       setDestination(null);
       setBinId('');
@@ -93,7 +96,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       setCrop(suggestedHarvest?.crop || field.intendedUse || '');
       setLandlordName(field.landlordName || '');
       setScaleTicketNumber('');
-      setHarvestDate(new Date().toISOString().split('T')[0]);
+      setHarvestDate(toLocalIsoDate(Date.now()));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.id, field.id, field.producerShare, field.intendedUse, field.landlordName, open, isDuplicate]);
@@ -124,6 +127,16 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       return;
     }
 
+    const selectedTimestamp = localDateTimeMs(harvestDate, harvestTime);
+    if (!Number.isFinite(selectedTimestamp)) {
+      toast.error('Enter a valid harvest date and time.');
+      return;
+    }
+    const harvestTimestamp = initialData && !isDuplicate &&
+      harvestDate === (initialData.harvestDate || toLocalIsoDate(initialData.timestamp)) &&
+      harvestTime === toLocalTime(initialData.timestamp)
+      ? initialData.timestamp : selectedTimestamp;
+
     setIsSaving(true);
     try {
       const harvestData = {
@@ -138,6 +151,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
         landlordName: landlordName.trim() || undefined,
         scaleTicketNumber: scaleTicketNumber.trim() || undefined,
         harvestDate: harvestDate || undefined,
+        timestamp: harvestTimestamp,
       };
 
       let success = false;
@@ -194,6 +208,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             binName: bin?.name || 'Unknown',
             bushels: bu,
             moisturePercent: m,
+            timestamp: harvestTimestamp,
             harvestRecordId: initialData.id,
           });
           if (!gmSuccess) {
@@ -210,7 +225,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             bushels: bu,
             moisturePercent: m,
             sourceFieldName: field.name,
-            timestamp: initialData.timestamp,
+            timestamp: harvestTimestamp,
             harvestRecordId: initialData.id,
           });
           if (!gmSuccess) {
@@ -221,7 +236,6 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
         }
       } else {
         const harvestId = crypto.randomUUID();
-        const harvestTimestamp = Date.now();
         success = await addHarvestRecord({
           ...harvestData,
           id: harvestId,
@@ -257,6 +271,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       if (keepOpen) {
         setBushels('');
         setScaleTicketNumber('');
+        setHarvestTime(toLocalTime(Date.now()));
         toast.success('Record saved. Ready for next entry.');
       } else {
         reset();
@@ -271,7 +286,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
     }
   };
 
-  const valid = destination && moisture && landlordSplit && bushels && (destination === 'town' || binId);
+  const valid = Number.isFinite(localDateTimeMs(harvestDate, harvestTime)) && destination && moisture && landlordSplit && bushels && (destination === 'town' || binId);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { reset(); onClose(); } }}>
@@ -390,6 +405,10 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
                 onChange={e => setHarvestDate(e.target.value)}
                 className="mt-1 bg-muted border-border text-foreground"
               />
+            </div>
+            <div>
+              <Label htmlFor="harvestTime" className="text-muted-foreground font-mono text-xs">HARVEST TIME</Label>
+              <Input id="harvestTime" name="harvestTime" type="time" value={harvestTime} onChange={e => setHarvestTime(e.target.value)} className="mt-1 bg-muted border-border text-foreground" />
             </div>
             <div>
               <Label htmlFor="bushels" className="text-muted-foreground font-mono text-xs">BUSHELS</Label>

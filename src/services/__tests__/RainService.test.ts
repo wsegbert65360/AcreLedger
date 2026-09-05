@@ -258,8 +258,9 @@ describe('RainService', () => {
       fieldId: mockFieldId, lat: 38.46, lng: -93.53,
       sincePlantingDate: daysAgo(30), sinceLastSprayDate: daysAgo(14)
     });
-    expect(result.sincePlanting).toBe(0);
-    expect(result.sinceLastSpray).toBe(0);
+    expect(result.sincePlanting).toBeNull();
+    expect(result.sinceLastSpray).toBeNull();
+    expect(result.dataWarning).toContain('Historical rainfall unavailable');
   });
 
   it('includes field_id in the API request URL', async () => {
@@ -344,4 +345,21 @@ describe('RainService', () => {
 
     expect(result.dataWarning).toContain('Radar verification covers only part of the range.');
   });
+
+  it('preserves successful ranges when another range fails', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(buildApiResponse({ '12h': 0, '24h': 1, '72h': 2, '168h': 3 }) as Response)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rain: { total: 0 } }) } as Response);
+    const result = await RainService.fetchComprehensiveRainfall({ fieldId: mockFieldId, lat: 38, lng: -93, sincePlantingDate: '2026-04-01', sinceLastSprayDate: '2026-05-01' });
+    expect(result.sincePlanting).toBeNull();
+    expect(result.sinceLastSpray).toBe(0);
+    expect(result['24h']).toBe(1);
+  });
+  it('propagates cancellation during a historical range lookup', async () => {
+    const controller = new AbortController();
+    vi.mocked(fetch).mockResolvedValueOnce(buildApiResponse({ '12h': 0, '24h': 1, '72h': 2, '168h': 3 }) as Response)
+      .mockImplementationOnce(async () => { controller.abort(); throw new DOMException('Aborted', 'AbortError'); });
+    await expect(RainService.fetchComprehensiveRainfall({ fieldId: mockFieldId, lat: 38, lng: -93, sincePlantingDate: '2026-04-01', signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
 });

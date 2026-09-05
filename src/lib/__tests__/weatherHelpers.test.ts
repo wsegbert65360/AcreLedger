@@ -178,4 +178,11 @@ describe('weatherHelpers', () => {
       expect(matchFieldByCoords(fields, 40.1234, -90.5678)).toBe('field-1');
     });
   });
+
+  it.each(['64093', '40.7128,-74.0060'])('preserves saved selection %s over field defaults', async saved => {
+    const result = await resolveCoords([{ lat: 39.1234, lng: -93.5678 }], saved);
+    expect(result.locationString).toBe(saved);
+    expect(native.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+  });
+
 });

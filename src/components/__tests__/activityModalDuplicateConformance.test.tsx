@@ -1,3 +1,4 @@
+import { toLocalIsoDate } from '@/utils/dates';
 /**
  * @vitest-environment jsdom
  *
@@ -154,7 +155,7 @@ describe('HarvestModal duplicate mode', () => {
     expect(arg.timestamp).toBeGreaterThan(1e12);
     expect(arg.seasonYear).toBeUndefined();
     expect(arg.farm_id).toBeUndefined();
-    expect(arg.harvestDate).toBe(today);
+    expect(arg.harvestDate).toBe(toLocalIsoDate(Date.now()));
     expect(arg.bushels).toBe(4000);
     expect(updateHarvestRecord).not.toHaveBeenCalled();
   });

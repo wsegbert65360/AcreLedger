@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useFarm } from '@/store/farmStore';
 import { Bin } from '@/types/farm';
 import { native } from '@/lib/native';
-import { parseLocalDate } from '@/utils/dates';
+import { localDateTimeMs, toLocalIsoDate, toLocalTime } from '@/utils/dates';
 import { Warehouse, Plus, Hash, Calendar } from 'lucide-react';
 
 interface AddGrainModalProps {
@@ -20,7 +20,16 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
     const [bushels, setBushels] = useState('');
     const [moisture, setMoisture] = useState('15.0');
     const [source, setSource] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(() => toLocalIsoDate(Date.now()));
+
+    const [time, setTime] = useState(() => toLocalTime(Date.now()));
+
+    useEffect(() => {
+        if (!open) return;
+        const now = Date.now();
+        setDate(toLocalIsoDate(now));
+        setTime(toLocalTime(now));
+    }, [open]);
 
     const [isSaving, setIsSaving] = useState(false);
 
@@ -31,25 +40,20 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
             native.haptic.error();
             return;
         }
-        if (isNaN(m)) {
+        if (isNaN(m) || !Number.isFinite(localDateTimeMs(date, time))) {
             native.haptic.error();
             return;
         }
 
         setIsSaving(true);
         try {
-            // Combine selected date with current local time to ensure correct registration time and avoid UTC shift
-            const localNow = new Date();
-            const selectedDate = parseLocalDate(date);
-            selectedDate.setHours(localNow.getHours(), localNow.getMinutes(), localNow.getSeconds(), localNow.getMilliseconds());
-
             const success = await addGrainMovement({
                 binId: bin.id,
                 binName: bin.name,
                 type: 'in',
                 bushels: amount,
                 moisturePercent: m,
-                timestamp: selectedDate.getTime(),
+                timestamp: localDateTimeMs(date, time),
                 sourceFieldName: source.trim() || undefined,
             });
             if (success) {
@@ -133,6 +137,10 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                         </div>
 
                         <div>
+                            <Label htmlFor="addTime" className="text-muted-foreground font-mono text-xs font-bold">TIME</Label>
+                            <Input id="addTime" name="addTime" type="time" value={time} onChange={e => setTime(e.target.value)} className="mt-1 bg-muted border-border font-mono" />
+                        </div>
+                        <div>
                             <Label htmlFor="source" className="text-muted-foreground font-mono text-xs font-bold flex items-center gap-1.5">
                                 <Warehouse size={12} /> SOURCE / FIELD NAME
                             </Label>
@@ -151,7 +159,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                 <DialogFooter className="pt-2">
                     <Button
                         onClick={handleSubmit}
-                        disabled={isSaving || !bushels || isNaN(parseFloat(bushels)) || parseFloat(bushels) <= 0}
+                        disabled={!Number.isFinite(localDateTimeMs(date, time)) || isSaving || !bushels || isNaN(parseFloat(bushels)) || parseFloat(bushels) <= 0}
                         className="w-full bg-harvest text-white hover:bg-harvest/90 glow-harvest font-bold py-6 text-lg"
                     >
                         {isSaving ? 'Saving...' : 'Save Inventory'}

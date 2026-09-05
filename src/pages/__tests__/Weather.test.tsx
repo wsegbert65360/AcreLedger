@@ -74,4 +74,13 @@ describe('CurrentConditionsCard', () => {
     expect(gustText).toContain(DASH);
     expect(gustText).not.toMatch(/0/);
   });
+  it('labels calendar fallback and displays unavailable totals without inventing zero', () => {
+    const { rerender } = render(<CurrentConditionsCard weather={{ ...errorWeather, isError: false, rainfallBasis: 'calendar', precip24h: 0.4, precip72h: null, precip168h: null }} lastUpdated="" />);
+    expect(screen.getByText('Yesterday').parentElement?.textContent).toContain('0.4');
+    expect(screen.getByText('Last 3 days').parentElement?.textContent).toContain(DASH);
+    expect(screen.queryByText('24h')).toBeNull();
+    rerender(<CurrentConditionsCard weather={{ ...errorWeather, isError: false, rainfallBasis: 'rolling' }} lastUpdated="" />);
+    expect(screen.getByText('24h').parentElement?.textContent).toContain('0');
+    expect(screen.queryByText('Yesterday')).toBeNull();
+  });
 });

@@ -331,6 +331,8 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 - **Data Warning**: The API includes `dataWarning` when >10% of hourly data is missing or when Supabase merge adds rain beyond IEM. Passed through to UI.
 - **API Fallback**: Custom range calls return `0` gracefully on failure to prevent UI crashes.
 
+Weather rainfall fallbacks use completed calendar days in the provider location's timezone (Yesterday / Last 3 days / Last 7 days), excluding today's mixed observation/forecast total. `rainfallBasis` switches labels to rolling hours only after a successful radar lookup. Missing fallback days and failed historical range lookups remain unavailable (`null`), not zero; range failures include `dataWarning`. WeatherBar uses the weather response's resolved coordinates for radar rainfall, never an unrelated first field. Explicit saved ZIP/coordinates take priority over field defaults on the weather page.
+
 ### Weather Proxy (`api/weather-proxy.ts`)
 Production web and configured Capacitor weather traffic uses an authenticated Vercel Function so the Visual Crossing key never reaches the client. `WeatherService` sends the current Supabase access token; the function validates it with `auth.getUser`, validates the requested timeline endpoint, location, and query allowlist, then safely builds the upstream request. Only `GET` and `OPTIONS` are supported, and the upstream request times out after 10 seconds.
 

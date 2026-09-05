@@ -241,9 +241,11 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
   // Auto-fetch current weather for new or duplicate records
   useEffect(() => {
+    const controller = new AbortController();
     if (open && (!initialData || isDuplicate) && field.lat != null && field.lng != null) {
       setLoading(true);
-      WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
+      WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`, controller.signal).then(w => {
+        if (controller.signal.aborted) return;
         if (!w || w.isError) {
           setLoading(false);
           return;
@@ -253,13 +255,15 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
         setManualWindSpeed(prev => prev || String(Number.isFinite(w.wind) ? w.wind : 0));
         setLoading(false);
       }).catch(() => {
+        if (controller.signal.aborted) return;
         setLoading(false);
       });
     } else if (open) {
       setLoading(false);
     }
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialData?.id, field.lat, field.lng, isDuplicate]);
+  }, [open, initialData?.id, field.id, field.lat, field.lng, isDuplicate]);
 
   // Auto-calculate total product amounts and summary total
   const ratesSignature = useMemo(() =>

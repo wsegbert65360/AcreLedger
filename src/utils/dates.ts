@@ -92,3 +92,15 @@ export function compareWorkDateDesc(a: WorkDateFields, b: WorkDateFields): numbe
     if (byDate !== 0) return byDate;
     return (b.timestamp ?? 0) - (a.timestamp ?? 0);
 }
+
+/** Local clock value for a minute-resolution time input. */
+export function toLocalTime(ts: number): string {
+    const date = new Date(ts);
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Combine user-selected local date and time without interpreting them as UTC. */
+export function localDateTimeMs(date: string, time: string): number {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return NaN;
+    return new Date(`${date}T${time}:00`).getTime();
+}

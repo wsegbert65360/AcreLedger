@@ -6,11 +6,15 @@ export type RainfallResult = {
   '72h': number;
   '168h': number;
   '7d': number; // Alias for 168h, always provided by the service
-  sincePlanting: number;
-  sinceLastSpray: number;
+  sincePlanting: number | null;
+  sinceLastSpray: number | null;
   periodEndUtc: string;
   dataWarning?: string;
 };
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+}
+
 const promiseCache = new Map<string, Promise<RainfallResult>>();
 const DEFAULT_RAIN_API_URL = 'https://rain-api.vercel.app';
 
@@ -52,11 +56,12 @@ export const RainService = {
   }): Promise<RainfallResult> {
     const { fieldId, lat, lng, boundary, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
+    throwIfAborted(signal);
     const cacheKey = `${fieldId ?? ''}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
 
     const existing = promiseCache.get(cacheKey);
     if (existing) {
-      try { return await existing; } catch { /* retry */ }
+      try { const result = await existing; throwIfAborted(signal); return result; } catch { throwIfAborted(signal); /* retry */ }
     }
 
     const fetchPromise = (async () => {
@@ -102,9 +107,9 @@ export const RainService = {
       const periodEndUtc = mainData.periodEndUtc || new Date().toISOString();
 
       // --- Custom range via Rain API (field-based historical lookup) ---
-      const fetchCustomRange = async (startDate: string): Promise<{ total: number; dataWarning?: string }> => {
+      const fetchCustomRange = async (startDate: string): Promise<{ total: number | null; dataWarning?: string }> => {
         if (!fieldId) {
-          return { total: 0 };
+          return { total: null, dataWarning: 'Historical rainfall unavailable: no field selected.' };
         }
         try {
           const today = new Date().toISOString().split('T')[0];
@@ -119,13 +124,19 @@ export const RainService = {
             `${baseUrl}/rain?${rangeParams.toString()}`,
             { signal }
           );
-          if (!response.ok) return { total: 0 };
+          if (!response.ok) throw new Error('Range lookup failed');
           const data = await response.json();
+          const total = data.rain?.total;
+          if (typeof total !== 'number' || !Number.isFinite(total) || total < 0) throw new Error('Invalid rainfall total');
           return {
-            total: Math.round(Number(data.rain?.total || 0) * 1000) / 1000,
+            total: Math.round(total * 1000) / 1000,
             dataWarning: data.dataWarning || undefined,
           };
-        } catch { return { total: 0 }; }
+        } catch (error) {
+          throwIfAborted(signal);
+          if ((error as { name?: string })?.name === 'AbortError') throw error;
+          return { total: null, dataWarning: `Historical rainfall unavailable for ${startDate}. Try refreshing.` };
+        }
       };
 
       const [plantingResult, sprayResult] = await Promise.all([

@@ -23,7 +23,15 @@ const ALLOWED_QUERY_PARAMS = new Set(['unitGroup', 'contentType', 'include', 'el
 const MAX_LOCATION_LENGTH = 1000;
 const MAX_ENDPOINT_LENGTH = 200;
 const VC_TIMEOUT_MS = 10_000;
-const ENDPOINT_RE = /^[a-zA-Z0-9\-/]+$/;
+const RELATIVE_ENDPOINTS = new Set(['today', 'last3days/today', 'last7days/next10days']);
+
+function isValidEndpoint(endpoint: string): boolean {
+  if (RELATIVE_ENDPOINTS.has(endpoint)) return true;
+  const match = endpoint.match(/^(\d{4}-\d{2}-\d{2})(?:T([01]\d|2[0-3]):([0-5]\d):([0-5]\d))?$/);
+  if (!match) return false;
+  const date = new Date(`${match[1]}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === match[1];
+}
 
 function getAllowedOrigins(): Set<string> {
   const raw = process.env.ALLOWED_ORIGINS;
@@ -112,7 +120,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (endpoint.length > MAX_ENDPOINT_LENGTH) {
       return res.status(400).json({ error: 'Endpoint parameter too long' });
     }
-    if (!ENDPOINT_RE.test(endpoint)) {
+    if (!isValidEndpoint(endpoint)) {
       return res.status(400).json({ error: 'Invalid endpoint parameter format' });
     }
   }

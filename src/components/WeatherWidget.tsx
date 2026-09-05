@@ -49,11 +49,6 @@ export default function WeatherBar() {
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
-  const firstFieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
-  const fieldCoordsKey = firstFieldWithCoords && firstFieldWithCoords.lat != null && firstFieldWithCoords.lng != null
-    ? `${firstFieldWithCoords.lat},${firstFieldWithCoords.lng}`
-    : '';
-
   const abortRef = useRef<AbortController | null>(null);
 
   const load = useCallback(async (z: string) => {
@@ -84,20 +79,8 @@ export default function WeatherBar() {
       hasDataRef.current = true;
       setLocationName(result.locationName || '');
 
-      let lat: number | null = null;
-      let lng: number | null = null;
-
-      const coordsMatch = z.trim().match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
-      if (coordsMatch) {
-        lat = parseFloat(coordsMatch[1]);
-        lng = parseFloat(coordsMatch[2]);
-      } else {
-        const fieldWithCoords = fieldsRef.current.find(f => f.lat != null && f.lng != null);
-        if (fieldWithCoords) {
-          lat = fieldWithCoords.lat;
-          lng = fieldWithCoords.lng;
-        }
-      }
+      const lat = result.latitude;
+      const lng = result.longitude;
 
       if (lat == null || lng == null) return;
 
@@ -114,6 +97,7 @@ export default function WeatherBar() {
           ...prev,
           precip24h: rainData['24h'],
           precip72h: rainData['72h'],
+          rainfallBasis: 'rolling',
         }));
       } catch (rainErr) {
         if ((rainErr as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
@@ -142,39 +126,6 @@ export default function WeatherBar() {
     };
   }, [zip, load]);
 
-  // Overlay radar rain once field coords exist for a zip-code location, without
-  // aborting/restarting the weather fetch just because fields[] got a new reference.
-  useEffect(() => {
-    if (!hasData || !zip.trim()) return;
-    if (/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/.test(zip.trim())) return;
-    if (!fieldCoordsKey) return;
-
-    const [lat, lng] = fieldCoordsKey.split(',').map(Number);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-
-    const controller = new AbortController();
-    const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
-
-    RainService.fetchComprehensiveRainfall({
-      ...(fieldId ? { fieldId } : {}),
-      lat,
-      lng,
-      signal: controller.signal,
-    }).then((rainData) => {
-      if (controller.signal.aborted) return;
-      setWeather(prev => ({
-        ...prev,
-        precip24h: rainData['24h'],
-        precip72h: rainData['72h'],
-      }));
-    }).catch((rainErr) => {
-      if ((rainErr as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
-      console.error('[WeatherWidget] Failed to fetch high-res radar rainfall:', rainErr);
-    });
-
-    return () => controller.abort();
-  }, [zip, fieldCoordsKey, hasData]);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const z = inputZip.trim();
@@ -197,7 +148,7 @@ export default function WeatherBar() {
     hasDataRef.current = false;
     setZip(z);
     setUsingCoords(!!coordsMatch);
-    if (!coordsMatch) saveZip(z, userId);
+    saveZip(z, userId);
   };
 
   const weatherUnavailable = Boolean(weather.isError && !hasData);
@@ -300,9 +251,9 @@ export default function WeatherBar() {
               ? '—'
               : weather.precip24h != null
                 ? `${weather.precip24h.toFixed(2)}"`
-                : '0.00"'}
+                : '—'}
           </span>
-          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Rain</span>
+          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">{weather.rainfallBasis === 'calendar' ? 'Yesterday' : 'Rain · 24h'}</span>
         </div>
 
         {/* Navigate hint */}

@@ -1,11 +1,14 @@
 export interface WeatherData {
+    latitude?: number;
+    longitude?: number;
+    rainfallBasis?: 'calendar' | 'rolling';
     wind: number;
     temp: number;
     humidity: number;
     windDirection: string;
     isError?: boolean;
-    precip24h?: number;
-    precip72h?: number;
+    precip24h?: number | null;
+    precip72h?: number | null;
     precipProb?: number;
 }
 
@@ -22,6 +25,7 @@ export interface ForecastDay {
 }
 
 export interface ExtendedWeatherData {
+    rainfallBasis?: 'calendar' | 'rolling';
     temp: number;
     feelsLike: number;
     humidity: number;
@@ -30,9 +34,9 @@ export interface ExtendedWeatherData {
     windDirection: string;
     dewPoint: number;
     precipProb: number;
-    precip24h: number;
-    precip72h: number;
-    precip168h: number;
+    precip24h: number | null;
+    precip72h: number | null;
+    precip168h: number | null;
     isRainingNow: boolean;
     locationName: string;
     cloudCover: number;       // 0-100

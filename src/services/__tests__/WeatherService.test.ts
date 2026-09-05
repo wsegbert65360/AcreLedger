@@ -21,6 +21,7 @@ describe('WeatherService', () => {
     });
 
     afterEach(() => {
+        vi.useRealTimers();
         vi.unstubAllEnvs();
         vi.unmock('@/lib/supabase');
     });
@@ -184,6 +185,8 @@ describe('WeatherService', () => {
         });
 
         it('should correctly map successful response', async () => {
+            vi.useFakeTimers();
+            vi.setSystemTime(new Date('2026-03-26T12:00:00Z'));
             const { WeatherService } = await import('../WeatherService');
             const mockData = {
                 address: 'New York',
@@ -498,4 +501,28 @@ describe('WeatherService', () => {
             )).resolves.toBeNull();
         });
     });
+
+    it('labels completed calendar totals and excludes today and forecast rain', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-09-05T01:00:00Z'));
+        const { WeatherService } = await import('../WeatherService');
+        const payload = {
+            timezone: 'America/Chicago', latitude: 38, longitude: -93,
+            currentConditions: { temp: 72, humidity: 50, windspeed: 5, winddir: 180 },
+            days: [
+                { datetime: '2026-09-02', precip: 0.2 },
+                { datetime: '2026-09-03', precip: 0.1 },
+                { datetime: '2026-09-04', precip: 10 },
+                { datetime: '2026-09-05', precip: 20 },
+                { datetime: '2026-09-01', precip: 0.3 },
+            ],
+        };
+        const current = WeatherService._mapCurrentWeather(payload);
+        const extended = WeatherService._mapExtendedWeather(payload, '38,-93');
+        for (const result of [current, extended]) {
+            expect(result).toMatchObject({ precip24h: 0.1, precip72h: 0.6, rainfallBasis: 'calendar', latitude: 38, longitude: -93 });
+        }
+        expect(extended.precip168h).toBeNull();
+    });
+
 });

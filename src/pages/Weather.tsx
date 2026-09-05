@@ -84,6 +84,7 @@ export default function Weather() {
           result.precip24h = rainData['24h'];
           result.precip72h = rainData['72h'];
           result.precip168h = rainData['168h'];
+          result.rainfallBasis = 'rolling';
         } catch (rainErr) {
           if ((rainErr as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
           console.error('[Weather] Failed to fetch high-res radar rainfall:', rainErr);
@@ -493,9 +494,9 @@ export function CurrentConditionsCard({ weather, lastUpdated }: { weather: Exten
 
       {/* Rainfall strip */}
       <div className="mx-4 mb-2.5 flex items-center divide-x divide-border/50 rounded-lg bg-muted/30">
-        <RainCell label="24h" value={weather.precip24h} isError={!!weather.isError} />
-        <RainCell label="72h" value={weather.precip72h} isError={!!weather.isError} />
-        <RainCell label="7d" value={weather.precip168h} isError={!!weather.isError} />
+        <RainCell label={weather.rainfallBasis === 'calendar' ? 'Yesterday' : '24h'} value={weather.precip24h} isError={!!weather.isError} />
+        <RainCell label={weather.rainfallBasis === 'calendar' ? 'Last 3 days' : '72h'} value={weather.precip72h} isError={!!weather.isError} />
+        <RainCell label={weather.rainfallBasis === 'calendar' ? 'Last 7 days' : '7d'} value={weather.precip168h} isError={!!weather.isError} />
       </div>
 
       {/* Sunrise / Sunset strip */}
@@ -529,11 +530,11 @@ function MiniStat({ icon, label, value, highlight = false }: {
   );
 }
 
-function RainCell({ label, value, suffix = '"', isError = false }: { label: string; value: number; suffix?: string; isError?: boolean }) {
+function RainCell({ label, value, suffix = '"', isError = false }: { label: string; value: number | null; suffix?: string; isError?: boolean }) {
   return (
     <div className="flex-1 text-center py-2">
       <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider">{label}</p>
-      <p className="text-[11px] font-bold font-mono text-foreground">{isError ? '—' : `${value}${suffix}`}</p>
+      <p className="text-[11px] font-bold font-mono text-foreground">{isError || value == null ? '—' : `${value}${suffix}`}</p>
     </div>
   );
 }
