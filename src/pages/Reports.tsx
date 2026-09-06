@@ -252,9 +252,10 @@ export default function Reports() {
       fertilizerApplications: fertilizerRecords,
       tillageRecords,
       harvestRecords,
+      hayHarvestRecords: hayRecords,
       seasonYear: viewingSeason,
     });
-  }, [selectedLandlord, fields, cluAssignments, plantRecords, sprayRecords, customSprayRecords, fertilizerRecords, tillageRecords, harvestRecords, viewingSeason]);
+  }, [selectedLandlord, fields, cluAssignments, plantRecords, sprayRecords, customSprayRecords, fertilizerRecords, tillageRecords, harvestRecords, hayRecords, viewingSeason]);
   const landlordReadinessSummary = useMemo(
     () => selectedLandlord ? buildLandlordReadiness(landlordSummary, harvestRecords) : null,
     [selectedLandlord, landlordSummary, harvestRecords],
@@ -477,18 +478,19 @@ export default function Reports() {
         title: 'Landlord Summary',
         subtitle: `${farmName ? farmName + ' — ' : ''}Prepared for: ${selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
         orientation: 'landscape',
-        headers: ['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'LANDLORD SHARE'],
+        headers: ['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'BALES', 'LANDLORD SHARE'],
         rows: landlordSummary.fields.map(f => [
           f.fieldName,
           f.crop ?? '—',
           f.acres.toLocaleString(),
           f.totalBushels.toLocaleString(),
           f.buPerAcre != null ? f.buPerAcre.toLocaleString() : '—',
+          f.totalBales.toLocaleString(),
           f.landlordShareBushels.toLocaleString(),
         ]),
         fileName: sanitizeNativeFileName(`${selectedLandlord}_Summary_${viewingSeason}.pdf`),
-        summaryText: 'Total Landlord Share',
-        summaryValue: `${landlordSummary.totals.landlordShareBushels.toLocaleString()} BU`,
+        summaryText: 'Production / Landlord Share',
+        summaryValue: `${landlordSummary.totals.totalBushels.toLocaleString()} BU · ${landlordSummary.totals.totalBales.toLocaleString()} BALES · ${landlordSummary.totals.landlordShareBushels.toLocaleString()} BU SHARE`,
         footerText: landlordSummary.activity.length > 0
           ? [
               'Activity Timeline:',

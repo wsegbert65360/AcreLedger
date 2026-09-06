@@ -9,6 +9,7 @@ import type {
   FertilizerApplication,
   Field,
   HarvestRecord,
+  HayHarvestRecord,
   PlantRecord,
   SprayRecord,
   TillageRecord,
@@ -53,6 +54,12 @@ const harvestRecords: HarvestRecord[] = [
   { id: 'h3', fieldId: 'f3', fieldName: 'East Quarter', destination: 'bin', moisturePercent: 14, landlordSplitPercent: 33, bushels: 9000, crop: 'Corn', harvestDate: '2026-10-05', timestamp: 7, seasonYear: 2026, farm_id: 'farm1', deleted_at: null },
 ];
 
+const hayHarvestRecords: HayHarvestRecord[] = [
+  { id: 'hh1', fieldId: 'f1', fieldName: 'North 40', date: '2026-07-15', baleCount: 80, cuttingNumber: 1, baleType: 'Round', timestamp: 5, seasonYear: 2026, farm_id: 'farm1', deleted_at: null },
+  { id: 'hh2', fieldId: 'f1', fieldName: 'North 40', date: '2026-08-20', baleCount: 45, cuttingNumber: 2, baleType: 'Square', timestamp: 6, seasonYear: 2026, farm_id: 'farm1', deleted_at: null },
+  { id: 'hh3', fieldId: 'f3', fieldName: 'East Quarter', date: '2026-07-20', baleCount: 200, cuttingNumber: 1, baleType: 'Round', timestamp: 7, seasonYear: 2026, farm_id: 'farm1', deleted_at: null },
+];
+
 const baseParams = {
   fields,
   cluAssignments: [],
@@ -62,6 +69,7 @@ const baseParams = {
   fertilizerApplications,
   tillageRecords,
   harvestRecords,
+  hayHarvestRecords,
   seasonYear: 2026,
 };
 
@@ -99,10 +107,12 @@ describe('generateLandlordSummary', () => {
     const north = summary.fields.find(f => f.fieldName === 'North 40')!;
     expect(north.totalBushels).toBe(4000);
     expect(north.buPerAcre).toBe(100); // 4000 / 40
+    expect(north.totalBales).toBe(125);
     expect(north.landlordShareBushels).toBe(1000); // 4000 * 0.25
     const south = summary.fields.find(f => f.fieldName === 'South Field')!;
     expect(south.totalBushels).toBe(6000);
     expect(south.buPerAcre).toBe(100); // 6000 / 60
+    expect(south.totalBales).toBe(0);
     expect(south.landlordShareBushels).toBe(0);
   });
 
@@ -110,6 +120,7 @@ describe('generateLandlordSummary', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
     expect(summary.totals.acres).toBe(100); // 40 + 60
     expect(summary.totals.totalBushels).toBe(10000); // 4000 + 6000
+    expect(summary.totals.totalBales).toBe(125); // excludes Mary Jones's 200 bales
     expect(summary.totals.landlordShareBushels).toBe(1000);
   });
 
@@ -135,10 +146,12 @@ describe('generateLandlordSummary', () => {
     //  2026-05-01 plant (f2)
     //  2026-05-20 spray (f1)
     //  2026-06-01 customSpray (f1)
+    //  2026-07-15 hay cutting 1 (f1)
+    //  2026-08-20 hay cutting 2 (f1)
     //  2026-10-01 harvest (f1)
     //  2026-10-10 harvest (f2)
     const types = summary.activity.map(a => a.activityType);
-    expect(types).toEqual(['fertilizer', 'tillage', 'plant', 'plant', 'spray', 'customSpray', 'harvest', 'harvest']);
+    expect(types).toEqual(['fertilizer', 'tillage', 'plant', 'plant', 'spray', 'customSpray', 'hay', 'hay', 'harvest', 'harvest']);
     // Verify sort keys are monotonic
     const keys = summary.activity.map(a => a.sortKey);
     const sorted = [...keys].sort((a, b) => a - b);
@@ -153,11 +166,20 @@ describe('generateLandlordSummary', () => {
     expect(harvestRows.find(r => r.fieldName === 'North 40')!.detail).toBe('4,000 bu');
   });
 
+  test('hay activity identifies bale type, count, and cutting', () => {
+    const summary = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
+    const hayRows = summary.activity.filter(a => a.activityType === 'hay');
+    expect(hayRows).toHaveLength(2);
+    expect(hayRows[0].detail).toBe('80 round bales · Cutting 1');
+    expect(hayRows[1].detail).toBe('45 square bales · Cutting 2');
+  });
+
   test('returns empty fields and activity for unknown landlord', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'Nobody' });
     expect(summary.fields).toHaveLength(0);
     expect(summary.activity).toHaveLength(0);
     expect(summary.totals.totalBushels).toBe(0);
+    expect(summary.totals.totalBales).toBe(0);
     expect(summary.totals.acres).toBe(0);
   });
 
@@ -184,11 +206,13 @@ describe('generateLandlordSummaryCSV', () => {
     expect(csv).toContain('Field');
     expect(csv).toContain('Crop');
     expect(csv).toContain('Bu/Acre');
+    expect(csv).toContain('Total Bales');
     expect(csv).toContain('North 40');
     expect(csv).toContain('Corn');
     expect(csv).toContain('TOTAL');
     // landlord share total (1000) should be present
     expect(csv).toContain('1000');
+    expect(csv).toContain('125');
   });
 
   test('weighted-average bu/acre in totals row when acres > 0', () => {

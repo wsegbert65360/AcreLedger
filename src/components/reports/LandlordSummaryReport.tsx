@@ -29,6 +29,7 @@ const ACTIVITY_LABEL: Record<LandlordActivityType, string> = {
   fertilizer: 'Fertilizer',
   tillage: 'Tillage',
   harvest: 'Harvest',
+  hay: 'Hay Harvest',
 };
 
 export default function LandlordSummaryReport({
@@ -54,7 +55,7 @@ export default function LandlordSummaryReport({
           <div>
             <h2 className="font-bold text-foreground text-base mb-1">Landlord Summary</h2>
             <p className="text-xs text-muted-foreground">
-              All field activity, yields, and crop share for the selected landlord. Generated {reportDate}.
+              All field activity, grain yield, bale production, and crop share for the selected landlord. Generated {reportDate}.
             </p>
           </div>
           <Select value={selectedLandlord} onValueChange={setSelectedLandlord}>
@@ -106,7 +107,7 @@ export default function LandlordSummaryReport({
             {readinessSummary && (
               <MobileReportExportPanel
                 title={`${selectedLandlord} landlord summary`}
-                description={`Review ${seasonLabel} field activity, yield, and crop-share completeness before exporting.`}
+                description={`Review ${seasonLabel} field activity, grain yield, bale production, and crop-share completeness before exporting.`}
                 summary={readinessSummary}
                 itemLabel="fields"
                 onExportPdf={onExportPdf}
@@ -120,12 +121,12 @@ export default function LandlordSummaryReport({
             <div className="hidden space-y-6 lg:block print:block">
             <ReportTable
               title="Fields"
-              subtitle={`Per-field yield and landlord crop share · ${seasonLabel}`}
-              headers={['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'LANDLORD SHARE']}
+              subtitle={`Per-field grain yield, bale production, and landlord crop share · ${seasonLabel}`}
+              headers={['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'BALES', 'LANDLORD SHARE']}
               summary={landlordSummary.fields.length > 0 ? (
                 <div className="flex items-center justify-between gap-4">
                   <span className="font-mono text-sm font-bold text-muted-foreground uppercase">Total</span>
-                  <div className="flex items-center gap-6 font-mono">
+                  <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 font-mono">
                     <span className="text-sm font-bold text-foreground">{landlordSummary.totals.acres.toLocaleString()} ac</span>
                     <span className="text-sm font-bold text-foreground">{landlordSummary.totals.totalBushels.toLocaleString()} bu</span>
                     <span className="text-sm font-bold text-foreground">
@@ -133,6 +134,7 @@ export default function LandlordSummaryReport({
                         ? (landlordSummary.totals.totalBushels / landlordSummary.totals.acres).toLocaleString(undefined, { maximumFractionDigits: 2 })
                         : '—'}
                     </span>
+                    <span className="text-sm font-bold text-foreground">{landlordSummary.totals.totalBales.toLocaleString()} bales</span>
                     <span className="text-base font-black text-blue-600">{landlordSummary.totals.landlordShareBushels.toLocaleString()} bu</span>
                   </div>
                 </div>
@@ -140,7 +142,7 @@ export default function LandlordSummaryReport({
             >
               {landlordSummary.fields.length === 0 ? (
                 <tr className="full-width-row">
-                  <td colSpan={6} className="py-12 text-center text-muted-foreground text-xs">
+                  <td colSpan={7} className="py-12 text-center text-muted-foreground text-xs">
                     No fields assigned to this landlord.
                   </td>
                 </tr>
@@ -152,6 +154,7 @@ export default function LandlordSummaryReport({
                     <td data-label="ACRES" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.acres.toLocaleString()}</td>
                     <td data-label="TOTAL BU." className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.totalBushels.toLocaleString()}</td>
                     <td data-label="BU/ACRE" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.buPerAcre != null ? f.buPerAcre.toLocaleString() : '—'}</td>
+                    <td data-label="BALES" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.totalBales.toLocaleString()}</td>
                     <td data-label="LANDLORD SHARE" className="px-4 py-3 font-mono text-[10px] text-blue-600 font-bold text-right">{f.landlordShareBushels.toLocaleString()}</td>
                   </tr>
                 ))

@@ -59,7 +59,7 @@ export function exportToPdf({
     columnStyles: {
       // Right align numeric columns if they contain only numbers or %
       ...headers.reduce((acc, header, index) => {
-        const isNumeric = ['ACRES', 'BUSHELS', 'MOIST %', 'LL %', 'SHARE %', 'TOTAL', 'BALE COUNT', 'YOUR SHARE', 'SPLIT %', 'TOTAL BU.'].includes(header.toUpperCase());
+        const isNumeric = ['ACRES', 'BUSHELS', 'MOIST %', 'LL %', 'SHARE %', 'TOTAL', 'BALES', 'BALE COUNT', 'YOUR SHARE', 'SPLIT %', 'TOTAL BU.'].includes(header.toUpperCase());
         if (isNumeric) {
           acc[index] = { halign: 'right' };
         }

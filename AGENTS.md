@@ -43,7 +43,7 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/reportExportHistory.ts` — per-user/farm/season/report local export fingerprints and changed-since-export status.
 - `@/components/reports/MobileReportExportPanel.tsx` + `ReportReadinessPanel.tsx` + `ReportIssueList.tsx` — mobile export-first report workspace, readiness summary, and actionable grouped issues.
 - `@/lib/complianceReports/fsa578PdfExport.ts` — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
-- `@/lib/complianceReports/generateLandlordSummary.ts` — Landlord Summary data builder (field-level landlord grouping, activity timeline, bu/acre + crop-share math, CSV export).
+- `@/lib/complianceReports/generateLandlordSummary.ts` — Landlord Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
 - `@/components/reports/LandlordSummaryReport.tsx` — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
 - `@/lib/sprayExport.ts` — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
 - `@/types/fsaTract.ts` — canonical FSA tract import and CLU assignment types.
@@ -250,7 +250,7 @@ This rule applies to **every** activity modal that captures a per-record acreage
 
 - The **Landlord** report tab (`LandlordSummaryReport.tsx` + `generateLandlordSummary.ts`) is a per-landlord overview driven by the **field-level** `Field.landlordName`, NOT the legacy harvest-only `HarvestRecord.landlordName`.
 - A landlord is selectable only if at least one non-deleted field carries their name (`getFieldLandlordNames` filters on `deleted_at`). Soft-deleting a landlord's last field removes them from the dropdown.
-- The summary aggregates all season-scoped activity (plant, spray, custom spray, fertilizer, tillage, harvest) across the landlord's fields into a date-sorted timeline, plus a per-field yield summary (acres via `getDisplayFieldAcres`, total bushels, bu/acre, and landlord crop-share bushels computed from each harvest's `landlordSplitPercent`).
+- The summary aggregates all season-scoped activity (plant, spray, custom spray, fertilizer, tillage, grain harvest, hay harvest) across the landlord's fields into a date-sorted timeline, plus a per-field production summary (acres via `getDisplayFieldAcres`, total bushels, bu/acre, total bales, and landlord crop-share bushels computed from each grain harvest's `landlordSplitPercent`). Hay production stays separate from bushels and does not infer a landlord bale share because `HayHarvestRecord` has no crop-share field.
 - Acreage must use `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, `field.acreage` fallback) — the canonical display acreage, never a raw `field.acreage` read.
 - Activity dates must format via `parseLocalDate` (from `@/utils/dates`), not `new Date(iso)`, to avoid the one-day-early UTC shift on date-only strings.
 - The desktop/print report renders through `ReportTable`; every `<td>` must carry `data-label` matching its header. Mobile uses the shared export-first workspace after a landlord is selected.

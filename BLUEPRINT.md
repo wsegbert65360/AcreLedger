@@ -722,10 +722,11 @@ per-landlord overview driven by the field-level `Field.landlordName` (not the le
 harvest-only `HarvestRecord.landlordName`). Selecting a landlord shows:
 
 - **Fields overview** — one row per field with acres (CLU-aware via `getDisplayFieldAcres`),
-  crop, total bushels, bu/acre, and landlord crop-share bushels. Totals row uses a weighted
-  average for overall bu/acre.
+  crop, total bushels, bu/acre, total bales, and landlord crop-share bushels. Grain and bale
+  production remain separate units; the totals row uses a weighted average for overall bu/acre.
 - **Activity Timeline** — all season-scoped activity (plant, spray, custom spray, fertilizer,
-  tillage, harvest) across the landlord's fields, sorted by date, with colored activity pills.
+  tillage, grain harvest, hay harvest) across the landlord's fields, sorted by date, with colored
+  activity pills. Hay entries show bale count/type and cutting number.
 - **Exports** — CSV (per-field summary + totals) and a **Detailed PDF** (landscape, fields
   table + activity timeline in the footer).
 
