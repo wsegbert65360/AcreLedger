@@ -22,7 +22,6 @@ const VISUAL_CROSSING_KEY = readBundledVisualCrossingKey();
 const WEATHER_PROXY_URL = cleanEnvValue(import.meta.env.VITE_WEATHER_PROXY_URL);
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
-const conditionsCache = new Map<string, Promise<any>>();
 const currentWeatherCache = new Map<string, Promise<any>>();
 const extendedCache = new Map<string, Promise<any>>();
 
@@ -128,94 +127,6 @@ function calendarRainfall(data: any): { precip24h: number | null; precip72h: num
  * Fetches real-time conditions and historical rainfall through Visual Crossing or the weather proxy.
  */
 export const WeatherService = {
-    /**
-     * Fetches current wind/temp for a specific field location via Visual Crossing.
-     * Returns windspeed, cardinal direction, raw direction, temp, and humidity.
-     */
-    async fetchFieldConditions(lat: number, lng: number, signal?: AbortSignal): Promise<{ 
-        windspeed: number | null; 
-        winddir: number | null;
-        windcardinal: string;
-        temp: number | null;
-        humidity: number | null;
-        isError?: boolean;
-    }> {
-        const location = `${lat},${lng}`;
-        const cacheKey = encodeURIComponent(location);
-        // Default values for safety/error cases
-        const defaults = { windspeed: null, winddir: null, windcardinal: '—', temp: null, humidity: null, isError: true };
-
-        // If a request for this location is already in-flight, return the shared promise
-        if (conditionsCache.has(cacheKey)) {
-            try {
-                const data = await conditionsCache.get(cacheKey);
-                return this._mapFieldConditions(data);
-            } catch (error: any) {
-                if (isAbortError(error)) {
-                    dropCacheEntry(conditionsCache, cacheKey);
-                    // Fall through so a newer caller can start a fresh request.
-                } else {
-                    return defaults;
-                }
-            }
-        }
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        let abortListener: (() => void) | undefined;
-        
-        if (signal) {
-            abortListener = () => controller.abort();
-            signal.addEventListener('abort', abortListener);
-        }
-
-        let fetchPromise: Promise<any> | undefined;
-        try {
-            const url = buildWeatherUrl(location, 'today', {
-                unitGroup: 'us',
-                contentType: 'json',
-                include: 'current',
-                elements: 'windspeed,winddir,temp,humidity',
-            });
-            
-            fetchPromise = fetchWeatherJson(url, controller.signal);
-
-            // Store the promise in the cache
-            conditionsCache.set(cacheKey, fetchPromise);
-
-            const data = await fetchPromise;
-            return this._mapFieldConditions(data);
-        } catch (error: any) {
-            dropCacheEntry(conditionsCache, cacheKey, fetchPromise);
-            if (isAbortError(error)) {
-                if (signal?.aborted) throw error;
-                console.error('[WeatherService] Fetch conditions timed out');
-            } else {
-                console.error('[WeatherService] Error fetching field conditions:', error);
-            }
-            return defaults;
-        } finally {
-            clearTimeout(timeoutId);
-            if (abortListener && signal) signal.removeEventListener('abort', abortListener);
-            dropCacheEntry(conditionsCache, cacheKey, fetchPromise);
-        }
-    },
-
-    /**
-     * Helper to map Visual Crossing timeline API response to our custom format.
-     */
-    _mapFieldConditions(data: any): { windspeed: number | null; winddir: number | null; windcardinal: string; temp: number | null; humidity: number | null; isError: boolean; } {
-        const current = data.currentConditions;
-        return {
-            windspeed: current?.windspeed ?? null,
-            winddir: current?.winddir ?? null,
-            windcardinal: current?.winddir != null ? this.degreesToDirection(current.winddir) : '—',
-            temp: current?.temp ?? null,
-            humidity: current?.humidity ?? null,
-            isError: false
-        };
-    },
-
     /**
      * Fetches current weather data for the Weather Bar via Visual Crossing.
      * Includes completed calendar-day rainfall, labeled separately from radar rolling totals.
