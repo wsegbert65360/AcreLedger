@@ -3,7 +3,7 @@ import { GrainMovement, HarvestRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapGrainToDb, mapHarvestToDb } from '@/lib/mappers';
-import { syncQueue } from '@/lib/syncQueue';
+import { LINKED_GRAIN_MUTATION_KEY, syncQueue } from '@/lib/syncQueue';
 
 interface UseHarvestRecordsArgs {
   farm_id: string | null;
@@ -83,10 +83,12 @@ export function useHarvestRecords({
     try {
       if (!isOnline) {
         try {
-          await syncQueue.enqueueMutations([
-            { tableName: 'harvest_records', operation: 'insert', payload: mappedHarvest, farmId: farm_id },
-            { tableName: 'grain_movements', operation: 'insert', payload: mappedGrain, farmId: farm_id },
-          ]);
+          await syncQueue.enqueueMutations([{
+            tableName: 'harvest_records',
+            operation: 'insert',
+            payload: { ...mappedHarvest, [LINKED_GRAIN_MUTATION_KEY]: mappedGrain },
+            farmId: farm_id,
+          }]);
           await onMutation();
           toast.success('Harvest and grain movement recorded offline.', {
             description: 'Queued together — they will sync automatically when connection is restored.',

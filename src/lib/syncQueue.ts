@@ -7,6 +7,7 @@ import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto'
 const isNative = Capacitor.isNativePlatform();
 const WEB_QUEUE_KEY = 'al_sync_queue';
 const CORRUPT_QUEUE_KEY = 'al_sync_queue_corrupt';
+export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
 let webQueuePromise: Promise<void> = Promise.resolve();
 // Set after the first corruption toast so repeated getWebQueue calls while the
 // blob is still broken don't re-toast on every enqueue/read.
@@ -98,6 +99,15 @@ function isTransientMutationError(response: MutationResponse): boolean {
   return false;
 }
 
+function equivalentTimestampStrings(actual: unknown, expected: unknown): boolean {
+  if (typeof actual !== 'string' || typeof expected !== 'string') return false;
+  const isoTimestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+  if (!isoTimestamp.test(actual) || !isoTimestamp.test(expected)) return false;
+  const actualTime = Date.parse(actual);
+  const expectedTime = Date.parse(expected);
+  return Number.isFinite(actualTime) && actualTime === expectedTime;
+}
+
 function expectedValueMatches(actual: unknown, expected: unknown): boolean {
   if (Array.isArray(expected)) {
     return Array.isArray(actual)
@@ -109,7 +119,37 @@ function expectedValueMatches(actual: unknown, expected: unknown): boolean {
     return Object.entries(expected).every(([key, value]) =>
       value === undefined || expectedValueMatches((actual as Record<string, unknown>)[key], value));
   }
-  return Object.is(actual, expected);
+  return Object.is(actual, expected) || equivalentTimestampStrings(actual, expected);
+}
+
+interface LinkedHarvestReplay {
+  harvestPayload: Record<string, unknown>;
+  grainPayload: Record<string, unknown>;
+  legacyGrainMutation?: QueuedMutation;
+}
+
+function getLinkedHarvestReplay(
+  mutation: QueuedMutation,
+  queue: QueuedMutation[],
+): LinkedHarvestReplay | null {
+  if (mutation.table_name !== 'harvest_records' || mutation.operation !== 'insert') return null;
+  const harvestId = mutation.payload?.id;
+  if (typeof harvestId !== 'string' || !harvestId) return null;
+
+  const { [LINKED_GRAIN_MUTATION_KEY]: embeddedGrain, ...harvestPayload } = mutation.payload;
+  if (embeddedGrain && typeof embeddedGrain === 'object' && !Array.isArray(embeddedGrain)) {
+    return { harvestPayload, grainPayload: embeddedGrain };
+  }
+
+  // Compatibility for pairs queued by versions that stored two adjacent rows.
+  const legacyGrainMutation = queue.find(candidate =>
+    candidate.farm_id === mutation.farm_id
+    && candidate.table_name === 'grain_movements'
+    && candidate.operation === 'insert'
+    && candidate.payload?.harvest_record_id === harvestId);
+  return legacyGrainMutation
+    ? { harvestPayload, grainPayload: legacyGrainMutation.payload, legacyGrainMutation }
+    : null;
 }
 
 /**
@@ -454,7 +494,9 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
     console.log(`Replaying sync queue: ${queue.length} mutations pending.`);
     let pendingRetryCount = 0;
 
+    const handledMutationIds = new Set<string>();
     for (const mutation of queue) {
+      if (handledMutationIds.has(mutation.id)) continue;
       if (!ALLOWED_TABLES.has(mutation.table_name)) {
         console.warn(`Discarding sync mutation: invalid table name ${mutation.table_name}`);
         await syncQueue.dequeueMutation(mutation.id);
@@ -462,21 +504,34 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
       }
       
       let response: MutationResponse = { error: null };
+      const linkedHarvest = getLinkedHarvestReplay(mutation, queue);
+      const linkedMutationIds = linkedHarvest?.legacyGrainMutation
+        ? [mutation.id, linkedHarvest.legacyGrainMutation.id]
+        : [mutation.id];
 
       try {
         if (mutation.operation === 'insert') {
-          const conflictColumns = mutation.table_name === 'fsa_tract_imports'
-            ? 'farm_id,tract_key'
-            : mutation.table_name === 'field_clu_assignments'
-              ? 'farm_id,tract_key,clu_number'
-              : null;
-          const query = supabase.from(mutation.table_name);
-          response = conflictColumns
-            ? await query.upsert(
-              [{ ...mutation.payload, farm_id: farmId }],
-              { onConflict: conflictColumns },
-            )
-            : await query.insert([{ ...mutation.payload, farm_id: farmId }]);
+          if (linkedHarvest) {
+            response = await supabase.rpc('create_harvest_with_grain', {
+              p_farm_id: farmId,
+              p_idempotency_key: linkedHarvest.harvestPayload.id,
+              p_harvest: { ...linkedHarvest.harvestPayload, farm_id: farmId },
+              p_grain_movement: { ...linkedHarvest.grainPayload, farm_id: farmId },
+            });
+          } else {
+            const conflictColumns = mutation.table_name === 'fsa_tract_imports'
+              ? 'farm_id,tract_key'
+              : mutation.table_name === 'field_clu_assignments'
+                ? 'farm_id,tract_key,clu_number'
+                : null;
+            const query = supabase.from(mutation.table_name);
+            response = conflictColumns
+              ? await query.upsert(
+                [{ ...mutation.payload, farm_id: farmId }],
+                { onConflict: conflictColumns },
+              )
+              : await query.insert([{ ...mutation.payload, farm_id: farmId }]);
+          }
         } else if (mutation.operation === 'update') {
           // Perform update, strip id/farm_id from set payload
           const {
@@ -529,6 +584,7 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
         if (response.error) {
           if (
             mutation.operation === 'insert'
+            && !linkedHarvest
             && response.error.code === '23505'
             && await reconcileDuplicateInsert(mutation, farmId)
           ) {
@@ -545,7 +601,11 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
             console.error(`Sync queue permanent mutation failure for ${mutation.table_name}:`, response.error);
 
             const nextRetries = mutation.retry_count + 1;
-            await syncQueue.incrementRetry(mutation.id, mutation.retry_count);
+            for (const id of linkedMutationIds) {
+              const queued = queue.find(item => item.id === id);
+              if (queued) await syncQueue.incrementRetry(id, queued.retry_count);
+              handledMutationIds.add(id);
+            }
             pendingRetryCount++;
             if (nextRetries === 3) {
               toast.error(`Offline ${mutation.operation} to ${mutation.table_name} still cannot sync.`, {
@@ -557,7 +617,10 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
           }
         } else {
           // Success: remove mutation from queue
-          await syncQueue.dequeueMutation(mutation.id);
+          for (const id of linkedMutationIds) {
+            await syncQueue.dequeueMutation(id);
+            handledMutationIds.add(id);
+          }
         }
       } catch (err) {
         console.error(`Unhandled error during sync queue replay:`, err);

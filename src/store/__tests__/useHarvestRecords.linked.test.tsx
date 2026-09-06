@@ -7,10 +7,12 @@ import { useStatefulArray } from '@/test/hookTestHarness';
 import type { GrainMovement, HarvestRecord } from '@/types/farm';
 
 const cloud = createSupabaseMock();
+const enqueueMutation = vi.fn();
 const enqueueMutations = vi.fn();
 vi.doMock('@/lib/supabase', () => ({ supabase: cloud.client }));
 vi.doMock('@/lib/syncQueue', () => ({
-  syncQueue: { enqueueMutation: vi.fn(), enqueueMutations },
+  LINKED_GRAIN_MUTATION_KEY: '__linked_grain_movement',
+  syncQueue: { enqueueMutation, enqueueMutations },
 }));
 vi.doMock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -67,6 +69,7 @@ function renderLinkedHook(
 describe('useHarvestRecords linked creation', () => {
   beforeEach(() => {
     cloud.reset();
+    enqueueMutation.mockReset().mockResolvedValue(undefined);
     enqueueMutations.mockReset().mockResolvedValue(undefined);
   });
 
@@ -87,7 +90,7 @@ describe('useHarvestRecords linked creation', () => {
     expect(result.current.grains.value.map(record => record.id)).toEqual([grainMovement.id]);
   });
 
-  it('persists the offline pair in one atomic local batch', async () => {
+  it('persists the offline pair as one atomic replay operation', async () => {
     const { result } = renderLinkedHook(false);
 
     await act(async () => {
@@ -95,10 +98,19 @@ describe('useHarvestRecords linked creation', () => {
     });
 
     expect(enqueueMutations).toHaveBeenCalledTimes(1);
-    expect(enqueueMutations).toHaveBeenCalledWith([
-      expect.objectContaining({ tableName: 'harvest_records', operation: 'insert' }),
-      expect.objectContaining({ tableName: 'grain_movements', operation: 'insert' }),
-    ]);
+    expect(enqueueMutations).toHaveBeenCalledWith([expect.objectContaining({
+      tableName: 'harvest_records',
+      operation: 'insert',
+      farmId: '00000000-0000-0000-0000-000000000100',
+      payload: expect.objectContaining({
+        id: harvest.id,
+        __linked_grain_movement: expect.objectContaining({
+          id: grainMovement.id,
+          harvest_record_id: harvest.id,
+        }),
+      }),
+    })]);
+    expect(enqueueMutation).not.toHaveBeenCalled();
   });
 
   it('rolls back both optimistic records when the transaction fails', async () => {

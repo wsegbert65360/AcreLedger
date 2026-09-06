@@ -196,6 +196,66 @@ describe('syncQueue web queue management', () => {
     expect(await syncQueue.getQueue('farm-1')).toEqual([]);
   });
 
+  it('replays a linked harvest and grain movement through one atomic RPC', async () => {
+    await syncQueue.enqueueMutation('harvest_records', 'insert', {
+      id: 'h1',
+      field_id: 'field-1',
+      __linked_grain_movement: {
+        id: 'g1',
+        bin_id: 'bin-1',
+        harvest_record_id: 'h1',
+        version: 1,
+      },
+    }, 'farm-1');
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('create_harvest_with_grain', {
+      p_farm_id: 'farm-1',
+      p_idempotency_key: 'h1',
+      p_harvest: { id: 'h1', field_id: 'field-1', farm_id: 'farm-1' },
+      p_grain_movement: expect.objectContaining({
+        id: 'g1',
+        harvest_record_id: 'h1',
+        farm_id: 'farm-1',
+      }),
+    });
+    expect(supabaseControl.insert).not.toHaveBeenCalled();
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('atomically replays legacy two-row harvest queues', async () => {
+    await syncQueue.enqueueMutations([
+      { tableName: 'harvest_records', operation: 'insert', payload: { id: 'h1' }, farmId: 'farm-1' },
+      { tableName: 'grain_movements', operation: 'insert', payload: { id: 'g1', harvest_record_id: 'h1' }, farmId: 'farm-1' },
+    ]);
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+
+    expect(supabaseControl.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseControl.insert).not.toHaveBeenCalled();
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('retains both legacy linked rows when their atomic RPC fails', async () => {
+    await syncQueue.enqueueMutations([
+      { tableName: 'harvest_records', operation: 'insert', payload: { id: 'h1' }, farmId: 'farm-1' },
+      { tableName: 'grain_movements', operation: 'insert', payload: { id: 'g1', harvest_record_id: 'h1' }, farmId: 'farm-1' },
+    ]);
+    supabaseControl.rpcResponses.push({
+      data: null,
+      error: { code: '23514', message: 'invalid linked payload' },
+      status: 409,
+    });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(2);
+    expect(queue.every(item => item.retry_count === 1)).toBe(true);
+    expect(supabaseControl.insert).not.toHaveBeenCalled();
+  });
+
   it('continues past a permanent PostgREST error without discarding the failed mutation', async () => {
     await syncQueue.enqueueMutation('fields', 'insert', { id: 'bad' }, 'farm-1');
     await syncQueue.enqueueMutation('bins', 'insert', { id: 'good' }, 'farm-1');
@@ -317,7 +377,7 @@ describe('syncQueue web queue management', () => {
     await syncQueue.enqueueMutation('fields', 'soft_delete', { id: 'f1', deleted_at: deletedAt }, 'farm-1');
     supabaseControl.updateResponses.push({ error: null, count: 0, status: 204 });
     supabaseControl.rpcResponses.push({
-      data: { id: 'f1', farm_id: 'farm-1', deleted_at: deletedAt },
+      data: { id: 'f1', farm_id: 'farm-1', deleted_at: '2026-09-05T00:00:00+00:00' },
       error: null,
       status: 200,
     });
