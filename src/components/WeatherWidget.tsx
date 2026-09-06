@@ -116,12 +116,13 @@ export default function WeatherBar() {
     }
   }, []);
 
+  // Pull once per launch (zip resolution) and on explicit location change.
+  // No background polling: repeated 5-min refreshes exhausted the Visual
+  // Crossing daily quota, so a page left open keeps its loaded values.
   useEffect(() => {
     if (!zip) return;
     load(zip);
-    const interval = setInterval(() => load(zip), 300_000);
     return () => {
-      clearInterval(interval);
       abortRef.current?.abort();
     };
   }, [zip, load]);
