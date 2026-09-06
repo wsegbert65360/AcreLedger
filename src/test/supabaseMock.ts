@@ -39,6 +39,7 @@ export interface SupabaseMock {
     in: ReturnType<typeof vi.fn>;
     is: ReturnType<typeof vi.fn>;
     order: ReturnType<typeof vi.fn>;
+    range: ReturnType<typeof vi.fn>;
     single: ReturnType<typeof vi.fn>;
   };
   /** Terminal result for the next awaited `from(...)` chain. */
@@ -51,6 +52,21 @@ export interface SupabaseMock {
   setRpcThrow: (error: unknown) => void;
   /** Per-table terminal override (takes precedence over `setResult`). */
   setTableHandler: (table: string, result: Partial<SupabaseResult>) => void;
+  /**
+   * Serve successive awaited chains against `table` from a queue. The handler
+   * receives the terminal index (0-based, per table) and the `range(from, to)`
+   * arguments if the chain used `.range`, so paginated reads can return one
+   * page per await. Falls back to `setTableHandler`/`setResult` once the queue
+   * is exhausted. Takes precedence over the static handlers.
+   */
+  setTablePages: (
+    table: string,
+    pages: Array<
+      Partial<SupabaseResult>
+      | PromiseLike<Partial<SupabaseResult>>
+      | ((info: { index: number; from?: number; to?: number }) => Partial<SupabaseResult> | PromiseLike<Partial<SupabaseResult>>)
+    >,
+  ) => void;
   /** Re-install all implementations (after `mockReset`) and clear all state. Call in `beforeEach`. */
   reset: () => void;
 }
@@ -69,6 +85,13 @@ export function createSupabaseMock(): SupabaseMock {
     rpcThrown: unknown;
     rpcHasThrow: boolean;
     tableHandlers: Record<string, SupabaseResult>;
+    tablePages: Record<string, Array<
+      Partial<SupabaseResult>
+      | PromiseLike<Partial<SupabaseResult>>
+      | ((info: { index: number; from?: number; to?: number }) => Partial<SupabaseResult> | PromiseLike<Partial<SupabaseResult>>)
+    >>;
+    tablePageCursor: Record<string, number>;
+    lastRangeByBuilder: WeakMap<object, { from?: number; to?: number }>;
   } = {
     result: { ...DEFAULT_RESULT },
     thrown: null,
@@ -77,9 +100,12 @@ export function createSupabaseMock(): SupabaseMock {
     rpcThrown: null,
     rpcHasThrow: false,
     tableHandlers: {},
+    tablePages: {},
+    tablePageCursor: {},
+    lastRangeByBuilder: new WeakMap(),
   };
 
-  const chainMethods = ['insert', 'upsert', 'update', 'select', 'eq', 'in', 'is', 'order', 'single'] as const;
+  const chainMethods = ['insert', 'upsert', 'update', 'select', 'eq', 'in', 'is', 'order', 'range', 'single'] as const;
   const fns = {
     from: vi.fn(),
     rpc: vi.fn(),
@@ -91,6 +117,7 @@ export function createSupabaseMock(): SupabaseMock {
     in: vi.fn(),
     is: vi.fn(),
     order: vi.fn(),
+    range: vi.fn(),
     single: vi.fn(),
   };
 
@@ -98,7 +125,10 @@ export function createSupabaseMock(): SupabaseMock {
     for (const m of chainMethods) {
       // Preserve shared assertion spies while returning the particular builder
       // on which the chain method was invoked.
-      fns[m].mockImplementation(function (this: Record<string, unknown>) {
+      fns[m].mockImplementation(function (this: Record<string, unknown>, ...args: unknown[]) {
+        if (m === 'range' && args.length >= 2) {
+          state.lastRangeByBuilder.set(this, { from: args[0] as number, to: args[1] as number });
+        }
         return this;
       });
     }
@@ -108,11 +138,25 @@ export function createSupabaseMock(): SupabaseMock {
     const builder: Record<string, unknown> = {
       // Capture the table per query so concurrent chains remain isolated.
       then(onFulfilled: ((r: SupabaseResult) => unknown) | null, onRejected: ((e: unknown) => unknown) | null) {
-        const terminal = state.tableHandlers[table] ?? state.result;
-        if (state.hasThrow) {
-          return Promise.reject(state.thrown).then(null, onRejected);
-        }
-        return Promise.resolve(terminal).then(onFulfilled);
+        const resolveTerminal = async (): Promise<SupabaseResult> => {
+          if (state.hasThrow) throw state.thrown;
+          const pages = state.tablePages[table];
+          if (!pages) return state.tableHandlers[table] ?? state.result;
+
+          const index = state.tablePageCursor[table] ?? 0;
+          const page = pages[index];
+          state.tablePageCursor[table] = index + 1;
+          const source = typeof page === 'function'
+            ? page({ index, ...state.lastRangeByBuilder.get(builder) })
+            : page;
+          const partial = source === undefined ? undefined : await source;
+          // An exhausted page queue falls through to the static handlers so a
+          // test can serve N explicit pages and a default tail.
+          return partial !== undefined
+            ? { ...DEFAULT_RESULT, ...partial }
+            : state.tableHandlers[table] ?? state.result;
+        };
+        return resolveTerminal().then(onFulfilled, onRejected);
       },
     };
 
@@ -144,6 +188,9 @@ export function createSupabaseMock(): SupabaseMock {
     state.rpcThrown = null;
     state.rpcHasThrow = false;
     state.tableHandlers = {};
+    state.tablePages = {};
+    state.tablePageCursor = {};
+    state.lastRangeByBuilder = new WeakMap();
     installChain();
     installFrom();
     installRpc();
@@ -166,6 +213,12 @@ export function createSupabaseMock(): SupabaseMock {
   const setTableHandler: SupabaseMock['setTableHandler'] = (table, result) => {
     state.tableHandlers[table] = { ...DEFAULT_RESULT, ...result };
   };
+  const setTablePages: SupabaseMock['setTablePages'] = (table, pages) => {
+    state.tablePages[table] = pages;
+    // Re-arm the cursor so calling setTablePages twice in one test restarts
+    // the queue instead of resuming past the new first page.
+    state.tablePageCursor[table] = 0;
+  };
 
   // Initial install (the mock is usable immediately, before the first reset()).
   installChain();
@@ -180,6 +233,7 @@ export function createSupabaseMock(): SupabaseMock {
     setRpcResult,
     setRpcThrow,
     setTableHandler,
+    setTablePages,
     reset,
   };
 }

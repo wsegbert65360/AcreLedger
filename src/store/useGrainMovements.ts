@@ -94,9 +94,13 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     if (isMutating.current) return false;
     isMutating.current = true;
 
+    const previousVersion = Number.isInteger(previous.version) && (previous.version ?? 0) > 0
+      ? previous.version as number
+      : 1;
+    const nextRecord: GrainMovement = { ...r, version: previousVersion + 1 };
     let mapped: ReturnType<typeof mapGrainToDb>;
     try {
-      mapped = mapGrainToDb(r);
+      mapped = mapGrainToDb(nextRecord);
     } catch (err) {
       console.error('mapGrainToDb failed:', err);
       isMutating.current = false;
@@ -110,9 +114,9 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
 
     setGrainMovements(prev => {
       if (!prev.some(item => item.id === previous.id)) {
-        return [...prev, r];
+        return [...prev, nextRecord];
       }
-      return prev.map(item => item.id === r.id ? r : item);
+      return prev.map(item => item.id === r.id ? nextRecord : item);
     });
 
     const rollback = () => {
@@ -124,21 +128,14 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       });
     };
 
-    // Concurrency guard: grain_movements has no version/updated_at column, so the
-    // row's timestamp is the only last-known-state fingerprint. Only enforce it
-    // when the timestamp is a usable fingerprint — a null/invalid stored timestamp
-    // (safeTimestamp → 0) can't be matched, so enforcing it would permanently
-    // block the row. Falling back to an unlocked update self-heals: the new value
-    // carries a valid timestamp for the next edit.
-    // (AGENTS.md: "Grain movement edits need a concurrency guard to prevent
-    // ghost rows and inventory drift.")
-    const hasUsableFingerprint = typeof previous.timestamp === 'number' && previous.timestamp > 0;
-    const previousTimestampIso = hasUsableFingerprint ? new Date(previous.timestamp).toISOString() : null;
-
     try {
       if (!isOnline) {
         try {
-          await syncQueue.enqueueMutation('grain_movements', 'update', { ...mapped, id: r.id }, farm_id);
+          await syncQueue.enqueueMutation('grain_movements', 'update', {
+            ...mapped,
+            id: r.id,
+            __expected_version: previousVersion,
+          }, farm_id);
           if (onMutation) await onMutation();
           toast.success('Grain movement record updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -152,18 +149,15 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
         }
       }
 
-      const { farm_id: _f, id: _i, ...payload } = mapped;
+      const { farm_id: _f, id: _i, version: _version, ...payload } = mapped;
       let error, affectedRows;
       try {
-        const base = supabase
+        const res = await supabase
           .from('grain_movements')
           .update(payload, { count: 'exact' })
           .eq('id', r.id)
-          .eq('farm_id', farm_id);
-        // Only fingerprint when we have a usable timestamp (see note above).
-        const res = previousTimestampIso
-          ? await base.eq('timestamp', previousTimestampIso)
-          : await base;
+          .eq('farm_id', farm_id)
+          .eq('version', previousVersion);
         error = res.error;
         affectedRows = res.count;
       } catch (err) {
@@ -175,20 +169,12 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           const { consolePayload, toastOptions } = describeSupabaseError(error);
           console.error('Error updating grain movement:', consolePayload);
           toast.error('Failed to update record.', toastOptions);
-        } else if (previousTimestampIso) {
-          // Zero rows matched the expected timestamp → concurrent edit on another
-          // client/device. Roll back so the user doesn't silently overwrite it.
+        } else {
           console.warn('Grain update concurrency conflict detected.', {
             id: r.id,
-            expectedTimestamp: previousTimestampIso,
+            expectedVersion: previousVersion,
           });
           toast.error('This movement changed elsewhere. Please refresh and try again.');
-        } else {
-          // No fingerprint guard and zero rows matched → the row was deleted or
-          // changed on the server since we loaded it. Surface it rather than
-          // silently treating a no-op as success.
-          console.warn('Grain update affected zero rows (no fingerprint guard).', { id: r.id });
-          toast.error('This movement could not be found. Please refresh and try again.');
         }
         rollback();
         return false;
@@ -225,10 +211,14 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           // rows (web: single save; native: transactional executeSet) and rejects on any
           // failure so the catch below restores the full snapshot.
           await syncQueue.enqueueMutations(
-            ids.map(id => ({
+            snapshot.map(({ record }) => ({
               tableName: 'grain_movements',
               operation: 'soft_delete' as const,
-              payload: { id, deleted_at: deletedAt },
+              payload: {
+                id: record.id,
+                deleted_at: deletedAt,
+                __expected_version: record.version ?? 1,
+              },
               farmId: farm_id,
             }))
           );
@@ -256,13 +246,17 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
 
       let error, affectedRows;
       try {
-        const res = await supabase
-          .from('grain_movements')
-          .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
-          .in('id', ids)
-          .eq('farm_id', farm_id);
+        const deletedAt = new Date().toISOString();
+        const res = await supabase.rpc('soft_delete_grain_movements_versioned', {
+          p_farm_id: farm_id,
+          p_items: snapshot.map(({ record }) => ({
+            id: record.id,
+            version: record.version ?? 1,
+            deleted_at: deletedAt,
+          })),
+        });
         error = res.error;
-        affectedRows = res.count;
+        affectedRows = res.data;
       } catch (err) {
         error = err;
       }
@@ -355,7 +349,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
 
     const id = crypto.randomUUID();
     const timestamp = r.timestamp || Date.now();
-    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id };
+    const newRecord: GrainMovement = { ...r, id, timestamp, seasonYear: viewingSeason, deleted_at: null, farm_id, version: 1 };
 
     let mapped: ReturnType<typeof mapGrainToDb>;
     try {

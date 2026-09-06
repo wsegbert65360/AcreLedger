@@ -260,7 +260,8 @@ Note: `date` is an ISO date string; `timestamp` is Unix ms. Both exist on the sa
 Grain in/out of a bin, including sales and contracts.
 ```ts
 { id, farm_id, binId, binName, type: 'in' | 'out', bushels, moisturePercent,
-  price?, destination?, sourceFieldName?, timestamp, seasonYear, deleted_at }
+  price?, destination?, sourceFieldName?, harvestRecordId?, timestamp, seasonYear,
+  version, deleted_at }
 ```
 **`bushels` may be negative.** Negative values represent an estimate-vs-actual correction
 (more grain removed than estimated). This is intentional business logic — do not block or clamp.
@@ -268,8 +269,11 @@ Display with an amber `AlertTriangle` warning only.
 
 #### The "Ghost Row" Prevention Rule
 To prevent inventory drift if two sessions edit the same bin simultaneously, all Grain Movement edits must include a **Concurrency Guard**:
-- Use a `Last-Modified` or `version` stamp check in the `WHERE` clause of the update.
-- If the count of updated rows is 0, notify the user that the record has been modified by another session and trigger a state refresh.
+- `grain_movements.version` is database-managed and increments on every update. Capture the expected version from the render closure and include it in online and replayed update/delete predicates; never use the activity timestamp as the concurrency token.
+- If the count of updated rows is 0, reconcile an already-applied operation, otherwise retain the mutation and notify the user that the record has changed.
+
+#### Linked Harvest Lifecycle
+A bin-destination harvest and its incoming grain movement form one logical operation. Online creation uses `create_harvest_with_grain` with retry-stable IDs; offline creation stores both mutations in one atomic queue batch. Harvest soft deletion uses `soft_delete_harvests_with_grain`, and a database trigger cascades the same `deleted_at` value to the linked active movement so generic offline replay cannot leave inventory behind. Client optimistic updates and rollback always cover both records.
 
 ### SavedSeed
 Seed inventory reference. Not season-scoped.

@@ -254,6 +254,7 @@ describe('useGrainMovements — addGrainMovement', () => {
   });
 
   it('soft-deletes a local unlinked leftover after updating a remote linked IN', async () => {
+    supabaseMock.setRpcResult({ data: 1, error: null });
     supabaseMock.setResult({
       data: [{
         id: 'g-remote',
@@ -291,7 +292,13 @@ describe('useGrainMovements — addGrainMovement', () => {
 
     expect(ok).toBe(true);
     expect(supabaseMock.fns.insert).not.toHaveBeenCalled();
-    expect(supabaseMock.fns.in).toHaveBeenCalledWith('id', ['g-unlinked']);
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith(
+      'soft_delete_grain_movements_versioned',
+      expect.objectContaining({
+        p_farm_id: FARM,
+        p_items: [expect.objectContaining({ id: 'g-unlinked', version: 1 })],
+      }),
+    );
     expect(result.current.grains.value.map(g => g.id)).toEqual(['g-remote']);
     expect(result.current.grains.value[0]).toMatchObject({
       id: 'g-remote',
@@ -343,6 +350,8 @@ describe('useGrainMovements — updateGrainMovement', () => {
 
     expect(ok).toBe(true);
     expect(result.current.grains.value[0].bushels).toBe(900);
+    expect(result.current.grains.value[0].version).toBe(2);
+    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('version', 1);
   });
 
   it('rolls back to previous on supabase error', async () => {
@@ -359,7 +368,7 @@ describe('useGrainMovements — updateGrainMovement', () => {
     await waitFor(() => expect(result.current.grains.value[0].bushels).toBe(1000));
   });
 
-  it('rolls back on count=0 with a usable fingerprint (concurrency conflict)', async () => {
+  it('rolls back on count=0 with a stale database version (concurrency conflict)', async () => {
     supabaseMock.setResult({ count: 0, data: null, error: null });
     const start = existingMovement({ timestamp: 1700000000000 });
     const { result } = renderGrainHook({ initial: [start] });
@@ -370,14 +379,12 @@ describe('useGrainMovements — updateGrainMovement', () => {
     });
 
     expect(ok).toBe(false);
-    // The fingerprint guard must have added a timestamp eq filter.
-    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('timestamp', expect.any(String));
+    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('version', 1);
+    expect(supabaseMock.fns.eq).not.toHaveBeenCalledWith('timestamp', expect.any(String));
     await waitFor(() => expect(result.current.grains.value[0].bushels).toBe(1000));
   });
 
-  it('rolls back on count=0 with NO fingerprint (legacy self-heal still updates)', async () => {
-    // timestamp <= 0 means no usable fingerprint → update must NOT add a
-    // timestamp eq (self-heal path). Zero rows still rolls back locally.
+  it('uses version 1 for a legacy cached row without a version', async () => {
     supabaseMock.setResult({ count: 0, data: null, error: null });
     const start = existingMovement({ timestamp: 0 });
     const { result } = renderGrainHook({ initial: [start] });
@@ -388,9 +395,7 @@ describe('useGrainMovements — updateGrainMovement', () => {
     });
 
     expect(ok).toBe(false);
-    // Self-heal: no timestamp eq was appended to the chain.
-    const timestampEqCalls = supabaseMock.fns.eq.mock.calls.filter(c => c[0] === 'timestamp');
-    expect(timestampEqCalls).toHaveLength(0);
+    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('version', 1);
   });
 
   it('preserves negative bushels (does not clamp) through the mapped payload', async () => {
@@ -417,7 +422,10 @@ describe('useGrainMovements — updateGrainMovement', () => {
 
     expect(ok).toBe(true);
     expect(enqueueMutation).toHaveBeenCalledWith(
-      'grain_movements', 'update', expect.objectContaining({ id: start.id }), FARM,
+      'grain_movements', 'update', expect.objectContaining({
+        id: start.id,
+        __expected_version: 1,
+      }), FARM,
     );
   });
 
@@ -453,8 +461,8 @@ describe('useGrainMovements — updateGrainMovement', () => {
 
 // ---------------------------------------------------------------------------
 describe('useGrainMovements — deleteGrainMovements', () => {
-  it('deletes via .in(id).eq(farm_id) on online success', async () => {
-    supabaseMock.setResult({ count: 2, data: null, error: null });
+  it('deletes through the transactional versioned RPC on online success', async () => {
+    supabaseMock.setRpcResult({ data: 2, error: null });
     const g1 = existingMovement({ id: 'g1' });
     const g2 = existingMovement({ id: 'g2' });
     const { result } = renderGrainHook({ initial: [g1, g2] });
@@ -463,13 +471,21 @@ describe('useGrainMovements — deleteGrainMovements', () => {
     await act(async () => { ok = await result.current.ops.deleteGrainMovements(['g1', 'g2']); });
 
     expect(ok).toBe(true);
-    expect(supabaseMock.fns.in).toHaveBeenCalledWith('id', ['g1', 'g2']);
-    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('farm_id', FARM);
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith(
+      'soft_delete_grain_movements_versioned',
+      expect.objectContaining({
+        p_farm_id: FARM,
+        p_items: expect.arrayContaining([
+          expect.objectContaining({ id: 'g1', version: 1 }),
+          expect.objectContaining({ id: 'g2', version: 1 }),
+        ]),
+      }),
+    );
     await waitFor(() => expect(result.current.grains.value).toHaveLength(0));
   });
 
   it('restores records at original indices on count mismatch', async () => {
-    supabaseMock.setResult({ count: 1, data: null, error: null }); // only 1 of 2 deleted
+    supabaseMock.setRpcResult({ data: 1, error: null }); // defensive mismatch response
     const g1 = existingMovement({ id: 'g1', bushels: 10 });
     const g2 = existingMovement({ id: 'g2', bushels: 20 });
     const g3 = existingMovement({ id: 'g3', bushels: 30 });
@@ -496,8 +512,16 @@ describe('useGrainMovements — deleteGrainMovements', () => {
     expect(ok).toBe(true);
     expect(enqueueMutations).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ tableName: 'grain_movements', operation: 'soft_delete' }),
-        expect.objectContaining({ tableName: 'grain_movements', operation: 'soft_delete' }),
+        expect.objectContaining({
+          tableName: 'grain_movements',
+          operation: 'soft_delete',
+          payload: expect.objectContaining({ __expected_version: 1 }),
+        }),
+        expect.objectContaining({
+          tableName: 'grain_movements',
+          operation: 'soft_delete',
+          payload: expect.objectContaining({ __expected_version: 1 }),
+        }),
       ]),
     );
     expect(enqueueMutation).not.toHaveBeenCalled();

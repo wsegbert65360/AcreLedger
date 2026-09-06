@@ -184,6 +184,8 @@ export interface GrainMovement {
   farm_id: string;
   deleted_at: string | null;
   harvestRecordId?: string;
+  /** Database-managed optimistic-concurrency version; absent only in legacy local caches. */
+  version?: number;
 }
 
 export interface SavedSeed {

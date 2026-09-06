@@ -211,6 +211,7 @@ export const grainMovementSchema = z.object({
   timestamp: z.number().optional(),
   deleted_at: z.string().nullable().optional(),
   harvestRecordId: z.string().optional(),
+  version: z.number().int().positive().optional(),
 }).strict();
 
 export const savedSeedSchema = z.object({

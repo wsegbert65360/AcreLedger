@@ -70,9 +70,12 @@ function renderConfigured(config: Config, online: boolean, farmId: string | null
   const original = { id: 'record-1', farm_id: 'farm-1', fieldId: 'field-1', fieldName: 'North 40', deleted_at: null };
   return renderHook(() => {
     const state = useStatefulArray<any>([original]);
+    const grains = useStatefulArray<any>([]);
     const args: any = {
       farm_id: farmId, viewingSeason: 2026, fields: [{ id: 'field-1', name: 'North 40' }],
       isOnline: online, onMutation: vi.fn(),
+      grainMovements: grains.value,
+      setGrainMovements: grains.setValue,
       [config.recordsKey]: state.value,
       [config.setterKey]: state.setValue,
     };
@@ -187,6 +190,9 @@ describe('activity hook rollback conformance', () => {
       // RLS trap regression guard: the deleted_at IS NULL SELECT policy hides
       // soft-deleted rows, so a zero exact count must be treated as failure.
       cloud.setResult({ count: 0, error: null });
+      if (config.name === 'harvest') {
+        cloud.setRpcResult({ data: null, error: { message: 'stale harvest batch', code: '40001' } });
+      }
       const { result } = renderConfigured(config, true);
 
       await act(async () => expect(await result.current.ops[config.deleteKey](['record-1'])).toBe(false));

@@ -75,13 +75,89 @@ async function saveWebQueue(queue: QueuedMutation[]) {
   localStorage.setItem(WEB_QUEUE_KEY, encrypted);
 }
 
-// Helper: check if a Supabase error is transient (network failure)
-function isNetworkError(error: any) {
+interface MutationResponse {
+  error: any;
+  status?: number;
+  count?: number | null;
+}
+
+// Supabase returns HTTP status beside `error`, while PostgREST errors themselves
+// normally contain only code/message/details/hint. An absent error.status is
+// therefore not evidence of a network failure.
+function isTransientMutationError(response: MutationResponse): boolean {
+  const { error, status } = response;
   if (!error) return false;
-  if (error.status === 0 || error.status === null || error.status === undefined) return true;
+  if (status === 0) return true;
+  const code = typeof error.code === 'string' ? error.code.toUpperCase() : '';
+  if (/^(08|40|53|57|58|XX)/.test(code)) return true;
+  if (status === 429 || status === 502 || status === 503 || status === 504) return true;
   const msg = (error.message || '').toLowerCase();
-  if (msg.includes('fetch') || msg.includes('network') || msg.includes('failed to fetch') || msg.includes('load failed')) {
+  if (!code && (msg.includes('fetch') || msg.includes('network') || msg.includes('load failed'))) {
     return true;
+  }
+  return false;
+}
+
+function expectedValueMatches(actual: unknown, expected: unknown): boolean {
+  if (Array.isArray(expected)) {
+    return Array.isArray(actual)
+      && actual.length === expected.length
+      && expected.every((value, index) => expectedValueMatches(actual[index], value));
+  }
+  if (expected && typeof expected === 'object') {
+    if (!actual || typeof actual !== 'object' || Array.isArray(actual)) return false;
+    return Object.entries(expected).every(([key, value]) =>
+      value === undefined || expectedValueMatches((actual as Record<string, unknown>)[key], value));
+  }
+  return Object.is(actual, expected);
+}
+
+/**
+ * A lost insert response can leave the row committed while the mutation stays
+ * queued. On a 23505 retry, verify the stable ID and complete queued payload
+ * before treating the insert as already applied.
+ */
+async function reconcileDuplicateInsert(mutation: QueuedMutation, farmId: string): Promise<boolean> {
+  const stableId = mutation.payload?.id;
+  if (typeof stableId !== 'string' || !stableId) return false;
+  const { data, error } = await supabase
+    .from(mutation.table_name)
+    .select('*')
+    .eq('id', stableId)
+    .eq('farm_id', farmId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return expectedValueMatches(data, { ...mutation.payload, farm_id: farmId });
+}
+
+async function reconcileZeroRowMutation(mutation: QueuedMutation, farmId: string): Promise<boolean> {
+  const stableId = mutation.payload?.id;
+  if (typeof stableId !== 'string' || !stableId) return false;
+  const { data, error } = await supabase.rpc('get_offline_sync_row_state', {
+    p_table_name: mutation.table_name,
+    p_row_id: stableId,
+    p_farm_id: farmId,
+  });
+  if (error || !data) return false;
+
+  if (mutation.operation === 'soft_delete') {
+    const versionMatches = mutation.table_name !== 'grain_movements'
+      || typeof mutation.payload.__expected_version !== 'number'
+      || data.version === mutation.payload.__expected_version + 1;
+    return versionMatches && expectedValueMatches(data.deleted_at, mutation.payload.deleted_at);
+  }
+  if (mutation.operation === 'update') {
+    const {
+      id: _id,
+      farm_id: _farmId,
+      version: _version,
+      __expected_version: expectedVersion,
+      ...expectedPayload
+    } = mutation.payload;
+    const versionMatches = mutation.table_name !== 'grain_movements'
+      || typeof expectedVersion !== 'number'
+      || data.version === expectedVersion + 1;
+    return versionMatches && expectedValueMatches(data, expectedPayload);
   }
   return false;
 }
@@ -376,7 +452,6 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
     if (queue.length === 0) return true;
 
     console.log(`Replaying sync queue: ${queue.length} mutations pending.`);
-    let discardedCount = 0;
     let pendingRetryCount = 0;
 
     for (const mutation of queue) {
@@ -386,7 +461,7 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
         continue;
       }
       
-      let error = null;
+      let response: MutationResponse = { error: null };
 
       try {
         if (mutation.operation === 'insert') {
@@ -396,56 +471,89 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
               ? 'farm_id,tract_key,clu_number'
               : null;
           const query = supabase.from(mutation.table_name);
-          const { error: err } = conflictColumns
+          response = conflictColumns
             ? await query.upsert(
               [{ ...mutation.payload, farm_id: farmId }],
               { onConflict: conflictColumns },
             )
             : await query.insert([{ ...mutation.payload, farm_id: farmId }]);
-          error = err;
         } else if (mutation.operation === 'update') {
           // Perform update, strip id/farm_id from set payload
-          const { farm_id: _f, id: _i, ...payload } = mutation.payload;
-          const { error: err } = await supabase
+          const {
+            farm_id: _f,
+            id: _i,
+            version: _version,
+            __expected_version: expectedVersion,
+            ...payload
+          } = mutation.payload;
+          const base = supabase
             .from(mutation.table_name)
-            .update(payload)
+            .update(payload, { count: 'exact' })
             .eq('id', mutation.payload.id)
             .eq('farm_id', farmId);
-          error = err;
+          response = mutation.table_name === 'grain_movements' && typeof expectedVersion === 'number'
+            ? await base.eq('version', expectedVersion)
+            : await base;
         } else if (mutation.operation === 'soft_delete') {
           // Perform soft delete update
-          const { error: err } = await supabase
+          const base = supabase
             .from(mutation.table_name)
-            .update({ deleted_at: mutation.payload.deleted_at })
+            .update({ deleted_at: mutation.payload.deleted_at }, { count: 'exact' })
             .eq('id', mutation.payload.id)
             .eq('farm_id', farmId);
-          error = err;
+          response = mutation.table_name === 'grain_movements'
+            && typeof mutation.payload.__expected_version === 'number'
+            ? await base.eq('version', mutation.payload.__expected_version)
+            : await base;
         }
 
-        if (error) {
-          if (isNetworkError(error)) {
+        if (
+          !response.error
+          && mutation.operation !== 'insert'
+          && response.count !== 1
+        ) {
+          if (response.count === 0 && await reconcileZeroRowMutation(mutation, farmId)) {
+            await syncQueue.dequeueMutation(mutation.id);
+            continue;
+          }
+          response = {
+            ...response,
+            status: 409,
+            error: {
+              code: 'SYNC_ROW_COUNT_MISMATCH',
+              message: `Expected one affected row, received ${String(response.count)}`,
+            },
+          };
+        }
+
+        if (response.error) {
+          if (
+            mutation.operation === 'insert'
+            && response.error.code === '23505'
+            && await reconcileDuplicateInsert(mutation, farmId)
+          ) {
+            await syncQueue.dequeueMutation(mutation.id);
+            continue;
+          }
+
+          if (isTransientMutationError(response)) {
             // Transient error: stop queue execution and wait for next connection online event
-            console.warn(`Sync queue replay paused due to connection issue:`, error);
+            console.warn(`Sync queue replay paused due to connection issue:`, response.error);
             return false;
           } else {
             // Permanent error (e.g. RLS failure, constraint error)
-            console.error(`Sync queue permanent mutation failure for ${mutation.table_name}:`, error);
-            
+            console.error(`Sync queue permanent mutation failure for ${mutation.table_name}:`, response.error);
+
             const nextRetries = mutation.retry_count + 1;
-            if (nextRetries >= 3) {
-              console.warn(`Discarding sync mutation ${mutation.id} after 3 failed attempts.`);
-              toast.error(`Offline ${mutation.operation} to ${mutation.table_name} failed after 3 tries and was discarded.`);
-              discardedCount++;
-              await syncQueue.dequeueMutation(mutation.id);
-            } else {
-              await syncQueue.incrementRetry(mutation.id, mutation.retry_count);
-              pendingRetryCount++;
-              // Intentional choice to continue processing so a poisoned or invalid mutation
-              // (e.g., RLS or schema constraint violation) does not block unrelated queue items indefinitely.
-              // Note: Dependent mutations in a chain (like insert -> update on the same row) will also
-              // fail and increment retry counts until discarded, but unrelated rows will sync successfully.
-              continue;
+            await syncQueue.incrementRetry(mutation.id, mutation.retry_count);
+            pendingRetryCount++;
+            if (nextRetries === 3) {
+              toast.error(`Offline ${mutation.operation} to ${mutation.table_name} still cannot sync.`, {
+                description: 'The change remains safely queued for recovery; it was not discarded.',
+              });
             }
+            // Continue so a permanent failure cannot block unrelated records.
+            continue;
           }
         } else {
           // Success: remove mutation from queue
@@ -459,10 +567,9 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
 
     // The completion toast must not claim everything uploaded when items were
     // skipped or discarded mid-drain.
-    if (discardedCount > 0 || pendingRetryCount > 0) {
+    if (pendingRetryCount > 0) {
       const parts: string[] = [];
       if (pendingRetryCount > 0) parts.push(`${pendingRetryCount} still pending retry`);
-      if (discardedCount > 0) parts.push(`${discardedCount} discarded after repeated failures`);
       toast.warning('Sync finished with unfinished items.', { description: `${parts.join('; ')}. They will retry on the next sync.` });
     } else {
       toast.success('Sync complete. All offline changes uploaded.');

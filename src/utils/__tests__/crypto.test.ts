@@ -28,4 +28,36 @@ describe('Crypto Utility', () => {
     const result = await decryptData('not-encrypted', secret);
     expect(result).toBe('not-encrypted');
   });
+
+  it('round-trips a large encoded attachment payload', async () => {
+    const attachment = JSON.stringify({
+      filename: 'spray-label.jpg',
+      mimeType: 'image/jpeg',
+      data: 'A'.repeat(500_000),
+    });
+
+    const encrypted = await encryptData(attachment, secret);
+
+    await expect(decryptData(encrypted, secret)).resolves.toBe(attachment);
+  });
+
+  it('round-trips a large tract GeoJSON payload', async () => {
+    const coordinates = Array.from({ length: 30_000 }, (_, index) => [
+      -93.5 + index / 1_000_000,
+      38.4 + index / 1_000_000,
+    ]);
+    const geoJson = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [coordinates] },
+        properties: { cluNumber: '1', acres: 120.5 },
+      }],
+    });
+    expect(geoJson.length).toBeGreaterThan(500_000);
+
+    const encrypted = await encryptData(geoJson, secret);
+
+    await expect(decryptData(encrypted, secret)).resolves.toBe(geoJson);
+  });
 });

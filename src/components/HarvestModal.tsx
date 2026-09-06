@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,7 +56,7 @@ interface HarvestModalProps {
 
 export default function HarvestModal({ field, open, onClose, initialData, mode = 'edit' }: HarvestModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { addHarvestRecord, updateHarvestRecord, addGrainMovement, updateGrainMovement, deleteGrainMovements, grainMovements, harvestRecords, bins, viewingSeason } = useFarm();
+  const { addHarvestRecord, addHarvestWithGrain, updateHarvestRecord, addGrainMovement, updateGrainMovement, deleteGrainMovements, grainMovements, harvestRecords, bins, viewingSeason } = useFarm();
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -68,6 +68,16 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
   const [harvestDate, setHarvestDate] = useState(initialData?.harvestDate || toLocalIsoDate(Date.now()));
   const [harvestTime, setHarvestTime] = useState(() => toLocalTime(initialData?.timestamp ?? Date.now()));
   const [isSaving, setIsSaving] = useState(false);
+  const createIdsRef = useRef<{ harvestId: string; grainMovementId: string } | null>(null);
+  const getCreateIds = () => {
+    if (!createIdsRef.current) {
+      createIdsRef.current = {
+        harvestId: crypto.randomUUID(),
+        grainMovementId: crypto.randomUUID(),
+      };
+    }
+    return createIdsRef.current;
+  };
 
   const suggestedHarvest = useMemo(() => {
     if (initialData) return null;
@@ -235,39 +245,39 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
           if (!(await removeLeftovers())) return;
         }
       } else {
-        const harvestId = crypto.randomUUID();
-        success = await addHarvestRecord({
-          ...harvestData,
-          id: harvestId,
-          timestamp: harvestTimestamp,
-        });
+        const { harvestId, grainMovementId } = getCreateIds();
+        if (destination === 'bin') {
+          const bin = bins.find(b => b.id === binId);
+          success = await addHarvestWithGrain({
+            harvest: { ...harvestData, id: harvestId, timestamp: harvestTimestamp },
+            grainMovement: {
+              id: grainMovementId,
+              binId,
+              binName: bin?.name || 'Unknown',
+              type: 'in',
+              bushels: bu,
+              moisturePercent: m,
+              sourceFieldName: field.name,
+              timestamp: harvestTimestamp,
+              harvestRecordId: harvestId,
+            },
+          });
+        } else {
+          success = await addHarvestRecord({
+            ...harvestData,
+            id: harvestId,
+            timestamp: harvestTimestamp,
+          });
+        }
         if (!success) {
           toast.error('Failed to save harvest record.');
           native.haptic.error();
           return;
         }
-
-        if (destination === 'bin') {
-          const bin = bins.find(b => b.id === binId);
-          const gmSuccess = await addGrainMovement({
-            binId,
-            binName: bin?.name || 'Unknown',
-            type: 'in',
-            bushels: bu,
-            moisturePercent: m,
-            sourceFieldName: field.name,
-            timestamp: harvestTimestamp,
-            harvestRecordId: harvestId,
-          });
-          if (!gmSuccess) {
-            toast.error('Harvest saved but grain movement addition failed.');
-            native.haptic.error();
-            return;
-          }
-        }
       }
 
       native.haptic.success();
+      createIdsRef.current = null;
       if (keepOpen) {
         setBushels('');
         setScaleTicketNumber('');
@@ -289,7 +299,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
   const valid = Number.isFinite(localDateTimeMs(harvestDate, harvestTime)) && destination && moisture && landlordSplit && bushels && (destination === 'town' || binId);
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { reset(); onClose(); } }}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { createIdsRef.current = null; reset(); onClose(); } }}>
       <DialogContent className="bg-card border-harvest/30 max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest">

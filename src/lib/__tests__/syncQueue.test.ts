@@ -14,17 +14,58 @@ vi.mock('@/utils/crypto', () => ({
   }),
 }));
 
-// Minimal Supabase mock — returns success for all operations
+const supabaseControl = vi.hoisted(() => ({
+  insertResponses: [] as Array<{ data?: unknown; error: any; status?: number }>,
+  selectResponses: [] as Array<{ data: unknown; error: any; status?: number }>,
+  updateResponses: [] as Array<{ error: any; count: number | null; status?: number }>,
+  rpcResponses: [] as Array<{ data: any; error: any; status?: number }>,
+  insert: vi.fn(),
+  update: vi.fn(),
+  rpc: vi.fn(),
+}));
+
+function updateBuilder(...args: unknown[]) {
+  supabaseControl.update(...args);
+  const response = Promise.resolve(
+    supabaseControl.updateResponses.shift() ?? { error: null, count: 1, status: 204 },
+  );
+  const builder: any = {
+    eq: () => builder,
+    then: response.then.bind(response),
+  };
+  return builder;
+}
+
+function selectBuilder() {
+  const builder: any = {
+    eq: () => builder,
+    maybeSingle: () => Promise.resolve(
+      supabaseControl.selectResponses.shift() ?? { data: null, error: null, status: 200 },
+    ),
+  };
+  return builder;
+}
+
+// Configurable Supabase mock; defaults to successful operations.
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: () => ({
-      insert: () => Promise.resolve({ error: null }),
-      update: () => ({
-        eq: () => ({
-          select: () => Promise.resolve({ data: [{ id: '1' }], error: null }),
-        }),
-      }),
+      insert: (...args: unknown[]) => {
+        supabaseControl.insert(...args);
+        return Promise.resolve(
+          supabaseControl.insertResponses.shift() ?? { error: null, status: 201 },
+        );
+      },
+      upsert: () => Promise.resolve({ error: null, status: 201 }),
+      update: updateBuilder,
+      select: selectBuilder,
     }),
+    rpc: (...args: unknown[]) => {
+      supabaseControl.rpc(...args);
+      return Promise.resolve(
+        supabaseControl.rpcResponses.shift() ?? { data: null, error: null, status: 200 },
+      );
+    },
   },
 }));
 
@@ -41,6 +82,10 @@ import { syncQueue } from '../syncQueue';
 describe('syncQueue web queue management', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    supabaseControl.insertResponses.length = 0;
+    supabaseControl.selectResponses.length = 0;
+    supabaseControl.updateResponses.length = 0;
+    supabaseControl.rpcResponses.length = 0;
     localStorage.clear();
   });
 
@@ -149,6 +194,191 @@ describe('syncQueue web queue management', () => {
     const result = await syncQueue.replayQueue('farm-1');
     expect(result).toBe(true);
     expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('continues past a permanent PostgREST error without discarding the failed mutation', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'bad' }, 'farm-1');
+    await syncQueue.enqueueMutation('bins', 'insert', { id: 'good' }, 'farm-1');
+    supabaseControl.insertResponses.push(
+      { error: { code: '23514', message: 'check constraint failed' }, status: 409 },
+      { error: null, status: 201 },
+    );
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(1);
+    expect(queue[0].payload.id).toBe('bad');
+    expect(queue[0].retry_count).toBe(1);
+    expect(supabaseControl.insert).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains a permanent failure after three attempts for later recovery', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'bad' }, 'farm-1');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      supabaseControl.insertResponses.push({
+        error: { code: '42501', message: 'permission denied' },
+        status: 403,
+      });
+      await syncQueue.replayQueue('farm-1');
+    }
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(1);
+    expect(queue[0].retry_count).toBe(3);
+  });
+
+  it('reconciles a retried insert whose stable ID and payload already exist', async () => {
+    const payload = { id: 'committed', name: 'Already saved', metadata: { source: 'offline' } };
+    await syncQueue.enqueueMutation('fields', 'insert', payload, 'farm-1');
+    supabaseControl.insertResponses.push({
+      error: { code: '23505', message: 'duplicate key' },
+      status: 409,
+    });
+    supabaseControl.selectResponses.push({
+      data: { ...payload, farm_id: 'farm-1', server_default: true },
+      error: null,
+      status: 200,
+    });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('does not reconcile a duplicate stable ID when the stored payload differs', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'collision', name: 'Offline value' }, 'farm-1');
+    supabaseControl.insertResponses.push({
+      error: { code: '23505', message: 'duplicate key' },
+      status: 409,
+    });
+    supabaseControl.selectResponses.push({
+      data: { id: 'collision', name: 'Different value', farm_id: 'farm-1' },
+      error: null,
+      status: 200,
+    });
+
+    await syncQueue.replayQueue('farm-1');
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(1);
+    expect(queue[0].retry_count).toBe(1);
+  });
+
+  it('pauses on a real transient response and leaves later work untouched', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'offline' }, 'farm-1');
+    await syncQueue.enqueueMutation('bins', 'insert', { id: 'later' }, 'farm-1');
+    supabaseControl.insertResponses.push({
+      error: { code: '08006', message: 'connection failure' },
+      status: 503,
+    });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(2);
+    expect(queue.every(item => item.retry_count === 0)).toBe(true);
+    expect(supabaseControl.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('requests exact counts for replayed updates and soft deletes', async () => {
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Changed' }, 'farm-1');
+    await syncQueue.enqueueMutation('bins', 'soft_delete', { id: 'b1', deleted_at: '2026-09-05T00:00:00.000Z' }, 'farm-1');
+
+    await syncQueue.replayQueue('farm-1');
+
+    expect(supabaseControl.update).toHaveBeenNthCalledWith(1, { name: 'Changed' }, { count: 'exact' });
+    expect(supabaseControl.update).toHaveBeenNthCalledWith(
+      2,
+      { deleted_at: '2026-09-05T00:00:00.000Z' },
+      { count: 'exact' },
+    );
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('removes a zero-row update only when the own-farm row already has the queued values', async () => {
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Changed' }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: null, count: 0, status: 204 });
+    supabaseControl.rpcResponses.push({
+      data: { id: 'f1', farm_id: 'farm-1', name: 'Changed', deleted_at: null },
+      error: null,
+      status: 200,
+    });
+
+    await syncQueue.replayQueue('farm-1');
+
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('get_offline_sync_row_state', {
+      p_table_name: 'fields',
+      p_row_id: 'f1',
+      p_farm_id: 'farm-1',
+    });
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('removes a zero-row soft delete only when the row is already deleted at the queued timestamp', async () => {
+    const deletedAt = '2026-09-05T00:00:00.000Z';
+    await syncQueue.enqueueMutation('fields', 'soft_delete', { id: 'f1', deleted_at: deletedAt }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: null, count: 0, status: 204 });
+    supabaseControl.rpcResponses.push({
+      data: { id: 'f1', farm_id: 'farm-1', deleted_at: deletedAt },
+      error: null,
+      status: 200,
+    });
+
+    await syncQueue.replayQueue('farm-1');
+
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('retains a zero-row conflict or missing target for recovery', async () => {
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Queued' }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: null, count: 0, status: 204 });
+    supabaseControl.rpcResponses.push({
+      data: { id: 'f1', farm_id: 'farm-1', name: 'Newer cloud value' },
+      error: null,
+      status: 200,
+    });
+
+    await syncQueue.replayQueue('farm-1');
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(1);
+    expect(queue[0].retry_count).toBe(1);
+  });
+
+  it('replays grain updates against the queued expected version', async () => {
+    await syncQueue.enqueueMutation('grain_movements', 'update', {
+      id: 'g1',
+      bushels: 900,
+      version: 2,
+      __expected_version: 1,
+    }, 'farm-1');
+
+    await syncQueue.replayQueue('farm-1');
+
+    expect(supabaseControl.update).toHaveBeenCalledWith(
+      { bushels: 900 },
+      { count: 'exact' },
+    );
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('requires the incremented version when reconciling a zero-row grain update', async () => {
+    await syncQueue.enqueueMutation('grain_movements', 'update', {
+      id: 'g1',
+      bushels: 900,
+      version: 2,
+      __expected_version: 1,
+    }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: null, count: 0, status: 204 });
+    supabaseControl.rpcResponses.push({
+      data: { id: 'g1', farm_id: 'farm-1', bushels: 900, version: 1 },
+      error: null,
+      status: 200,
+    });
+
+    await syncQueue.replayQueue('farm-1');
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(1);
+    expect(queue[0].retry_count).toBe(1);
   });
 
   // ─── Replay — Invalid Table ───────────────────────────────────────────────

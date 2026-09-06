@@ -11,6 +11,7 @@ import HarvestModal from '../HarvestModal';
 const state = vi.hoisted(() => ({
   grainMovements: [] as import('@/types/farm').GrainMovement[],
   updateHarvestRecord: vi.fn().mockResolvedValue(true),
+  addHarvestWithGrain: vi.fn().mockResolvedValue(true),
   addGrainMovement: vi.fn().mockResolvedValue(true),
   updateGrainMovement: vi.fn().mockResolvedValue(true),
   deleteGrainMovements: vi.fn().mockResolvedValue(true),
@@ -19,6 +20,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     addHarvestRecord: vi.fn().mockResolvedValue(true),
+    addHarvestWithGrain: state.addHarvestWithGrain,
     updateHarvestRecord: state.updateHarvestRecord,
     addGrainMovement: state.addGrainMovement,
     updateGrainMovement: state.updateGrainMovement,
@@ -128,6 +130,7 @@ describe('HarvestModal linked grain movement', () => {
     vi.clearAllMocks();
     state.grainMovements = [];
     state.updateHarvestRecord.mockResolvedValue(true);
+    state.addHarvestWithGrain.mockResolvedValue(true);
     state.addGrainMovement.mockResolvedValue(true);
     state.updateGrainMovement.mockResolvedValue(true);
     state.deleteGrainMovements.mockResolvedValue(true);
@@ -378,6 +381,31 @@ describe('HarvestModal linked grain movement', () => {
       expect(state.updateHarvestRecord.mock.calls[1][0]).toEqual(original);
     });
   });
+});
+
+it('uses retry-stable IDs for atomic creation of a new bin harvest', async () => {
+  state.addHarvestWithGrain
+    .mockResolvedValueOnce(false)
+    .mockResolvedValueOnce(true);
+  render(<HarvestModal field={field} open onClose={() => {}} />);
+
+  fireEvent.click(screen.getByRole('button', { name: /bin/i }));
+  fireEvent.change(screen.getByTestId('select'), { target: { value: 'bin-1' } });
+  fireEvent.change(screen.getByLabelText(/moisture/i), { target: { value: '15' } });
+  fireEvent.change(screen.getByLabelText(/landlord %/i), { target: { value: '0' } });
+  fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '1200' } });
+
+  fireEvent.click(screen.getByRole('button', { name: /log harvest/i }));
+  await waitFor(() => expect(state.addHarvestWithGrain).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: /log harvest/i }));
+  await waitFor(() => expect(state.addHarvestWithGrain).toHaveBeenCalledTimes(2));
+
+  const first = state.addHarvestWithGrain.mock.calls[0][0];
+  const retry = state.addHarvestWithGrain.mock.calls[1][0];
+  expect(first.harvest.id).toBe(retry.harvest.id);
+  expect(first.grainMovement.id).toBe(retry.grainMovement.id);
+  expect(first.grainMovement.harvestRecordId).toBe(first.harvest.id);
+  expect(state.addGrainMovement).not.toHaveBeenCalled();
 });
 
 it('saves a selected local harvest time to the harvest and linked bin movement', async () => {

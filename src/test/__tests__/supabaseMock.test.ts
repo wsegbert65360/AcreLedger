@@ -85,6 +85,100 @@ describe('supabaseMock', () => {
     expect(assignmentResult.data).toEqual([{ id: 'assignment-1' }]);
   });
 
+  describe('setTablePages', () => {
+    it('serves successive awaited chains from the queue, one page per await', async () => {
+      mock.setTablePages('plant_records', [
+        { data: [{ id: 'p1' }, { id: 'p2' }], error: null },
+        { data: [{ id: 'p3' }], error: null },
+      ]);
+
+      const page1 = await mock.client.from('plant_records').select('*');
+      const page2 = await mock.client.from('plant_records').select('*');
+
+      expect(page1.data).toEqual([{ id: 'p1' }, { id: 'p2' }]);
+      expect(page2.data).toEqual([{ id: 'p3' }]);
+    });
+
+    it('passes the page index and range(from, to) args to function pages', async () => {
+      const seen: Array<{ index: number; from?: number; to?: number }> = [];
+      mock.setTablePages('spray_records', [
+        ({ index, from, to }) => {
+          seen.push({ index, from, to });
+          return { data: [{ id: `s${index}` }], error: null };
+        },
+        ({ index, from, to }) => {
+          seen.push({ index, from, to });
+          return { data: [{ id: `s${index}` }], error: null };
+        },
+      ]);
+
+      await mock.client.from('spray_records').select('*').range(0, 999);
+      await mock.client.from('spray_records').select('*').range(1000, 1999);
+
+      expect(seen).toEqual([
+        { index: 0, from: 0, to: 999 },
+        { index: 1, from: 1000, to: 1999 },
+      ]);
+    });
+
+    it('falls back to the static table handler once the queue is exhausted', async () => {
+      mock.setTableHandler('bins', { data: [{ id: 'tail' }], error: null, count: null });
+      mock.setTablePages('bins', [{ data: [{ id: 'head' }], error: null }]);
+
+      const first = await mock.client.from('bins').select('*');
+      const second = await mock.client.from('bins').select('*');
+
+      expect(first.data).toEqual([{ id: 'head' }]);
+      expect(second.data).toEqual([{ id: 'tail' }]);
+    });
+
+    it('keeps page queues isolated per table under concurrent pagination', async () => {
+      mock.setTablePages('plant_records', [
+        { data: [{ id: 'plant-p1' }], error: null },
+        { data: [{ id: 'plant-p2' }], error: null },
+      ]);
+      mock.setTablePages('bins', [
+        { data: [{ id: 'bin-p1' }], error: null },
+        { data: [{ id: 'bin-p2' }], error: null },
+      ]);
+
+      const plantQuery = (async () => {
+        const first = await mock.client.from('plant_records').select('*');
+        const second = await mock.client.from('plant_records').select('*');
+        return [first, second];
+      })();
+      const binQuery = (async () => {
+        const first = await mock.client.from('bins').select('*');
+        const second = await mock.client.from('bins').select('*');
+        return [first, second];
+      })();
+
+      const [[plant1, plant2], [bin1, bin2]] = await Promise.all([plantQuery, binQuery]);
+      expect(plant1.data).toEqual([{ id: 'plant-p1' }]);
+      expect(plant2.data).toEqual([{ id: 'plant-p2' }]);
+      expect(bin1.data).toEqual([{ id: 'bin-p1' }]);
+      expect(bin2.data).toEqual([{ id: 'bin-p2' }]);
+    });
+
+    it('restarts the queue when setTablePages is called again for the same table', async () => {
+      mock.setTablePages('fields', [{ data: [{ id: 'first-run' }], error: null }]);
+      await mock.client.from('fields').select('*');
+
+      mock.setTablePages('fields', [{ data: [{ id: 'second-run' }], error: null }]);
+      const res = await mock.client.from('fields').select('*');
+
+      expect(res.data).toEqual([{ id: 'second-run' }]);
+    });
+
+    it('reset() clears page queue state', async () => {
+      mock.setTablePages('fields', [{ data: [{ id: 'queued' }], error: null }]);
+      mock.reset();
+
+      const res = await mock.client.from('fields').select('*');
+      expect(res).toEqual({ count: 1, data: null, error: null });
+    });
+  });
+
   it('reset() restores default behavior for a second call after throw/handler/rpc state is set', async () => {
     // Poison all terminals, then reset, then prove a fresh chain resolves to
     // the default — i.e. reset() re-installs the implementations mockReset

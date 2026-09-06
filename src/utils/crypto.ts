@@ -1,21 +1,61 @@
 import { Preferences } from '@capacitor/preferences';
 
 const PERSISTENT_KEY_STORAGE = 'al_local_encryption_key';
+const ENCRYPTION_KEY_LOCK = 'acreledger-local-encryption-key';
+const BASE64_CHUNK_SIZE = 0x8000;
+let localEncryptionKeyPromise: Promise<string> | null = null;
+
+/**
+ * Converts arbitrary binary data without spreading the entire payload into a
+ * single function call. Large offline caches and encoded attachments can be
+ * several hundred kilobytes, beyond JavaScript engines' argument limits.
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunks: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+    const chunk = bytes.subarray(offset, offset + BASE64_CHUNK_SIZE);
+    chunks.push(String.fromCharCode(...chunk));
+  }
+  return btoa(chunks.join(''));
+}
 
 /**
  * Retrieves or generates a persistent local encryption key.
  * This ensures data remains readable even if the user is offline or the session expires.
  */
-export async function getLocalEncryptionKey(): Promise<string> {
-  // Try Preferences (Keychain on iOS/Android, localStorage on Web)
+async function readOrCreateLocalEncryptionKey(): Promise<string> {
   let { value: key } = await Preferences.get({ key: PERSISTENT_KEY_STORAGE });
-  
+
   if (!key) {
     key = crypto.randomUUID();
     await Preferences.set({ key: PERSISTENT_KEY_STORAGE, value: key });
   }
-  
+
   return key;
+}
+
+async function initializeLocalEncryptionKey(): Promise<string> {
+  // Web Locks coordinate first use across browser tabs and workers. Native
+  // runtimes have one active JS context, where the shared promise below is the
+  // serialization boundary.
+  const lockManager = globalThis.navigator?.locks;
+  if (lockManager) {
+    return lockManager.request(ENCRYPTION_KEY_LOCK, readOrCreateLocalEncryptionKey);
+  }
+  return readOrCreateLocalEncryptionKey();
+}
+
+export function getLocalEncryptionKey(): Promise<string> {
+  // Cache the promise, not only its result, so simultaneous callers all await
+  // the same read/generate/write transaction. Clear a rejected initialization
+  // so a transient storage failure can be retried.
+  if (!localEncryptionKeyPromise) {
+    localEncryptionKeyPromise = initializeLocalEncryptionKey().catch(error => {
+      localEncryptionKeyPromise = null;
+      throw error;
+    });
+  }
+  return localEncryptionKeyPromise;
 }
 
 export async function generateKey(secret: string): Promise<CryptoKey> {
@@ -52,8 +92,8 @@ export async function encryptData(data: string, secret: string): Promise<string>
       key,
       enc.encode(data)
     );
-    const ivB64 = btoa(String.fromCharCode(...iv));
-    const encB64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    const ivB64 = bytesToBase64(iv);
+    const encB64 = bytesToBase64(new Uint8Array(encrypted));
     return `enc:${ivB64}:${encB64}`;
   } catch (err) {
     throw new Error(`Encryption failed: ${err instanceof Error ? err.message : String(err)}`);

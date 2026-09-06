@@ -19,30 +19,40 @@ const cloud = createSupabaseMock();
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
 const authSignOut = vi.fn();
+// farmStore's fetch effect depends on setLoading; production passes a stable
+// useState setter, so the mock must too or every re-render re-triggers
+// fetchData (which corrupts stateful page queues set up by pagination tests).
+const authSetLoading = vi.fn();
 const clearLocalCacheMock = vi.fn();
+const getPendingCountMock = vi.fn().mockResolvedValue(0);
+const replayQueueMock = vi.fn().mockResolvedValue(true);
+const loadCacheMock = vi.fn();
+const saveCacheMock = vi.fn();
 
 // Per-test controls read by the mocked hooks.
 const control = {
   farm_id: 'farm-1' as string | null,
+  user_id: 'user-1' as string | null,
   isOnline: false,
 };
-const cacheControl: { data: Record<string, unknown> } = { data: {} };
+const cacheControl: {
+  data: Record<string, unknown>;
+  load: null | ((table: string, userId: string | null) => unknown | Promise<unknown>);
+} = { data: {}, load: null };
 
 vi.doMock('@/lib/supabase', () => ({ supabase: cloud.client }));
 vi.doMock('sonner', () => ({ toast: { error: toastError, success: toastSuccess } }));
 
 vi.doMock('@/store/useAuth', () => ({
   useAuth: () => {
-    // Session must be referentially stable: farmStore's hydration effect
-    // depends on the session object, and a fresh object each render would loop.
-    const [session] = useState(() => ({ user: { id: 'user-1' } }));
+    const session = control.user_id ? { user: { id: control.user_id } } : null;
     const [activeSeason, setActiveSeason] = useState(2026);
     const [viewingSeason, setViewingSeason] = useState(2026);
     const [onboardingComplete, setOnboardingComplete] = useState(true);
     return {
       session,
       loading: false,
-      setLoading: vi.fn(),
+      setLoading: authSetLoading,
       farm_id: control.farm_id,
       setFarmId: vi.fn(),
       activeSeason,
@@ -80,15 +90,15 @@ vi.doMock('@/store/useSeasonManagement', () => ({
 
 vi.doMock('@/lib/syncQueue', () => ({
   syncQueue: {
-    getPendingCount: vi.fn().mockResolvedValue(0),
-    replayQueue: vi.fn().mockResolvedValue(true),
+    getPendingCount: getPendingCountMock,
+    replayQueue: replayQueueMock,
   },
 }));
 
 vi.doMock('@/lib/offlineStorage', () => ({
   offlineStorage: {
-    loadCache: vi.fn((table: string) => Promise.resolve(cacheControl.data[table] ?? null)),
-    saveCache: vi.fn(),
+    loadCache: loadCacheMock,
+    saveCache: saveCacheMock,
     clearCache: vi.fn(),
   },
 }));
@@ -121,12 +131,22 @@ describe('farmStore composed behaviors', () => {
   beforeEach(() => {
     cloud.reset();
     control.farm_id = 'farm-1';
+    control.user_id = 'user-1';
     control.isOnline = false;
     cacheControl.data = {};
+    cacheControl.load = null;
     toastError.mockReset();
     toastSuccess.mockReset();
     authSignOut.mockReset().mockResolvedValue(undefined);
+    authSetLoading.mockReset();
     clearLocalCacheMock.mockReset();
+    getPendingCountMock.mockReset().mockResolvedValue(0);
+    replayQueueMock.mockReset().mockResolvedValue(true);
+    loadCacheMock.mockReset().mockImplementation((table: string, userId: string | null) =>
+      Promise.resolve(cacheControl.load
+        ? cacheControl.load(table, userId)
+        : cacheControl.data[table] ?? null));
+    saveCacheMock.mockReset();
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -261,6 +281,113 @@ describe('farmStore composed behaviors', () => {
       let ok: boolean | undefined;
       await act(async () => { ok = await result.current.refresh(); });
       expect(ok).toBe(false);
+    });
+
+    it('pages past the Data API row cap and applies rows from every page', async () => {
+      control.isOnline = true;
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm' }, error: null });
+      // A collection larger than COMPLETE_COLLECTION_PAGE_SIZE: the second page
+      // must be fetched and merged, not silently truncated.
+      const pageOne = Array.from({ length: 1000 }, (_, i) => ({
+        id: `bin-${i}`, name: `Bin ${i}`, capacity: 1000, farm_id: 'farm-1', deleted_at: null,
+      }));
+      const pageTwo = [{
+        id: 'bin-overflow', name: 'Overflow Bin', capacity: 500, farm_id: 'farm-1', deleted_at: null,
+      }];
+      cloud.setTablePages('bins', [
+        { data: pageOne, error: null },
+        { data: pageTwo, error: null },
+      ]);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+
+      expect(result.current.bins).toHaveLength(1001);
+      expect(result.current.bins.some(b => b.id === 'bin-overflow')).toBe(true);
+      // Second offset window (from=1000, to=1999) was actually requested.
+      expect(cloud.fns.range).toHaveBeenCalledWith(1000, 1999);
+    });
+
+    it('keeps the load unsettled and applies no rows when a later page fails', async () => {
+      control.isOnline = true;
+      // Page one must be exactly full-size so the read continues into the
+      // failing second page instead of stopping at a short page.
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({
+        id: `bin-${i}`, name: `Bin ${i}`, capacity: 1000, farm_id: 'farm-1', deleted_at: null,
+      }));
+      cloud.setTablePages('bins', [
+        { data: fullPage, error: null },
+        { data: null, error: { message: 'page 2 denied' } },
+      ]);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+
+      await waitFor(() => expect(result.current.fetchError).toBe(true));
+
+      // A truncated fetch must not look settled: complete-collection reads that
+      // error return no rows and never mark the initial load complete.
+      expect(toastError).toHaveBeenCalledWith('Some data failed to load from cloud. Showing local cache.');
+      expect(result.current.initialFetchComplete).toBe(false);
+      expect(result.current.bins).toEqual([]);
+    });
+
+    it('ignores a previous user cache hydration after the identity changes', async () => {
+      let resolveOldCache!: (value: unknown) => void;
+      const oldCache = new Promise(resolve => { resolveOldCache = resolve; });
+      const userTwoField = { id: 'field-b', name: 'User B field', acreage: 10, farm_id: 'farm-2', deleted_at: null };
+      cacheControl.load = (table, userId) => {
+        if (table !== 'fields') return null;
+        if (userId === 'user-1') return oldCache;
+        if (userId === 'user-2') return [userTwoField];
+        return null;
+      };
+      const { result, rerender } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(loadCacheMock).toHaveBeenCalledWith('fields', 'user-1'));
+
+      control.user_id = 'user-2';
+      control.farm_id = 'farm-2';
+      rerender();
+      await waitFor(() => expect(result.current.fields.map(field => field.id)).toEqual(['field-b']));
+
+      await act(async () => {
+        resolveOldCache([{ id: 'field-a', name: 'User A field', acreage: 20, farm_id: 'farm-1', deleted_at: null }]);
+        await oldCache;
+      });
+
+      expect(result.current.fields.map(field => field.id)).toEqual(['field-b']);
+      const userTwoFieldWrites = saveCacheMock.mock.calls
+        .filter(([table, userId]) => table === 'fields' && userId === 'user-2')
+        .map(([, , value]) => value);
+      expect(userTwoFieldWrites).not.toContainEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'field-a' }),
+      ]));
+    });
+
+    it('does not apply an old account cloud response after sign-out', async () => {
+      control.isOnline = true;
+      let resolveFields!: (value: { data: unknown[]; error: null }) => void;
+      const deferredFields = new Promise<{ data: unknown[]; error: null }>(resolve => {
+        resolveFields = resolve;
+      });
+      cloud.setTablePages('fields', [deferredFields]);
+      cloud.setTableHandler('farms', { data: { name: 'Farm A' }, error: null });
+      const { result, rerender } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(cloud.fns.from).toHaveBeenCalledWith('fields'));
+
+      control.user_id = null;
+      control.farm_id = null;
+      rerender();
+      await waitFor(() => expect(result.current.fields).toEqual([]));
+
+      await act(async () => {
+        resolveFields({
+          data: [{ id: 'field-a', name: 'Late field', acreage: 10, farm_id: 'farm-1', deleted_at: null }],
+          error: null,
+        });
+        await deferredFields;
+      });
+
+      expect(result.current.fields).toEqual([]);
+      expect(result.current.farmName).toBeNull();
     });
   });
 });
