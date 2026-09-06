@@ -271,6 +271,7 @@ Display with an amber `AlertTriangle` warning only.
 To prevent inventory drift if two sessions edit the same bin simultaneously, all Grain Movement edits must include a **Concurrency Guard**:
 - `grain_movements.version` is database-managed and increments on every update. Capture the expected version from the render closure and include it in online and replayed update/delete predicates; never use the activity timestamp as the concurrency token.
 - If the count of updated rows is 0, reconcile an already-applied operation, otherwise retain the mutation and notify the user that the record has changed.
+- Reconciliation compares strictly validated ISO timestamp strings by their parsed instant, so PostgreSQL `+00:00` serialization matches an equivalent queued `.000Z` value. Other payload values retain recursive exact comparison.
 
 #### Linked Harvest Lifecycle
 A bin-destination harvest and its incoming grain movement form one logical operation. Online creation uses `create_harvest_with_grain` with retry-stable IDs. Offline creation stores one harvest queue envelope containing the mapped grain payload; replay sends that envelope, and legacy two-row pairs, through the same atomic RPC. Harvest soft deletion uses `soft_delete_harvests_with_grain`, and a database trigger cascades the same `deleted_at` value to the linked active movement so generic offline replay cannot leave inventory behind. Client optimistic updates and rollback always cover both records.

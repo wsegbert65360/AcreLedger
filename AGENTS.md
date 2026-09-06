@@ -127,6 +127,8 @@ Every add, update, and delete mutation must follow this sequence:
 
 Bulk or cascading offline mutations must use `syncQueue.enqueueMutations(...)`, never a per-record `enqueueMutation` loop. The batch is a single encrypted localStorage write on web and a transactional SQLite `executeSet` on native. Offline field deletion must batch active `field_clu_assignments` before the field soft-delete; the database `fields_cascade_soft_delete_to_clu_assignments` trigger provides transactional protection when the field row replays. Online field deletion must use the atomic `soft_delete_field_with_clu_assignments` RPC. Sign-out must fail closed unless the selected farm's pending queue is cleared before the auth session is ended.
 
+When replay reconciliation compares queued values with a row already stored by Postgres, ISO timestamps must be compared as instants after strict timestamp validation. PostgreSQL may return `+00:00` while the client queued the equivalent `.000Z`; raw string equality would falsely retain an already-applied mutation. Keep recursive equality for all non-timestamp payload values.
+
 All add, update, and delete operations return `Promise<boolean>` — `true` on success, `false` on failure. Never return `undefined`.
 
 ### Supabase and Database
