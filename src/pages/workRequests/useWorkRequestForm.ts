@@ -32,10 +32,6 @@ function emptyProduct(): WorkRequestProduct {
   return { productName: '', applicationRate: '', rateUnit: '', carrierVolume: '', carrierVolumeUnit: '', applicationMethod: '', supplier: undefined };
 }
 
-function todayIso(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
 function buildEntryFromField(
   fieldId: string,
   farmName: string,
@@ -296,5 +292,3 @@ export function buildInitialDraft(
     fields: [],
   };
 }
-
-export { todayIso };
