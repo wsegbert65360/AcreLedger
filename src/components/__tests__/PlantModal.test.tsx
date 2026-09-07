@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PlantModal from '../PlantModal';
 import { Field, PlantRecord } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
+import { toLocalIsoDate } from '@/utils/dates';
 
 // --- Mocks (canonical shape per SprayModal.test.tsx) ---
 const addPlantRecordMock = vi.fn().mockResolvedValue(true);
@@ -186,7 +187,7 @@ describe('PlantModal duplicate mode', () => {
       <PlantModal field={field} open={true} onClose={vi.fn()} initialData={source} mode="duplicate" />
     );
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalIsoDate(Date.now());
     const dateInput = screen.getByLabelText(/plant date/i) as HTMLInputElement;
     expect(dateInput.value).toBe(today);
 
