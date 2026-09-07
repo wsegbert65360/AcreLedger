@@ -16,7 +16,7 @@ import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
 import { cn } from '@/lib/utils';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
 import { generateSprayPDF } from '@/lib/sprayExport';
-import { compareWorkDateDesc } from '@/utils/dates';
+import { compareWorkDateDesc, formatIsoDate, parseLocalDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 
 import { Button } from '@/components/ui/button';
@@ -114,7 +114,6 @@ export default function FieldDetailScreen() {
     .sort()
     .join('|');
 
-  // Derived Values
   const unifiedRecords = useMemo(() => {
     if (!field) return [];
     const all = [
@@ -134,29 +133,29 @@ export default function FieldDetailScreen() {
   const latestPlanting = useMemo(() =>
     plantRecords
       .filter(r => r.fieldId === field?.id && r.seasonYear === viewingSeason)
-      .sort((a,b) => new Date(b.plantDate || 0).getTime() - new Date(a.plantDate || 0).getTime())[0]
+      .sort(compareWorkDateDesc)[0]
   , [plantRecords, field?.id, viewingSeason]);
 
   const latestSpray = useMemo(() =>
     sprayRecords
       .filter(r => r.fieldId === field?.id && r.seasonYear === viewingSeason)
-      .sort((a,b) => new Date(b.sprayDate || 0).getTime() - new Date(a.sprayDate || 0).getTime())[0]
+      .sort(compareWorkDateDesc)[0]
   , [sprayRecords, field?.id, viewingSeason]);
 
   const crop = latestPlanting?.crop || field?.intendedUse || 'No Crop Logged';
   const cropStyles = getPlantedCropColorStyles(latestPlanting?.crop);
 
-  /** Format rainfall to 2 decimal places; null/undefined fallback to '0.00' */
   const fmtRain = (val: number | undefined | null) =>
     val != null ? val.toFixed(2) : '0.00';
 
   const daysSinceSpray = useMemo(() => {
     if (!latestSpray?.sprayDate) return null;
-    const diff = new Date().getTime() - new Date(latestSpray.sprayDate).getTime();
+    const sprayDay = parseLocalDate(String(latestSpray.sprayDate).split('T')[0]);
+    if (isNaN(sprayDay.getTime())) return null;
+    const diff = Date.now() - sprayDay.getTime();
     return Math.floor(diff / (1000 * 60 * 60 * 24));
   }, [latestSpray]);
 
-  // Fetching Logic
   const handleFetchRain = useCallback(async (signal?: AbortSignal, force = false) => {
     const currentField = fieldRef.current;
     if (!currentField?.id || fetchingRainRef.current) return;
@@ -174,7 +173,6 @@ export default function FieldDetailScreen() {
       );
       if (signal?.aborted) return;
 
-      // Skip if this exact field/activity/location combination is already loaded or loading.
       fetchKey = JSON.stringify({
         fieldId: currentField.id,
         lat: location.lat,
@@ -234,7 +232,6 @@ export default function FieldDetailScreen() {
     handleFetchRain(controller.signal);
     return () => {
       controller.abort();
-      // Ensure we clear the fetching ref on unmount
       fetchingRainRef.current = false;
     };
   }, [field?.id, handleFetchRain]);
@@ -278,7 +275,6 @@ export default function FieldDetailScreen() {
 
   return (
     <div className="min-h-screen bg-background pb-[calc(6rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
-      {/* Sticky Header */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border p-4">
         <div className="max-w-lg mx-auto flex items-center justify-between lg:max-w-5xl lg:px-8">
           <button onClick={() => navigate(-1)} aria-label="Go back" className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors">
@@ -290,8 +286,6 @@ export default function FieldDetailScreen() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-6 lg:max-w-5xl lg:px-8">
-
-        {/* 1. Dashboard Header */}
         <section className="space-y-1">
           <div className="flex items-baseline justify-between">
             <h1 className="text-3xl font-black text-foreground tracking-tight">{field.name}</h1>
@@ -319,14 +313,12 @@ export default function FieldDetailScreen() {
           </p>
         </section>
 
-        {/* Field Boundary Map */}
         {hasFieldMapData && (
           <section>
             <FieldBoundaryMap fieldId={field.id} />
           </section>
         )}
 
-        {/* 2. Quick Actions */}
         <section className="space-y-3">
           <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
             {FIELD_ACTIONS.map((action) => (
@@ -358,9 +350,7 @@ export default function FieldDetailScreen() {
           </button>
         </section>
 
-        {/* 3. Today at a Glance - Grid of 4 Cards */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
-          {/* Rainfall Card */}
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="p-1.5 rounded-lg bg-spray/10 text-spray">
@@ -385,7 +375,6 @@ export default function FieldDetailScreen() {
             </div>
           </div>
 
-          {/* Spray Status Card */}
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="p-1.5 rounded-lg bg-spray/10 text-spray">
@@ -406,7 +395,6 @@ export default function FieldDetailScreen() {
             </div>
           </div>
 
-          {/* Latest Activity Card */}
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="p-1.5 rounded-lg bg-harvest/10 text-harvest">
@@ -422,7 +410,7 @@ export default function FieldDetailScreen() {
                 {latestActivity ? (() => {
                   const d = latestActivity.data as any;
                   const dateVal = d.date || d.plantDate || d.sprayDate || d.harvestDate || '';
-                  return dateVal ? new Date(dateVal).toLocaleDateString() : '—';
+                  return formatIsoDate(dateVal) || '—';
                 })() : '—'}
               </div>
               <div className="text-xs text-muted-foreground font-medium truncate">
@@ -431,7 +419,6 @@ export default function FieldDetailScreen() {
             </div>
           </div>
 
-          {/* Crop Status Card */}
           <div className="bg-card border border-border rounded-2xl p-4 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
@@ -444,7 +431,7 @@ export default function FieldDetailScreen() {
                 {crop || 'Fallow'}
               </div>
               <div className="text-xs text-muted-foreground font-medium truncate">
-                {latestPlanting?.plantDate ? `Set ${new Date(latestPlanting.plantDate).toLocaleDateString()}` : 'Not planted'}
+                {latestPlanting?.plantDate ? `Set ${formatIsoDate(latestPlanting.plantDate)}` : 'Not planted'}
               </div>
               <div className="text-xs text-muted-foreground font-medium truncate italic h-4">
                 {latestPlanting?.seedVariety || ''}
@@ -453,7 +440,6 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* 4. Latest Spray */}
         {latestSpray && (
           <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
@@ -478,7 +464,7 @@ export default function FieldDetailScreen() {
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Application Date</label>
                 <div className="text-sm font-bold text-foreground">
-                  {new Date(latestSpray.sprayDate || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {formatIsoDate(latestSpray.sprayDate) || '—'}
                 </div>
                 <div className="text-xs text-muted-foreground">{latestSpray.startTime} - {latestSpray.endTime}</div>
               </div>
@@ -530,7 +516,6 @@ export default function FieldDetailScreen() {
           </section>
         )}
 
-        {/* 5. Field History Timeline */}
         <section id="history-section" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -572,7 +557,6 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* 6. Rainfall Summary */}
         <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -596,9 +580,10 @@ export default function FieldDetailScreen() {
               { label: 'Planted', value: fmtRain(rainStats?.sincePlanting), sub: 'Since', unit: '"' },
               { label: 'Sprayed', value: fmtRain(rainStats?.sinceLastSpray), sub: 'Since', unit: '"' },
               { label: 'Season', value: rainStats?.periodEndUtc ? (() => {
-                const start = latestPlanting?.plantDate ? new Date(latestPlanting.plantDate) : new Date(`${viewingSeason}-03-01`);
-                const end = new Date();
-                const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000);
+                const start = latestPlanting?.plantDate
+                  ? parseLocalDate(String(latestPlanting.plantDate).split('T')[0])
+                  : new Date(viewingSeason, 2, 1);
+                const days = Math.floor((Date.now() - start.getTime()) / 86_400_000);
                 return `${days}d`;})() : '—', unit: '' },
             ].map((stat, i) => (
               <div key={i} className="p-3 rounded-2xl bg-muted/50 border border-border/60">
@@ -632,7 +617,6 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* 7. CLU Summary */}
         <section className="bg-card border border-border rounded-2xl p-3 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -667,7 +651,6 @@ export default function FieldDetailScreen() {
           </div>
         </section>
 
-        {/* 8. Field Details (Meta) */}
         <section className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
             <MapPin size={16} className="text-primary" />
@@ -704,7 +687,6 @@ export default function FieldDetailScreen() {
 
       </main>
 
-      {/* Spray entry type chooser (full record vs. custom/outside-party) */}
       <SprayTypeChooser
         open={showSprayChooser}
         field={field}
@@ -713,7 +695,6 @@ export default function FieldDetailScreen() {
         onCancel={() => setShowSprayChooser(false)}
       />
 
-      {/* Modals - Reusing existing implementation */}
       {modal === 'plant' && (
         <PlantModal field={field} open initialData={editingRecord ? editingRecord as PlantRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
@@ -736,7 +717,6 @@ export default function FieldDetailScreen() {
         <TillageModal field={field} open initialData={editingRecord ? editingRecord as TillageRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
 
-      {/* Dialog for CLU management */}
       <Dialog open={isCluDialogOpen} onOpenChange={setIsCluDialogOpen}>
         <DialogContent className="max-w-2xl h-[80vh] p-0 flex flex-col gap-0">
           <DialogHeader className="p-4 pb-0 shrink-0">
