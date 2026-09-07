@@ -135,6 +135,34 @@ describe('AddGrainModal harvest path', () => {
 
     await waitFor(() => expect(screen.getByLabelText(/crop type/i)).toHaveValue('Timber'));
     expect(screen.getByLabelText(/landlord %/i)).toHaveValue(100);
+    expect(screen.getByLabelText(/landlord name/i)).toHaveValue('Dad');
+  });
+
+  it('keeps a typed landlord name across Back, then reapplies it when the field changes', async () => {
+    openHarvestPath();
+
+    fireEvent.change(screen.getByTestId('select'), { target: { value: 'field-2' } });
+    await waitFor(() => expect(screen.getByLabelText(/landlord name/i)).toHaveValue('Dad'));
+
+    fireEvent.change(screen.getByLabelText(/landlord name/i), { target: { value: 'Acme Farms' } });
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /harvest from field/i }));
+
+    expect(screen.getByLabelText(/landlord name/i)).toHaveValue('Acme Farms');
+
+    fireEvent.change(screen.getByTestId('select'), { target: { value: 'field-1' } });
+    await waitFor(() => expect(screen.getByLabelText(/landlord name/i)).toHaveValue(''));
+  });
+
+  it('focuses bushels instead of the field select when re-entering harvest with a field already chosen', async () => {
+    openHarvestPath();
+
+    fireEvent.change(screen.getByTestId('select'), { target: { value: 'field-1' } });
+    await waitFor(() => expect(screen.getByLabelText(/crop type/i)).toHaveValue('Corn'));
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    fireEvent.click(screen.getByRole('button', { name: /harvest from field/i }));
+
+    expect(screen.getByLabelText(/bushels/i)).toHaveFocus();
   });
 
   it('disables save until a crop is present', async () => {

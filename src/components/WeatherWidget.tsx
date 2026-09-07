@@ -26,8 +26,8 @@ export default function WeatherBar() {
   const [locationName, setLocationName] = useState('');
 
   const [loading, setLoading] = useState(false);
-  // True once the first valid weather result has arrived. Stays true across
-  // background refreshes so the bar doesn't flash placeholders every 5 min.
+  // True once the first valid weather result has arrived. Keeps placeholders
+  // from flashing on the initial load or a retry.
   const [hasData, setHasData] = useState(false);
   const hasDataRef = useRef(false);
 

@@ -36,6 +36,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
     const [landlordSplit, setLandlordSplit] = useState('0');
     const cropEditedRef = useRef(false);
     const landlordSplitEditedRef = useRef(false);
+    const landlordNameEditedRef = useRef(false);
 
     // Adjustment path state (plain inventory movement — not tied to a field harvest)
     const [source, setSource] = useState('');
@@ -62,8 +63,15 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
         setTime(toLocalTime(now));
     }, [open]);
 
-    // Suggested-record prefill: when the chosen field changes, seed crop and
-    // landlord split from that field until the user edits them manually.
+    // Clearing the landlord-name edited flag on selection — not in the prefill
+    // effect — lets a typed name survive Back, while picking a field (even the
+    // same one again) re-applies that field's landlord.
+    const handleFieldSelect = (value: string) => {
+        landlordNameEditedRef.current = false;
+        setFieldId(value);
+    };
+
+    // Prefill crop/landlord from the field until edited.
     useEffect(() => {
         if (!open || path !== 'harvest' || !fieldId) return;
         const field = activeFields.find(f => f.id === fieldId);
@@ -75,7 +83,9 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
         if (!landlordSplitEditedRef.current) {
             setLandlordSplit(field.producerShare != null ? (100 - field.producerShare).toString() : '0');
         }
-        setLandlordName(field.landlordName || '');
+        if (!landlordNameEditedRef.current) {
+            setLandlordName(field.landlordName || '');
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, path, fieldId]);
 
@@ -90,6 +100,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
         setLandlordSplit('0');
         cropEditedRef.current = false;
         landlordSplitEditedRef.current = false;
+        landlordNameEditedRef.current = false;
         createIdsRef.current = null;
     };
 
@@ -204,8 +215,8 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
-            <DialogContent className="bg-card border-harvest/30 max-w-sm">
-                <DialogHeader>
+            <DialogContent className="bg-card border-harvest/30 max-w-sm max-h-[90vh] flex flex-col overflow-hidden">
+                <DialogHeader className="shrink-0">
                     <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest font-bold text-lg">
                         <div className="flex items-center gap-2">
                             <Plus size={24} className="bg-harvest/20 rounded p-1" />
@@ -221,7 +232,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                 </DialogHeader>
 
                 {!path ? (
-                    <div className="space-y-3 py-4">
+                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4">
                         <p className="text-muted-foreground font-mono text-xs text-center">WHAT IS ENTERING THIS BIN?</p>
                         <div className="grid grid-cols-1 gap-3">
                             <Button
@@ -244,13 +255,13 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4 py-2">
+                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2">
                         {path === 'harvest' && (
                             <>
                                 <div>
                                     <Label htmlFor="addHarvestField" className="text-muted-foreground font-mono text-xs">SOURCE FIELD</Label>
-                                    <Select value={fieldId} onValueChange={setFieldId}>
-                                        <SelectTrigger id="addHarvestField" name="addHarvestField" className="mt-1 bg-muted border-border">
+                                    <Select value={fieldId} onValueChange={handleFieldSelect}>
+                                        <SelectTrigger id="addHarvestField" name="addHarvestField" className="mt-1 bg-muted border-border" autoFocus={!fieldId}>
                                             <SelectValue placeholder="Choose field..." />
                                         </SelectTrigger>
                                         <SelectContent className="bg-popover border-border">
@@ -286,7 +297,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                                 onChange={e => setBushels(e.target.value)}
                                 placeholder="e.g. 1000"
                                 className="mt-1 bg-muted border-border font-mono focus:ring-harvest"
-                                autoFocus
+                                autoFocus={path === 'adjust' || (path === 'harvest' && !!fieldId)}
                             />
                         </div>
 
@@ -331,7 +342,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                                         id="addHarvestLandlordName"
                                         name="addHarvestLandlordName"
                                         value={landlordName}
-                                        onChange={e => setLandlordName(e.target.value)}
+                                        onChange={e => { landlordNameEditedRef.current = true; setLandlordName(e.target.value); }}
                                         placeholder="Optional"
                                         className="mt-1 bg-muted border-border text-foreground"
                                     />
@@ -368,7 +379,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                 )}
 
                 {path && (
-                    <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                    <DialogFooter className="flex shrink-0 flex-col gap-2 sm:flex-row">
                         <div className="flex w-full gap-2">
                             <Button type="button" variant="outline" onClick={() => setPath(null)} className="touch-target flex-1 border-border text-muted-foreground h-11 text-xs">
                                 Back
