@@ -2,6 +2,7 @@ import { Edit2 } from 'lucide-react';
 import { ModalType } from '@/pages/FieldDetailScreen';
 
 import type { ActivityRecord, ActivityRecordBase } from '@/types/farm';
+import { formatDate, formatIsoDate } from '@/utils/dates';
 
 type FeedRecord = Exclude<ActivityRecord, { type: 'grain' }>;
 type FeedRecordData = FeedRecord['data'];
@@ -40,19 +41,7 @@ export default function ActivityFeed({ records, year, onEdit, onDuplicate, hideH
 
   const getRecordDate = (r: ActivityRecordBase): string => {
     const dateRaw = r.date || r.plantDate || r.sprayDate || r.harvestDate;
-    if (dateRaw) {
-      const parsed = new Date(dateRaw);
-      return !isNaN(parsed.getTime())
-        ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
-        : '—';
-    }
-    if (r.timestamp) {
-      const parsed = new Date(r.timestamp);
-      return !isNaN(parsed.getTime())
-        ? parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
-        : '—';
-    }
-    return '—';
+    return formatIsoDate(dateRaw) || (r.timestamp ? formatDate(r.timestamp) : '—') || '—';
   };
 
   return (
