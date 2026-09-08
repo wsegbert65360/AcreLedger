@@ -138,6 +138,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     try {
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
+        // Locked product answer: the card is always collected at checkout so
+        // the yearly renewal just works after the 122-day trial.
+        payment_method_collection: 'always',
         line_items: [{ price: billing.config.priceId, quantity: 1 }],
         subscription_data: {
           trial_period_days: TRIAL_PERIOD_DAYS,

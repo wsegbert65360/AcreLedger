@@ -45,7 +45,9 @@ async function readRawBody(req: WebhookRequest): Promise<Buffer> {
  * Upsert the entitlement row for `farmId` from a Stripe subscription.
  * Creates the row (stamping the farm owner from checkout metadata) or updates
  * the single active row; soft-deleted history is never touched or hard-deleted.
- * Returns false when the payload cannot be attributed to a farm.
+ * Throws on database write failures so the handler responds 500 and Stripe
+ * retries; returns false when the payload cannot be attributed to a farm
+ * (a permanent condition the handler acknowledges as ignored).
  */
 export async function upsertFarmSubscriptionEntitlement(
   supabase: SupabaseClient,
@@ -60,12 +62,15 @@ export async function upsertFarmSubscriptionEntitlement(
     return false;
   }
 
-  const { data: existing } = await supabase
+  const { data: existing, error: selectError } = await supabase
     .from('farm_subscriptions')
     .select('id, owner_user_id')
     .eq('farm_id', farmId)
     .is('deleted_at', null)
     .maybeSingle();
+  if (selectError) {
+    throw new Error(`Failed to read farm subscription: ${selectError.message}`);
+  }
 
   const ownerId = userId ?? existing?.owner_user_id ?? null;
   if (!ownerId) {
@@ -88,8 +93,7 @@ export async function upsertFarmSubscriptionEntitlement(
         .from('farm_subscriptions')
         .insert({ ...payload, farm_id: farmId, owner_user_id: ownerId });
   if (error) {
-    console.error('Failed to upsert farm subscription:', error.message);
-    return false;
+    throw new Error(`Failed to upsert farm subscription: ${error.message}`);
   }
   return true;
 }
