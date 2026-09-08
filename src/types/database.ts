@@ -330,3 +330,19 @@ export interface WorkRequestRow {
     timestamp: string;
     deleted_at?: string | null;
 }
+
+export interface FarmSubscriptionRow {
+    id: string;
+    farm_id: string;
+    owner_user_id: string;
+    status: string;
+    trial_ends_at?: string | null;
+    current_period_end?: string | null;
+    cancel_at_period_end?: boolean | null;
+    stripe_customer_id?: string | null;
+    stripe_subscription_id?: string | null;
+    stripe_price_id?: string | null;
+    created_at: string;
+    updated_at: string;
+    deleted_at?: string | null;
+}
