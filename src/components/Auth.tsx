@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,16 +10,23 @@ import { getAuthErrorMessage } from '@/lib/authErrors';
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'verification_sent';
 
 export function Auth() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [mode, setMode] = useState<AuthMode>('signin');
+    const [mode, setMode] = useState<AuthMode>(() =>
+        searchParams.get('mode') === 'signup' ? 'signup' : 'signin'
+    );
 
     const handleModeChange = (newMode: AuthMode) => {
         setMode(newMode);
         setPassword('');
         setConfirmPassword('');
+        setSearchParams(
+            newMode === 'signup' || newMode === 'signin' ? { mode: newMode } : {},
+            { replace: true }
+        );
     };
 
     const handleAuth = async (e: React.FormEvent) => {
@@ -82,10 +90,10 @@ export function Auth() {
     const subtitle = mode === 'forgot'
         ? 'Enter your email to receive a reset link'
         : mode === 'signup'
-            ? 'Join AcreLedger Precision Ag'
+            ? 'Set up your farm records'
             : mode === 'verification_sent'
                 ? 'We sent a verification link to your inbox'
-                : 'Sign in to your farm dashboard';
+                : 'Sign in to your farm';
 
     const buttonLabel = mode === 'forgot'
         ? 'Send Reset Link'
@@ -96,6 +104,15 @@ export function Auth() {
     return (
         <div className="flex items-center justify-center min-h-[80vh] bg-background">
             <div className="w-full max-w-md mx-4">
+                <div className="mb-4 flex justify-start">
+                    <Link
+                        to="/"
+                        className="inline-flex items-center gap-1 rounded-lg text-xs text-muted-foreground transition-colors hover:text-primary"
+                    >
+                        <ArrowLeft size={14} />
+                        Back to home
+                    </Link>
+                </div>
                 {/* Logo area */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
@@ -105,7 +122,7 @@ export function Auth() {
                         AcreLedger
                     </h1>
                     <p className="text-xs text-muted-foreground mt-1">
-                        Farm Record Keeping & Compliance
+                        Farm records &amp; compliance
                     </p>
                 </div>
 
@@ -136,6 +153,9 @@ export function Auth() {
                                 </p>
                                 <p className="text-xs text-muted-foreground pt-2">
                                     Please click the link in the email to activate your account. If you do not receive it in a few minutes, check your spam folder.
+                                </p>
+                                <p className="text-xs text-muted-foreground pt-2">
+                                    Next: name your farm, add a field (by hand is fine), and log a planting. You can import FSA tracts later.
                                 </p>
                             </div>
                             <Button
@@ -242,6 +262,14 @@ export function Auth() {
                             </div>
                         </form>
                     )}
+                    <div className="pb-5 text-center">
+                        <Link
+                            to="/privacy"
+                            className="text-xs text-muted-foreground transition-colors hover:text-primary"
+                        >
+                            Privacy policy
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>
