@@ -370,6 +370,38 @@ export interface WorkRequest {
   deleted_at: string | null;
 }
 
+/**
+ * Per-farm Stripe Billing entitlement mirror (billing infrastructure — NOT a
+ * farm record: excluded from backup/restore and the AI assistant catalog).
+ * Farm members may READ their own farm's row via RLS; every write is
+ * service_role only (webhook / admin grants), so there is no client mapper.
+ * Fields mirror the snake_case database row because the client never writes it.
+ */
+export type FarmSubscriptionStatus =
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'canceled'
+  | 'unpaid'
+  | 'incomplete';
+
+export interface FarmSubscription {
+  id: string;
+  farm_id: string;
+  /** Farm owner who started Checkout; only this user may start Checkout/Portal. */
+  owner_user_id: string;
+  status: FarmSubscriptionStatus;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
 export type ActivityRecord =
   | { type: 'plant'; data: PlantRecord }
   | { type: 'spray'; data: SprayRecord }
