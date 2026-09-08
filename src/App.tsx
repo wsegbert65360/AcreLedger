@@ -37,6 +37,7 @@ import CustomSprayModal from "@/components/CustomSprayModal";
 import Activity from "./pages/Activity";
 import FieldDetailScreen from "./pages/FieldDetailScreen";
 import Index from "./pages/Index";
+import Landing from "./pages/Landing";
 import Logistics from "./pages/Logistics";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
@@ -81,6 +82,7 @@ const AnimatedRoutes = () => {
       >
         <Routes location={location}>
           <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
+          <Route path="/auth" element={<Navigate to="/" replace />} />
           <Route path="/logistics" element={<ErrorBoundary><Logistics /></ErrorBoundary>} />
           <Route path="/activity" element={<ErrorBoundary><Activity /></ErrorBoundary>} />
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
@@ -177,7 +179,17 @@ const AppContent = () => {
   }
 
   if (!session) {
-    return <Auth />;
+    // Signed-out surfaces: the thin landing at /, the auth screen at /auth
+    // (deep-linkable via ?mode=signup|signin), and the public privacy policy.
+    // Everything else redirects to the landing instead of hiding the app shell.
+    return (
+      <Routes>
+        <Route path="/" element={<ErrorBoundary><Landing /></ErrorBoundary>} />
+        <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+        <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
   }
 
   const onboardingKey = `${session.user.id}_al_onboarding_complete`;
