@@ -291,7 +291,14 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - **Marketing version** is read from `package.json` at build time. **Build number** uses CodeMagic's `$BUILD_NUMBER`.
 - **Do not** add `app_store_connect` publishing blocks without verifying the integration name exists in CodeMagic.
 - The working integration name is `appstore`. Do not rename it without updating the yaml.
-- All three remotes (GitHub, Codeberg, GitLab) must be synced when pushing CI/CD changes. For normal mainline pushes, verify remote heads after pushing because `origin` has multiple push URLs.
+- Pushes that touch CI/CD must be synced across all three remotes (GitHub, Codeberg, GitLab) before they count as complete — see Git Remotes and Push Hygiene below.
+
+### Git Remotes and Push Hygiene
+
+- Remote topology: `origin` fetches from GitLab and carries **three push URLs** (GitLab, Codeberg, GitHub). A single `git push origin main` fans out to all three remotes at once — do not push each remote separately. The dedicated `github` and `codeberg` remotes exist for fetching and verifying individual hosts.
+- Before pushing: `git fetch --all` and compare heads. `main` legitimately gains commits from other machines, GitHub PR merges (which land on GitHub first), and agent sessions. If a remote is ahead, fast-forward, or rebuild on the remote head and cherry-pick only the novel commits; never force-push `main`.
+- After pushing: verify every remote head (`git ls-remote <remote> main` for each of `github`, `codeberg`, `origin`) reports the same hash. All three must match before the push is done — mandatory for CI/CD changes, because CodeMagic triggers on push to `main`.
+- Codeberg intermittently rejects the fan-out push with `cannot lock ref 'refs/heads/main': is at <new> but expected <old>` **after** the update has already landed. The error text itself names the target hash, which proves success — read it, confirm with `ls-remote`, and never respond with a force-push. Observed with identical behavior on 2026-09-06 and 2026-09-08.
 
 ### Native & Offline Capability
 
