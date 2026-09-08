@@ -95,7 +95,7 @@ const field: Field = {
   deleted_at: null
 };
 
-const today = new Date().toISOString().split('T')[0];
+const today = toLocalIsoDate(Date.now());
 
 /** Shared assertions for every duplicate-mode modal. */
 async function expectDuplicateSemantics(addMock: ReturnType<typeof vi.fn>, updateMock: ReturnType<typeof vi.fn>) {

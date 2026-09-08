@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { calculateSprayProductFields, hasValidSprayRate } from '@/utils/unitConversion';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { getLatestForField } from '@/lib/utils';
+import { toLocalIsoDate } from '@/utils/dates';
 
 export type SprayWizardStep = 'core' | 'mix' | 'conditions' | 'review';
 
@@ -58,7 +59,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     initialDataRef.current = initialData;
   }, [initialData]);
 
-  // Utility to extract attachment from notes
   const extractAttachment = useCallback((notesStr: string) => {
     const match = notesStr.match(/\[ATTACHMENT:(data:image\/[^;]+;base64,([^\]]+))\]/);
     if (match) {
@@ -72,7 +72,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     return { cleanNotes: notesStr, dataUri: '', base64: '', type: '' };
   }, []);
 
-  // Wizard navigation & quick mode
   const [step, setStep] = useState<SprayWizardStep>('core');
   const stepIndex = WIZARD_STEPS.indexOf(step);
   const [isQuickMode, setIsQuickMode] = useState(() => localStorage.getItem('al_spray_quick_mode') === 'true');
@@ -81,13 +80,12 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     localStorage.setItem('al_spray_quick_mode', String(isQuickMode));
   }, [isQuickMode]);
 
-  // Form state
   const [products, setProducts] = useState<SprayRecipeProduct[]>(() => normalizeProducts(initialData));
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
   const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
   const [targetPest, setTargetPest] = useState(initialData?.targetPest || 'grass/broadleaves');
-  const [sprayDate, setSprayDate] = useState(initialData?.sprayDate || new Date().toISOString().split('T')[0]);
+  const [sprayDate, setSprayDate] = useState(initialData?.sprayDate || toLocalIsoDate(Date.now()));
   const [startTime, setStartTime] = useState(() => initialData?.startTime || new Date().toTimeString().slice(0, 5));
   const [endTime, setEndTime] = useState(initialData?.endTime || '');
   const [isEndTimeManual, setIsEndTimeManual] = useState(!!initialData?.endTime);
@@ -117,7 +115,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [sensitiveAreaNotes, setSensitiveAreaNotes] = useState(initialData?.sensitiveAreaNotes || '');
   const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
 
-  // Async / UI state
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
@@ -125,7 +122,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [showValidation, setShowValidation] = useState(false);
   const hasSeenIncompleteWarning = useRef(false);
 
-  // Save-as-recipe dialog state
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const [recipeName, setRecipeName] = useState('');
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
@@ -142,7 +138,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     return getLatestForField(sprayRecords, field.id, 'sprayDate', record => record.seasonYear === viewingSeason);
   }, [field.id, initialData, sprayRecords, viewingSeason]);
 
-  // Reset form when modal opens/closes or record changes
   useEffect(() => {
     if (!open) return;
 
@@ -157,7 +152,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setApplicatorName(initialData.applicatorName || '');
       setLicenseNumber(initialData.licenseNumber || '');
       setTargetPest(initialData.targetPest || 'grass/broadleaves');
-      setSprayDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.sprayDate || new Date().toISOString().split('T')[0]));
+      setSprayDate(isDuplicate ? toLocalIsoDate(Date.now()) : (initialData.sprayDate || toLocalIsoDate(Date.now())));
       setStartTime(initialData.startTime || '');
       setEndTime(initialData.endTime || '');
       setIsEndTimeManual(!!initialData.endTime);
@@ -204,7 +199,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setApplicatorName(suggestedSpray?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
       setLicenseNumber(suggestedSpray?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
       setTargetPest(suggestedSpray?.targetPest || 'grass/broadleaves');
-      setSprayDate(now.toISOString().split('T')[0]);
+      setSprayDate(toLocalIsoDate(Date.now()));
       setStartTime(now.toTimeString().slice(0, 5));
       setEndTime('');
       setIsEndTimeManual(false);
@@ -227,19 +222,14 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setSensitiveAreaNotes('');
       setWeather(null);
     }
-    // Depend only on open/initialData primitives per AGENTS.md (do not depend on `field` object reference).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData?.id, isDuplicate]);
 
-  // CLU assignments can finish hydrating after a new-record modal opens. Refresh
-  // the default only until the farmer edits it; existing and duplicated records
-  // must preserve their explicitly stored treated acreage.
   useEffect(() => {
     if (!open || initialData || treatedAreaEditedRef.current) return;
     setTreatedAreaSizeState(displayFieldAcres.toString() || '');
   }, [open, initialData, displayFieldAcres]);
 
-  // Auto-fetch current weather for new or duplicate records
   useEffect(() => {
     const controller = new AbortController();
     if (open && (!initialData || isDuplicate) && field.lat != null && field.lng != null) {
@@ -265,7 +255,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData?.id, field.id, field.lat, field.lng, isDuplicate]);
 
-  // Auto-calculate total product amounts and summary total
   const ratesSignature = useMemo(() =>
     products.map(p => `${p.rate}-${p.rateUnit}`).join(','),
     [products]
@@ -282,16 +271,13 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     ));
     if (productsChanged) setProducts(calculatedProducts);
 
-    // Compatibility summary only: per-product totals remain authoritative.
     const firstProductTotal = calculatedProducts[0]?.totalProductAmount;
     if (hasValidSprayRate(calculatedProducts[0] || {}) && firstProductTotal) {
       setTotalAmountApplied(firstProductTotal);
     }
-    // ratesSignature intentionally limits recalculation to acreage/rate changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treatedAreaSize, ratesSignature]);
 
-  // Auto-estimate end time
   useEffect(() => {
     if (isEndTimeManual || !startTime || !treatedAreaSize) return;
 
@@ -440,7 +426,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
   const goToStep = useCallback((target: SprayWizardStep) => {
     const targetIndex = WIZARD_STEPS.indexOf(target);
-    // Only allow jumping to steps that have been reached or are immediately next.
     if (targetIndex <= stepIndex + 1) {
       setStep(target);
     }
@@ -533,9 +518,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       if (success) {
         native.haptic.success();
 
-        // Save as recipe prompt — only fire when the mix is novel.
-        // The canonical save success toast is fired by useSprayRecords.addSprayRecord,
-        // so we only emit a toast here when there's an actionable follow-up.
         const currentProducts = [...products];
         const currentApplicator = applicatorName.trim();
         const currentLicense = licenseNumber.trim();
@@ -649,7 +631,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   }, [onClose]);
 
   return {
-    // Wizard
     step,
     setStep,
     stepIndex,
@@ -659,16 +640,12 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     goNext,
     goBack,
     goToStep,
-
-    // Quick/Glove mode & Photo attachment
     isQuickMode,
     setIsQuickMode,
     photoBase64,
     setPhotoBase64,
     photoType,
     setPhotoType,
-
-    // Save-as-recipe dialog
     recipeDialogOpen,
     recipeName,
     setRecipeName,
@@ -676,8 +653,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     confirmSaveRecipe,
     cancelRecipeDialog,
     isSavingRecipe,
-
-    // State values
     products,
     selectedRecipeId,
     applicatorName,
@@ -710,8 +685,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     isRecovering,
     isSaving,
     showValidation,
-
-    // Setters exposed to steps
     setProducts,
     setSelectedRecipeId,
     setApplicatorName,
@@ -738,8 +711,6 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     setNotes,
     setSensitiveAreaCheck,
     setSensitiveAreaNotes,
-
-    // Actions
     updateProduct,
     addProduct,
     removeProduct,
@@ -747,14 +718,10 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     handleRecoverWeather,
     handleSubmit,
     setShowValidation,
-
-    // Validation
     isMinimumValid,
     isFullyCompliant,
     missingComplianceFields,
     stepValidation,
-
-    // Prefill recommendation
     suggestedSpray
   };
 }

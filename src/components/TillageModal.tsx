@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { getLatestForField } from '@/lib/utils';
+import { toLocalIsoDate } from '@/utils/dates';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     AlertDialog,
@@ -32,7 +33,7 @@ interface TillageModalProps {
 export default function TillageModal({ field, open, onClose, initialData, mode = 'edit' }: TillageModalProps) {
     const isDuplicate = mode === 'duplicate' && !!initialData;
     const { addTillageRecord, updateTillageRecord, deleteTillageRecords, tillageRecords, viewingSeason } = useFarm();
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(toLocalIsoDate(Date.now()));
     const [implementType, setImplementType] = useState('Disk');
     const [notes, setNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -45,11 +46,11 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
     useEffect(() => {
         if (!open) return;
         if (initialData) {
-            setDate(isDuplicate ? new Date().toISOString().split('T')[0] : initialData.date);
+            setDate(isDuplicate ? toLocalIsoDate(Date.now()) : initialData.date);
             setImplementType(initialData.implementType);
             setNotes(initialData.notes || '');
         } else {
-            setDate(new Date().toISOString().split('T')[0]);
+            setDate(toLocalIsoDate(Date.now()));
             setImplementType(suggestedTillage?.implementType || 'Disk');
             setNotes('');
         }

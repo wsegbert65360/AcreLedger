@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { getLatestForField } from '@/lib/utils';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
+import { toLocalIsoDate } from '@/utils/dates';
 
 interface FertilizerModalProps {
     field: Field;
@@ -47,7 +48,7 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
     } = useFarm();
     const displayFieldAcres = getDisplayFieldAcres(field, cluAssignments);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(toLocalIsoDate(Date.now()));
     const [acres, setAcresState] = useState(initialData?.acres?.toString() || displayFieldAcres.toString() || '');
     const acresEditedRef = useRef(false);
     const setAcres = useCallback((value: string) => {
@@ -74,11 +75,11 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
         if (!open) return;
         acresEditedRef.current = false;
         if (initialData) {
-            setDate(isDuplicate ? new Date().toISOString().split('T')[0] : initialData.date);
+            setDate(isDuplicate ? toLocalIsoDate(Date.now()) : initialData.date);
             setAcresState(initialData.acres?.toString() || displayFieldAcres.toString() || '');
             setFormula(initialData.fertilizer_formula);
         } else {
-            setDate(new Date().toISOString().split('T')[0]);
+            setDate(toLocalIsoDate(Date.now()));
             setAcresState(displayFieldAcres.toString() || '');
             setFormula(suggestedFertilizer?.fertilizer_formula || '');
         }

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
-import { formatIsoDate } from '@/utils/dates';
+import { formatIsoDate, toLocalIsoDate } from '@/utils/dates';
 
 const CROP_STATUS_OPTIONS: NonNullable<PlantRecord['cropStatus']>[] = [
   'Planted',
@@ -53,7 +53,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
   const [cropStatus, setCropStatus] = useState<NonNullable<PlantRecord['cropStatus']>>(initialData?.cropStatus || 'Planted');
   const [cropSequence, setCropSequence] = useState<NonNullable<PlantRecord['cropSequence']>>(initialData?.cropSequence || 'First Crop');
   const [plantingPattern, setPlantingPattern] = useState(initialData?.plantingPattern || '');
-  const [plantDate, setPlantDate] = useState(initialData?.plantDate || new Date().toISOString().split('T')[0]);
+  const [plantDate, setPlantDate] = useState(initialData?.plantDate || toLocalIsoDate(Date.now()));
   const [acreage, setAcreageState] = useState((initialData?.acreage ?? displayFieldAcres).toString());
   const acreageEditedRef = useRef(false);
   const setAcreage = useCallback((value: string) => {
@@ -110,7 +110,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setCropStatus(initialData.cropStatus || 'Planted');
       setCropSequence(initialData.cropSequence || 'First Crop');
       setPlantingPattern(initialData.plantingPattern || '');
-      setPlantDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.plantDate || new Date().toISOString().split('T')[0]));
+      setPlantDate(isDuplicate ? toLocalIsoDate(Date.now()) : (initialData.plantDate || toLocalIsoDate(Date.now())));
       setAcreageState((initialData.acreage ?? displayFieldAcres).toString());
       setMemo(initialData.memo || '');
     } else {
@@ -122,7 +122,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setCropStatus('Planted');
       setCropSequence('First Crop');
       setPlantingPattern('');
-      setPlantDate(new Date().toISOString().split('T')[0]);
+      setPlantDate(toLocalIsoDate(Date.now()));
       setAcreageState(displayFieldAcres.toString());
       setMemo('');
     }

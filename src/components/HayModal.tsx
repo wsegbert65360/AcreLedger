@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { Tractor, Thermometer, Cloud, Hash, Layers, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
 import { WeatherService } from '@/services/WeatherService';
+import { toLocalIsoDate } from '@/utils/dates';
 
 interface HayModalProps {
     field: Field;
@@ -28,7 +29,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
     const [baleType, setBaleType] = useState<'Round' | 'Square'>(initialData?.baleType || 'Round');
     const [temp, setTemp] = useState(initialData?.temperature?.toString() || '');
     const [conditions, setConditions] = useState(initialData?.conditions || '');
-    const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(initialData?.date || toLocalIsoDate(Date.now()));
     const [loadingWeather, setLoadingWeather] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -45,14 +46,14 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
             setBaleType(initialData.baleType);
             setTemp(isDuplicate ? '' : (initialData.temperature?.toString() || ''));
             setConditions(isDuplicate ? '' : (initialData.conditions || ''));
-            setDate(isDuplicate ? new Date().toISOString().split('T')[0] : (initialData.date || new Date().toISOString().split('T')[0]));
+            setDate(isDuplicate ? toLocalIsoDate(Date.now()) : (initialData.date || toLocalIsoDate(Date.now())));
         } else {
             setBaleCount('');
             setCuttingNumber('1');
             setBaleType(suggestedHay?.baleType || 'Round');
             setTemp('');
             setConditions('');
-            setDate(new Date().toISOString().split('T')[0]);
+            setDate(toLocalIsoDate(Date.now()));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, initialData?.id, isDuplicate]);

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
 import { Bin } from '@/types/farm';
-import { parseLocalDate } from '@/utils/dates';
+import { parseLocalDate, toLocalIsoDate } from '@/utils/dates';
 
 interface SellModalProps {
     bin: Bin;
@@ -24,7 +24,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
     const [price, setPrice] = useState('');
     const [moisture, setMoisture] = useState('');
     const [destination, setDestination] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(toLocalIsoDate(Date.now()));
     const [isSaving, setIsSaving] = useState(false);
 
     // All-season total: bin contents are physical and carry across seasons, so a

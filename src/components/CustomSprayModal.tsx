@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Cloud, CloudDownload, Clock3, User, Thermometer, Wind, FlaskConical, StickyNote, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
 import { WeatherService } from '@/services/WeatherService';
+import { toLocalIsoDate } from '@/utils/dates';
 
 interface CustomSprayModalProps {
     field: Field;
@@ -17,14 +18,6 @@ interface CustomSprayModalProps {
     onClose: () => void;
     initialData?: CustomSprayRecord;
     mode?: 'edit' | 'duplicate';
-}
-
-function getLocalDateValue(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
 }
 
 function getLocalTimeValue(): string {
@@ -37,7 +30,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
     const { addCustomSprayRecord, updateCustomSprayRecord, customSprayRecords, viewingSeason } = useFarm();
     const [applicator, setApplicator] = useState(initialData?.applicator || '');
     const [recipe, setRecipe] = useState(initialData?.recipe || '');
-    const [date, setDate] = useState(initialData?.date || getLocalDateValue());
+    const [date, setDate] = useState(initialData?.date || toLocalIsoDate(Date.now()));
     const [applicationTime, setApplicationTime] = useState(initialData?.applicationTime || getLocalTimeValue());
     const [windSpeed, setWindSpeed] = useState(initialData?.windSpeed?.toString() || '');
     const [windDirection, setWindDirection] = useState(initialData?.windDirection || '');
@@ -56,7 +49,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
         if (initialData) {
             setApplicator(initialData.applicator || '');
             setRecipe(isDuplicate ? '' : (initialData.recipe || ''));
-            setDate(isDuplicate ? getLocalDateValue() : (initialData.date || getLocalDateValue()));
+            setDate(isDuplicate ? toLocalIsoDate(Date.now()) : (initialData.date || toLocalIsoDate(Date.now())));
             setApplicationTime(isDuplicate ? getLocalTimeValue() : (initialData.applicationTime || ''));
             setWindSpeed(isDuplicate ? '' : (initialData.windSpeed?.toString() || ''));
             setWindDirection(isDuplicate ? '' : (initialData.windDirection || ''));
@@ -65,7 +58,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
         } else {
             setApplicator(suggested?.applicator || '');
             setRecipe(suggested?.recipe || '');
-            setDate(getLocalDateValue());
+            setDate(toLocalIsoDate(Date.now()));
             setApplicationTime(getLocalTimeValue());
             setWindSpeed('');
             setWindDirection('');
