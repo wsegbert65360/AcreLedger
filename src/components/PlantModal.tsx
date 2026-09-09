@@ -43,12 +43,12 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
   const { addPlantRecord, updatePlantRecord, plantRecords, savedSeeds, cluAssignments, viewingSeason } = useFarm();
   const displayFieldAcres = getDisplayFieldAcres(field, cluAssignments);
   const fieldIntendedUse = field.intendedUse || '';
-  const fieldProducerShare = field.producerShare?.toString() || '100';
+  const fieldProducerShare = field.producerShare != null ? field.producerShare.toString() : '100';
   const fieldIrrigationPractice = field.irrigationPractice || 'Non-Irrigated';
   const [seedVariety, setSeedVariety] = useState(initialData?.seedVariety || '');
   const [crop, setCrop] = useState(initialData?.crop || '');
   const [intendedUse, setIntendedUse] = useState(initialData?.intendedUse || fieldIntendedUse);
-  const [producerShare, setProducerShare] = useState(initialData?.producerShare?.toString() || fieldProducerShare);
+  const [producerShare, setProducerShare] = useState(initialData?.producerShare != null ? initialData.producerShare.toString() : fieldProducerShare);
   const [irrigationPractice, setIrrigationPractice] = useState<'Irrigated' | 'Non-Irrigated'>(initialData?.irrigationPractice || fieldIrrigationPractice);
   const [cropStatus, setCropStatus] = useState<NonNullable<PlantRecord['cropStatus']>>(initialData?.cropStatus || 'Planted');
   const [cropSequence, setCropSequence] = useState<NonNullable<PlantRecord['cropSequence']>>(initialData?.cropSequence || 'First Crop');
@@ -105,7 +105,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setSeedVariety(initialData.seedVariety || '');
       setCrop(initialData.crop || '');
       setIntendedUse(initialData.intendedUse || fieldIntendedUse);
-      setProducerShare(initialData.producerShare?.toString() || fieldProducerShare);
+      setProducerShare(initialData.producerShare != null ? initialData.producerShare.toString() : fieldProducerShare);
       setIrrigationPractice(initialData.irrigationPractice || fieldIrrigationPractice);
       setCropStatus(initialData.cropStatus || 'Planted');
       setCropSequence(initialData.cropSequence || 'First Crop');
@@ -151,6 +151,11 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       return;
     }
 
+    // 0 is a valid producer share (e.g. 100% landlord); only an empty or
+    // non-numeric entry falls back to the field default.
+    const parsedProducerShare = parseFloat(producerShare);
+    const producerShareValue = Number.isFinite(parsedProducerShare) ? parsedProducerShare : parseFloat(fieldProducerShare);
+
     setIsSaving(true);
     try {
       let success = false;
@@ -163,7 +168,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
-          producerShare: parseFloat(producerShare) || 100,
+          producerShare: producerShareValue,
           irrigationPractice,
           cropStatus,
           cropSequence: cropStatus === 'Planted' ? cropSequence : undefined,
@@ -179,7 +184,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
           crop: crop.trim() || undefined,
           intendedUse: intendedUse.trim() || undefined,
           plantDate: plantDate || undefined,
-          producerShare: parseFloat(producerShare) || 100,
+          producerShare: producerShareValue,
           irrigationPractice,
           cropStatus,
           cropSequence: cropStatus === 'Planted' ? cropSequence : undefined,
