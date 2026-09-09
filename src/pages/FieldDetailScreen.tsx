@@ -1,1 +1,1 @@
-LOAD_FROM:/workspace/FieldDetailScreen_GOOD.tsx
+PLACEHOLDER
