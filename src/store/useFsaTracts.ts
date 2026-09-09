@@ -442,71 +442,6 @@ export function useFsaTracts({
     }
   }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
 
-  const unassignAllClusForField = useCallback(async (fieldId: string): Promise<boolean> => {
-    if (!farm_id) return false;
-    if (isMutating.current) return false;
-    isMutating.current = true;
-
-    try {
-      const toDelete = cluAssignments.filter(a => a.fieldId === fieldId && !a.deletedAt);
-      if (toDelete.length === 0) return true;
-
-      const deletedAt = new Date().toISOString();
-
-      setCluAssignments(prev => prev.map(a =>
-        a.fieldId === fieldId ? { ...a, deletedAt } : a
-      ));
-      const rollbackAssignments = () => setCluAssignments(prev => prev.map(a => {
-        const original = toDelete.find(t => t.id === a.id);
-        return original ?? a;
-      }));
-
-      if (!isOnline) {
-        try {
-          // Atomic batch: all field CLU assignments enqueue together so a partial
-          // failure rolls back the whole cascade rather than leaving some queued.
-          await syncQueue.enqueueMutations(
-            toDelete.map(a => ({
-              tableName: 'field_clu_assignments',
-              operation: 'soft_delete' as const,
-              payload: { id: a.id, deleted_at: deletedAt },
-              farmId: farm_id,
-            }))
-          );
-          if (onMutation) await onMutation();
-          return true;
-        } catch (err) {
-          console.error('Failed to enqueue mass CLU unassignment offline:', err);
-          rollbackAssignments();
-          return false;
-        }
-      }
-
-      let deleteError: unknown = null;
-      try {
-        for (const a of toDelete) {
-          const result = await cluAssignmentService.removeAssignment(a.id, farm_id, deletedAt);
-          if (result.error || result.count !== 1) {
-            deleteError = result.error ?? new Error(`Expected to remove 1 CLU assignment, removed ${result.count ?? 0}`);
-            break;
-          }
-        }
-      } catch (error) {
-        deleteError = error;
-      }
-
-      if (deleteError) {
-        console.error('Failed to unassign CLU on field delete:', deleteError);
-        rollbackAssignments();
-        toast.error('Failed to remove CLU assignments');
-        return false;
-      }
-      return true;
-    } finally {
-      isMutating.current = false;
-    }
-  }, [farm_id, cluAssignments, setCluAssignments, isOnline, onMutation]);
-
   return {
     fetchTractsAndAssignments,
     importTract,
@@ -514,6 +449,5 @@ export function useFsaTracts({
     assignClu,
     updateCluLandUse,
     unassignClu,
-    unassignAllClusForField,
   };
 }

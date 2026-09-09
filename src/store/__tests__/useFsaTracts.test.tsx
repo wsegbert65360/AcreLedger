@@ -349,45 +349,6 @@ describe('useFsaTracts — deleteTract (corrected cascade)', () => {
 });
 
 // ---------------------------------------------------------------------------
-describe('useFsaTracts — unassignAllClusForField (field-deletion cascade target)', () => {
-  it('online: soft-deletes each field assignment via the service loop', async () => {
-    cluAssignmentService.removeAssignment.mockResolvedValue({ count: 1, error: null });
-    const a1 = makeAssignment({ id: 'a1', fieldId: 'f1' });
-    const a2 = makeAssignment({ id: 'a2', fieldId: 'f1' });
-    const other = makeAssignment({ id: 'a3', fieldId: 'f2' });
-    const { result } = renderFsaHook({ assignments: [a1, a2, other] });
-
-    let ok: boolean | undefined;
-    await act(async () => { ok = await result.current.ops.unassignAllClusForField('f1'); });
-
-    expect(ok).toBe(true);
-    expect(cluAssignmentService.removeAssignment).toHaveBeenCalledTimes(2);
-    // Only f1 assignments were marked deleted; f2 untouched.
-    await waitFor(() => {
-      const f1 = result.current.assignState.value.filter(a => a.fieldId === 'f1');
-      expect(f1.every(a => a.deletedAt !== null)).toBe(true);
-      const f2 = result.current.assignState.value.filter(a => a.fieldId === 'f2');
-      expect(f2.every(a => a.deletedAt === null)).toBe(true);
-    });
-  });
-
-  it('offline: enqueues the field assignments atomically', async () => {
-    const a1 = makeAssignment({ id: 'a1', fieldId: 'f1' });
-    const a2 = makeAssignment({ id: 'a2', fieldId: 'f1' });
-    const { result } = renderFsaHook({ assignments: [a1, a2], isOnline: false });
-
-    let ok: boolean | undefined;
-    await act(async () => { ok = await result.current.ops.unassignAllClusForField('f1'); });
-
-    expect(ok).toBe(true);
-    expect(enqueueMutations).toHaveBeenCalledTimes(1);
-    const batch = enqueueMutations.mock.calls[0][0] as { tableName: string; payload: { id: string } }[];
-    expect(batch).toHaveLength(2);
-    expect(batch.map(b => b.payload.id)).toEqual(expect.arrayContaining(['a1', 'a2']));
-  });
-});
-
-// ---------------------------------------------------------------------------
 describe('useFsaTracts — importTract', () => {
   it('online: delegates to fsaTractService.importTract', async () => {
     fsaTractService.importTract.mockResolvedValue({ data: makeTract({ id: 't1' }), error: null });
