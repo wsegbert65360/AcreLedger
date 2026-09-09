@@ -1,1 +1,578 @@
-PLACEHOLDER_LOAD_FROM_/workspace/patched_FieldManageModal.tsx
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { FileUp, MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// Leaflet & GIS
+import { MapContainer, TileLayer, Marker, Polygon, useMapEvents, useMap } from 'react-leaflet';
+
+import '@/lib/leafletSetup';
+
+import { native } from '@/lib/native';
+import { useFarm } from '@/store/farmStore';
+import { Field } from '@/types/farm';
+import { calculateAcreage } from '@/lib/gisService';
+import { getBoundaryFieldAcres } from '@/lib/fieldAcreage';
+import { FsaImportCandidate, parseFsaGeoJson } from '@/lib/fsaImport';
+
+function MapInteraction({ onPointAdd, isCapturing }: { onPointAdd: (latlng: [number, number]) => void; isCapturing: boolean }) {
+  useMapEvents({
+    click(e) {
+      if (isCapturing) {
+        onPointAdd([e.latlng.lat, e.latlng.lng]);
+      }
+    },
+  });
+  return null;
+}
+
+// Helper to update map view when geolocation is found
+function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+}
+
+interface FieldManageModalProps {
+  open: boolean;
+  onClose: () => void;
+  editField?: Field | null;
+}
+
+export default function FieldManageModal({ open, onClose, editField }: FieldManageModalProps) {
+  const { addField, updateField, cluAssignments } = useFarm();
+  const editBoundaryAcreage = editField ? getBoundaryFieldAcres(editField, cluAssignments) : null;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [name, setName] = useState(editField?.name || '');
+  const [acreage, setAcreage] = useState(editBoundaryAcreage?.toString() || '');
+  const [lat, setLat] = useState(editField?.lat?.toString() || '');
+  const [lng, setLng] = useState(editField?.lng?.toString() || '');
+  const [fsaFarm, setFsaFarm] = useState(editField?.fsaFarmNumber || '');
+  const [fsaTract, setFsaTract] = useState(editField?.fsaTractNumber || '');
+  const [fsaField, setFsaField] = useState(editField?.fsaFieldNumber || '');
+  const [producerShare, setProducerShare] = useState(editField?.producerShare != null ? editField.producerShare.toString() : '100');
+  const [landlord, setLandlord] = useState(editField?.landlordName || '');
+  const [irrigation, setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
+  const [intendedUse, setIntendedUse] = useState(editField?.intendedUse || 'Grain');
+  const [notes, setNotes] = useState(editField?.notes || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // GIS State
+  const [points, setPoints] = useState<[number, number][]>(editField?.boundary?.coordinates?.[0]?.slice(0, -1).map((c: any) => [c[1], c[0]]) || []);
+  const [boundary, setBoundary] = useState<Field['boundary']>(editField?.boundary ?? null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [mapCenter, setMapCenter] = useState<[number, number]>(points.length > 0 ? points[0] : [38.5, -92.5]);
+  const [mapZoom, setMapZoom] = useState(points.length > 0 ? 15 : 4);
+  const [importCandidates, setImportCandidates] = useState<FsaImportCandidate[]>([]);
+  const [selectedImportId, setSelectedImportId] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    if (editField) {
+      setName(editField.name || '');
+      setAcreage(editBoundaryAcreage?.toString() || '');
+      setLat(editField.lat?.toString() || '');
+      setLng(editField.lng?.toString() || '');
+      setFsaFarm(editField.fsaFarmNumber || '');
+      setFsaTract(editField.fsaTractNumber || '');
+      setFsaField(editField.fsaFieldNumber || '');
+      setProducerShare(editField.producerShare != null ? editField.producerShare.toString() : '100');
+      setLandlord(editField.landlordName || '');
+      setIrrigation(editField.irrigationPractice || 'Non-Irrigated');
+      setIntendedUse(editField.intendedUse || 'Grain');
+      setNotes(editField.notes || '');
+      const newPoints: [number, number][] = (editField?.boundary?.coordinates?.[0]?.slice(0, -1).map((c: any) => [c[1], c[0]]) as [number, number][]) || [];
+      setPoints(newPoints);
+      setBoundary(editField.boundary ?? null);
+      setMapCenter(newPoints.length > 0 ? newPoints[0] : [38.5, -92.5]);
+      setMapZoom(newPoints.length > 0 ? 15 : 4);
+    } else {
+      setName('');
+      setAcreage('');
+      setLat('');
+      setLng('');
+      setFsaFarm('');
+      setFsaTract('');
+      setFsaField('');
+      setProducerShare('100');
+      setLandlord('');
+      setIrrigation('Non-Irrigated');
+      setIntendedUse('Grain');
+      setNotes('');
+      setPoints([]);
+      setBoundary(null);
+      setMapCenter([38.5, -92.5]);
+      setMapZoom(4);
+    }
+    setImportCandidates([]);
+    setSelectedImportId('');
+  }, [editBoundaryAcreage, editField, open]);
+
+  // Attempt Geolocation on Mount if no field is being edited
+  useEffect(() => {
+    if (!editField) {
+      native.geolocation.getCurrentPosition({ enableHighAccuracy: true })
+        .then((pos) => {
+          const newCenter: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+          setMapCenter(newCenter);
+          setMapZoom(15);
+        })
+        .catch((err) => console.warn('Geolocation error:', err));
+    }
+  }, [editField]);
+
+  const isEdit = !!editField;
+
+  const polygonPositions = useMemo(() => {
+    if (boundary?.coordinates?.length) {
+      return boundary.coordinates.map(ring => ring.map(point => [point[1], point[0]] as [number, number]));
+    }
+    return points.length >= 3 ? [[...points, points[0]]] : points;
+  }, [boundary, points]);
+
+  const applyImportCandidate = useCallback((candidate: FsaImportCandidate) => {
+    setName(candidate.name);
+    setAcreage(candidate.acreage.toString());
+    setLat(candidate.lat != null ? candidate.lat.toString() : '');
+    setLng(candidate.lng != null ? candidate.lng.toString() : '');
+    setFsaFarm(candidate.fsaFarmNumber || '');
+    setFsaTract(candidate.fsaTractNumber || '');
+    setFsaField(candidate.fsaFieldNumber || '');
+    setIntendedUse(candidate.intendedUse || 'Grain');
+    setNotes(candidate.notes || '');
+    setBoundary(candidate.boundary);
+
+    const importedRing = candidate.boundary?.type === 'Polygon'
+      ? candidate.boundary.coordinates[0]
+      : candidate.boundary?.coordinates[0]?.[0];
+    const importedPoints: [number, number][] = importedRing
+      ?.slice(0, -1)
+      .map(point => [point[1], point[0]] as [number, number]) ?? [];
+    setPoints(importedPoints);
+    if (candidate.lat != null && candidate.lng != null) {
+      setMapCenter([candidate.lat, candidate.lng]);
+      setMapZoom(16);
+    } else if (importedPoints.length > 0) {
+      setMapCenter(importedPoints[0]);
+      setMapZoom(16);
+    }
+    setIsCapturing(false);
+  }, []);
+
+  const handleImportSelection = useCallback((candidateId: string) => {
+    setSelectedImportId(candidateId);
+    const candidate = importCandidates.find(item => item.id === candidateId);
+    if (candidate) {
+      applyImportCandidate(candidate);
+    }
+  }, [applyImportCandidate, importCandidates]);
+
+  const handleImportFile = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const candidates = parseFsaGeoJson(text, file.name);
+      setImportCandidates(candidates);
+      setSelectedImportId(candidates[0].id);
+      applyImportCandidate(candidates[0]);
+      toast.success(candidates.length === 1 ? 'Imported FSA field.' : `Imported ${candidates.length} FSA fields. Select the one to use.`);
+      native.haptic.success();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not import this FSA file.';
+      toast.error(message);
+      native.haptic.error();
+    }
+  }, [applyImportCandidate]);
+
+  const handlePointAdd = useCallback(async (latlng: [number, number]) => {
+    const newPoints = [...points, latlng];
+    setPoints(newPoints);
+    setImportCandidates([]);
+    setSelectedImportId('');
+
+    if (newPoints.length === 1) {
+      setLat(latlng[0].toFixed(6));
+      setLng(latlng[1].toFixed(6));
+    }
+
+    if (newPoints.length >= 3) {
+      const geojson: { type: 'Polygon'; coordinates: number[][][] } = {
+        type: 'Polygon',
+        coordinates: [[...newPoints, newPoints[0]].map(p => [p[1], p[0]])]
+      };
+      const area = calculateAcreage(geojson);
+      setAcreage(area.toString());
+      setBoundary(geojson);
+    } else {
+      setBoundary(null);
+    }
+  }, [points]);
+
+  const clearPoints = () => {
+    setPoints([]);
+    setBoundary(null);
+    setImportCandidates([]);
+    setSelectedImportId('');
+    setAcreage('');
+    setIsCapturing(true);
+  };
+
+  const handleSubmit = async () => {
+    const ac = parseFloat(acreage);
+    if (!name.trim() || isNaN(ac) || ac <= 0) {
+      native.haptic.error();
+      return;
+    }
+    // lat/lng may be null if geocoding skipped (BLUEPRINT)
+    const la = lat.trim() === '' ? null : parseFloat(lat);
+    const ln = lng.trim() === '' ? null : parseFloat(lng);
+    if (la !== null && (isNaN(la) || la < -90 || la > 90)) {
+      native.haptic.error();
+      return;
+    }
+    if (ln !== null && (isNaN(ln) || ln < -180 || ln > 180)) {
+      native.haptic.error();
+      return;
+    }
+
+    let fieldBoundary: Field['boundary'] = boundary;
+    if (!fieldBoundary && points.length >= 3) {
+      fieldBoundary = {
+        type: 'Polygon',
+        coordinates: [[...points, points[0]].map(p => [p[1], p[0]])]
+      };
+    }
+
+    // 0 is a valid producer share; an empty or non-numeric entry means "not set".
+    const parsedProducerShare = parseFloat(producerShare);
+
+    const fieldData = {
+      name: name.trim(),
+      acreage: ac,
+      boundaryAcreage: ac,
+      lat: la,
+      lng: ln,
+      boundary: fieldBoundary,
+      fsaFarmNumber: fsaFarm.trim() || undefined,
+      fsaTractNumber: fsaTract.trim() || undefined,
+      fsaFieldNumber: fsaField.trim() || undefined,
+      producerShare: Number.isFinite(parsedProducerShare) ? parsedProducerShare : undefined,
+      landlordName: landlord.trim() || undefined,
+      irrigationPractice: irrigation,
+      intendedUse: intendedUse.trim() || undefined,
+      notes: notes.trim() || undefined,
+      deleted_at: null as string | null
+    };
+
+    setIsSaving(true);
+    try {
+      let success = false;
+      if (isEdit) {
+        const updatedField: Field = {
+          ...editField,
+          ...fieldData,
+          farm_id: editField.farm_id,
+          deleted_at: editField.deleted_at ?? null
+        };
+        success = await updateField(updatedField);
+      } else {
+        const newField: Omit<Field, 'id' | 'farm_id'> = {
+          ...fieldData
+        };
+        success = await addField(newField);
+      }
+      if (success) {
+        native.haptic.success();
+        onClose();
+      } else {
+        native.haptic.error();
+      }
+    } catch (_e) {
+      native.haptic.error();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const valid = !!name.trim() && !!acreage && !isNaN(parseFloat(acreage)) && parseFloat(acreage) > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="bg-card border-primary/30 max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-primary">
+            {isEdit ? <Pencil size={20} /> : <Plus size={20} />}
+            {isEdit ? 'Edit Field' : 'Add Field'}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Add or edit field details and boundaries.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json,application/geo+json,.geojson"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full justify-center font-mono text-[11px]"
+            >
+              <FileUp size={14} className="mr-2" />
+              IMPORT FSA GEOJSON
+            </Button>
+            {importCandidates.length > 1 && (
+              <div>
+                <Label htmlFor="fsaImportCandidate" className="text-muted-foreground font-mono text-xs uppercase">Imported polygon</Label>
+                <Select value={selectedImportId} onValueChange={handleImportSelection}>
+                  <SelectTrigger id="fsaImportCandidate" className="h-11 mt-1 bg-background border-border font-mono text-xs">
+                    <SelectValue placeholder="Select FSA polygon" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {importCandidates.map(candidate => (
+                      <SelectItem key={candidate.id} value={candidate.id}>
+                        {candidate.name} · {candidate.acreage} AC
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {/* Map Preview / Drawing Area */}
+          <div className="relative group">
+            <div className="h-48 w-full rounded-lg overflow-hidden border border-border bg-muted mb-2 z-0">
+              <MapContainer
+                center={mapCenter}
+                zoom={mapZoom}
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                  attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+                />
+                <TileLayer
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                />
+                <TileLayer
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"
+                />
+                <ChangeView center={mapCenter} zoom={mapZoom} />
+                <MapInteraction onPointAdd={handlePointAdd} isCapturing={isCapturing} />
+                {points.map((p, i) => (
+                  <Marker key={i} position={p} />
+                ))}
+                {polygonPositions.length >= 2 && (
+                  <Polygon positions={polygonPositions} pathOptions={{ color: 'var(--primary)' }} />
+                )}
+              </MapContainer>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant={isCapturing ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setIsCapturing(!isCapturing)}
+                className="flex-1 font-mono text-[11px]"
+              >
+                <MapIcon size={14} className="mr-2" />
+                {isCapturing ? 'TAP MAP TO DRAW' : 'ENABLE MAP DRAWING'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearPoints}
+                className="px-3"
+                aria-label="Reset map drawing"
+              >
+                <RotateCcw size={14} />
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <Label htmlFor="fieldName" className="text-muted-foreground font-mono text-xs">FIELD NAME</Label>
+              <Input
+                id="fieldName"
+                name="fieldName"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. North 80"
+                className="mt-1 bg-muted border-border text-foreground"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="acreage" className="text-muted-foreground font-mono text-xs flex items-center gap-1">
+                BOUNDARY ACRES {points.length >= 3 && <span className="text-[11px] text-primary">(AUTO)</span>}
+              </Label>
+              <Input
+                id="acreage"
+                name="acreage"
+                type="number"
+                value={acreage}
+                onChange={e => setAcreage(e.target.value)}
+                placeholder="0"
+                className="mt-1 bg-muted border-border text-foreground"
+              />
+            </div>
+            <div>
+              <Label htmlFor="fsaField" className="text-muted-foreground font-mono text-xs">FSA FIELD #</Label>
+              <Input
+                id="fsaField"
+                name="fsaField"
+                value={fsaField}
+                onChange={e => setFsaField(e.target.value)}
+                placeholder="1"
+                className="mt-1 bg-muted border-border text-foreground"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="latitude" className="text-muted-foreground font-mono text-xs flex items-center gap-1">
+                <MapPin size={10} /> LATITUDE
+              </Label>
+              <Input
+                id="latitude"
+                name="latitude"
+                type="number"
+                step="0.000001"
+                value={lat}
+                onChange={e => setLat(e.target.value)}
+                className="mt-1 bg-muted border-border text-foreground font-mono text-xs"
+              />
+            </div>
+            <div>
+              <Label htmlFor="longitude" className="text-muted-foreground font-mono text-xs flex items-center gap-1">
+                <MapPin size={10} /> LONGITUDE
+              </Label>
+              <Input
+                id="longitude"
+                name="longitude"
+                type="number"
+                step="0.000001"
+                value={lng}
+                onChange={e => setLng(e.target.value)}
+                className="mt-1 bg-muted border-border text-foreground font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-primary font-mono text-[11px] font-bold block">FSA COMPLIANCE DATA</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="fsaFarm" className="text-muted-foreground font-mono text-xs uppercase">FSA Farm #</Label>
+                <Input
+                  id="fsaFarm"
+                  name="fsaFarm"
+                  value={fsaFarm}
+                  onChange={e => setFsaFarm(e.target.value)}
+                  placeholder="Enter Farm #"
+                  className="mt-1 bg-background border-border text-foreground h-8 text-sm"
+                />
+              </div>
+              <div>
+                <Label htmlFor="fsaTract" className="text-muted-foreground font-mono text-xs uppercase">Tract #</Label>
+                <Input
+                  id="fsaTract"
+                  name="fsaTract"
+                  value={fsaTract}
+                  onChange={e => setFsaTract(e.target.value)}
+                  placeholder="Enter Tract #"
+                  className="mt-1 bg-background border-border text-foreground h-8 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/20">
+            <div>
+              <Label htmlFor="fieldIrrigation" className="text-muted-foreground font-mono text-xs uppercase">Irrigation</Label>
+              <Select value={irrigation} onValueChange={(val: any) => setIrrigation(val)}>
+                <SelectTrigger id="fieldIrrigation" className="h-11 mt-1 bg-muted border-border font-mono text-sm leading-tight text-foreground/80 focus:ring-1 focus:ring-primary/30">
+                  <SelectValue placeholder="Non-Irrigated" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Non-Irrigated">Non-Irrigated</SelectItem>
+                  <SelectItem value="Irrigated">Irrigated</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="fieldIntendedUse" className="text-muted-foreground font-mono text-xs uppercase">Intended Use</Label>
+              <Input
+                id="fieldIntendedUse"
+                name="fieldIntendedUse"
+                value={intendedUse}
+                onChange={e => setIntendedUse(e.target.value)}
+                placeholder="Grain"
+                className="mt-1 bg-muted border-border text-foreground font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div>
+              <Label htmlFor="fieldProducerShare" className="text-muted-foreground font-mono text-xs uppercase">Producer Share %</Label>
+              <Input
+                id="fieldProducerShare"
+                name="fieldProducerShare"
+                type="number"
+                value={producerShare}
+                onChange={e => setProducerShare(e.target.value)}
+                className="mt-1 bg-muted border-border text-foreground font-mono"
+              />
+            </div>
+            <div>
+              <Label htmlFor="fieldLandlord" className="text-muted-foreground font-mono text-xs uppercase">Landlord</Label>
+              <Input
+                id="fieldLandlord"
+                name="fieldLandlord"
+                value={landlord}
+                onChange={e => setLandlord(e.target.value)}
+                placeholder="Optional"
+                className="mt-1 bg-muted border-border text-foreground font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button
+            onClick={handleSubmit}
+            disabled={isSaving || !valid}
+            className="touch-target w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-plant font-bold"
+          >
+            {isSaving ? (isEdit ? 'Saving...' : 'Adding...') : (isEdit ? 'Save Changes' : 'Add Field')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
