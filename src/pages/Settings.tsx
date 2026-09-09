@@ -1,9 +1,11 @@
-import { Settings as SettingsIcon, Sprout, Database, User } from 'lucide-react';
+import { Settings as SettingsIcon, Sprout, Database, User, CreditCard } from 'lucide-react';
 import FsaTractManager from '@/components/settings/FsaTractManager';
 import SeedManager from '@/components/settings/SeedManager';
 import RecipeManager from '@/components/settings/RecipeManager';
 import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManager';
 import DisplayManager from '@/components/settings/DisplayManager';
+import BillingManager from '@/components/settings/BillingManager';
+import { isBillingUiAvailable } from '@/lib/billing';
 import SyncStatus from '@/components/settings/SyncStatus';
 import BackupManager from '@/components/settings/BackupManager';
 import SecurityManager from '@/components/settings/SecurityManager';
@@ -73,6 +75,22 @@ export default function Settings() {
               </div>
             </AccordionContent>
           </AccordionItem>
+
+          {isBillingUiAvailable() && (
+            <AccordionItem value="billing" className="border border-border rounded-2xl bg-card px-4">
+              <AccordionTrigger className="hover:no-underline py-4">
+                <div className="flex items-center gap-2 text-foreground">
+                  <CreditCard size={18} className="text-harvest" />
+                  <span className="font-bold">Billing</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid grid-cols-1 gap-6 pb-4">
+                  <BillingManager />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
 
           <AccordionItem value="account-display" className="border border-border rounded-2xl bg-card px-4">
             <AccordionTrigger className="hover:no-underline py-4">
