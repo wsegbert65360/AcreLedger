@@ -1,1 +1,1 @@
-PLACEHOLDER_LOAD_FROM_MCP_ARGS_FILE
+file:///workspace/AcreLedger/src/pages/FieldDetailScreen.tsx
