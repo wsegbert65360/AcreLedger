@@ -101,7 +101,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       setDestination(null);
       setBinId('');
       setMoisture('');
-      setLandlordSplit(field.producerShare ? (100 - field.producerShare).toString() : '0');
+      setLandlordSplit(field.producerShare != null ? (100 - field.producerShare).toString() : '0');
       setBushels('');
       setCrop(suggestedHarvest?.crop || field.intendedUse || '');
       setLandlordName(field.landlordName || '');

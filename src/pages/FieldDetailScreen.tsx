@@ -676,7 +676,7 @@ export default function FieldDetailScreen() {
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Share %</label>
-              <div className="font-bold text-foreground">{field.producerShare || 100}% Producer</div>
+              <div className="font-bold text-foreground">{field.producerShare ?? 100}% Producer</div>
             </div>
           </div>
 

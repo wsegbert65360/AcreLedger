@@ -421,3 +421,27 @@ it('saves a selected local harvest time to the harvest and linked bin movement',
   await waitFor(() => expect(state.updateGrainMovement).toHaveBeenCalledWith(expect.objectContaining({ timestamp })));
   expect(state.updateHarvestRecord).toHaveBeenCalledWith(expect.objectContaining({ harvestDate: '2026-09-03', timestamp }));
 });
+
+describe('HarvestModal landlord split defaults', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('prefills 100% landlord split when the field producer share is 0', () => {
+    render(<HarvestModal field={{ ...field, producerShare: 0 }} open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /bin/i }));
+    expect((screen.getByLabelText(/landlord %/i) as HTMLInputElement).value).toBe('100');
+  });
+
+  it('prefills 0% landlord split when the field has no producer share', () => {
+    render(<HarvestModal field={field} open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /bin/i }));
+    expect((screen.getByLabelText(/landlord %/i) as HTMLInputElement).value).toBe('0');
+  });
+
+  it('prefills the complement of a nonzero field producer share', () => {
+    render(<HarvestModal field={{ ...field, producerShare: 75 }} open onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /bin/i }));
+    expect((screen.getByLabelText(/landlord %/i) as HTMLInputElement).value).toBe('25');
+  });
+});

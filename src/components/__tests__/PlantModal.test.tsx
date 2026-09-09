@@ -211,3 +211,92 @@ describe('PlantModal duplicate mode', () => {
     expect(updatePlantRecordMock).not.toHaveBeenCalled();
   });
 });
+
+describe('PlantModal producer share zero', () => {
+  const field: Field = {
+    id: 'field-1',
+    name: 'North Field',
+    acreage: 80,
+    lat: null,
+    lng: null,
+    farm_id: 'farm-1',
+    deleted_at: null
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCluAssignments = [];
+  });
+
+  it('defaults the share from a 0% field and saves 0 on a new record', async () => {
+    render(
+      <PlantModal field={{ ...field, producerShare: 0 }} open={true} onClose={vi.fn()} />
+    );
+
+    const shareInput = screen.getByLabelText(/producer share/i) as HTMLInputElement;
+    expect(shareInput.value).toBe('0');
+
+    fireEvent.change(screen.getByLabelText(/seed variety/i), { target: { value: 'P1197' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /log planting/i }));
+    });
+
+    await waitFor(() => expect(addPlantRecordMock).toHaveBeenCalledTimes(1));
+    expect(addPlantRecordMock.mock.calls[0][0]).toMatchObject({
+      fieldId: field.id,
+      producerShare: 0,
+    });
+  });
+
+  it('preserves a stored 0% share when editing a record on a field without a share', async () => {
+    const existing: PlantRecord = {
+      id: 'plant-1',
+      fieldId: field.id,
+      fieldName: field.name,
+      seedVariety: 'P1197',
+      acreage: 33,
+      producerShare: 0,
+      timestamp: 1000,
+      seasonYear: 2025,
+      farm_id: 'farm-1',
+      deleted_at: null,
+      plantDate: '2025-04-10',
+      crop: 'Corn',
+    };
+
+    render(
+      <PlantModal field={field} open={true} onClose={vi.fn()} initialData={existing} />
+    );
+
+    const shareInput = screen.getByLabelText(/producer share/i) as HTMLInputElement;
+    expect(shareInput.value).toBe('0');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+    });
+
+    await waitFor(() => expect(updatePlantRecordMock).toHaveBeenCalledTimes(1));
+    expect(updatePlantRecordMock.mock.calls[0][0]).toMatchObject({
+      id: 'plant-1',
+      producerShare: 0,
+    });
+  });
+
+  it('falls back to the field default when the share entry is cleared', async () => {
+    render(
+      <PlantModal field={{ ...field, producerShare: 60 }} open={true} onClose={vi.fn()} />
+    );
+
+    fireEvent.change(screen.getByLabelText(/seed variety/i), { target: { value: 'P1197' } });
+    fireEvent.change(screen.getByLabelText(/producer share/i), { target: { value: '' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /log planting/i }));
+    });
+
+    await waitFor(() => expect(addPlantRecordMock).toHaveBeenCalledTimes(1));
+    expect(addPlantRecordMock.mock.calls[0][0]).toMatchObject({
+      fieldId: field.id,
+      producerShare: 60,
+    });
+  });
+});

@@ -58,7 +58,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [fsaFarm, setFsaFarm] = useState(editField?.fsaFarmNumber || '');
   const [fsaTract, setFsaTract] = useState(editField?.fsaTractNumber || '');
   const [fsaField, setFsaField] = useState(editField?.fsaFieldNumber || '');
-  const [producerShare, setProducerShare] = useState(editField?.producerShare?.toString() || '100');
+  const [producerShare, setProducerShare] = useState(editField?.producerShare != null ? editField.producerShare.toString() : '100');
   const [landlord, setLandlord] = useState(editField?.landlordName || '');
   const [irrigation, setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
   const [intendedUse, setIntendedUse] = useState(editField?.intendedUse || 'Grain');
@@ -84,7 +84,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       setFsaFarm(editField.fsaFarmNumber || '');
       setFsaTract(editField.fsaTractNumber || '');
       setFsaField(editField.fsaFieldNumber || '');
-      setProducerShare(editField.producerShare?.toString() || '100');
+      setProducerShare(editField.producerShare != null ? editField.producerShare.toString() : '100');
       setLandlord(editField.landlordName || '');
       setIrrigation(editField.irrigationPractice || 'Non-Irrigated');
       setIntendedUse(editField.intendedUse || 'Grain');
@@ -254,6 +254,9 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       };
     }
 
+    // 0 is a valid producer share; an empty or non-numeric entry means "not set".
+    const parsedProducerShare = parseFloat(producerShare);
+
     const fieldData = {
       name: name.trim(),
       acreage: ac,
@@ -264,7 +267,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       fsaFarmNumber: fsaFarm.trim() || undefined,
       fsaTractNumber: fsaTract.trim() || undefined,
       fsaFieldNumber: fsaField.trim() || undefined,
-      producerShare: parseFloat(producerShare) || undefined,
+      producerShare: Number.isFinite(parsedProducerShare) ? parsedProducerShare : undefined,
       landlordName: landlord.trim() || undefined,
       irrigationPractice: irrigation,
       intendedUse: intendedUse.trim() || undefined,
