@@ -363,7 +363,7 @@ export default function FieldDetailScreen() {
                 {fetchingRain && !rainStats ? (
                   <span className="text-muted-foreground animate-pulse">...</span>
                 ) : (
-                  `${fmtRain(rainStats?.['24h'])}"`
+                  `${fmtRain(rainStats?.['24h'])}"
                 )}
               </div>
               <div className="text-xs text-muted-foreground font-medium">
@@ -676,7 +676,7 @@ export default function FieldDetailScreen() {
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-0.5">Share %</label>
-              <div className="font-bold text-foreground">{field.producerShare || 100}% Producer</div>
+              <div className="font-bold text-foreground">{field.producerShare ?? 100}% Producer</div>
             </div>
           </div>
 
