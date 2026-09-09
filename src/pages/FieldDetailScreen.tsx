@@ -1,1 +1,1 @@
-file:///workspace/AcreLedger/src/pages/FieldDetailScreen.tsx
+LOAD_FROM:/workspace/FieldDetailScreen_GOOD.tsx
