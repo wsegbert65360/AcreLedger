@@ -77,6 +77,18 @@ workflows:
         script: |
           cd ios/App && pod install
 
+      - name: Validate App Store privacy and SDK requirements
+        script: |
+          XCODE_MAJOR=$(xcodebuild -version | awk 'NR == 1 { split($2, version, "."); print version[1] }')
+          if [ "$XCODE_MAJOR" -lt 26 ]; then
+            echo "App Store submissions require Xcode 26 or newer" >&2
+            exit 1
+          fi
+          plutil -lint ios/App/App/Info.plist
+          plutil -lint ios/App/App/PrivacyInfo.xcprivacy
+          grep -q "com.wsegbert.acreledger" ios/App/App/Info.plist
+          grep -q "CapacitorSecureStoragePlugin" ios/App/Podfile.lock
+
       - name: Set up provisioning profiles settings on Xcode project
         script: |
           xcode-project use-profiles

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -24,7 +24,9 @@ import { QuickAddProvider, useQuickAdd } from "@/context/QuickAddContext";
 import AskAcreLedger from "@/components/AskAcreLedger";
 import QuickAddDialog from "@/components/QuickAddDialog";
 import { native } from "@/lib/native";
+import { listenForNativePasswordRecovery } from "@/lib/authDeepLinks";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 
 import PlantModal from "@/components/PlantModal";
 import SprayModal from "@/components/SprayModal";
@@ -112,6 +114,9 @@ const AppContent = () => {
   const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
   const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
+  const navigate = useNavigate();
+  const isPasswordRecovery = location.pathname === '/auth'
+    && new URLSearchParams(location.search).get('mode') === 'recovery';
   const coachmarks = useCoachmarks({
     userId: session?.user?.id,
     enabled: !!session && onboardingComplete && location.pathname === '/'
@@ -136,6 +141,11 @@ const AppContent = () => {
     };
   }, [isOnline, farm_id]);
 
+  useEffect(() => listenForNativePasswordRecovery(
+    () => navigate('/auth?mode=recovery', { replace: true }),
+    error => toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.'),
+  ), [navigate]);
+
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
@@ -151,6 +161,10 @@ const AppContent = () => {
       backListenerPromise.then((handle) => handle.remove());
     };
   }, []);
+
+  if (isPasswordRecovery) {
+    return <ErrorBoundary><Auth /></ErrorBoundary>;
+  }
 
   if (loading) {
     return (

@@ -1,4 +1,4 @@
-import { Preferences } from '@capacitor/preferences';
+import { secureStorage } from '@/lib/secureStorage';
 
 const PERSISTENT_KEY_STORAGE = 'al_local_encryption_key';
 const ENCRYPTION_KEY_LOCK = 'acreledger-local-encryption-key';
@@ -24,11 +24,11 @@ function bytesToBase64(bytes: Uint8Array): string {
  * This ensures data remains readable even if the user is offline or the session expires.
  */
 async function readOrCreateLocalEncryptionKey(): Promise<string> {
-  let { value: key } = await Preferences.get({ key: PERSISTENT_KEY_STORAGE });
+  let key = await secureStorage.getItem(PERSISTENT_KEY_STORAGE);
 
   if (!key) {
     key = crypto.randomUUID();
-    await Preferences.set({ key: PERSISTENT_KEY_STORAGE, value: key });
+    await secureStorage.setItem(PERSISTENT_KEY_STORAGE, key);
   }
 
   return key;

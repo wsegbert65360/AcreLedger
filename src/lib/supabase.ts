@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
-import { Preferences } from '@capacitor/preferences';
+import { secureStorage } from '@/lib/secureStorage';
 
 const PLACEHOLDER_SUPABASE_URL = 'https://placeholder-url.supabase.co';
 const PLACEHOLDER_SUPABASE_ANON_KEY = 'placeholder-key';
@@ -45,17 +45,11 @@ export const isSupabaseConfigured = hasValidSupabaseUrl && Boolean(configuredSup
 
 const isNative = Capacitor.isNativePlatform();
 
-// Custom storage adapter for Native (iOS/Android) to use Keychain/Preferences instead of localStorage
+// Native auth sessions contain refresh tokens and must stay in the OS secure store.
 const nativeStorageAdapter = {
-    getItem: (key: string) => {
-        return Preferences.get({ key }).then(res => res.value).catch(() => null);
-    },
-    setItem: (key: string, value: string) => {
-        return Preferences.set({ key, value });
-    },
-    removeItem: (key: string) => {
-        return Preferences.remove({ key });
-    },
+    getItem: (key: string) => secureStorage.getItem(key),
+    setItem: (key: string, value: string) => secureStorage.setItem(key, value),
+    removeItem: (key: string) => secureStorage.removeItem(key),
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -64,5 +58,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
+        flowType: 'pkce',
     },
 });

@@ -36,45 +36,29 @@ export async function getDatabase() {
           await dbConnection.open();
         }
       } else {
-        let { value: encKey } = await Preferences.get({ key: 'db_enc_key' });
-        if (!encKey) {
-          encKey = crypto.randomUUID();
-          await Preferences.set({ key: 'db_enc_key', value: encKey });
-        }
+        const encKey = await getEncryptionSecret();
 
         const isSecretStored = (await sqliteConnection.isSecretStored()).result;
         if (!isSecretStored) {
           await sqliteConnection.setEncryptionSecret(encKey);
         }
 
-        try {
-          dbConnection = await sqliteConnection.createConnection(
-            'acreledger_db',
-            true, // encrypted
-            'secret', // mode
-            1, // version
-            false // readonly
-          );
-          await dbConnection.open();
-        } catch (openErr) {
-          console.warn('[OfflineStorage] Failed to open database in encrypted mode. Attempting fallback to unencrypted mode...', openErr);
-          try {
-            await sqliteConnection.closeConnection('acreledger_db', false);
-          } catch (closeErr) {
-            console.error('[OfflineStorage] Error closing connection registry:', closeErr);
-          }
-          
-          dbConnection = await sqliteConnection.createConnection(
-            'acreledger_db',
-            false, // encrypted
-            'no-encryption', // mode
-            1, // version
-            false // readonly
-          );
-          await dbConnection.open();
-          console.log('[OfflineStorage] Fallback to unencrypted mode succeeded.');
-        }
+        dbConnection = await sqliteConnection.createConnection(
+          'acreledger_db',
+          true, // encrypted
+          'secret', // mode
+          1, // version
+          false // readonly
+        );
+        await dbConnection.open();
       }
+
+      // Older builds duplicated the database passphrase in plaintext
+      // Preferences. SQLCipher already retains its configured secret in the
+      // native secure store, so remove the obsolete copy after a safe open.
+      await Preferences.remove({ key: 'db_enc_key' }).catch(error => {
+        console.warn('[OfflineStorage] Could not remove legacy database key copy:', error);
+      });
 
       // Create the offline cache table
       await dbConnection.execute(`

@@ -19,6 +19,8 @@ vi.mock('@/lib/supabase', () => ({
       signUp: vi.fn().mockResolvedValue({ data: null, error: null }),
       signInWithPassword: vi.fn().mockResolvedValue({ data: null, error: null }),
       resetPasswordForEmail: vi.fn().mockResolvedValue({ data: null, error: null }),
+      updateUser: vi.fn().mockResolvedValue({ data: null, error: null }),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
     },
   },
 }));
@@ -158,6 +160,14 @@ describe('signed-out routing (ticket C)', () => {
     expect(screen.getByRole('heading', { name: 'Welcome Back' })).toBeInTheDocument();
   });
 
+  it('deep-links password recovery into the new-password screen', () => {
+    navigate('/auth?mode=recovery');
+    renderApp();
+    expect(screen.getByRole('heading', { name: 'Choose New Password' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update Password' })).toBeInTheDocument();
+  });
+
   it('links the auth screen to the privacy policy', () => {
     navigate('/auth');
     renderApp();
@@ -219,6 +229,12 @@ describe('signed-in routing (preserved behavior)', () => {
     navigate('/auth');
     renderApp();
     expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
+  });
+
+  it('allows an authenticated recovery session to set a new password', () => {
+    navigate('/auth?mode=recovery');
+    renderApp();
+    expect(screen.getByRole('heading', { name: 'Choose New Password' })).toBeInTheDocument();
   });
 
   it('still renders /privacy inside the app shell', async () => {

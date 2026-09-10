@@ -24,7 +24,7 @@ export default function Privacy() {
                             </div>
                             <div>
                                 <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 1, 2026</p>
+                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 10, 2026</p>
                             </div>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
@@ -45,7 +45,11 @@ export default function Privacy() {
                             <ul className="list-none space-y-3 pl-4">
                                 <li className="text-sm flex border-l-2 border-primary/30 pl-3">
                                     <span className="text-foreground font-bold mr-2">Field Data:</span>
-                                    GPS coordinates, field boundaries, and acreage for the 17+ fields you manage.
+                                    GPS coordinates, field boundaries, and acreage for the fields you manage.
+                                </li>
+                                <li className="text-sm flex border-l-2 border-primary/30 pl-3">
+                                    <span className="text-foreground font-bold mr-2">Account Data:</span>
+                                    Your email address, user ID, farm name, and sign-in information needed to operate and secure your account.
                                 </li>
                                 <li className="text-sm flex border-l-2 border-primary/30 pl-3">
                                     <span className="text-foreground font-bold mr-2">Activity Logs:</span>
@@ -94,6 +98,15 @@ export default function Privacy() {
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
                                     <div>
+                                        <p className="text-sm font-bold text-foreground">Supabase</p>
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                            Provides account authentication and encrypted cloud storage for farm records.
+                                        </p>
+                                    </div>
+                                    <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">Account and farm data</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
+                                    <div>
                                         <p className="text-sm font-bold text-foreground">Visual Crossing Weather</p>
                                     </div>
                                     <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">GPS Data only</span>
@@ -133,13 +146,13 @@ export default function Privacy() {
                                 <div className="p-3 border border-border/40 rounded-lg">
                                     <p className="text-sm font-bold mb-1">Soft Deletes</p>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
-                                        When you delete a record (like a Fertilizer log), it is marked as deleted but retained for historical recovery until you permanently purge it.
+                                        When you delete a record (like a fertilizer log), it is marked as deleted and excluded from active records. It remains recoverable until the account deletion process removes data that we are not legally required to retain.
                                     </p>
                                 </div>
                                 <div className="p-3 border border-border/40 rounded-lg">
                                     <p className="text-sm font-bold mb-1">Account Deletion</p>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
-                                        You may request the full deletion of your farm account and all associated field data through the "Setup" tab.
+                                        You can initiate permanent account deletion in Settings under Account &amp; Display. We complete requests within 30 days and delete associated personal data unless retention is legally required.
                                     </p>
                                 </div>
                             </div>

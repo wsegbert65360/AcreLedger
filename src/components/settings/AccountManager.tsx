@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useFarm } from '@/store/farmStore';
+import { requestAccountDeletion } from '@/lib/accountDeletion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,12 +8,16 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 
 export default function AccountManager() {
-  const { session, farmName, updateFarmName, signOut, pendingSyncCount } = useFarm();
+  const { session, farm_id, farmName, updateFarmName, signOut, pendingSyncCount } = useFarm();
   const [name, setName] = useState(farmName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [confirmDeletion, setConfirmDeletion] = useState(false);
+  const [deletionConfirmation, setDeletionConfirmation] = useState('');
+  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
 
   useEffect(() => {
     if (farmName) {
@@ -39,6 +44,32 @@ export default function AccountManager() {
       return;
     }
     signOut();
+  };
+
+  const handleDeletionRequest = async () => {
+    if (!session?.user.id || !farm_id || deletionConfirmation !== 'DELETE') return;
+    if (pendingSyncCount > 0) {
+      toast.error('Sync your offline changes before requesting account deletion.');
+      return;
+    }
+
+    setIsRequestingDeletion(true);
+    try {
+      const result = await requestAccountDeletion(session.user.id, farm_id);
+      toast.success(
+        result === 'already_pending'
+          ? 'Your account deletion request is already pending.'
+          : 'Account deletion requested. It will be completed within 30 days.',
+      );
+      setConfirmDeletion(false);
+      setDeletionConfirmation('');
+      await signOut();
+    } catch (error) {
+      console.error('Failed to request account deletion:', error);
+      toast.error('Could not request account deletion. Please try again.');
+    } finally {
+      setIsRequestingDeletion(false);
+    }
   };
 
   return (
@@ -94,6 +125,20 @@ export default function AccountManager() {
           >
             Sign Out
           </Button>
+
+          <div className="border-t border-border/40 pt-4 space-y-2">
+            <p className="text-xs text-muted-foreground">
+              You can request permanent deletion of your account and associated personal data.
+              Requests are completed within 30 days.
+            </p>
+            <Button
+              variant="outline"
+              className="w-full h-10 border-destructive/40 text-destructive hover:bg-destructive/10"
+              onClick={() => setConfirmDeletion(true)}
+            >
+              Delete Account
+            </Button>
+          </div>
         </div>
       </CardContent>
 
@@ -111,6 +156,53 @@ export default function AccountManager() {
             <AlertDialogCancel>Stay signed in</AlertDialogCancel>
             <AlertDialogAction onClick={() => signOut()}>
               Sign out and discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmDeletion} onOpenChange={(open) => {
+        setConfirmDeletion(open);
+        if (!open) setDeletionConfirmation('');
+      }}>
+        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Request permanent account deletion?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This starts deletion of your AcreLedger account and associated personal data.
+              The request will be completed within 30 days, and you will be signed out now.
+              This cannot be undone after completion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {pendingSyncCount > 0 ? (
+            <p className="text-sm text-destructive">
+              Reconnect and sync {pendingSyncCount} pending change{pendingSyncCount === 1 ? '' : 's'} first.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              <label htmlFor="deleteAccountConfirmation" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Type DELETE to confirm
+              </label>
+              <Input
+                id="deleteAccountConfirmation"
+                value={deletionConfirmation}
+                onChange={(event) => setDeletionConfirmation(event.target.value)}
+                autoCapitalize="characters"
+                autoComplete="off"
+              />
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep account</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeletionRequest();
+              }}
+              disabled={pendingSyncCount > 0 || deletionConfirmation !== 'DELETE' || isRequestingDeletion}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isRequestingDeletion ? 'Requesting...' : 'Request deletion'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

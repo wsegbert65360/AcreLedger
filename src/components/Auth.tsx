@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Sprout, Mail, ArrowLeft } from 'lucide-react';
 import { getAuthErrorMessage } from '@/lib/authErrors';
+import { getPasswordRecoveryRedirectUrl } from '@/lib/authDeepLinks';
 
-type AuthMode = 'signin' | 'signup' | 'forgot' | 'verification_sent';
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'recovery' | 'verification_sent';
 
 export function Auth() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -15,9 +16,14 @@ export function Auth() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [mode, setMode] = useState<AuthMode>(() =>
-        searchParams.get('mode') === 'signup' ? 'signup' : 'signin'
-    );
+    const [mode, setMode] = useState<AuthMode>(() => {
+        const requestedMode = searchParams.get('mode');
+        return requestedMode === 'signup' || requestedMode === 'recovery' ? requestedMode : 'signin';
+    });
+
+    useEffect(() => {
+        if (searchParams.get('mode') === 'recovery') setMode('recovery');
+    }, [searchParams]);
 
     const handleModeChange = (newMode: AuthMode) => {
         setMode(newMode);
@@ -42,12 +48,12 @@ export function Auth() {
         try {
             if (mode === 'forgot') {
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/`,
+                    redirectTo: getPasswordRecoveryRedirectUrl(),
                 });
                 if (error) throw error;
                 toast.success('Password reset email sent! Check your inbox.');
                 handleModeChange('signin');
-            } else if (mode === 'signup') {
+            } else if (mode === 'signup' || mode === 'recovery') {
                 if (password.length < 8) {
                     toast.error('Password must be at least 8 characters long');
                     setLoading(false);
@@ -58,12 +64,20 @@ export function Auth() {
                     setLoading(false);
                     return;
                 }
-                const { error } = await supabase.auth.signUp({
-                    email,
-                    password,
-                });
-                if (error) throw error;
-                handleModeChange('verification_sent');
+                if (mode === 'recovery') {
+                    const { error } = await supabase.auth.updateUser({ password });
+                    if (error) throw error;
+                    await supabase.auth.signOut();
+                    toast.success('Password updated. Sign in with your new password.');
+                    handleModeChange('signin');
+                } else {
+                    const { error } = await supabase.auth.signUp({
+                        email,
+                        password,
+                    });
+                    if (error) throw error;
+                    handleModeChange('verification_sent');
+                }
             } else {
                 const { error } = await supabase.auth.signInWithPassword({
                     email,
@@ -81,6 +95,8 @@ export function Auth() {
 
     const title = mode === 'forgot'
         ? 'Reset Password'
+        : mode === 'recovery'
+            ? 'Choose New Password'
         : mode === 'signup'
             ? 'Create Account'
             : mode === 'verification_sent'
@@ -89,6 +105,8 @@ export function Auth() {
 
     const subtitle = mode === 'forgot'
         ? 'Enter your email to receive a reset link'
+        : mode === 'recovery'
+            ? 'Enter a new password for your AcreLedger account'
         : mode === 'signup'
             ? 'Set up your farm records'
             : mode === 'verification_sent'
@@ -97,6 +115,8 @@ export function Auth() {
 
     const buttonLabel = mode === 'forgot'
         ? 'Send Reset Link'
+        : mode === 'recovery'
+            ? 'Update Password'
         : mode === 'signup'
             ? 'Sign Up'
             : 'Sign In';
@@ -171,19 +191,21 @@ export function Auth() {
                     ) : (
                         <form onSubmit={handleAuth}>
                             <div className="px-6 py-4 space-y-4">
-                                <div className="space-y-2">
-                                    <label htmlFor="authEmail" className="text-sm font-medium">Email</label>
-                                    <Input
-                                        id="authEmail"
-                                        name="email"
-                                        type="email"
-                                        placeholder="farm@example.com"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        required
-                                        className="bg-background"
-                                    />
-                                </div>
+                                {mode !== 'recovery' && (
+                                    <div className="space-y-2">
+                                        <label htmlFor="authEmail" className="text-sm font-medium">Email</label>
+                                        <Input
+                                            id="authEmail"
+                                            name="email"
+                                            type="email"
+                                            placeholder="farm@example.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            required
+                                            className="bg-background"
+                                        />
+                                    </div>
+                                )}
                                 {mode !== 'forgot' && (
                                     <>
                                         <div className="space-y-2">
@@ -198,7 +220,7 @@ export function Auth() {
                                                 className="bg-background"
                                             />
                                         </div>
-                                        {mode === 'signup' && (
+                                        {(mode === 'signup' || mode === 'recovery') && (
                                             <div className="space-y-2">
                                                 <label htmlFor="authConfirmPassword" className="text-sm font-medium">Confirm Password</label>
                                                 <Input
@@ -257,6 +279,16 @@ export function Auth() {
                                         onClick={() => handleModeChange('signin')}
                                     >
                                         Back to Sign In
+                                    </Button>
+                                )}
+                                {mode === 'recovery' && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="w-full"
+                                        onClick={() => handleModeChange('signin')}
+                                    >
+                                        Cancel and Sign In
                                     </Button>
                                 )}
                             </div>

@@ -378,7 +378,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       if (isCurrentRequest()) setInitialFetchComplete(true);
       return true;
     }
-    setLoading(true);
+    // Only the first authoritative load owns the full-screen loading state.
+    // Reconnect/background refreshes must not unmount active forms or discard
+    // unsaved input while newer cloud data is fetched.
+    const ownsInitialLoadingState = !initialFetchComplete;
+    if (ownsInitialLoadingState) setLoading(true);
     setFetchError(false);
     try {
       // Complete-collection reads must be paginated (Data API max_rows cap) and
@@ -518,9 +522,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           }
           return false;
         } finally {
-          if (isCurrentRequest()) setLoading(false);
+          if (isCurrentRequest() && ownsInitialLoadingState) setLoading(false);
         }
-  }, [cacheHydrated, farm_id, identityKey, isOnline, sessionUserId, setLoading]);
+  }, [cacheHydrated, farm_id, identityKey, initialFetchComplete, isOnline, sessionUserId, setLoading]);
 
   const fetchDataRef = useRef(fetchData);
   useEffect(() => {
