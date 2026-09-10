@@ -20,6 +20,7 @@ function makeSubscription(overrides: Partial<FarmSubscription> = {}): FarmSubscr
     cancel_at_period_end: false,
     stripe_customer_id: 'cus_test_1',
     stripe_subscription_id: 'sub_stripe_1',
+    stripe_subscription_created_at: '2026-09-09T00:00:00.000Z',
     stripe_price_id: 'price_test_1',
     created_at: '2026-09-08T00:00:00.000Z',
     updated_at: '2026-09-08T00:00:00.000Z',

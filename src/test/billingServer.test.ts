@@ -5,6 +5,7 @@ import {
   PAST_DUE_GRACE_DAYS,
   TRIAL_PERIOD_DAYS,
   assertTestModeBilling,
+  buildCheckoutIdempotencyKey,
   buildSubscriptionUpsert,
   canOpenPortal,
   canStartCheckout,
@@ -13,6 +14,7 @@ import {
   mapStripeStatusToBillingStatus,
   parseBillingAllowlist,
   readSubscriptionMetadata,
+  shouldApplySubscriptionSnapshot,
 } from '../../server/billing';
 
 const TEST_ENV = {
@@ -116,6 +118,29 @@ describe('canStartCheckout (owner gate)', () => {
   });
 });
 
+describe('buildCheckoutIdempotencyKey', () => {
+  it('deduplicates initial checkout requests for a farm', () => {
+    expect(buildCheckoutIdempotencyKey('farm-1', null)).toBe(
+      'acreledger-checkout:farm-1:initial',
+    );
+  });
+
+  it('changes when the mirrored subscription state changes', () => {
+    const canceled = {
+      owner_user_id: 'user-1',
+      status: 'canceled',
+      deleted_at: null,
+      stripe_subscription_id: 'sub_old',
+    };
+    expect(buildCheckoutIdempotencyKey('farm-1', canceled)).toBe(
+      'acreledger-checkout:farm-1:sub_old:canceled',
+    );
+    expect(buildCheckoutIdempotencyKey('farm-1', { ...canceled, status: 'unpaid' })).not.toBe(
+      buildCheckoutIdempotencyKey('farm-1', canceled),
+    );
+  });
+});
+
 describe('canOpenPortal (owner gate)', () => {
   const caller = 'user-1';
   const activeRow = {
@@ -169,6 +194,7 @@ describe('buildSubscriptionUpsert (webhook mapper)', () => {
     const upsert = buildSubscriptionUpsert({
       id: 'sub_stripe_1',
       status: 'trialing',
+      created: 1790000000,
       customer: 'cus_test_1',
       trial_end: 1799366400, // 2027-01-08T00:00:00Z
       current_period_end: 1799366400,
@@ -182,6 +208,7 @@ describe('buildSubscriptionUpsert (webhook mapper)', () => {
       cancel_at_period_end: false,
       stripe_customer_id: 'cus_test_1',
       stripe_subscription_id: 'sub_stripe_1',
+      stripe_subscription_created_at: '2026-09-21T14:13:20.000Z',
       stripe_price_id: 'price_test_1',
     });
   });
@@ -196,6 +223,7 @@ describe('buildSubscriptionUpsert (webhook mapper)', () => {
     expect(upsert.status).toBe('incomplete');
     expect(upsert.trial_ends_at).toBeNull();
     expect(upsert.current_period_end).toBeNull();
+    expect(upsert.stripe_subscription_created_at).toBeNull();
     expect(upsert.stripe_price_id).toBeNull();
     expect(upsert.cancel_at_period_end).toBe(false);
     expect(Object.values(upsert).every(v => v !== undefined)).toBe(true);
@@ -210,6 +238,43 @@ describe('buildSubscriptionUpsert (webhook mapper)', () => {
     });
     expect(upsert.trial_ends_at).toBeNull();
     expect(upsert.current_period_end).toBeNull();
+  });
+});
+
+describe('shouldApplySubscriptionSnapshot', () => {
+  const current = {
+    stripe_subscription_id: 'sub_current',
+    stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+  };
+
+  it('accepts current-subscription updates and explicit newer replacements', () => {
+    expect(
+      shouldApplySubscriptionSnapshot(current, { id: 'sub_current', status: 'active' }, false),
+    ).toBe(true);
+    expect(
+      shouldApplySubscriptionSnapshot(
+        current,
+        { id: 'sub_new', status: 'trialing', created: 1788955201 },
+        true,
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects unrelated or older subscription snapshots', () => {
+    expect(
+      shouldApplySubscriptionSnapshot(
+        current,
+        { id: 'sub_other', status: 'canceled', created: 1788955199 },
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      shouldApplySubscriptionSnapshot(
+        current,
+        { id: 'sub_old', status: 'canceled', created: 1788955199 },
+        true,
+      ),
+    ).toBe(false);
   });
 });
 

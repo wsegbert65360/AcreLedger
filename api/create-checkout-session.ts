@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   TRIAL_PERIOD_DAYS,
   assertTestModeBilling,
+  buildCheckoutIdempotencyKey,
   canStartCheckout,
   isBillingAllowlisted,
 } from '../server/billing.js';
@@ -117,7 +118,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // ---------- Owner gate ----------
     const { data: existing } = await supabase
       .from('farm_subscriptions')
-      .select('owner_user_id, status, deleted_at')
+      .select('owner_user_id, status, deleted_at, stripe_subscription_id')
       .eq('farm_id', farmId)
       .maybeSingle();
 
@@ -136,23 +137,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const stripe = new Stripe(billing.config.secretKey);
     try {
-      const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        // Locked product answer: the card is always collected at checkout so
-        // the yearly renewal just works after the 122-day trial.
-        payment_method_collection: 'always',
-        line_items: [{ price: billing.config.priceId, quantity: 1 }],
-        subscription_data: {
-          trial_period_days: TRIAL_PERIOD_DAYS,
+      const session = await stripe.checkout.sessions.create(
+        {
+          mode: 'subscription',
+          // Locked product answer: the card is always collected at checkout so
+          // the yearly renewal just works after the 122-day trial.
+          payment_method_collection: 'always',
+          line_items: [{ price: billing.config.priceId, quantity: 1 }],
+          subscription_data: {
+            trial_period_days: TRIAL_PERIOD_DAYS,
+            metadata: { farm_id: farmId, user_id: user.id },
+          },
           metadata: { farm_id: farmId, user_id: user.id },
+          client_reference_id: farmId,
+          customer_email: email ?? undefined,
+          consent_collection: { terms_of_service: 'none' },
+          success_url: `${origin}/settings?billing=success`,
+          cancel_url: `${origin}/settings?billing=cancelled`,
         },
-        metadata: { farm_id: farmId, user_id: user.id },
-        client_reference_id: farmId,
-        customer_email: email ?? undefined,
-        consent_collection: { terms_of_service: 'none' },
-        success_url: `${origin}/settings?billing=success`,
-        cancel_url: `${origin}/settings?billing=cancelled`,
-      });
+        { idempotencyKey: buildCheckoutIdempotencyKey(farmId, existing) },
+      );
       if (!session.url) {
         return res.status(502).json({ error: 'Stripe did not return a checkout URL' });
       }

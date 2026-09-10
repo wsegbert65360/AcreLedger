@@ -92,6 +92,7 @@ export interface ExistingSubscriptionRow {
   owner_user_id: string;
   status: string;
   deleted_at: string | null;
+  stripe_subscription_id?: string | null;
 }
 
 export type CheckoutGate =
@@ -119,6 +120,22 @@ export function canStartCheckout(
     return { ok: false, reason: 'already_subscribed' };
   }
   return { ok: true };
+}
+
+/**
+ * Keep repeated Checkout requests for the same farm/subscription state on one
+ * Stripe Checkout Session. A changed mirrored subscription state produces a
+ * new key, so a later recovery attempt can create a fresh session.
+ */
+export function buildCheckoutIdempotencyKey(
+  farmId: string,
+  existing: ExistingSubscriptionRow | null | undefined,
+): string {
+  if (!existing || existing.deleted_at) {
+    return `acreledger-checkout:${farmId}:initial`;
+  }
+  const subscriptionId = existing.stripe_subscription_id?.trim() || 'untracked';
+  return `acreledger-checkout:${farmId}:${subscriptionId}:${existing.status}`;
 }
 
 export interface PortalSubscriptionRow {
@@ -164,6 +181,7 @@ export function mapStripeStatusToBillingStatus(status: string): BillingStatus {
 export interface StripeSubscriptionLike {
   id: string;
   status: string;
+  created?: number | null;
   customer?: string | { id?: string | null } | null;
   trial_end?: number | null;
   current_period_end?: number | null;
@@ -190,6 +208,7 @@ export function buildSubscriptionUpsert(subscription: StripeSubscriptionLike): {
   cancel_at_period_end: boolean;
   stripe_customer_id: string | null;
   stripe_subscription_id: string;
+  stripe_subscription_created_at: string | null;
   stripe_price_id: string | null;
 } {
   const customer = subscription.customer;
@@ -201,8 +220,37 @@ export function buildSubscriptionUpsert(subscription: StripeSubscriptionLike): {
     stripe_customer_id:
       typeof customer === 'string' ? customer : customer?.id != null ? customer.id : null,
     stripe_subscription_id: subscription.id,
+    stripe_subscription_created_at: stripeEpochToIso(subscription.created),
     stripe_price_id: subscription.items?.data?.[0]?.price?.id ?? null,
   };
+}
+
+export interface ExistingEntitlementIdentity {
+  stripe_subscription_id: string | null;
+  stripe_subscription_created_at: string | null;
+}
+
+/**
+ * Decide whether a Stripe snapshot may replace the subscription currently
+ * mirrored for a farm. Updates for the same subscription are always safe.
+ * A different subscription must come through an explicit replacement event
+ * (Checkout completion) and be newer than the current subscription.
+ */
+export function shouldApplySubscriptionSnapshot(
+  existing: ExistingEntitlementIdentity | null | undefined,
+  incoming: StripeSubscriptionLike,
+  allowReplacement: boolean,
+): boolean {
+  if (!existing?.stripe_subscription_id || existing.stripe_subscription_id === incoming.id) {
+    return true;
+  }
+  if (!allowReplacement) return false;
+
+  const incomingCreatedAt = stripeEpochToIso(incoming.created);
+  if (!incomingCreatedAt) return false;
+  if (!existing.stripe_subscription_created_at) return true;
+
+  return Date.parse(incomingCreatedAt) > Date.parse(existing.stripe_subscription_created_at);
 }
 
 /** Checkout metadata is the only trusted source for the target farm/owner. */

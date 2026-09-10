@@ -5,6 +5,7 @@ import {
   buildSubscriptionUpsert,
   isUniqueViolation,
   readSubscriptionMetadata,
+  shouldApplySubscriptionSnapshot,
   type StripeSubscriptionLike,
 } from '../server/billing.js';
 
@@ -53,6 +54,7 @@ export async function upsertFarmSubscriptionEntitlement(
   supabase: SupabaseClient,
   subscription: StripeSubscriptionLike,
   metadata: Record<string, string> | null | undefined,
+  options: { allowReplacement?: boolean } = {},
 ): Promise<boolean> {
   const { farmId, userId } = readSubscriptionMetadata(
     metadata ?? subscription.metadata ?? null,
@@ -64,12 +66,19 @@ export async function upsertFarmSubscriptionEntitlement(
 
   const { data: existing, error: selectError } = await supabase
     .from('farm_subscriptions')
-    .select('id, owner_user_id')
+    .select('id, owner_user_id, stripe_subscription_id, stripe_subscription_created_at')
     .eq('farm_id', farmId)
     .is('deleted_at', null)
     .maybeSingle();
   if (selectError) {
     throw new Error(`Failed to read farm subscription: ${selectError.message}`);
+  }
+
+  if (!shouldApplySubscriptionSnapshot(existing, subscription, options.allowReplacement === true)) {
+    console.warn(
+      `Ignoring stale Stripe subscription ${subscription.id} for farm ${farmId}; current subscription is ${existing?.stripe_subscription_id}.`,
+    );
+    return false;
   }
 
   const ownerId = userId ?? existing?.owner_user_id ?? null;
@@ -103,9 +112,10 @@ async function retrieveAndUpsertSubscription(
   supabase: SupabaseClient,
   subscriptionId: string,
   metadata: Record<string, string> | null | undefined,
+  options: { allowReplacement?: boolean } = {},
 ): Promise<boolean> {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  return upsertFarmSubscriptionEntitlement(supabase, subscription, metadata);
+  return upsertFarmSubscriptionEntitlement(supabase, subscription, metadata, options);
 }
 
 /**
@@ -164,16 +174,29 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
     },
   });
 
-  // ---------- Idempotency ledger: the first insert wins, replays are duplicates ----------
+  // ---------- Idempotency ledger: completed events are skipped; failed claims retry ----------
   const { error: ledgerError } = await supabase
     .from('billing_webhook_events')
     .insert({ stripe_event_id: event.id, type: event.type });
   if (ledgerError) {
     if (isUniqueViolation(ledgerError)) {
-      return res.status(200).json({ received: true, duplicate: true });
+      const { data: ledger, error: readLedgerError } = await supabase
+        .from('billing_webhook_events')
+        .select('processed_at')
+        .eq('stripe_event_id', event.id)
+        .maybeSingle();
+      if (readLedgerError) {
+        console.error('Failed to read billing webhook event:', readLedgerError.message);
+        return res.status(500).json({ error: 'Failed to read webhook event' });
+      }
+      if (ledger?.processed_at) {
+        return res.status(200).json({ received: true, duplicate: true });
+      }
     }
-    console.error('Failed to record billing webhook event:', ledgerError.message);
-    return res.status(500).json({ error: 'Failed to record webhook event' });
+    if (!isUniqueViolation(ledgerError)) {
+      console.error('Failed to record billing webhook event:', ledgerError.message);
+      return res.status(500).json({ error: 'Failed to record webhook event' });
+    }
   }
 
   try {
@@ -185,7 +208,13 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
         if (subscriptionId) {
           // Fetch the full subscription so the entitlement row lands complete
           // even if the paired customer.subscription.created event was missed.
-          await retrieveAndUpsertSubscription(stripe, supabase, subscriptionId, session.metadata ?? null);
+          await retrieveAndUpsertSubscription(
+            stripe,
+            supabase,
+            subscriptionId,
+            session.metadata ?? null,
+            { allowReplacement: true },
+          );
         }
         break;
       }
@@ -195,7 +224,13 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
         // Deleted subscriptions map to status "canceled"; the row is kept as
         // history (soft state) and access is denied by status, not by deletion.
         const subscription = event.data.object as Stripe.Subscription;
-        await upsertFarmSubscriptionEntitlement(supabase, subscription, subscription.metadata);
+        await retrieveAndUpsertSubscription(
+          stripe,
+          supabase,
+          subscription.id,
+          subscription.metadata,
+          { allowReplacement: event.type === 'customer.subscription.created' },
+        );
         break;
       }
       case 'invoice.paid':
@@ -216,6 +251,18 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
   } catch (err: unknown) {
     console.error('Billing webhook processing error:', err);
     return res.status(500).json({ error: 'Webhook processing failed' });
+  }
+
+  const { error: processedError, count: processedCount } = await supabase
+    .from('billing_webhook_events')
+    .update({ processed_at: new Date().toISOString() }, { count: 'exact' })
+    .eq('stripe_event_id', event.id);
+  if (processedError || processedCount !== 1) {
+    console.error(
+      'Failed to finalize billing webhook event:',
+      processedError?.message ?? `expected 1 row, updated ${processedCount ?? 0}`,
+    );
+    return res.status(500).json({ error: 'Failed to finalize webhook event' });
   }
 
   return res.status(200).json({ received: true });
