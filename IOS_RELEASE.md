@@ -4,7 +4,7 @@
 
 - [x] Apply all pending Supabase migrations, including
   `20260910230451_account_deletion_requests.sql`.
-- [ ] In Supabase Authentication → URL Configuration, add these redirect URLs:
+- [x] In Supabase Authentication → URL Configuration, add these redirect URLs:
   - `com.wsegbert.acreledger://auth/recovery`
   - `https://acreledger.vercel.app/auth?mode=recovery`
 - [ ] Confirm the production CodeMagic `appstore` environment group provides
