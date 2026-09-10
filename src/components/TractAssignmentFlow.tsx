@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Check, ChevronDown, ChevronUp, Trash2, RefreshCw, FileUp, HelpCircle, ExternalLink, Mail, Info, Copy } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Trash2, RefreshCw, FileUp, HelpCircle, ExternalLink, Mail, Info, Copy, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -22,14 +22,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useFarm } from '@/store/farmStore';
-import { parseCluGeoJson } from '@/lib/cluImport';
+import { parseCluFile } from '@/lib/cluImport';
 import { loadTractData, parseTractKeys } from '@/lib/tractLookup';
 import { cn } from '@/lib/utils';
 import FsaTractImporter from '@/components/FsaTractImporter';
+import FsaRequestSheetDialog from '@/components/FsaRequestSheetDialog';
 import CluAssignmentMap from '@/components/CluAssignmentMap';
 import CluFieldSelector from '@/components/CluFieldSelector';
 import type { CluLandUse, FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
 import { getCentroid } from '@/lib/geoHelpers';
+import { FSA_BOUNDARY_REQUEST_TEXT } from '@/lib/fsaOfficeRequestSheet';
 
 interface TractAssignmentFlowProps {
   onDone?: () => void;
@@ -75,6 +77,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
   const displayAssignmentsRef = useRef<FieldCluAssignment[]>([]);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isDialogDragActive, setIsDialogDragActive] = useState(false);
+  const [isRequestSheetOpen, setIsRequestSheetOpen] = useState(false);
   const [tractToDelete, setTractToDelete] = useState<string | null>(null);
   const dialogFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -387,11 +390,20 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
     if (!file || !reimportTarget) { setReimportTarget(null); return; }
 
     try {
-      const contents = await file.text();
-      const { collection } = parseCluGeoJson(contents, file.name);
       const target = fsaTracts.find(tract => tract.id === reimportTarget);
       if (!target) throw new Error('The tract being replaced could not be found.');
-      await importTract(target.tractKey, file.name, collection, collection.features.length);
+
+      const parsed = await parseCluFile(file);
+      const replacement = parsed.find(tract => tract.tractKey === target.tractKey);
+      if (!replacement) {
+        const foundKeys = parsed.map(tract => tract.tractKey).join(', ');
+        throw new Error(
+          foundKeys
+            ? `This file contains boundaries for ${foundKeys}, not tract ${target.tractKey}. It cannot replace this tract.`
+            : `This file does not contain a boundary for tract ${target.tractKey}. It cannot replace this tract.`,
+        );
+      }
+      await importTract(replacement.tractKey, file.name, replacement.collection, replacement.collection.features.length);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to parse file');
     }
@@ -403,21 +415,25 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
   const handleImportFiles = useCallback(async (files: FileList | File[] | null) => {
     if (!files?.length) return;
 
-    let imported = 0;
+    let importedTracts = 0;
+    let importedClus = 0;
     for (const file of Array.from(files)) {
       try {
-        const contents = await file.text();
-        const { tractKey, collection } = parseCluGeoJson(contents, file.name);
-
-        const ok = await importTract(tractKey, file.name, collection, collection.features.length);
-        if (ok) imported++;
+        const tracts = await parseCluFile(file);
+        for (const tract of tracts) {
+          const ok = await importTract(tract.tractKey, file.name, tract.collection, tract.collection.features.length);
+          if (ok) {
+            importedTracts++;
+            importedClus += tract.collection.features.length;
+          }
+        }
       } catch (err) {
         toast.error(`${file.name}: ${err instanceof Error ? err.message : 'Failed to parse'}`);
       }
     }
 
-    if (imported > 0) {
-      toast.success(`${imported} tract${imported > 1 ? 's' : ''} imported successfully`);
+    if (importedTracts > 0) {
+      toast.success(`Imported ${importedTracts} tract${importedTracts > 1 ? 's' : ''} with ${importedClus} CLU${importedClus !== 1 ? 's' : ''}`);
       setIsGuideOpen(false);
     }
   }, [importTract]);
@@ -447,6 +463,10 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
       handleImportFiles(e.dataTransfer.files);
     }
   }, [handleImportFiles]);
+
+  const handlePrintFsaRequest = useCallback(() => {
+    setIsRequestSheetOpen(true);
+  }, []);
 
   const tractAssignmentCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -494,13 +514,13 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                   Click to select or drag your field boundary files here
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Accepts .json or .geojson boundary files from NRCS or FSA
+                  Accepts FSA boundary files: .zip, .json, or .geojson
                 </p>
               </div>
               <input
                 id="empty-state-file-input"
                 type="file"
-                accept=".json,.geojson"
+                accept=".zip,.json,.geojson"
                 multiple
                 className="hidden"
                 onChange={handleEmptyStateImport}
@@ -514,8 +534,19 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                 How to get your field boundary files
               </h4>
               <p className="leading-relaxed">
-                Request the <strong>FSA CLU JSON or GeoJSON</strong> files for your fields from your local <strong>NRCS office</strong>.
-                You can contact them via phone or email and ask them to email the files directly to you.
+                The easiest way is to <strong>download the file yourself</strong> from{' '}
+                <a
+                  href="https://www.farmers.gov/account"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline font-semibold inline-flex items-center gap-0.5"
+                >
+                  farmers.gov
+                  <ExternalLink size={12} className="inline shrink-0" />
+                </a>{' '}
+                — sign in, open <strong>Land</strong>, and export your Common Land Unit field boundaries.
+                You can also visit your local <strong>Farm Service Agency (FSA) office</strong> and ask for the file.
+                GeoJSON and ESRI shapefile ZIP files both load directly into AcreLedger.
               </p>
               <div className="pt-0.5">
                 <Button
@@ -524,7 +555,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                   onClick={() => setIsGuideOpen(true)}
                   className="p-0 h-auto text-xs text-primary font-medium hover:underline"
                 >
-                  View detailed request guide & templates
+                  View the step-by-step guide
                 </Button>
               </div>
             </div>
@@ -658,8 +689,9 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
 
       <input
         ref={reimportRef}
+        id="reimport-file-input"
         type="file"
-        accept=".json,.geojson"
+        accept=".zip,.json,.geojson"
         className="hidden"
         onChange={handleReimport}
       />
@@ -700,34 +732,135 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
           <DialogHeader className="p-5 pb-2 shrink-0">
             <DialogTitle className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
               <HelpCircle className="text-primary" size={20} />
-              Importing FSA & NRCS Boundaries
+              Get Your FSA Field Boundaries
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Learn how to request, convert, and upload CLU field boundary files.
+              Learn how to download or request your FSA field boundary files and load them into AcreLedger.
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="upload" className="flex-1 flex flex-col min-h-0">
+          <Tabs defaultValue="get" className="flex-1 flex flex-col min-h-0">
             <div className="px-5 border-b border-border bg-muted/30 shrink-0">
-              <TabsList className="grid w-full grid-cols-3 h-10 bg-muted/60 p-1">
+              <TabsList className="grid w-full grid-cols-2 h-10 bg-muted/60 p-1">
+                <TabsTrigger value="get" className="text-xs font-semibold data-[state=active]:bg-background">
+                  1. Get the File
+                </TabsTrigger>
                 <TabsTrigger value="upload" className="text-xs font-semibold data-[state=active]:bg-background">
-                  1. Load Files
-                </TabsTrigger>
-                <TabsTrigger value="request" className="text-xs font-semibold data-[state=active]:bg-background">
-                  2. How to Request
-                </TabsTrigger>
-                <TabsTrigger value="convert" className="text-xs font-semibold data-[state=active]:bg-background">
-                  3. Shapefile Guide
+                  2. Load the File
                 </TabsTrigger>
               </TabsList>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <TabsContent value="get" className="mt-0 space-y-4 outline-none">
+                {/* Option A: Download it yourself */}
+                <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-bold text-sm text-foreground">Download it yourself</h4>
+                    <span className="bg-primary/10 text-primary text-[10px] font-semibold px-2 py-0.5 rounded-full">Easiest</span>
+                  </div>
+                  <ol className="list-decimal pl-5 text-xs space-y-2 text-muted-foreground">
+                    <li>
+                      Go to{" "}
+                      <a
+                        href="https://www.farmers.gov/account"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-semibold inline-flex items-center gap-0.5"
+                      >
+                        farmers.gov/account
+                        <ExternalLink size={12} className="inline shrink-0" />
+                      </a>
+                      .
+                    </li>
+                    <li>Sign in with Login.gov.</li>
+                    <li>Open <strong>Land</strong>.</li>
+                    <li>Select <strong>View Farm Records</strong>.</li>
+                    <li>If the farm belongs to an LLC, trust, or other business, use <strong>Switch Profile</strong>.</li>
+                    <li>Select the correct farm and tract.</li>
+                    <li>Export the <strong>Common Land Unit field boundaries</strong>.</li>
+                    <li>Choose <strong>GeoJSON</strong> or an <strong>ESRI shapefile ZIP</strong> — both work.</li>
+                    <li>Return to AcreLedger and select <strong>Load Boundary File</strong>.</li>
+                  </ol>
+                  <a
+                    href="https://www.farmers.gov/account"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary text-primary-foreground h-11 px-4 text-sm font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    Open farmers.gov/account
+                    <ExternalLink size={14} />
+                  </a>
+                </div>
+
+                {/* Option B: Visit your FSA office */}
+                <div className="space-y-2.5 rounded-xl border border-border p-4 bg-card">
+                  <h4 className="font-bold text-sm text-foreground">Visit your FSA office</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Print the AcreLedger request sheet and take it to your local Farm Service Agency office.
+                    It explains exactly which file to ask for.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handlePrintFsaRequest}
+                    className="w-full gap-2 font-semibold"
+                  >
+                    <Printer size={15} />
+                    Download PDF request sheet
+                  </Button>
+                  <a
+                    href="https://www.farmers.gov/working-with-us/service-center-locator"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline font-semibold inline-flex items-center gap-0.5"
+                  >
+                    Find your USDA Service Center
+                    <ExternalLink size={12} className="inline shrink-0" />
+                  </a>
+                  <div className="relative bg-muted p-3.5 rounded-lg border border-border/80 text-xs font-mono text-muted-foreground leading-relaxed">
+                    <span className="absolute -top-2 left-3 bg-card px-1.5 text-[9px] uppercase font-sans font-bold tracking-wider text-muted-foreground border rounded-sm">Wording for a call or email</span>
+                    <p className="pt-2 text-foreground/95 select-all font-sans">
+                      “{FSA_BOUNDARY_REQUEST_TEXT}”
+                    </p>
+                    <div className="mt-2.5 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(FSA_BOUNDARY_REQUEST_TEXT);
+                          toast.success("FSA request wording copied to clipboard!");
+                        }}
+                        className="h-7 text-[10px] px-2.5 gap-1 hover:bg-muted bg-background border-border"
+                      >
+                        <Copy size={12} />
+                        <span>Copy Wording</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* NRCS optional note */}
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <strong>NRCS</strong> (Natural Resources Conservation Service) can also provide conservation
+                  plan maps, soil layers, waterways, and conservation-practice maps. FSA is the office for
+                  official Common Land Unit boundaries and farm/tract numbers.
+                </p>
+
+                <div className="rounded-lg border border-border bg-card p-3.5 text-xs text-muted-foreground flex gap-2 items-center">
+                  <Mail size={16} className="text-primary shrink-0" />
+                  <div>
+                    Need help? Email <span className="font-semibold text-foreground font-mono">support@acreledger.com</span>.
+                  </div>
+                </div>
+              </TabsContent>
+
               <TabsContent value="upload" className="mt-0 space-y-4 outline-none">
                 <div className="space-y-2">
-                  <h3 className="font-semibold text-sm text-foreground">Have your boundary files? Load them here:</h3>
+                  <h3 className="font-semibold text-sm text-foreground">Have your boundary file? Load it here:</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Once you receive your JSON/GeoJSON files (e.g. via email from NRCS or FSA), save them to your device and load them directly into AcreLedger:
+                    Save the file to your device (from farmers.gov, an email from FSA, or a USB drive),
+                    then load it directly into AcreLedger. FSA shapefile ZIP files are converted right on
+                    your device — nothing is uploaded anywhere else.
                   </p>
                 </div>
 
@@ -756,13 +889,13 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                       {isDialogDragActive ? "Drop files now!" : "Click to select or drag boundary files here"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Supports .json or .geojson files.
+                      Supports .zip, .json, and .geojson files.
                     </p>
                   </div>
                   <input
                     ref={dialogFileInputRef}
                     type="file"
-                    accept=".json,.geojson"
+                    accept=".zip,.json,.geojson"
                     multiple
                     className="hidden"
                     onChange={async (e) => {
@@ -782,125 +915,11 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                   </div>
                 </div>
               </TabsContent>
-
-              <TabsContent value="request" className="mt-0 space-y-5 outline-none">
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm text-foreground">Where to request boundary files:</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Local agricultural agency offices manage digital maps of your fields. Email or call them to request exports of your files.
-                  </p>
-                </div>
-
-                {/* FSA Section */}
-                <div className="space-y-2.5 rounded-xl border border-border p-3.5 bg-card">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-xs text-foreground uppercase tracking-wider">Option A: Request FSA CLU boundaries</h4>
-                    <span className="bg-primary/10 text-primary text-[10px] font-semibold px-2 py-0.5 rounded-full">Recommended</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Contact your local <strong>Farm Service Agency (FSA)</strong>. They maintain the official CLU (Common Land Unit) field boundaries.
-                  </p>
-                  <div className="relative bg-muted p-3.5 rounded-lg border border-border/80 text-xs font-mono text-muted-foreground leading-relaxed">
-                    <span className="absolute -top-2 left-3 bg-card px-1.5 text-[9px] uppercase font-sans font-bold tracking-wider text-muted-foreground border rounded-sm">Suggested Email Template</span>
-                    <p className="pt-2 text-foreground/95 select-all font-sans">
-                      “I am trying to use my FSA field boundaries in my farm recordkeeping software. Can you help me export my FSA Common Land Unit, or CLU, field boundaries? I would prefer them as GeoJSON files, but shapefiles are fine if GeoJSON is not available. I need the field polygons with farm number, tract number, field number, and acres if those are included.”
-                    </p>
-                    <div className="mt-2.5 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          navigator.clipboard.writeText("I am trying to use my FSA field boundaries in my farm recordkeeping software. Can you help me export my FSA Common Land Unit, or CLU, field boundaries? I would prefer them as GeoJSON files, but shapefiles are fine if GeoJSON is not available. I need the field polygons with farm number, tract number, field number, and acres if those are included.");
-                          toast.success("Suggested FSA wording copied to clipboard!");
-                        }}
-                        className="h-7 text-[10px] px-2.5 gap-1 hover:bg-muted bg-background border-border"
-                      >
-                        <Copy size={12} />
-                        <span>Copy Wording</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* NRCS Section */}
-                <div className="space-y-2.5 rounded-xl border border-border p-3.5 bg-card">
-                  <h4 className="font-bold text-xs text-foreground uppercase tracking-wider">Option B: Request NRCS GIS layers</h4>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Contact your <strong>Natural Resources Conservation Service (NRCS)</strong> office. They have detailed conservation plan maps and soil layers.
-                  </p>
-                  <div className="relative bg-muted p-3.5 rounded-lg border border-border/80 text-xs font-mono text-muted-foreground leading-relaxed">
-                    <span className="absolute -top-2 left-3 bg-card px-1.5 text-[9px] uppercase font-sans font-bold tracking-wider text-muted-foreground border rounded-sm">Suggested Email Template</span>
-                    <p className="pt-2 text-foreground/95 select-all font-sans">
-                      “I am using farm mapping software and would like any available GIS files for my operation. Do you have GeoJSON, shapefile, or other GIS exports for my farm boundaries, conservation plan maps, soil/resource layers, waterways, or planned NRCS practices?”
-                    </p>
-                    <div className="mt-2.5 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          navigator.clipboard.writeText("I am using farm mapping software and would like any available GIS files for my operation. Do you have GeoJSON, shapefile, or other GIS exports for my farm boundaries, conservation plan maps, soil/resource layers, waterways, or planned NRCS practices?");
-                          toast.success("Suggested NRCS wording copied to clipboard!");
-                        }}
-                        className="h-7 text-[10px] px-2.5 gap-1 hover:bg-muted bg-background border-border"
-                      >
-                        <Copy size={12} />
-                        <span>Copy Wording</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="convert" className="mt-0 space-y-4 outline-none">
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm text-foreground">Did you receive a Shapefile (.zip)?</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Government offices often send map boundaries in a <strong>Shapefile</strong> format (usually a <code>.zip</code> file containing multiple files like <code>.shp</code>, <code>.dbf</code>, and <code>.prj</code>).
-                  </p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Since AcreLedger uses the modern, lightweight <strong>GeoJSON</strong> format, you can easily convert shapefiles in 15 seconds:
-                  </p>
-                </div>
-
-                <div className="space-y-3 rounded-xl border border-border p-4 bg-muted/30">
-                  <h4 className="font-bold text-xs text-foreground uppercase tracking-wider">How to convert using Mapshaper:</h4>
-                  <ol className="list-decimal pl-5 text-xs space-y-2.5 text-muted-foreground">
-                    <li>
-                      Open{" "}
-                      <a
-                        href="https://mapshaper.org"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline font-semibold inline-flex items-center gap-0.5"
-                      >
-                        mapshaper.org
-                        <ExternalLink size={12} className="inline shrink-0" />
-                      </a>{" "}
-                      in a new tab. This is a free, secure, and private browser-only converter.
-                    </li>
-                    <li>
-                      Drag and drop your shapefile <strong>ZIP file</strong> (or select the individual files) into the Mapshaper window and click <strong>Import</strong>.
-                    </li>
-                    <li>
-                      Click <strong>Export</strong> in the top-right corner of Mapshaper, select <strong>GeoJSON</strong>, and click <strong>Export</strong>.
-                    </li>
-                    <li>
-                      Return to AcreLedger, go to the <strong>Load Files</strong> tab of this guide, and upload/drop the exported <code>.json</code> or <code>.geojson</code> file.
-                    </li>
-                  </ol>
-                </div>
-
-                <div className="rounded-lg border border-border bg-card p-3.5 text-xs text-muted-foreground flex gap-2 items-center">
-                  <Mail size={16} className="text-primary shrink-0" />
-                  <div>
-                    Need help? Email the files you received to <span className="font-semibold text-foreground font-mono">support@acreledger.com</span> and we will convert and load them for you!
-                  </div>
-                </div>
-              </TabsContent>
             </div>
           </Tabs>
         </DialogContent>
       </Dialog>
+      <FsaRequestSheetDialog open={isRequestSheetOpen} onOpenChange={setIsRequestSheetOpen} />
       <AlertDialog open={!!tractToDelete} onOpenChange={(open) => { if (!open) setTractToDelete(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
