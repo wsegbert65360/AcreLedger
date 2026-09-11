@@ -3,10 +3,14 @@ PODS:
     - CapacitorCordova
   - CapacitorApp (6.0.3):
     - Capacitor
+  - CapacitorCommunitySpeechRecognition (6.0.1):
+    - Capacitor
   - CapacitorCommunitySqlite (6.0.2):
     - Capacitor
     - SQLCipher
     - ZIPFoundation
+  - CapacitorCommunityTextToSpeech (5.1.0):
+    - Capacitor
   - CapacitorCordova (6.2.1)
   - CapacitorFilesystem (6.0.4):
     - Capacitor
@@ -18,6 +22,9 @@ PODS:
     - Capacitor
   - CapacitorPreferences (6.0.4):
     - Capacitor
+  - CapacitorSecureStoragePlugin (0.10.0):
+    - Capacitor
+    - SwiftKeychainWrapper
   - CapacitorShare (6.0.4):
     - Capacitor
   - CapacitorSplashScreen (6.0.4):
@@ -29,18 +36,22 @@ PODS:
   - SQLCipher/common (4.10.0)
   - SQLCipher/standard (4.10.0):
     - SQLCipher/common
+  - SwiftKeychainWrapper (4.0.1)
   - ZIPFoundation (0.9.20)
 
 DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorApp (from `../../node_modules/@capacitor/app`)"
+  - "CapacitorCommunitySpeechRecognition (from `../../node_modules/@capacitor-community/speech-recognition`)"
   - "CapacitorCommunitySqlite (from `../../node_modules/@capacitor-community/sqlite`)"
+  - "CapacitorCommunityTextToSpeech (from `../../node_modules/@capacitor-community/text-to-speech`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorFilesystem (from `../../node_modules/@capacitor/filesystem`)"
   - "CapacitorGeolocation (from `../../node_modules/@capacitor/geolocation`)"
   - "CapacitorHaptics (from `../../node_modules/@capacitor/haptics`)"
   - "CapacitorNetwork (from `../../node_modules/@capacitor/network`)"
   - "CapacitorPreferences (from `../../node_modules/@capacitor/preferences`)"
+  - CapacitorSecureStoragePlugin (from `../../node_modules/capacitor-secure-storage-plugin`)
   - "CapacitorShare (from `../../node_modules/@capacitor/share`)"
   - "CapacitorSplashScreen (from `../../node_modules/@capacitor/splash-screen`)"
   - "CapacitorStatusBar (from `../../node_modules/@capacitor/status-bar`)"
@@ -48,6 +59,7 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - SQLCipher
+    - SwiftKeychainWrapper
     - ZIPFoundation
 
 EXTERNAL SOURCES:
@@ -55,8 +67,12 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorApp:
     :path: "../../node_modules/@capacitor/app"
+  CapacitorCommunitySpeechRecognition:
+    :path: "../../node_modules/@capacitor-community/speech-recognition"
   CapacitorCommunitySqlite:
     :path: "../../node_modules/@capacitor-community/sqlite"
+  CapacitorCommunityTextToSpeech:
+    :path: "../../node_modules/@capacitor-community/text-to-speech"
   CapacitorCordova:
     :path: "../../node_modules/@capacitor/ios"
   CapacitorFilesystem:
@@ -69,6 +85,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/network"
   CapacitorPreferences:
     :path: "../../node_modules/@capacitor/preferences"
+  CapacitorSecureStoragePlugin:
+    :path: "../../node_modules/capacitor-secure-storage-plugin"
   CapacitorShare:
     :path: "../../node_modules/@capacitor/share"
   CapacitorSplashScreen:
@@ -79,19 +97,23 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Capacitor: c95400d761e376be9da6be5a05f226c0e865cebf
   CapacitorApp: a19ccb4f5f32d2534be5c6f524d5a9b614a1e8a7
+  CapacitorCommunitySpeechRecognition: 73be1a178a23856d9706886d5f40ef06a6055438
   CapacitorCommunitySqlite: 0299d20f4b00c2e6aa485a1d8932656753937b9b
+  CapacitorCommunityTextToSpeech: ed295743e9163fd4f8370a48ab4ae144fc7127c3
   CapacitorCordova: 8d93e14982f440181be7304aa9559ca631d77fff
   CapacitorFilesystem: 5b9aec35c0212bd0064e26d278c93e925864f212
   CapacitorGeolocation: ef657a46a125be74010f4ce57caae173c23204d2
   CapacitorHaptics: 40f83026feeee9cfe36e89e9c98a3baaaf20c450
   CapacitorNetwork: 093efa3664b692a971bdd01be70523291cd6a87f
   CapacitorPreferences: 5848e0691b36b4bb4acc98e481ab56d451578d30
+  CapacitorSecureStoragePlugin: 545b51d782d35e61a39231ecf99a966b060a2cbb
   CapacitorShare: 77ff779e3b7c6ae9fb5461e52cf7ef805d429491
   CapacitorSplashScreen: ef140a8b1ea7244e0c245ce2dd4ce5251e7ab86a
   CapacitorStatusBar: 149cde8f1328ec3aa6cbdd872a55137ae3f98b16
   SQLCipher: eb79c64049cb002b4e9fcb30edb7979bf4706dfc
+  SwiftKeychainWrapper: 807ba1d63c33a7d0613288512399cd1eda1e470c
   ZIPFoundation: dfd3d681c4053ff7e2f7350bc4e53b5dba3f5351
 
-PODFILE CHECKSUM: 94b4e914fc46b6e8d90d31df1962ace882189585
+PODFILE CHECKSUM: 7e99f3321f10546afd3f4367ac5c4c0ceaa007ac
 
 COCOAPODS: 1.16.2
