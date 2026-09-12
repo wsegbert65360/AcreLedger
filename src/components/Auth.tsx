@@ -294,12 +294,18 @@ export function Auth() {
                             </div>
                         </form>
                     )}
-                    <div className="pb-5 text-center">
+                    <div className="flex items-center justify-center gap-4 pb-5 text-center">
                         <Link
                             to="/privacy"
                             className="text-xs text-muted-foreground transition-colors hover:text-primary"
                         >
                             Privacy policy
+                        </Link>
+                        <Link
+                            to="/support"
+                            className="text-xs text-muted-foreground transition-colors hover:text-primary"
+                        >
+                            Support
                         </Link>
                     </div>
                 </div>

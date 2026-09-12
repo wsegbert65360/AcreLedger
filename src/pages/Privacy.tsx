@@ -1,7 +1,9 @@
+import { Link, useNavigate } from "react-router-dom";
+
+import { ArrowLeft, ShieldCheck, Lock, Globe, FileText, Trash2, Mail } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, ShieldCheck, Lock, Globe, FileText, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
 export default function Privacy() {
     const navigate = useNavigate();
@@ -24,7 +26,7 @@ export default function Privacy() {
                             </div>
                             <div>
                                 <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 10, 2026</p>
+                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 11, 2026</p>
                             </div>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
@@ -169,6 +171,31 @@ export default function Privacy() {
                                 <span className="block mt-2 font-bold text-foreground/90">
                                     We do not share these reports with any government agency (like the FSA) unless you explicitly choose to export and send them yourself.
                                 </span>
+                            </p>
+                        </section>
+
+                        {/* Section 6 */}
+                        <section className="space-y-4 border-t border-border/10 pt-6">
+                            <div className="flex items-center gap-2 text-primary">
+                                <Mail size={18} />
+                                <h2 className="font-bold text-lg">6. Contact</h2>
+                            </div>
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                                Privacy questions and support requests go to{' '}
+                                <a
+                                    href="mailto:support@acreledger.com"
+                                    className="font-bold text-foreground underline-offset-4 hover:text-primary hover:underline"
+                                >
+                                    support@acreledger.com
+                                </a>
+                                . The public{' '}
+                                <Link
+                                    to="/support"
+                                    className="font-bold text-foreground underline-offset-4 hover:text-primary hover:underline"
+                                >
+                                    support page
+                                </Link>
+                                {' '}is also available without signing in.
                             </p>
                         </section>
                     </CardContent>

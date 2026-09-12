@@ -50,6 +50,14 @@ describe('assertTestModeBilling', () => {
     expect(check.ok === false && check.reason).toMatch(/live charges/i);
   });
 
+  it('refuses any BILLING_LIVE_CHARGES value other than absent or false', () => {
+    for (const value of ['TRUE', '1', 'yes', 'on']) {
+      const check = assertTestModeBilling({ ...TEST_ENV, BILLING_LIVE_CHARGES: value });
+      expect(check.ok).toBe(false);
+      expect(check.ok === false && check.reason).toMatch(/live charges/i);
+    }
+  });
+
   it('refuses live secret keys and missing or malformed keys', () => {
     expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_SECRET_KEY: 'sk_live_zzz' })).toMatchObject({
       ok: false,

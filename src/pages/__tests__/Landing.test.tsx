@@ -3,7 +3,7 @@
  *
  * Ticket C thin landing: signed-out visitors get a marketing landing at /
  * whose CTAs deep-link into /auth?mode=signup|signin, with the privacy
- * policy reachable from the header and footer.
+ * policy and support page reachable from the header and footer.
  */
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
@@ -77,5 +77,20 @@ describe('Landing', () => {
     const links = screen.getAllByRole('link', { name: /privacy/i });
     expect(links.length).toBeGreaterThanOrEqual(2);
     links.forEach((link) => expect(link).toHaveAttribute('href', '/privacy'));
+  });
+
+  it('exposes support from header and footer', () => {
+    renderLanding();
+    const links = screen.getAllByRole('link', { name: /^support$/i });
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    links.forEach((link) => expect(link).toHaveAttribute('href', '/support'));
+  });
+
+  it('names support@acreledger.com in the footer', () => {
+    renderLanding();
+    expect(screen.getByRole('link', { name: 'support@acreledger.com' })).toHaveAttribute(
+      'href',
+      'mailto:support@acreledger.com'
+    );
   });
 });

@@ -1,8 +1,10 @@
+import { Capacitor } from '@capacitor/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   getFarmBillingAccess,
   isBillingAllowlisted,
+  isBillingUiAvailable,
   isBillingUiEnabled,
   parseBillingAllowlist,
   requestBillingSession,
@@ -166,6 +168,28 @@ describe('isBillingUiEnabled', () => {
     expect(isBillingUiEnabled({ VITE_BILLING_UI_ENABLED: '1' })).toBe(false);
     expect(isBillingUiEnabled({})).toBe(false);
     expect(isBillingUiEnabled(undefined as unknown as Record<string, string | undefined>)).toBe(false);
+  });
+});
+
+describe('isBillingUiAvailable', () => {
+  it('hides billing on native even when the UI flag is on', () => {
+    const spy = vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    try {
+      expect(isBillingUiAvailable({ VITE_BILLING_UI_ENABLED: 'true' })).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('is available on web only when the UI flag is exactly true', () => {
+    const spy = vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
+    try {
+      expect(isBillingUiAvailable({ VITE_BILLING_UI_ENABLED: 'true' })).toBe(true);
+      expect(isBillingUiAvailable({ VITE_BILLING_UI_ENABLED: 'false' })).toBe(false);
+      expect(isBillingUiAvailable({})).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

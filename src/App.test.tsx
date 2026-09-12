@@ -3,8 +3,8 @@
  *
  * Ticket C routing invariants: signed-out users get the thin landing at /
  * (not the auth screen), /auth is deep-linkable with ?mode=signup|signin,
- * /privacy stays publicly readable, and signed-in behavior is unchanged —
- * the app renders at / and /auth bounces back into the app.
+ * /privacy and /support stay publicly readable, and signed-in behavior is
+ * unchanged — the app renders at / and /auth bounces back into the app.
  */
 import type { ReactNode } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -146,6 +146,22 @@ describe('signed-out routing (ticket C)', () => {
     navigate('/privacy');
     renderApp();
     expect(screen.getByText('AcreLedger Privacy Policy')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'support@acreledger.com' })).toHaveAttribute(
+      'href',
+      'mailto:support@acreledger.com'
+    );
+    expect(screen.queryByRole('link', { name: 'Create account' })).not.toBeInTheDocument();
+  });
+
+  it('keeps /support publicly readable', () => {
+    navigate('/support');
+    renderApp();
+    expect(screen.getByText('AcreLedger Support')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'support@acreledger.com' })).toHaveAttribute(
+      'href',
+      'mailto:support@acreledger.com'
+    );
+    expect(screen.queryByRole('link', { name: 'Create account' })).not.toBeInTheDocument();
   });
 
   it('deep-links /auth?mode=signup into sign-up mode', () => {
@@ -168,12 +184,16 @@ describe('signed-out routing (ticket C)', () => {
     expect(screen.getByRole('button', { name: 'Update Password' })).toBeInTheDocument();
   });
 
-  it('links the auth screen to the privacy policy', () => {
+  it('links the auth screen to the privacy policy and support page', () => {
     navigate('/auth');
     renderApp();
     expect(screen.getByRole('link', { name: /privacy/i })).toHaveAttribute(
       'href',
       '/privacy'
+    );
+    expect(screen.getByRole('link', { name: /^support$/i })).toHaveAttribute(
+      'href',
+      '/support'
     );
   });
 
@@ -241,5 +261,11 @@ describe('signed-in routing (preserved behavior)', () => {
     navigate('/privacy');
     renderApp();
     expect(await screen.findByText('AcreLedger Privacy Policy')).toBeInTheDocument();
+  });
+
+  it('still renders /support inside the app shell', async () => {
+    navigate('/support');
+    renderApp();
+    expect(await screen.findByText('AcreLedger Support')).toBeInTheDocument();
   });
 });

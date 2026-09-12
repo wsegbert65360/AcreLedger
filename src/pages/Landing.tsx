@@ -16,7 +16,7 @@ const bullets = [
 /**
  * Thin public landing page for signed-out visitors (ticket C, Oct 1 launch).
  * The app itself stays behind /auth; CTAs deep-link into each auth mode and
- * /privacy remains publicly readable.
+ * /privacy and /support remain publicly readable.
  */
 const Landing = () => {
   return (
@@ -24,12 +24,20 @@ const Landing = () => {
       <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-[env(safe-area-inset-bottom,0px)]">
         <header className="flex items-center justify-between py-4">
           <Logo />
-          <Link
-            to="/privacy"
-            className="rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-primary"
-          >
-            Privacy
-          </Link>
+          <nav className="flex items-center gap-3">
+            <Link
+              to="/privacy"
+              className="rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+            >
+              Privacy
+            </Link>
+            <Link
+              to="/support"
+              className="rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+            >
+              Support
+            </Link>
+          </nav>
         </header>
 
         <main className="flex flex-1 flex-col">
@@ -81,17 +89,32 @@ const Landing = () => {
             Working documents for your records and appointments &mdash; not a
             guarantee of FSA acceptance. Follow labels and your county office.
           </p>
-          <div>
+          <div className="flex items-center justify-center gap-4">
             <Link
               to="/privacy"
               className="text-xs text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
             >
               Privacy policy
             </Link>
-            <p className="mt-2 font-mono text-[11px] text-muted-foreground/70">
-              &copy; 2026 AcreLedger
-            </p>
+            <Link
+              to="/support"
+              className="text-xs text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+            >
+              Support
+            </Link>
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Questions:{' '}
+            <a
+              href="mailto:support@acreledger.com"
+              className="underline-offset-4 hover:text-primary hover:underline"
+            >
+              support@acreledger.com
+            </a>
+          </p>
+          <p className="mt-2 font-mono text-[11px] text-muted-foreground/70">
+            &copy; 2026 AcreLedger
+          </p>
         </footer>
       </div>
     </div>

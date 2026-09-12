@@ -185,6 +185,7 @@ export default function AccountManager() {
               </label>
               <Input
                 id="deleteAccountConfirmation"
+                name="deleteAccountConfirmation"
                 value={deletionConfirmation}
                 onChange={(event) => setDeletionConfirmation(event.target.value)}
                 autoCapitalize="characters"

@@ -45,6 +45,7 @@ import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Support from "./pages/Support";
 import Onboarding from "./pages/Onboarding";
 import Weather from "./pages/Weather";
 
@@ -91,6 +92,7 @@ const AnimatedRoutes = () => {
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
           <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
+          <Route path="/support" element={<ErrorBoundary><Support /></ErrorBoundary>} />
           <Route path="/weather" element={<ErrorBoundary><Weather /></ErrorBoundary>} />
           <Route path="/field/:id" element={<ErrorBoundary><FieldDetailScreen /></ErrorBoundary>} />
           <Route path="*" element={<NotFound />} />
@@ -194,13 +196,15 @@ const AppContent = () => {
 
   if (!session) {
     // Signed-out surfaces: the thin landing at /, the auth screen at /auth
-    // (deep-linkable via ?mode=signup|signin), and the public privacy policy.
-    // Everything else redirects to the landing instead of hiding the app shell.
+    // (deep-linkable via ?mode=signup|signin), and the public privacy and
+    // support pages. Everything else redirects to the landing instead of
+    // hiding the app shell.
     return (
       <Routes>
         <Route path="/" element={<ErrorBoundary><Landing /></ErrorBoundary>} />
         <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
         <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
+        <Route path="/support" element={<ErrorBoundary><Support /></ErrorBoundary>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -228,6 +232,7 @@ const AppContent = () => {
     location.pathname === '/settings' ||
     location.pathname === '/onboarding' ||
     location.pathname === '/privacy' ||
+    location.pathname === '/support' ||
     location.pathname.startsWith('/field/');
 
   return (
