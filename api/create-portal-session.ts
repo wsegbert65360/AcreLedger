@@ -97,11 +97,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     // ---------- Farm scope from the caller's own profile (RLS applies) ----------
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, farm_id')
       .eq('id', user.id)
       .maybeSingle();
+    if (profileError) {
+      console.error('Failed to resolve billing profile:', profileError.message);
+      return res.status(500).json({ error: 'Could not resolve billing account' });
+    }
     if (!profile?.farm_id) {
       return res.status(400).json({ error: 'No farm selected.' });
     }
@@ -114,11 +118,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     // ---------- Owner + subscription gate ----------
-    const { data: existing } = await supabase
+    const { data: existing, error: subscriptionError } = await supabase
       .from('farm_subscriptions')
       .select('owner_user_id, stripe_customer_id, deleted_at')
       .eq('farm_id', farmId)
+      .is('deleted_at', null)
       .maybeSingle();
+    if (subscriptionError) {
+      console.error('Failed to read farm subscription:', subscriptionError.message);
+      return res.status(500).json({ error: 'Could not verify billing status' });
+    }
 
     const portalGate = canOpenPortal(existing, user.id);
     if (!portalGate.ok) {

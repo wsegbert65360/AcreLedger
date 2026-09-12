@@ -211,4 +211,34 @@ describe('Stripe webhook delivery recovery', () => {
     expect(response).toMatchObject({ status: 200, body: { received: true, duplicate: true } });
     expect(mocks.retrieveSubscription).not.toHaveBeenCalled();
   });
+
+  it('retries when the mirrored subscription update matches no row', async () => {
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result());
+    supabase.queue(
+      'farm_subscriptions',
+      result({
+        data: {
+          id: 'row-1',
+          owner_user_id: 'user-1',
+          stripe_subscription_id: 'sub_current',
+          stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+        },
+        count: null,
+      }),
+      result({ count: 0 }),
+    );
+
+    const response = await invoke();
+
+    expect(response.status).toBe(500);
+    expect(
+      supabase.calls.some(
+        call => call.table === 'farm_subscriptions' &&
+          call.operation === 'update' &&
+          (call.options as { count?: string } | undefined)?.count === 'exact',
+      ),
+    ).toBe(true);
+  });
 });

@@ -80,7 +80,9 @@ beforeEach(() => {
     return {
       select: () => ({
         eq: () => ({
-          maybeSingle: () => Promise.resolve(subscriptionResult),
+          is: () => ({
+            maybeSingle: () => Promise.resolve(subscriptionResult),
+          }),
         }),
       }),
     };

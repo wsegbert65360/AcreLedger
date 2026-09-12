@@ -59,6 +59,9 @@ describe('create checkout session API', () => {
       from: vi.fn((table: string) => ({
         select: () => ({
           eq: () => ({
+            is: () => ({
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
             maybeSingle: vi.fn().mockResolvedValue(
               table === 'profiles'
                 ? { data: { id: 'user-1', farm_id: 'farm-1' }, error: null }
@@ -95,5 +98,77 @@ describe('create checkout session API', () => {
       expect.objectContaining({ client_reference_id: 'farm-1' }),
       { idempotencyKey: 'acreledger-checkout:farm-1:initial' },
     );
+  });
+
+  it('fails closed when the caller profile cannot be read', async () => {
+    mocks.createClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-1', email: 'farmer@example.com' } },
+          error: null,
+        }),
+      },
+      from: vi.fn(() => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'profile database unavailable' },
+            }),
+          }),
+        }),
+      })),
+    });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state).toMatchObject({
+      status: 500,
+      body: { error: 'Could not resolve billing account' },
+    });
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the existing subscription cannot be verified', async () => {
+    mocks.createClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-1', email: 'farmer@example.com' } },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => ({
+        select: () => ({
+          eq: () => table === 'profiles'
+            ? { maybeSingle: vi.fn().mockResolvedValue({ data: { farm_id: 'farm-1' }, error: null }) }
+            : {
+                is: () => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: { message: 'subscription database unavailable' },
+                  }),
+                }),
+              },
+        }),
+      })),
+    });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state).toMatchObject({
+      status: 500,
+      body: { error: 'Could not verify billing status' },
+    });
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 });

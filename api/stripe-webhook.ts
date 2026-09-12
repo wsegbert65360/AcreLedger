@@ -92,10 +92,10 @@ export async function upsertFarmSubscriptionEntitlement(
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = existing
+  const { error, count } = existing
     ? await supabase
         .from('farm_subscriptions')
-        .update(payload)
+        .update(payload, { count: 'exact' })
         .eq('id', existing.id)
         .eq('farm_id', farmId)
     : await supabase
@@ -103,6 +103,9 @@ export async function upsertFarmSubscriptionEntitlement(
         .insert({ ...payload, farm_id: farmId, owner_user_id: ownerId });
   if (error) {
     throw new Error(`Failed to upsert farm subscription: ${error.message}`);
+  }
+  if (existing && count !== 1) {
+    throw new Error(`Failed to upsert farm subscription: expected 1 row, updated ${count ?? 0}`);
   }
   return true;
 }

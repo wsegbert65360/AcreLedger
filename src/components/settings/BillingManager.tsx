@@ -76,6 +76,7 @@ export default function BillingManager() {
       .from('farm_subscriptions')
       .select('*')
       .eq('farm_id', farm_id)
+      .is('deleted_at', null)
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
