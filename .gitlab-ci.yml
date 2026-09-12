@@ -1,5 +1,5 @@
 # GitLab CI configuration for AcreLedger (Node.js/Vite project)
-image: node:20
+image: node:22
 
 stages:
   - test
@@ -8,6 +8,10 @@ test_job:
   stage: test
   script:
     - npm ci
+    # Owner-DR packages are separate npm projects. `npm test` includes
+    # their suites, so a root-only install leaves CI without vitest.
+    - npm ci --prefix infrastructure/owner-backup
+    - npm ci --prefix scripts/recovery
     - npm test
   only:
     - main

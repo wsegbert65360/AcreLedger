@@ -19,7 +19,7 @@ npm run build           # vite build (bundle gate)
 
 ### Unit vs. Integration Separation
 
-- **Unit suite** (`test:unit`): excludes `**/*.integration.test.{ts,tsx}` and preserves Vitest's default exclusions. `npm test` also runs owner-DR package tests. CodeMagic's Unit tests step is this combined gate and must install the nested owner-DR packages first.
+- **Unit suite** (`test:unit`): excludes `**/*.integration.test.{ts,tsx}` and preserves Vitest's default exclusions. `npm test` also runs owner-DR package tests. CodeMagic's Unit tests step and GitLab's `test_job` are this combined gate and must install the nested owner-DR packages first (Node 22).
 - **Integration suite** (`test:integration`): runs only `*.integration.test.*` via `vitest.integration.config.ts`. These hit live services and require credentials/network:
   - `src/services/__tests__/RainService.integration.test.ts` — real Rain API (skips when `import.meta.env.VITE_RAIN_API_URL` is unset).
   - `src/lib/__tests__/auth.integration.test.ts` — bot auth + farm_id resolution (skips via `describe.skipIf` when `TEST_BOT_EMAIL`/`TEST_BOT_PASSWORD` are absent). These non-public vars live in `.env.test.local` and are loaded into `process.env` by `vitest.integration.config.ts` (Vitest does not load that file automatically).
