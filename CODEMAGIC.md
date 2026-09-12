@@ -84,10 +84,12 @@ To bump the app version:
 
 ```
 npm ci
+npm ci --prefix infrastructure/owner-backup
+npm ci --prefix scripts/recovery
   ↓
 eslint (lint)
   ↓
-vitest (unit tests)
+npm run test (app unit suite + owner-DR package tests)
   ↓
 vite build --mode capacitor + npx cap sync ios
   ↓

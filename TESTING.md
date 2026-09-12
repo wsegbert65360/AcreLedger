@@ -5,8 +5,10 @@ This document outlines the testing protocols for the AcreLedger project.
 ## Test Commands
 
 ```bash
-npm run test            # unit suite (default; excludes integration tests)
-npm run test:unit       # explicit alias of the unit suite
+npm run test            # app unit suite plus owner-DR package tests
+npm run test:unit       # app unit suite only (excludes integration tests)
+npm run test:owner-dr   # owner backup + recovery package tests and typecheck
+npm run install:owner-dr # npm ci in infrastructure/owner-backup and scripts/recovery
 npm run test:watch      # unit suite in watch mode
 npm run test:integration # live-credential/network tests only (Rain API, bot auth)
 npm run test:coverage   # unit suite with V8 coverage collection
@@ -17,7 +19,7 @@ npm run build           # vite build (bundle gate)
 
 ### Unit vs. Integration Separation
 
-- **Unit suite** (`npm test` / `test:unit`): excludes `**/*.integration.test.{ts,tsx}` and preserves Vitest's default exclusions. This is the CI gate.
+- **Unit suite** (`test:unit`): excludes `**/*.integration.test.{ts,tsx}` and preserves Vitest's default exclusions. `npm test` also runs owner-DR package tests. CodeMagic's Unit tests step is this combined gate and must install the nested owner-DR packages first.
 - **Integration suite** (`test:integration`): runs only `*.integration.test.*` via `vitest.integration.config.ts`. These hit live services and require credentials/network:
   - `src/services/__tests__/RainService.integration.test.ts` — real Rain API (skips when `import.meta.env.VITE_RAIN_API_URL` is unset).
   - `src/lib/__tests__/auth.integration.test.ts` — bot auth + farm_id resolution (skips via `describe.skipIf` when `TEST_BOT_EMAIL`/`TEST_BOT_PASSWORD` are absent). These non-public vars live in `.env.test.local` and are loaded into `process.env` by `vitest.integration.config.ts` (Vitest does not load that file automatically).

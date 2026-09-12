@@ -39,12 +39,19 @@ workflows:
       cache_paths:
         - $HOME/.npm
         - node_modules
+        - infrastructure/owner-backup/node_modules
+        - scripts/recovery/node_modules
         - ios/App/Pods
 
     scripts:
       - name: Install npm dependencies
         script: |
           npm ci --prefer-offline
+          # Owner-DR packages are separate npm projects. `npm run test`
+          # includes their suites, so a root-only install leaves CI without
+          # vitest/tsx and fails the Unit tests step.
+          npm ci --prefer-offline --prefix infrastructure/owner-backup
+          npm ci --prefer-offline --prefix scripts/recovery
 
       - name: Lint
         script: |

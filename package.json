@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b",
     "typecheck:api": "tsc -p tsconfig.api.json",
+    "install:owner-dr": "npm ci --prefix infrastructure/owner-backup && npm ci --prefix scripts/recovery",
     "test:owner-backup": "npm test --prefix infrastructure/owner-backup",
     "typecheck:owner-backup": "npm run typecheck --prefix infrastructure/owner-backup",
     "test:recovery": "npm test --prefix scripts/recovery",
