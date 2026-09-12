@@ -8,6 +8,8 @@
 
 ### External Resources
 - **Testing & Credentials**: [TESTING.md](./TESTING.md)
+- **Owner Disaster Recovery Plan**: [docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md](./docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md) — implemented tooling; deployment and live drills pending
+- **iOS Release Runbook**: [IOS_RELEASE.md](./IOS_RELEASE.md)
 
 ---
 
@@ -20,6 +22,12 @@ grain movement — while generating strict regulatory compliance logs including 
 Reports and MDA/state private applicator audit trails. Data is stored per-farm in Supabase with
 optimistic UI, offline-capable client-side backup/restore, and printable FSA-compliant reports.
 The target user is an individual farmer or small operation, not an enterprise.
+
+The repository includes owner disaster-recovery tooling for a
+nightly encrypted whole-project archive in the project owner's personal Google Drive, with full
+database/Auth/Storage recovery and an isolated, tenant-aware single-farm extraction workflow.
+This operational archive is separate from the signed-in farmer's Settings JSON backup. It must not
+be described as operationally proven until deployment verification and both recovery drills pass.
 
 ---
 
@@ -44,6 +52,9 @@ The target user is an individual farmer or small operation, not an enterprise.
 | Utilities | `@/utils/dates`, `@/utils/numbers`, `@/utils/text` | Pure formatting helpers |
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
 | Reports | `@/lib/complianceReports` | CSV & PDF export generators (FSA, spray log, etc.) |
+| Native security | Capacitor secure storage + iOS Keychain | Credential/encryption-material storage on native devices |
+| Billing | Stripe test mode + Vercel Functions | Web-only Checkout/Portal and signed webhook entitlement mirror; live charges disabled |
+| Owner DR tooling | Cloud Run Job + Cloud Scheduler + Google Drive + age | Nightly encrypted whole-project off-site backup and isolated recovery; deployment/drills pending |
 
 ---
 
@@ -301,13 +312,23 @@ Saved fertilizer formulas for reuse on fertilizer application records.
 - **Usage**: Saved recipes appear as a dropdown in the Fertilizer Modal for quick data entry.
 
 ### FsaTractImport
-Imported FSA tract/CLU GeoJSON owned by a farm. Not season-scoped.
+Imported FSA tract/CLU boundary data owned by a farm and stored canonically as GeoJSON. Not season-scoped.
 ```ts
 { id, farmId, tractKey, filename, featureCount, geojson, importedAt, deletedAt }
 ```
 - **DB table**: `fsa_tract_imports` stores `farm_id`, `tract_key`, `filename`, `feature_count`, `geojson`, `imported_at`, and `deleted_at`.
 - **Conflict key**: One active/restoreable import per farm/tract key. Inserts and backup restore replays use upsert conflict `farm_id,tract_key` so a re-import restores a soft-deleted tract instead of violating the unique constraint.
 - **Mappers**: Use `mapFsaTractFromDb` and `mapFsaTractToDb` from `@/lib/mappers.ts`.
+- **Input formats**: `parseCluFile` is the shared entry point for GeoJSON (`.json`/`.geojson`)
+  and ESRI shapefile ZIP (`.zip`). ZIP conversion runs locally through `shpjs`; a complete
+  shapefile needs usable geometry/DBF attributes and identifiable projection information.
+- **Tract grouping**: A single source file may yield multiple farm/tract collections. Farm and
+  tract attributes take priority; a filename such as `4251-9747.zip` is the fallback when the
+  features lack those identifiers. Generic unidentified files fail with corrective guidance.
+- **Office request workflow**: `FsaRequestSheetDialog.tsx` uses `fsaOfficeRequestSheet.ts` to
+  generate a worksheet requesting digital CLU boundaries from FSA. The user guidance links to
+  farmers.gov and the service-center locator and states that both GeoJSON and shapefile ZIPs load
+  directly. The worksheet is a data request, not an official USDA form.
 
 ### FieldCluAssignment
 Farm-owned assignment from one CLU inside a tract to one AcreLedger field. Not season-scoped.
@@ -451,6 +472,65 @@ older exports or pre-fix local cache data. Restore must always treat the current
   A device viewing the previous active season advances to the new active season; an intentionally
   different historical selection is preserved when valid and otherwise clamped.
 
+### Owner Whole-Project Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)
+
+The customer-facing JSON backup above is a portable active-record snapshot for one signed-in farm.
+It is not the system disaster-recovery archive. The authoritative implementation plan is
+`docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`; operational procedures live in
+`docs/runbooks/full-project-recovery.md` and `docs/runbooks/single-farm-recovery.md`.
+
+Implemented design:
+
+- One owner-controlled personal Google Drive connection, not one connection per farm.
+- A containerized Google Cloud Run Job runs nightly at 02:00 `America/Chicago` through Cloud
+  Scheduler. Retention is 30 successful daily archives plus 12 successful monthly archives.
+- The package covers roles, schema, all application and private data (including soft-deleted
+  rows), Supabase Auth, Storage metadata, actual Storage object bytes, and a non-secret project
+  configuration inventory. Database backups alone do not contain Storage object bytes.
+- Current spray image attachments live as base64 tokens in database rows and must remain intact in
+  the owner archive; AI-boundary data minimization does not apply to disaster recovery.
+- The complete package is checksummed, compressed, and public-key encrypted before Drive upload.
+  Runtime credentials stay in Google Secret Manager; the worker receives only the encryption
+  public key, while the owner keeps the private recovery key offline in two locations.
+- A run succeeds only after dump, Storage export, manifest/checksum generation, encryption, Drive
+  upload, and remote size/integrity verification. Monitoring must alert on a failed run, revoked
+  Drive authorization, or the absence of a verified archive for 30 hours.
+- Drive retention runs only after the current archive is verified. It may delete expired verified
+  app-created archives and fully identified same-folder encrypted archives left unverified by an
+  interrupted worker. It must never delete unrelated or merely malformed files or the last
+  known-good archive.
+
+Single-farm recovery is deliberately indirect. Restore the whole encrypted archive into a
+temporary isolated Supabase project, disable Cron/webhooks/email/`pg_net` and other outbound side
+effects, verify the source manifest, and then extract exactly one `farm_id` through a checked-in
+tenant ownership registry. The registry classifies direct `farm_id` tables, user-owned rows,
+indirect relationships, global infrastructure, and derived data; an `information_schema` test must
+fail when a new farm-owned table is unclassified.
+
+Storage ownership remains deliberately fail-closed during selective recovery. The current extractor
+attributes no object automatically and places every Storage key from the restored project—including
+other farms' keys—into `manualReview`. An operator may copy only a key that can be tied to the selected
+farm with certainty.
+
+The owner recovery CLI must dry-run first, create a fresh verified pre-recovery backup, reject
+cross-farm rows/ID collisions, and scope all production writes to the selected farm and exact user
+IDs. Default merge mode inserts missing data and reports conflicts. Snapshot mode may upsert the
+selected snapshot and soft-delete target-farm rows absent from it, but it never hard-deletes farm
+records or changes another farm. Existing Auth users are preserved; selectively deleted users are
+recreated through `scripts/recovery/recreate-auth-user.ts`, which invites through the Auth Admin API,
+accepts only an empty trigger-created farm for reassignment, atomically remounts a surviving old
+profile onto the new Auth ID, compensates a failed attach by deleting the new Auth user, and remaps
+only registry-declared user columns in a newly checksummed bundle. They receive fresh sessions rather
+than copied historical sessions. Full-project and isolated SQL restores must use
+`npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory>`;
+do not replace it with a hand-written `psql` sequence. `restore-isolated.ts` is authoritative for the
+declared order, including `auth-schema.sql`, `storage-schema.sql`, and optional migration schema/data
+files. It fails on missing required artifacts, then executes `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after
+schema load to unschedule Cron jobs, disable outbound webhook triggers, and remove application
+Realtime publications. It verifies they are neutralized before enabling replica mode and loading
+data. A complete-project disaster uses
+the full Auth restore path.
+
 ---
 
 ## 5. Database Conventions
@@ -491,6 +571,51 @@ to `anon` or `authenticated`. Match this stricter table pattern for new farm rec
 `public.profiles` is the farm-membership security boundary used by RLS. Authenticated clients may select only their own profile and directly update only `active_season` and `onboarding_complete`. They must not be granted direct authority to change `id` or `farm_id`, insert a profile, or delete one; trusted farm assignment remains behind the `ensure_user_farm` security-definer flow. Migration `20260720165352_protect_profile_farm_membership.sql` owns these column grants and policies.
 
 The live auth integration suite verifies forbidden operations by asserting PostgreSQL code `42501`. Its probes must be harmless: same-value protected-column updates, duplicate-ID insert attempts, and delete queries with contradictory filters. Successful preference checks also use same-value writes so verification cannot alter the QA account.
+
+### Stripe Billing (Test Mode, Web Only)
+
+Billing is implemented but intentionally restricted to Stripe test mode. The Settings card is
+web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and remains hidden in Capacitor. Internal
+rollout requires a matching client and server allowlist entry; an empty allowlist means billing is
+unavailable. `BILLING_LIVE_CHARGES` must remain absent or exactly `false`, and the server accepts
+only `sk_test_` keys until the owner explicitly approves a production/legal rollout.
+
+Product access enforcement is off by default. A missing or soft-deleted subscription row is
+`unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
+passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
+
+The locked product terms are a 122-day trial and a three-day `past_due` grace period.
+`farm_subscriptions` is the authoritative local entitlement mirror. Farm members may select their
+farm's active row, but only service-role server paths write it. The checkout and portal endpoints
+authenticate the caller's Supabase bearer token, resolve the authoritative profile/farm, apply the
+subscription-owner gate, and accept only HTTPS Stripe URLs. Checkout uses a state-derived
+idempotency key.
+
+`api/stripe-webhook.ts` verifies the Stripe raw-body signature, claims `billing_webhook_events` as
+an idempotency ledger, fetches complete subscription state when needed, ignores stale replacement
+subscriptions, and mirrors handled events into `farm_subscriptions`. `billing_webhook_events` has
+RLS enabled with no client policies or grants. Billing infrastructure is excluded from the
+customer JSON backup/`restore_farm_backup`, but included and classified in owner disaster recovery.
+
+### Account Lifecycle and Native Credential Safety
+
+Account deletion is request-based. `AccountManager` requires the exact `DELETE` confirmation,
+refuses while the selected farm has pending offline mutations, inserts a pending
+`account_deletion_requests` row, treats the per-user unique conflict as already pending, and signs
+out after success. Authenticated clients may only select their own request and insert a constrained
+pending request for the farm resolved by their profile. Completion/cancellation remains an
+operator/service-role action; the client never directly deletes Auth or farm data.
+
+`src/lib/secureStorage.ts` centralizes credentials and encryption material. Native builds use the
+secure-storage plugin backed by iOS Keychain/Android Keystore, migrate legacy Capacitor Preferences
+values on first read, and remove the Preferences copy after a successful secure write. Browser
+builds continue to use Preferences because they have no OS keychain surface.
+
+Password recovery uses `src/lib/authDeepLinks.ts`. Web callbacks use `/auth?mode=recovery`; native
+callbacks must match the exact `com.wsegbert.acreledger://auth/recovery` scheme/host/path. The native
+listener handles an authorization code or the legacy access/refresh-token fragment, establishes the
+Supabase session, deduplicates repeated launch/open events, and only then opens the reset UI. Keep
+the Supabase redirect allowlist, `Info.plist` URL registration, app listener, and tests synchronized.
 
 ### Ask the Book Read Registry
 `server/ai-assistant-tools.ts` is the only database read catalog exposed to the AI assistant. It uses the authenticated caller's JWT and publishable/anon key, keeps RLS as the primary tenant boundary, and adds the authoritative current `farm_id` to every direct or joined query. It must never use a service-role/secret key, raw SQL, caller-provided table names, or mutation methods.

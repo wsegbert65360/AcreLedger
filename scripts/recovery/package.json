@@ -1,0 +1,27 @@
+{
+  "name": "@acreledger/owner-recovery",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Owner-only CLI tools for verifying backups and recovering one farm. Not a public RPC or app screen.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify-backup": "tsx verify-backup.ts",
+    "restore-isolated": "tsx restore-isolated.ts",
+    "inventory-tenant": "tsx inventory-tenant.ts",
+    "extract-tenant": "tsx extract-tenant.ts",
+    "apply-tenant-recovery": "tsx apply-tenant-recovery.ts",
+    "recreate-auth-user": "tsx recreate-auth-user.ts"
+  },
+  "dependencies": {
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "@types/pg": "8.23.1",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}

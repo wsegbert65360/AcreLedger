@@ -135,6 +135,8 @@ export default defineConfig(({ mode }) => ({
     exclude: [
       ...configDefaults.exclude,
       "**/*.integration.test.{ts,tsx}",
+      "infrastructure/**",
+      "scripts/recovery/**",
     ],
     coverage: {
       provider: "v8",

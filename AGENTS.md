@@ -26,12 +26,16 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 
 - `BLUEPRINT.md` — full authoritative architecture, data model, conventions, and domain rules.
 - `TESTING.md` — verification protocols and test credentials.
+- `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md` — approved owner-only design implemented by `infrastructure/owner-backup/`, `scripts/recovery/`, and `docs/runbooks/`. Deployment and recovery capability remain unproven until the required live drills pass. This is distinct from the customer-facing JSON backup.
+- `docs/runbooks/full-project-recovery.md` and `docs/runbooks/single-farm-recovery.md` — owner operating procedures. Full-project SQL restore must use the checked-in `restore-isolated` command rather than a hand-written file sequence.
 - `api/weather-proxy.ts` — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
 - `src/test/weatherProxy.test.ts` — weather-proxy contract tests; keep API tests outside `api/` so Vercel does not deploy them as functions.
 - `api/ai-assistant.ts` + `server/ai-assistant-tools.ts` — weather-proxy-style Vercel Function and centralized allowlisted read catalog for Ask the book. Named read tools only (no raw SQL, no writes). Uses the caller’s JWT plus explicit farm filters so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
 - `@/types/farm.ts` — canonical TypeScript entity definitions.
 - `@/lib/mappers.ts` — entity to database row translation.
 - `@/lib/backupSchema.ts` — strict backup/restore validation schema.
+- `api/create-checkout-session.ts`, `api/create-portal-session.ts`, `api/stripe-webhook.ts`, `server/billing.ts`, and `@/lib/billing.ts` — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
+- `@/lib/secureStorage.ts`, `@/lib/authDeepLinks.ts`, and `@/lib/accountDeletion.ts` — native credential storage, password-recovery deep links, and the user-requested account-deletion intake path.
 - `farmStore.tsx` — global React Context store and CRUD actions.
 - `@/lib/native.ts` — centralized native capabilities (haptics, status bar, geolocation).
 - `@/lib/syncQueue.ts` — local sync queue and transaction retry engine for offline operation.
@@ -47,7 +51,8 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/components/reports/LandlordSummaryReport.tsx` — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
 - `@/lib/sprayExport.ts` — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
 - `@/types/fsaTract.ts` — canonical FSA tract import and CLU assignment types.
-- `@/lib/cluImport.ts` — CLU/FSA GeoJSON parsing and validation.
+- `@/lib/cluImport.ts` — shared CLU/FSA GeoJSON and ESRI shapefile ZIP parsing, grouping, projection checks, and acreage validation.
+- `@/lib/fsaOfficeRequestSheet.ts` + `@/components/FsaRequestSheetDialog.tsx` — FSA boundary-file request worksheet data builder/PDF and its dialog.
 - `@/lib/tractLookup.ts` and `@/lib/bundledFsaTracts.ts` — bundled/imported FSA tract lookup and merge helpers; use `loadKeyedTractCollections` when code needs tract keys preserved alongside GeoJSON collections.
 - `@/lib/fieldLocation.ts` — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
 - `@/store/useFsaTracts.ts` — FSA tract import and CLU assignment CRUD actions.
@@ -209,6 +214,9 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - FSA tract and CLU assignment changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup/restore schema, bundled tract helpers, assignment UI, and FSA report generation/tests.
 - Central mapper names are `mapFsaTractFromDb`, `mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`, and `mapFieldCluAssignmentToDb`; use them before React state changes and before backup restore RPC payload construction.
 - CLU parsing and GeoJSON rendering logic must support both `Polygon` and `MultiPolygon` geometries. Downstream systems (like map rendering and FSA reports) must extract coordinates or centroids correctly from deeply nested `MultiPolygon` structures.
+- `parseCluFile` is the shared import entry point and accepts GeoJSON (`.json`/`.geojson`) plus ESRI shapefile ZIPs (`.zip`). Do not add a component-only parser or unzip path.
+- Shapefile ZIP import runs locally through `shpjs`, requires usable geometry and DBF attributes, rejects an unidentifiable coordinate system when the PRJ information is missing, groups features by farm/tract, and applies the same positive-acreage validation as GeoJSON. When feature attributes cannot identify a tract, a filename such as `4251-9747.zip` may supply the farm/tract key; generic unidentified files fail with actionable guidance.
+- `FsaRequestSheetDialog` and `fsaOfficeRequestSheet.ts` generate a boundary-file request worksheet for the local FSA office. Preserve its statement that AcreLedger accepts GeoJSON and ESRI shapefile ZIPs, the farmers.gov/service-center guidance, operator/contact blanks, and the disclaimer that the sheet requests digital boundary data rather than acting as an official USDA form.
 - `field_clu_assignments` stores one active assignment per farm/tract/CLU. Assignment actions must preserve the authoritative current `farm_id`, restore soft-deleted rows when reassigning, and never hard-delete assignments.
 - `fsa_tract_imports` stores parsed GeoJSON per farm/tract key. Imported tracts may replace bundled tract data with the same tract key in assignment flows.
 - Backup exports MUST include `fsaTracts` and `cluAssignments`. Restore must validate those arrays through `backupSchema.ts`, map them to `fsa_tract_imports` and `field_clu_assignments`, and replay them through the restore RPC using the CLU conflict keys above.
@@ -275,6 +283,41 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - `profiles` must remain in the `supabase_realtime` publication so an active-season rollover reaches other signed-in devices during the same session.
 - If the restore RPC fails, do not mutate React state.
 
+### Owner Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)
+
+- The authoritative implementation plan is `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`. Do not treat this section as evidence that scheduling or Drive uploads are already deployed.
+- This is owner-only infrastructure for the entire AcreLedger Supabase project, not a Drive connection per farm and not a replacement for Settings → Backup Data.
+- Locked decisions: personal Google Drive, nightly at 02:00 `America/Chicago`, complete database/Auth/Storage coverage, 30 successful daily archives, and 12 successful monthly archives.
+- The checked-in worker is a containerized Google Cloud Run Job intended to be triggered by Cloud Scheduler. Full dumps and Storage copies must not run inside the browser, Capacitor app, a public Vercel endpoint, or a customer-accessible RPC.
+- Backups must include roles/schema/data, `auth`, `storage` metadata, application/private schemas, soft-deleted rows, configuration inventory, and actual Supabase Storage object bytes. Supabase database dumps alone do not contain Storage object bytes.
+- Current spray image attachments are embedded as base64 tokens in database rows; the owner backup must retain those bytes. Do not apply the AI assistant's image-stripping boundary to disaster-recovery exports.
+- Compress and public-key-encrypt the complete package before Google Drive upload. The worker receives only the encryption public key; the owner keeps the private recovery key offline. Runtime credentials live in Google Secret Manager and never in `VITE_*`, client code, logs, or the repository.
+- A whole-database archive must never be restored directly into live production merely to recover one customer. Restore it into an isolated temporary project with `npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory>`, keep external email/secret/consumer configuration absent, verify manifest counts/checksums, and extract one exact `farm_id` through the checked-in tenant ownership registry. Do not substitute a hand-written `psql` file order.
+- Single-farm recovery is an owner CLI with dry-run and conflict reporting. It must reject bundles containing another farm, reject IDs owned by another farm, create a verified pre-recovery backup, scope every write to the selected farm/user IDs, and never hard-delete farm records.
+- `restore-isolated.ts` is the authority for the full SQL restore order, including `auth-schema.sql`, `storage-schema.sql`, and optional migration schema/data files. It must load every present dump artifact in `ISOLATED_RESTORE_ORDER`, fail when a required dump is absent, execute `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after schema load and before any data file, and then probe that Cron schedules, outbound database webhook triggers, and application Realtime publications were neutralized. Do not refuse merely because the restored schema recreated these side effects, and do not reduce the controls to printed advice.
+- Tenant extraction currently attributes no Storage object automatically. Its dry-run bundle/report must list every restored-project Storage key—including keys from other farms—in `manualReview`; operators may copy only objects they can tie to the selected farm with certainty.
+- If an Auth user still exists, preserve it. If a selectively recovered user was deleted, use `scripts/recovery/recreate-auth-user.ts`; it requires a verified pre-recovery backup, exact typed confirmation, an Auth Admin invite, an empty generated farm, and checksum-safe remapping of registered user columns. If the old profile survived, atomically remount it onto the new Auth ID instead of leaving two farm members. A failed attach must compensate by removing the newly invited Auth user and its unusable output bundle. Do not normally insert selected `auth` rows or restore old sessions into production. A full-project disaster uses the complete Auth restore path.
+- A same-day Drive archive suppresses another run only when ledger, status, archive verification marker, manifest ID, and SHA-256 all agree. Unverified uploads must never participate in retention; a failed verification deletes its upload immediately, and the next successful run removes fully identified same-folder encrypted archives left unverified by an interrupted worker.
+- Every new or renamed farm-owned table must update `scripts/recovery/tenant-registry.ts` and its `information_schema` coverage test in the same change. Update the manifest version when archive layout or recovery semantics change.
+
+### Stripe Billing (Test Mode Only)
+
+- Billing v1 is web-only and hidden unless `VITE_BILLING_UI_ENABLED === 'true'`; Capacitor builds render no billing surface. The internal rollout also requires the caller's email or user ID in both the client and server allowlists. Empty allowlists fail closed.
+- `BILLING_LIVE_CHARGES` must remain absent or exactly `false`, and server validation accepts only `sk_test_` Stripe secret keys. Do not enable live charges until the product owner explicitly approves the legal and production billing rollout.
+- Product access enforcement is off by default: a missing or soft-deleted subscription row remains `unmanaged` with full access unless a future owner-approved enforcement path explicitly passes `enforce: true`. Do not turn an absent billing row into a production paywall accidentally.
+- Locked terms are a 122-day trial and a three-day `past_due` grace window. `farm_subscriptions` is the local entitlement mirror; the client never treats query parameters or client-reported Stripe state as authoritative.
+- Checkout and portal endpoints authenticate the Supabase bearer token, resolve the caller's current profile/farm, apply owner gates, and accept only trusted HTTPS Stripe redirect URLs. Repeated Checkout requests use state-derived idempotency keys.
+- `stripe-webhook.ts` verifies the raw-body Stripe signature, runs with the server-only service-role key, claims `billing_webhook_events` for idempotency, ignores stale replacement subscriptions, and writes `farm_subscriptions`. Clients have read-only farm-scoped access to subscriptions and no access to the webhook ledger.
+- Billing tables are infrastructure and remain outside the customer farm JSON backup/`restore_farm_backup`. They are included in the owner whole-project disaster-recovery archive and must remain classified in the tenant recovery registry.
+
+### Account, Credential, and Password-Recovery Safety
+
+- Account deletion is a request workflow, not an immediate client deletion. `AccountManager` requires the exact `DELETE` confirmation, blocks while offline mutations are pending, inserts into `account_deletion_requests`, treats the unique-user conflict as already pending, and signs out after a successful request.
+- `account_deletion_requests` grants authenticated users only their own `SELECT` and a constrained pending `INSERT`; completion/cancellation is service-role/operator work. Never add client update/delete grants or let request input choose a different user/farm.
+- Native credential and encryption material must go through `secureStorage`: iOS/Android use the secure-storage plugin (Keychain/Keystore), migrate a legacy Preferences value on first read, and remove the plaintext Preferences copy only after the secure write succeeds. Browser builds continue to use Preferences because no OS keychain is available.
+- Password reset redirects use `getPasswordRecoveryRedirectUrl`. Native recovery uses the exact `com.wsegbert.acreledger://auth/recovery` scheme, handles both authorization-code and legacy token-fragment callbacks, deduplicates repeated app URL events, and establishes the Supabase session before opening reset UI. Web recovery remains `/auth?mode=recovery`.
+- Keep the native URL scheme, Supabase redirect allowlist, `Info.plist`, app listener, and recovery tests synchronized. Do not accept arbitrary custom-scheme hosts or paths.
+
 ### CI/CD (CodeMagic)
 
 - `codemagic.yaml` defines the iOS build workflow for CodeMagic.
@@ -286,6 +329,8 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - `VITE_RAIN_API_URL` is optional because `RainService` falls back to `https://rain-api.vercel.app` when the variable is missing. If configured, it must be a clean HTTPS URL; do not include quotes, `KEY=`, commas, CLI commands, or duplicate `/rain` path suffixes.
 - `VITE_SUPABASE_URL` must be the raw HTTPS project URL, e.g. `https://<project-ref>.supabase.co`; do not include quotes, `KEY=`, commas, CLI commands, or the Postgres connection string in Codemagic values.
 - Capacitor iOS builds depend on `npm run cap:build` using `vite build --mode capacitor`; keep `base: "./"` for capacitor mode so bundled JS/CSS load from `capacitor://localhost`.
+- Native builds include `capacitor-secure-storage-plugin`; keep the lockfile, CocoaPods resolution, and iOS Keychain-backed credential migration aligned.
+- Preserve the `com.wsegbert.acreledger` recovery URL scheme in `Info.plist` and the privacy manifest declarations in `ios/App/App/PrivacyInfo.xcprivacy`. Use `IOS_RELEASE.md` as the App Store/TestFlight release checklist.
 - Do not add a global `tar` override in `package.json`. Capacitor 6 CLI requires its compatible nested `tar@6` dependency shape; forcing `tar@7` breaks `npx cap sync ios` with `Cannot read properties of undefined (reading 'extract')`.
 - Do not re-enable automatic external TestFlight submission unless App Store Connect Beta App Information and Beta App Review Information are complete.
 - **Marketing version** is read from `package.json` at build time. **Build number** uses CodeMagic's `$BUILD_NUMBER`.
@@ -561,7 +606,7 @@ While editing:
 
 1. Keep changes minimal and task-scoped.
 2. Preserve existing behavior unless the task explicitly asks to change it.
-3. Update types, mappers, database logic, UI, and reports together when the data model changes. For any new field/table, also update `backupSchema.ts` (the `.strict()` schemas reject unknown keys, so a missing entry throws on every save), add a Supabase migration, and extend `generateTestData.ts`.
+3. Update types, mappers, database logic, UI, and reports together when the data model changes. For any new field/table, also update `backupSchema.ts` when it belongs in the customer farm backup (the `.strict()` schemas reject unknown keys, so a missing entry throws on every save), add a Supabase migration, extend `generateTestData.ts`, and classify the table in `scripts/recovery/tenant-registry.ts` under the owner-recovery design described in `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`.
 4. Do not leave TODOs in production code unless the user explicitly asks for scaffolding.
 
 After editing:

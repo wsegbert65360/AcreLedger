@@ -60,6 +60,7 @@ build/
 Website/
 
 # local scratch and assistant files
+output/
 .tmp/
 tmp/
 .claude/

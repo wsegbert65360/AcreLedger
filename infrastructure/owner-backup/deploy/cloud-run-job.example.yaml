@@ -1,0 +1,94 @@
+# Example Cloud Run Job for the owner-only AcreLedger backup worker.
+# Do not put secret values in this file. Bind Secret Manager versions at deploy time.
+#
+# Suggested deploy (after owner approval for billable resources):
+#   gcloud run jobs replace infrastructure/owner-backup/deploy/cloud-run-job.example.yaml
+#
+# Region: choose the same or nearest region to the Supabase project.
+
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: acreledger-owner-backup
+  labels:
+    application: acreledger-owner-backup
+spec:
+  template:
+    spec:
+      parallelism: 1
+      taskCount: 1
+      template:
+        spec:
+          serviceAccountName: acreledger-owner-backup@PROJECT_ID.iam.gserviceaccount.com
+          timeoutSeconds: 7200
+          maxRetries: 1
+          containers:
+            - image: REGION-docker.pkg.dev/PROJECT_ID/acreledger/owner-backup:GIT_SHA
+              resources:
+                limits:
+                  cpu: "2"
+                  memory: 2Gi
+              env:
+                - name: OWNER_BACKUP_WORKER_VERSION
+                  value: GIT_SHA
+                - name: OWNER_BACKUP_SUPABASE_CLI_VERSION
+                  value: "2.107.0"
+                - name: OWNER_BACKUP_WORK_DIR
+                  value: /tmp/acreledger-owner-backup
+                - name: OWNER_BACKUP_S3_REGION
+                  value: auto
+                - name: OWNER_BACKUP_DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-db-url
+                      key: latest
+                - name: OWNER_BACKUP_AGE_RECIPIENT
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-age-recipient
+                      key: latest
+                - name: OWNER_BACKUP_GOOGLE_OAUTH_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-google-oauth-client-id
+                      key: latest
+                - name: OWNER_BACKUP_GOOGLE_OAUTH_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-google-oauth-client-secret
+                      key: latest
+                - name: OWNER_BACKUP_GOOGLE_REFRESH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-google-refresh-token
+                      key: latest
+                - name: OWNER_BACKUP_DRIVE_FOLDER_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-drive-folder-id
+                      key: latest
+                - name: OWNER_BACKUP_S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-s3-endpoint
+                      key: latest
+                - name: OWNER_BACKUP_S3_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-s3-access-key
+                      key: latest
+                - name: OWNER_BACKUP_S3_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-s3-secret-key
+                      key: latest
+                - name: OWNER_BACKUP_ALERT_WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-alert-webhook-url
+                      key: latest
+                - name: OWNER_BACKUP_PROJECT_REF
+                  valueFrom:
+                    secretKeyRef:
+                      name: acreledger-backup-project-ref
+                      key: latest

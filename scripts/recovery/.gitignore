@@ -1,0 +1,4 @@
+node_modules/
+dist/
+*.tar.zst
+*.tar.zst.age
