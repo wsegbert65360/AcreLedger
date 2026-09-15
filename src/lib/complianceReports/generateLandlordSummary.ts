@@ -10,7 +10,7 @@ import type {
 } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
-import { parseLocalDate } from '@/utils/dates';
+import { getWorkDateMs, parseLocalDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 
 /**
@@ -120,11 +120,7 @@ function formatDate(iso: string | undefined): string {
 
 /** Parses any record date into an epoch-ms sort key (0 when missing/invalid). */
 function dateSortKey(iso: string | undefined, fallbackTimestamp?: number): number {
-  if (iso) {
-    const t = new Date(iso).getTime();
-    if (!isNaN(t)) return t;
-  }
-  return typeof fallbackTimestamp === 'number' ? fallbackTimestamp : 0;
+  return getWorkDateMs({ date: iso, timestamp: fallbackTimestamp });
 }
 
 function buildFieldSummaries(

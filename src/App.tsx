@@ -91,11 +91,11 @@ const AnimatedRoutes = () => {
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
-          <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
-          <Route path="/support" element={<ErrorBoundary><Support /></ErrorBoundary>} />
+          <Route path="/privacy" element={<ErrorBoundary><Privacy withBottomNav /></ErrorBoundary>} />
+          <Route path="/support" element={<ErrorBoundary><Support withBottomNav /></ErrorBoundary>} />
           <Route path="/weather" element={<ErrorBoundary><Weather /></ErrorBoundary>} />
           <Route path="/field/:id" element={<ErrorBoundary><FieldDetailScreen /></ErrorBoundary>} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<ErrorBoundary><NotFound /></ErrorBoundary>} />
         </Routes>
       </motion.div>
     </AnimatePresence>
@@ -225,15 +225,7 @@ const AppContent = () => {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const hideQuickAddFab =
-    location.pathname === '/activity' ||
-    location.pathname === '/logistics' ||
-    location.pathname === '/reports' ||
-    location.pathname === '/settings' ||
-    location.pathname === '/onboarding' ||
-    location.pathname === '/privacy' ||
-    location.pathname === '/support' ||
-    location.pathname.startsWith('/field/');
+  const showQuickAddFab = location.pathname === '/' || location.pathname === '/weather';
 
   return (
     <>
@@ -263,7 +255,7 @@ const AppContent = () => {
       })()}
 
       {/* Global Floating Action Button (FAB) for Mobile Quick Add */}
-      {!hideQuickAddFab && (
+      {showQuickAddFab && (
         <button
           onClick={() => {
             native.haptic.light();

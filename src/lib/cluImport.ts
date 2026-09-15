@@ -17,10 +17,17 @@ interface RawFeature {
 const WEB_MERCATOR_MAX = 20037508.34;
 
 function isWebMercator(coords: number[][][] | number[][][][]): boolean {
-  // If it's a MultiPolygon, grab the first polygon
-  const firstPoly = (coords.length > 0 && Array.isArray(coords[0][0][0])) ? coords[0] as number[][][] : coords as number[][][];
+  // MultiPolygon: coords[0][0][0] is a point ([lng, lat]). Polygon: it is a number (lng).
+  // Optional-chain so an empty ring (`[[]]`) cannot throw on undefined[0].
+  const firstPoly = (
+    coords.length > 0
+    && Array.isArray(coords[0]?.[0])
+    && Array.isArray(coords[0][0][0])
+  ) ? coords[0] as number[][][] : coords as number[][][];
   for (const ring of firstPoly) {
+    if (!Array.isArray(ring)) continue;
     for (const pt of ring) {
+      if (!Array.isArray(pt) || pt.length < 2) continue;
       if (Math.abs(pt[0]) > 180 || Math.abs(pt[1]) > 90) return true;
     }
   }
@@ -136,6 +143,43 @@ function isPolygonFeature(feature: RawFeature): boolean {
   return (geom?.type === 'Polygon' || geom?.type === 'MultiPolygon') && Array.isArray(geom.coordinates);
 }
 
+function isUsableLinearRing(value: unknown): boolean {
+  return Array.isArray(value)
+    && value.length >= 3
+    && value.every(point => (
+      Array.isArray(point)
+      && point.length >= 2
+      && Number.isFinite(point[0])
+      && Number.isFinite(point[1])
+    ));
+}
+
+function hasUsablePolygonGeometry(feature: RawFeature): boolean {
+  const geom = feature.geometry;
+  if (!geom || !Array.isArray(geom.coordinates)) return false;
+
+  if (geom.type === 'Polygon') {
+    return isUsableLinearRing(geom.coordinates[0]);
+  }
+
+  if (geom.type === 'MultiPolygon') {
+    return geom.coordinates.length > 0 && geom.coordinates.every(polygon => (
+      Array.isArray(polygon) && isUsableLinearRing(polygon[0])
+    ));
+  }
+
+  return false;
+}
+
+function requireUsablePolygonGeometry(polygons: RawFeature[]): void {
+  const invalidCount = polygons.filter(feature => !hasUsablePolygonGeometry(feature)).length;
+  if (invalidCount === 0) return;
+
+  throw new Error(
+    `This file contains ${invalidCount} of ${polygons.length} field boundaries without usable polygon geometry. Ask FSA for a complete file with a valid polygon for every boundary.`
+  );
+}
+
 function buildTractFeature(feature: RawFeature, convertProjection: boolean): TractFeature {
   const props = feature.properties ?? {};
   const geom = feature.geometry as { type: 'Polygon' | 'MultiPolygon'; coordinates: any };
@@ -177,6 +221,8 @@ export function parseCluGeoJson(contents: string, filename: string): { tractKey:
   if (features.length === 0) {
     throw new Error('No CLU polygon features found in this file.');
   }
+
+  requireUsablePolygonGeometry(features);
 
   const featuresWithClu = features.filter(f => {
     const props = f.properties as Record<string, unknown> | undefined;
@@ -276,6 +322,8 @@ export function parseCluGeoJsonTracts(contents: string, filename: string): Parse
     throw new Error('No CLU polygon features found in this file.');
   }
 
+  requireUsablePolygonGeometry(polygons);
+
   requireCompleteCluNumbers(polygons);
 
   let needsProjection = false;
@@ -350,6 +398,8 @@ export async function parseCluZip(buffer: ArrayBuffer, filename: string): Promis
   if (polygons.length === 0) {
     throw new Error('No field boundary polygons were found.');
   }
+
+  requireUsablePolygonGeometry(polygons);
 
   // A shapefile ZIP with no attributes at all means the DBF sidecar is missing.
   const hasAttributes = polygons.some(feature => feature.properties && Object.keys(feature.properties).length > 0);

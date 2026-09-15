@@ -1,4 +1,5 @@
 import type { HarvestRecord } from '../../types/farm';
+import { getWorkDateMs, parseLocalDate, toLocalIsoDate } from '../../utils/dates';
 
 export type LandlordStatementRow = {
   fieldName: string;
@@ -29,7 +30,7 @@ export function generateLandlordStatement(
 
   // 2. Sort by harvest date ascending (oldest first)
   const sorted = [...filtered].sort(
-    (a, b) => new Date(a.harvestDate || 0).getTime() - new Date(b.harvestDate || 0).getTime()
+    (a, b) => getWorkDateMs(a) - getWorkDateMs(b)
   );
 
   // 3. Map to statement rows
@@ -40,7 +41,9 @@ export function generateLandlordStatement(
     return {
       fieldName: r.fieldName,
       crop: r.crop || 'Unknown',
-      harvestDate: formatDate(r.harvestDate || new Date(r.timestamp || Date.now()).toISOString()),
+      harvestDate: r.harvestDate
+        ? formatDate(r.harvestDate)
+        : formatDate(toLocalIsoDate(r.timestamp || Date.now())),
       totalBushels: r.bushels || 0,
       landlordSplitPercent: r.landlordSplitPercent || 0,
       landlordBushels,
@@ -202,7 +205,7 @@ export function getUniqueLandlordNames(records: HarvestRecord[]): string[] {
 }
 
 function formatDate(isoDate: string): string {
-  const d = new Date(isoDate);
+  const d = parseLocalDate(isoDate.split('T')[0]);
   if (isNaN(d.getTime())) return 'N/A';
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');

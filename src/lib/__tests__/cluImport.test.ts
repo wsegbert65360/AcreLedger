@@ -203,6 +203,19 @@ describe('parseCluGeoJson', () => {
     expect(coords[0][1]).toBeCloseTo(38.47, 1);
   });
 
+  it('rejects a polygon with an empty ring without crashing', () => {
+    const emptyRing = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [[]] },
+        properties: { cluNumber: '11', acres: 10.5 },
+      }],
+    });
+    expect(() => parseCluGeoJson(emptyRing, '4251-9747.json'))
+      .toThrow(/without usable polygon geometry/i);
+  });
+
   it('does not convert WGS84 coordinates', () => {
     const result = parseCluGeoJson(validJson, 'test.json');
     expect(result.collection.features[0].geometry.coordinates[0][0]).toEqual([0, 0]);
@@ -441,6 +454,19 @@ describe('parseCluFile / parseCluZip', () => {
     expect(tracts).toHaveLength(1);
     expect(tracts[0].tractKey).toBe('4251-9747');
     expect(tracts[0].collection.features.map(f => f.properties.cluNumber)).toEqual(['11', '12']);
+  });
+
+  it('rejects an empty-ring GeoJSON boundary with complete-file guidance', () => {
+    const json = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [[]] },
+        properties: { clu_number: '11', clu_acres: 10.5 },
+      }],
+    });
+    expect(() => parseCluGeoJsonTracts(json, '4251-9747.json'))
+      .toThrow(/ask FSA for a complete file with a valid polygon for every boundary/i);
   });
 
   it('ignores non-polygon features without rejecting the file on the strict path', () => {

@@ -4,6 +4,7 @@ import { ArrowLeft, LifeBuoy, Mail } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 const SUPPORT_EMAIL = 'support@acreledger.com';
 
@@ -12,18 +13,34 @@ const SUPPORT_EMAIL = 'support@acreledger.com';
  * App Store support URLs can point here on the live Vercel host while
  * acreledger.com stays parked.
  */
-export default function Support() {
+interface SupportProps {
+  withBottomNav?: boolean;
+}
+
+export default function Support({ withBottomNav = false }: SupportProps) {
   const navigate = useNavigate();
 
+  const goBack = () => {
+    if ((window.history.state?.idx ?? 0) > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
+  };
+
   return (
-    <div className="min-h-screen bg-background pb-12">
+    <div className={cn(
+      'min-h-screen bg-background pb-12',
+      withBottomNav && 'pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-12',
+    )}>
       <div className="mx-auto max-w-2xl space-y-6 p-4 lg:max-w-4xl lg:px-8">
         <header className="flex items-center gap-4 py-4">
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate(-1)}
-            className="text-muted-foreground"
+            onClick={goBack}
+            aria-label="Go back"
+            className="h-11 w-11 text-muted-foreground"
           >
             <ArrowLeft size={20} />
           </Button>
@@ -46,7 +63,7 @@ export default function Support() {
               This page is public so you can reach us without signing in.
             </p>
           </CardHeader>
-          <CardContent className="space-y-8 pt-8 font-mono">
+          <CardContent className="space-y-8 pt-8">
             <section className="space-y-4">
               <div className="flex items-center gap-2 text-primary">
                 <Mail size={18} />
@@ -56,7 +73,7 @@ export default function Support() {
                 Write to{' '}
                 <a
                   href={`mailto:${SUPPORT_EMAIL}`}
-                  className="font-bold text-foreground underline-offset-4 hover:text-primary hover:underline"
+                  className="break-all font-bold text-foreground underline-offset-4 hover:text-primary hover:underline sm:break-normal"
                 >
                   {SUPPORT_EMAIL}
                 </a>

@@ -4,15 +4,31 @@ import { ArrowLeft, ShieldCheck, Lock, Globe, FileText, Trash2, Mail } from "luc
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
-export default function Privacy() {
+interface PrivacyProps {
+    withBottomNav?: boolean;
+}
+
+export default function Privacy({ withBottomNav = false }: PrivacyProps) {
     const navigate = useNavigate();
 
+    const goBack = () => {
+        if ((window.history.state?.idx ?? 0) > 0) {
+            navigate(-1);
+            return;
+        }
+        navigate('/');
+    };
+
     return (
-        <div className="min-h-screen bg-background pb-12">
+        <div className={cn(
+            "min-h-screen bg-background pb-12",
+            withBottomNav && "pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-12",
+        )}>
             <div className="max-w-2xl mx-auto p-4 space-y-6 lg:max-w-4xl lg:px-8">
                 <header className="flex items-center gap-4 py-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground">
+                    <Button variant="ghost" size="icon" onClick={goBack} aria-label="Go back" className="h-11 w-11 text-muted-foreground">
                         <ArrowLeft size={20} />
                     </Button>
                     <h1 className="text-2xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
@@ -34,7 +50,7 @@ export default function Privacy() {
                             This policy outlines how we collect, protect, and isolate your agricultural information.
                         </p>
                     </CardHeader>
-                    <CardContent className="space-y-8 pt-8 font-mono">
+                    <CardContent className="space-y-8 pt-8">
                         {/* Section 1 */}
                         <section className="space-y-4">
                             <div className="flex items-center gap-2 text-primary">
@@ -44,21 +60,21 @@ export default function Privacy() {
                             <p className="text-sm text-muted-foreground leading-relaxed">
                                 We collect only the data necessary to manage your field operations and compliance reporting:
                             </p>
-                            <ul className="list-none space-y-3 pl-4">
-                                <li className="text-sm flex border-l-2 border-primary/30 pl-3">
-                                    <span className="text-foreground font-bold mr-2">Field Data:</span>
+                            <ul className="list-none space-y-3">
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Field Data:</span>
                                     GPS coordinates, field boundaries, and acreage for the fields you manage.
                                 </li>
-                                <li className="text-sm flex border-l-2 border-primary/30 pl-3">
-                                    <span className="text-foreground font-bold mr-2">Account Data:</span>
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Account Data:</span>
                                     Your email address, user ID, farm name, and sign-in information needed to operate and secure your account.
                                 </li>
-                                <li className="text-sm flex border-l-2 border-primary/30 pl-3">
-                                    <span className="text-foreground font-bold mr-2">Activity Logs:</span>
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Activity Logs:</span>
                                     Records of Planting, Spraying, Harvesting, and Fertilizer applications, including product formulas and dates.
                                 </li>
-                                <li className="text-sm flex border-l-2 border-primary/30 pl-3">
-                                    <span className="text-foreground font-bold mr-2">Location Services:</span>
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Location Services:</span>
                                     We use GPS data to provide hyper-local weather from Visual Crossing and to "Pin" activity locations in the field.
                                 </li>
                             </ul>
@@ -98,26 +114,26 @@ export default function Privacy() {
                                 AcreLedger connects to the following services to provide essential functionality:
                             </p>
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
-                                    <div>
+                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
                                         <p className="text-sm font-bold text-foreground">Supabase</p>
                                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                                             Provides account authentication and encrypted cloud storage for farm records.
                                         </p>
                                     </div>
-                                    <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">Account and farm data</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">Account and farm data</span>
                                 </div>
-                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
-                                    <div>
+                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
                                         <p className="text-sm font-bold text-foreground">Visual Crossing Weather</p>
                                     </div>
-                                    <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">GPS Data only</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
                                 </div>
-                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
-                                    <div>
+                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
                                         <p className="text-sm font-bold text-foreground">Vercel</p>
                                     </div>
-                                    <span className="text-[11px] bg-primary/20 text-primary px-2 py-0.5 rounded uppercase font-bold">Hosting/SSL</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">Hosting/SSL</span>
                                 </div>
                                 <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
                                     <div>
@@ -184,7 +200,7 @@ export default function Privacy() {
                                 Privacy questions and support requests go to{' '}
                                 <a
                                     href="mailto:support@acreledger.com"
-                                    className="font-bold text-foreground underline-offset-4 hover:text-primary hover:underline"
+                                    className="break-all font-bold text-foreground underline-offset-4 hover:text-primary hover:underline sm:break-normal"
                                 >
                                     support@acreledger.com
                                 </a>

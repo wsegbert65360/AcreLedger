@@ -21,7 +21,7 @@ import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
-import { formatIsoDate } from '@/utils/dates';
+import { formatIsoDate, getWorkDateMs } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
@@ -148,17 +148,17 @@ export default function Reports() {
 
   const fertilizerRecords = useMemo(() =>
     [...allFertilizer.filter(r => r.seasonYear === viewingSeason)]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      .sort((a, b) => getWorkDateMs(a) - getWorkDateMs(b)),
   [allFertilizer, viewingSeason]);
 
   const tillageRecords = useMemo(() =>
     [...allTillage.filter(r => r.seasonYear === viewingSeason)]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      .sort((a, b) => getWorkDateMs(a) - getWorkDateMs(b)),
   [allTillage, viewingSeason]);
 
   const customSprayRecords = useMemo(() =>
     [...allCustomSpray.filter(r => r.seasonYear === viewingSeason)]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      .sort((a, b) => getWorkDateMs(a) - getWorkDateMs(b)),
   [allCustomSpray, viewingSeason]);
 
   // Expanded spray rows — memoized, keyed by index to avoid product-name collisions

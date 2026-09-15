@@ -47,6 +47,12 @@ describe('generateLandlordStatement', () => {
     expect(stmt.rows[1].fieldName).toBe('South Field');
   });
 
+  test('formats date-only harvest dates as the local calendar day', () => {
+    const stmt = generateLandlordStatement(mockRecords, 'John Smith');
+    expect(stmt.rows[0].harvestDate).toBe('10/01/2025');
+    expect(stmt.rows[1].harvestDate).toBe('10/15/2025');
+  });
+
   test('returns empty rows for unknown landlord', () => {
     const stmt = generateLandlordStatement(mockRecords, 'Nobody Here');
     expect(stmt.rows).toHaveLength(0);

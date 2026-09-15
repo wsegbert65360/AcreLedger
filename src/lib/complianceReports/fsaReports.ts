@@ -5,7 +5,7 @@ import { parseTractKeys } from '@/lib/tractLookup';
 import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
-import { toLocalIsoDate } from '../../utils/dates';
+import { getWorkDateMs, toLocalIsoDate } from '../../utils/dates';
 import { roundTo } from '../../utils/numbers';
 import { formatSprayProductTotal } from '../../utils/unitConversion';
 
@@ -185,8 +185,7 @@ function findContainingFeature(
 }
 
 function plantSortTime(record: PlantRecord): number {
-    const dateTime = record.plantDate ? new Date(record.plantDate).getTime() : NaN;
-    return Number.isFinite(dateTime) ? dateTime : record.timestamp;
+    return getWorkDateMs(record);
 }
 
 function sortedPlantRecords(plantRecords: PlantRecord[]): PlantRecord[] {

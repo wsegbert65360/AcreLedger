@@ -15,7 +15,7 @@ import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
-import { compareWorkDateDesc } from '@/utils/dates';
+import { compareWorkDateDesc, getWorkDateMs } from '@/utils/dates';
 import type {
   PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
   FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord
@@ -263,7 +263,7 @@ export default function Activity() {
       ...filteredHarvest.map(r => ({ type: 'harvest' as const, data: r, timestamp: r.timestamp })),
       ...filteredHay.map(r => ({ type: 'hay' as const, data: r, timestamp: r.timestamp })),
       ...filteredCustomSpray.map(r => ({ type: 'customSpray' as const, data: r, timestamp: r.timestamp })),
-      ...filteredFertilizer.map(r => ({ type: 'fertilizer' as const, data: r, timestamp: new Date(r.date).getTime() })),
+      ...filteredFertilizer.map(r => ({ type: 'fertilizer' as const, data: r, timestamp: getWorkDateMs(r) })),
       ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
     ];
@@ -392,7 +392,7 @@ export default function Activity() {
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs — grouped pills */}
         <div className="relative -mx-4 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
+          <div role="group" aria-label="Activity types" className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
                 {group.tabs.map((t) => {

@@ -1,0 +1,970 @@
+/*
+ * AcreLedger design demo — "Field Margin" landing page.
+ *
+ * Self-contained on purpose: everything is scoped under `.landing` so this
+ * page cannot leak into the app theme (and vice versa). Delete this folder
+ * plus the /demo route lines in App.tsx to remove the demo entirely.
+ *
+ * Palette "Red-Line Ledger": aged cream stock, iron-gall ink, banker's
+ * green, and the double red margin rule of a ledger page — brightened with
+ * seed-catalog plate colors (corn gold, pumpkin, field sky).
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,560;0,9..144,640;1,9..144,400;1,9..144,560&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+.landing {
+  --ald-cream: #f6f0e2;
+  --ald-cream-deep: #ece2cc;
+  --ald-ink: #27221a;
+  --ald-ink-soft: #5f5745;
+  --ald-red: #b23a2a;
+  --ald-green: #1f4b38;
+  --ald-green-deep: #16382a;
+  --ald-gold: #d9a419;
+  --ald-gold-plate: #e2b44a;
+  --ald-pumpkin: #c9661f;
+  --ald-sky: #3e6f9c;
+  --ald-line: rgba(39, 34, 26, 0.25);
+  --ald-line-strong: rgba(39, 34, 26, 0.6);
+  --ald-red-line: rgba(178, 58, 42, 0.55);
+  --ald-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --ald-body: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --ald-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  min-height: 100vh;
+  background: var(--ald-cream);
+  color: var(--ald-ink);
+  font-family: var(--ald-body);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* Paper grain over everything, click-through. */
+.landing::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.7'/></svg>");
+}
+
+/* Catalog spine tape across the very top. */
+.landing-spine {
+  height: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--ald-green) 0 20%,
+    var(--ald-gold) 20% 40%,
+    var(--ald-pumpkin) 40% 60%,
+    var(--ald-sky) 60% 80%,
+    var(--ald-red) 80% 100%
+  );
+}
+
+/* ---------- Reveal motion (signature: rules draw in, stamp thunks) ---------- */
+
+.landing [data-reveal] {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s ease;
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.landing [data-reveal].in-view {
+  opacity: 1;
+  transform: none;
+}
+
+.landing [data-reveal='rule'] {
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.landing [data-reveal='rule'].in-view {
+  transform: scaleX(1);
+}
+
+.landing [data-reveal='stamp'] {
+  transform: scale(1.4) rotate(4deg);
+  transition-duration: 0.4s;
+  transition-timing-function: cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+.landing [data-reveal='stamp'].in-view {
+  transform: scale(1) rotate(0deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing [data-reveal] {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reveal base state is opacity:0 — never let print capture hit it. */
+@media print {
+  .landing [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---------- Header ---------- */
+
+.landing-header {
+  border-bottom: 1px solid var(--ald-line-strong);
+  box-shadow: 0 3px 0 -2px var(--ald-line);
+}
+
+.landing-header-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.landing-wordmark {
+  color: var(--ald-ink);
+  font-family: var(--ald-display);
+  font-weight: 640;
+  font-size: 1.35rem;
+  letter-spacing: -0.015em;
+  text-decoration: none;
+}
+
+.landing-wordmark span {
+  font-style: italic;
+  color: var(--ald-green);
+}
+
+.landing-header-cta {
+  color: var(--ald-ink);
+  font-family: var(--ald-mono);
+  font-size: 0.82rem;
+  text-decoration: none;
+  border: 1px solid var(--ald-line-strong);
+  border-radius: 3px;
+  padding: 0.55rem 0.9rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+.landing-header-cta:hover {
+  background: rgba(39, 34, 26, 0.06);
+}
+
+/* ---------- Shared section scaffolding ---------- */
+
+.landing-section {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 4.5rem 1.25rem;
+  position: relative;
+}
+
+@media (min-width: 640px) {
+  .landing-section {
+    padding: 5.5rem 2.5rem 5.5rem 5rem;
+  }
+}
+
+/* The double red margin rule, desktop only. */
+@media (min-width: 640px) {
+  .landing-section::before {
+    content: '';
+    position: absolute;
+    top: 2.5rem;
+    bottom: 2.5rem;
+    left: 2.1rem;
+    width: 0;
+    border-left: 1px solid var(--ald-red-line);
+    border-right: 1px solid var(--ald-red-line);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+}
+
+.landing-entry-no {
+  font-family: var(--ald-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--ald-red);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.landing-entry-no::after {
+  content: '';
+  width: 2.4rem;
+  height: 1px;
+  background: var(--ald-red-line);
+  align-self: center;
+}
+
+@media (min-width: 640px) {
+  .landing-entry-no {
+    position: absolute;
+    left: -0.6rem;
+    top: 5.6rem;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+  }
+
+  .landing-entry-no::after {
+    width: 1px;
+    height: 2.4rem;
+    align-self: center;
+  }
+}
+
+.landing-h2 {
+  font-family: var(--ald-display);
+  font-weight: 560;
+  font-size: clamp(1.9rem, 4vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  margin: 0.9rem 0 0;
+  max-width: 46rem;
+}
+
+.landing-lede {
+  color: var(--ald-ink-soft);
+  max-width: 38rem;
+  margin: 1rem 0 0;
+  font-size: 1.1rem;
+}
+
+/* Thick-over-thin ledger double rule between sections. */
+.landing-hr {
+  border: none;
+  border-top: 2px solid var(--ald-line-strong);
+  margin: 0;
+  max-width: 72rem;
+  position: relative;
+}
+
+.landing-hr::after {
+  content: '';
+  display: block;
+  border-top: 1px solid var(--ald-line);
+  margin-top: 2px;
+}
+
+/* Full-bleed color plates (seed-catalog bands). */
+.landing-band--gold {
+  background: var(--ald-gold-plate);
+  border-top: 2px solid var(--ald-ink);
+  border-bottom: 2px solid var(--ald-ink);
+}
+
+.landing-band--green {
+  background: var(--ald-green);
+  color: var(--ald-cream);
+  border-top: 2px solid var(--ald-ink);
+}
+
+.landing-band--green .landing-lede {
+  color: rgba(246, 240, 226, 0.8);
+}
+
+/* ---------- Buttons ---------- */
+
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 50px;
+  padding: 0 1.5rem;
+  background: var(--ald-green);
+  color: #ffffff;
+  font-family: var(--ald-mono);
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--ald-green-deep);
+  border-radius: 3px;
+  text-decoration: none;
+  box-shadow: 0 1px 0 rgba(39, 34, 26, 0.4);
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.landing-btn:hover {
+  background: var(--ald-green-deep);
+  transform: translateY(-1px);
+}
+
+.landing-btn--ghost {
+  background: transparent;
+  color: var(--ald-ink);
+  border: 1px solid var(--ald-line-strong);
+  box-shadow: none;
+}
+
+.landing-btn--ghost:hover {
+  background: rgba(39, 34, 26, 0.06);
+  transform: none;
+}
+
+.landing-btn--light {
+  background: var(--ald-cream);
+  color: var(--ald-green-deep);
+  border-color: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.landing-btn--gold {
+  background: var(--ald-gold);
+  color: var(--ald-ink);
+  border-color: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+
+.landing-btn--gold:hover {
+  background: #c89314;
+}
+
+.landing-btn--light:hover {
+  background: #fffaf0;
+}
+
+/* ---------- Hero ---------- */
+
+.landing-hero-grid {
+  display: grid;
+  gap: 3.5rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .landing-hero-grid {
+    grid-template-columns: 1.02fr 0.98fr;
+    gap: 4rem;
+  }
+}
+
+.landing-eyebrow {
+  font-family: var(--ald-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--ald-green);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.landing-eyebrow::before {
+  content: '';
+  width: 2.2rem;
+  height: 3px;
+  background: linear-gradient(90deg, var(--ald-green) 0 34%, var(--ald-gold) 34% 67%, var(--ald-pumpkin) 67% 100%);
+}
+
+.landing-h1 {
+  font-family: var(--ald-display);
+  font-weight: 560;
+  font-size: clamp(2.7rem, 6.5vw, 4.5rem);
+  line-height: 1;
+  letter-spacing: -0.015em;
+  margin: 1.4rem 0 0;
+}
+
+.landing-h1 em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--ald-green);
+  text-decoration: underline;
+  text-decoration-color: var(--ald-red-line);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 0.14em;
+}
+
+.landing-hero-sub {
+  margin: 1.5rem 0 0;
+  max-width: 34rem;
+  font-size: 1.15rem;
+  color: var(--ald-ink-soft);
+}
+
+.landing-hero-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 2.2rem;
+}
+
+@media (min-width: 480px) {
+  .landing-hero-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.landing-hero-terms {
+  margin-top: 1.1rem;
+  font-family: var(--ald-mono);
+  font-size: 0.78rem;
+  color: var(--ald-ink-soft);
+}
+
+/* Stamp (wildcard) — set beside the terms line. */
+.landing-stamp {
+  display: inline-block;
+  transform: rotate(-8deg);
+  color: var(--ald-red);
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px currentColor;
+  padding: 0.35rem 0.7rem;
+  font-family: var(--ald-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.45;
+  text-align: center;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+  margin-top: 1.6rem;
+}
+
+.landing-stamp small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+}
+
+/* ---------- Phone frames for real app screenshots ---------- */
+
+.landing-phone {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  background: #201b13;
+  border-radius: 34px;
+  padding: 9px;
+  margin: 0;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  transition: transform 0.25s ease;
+}
+
+.landing-phone img {
+  display: block;
+  width: 100%;
+  border-radius: 26px;
+}
+
+.landing-phone--gold {
+  box-shadow: 16px 16px 0 var(--ald-gold);
+  transform: rotate(1.5deg);
+}
+
+.landing-phone--pumpkin {
+  box-shadow: 14px 14px 0 var(--ald-pumpkin);
+  transform: rotate(-1.2deg);
+}
+
+.landing-phone--sky {
+  box-shadow: 14px 14px 0 var(--ald-sky);
+  transform: rotate(1deg);
+}
+
+.landing-phone--red {
+  box-shadow: 14px 14px 0 var(--ald-red);
+  transform: rotate(-1.5deg);
+}
+
+.landing-phone:hover {
+  transform: rotate(0deg) translateY(-4px);
+}
+
+.landing-phone-caption {
+  font-family: var(--ald-mono);
+  font-size: 0.78rem;
+  color: var(--ald-ink-soft);
+  margin-top: 2.2rem;
+  max-width: 300px;
+}
+
+.landing-phone-caption strong {
+  display: block;
+  color: var(--ald-ink);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 1023px) {
+  .landing-phone {
+    margin: 0 auto;
+  }
+
+  .landing-phone-caption {
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
+}
+
+/* Screenshot gallery strip. */
+.landing-gallery {
+  list-style: none;
+  margin: 3rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3.5rem 2.5rem;
+}
+
+@media (min-width: 900px) {
+  .landing-gallery {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ---------- Manifesto plate ---------- */
+
+.landing-manifesto p {
+  font-family: var(--ald-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3.4vw, 2.2rem);
+  line-height: 1.3;
+  max-width: 44rem;
+  margin: 1.2rem auto 0;
+  text-align: center;
+}
+
+.landing-manifesto p strong {
+  font-weight: 560;
+  font-style: normal;
+  color: var(--ald-green);
+}
+
+/* ---------- Features as ledger entries ---------- */
+
+.landing-features {
+  list-style: none;
+  margin: 3rem 0 0;
+  padding: 0;
+  border-top: 2px solid var(--ald-line-strong);
+}
+
+.landing-features li {
+  display: grid;
+  gap: 0.4rem 2.5rem;
+  padding: 1.9rem 0;
+  border-bottom: 1px solid var(--ald-line);
+}
+
+@media (min-width: 768px) {
+  .landing-features li {
+    grid-template-columns: 5.2rem 1fr 1.2fr;
+    align-items: baseline;
+  }
+}
+
+.landing-feature-no {
+  font-family: var(--ald-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ald-accent, var(--ald-red));
+}
+
+.landing-feature-title {
+  font-family: var(--ald-display);
+  font-weight: 560;
+  font-size: 1.35rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.landing-feature-copy {
+  color: var(--ald-ink-soft);
+  margin: 0.2rem 0 0;
+  font-size: 1.02rem;
+}
+
+/* ---------- How it works ---------- */
+
+.landing-steps {
+  list-style: none;
+  margin: 3rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2.5rem;
+}
+
+@media (min-width: 900px) {
+  .landing-steps {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3rem;
+  }
+}
+
+.landing-steps li {
+  position: relative;
+  padding-top: 1.4rem;
+  border-top: 3px solid var(--ald-accent, var(--ald-line));
+}
+
+.landing-step-no {
+  font-family: var(--ald-display);
+  font-weight: 400;
+  font-style: italic;
+  font-size: 2.6rem;
+  color: var(--ald-accent, var(--ald-red));
+  line-height: 1;
+}
+
+.landing-step-title {
+  font-family: var(--ald-display);
+  font-weight: 560;
+  font-size: 1.3rem;
+  margin: 0.7rem 0 0;
+}
+
+.landing-steps p {
+  color: var(--ald-ink-soft);
+  margin: 0.6rem 0 0;
+}
+
+/* ---------- Pricing scale ticket ---------- */
+
+.landing-ticket-wrap {
+  display: grid;
+  gap: 3rem;
+  margin-top: 3rem;
+}
+
+@media (min-width: 960px) {
+  .landing-ticket-wrap {
+    grid-template-columns: 1.05fr 0.95fr;
+    align-items: start;
+    gap: 4rem;
+  }
+}
+
+.landing-ticket {
+  background: #faf5e9;
+  border: 1px solid var(--ald-line-strong);
+  border-radius: 2px;
+  box-shadow: 14px 14px 0 var(--ald-pumpkin);
+  padding: 0 1.5rem 1.6rem;
+  position: relative;
+  margin: 0 14px 14px 0;
+}
+
+/* Punched grab-hole notches, like a real ticket. */
+.landing-ticket::before,
+.landing-ticket::after {
+  content: '';
+  position: absolute;
+  left: -0.55rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--ald-cream);
+  border: 1px solid var(--ald-line-strong);
+}
+
+.landing-ticket::before {
+  top: 5rem;
+}
+
+.landing-ticket::after {
+  bottom: 4.6rem;
+}
+
+.landing-ticket-head {
+  background: var(--ald-green);
+  color: var(--ald-cream);
+  margin: 0 -1.5rem 1.1rem;
+  padding: 0.9rem 1.5rem;
+  font-family: var(--ald-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-bottom: 2px solid var(--ald-green-deep);
+}
+
+.landing-ticket-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px dotted var(--ald-line);
+  font-size: 1rem;
+}
+
+.landing-ticket-line dt {
+  font-family: var(--ald-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ald-accent, var(--ald-ink-soft));
+}
+
+.landing-ticket-line dd {
+  margin: 0;
+  font-family: var(--ald-mono);
+  font-weight: 600;
+  text-align: right;
+}
+
+.landing-ticket-line dd small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--ald-ink-soft);
+}
+
+.landing-ticket-net {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.85rem;
+  padding-top: 1rem;
+  border-top: 2px dashed var(--ald-line-strong);
+  font-family: var(--ald-mono);
+}
+
+.landing-ticket-net span:first-child {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: var(--ald-red);
+  font-weight: 600;
+}
+
+.landing-ticket-net span:last-child {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--ald-green);
+}
+
+.landing-included {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 1;
+}
+
+@media (min-width: 560px) {
+  .landing-included {
+    columns: 2;
+    column-gap: 2.5rem;
+  }
+}
+
+.landing-included li {
+  break-inside: avoid;
+  padding: 0.5rem 0 0.5rem 1.6rem;
+  position: relative;
+  border-bottom: 1px dotted var(--ald-line);
+  font-size: 0.98rem;
+}
+
+.landing-included li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--ald-green);
+  font-weight: 600;
+}
+
+.landing-included-title {
+  font-family: var(--ald-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: var(--ald-ink-soft);
+  margin: 0 0 0.6rem;
+}
+
+/* ---------- FAQ ---------- */
+
+.landing-faq {
+  margin: 2.5rem 0 0;
+  border-top: 2px solid var(--ald-line-strong);
+}
+
+.landing-faq details {
+  border-bottom: 1px solid var(--ald-line);
+}
+
+.landing-faq summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1.5rem;
+  padding: 1.3rem 0;
+  font-family: var(--ald-display);
+  font-weight: 560;
+  font-size: 1.15rem;
+  min-height: 44px;
+}
+
+.landing-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-faq summary::after {
+  content: '+';
+  font-family: var(--ald-mono);
+  color: var(--ald-red);
+  font-size: 1.2rem;
+}
+
+.landing-faq details[open] summary::after {
+  content: '–';
+}
+
+.landing-faq details p {
+  margin: 0;
+  padding: 0 0 1.4rem;
+  max-width: 42rem;
+  color: var(--ald-ink-soft);
+}
+
+/* ---------- Final CTA (green plate) ---------- */
+
+.landing-final {
+  text-align: center;
+  padding-bottom: 6rem;
+}
+
+.landing-final .landing-hero-actions {
+  justify-content: center;
+}
+
+.landing-final h2 {
+  font-family: var(--ald-display);
+  font-weight: 560;
+  font-size: clamp(2.2rem, 5.5vw, 3.6rem);
+  line-height: 1.05;
+  margin: 1.2rem auto 0;
+  max-width: 40rem;
+}
+
+.landing-final .landing-btn {
+  margin-top: 2.2rem;
+}
+
+.landing-final-terms {
+  margin-top: 1rem;
+  font-family: var(--ald-mono);
+  font-size: 0.78rem;
+  color: rgba(246, 240, 226, 0.75);
+}
+
+.landing-final .landing-stamp {
+  margin-top: 2.4rem;
+  color: var(--ald-gold);
+  mix-blend-mode: normal;
+}
+
+/* ---------- Footer ---------- */
+
+.landing-footer {
+  border-top: 2px solid var(--ald-ink);
+}
+
+.landing-footer-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 2.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1.2rem 2.5rem;
+  font-family: var(--ald-mono);
+  font-size: 0.78rem;
+  color: var(--ald-ink-soft);
+}
+
+.landing-footer a {
+  color: var(--ald-ink-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--ald-line-strong);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.landing-footer a:hover {
+  color: var(--ald-ink);
+}
+
+.landing-footer-legal {
+  flex-basis: 100%;
+  max-width: 46rem;
+  font-family: var(--ald-mono);
+  font-size: 0.72rem;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+}
+
+/* Pricing fine print. */
+.landing-ticket-note {
+  margin: 1rem 0 0;
+  font-family: var(--ald-mono);
+  font-size: 0.72rem;
+  line-height: 1.7;
+  color: var(--ald-ink-soft);
+}
+
+.landing-header-signin {
+  color: var(--ald-ink);
+  font-family: var(--ald-mono);
+  font-size: 0.82rem;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--ald-line-strong);
+  padding: 0.55rem 0.2rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.landing-header-signin:hover {
+  color: var(--ald-green);
+}
+
+.landing-header-cta--solid {
+  background: var(--ald-green);
+  color: var(--ald-cream);
+  border-color: var(--ald-green-deep);
+}
+
+.landing-header-cta--solid:hover {
+  background: var(--ald-green-deep);
+  color: var(--ald-cream);
+}
+
+.landing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}

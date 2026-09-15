@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useFarm } from '@/store/farmStore';
 import { Field, PlantRecord } from '@/types/farm';
-import { formatIsoDate, toLocalIsoDate } from '@/utils/dates';
+import { compareWorkDateDesc, formatIsoDate, toLocalIsoDate } from '@/utils/dates';
 
 const CROP_STATUS_OPTIONS: NonNullable<PlantRecord['cropStatus']>[] = [
   'Planted',
@@ -75,11 +75,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
         && (record.cropStatus ?? 'Planted') === 'Planted'
         && (record.cropSequence ?? 'First Crop') === cropSequence
       )
-      .sort((a, b) => {
-        const bTime = new Date(b.plantDate || b.timestamp).getTime();
-        const aTime = new Date(a.plantDate || a.timestamp).getTime();
-        return bTime - aTime;
-      })[0];
+      .sort(compareWorkDateDesc)[0];
   }, [cropSequence, field.id, initialData, isDuplicate, plantRecords, viewingSeason]);
   const duplicatePlantingDate = duplicatePlanting
     ? formatIsoDate(duplicatePlanting.plantDate)

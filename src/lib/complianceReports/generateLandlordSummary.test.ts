@@ -136,6 +136,45 @@ describe('generateLandlordSummary', () => {
     expect(summary.fields[0].totalBushels).toBe(500);
   });
 
+  test('latest crop uses the work date, not a later save timestamp', () => {
+    const summary = generateLandlordSummary({
+      ...baseParams,
+      landlordName: 'John Smith',
+      harvestRecords: [
+        {
+          id: 'h-dated',
+          fieldId: 'f1',
+          fieldName: 'North 40',
+          destination: 'bin',
+          moisturePercent: 15,
+          landlordSplitPercent: 25,
+          bushels: 100,
+          crop: 'Corn',
+          harvestDate: '2026-10-11',
+          timestamp: new Date(2026, 9, 10, 20, 0).getTime(),
+          seasonYear: 2026,
+          farm_id: 'farm1',
+          deleted_at: null,
+        },
+        {
+          id: 'h-stamp',
+          fieldId: 'f1',
+          fieldName: 'North 40',
+          destination: 'bin',
+          moisturePercent: 15,
+          landlordSplitPercent: 25,
+          bushels: 50,
+          crop: 'Soybeans',
+          timestamp: new Date(2026, 9, 10, 21, 0).getTime(),
+          seasonYear: 2026,
+          farm_id: 'farm1',
+          deleted_at: null,
+        },
+      ],
+    });
+    expect(summary.fields.find(f => f.fieldName === 'North 40')?.crop).toBe('Corn');
+  });
+
   test('aggregates activity across types and sorts by date ascending', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
     // John's fields are f1 (North 40) and f2 (South Field) — both owned by John.

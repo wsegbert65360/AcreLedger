@@ -8,6 +8,19 @@ import { mapFieldToDb, mapBinToDb, mapSeedToDb, mapRecipeToDb, mapFertilizerReci
 import { syncQueue } from '@/lib/syncQueue';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 
+function restoreAtIndex<T>(
+  setItems: React.Dispatch<React.SetStateAction<T[]>>,
+  item: T | undefined,
+  index: number,
+): void {
+  if (!item) return;
+  setItems(prev => {
+    const restored = [...prev];
+    restored.splice(Math.min(Math.max(0, index), restored.length), 0, item);
+    return restored;
+  });
+}
+
 interface UseFieldsAndBinsArgs {
   farm_id: string | null;
   fields: Field[];
@@ -525,7 +538,8 @@ export function useFieldsAndBins({
     isSeedMutating.current = true;
 
     // Capture the prior record from the closure (see updateField note).
-    const previous = savedSeeds.find(s => s.id === id);
+    const previousIndex = savedSeeds.findIndex(s => s.id === id);
+    const previous = previousIndex >= 0 ? savedSeeds[previousIndex] : undefined;
     const deletedAt = new Date().toISOString();
     setSavedSeeds(prev => prev.filter(s => s.id !== id));
 
@@ -538,7 +552,7 @@ export function useFieldsAndBins({
           return true;
         } catch (err) {
           console.error('Failed to enqueue delete seed offline:', err);
-          if (previous) setSavedSeeds(prev => [...prev, previous]);
+          restoreAtIndex(setSavedSeeds, previous, previousIndex);
           toast.error('Failed to remove seed offline');
           return false;
         }
@@ -556,7 +570,7 @@ export function useFieldsAndBins({
           } else {
             console.warn('Seed delete affected zero rows:', id);
           }
-          if (previous) setSavedSeeds(prev => [...prev, previous]);
+          restoreAtIndex(setSavedSeeds, previous, previousIndex);
           toast.error('Failed to delete seed');
           return false;
         }
@@ -564,7 +578,7 @@ export function useFieldsAndBins({
         return true;
       } catch (err) {
         console.error('Network error deleting seed:', err);
-        if (previous) setSavedSeeds(prev => [...prev, previous]);
+        restoreAtIndex(setSavedSeeds, previous, previousIndex);
         toast.error('Failed to delete seed due to a network error');
         return false;
       }
@@ -718,7 +732,8 @@ export function useFieldsAndBins({
     isRecipeMutating.current = true;
 
     // Capture the prior record from the closure (see updateField note).
-    const previous = sprayRecipes.find(r => r.id === id);
+    const previousIndex = sprayRecipes.findIndex(r => r.id === id);
+    const previous = previousIndex >= 0 ? sprayRecipes[previousIndex] : undefined;
     const deletedAt = new Date().toISOString();
     setSprayRecipes(prev => prev.filter(r => r.id !== id));
 
@@ -731,7 +746,7 @@ export function useFieldsAndBins({
           return true;
         } catch (err) {
           console.error('Failed to enqueue delete spray recipe offline:', err);
-          if (previous) setSprayRecipes(prev => [...prev, previous]);
+          restoreAtIndex(setSprayRecipes, previous, previousIndex);
           toast.error('Failed to delete recipe offline');
           return false;
         }
@@ -749,7 +764,7 @@ export function useFieldsAndBins({
           } else {
             console.warn('Spray recipe delete affected zero rows:', id);
           }
-          if (previous) setSprayRecipes(prev => [...prev, previous]);
+          restoreAtIndex(setSprayRecipes, previous, previousIndex);
           toast.error('Failed to delete recipe');
           return false;
         }
@@ -757,7 +772,7 @@ export function useFieldsAndBins({
         return true;
       } catch (err) {
         console.error('Network error deleting spray recipe:', err);
-        if (previous) setSprayRecipes(prev => [...prev, previous]);
+        restoreAtIndex(setSprayRecipes, previous, previousIndex);
         toast.error('Failed to delete recipe due to a network error');
         return false;
       }
@@ -912,7 +927,8 @@ export function useFieldsAndBins({
     isRecipeMutating.current = true;
 
     // Capture the prior record from the closure (see updateField note).
-    const previous = fertilizerRecipes.find(r => r.id === id);
+    const previousIndex = fertilizerRecipes.findIndex(r => r.id === id);
+    const previous = previousIndex >= 0 ? fertilizerRecipes[previousIndex] : undefined;
     const deletedAt = new Date().toISOString();
     setFertilizerRecipes(prev => prev.filter(r => r.id !== id));
 
@@ -925,7 +941,7 @@ export function useFieldsAndBins({
           return true;
         } catch (err) {
           console.error('Failed to enqueue delete fertilizer recipe offline:', err);
-          if (previous) setFertilizerRecipes(prev => [...prev, previous]);
+          restoreAtIndex(setFertilizerRecipes, previous, previousIndex);
           toast.error('Failed to delete recipe offline');
           return false;
         }
@@ -943,7 +959,7 @@ export function useFieldsAndBins({
           } else {
             console.warn('Fertilizer recipe delete affected zero rows:', id);
           }
-          if (previous) setFertilizerRecipes(prev => [...prev, previous]);
+          restoreAtIndex(setFertilizerRecipes, previous, previousIndex);
           toast.error('Failed to delete recipe');
           return false;
         }
@@ -951,7 +967,7 @@ export function useFieldsAndBins({
         return true;
       } catch (err) {
         console.error('Network error deleting fertilizer recipe:', err);
-        if (previous) setFertilizerRecipes(prev => [...prev, previous]);
+        restoreAtIndex(setFertilizerRecipes, previous, previousIndex);
         toast.error('Failed to delete recipe due to a network error');
         return false;
       }

@@ -132,10 +132,10 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 shadow-sm backdrop-blur-xl print:hidden">
-        <div className="max-w-lg mx-auto px-4 py-2.5 flex items-center justify-between gap-2 lg:max-w-5xl lg:px-8">
+        <div className="mx-auto flex max-w-lg flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Logo />
-            <div className="flex min-w-0 flex-col">
+            <div className="hidden min-w-0 flex-col sm:flex">
               <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="whitespace-nowrap">{allFields.length} fields</span>
@@ -143,7 +143,7 @@ const Index = () => {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="absolute right-4 top-2.5 flex items-center gap-2 sm:static">
             <button
               onClick={() => setAddOpen(true)}
               aria-label="Add new field"
@@ -169,6 +169,10 @@ const Index = () => {
               <span className="hidden sm:inline">Manage</span>
             </button>
           </div>
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground sm:hidden">
+            <span className="whitespace-nowrap">{allFields.length} fields</span>
+            <SeasonSelect className="min-w-[5.5rem] border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
+          </div>
         </div>
 
       </header>
@@ -188,35 +192,43 @@ const Index = () => {
                     {allFields.length} field{allFields.length === 1 ? '' : 's'}
                   </span>
                 </div>
-                <div className="relative">
-                <div className="flex flex-row overflow-x-auto gap-2 items-center no-scrollbar w-full py-0.5">
-                  {cropTotals.map(([crop, acres]) => {
-                    const isActive = selectedCrops.includes(crop);
-                    const cropStyles = getCropColorStyles(crop);
-                    return (
-                      <button
-                        key={crop}
-                        type="button"
-                        data-crop={cropStyles?.key}
-                        onClick={() => toggleCrop(crop)}
-                        className={cn(
-                          'flex-none flex items-center justify-center h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold whitespace-nowrap',
-                          cropStyles
-                            ? (isActive ? cropStyles.chipActive : cropStyles.chip)
-                            : isActive
-                              ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
-                              : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50',
-                        )}
-                      >
-                        {crop}: {formatMeasurement(acres, 'AC')}
-                      </button>
-                    );
-                  })}
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <div className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto py-0.5 pr-6">
+                      {cropTotals.map(([crop, acres]) => {
+                        const isActive = selectedCrops.includes(crop);
+                        const cropStyles = getCropColorStyles(crop);
+                        return (
+                          <button
+                            key={crop}
+                            type="button"
+                            data-crop={cropStyles?.key}
+                            onClick={() => toggleCrop(crop)}
+                            className={cn(
+                              'flex h-11 flex-none items-center justify-center whitespace-nowrap rounded-xl border px-3 text-xs font-semibold transition-all active:scale-95',
+                              cropStyles
+                                ? (isActive ? cropStyles.chipActive : cropStyles.chip)
+                                : isActive
+                                  ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
+                                  : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50',
+                            )}
+                          >
+                            {crop}: {formatMeasurement(acres, 'AC')}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card via-card/60 to-transparent"
+                    />
+                  </div>
                   <button
+                    type="button"
                     onClick={toggleSearch}
                     aria-label={searchOpen ? 'Close search' : 'Open search'}
                     aria-pressed={searchOpen}
-                    className={`flex-none flex items-center justify-center gap-1 h-11 px-3 rounded-xl border transition-all active:scale-95 text-xs font-semibold whitespace-nowrap ${searchOpen || hasSearch
+                    className={`flex h-11 flex-none items-center justify-center gap-1 whitespace-nowrap rounded-xl border px-3 text-xs font-semibold transition-all active:scale-95 ${searchOpen || hasSearch
                       ? 'ring-2 ring-primary bg-primary/10 border-primary/20 text-primary font-black shadow-sm'
                       : 'bg-background border-border/50 text-muted-foreground hover:bg-muted/50'
                       }`}
@@ -224,11 +236,6 @@ const Index = () => {
                     <Search size={14} />
                     <span>Search</span>
                   </button>
-                </div>
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card via-card/60 to-transparent"
-                />
                 </div>
                 {searchOpen && (
                   <div className="relative mt-1">

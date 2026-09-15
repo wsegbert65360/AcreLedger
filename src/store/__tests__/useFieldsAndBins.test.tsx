@@ -43,13 +43,31 @@ const assignment = (): FieldCluAssignment => ({
   cluNumber: '1', acres: 40, landUse: 'cropland', assignedAt: '2026-01-01', deletedAt: null,
 });
 
-function renderStore(options: { online?: boolean; fields?: Field[]; bins?: Bin[]; assignments?: FieldCluAssignment[] } = {}) {
+const seed = (overrides: Partial<SavedSeed> = {}): SavedSeed => ({
+  id: 'seed-1', name: 'Pioneer 1197', crop: 'Corn', variety: 'P1197',
+  supplier: '', lotNumber: '', year: 2026, notes: '', farm_id: 'farm-1', deleted_at: null,
+  ...overrides,
+});
+
+const sprayRecipe = (overrides: Partial<SprayRecipe> = {}): SprayRecipe => ({
+  id: 'recipe-1', name: 'Burndown', products: [], farm_id: 'farm-1', deleted_at: null,
+  ...overrides,
+});
+
+function renderStore(options: {
+  online?: boolean;
+  fields?: Field[];
+  bins?: Bin[];
+  assignments?: FieldCluAssignment[];
+  seeds?: SavedSeed[];
+  sprayRecipes?: SprayRecipe[];
+} = {}) {
   return renderHook(() => {
     const fields = useStatefulArray(options.fields ?? [field()]);
     const bins = useStatefulArray(options.bins ?? [bin()]);
     const assignments = useStatefulArray(options.assignments ?? [assignment()]);
-    const seeds = useStatefulArray<SavedSeed>([]);
-    const sprayRecipes = useStatefulArray<SprayRecipe>([]);
+    const seeds = useStatefulArray<SavedSeed>(options.seeds ?? []);
+    const sprayRecipes = useStatefulArray<SprayRecipe>(options.sprayRecipes ?? []);
     const fertilizerRecipes = useStatefulArray<FertilizerRecipe>([]);
     const ops = useFieldsAndBins({
       farm_id: 'farm-1', fields: fields.value, bins: bins.value,
@@ -61,7 +79,7 @@ function renderStore(options: { online?: boolean; fields?: Field[]; bins?: Bin[]
       setCluAssignments: assignments.setValue,
       isOnline: options.online ?? true, onMutation: vi.fn(),
     });
-    return { ops, fields, bins, assignments };
+    return { ops, fields, bins, assignments, seeds, sprayRecipes };
   });
 }
 
@@ -145,5 +163,33 @@ describe('useFieldsAndBins safety', () => {
     const { result } = renderStore();
     await act(async () => expect(await result.current.ops.updateBin(bin({ name: 'Lost' }))).toBe(false));
     expect(result.current.bins.value[0].name).toBe('Bin 1');
+  });
+
+  it('restores a failed seed delete at its original index', async () => {
+    enqueueMutation.mockRejectedValue(new Error('storage full'));
+    const { result } = renderStore({
+      online: false,
+      seeds: [
+        seed({ id: 's1', name: 'A' }),
+        seed({ id: 's2', name: 'B' }),
+        seed({ id: 's3', name: 'C' }),
+      ],
+    });
+    await act(async () => expect(await result.current.ops.deleteSeed('s2')).toBe(false));
+    expect(result.current.seeds.value.map(s => s.id)).toEqual(['s1', 's2', 's3']);
+  });
+
+  it('restores a failed spray recipe delete at its original index', async () => {
+    enqueueMutation.mockRejectedValue(new Error('storage full'));
+    const { result } = renderStore({
+      online: false,
+      sprayRecipes: [
+        sprayRecipe({ id: 'r1', name: 'A' }),
+        sprayRecipe({ id: 'r2', name: 'B' }),
+        sprayRecipe({ id: 'r3', name: 'C' }),
+      ],
+    });
+    await act(async () => expect(await result.current.ops.deleteSprayRecipe('r2')).toBe(false));
+    expect(result.current.sprayRecipes.value.map(recipe => recipe.id)).toEqual(['r1', 'r2', 'r3']);
   });
 });

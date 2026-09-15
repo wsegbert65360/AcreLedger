@@ -138,7 +138,7 @@ describe('signed-out routing (ticket C)', () => {
 
   it('shows the landing, not the auth screen, at /', () => {
     renderApp();
-    expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Open your farm book' }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'Welcome Back' })).not.toBeInTheDocument();
   });
 
@@ -230,7 +230,7 @@ describe('signed-out routing (ticket C)', () => {
   it('redirects unknown signed-out paths to the landing', () => {
     navigate('/reports');
     renderApp();
-    expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Open your farm book' }).length).toBeGreaterThan(0);
   });
 });
 
@@ -243,6 +243,7 @@ describe('signed-in routing (preserved behavior)', () => {
   it('renders the app at /', async () => {
     renderApp();
     expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Quick add record' })).toBeInTheDocument();
   });
 
   it('bounces /auth back into the app', async () => {
@@ -267,5 +268,14 @@ describe('signed-in routing (preserved behavior)', () => {
     navigate('/support');
     renderApp();
     expect(await screen.findByText('AcreLedger Support')).toBeInTheDocument();
+  });
+
+  it('shows a focused recovery page without Quick Add for an unknown route', async () => {
+    navigate('/missing-page');
+    renderApp();
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to fields' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('button', { name: 'Quick add record' })).not.toBeInTheDocument();
   });
 });
