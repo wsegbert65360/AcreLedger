@@ -35,6 +35,7 @@ yarn-error.log*
 vite-dev.log
 vite-dev.err.log
 *.png
+!src/assets/landing/*.png
 SECURITY_AUDIT_*.md
 AcreLedger_UIUX_Recommendations*.md
 

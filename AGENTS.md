@@ -401,6 +401,12 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Keep stored numeric precision intact; round for display/export summaries, not by mutating source records.
 - Treat `0` as a valid display value. Use `value != null ? value : '—'`, not simple truthiness.
 
+### Date Parsing and Sorting
+
+- Never build `Date` objects from date-only strings with `new Date(iso)` or sort with `.getTime()` on raw fields; the UTC parse shifts date-only entries one day early in western timezones and produces `NaN` keys for invalid input.
+- Display formatting uses `parseLocalDate` / `formatIsoDate` from `@/utils/dates`; epoch rendering uses `toLocalIsoDate`.
+- Sorting or comparing records by the work date shown to the user must go through `getWorkDateMs` / `compareWorkDateDesc` from `@/utils/dates`, which parse date-only strings as local midnight and fall back to `record.timestamp`. The Landlord Summary section carries the same rule for its own paths; this is the general rule.
+
 ### Text Case
 
 - Prefer sentence case.
@@ -412,9 +418,9 @@ This rule applies to **every** activity modal that captures a per-record acreage
 
 - Preserve the mobile-first design.
 - Page headers should follow the sticky header pattern from `BLUEPRINT.md`.
-- Mobile pages must reserve bottom padding for the fixed `BottomNav`. `BottomNav` uses `.touch-target` (`min-height: 64px` ≈ `4rem`) plus `pb-[env(safe-area-inset-bottom)]`. The page-container value depends on whether the global Quick Add FAB renders on that route (`App.tsx` → `hideQuickAddFab`):
-  - **FAB shown** (Index, Reports, Settings, Weather, other root pages): use `pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` so the last card clears both the nav and the FAB.
-  - **FAB hidden** (`/activity`, `/logistics`, `/onboarding`, `/privacy`, `/field/*`): use `pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` (nav only). `FieldDetailScreen` uses `6rem` because it renders its own in-flow Quick Actions grid.
+- Mobile pages must reserve bottom padding for the fixed `BottomNav`. `BottomNav` uses `.touch-target` (`min-height: 64px` ≈ `4rem`) plus `pb-[env(safe-area-inset-bottom)]`. The page-container value depends on whether the global Quick Add FAB renders on that route (`App.tsx` → `showQuickAddFab`, a route allowlist):
+  - **FAB shown** (`/` Index and `/weather` only): use `pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` so the last card clears both the nav and the FAB.
+  - **FAB hidden** (everywhere else — `/activity`, `/logistics`, `/reports`, `/settings`, `/onboarding`, `/privacy`, `/support`, `/field/*`, and unknown routes): use `pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` (nav only). `FieldDetailScreen` uses `6rem` because it renders its own in-flow Quick Actions grid.
   - Never set page-container bottom padding below the nav height, or the last cards scroll under the tab bar.
 - Do not reintroduce floating/sticky bottom bars on the dashboard. Crop filters, totals, and quick actions live in the scrollable body (directly below the `WeatherBar`), not in an overlay footer.
 - `FieldDetailScreen` section order is canonical (see `BLUEPRINT.md` → Field Dashboard): header → boundary map → Quick Actions → Today at a Glance → Latest Spray → Field History → Rainfall Summary → CLU Summary → Field Details & Notes. Daily-use action sections (Quick Actions, Today at a Glance, Latest Spray, Field History) sit above reference sections (rainfall detail, CLU, field meta). The CLU section is a single row showing count + cropland/non-cropland totals + Manage/Assign button; the full per-CLU list lives in the management dialog, not inline on the page.
