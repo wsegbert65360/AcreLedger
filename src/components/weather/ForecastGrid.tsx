@@ -1,6 +1,6 @@
 import { Cloud, CloudRain, Wind } from 'lucide-react';
 
-import { getWeatherLucideIcon } from '@/lib/weatherHelpers';
+import { getWeatherLucideIcon, WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { ForecastDay } from '@/types/weather';
 
 interface ForecastGridProps {
@@ -36,7 +36,7 @@ function ForecastDayRow({
   const rainChance = day.rainChance ?? 0;
   const precipIn = day.precipIn ?? 0;
   const windSpeed = day.windSpeed ?? 0;
-  const isHighWind = windSpeed >= 10; // WIND_ALERT_MPH = 10
+  const isHighWind = windSpeed >= WIND_ALERT_MPH;
   const hasRainChance = rainChance > 0;
   const highRainChance = rainChance >= 40;
   const rainActive = hasRainChance || precipIn > 0;
@@ -120,7 +120,7 @@ function ForecastDayRow({
           isHighWind ? 'text-amber-600 dark:text-amber-300' : 'text-muted-foreground'
         }`}>
           <Wind size={14} />
-          <span title={isHighWind ? 'Wind is at or above 10 mph (spraying warning)' : undefined}>
+          <span title={isHighWind ? `Wind is at or above ${WIND_ALERT_MPH} mph (spraying warning)` : undefined}>
             {windSpeed > 0 ? `${windSpeed} mph` : 'No wind'}
           </span>
         </div>
