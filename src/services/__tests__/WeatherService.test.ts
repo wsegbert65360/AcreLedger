@@ -14,7 +14,7 @@ describe('WeatherService', () => {
         vi.mock('@/lib/supabase', () => ({
             supabase: {
                 auth: {
-                    getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } })
+                    refreshSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } })
                 }
             }
         }));
