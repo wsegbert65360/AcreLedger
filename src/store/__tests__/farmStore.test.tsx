@@ -101,6 +101,9 @@ vi.doMock('@/lib/offlineStorage', () => ({
     saveCache: saveCacheMock,
     clearCache: vi.fn(),
   },
+  OFFLINE_DATABASE_UNAVAILABLE: 'Offline database unavailable.',
+  isOfflineDatabaseUnavailableError: (error: unknown) =>
+    error instanceof Error && error.message === 'Offline database unavailable.',
 }));
 
 let FarmProvider: typeof import('../farmStore').FarmProvider;
@@ -250,6 +253,17 @@ describe('farmStore composed behaviors', () => {
       expect(ok).toBe(true);
       expect(result.current.fetchError).toBe(false);
       expect(result.current.farmName).toBe('Cloud Farm');
+    });
+
+    it('still hydrates from cloud when the phone offline store cannot be opened', async () => {
+      control.isOnline = true;
+      replayQueueMock.mockRejectedValue(new Error('Offline database unavailable.'));
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm' }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.farmName).toBe('Cloud Farm');
+      expect(result.current.fetchError).toBe(false);
     });
 
     it('toasts and flags fetchError when a table returns an error', async () => {

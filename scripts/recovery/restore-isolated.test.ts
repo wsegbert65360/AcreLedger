@@ -23,8 +23,13 @@ describe("isolated restore", () => {
     await fs.mkdir(path.join(root, "database"));
     for (const name of ISOLATED_RESTORE_ORDER) await fs.writeFile(path.join(root, "database", name), "-- test\n");
     const runner: CommandRunner = {
-      async run(_command, args) {
+      async run(_command, args, options) {
         expect(args).toContain("SET session_replication_role = replica");
+        expect(args).not.toContain("--dbname");
+        expect(args.join(" ")).not.toContain("secret");
+        expect(options?.env?.PGPASSWORD).toBe("secret");
+        expect(options?.env?.PGHOST).toBe("localhost");
+        expect(options?.env?.PGDATABASE).toBe("postgres");
         for (const name of ISOLATED_RESTORE_ORDER) expect(args.some((item) => item.endsWith(name))).toBe(true);
         expect(args).toContain(RECOVERY_SIDE_EFFECT_DISABLE_SQL);
         expect(RECOVERY_SIDE_EFFECT_DISABLE_SQL).toContain("cron.unschedule");

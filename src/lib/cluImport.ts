@@ -346,10 +346,10 @@ function stripExtension(filename: string): string {
 function filenameTractKey(filename: string): string | null {
   const basename = stripExtension(filename);
 
-  if (/^\d+-\d+$/.test(basename)) return basename;
-
-  const match = basename.match(/(\d+)[-_](\d+)/);
-  if (match) return `${match[1]}-${match[2]}`;
+  // Whole name is farm-tract (4251-9747 or 6418_1315). Do not scan inside
+  // names like clu_2025_02.zip — those digits are a date, not an FSA key.
+  const exact = basename.match(/^(\d+)[-_](\d+)$/);
+  if (exact) return `${exact[1]}-${exact[2]}`;
 
   const fMatch = basename.match(/^F(\d+)_T(\d+)/i);
   if (fMatch) return `${fMatch[1]}-${fMatch[2]}`;

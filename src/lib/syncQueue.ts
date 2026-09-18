@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
-import { getDatabase } from './offlineStorage';
+import { getDatabase, OFFLINE_DATABASE_UNAVAILABLE } from './offlineStorage';
 import { toast } from 'sonner';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 
@@ -218,7 +218,7 @@ export const syncQueue = {
     if (isNative) {
       try {
         const db = await getDatabase();
-        if (!db) throw new Error('Offline database unavailable.');
+        if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
         await db.run(
           INSERT_QUEUE_SQL,
           [id, tableName, operation, JSON.stringify(payload), farmId, now]
@@ -286,7 +286,7 @@ export const syncQueue = {
     if (isNative) {
       try {
         const db = await getDatabase();
-        if (!db) throw new Error('Offline database unavailable.');
+        if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
         await db.executeSet(
           rows.map(row => ({
             statement: INSERT_QUEUE_SQL,
@@ -318,22 +318,22 @@ export const syncQueue = {
    */
   getQueue: async (farmId: string): Promise<QueuedMutation[]> => {
     if (isNative) {
+      const db = await getDatabase();
+      if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
       try {
-        const db = await getDatabase();
-        if (db) {
-          const res = await db.query(
-            'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC;',
-            [farmId]
-          );
-          if (res.values) {
-            return res.values.map((v: any) => ({
-              ...v,
-              payload: JSON.parse(v.payload)
-            }));
-          }
+        const res = await db.query(
+          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC;',
+          [farmId]
+        );
+        if (res.values) {
+          return res.values.map((v: any) => ({
+            ...v,
+            payload: JSON.parse(v.payload)
+          }));
         }
       } catch (err) {
         console.error('Failed to fetch native sync queue:', err);
+        throw err;
       }
       return [];
     } else {
@@ -352,7 +352,7 @@ export const syncQueue = {
   clearQueue: async (farmId: string): Promise<void> => {
     if (isNative) {
       const db = await getDatabase();
-      if (!db) throw new Error('Offline database unavailable.');
+      if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
       await db.run('DELETE FROM sync_queue WHERE farm_id = ?;', [farmId]);
       return;
     }
@@ -425,16 +425,16 @@ export const syncQueue = {
    */
   getPendingCount: async (farmId: string): Promise<number> => {
     if (isNative) {
+      const db = await getDatabase();
+      if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
       try {
-        const db = await getDatabase();
-        if (db) {
-          const res = await db.query('SELECT COUNT(*) as count FROM sync_queue WHERE farm_id = ?;', [farmId]);
-          if (res.values && res.values.length > 0) {
-            return res.values[0].count;
-          }
+        const res = await db.query('SELECT COUNT(*) as count FROM sync_queue WHERE farm_id = ?;', [farmId]);
+        if (res.values && res.values.length > 0) {
+          return res.values[0].count;
         }
       } catch (err) {
         console.error('Failed to get native pending count:', err);
+        throw err;
       }
       return 0;
     } else {

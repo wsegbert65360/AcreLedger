@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultCommandRunner } from "../../infrastructure/owner-backup/src/command.js";
-import { assertTlsDatabaseUrl } from "../../infrastructure/owner-backup/src/config.js";
+import { assertTlsDatabaseUrl, childProcessDatabaseEnv } from "../../infrastructure/owner-backup/src/config.js";
 import type { CommandRunner } from "../../infrastructure/owner-backup/src/types.js";
 
 export const ISOLATED_RESTORE_ORDER = [
@@ -107,10 +107,8 @@ export async function restoreIsolated(options: {
     "--command",
     "SET session_replication_role = replica",
     ...data.flatMap(({ file }) => ["--file", file]),
-    "--dbname",
-    options.databaseUrl,
   ];
-  const result = await runner.run("psql", args);
+  const result = await runner.run("psql", args, { env: childProcessDatabaseEnv(options.databaseUrl) });
   if (result.code !== 0) {
     throw new Error("Isolated restore failed.");
   }

@@ -193,18 +193,20 @@ export function createFsaOfficeRequestSheet({
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setDrawColor(150, 150, 150);
-  const noteLines = Math.max(3, Math.min(4, Math.floor((250 - officeY) / 7)));
+  const noteLines = Math.max(3, Math.min(4, Math.floor((244 - officeY) / 7)));
   for (let i = 0; i < noteLines; i += 1) {
     doc.line(LEFT, officeY + 7 + (i * 7), RIGHT, officeY + 7 + (i * 7));
   }
 
+  // Last baseline 268mm leaves ~11mm on US Letter so office printers do not clip the support line.
   doc.setDrawColor(31, 78, 48);
   doc.setLineWidth(0.5);
-  doc.line(LEFT, 258, RIGHT, 258);
+  doc.line(LEFT, 252, RIGHT, 252);
   doc.setTextColor(70, 70, 70);
   doc.setFontSize(8.5);
-  doc.text('AcreLedger accepts GeoJSON (.json or .geojson) and ESRI shapefile ZIP files directly.', LEFT, 264);
-  doc.text('Questions or file help: support@acreledger.com', LEFT, 269);
+  doc.text('AcreLedger accepts GeoJSON (.json or .geojson) and ESRI shapefile ZIP files directly.', LEFT, 258);
+  doc.text('This is a data request, not an official USDA form.', LEFT, 263);
+  doc.text('Questions or file help: support@acreledger.com', LEFT, 268);
 
   if (save) doc.save('AcreLedger_FSA_Field_File_Request.pdf');
   return doc;

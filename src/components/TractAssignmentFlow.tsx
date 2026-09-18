@@ -830,7 +830,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                           navigator.clipboard.writeText(FSA_BOUNDARY_REQUEST_TEXT);
                           toast.success("FSA request wording copied to clipboard!");
                         }}
-                        className="h-7 text-[10px] px-2.5 gap-1 hover:bg-muted bg-background border-border"
+                        className="h-11 text-xs px-3 gap-1.5 hover:bg-muted bg-background border-border"
                       >
                         <Copy size={12} />
                         <span>Copy Wording</span>

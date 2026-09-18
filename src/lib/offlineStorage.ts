@@ -1,16 +1,32 @@
 import { Capacitor } from '@capacitor/core';
 import { SQLiteConnection, CapacitorSQLite } from '@capacitor-community/sqlite';
 import { Preferences } from '@capacitor/preferences';
+import { toast } from 'sonner';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 
 const isNative = Capacitor.isNativePlatform();
 
+export const OFFLINE_DATABASE_UNAVAILABLE = 'Offline database unavailable.';
+export const OFFLINE_STORE_UNAVAILABLE_MESSAGE =
+  'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.';
+
+export function isOfflineDatabaseUnavailableError(error: unknown): boolean {
+  return error instanceof Error && error.message === OFFLINE_DATABASE_UNAVAILABLE;
+}
+
 let dbConnection: any = null;
 let sqliteConnection: any = null;
 let initPromise: Promise<any> | null = null;
+let nativeStoreFailed = false;
+let unavailableToastShown = false;
 
 async function getEncryptionSecret(): Promise<string> {
   return getLocalEncryptionKey();
+}
+
+/** True when this native device tried to open the encrypted store and failed. */
+export function isNativeOfflineStoreUnavailable(): boolean {
+  return isNative && nativeStoreFailed && !dbConnection;
 }
 
 /**
@@ -82,10 +98,18 @@ export async function getDatabase() {
         );
       `);
 
+      nativeStoreFailed = false;
+      unavailableToastShown = false;
       return dbConnection;
     } catch (err) {
       console.error('Failed to initialize SQLite database:', err);
+      nativeStoreFailed = true;
+      dbConnection = null;
       initPromise = null; // Reset so that we can retry if needed
+      if (!unavailableToastShown) {
+        unavailableToastShown = true;
+        toast.error(OFFLINE_STORE_UNAVAILABLE_MESSAGE);
+      }
       return null;
     }
   })();

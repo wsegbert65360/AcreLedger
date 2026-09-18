@@ -29,7 +29,7 @@ import { useTillageRecords } from './useTillageRecords';
 import { useWorkRequests } from './useWorkRequests';
 import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
-import { offlineStorage } from '../lib/offlineStorage';
+import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { syncQueue } from '../lib/syncQueue';
 
 /**
@@ -257,8 +257,13 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const updatePendingSyncCount = useCallback(async () => {
     const requestIdentity = identityKey;
     if (farm_id && requestIdentity) {
-      const count = await syncQueue.getPendingCount(farm_id);
-      if (identityRef.current === requestIdentity) setPendingSyncCount(count);
+      try {
+        const count = await syncQueue.getPendingCount(farm_id);
+        if (identityRef.current === requestIdentity) setPendingSyncCount(count);
+      } catch (err) {
+        console.error('Failed to read pending sync count:', err);
+        // Leave the previous count. An unreadable store must not look empty.
+      }
     } else {
       setPendingSyncCount(0);
     }
@@ -544,7 +549,15 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     const loadIdentity = identityKey;
     let cancelled = false;
     const loadAuthoritativeState = async () => {
-      const replayed = await syncQueue.replayQueue(farm_id);
+      let replayed = false;
+      try {
+        replayed = await syncQueue.replayQueue(farm_id);
+      } catch (err) {
+        if (!isOfflineDatabaseUnavailableError(err)) throw err;
+        // Sealed phone store: keep the queue untouched and still load cloud records.
+        console.error('Offline store unavailable; loading cloud records without replay:', err);
+        replayed = true;
+      }
       if (cancelled || identityRef.current !== loadIdentity) return;
       await updatePendingSyncCount();
       if (replayed && !cancelled && identityRef.current === loadIdentity) {

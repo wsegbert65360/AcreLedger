@@ -18,10 +18,15 @@ import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
 import { CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupCompatibility';
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
-import { setStorageLock } from './storageUtils';
-import { offlineStorage } from '@/lib/offlineStorage';
-import { syncQueue } from '@/lib/syncQueue';
+import {
+  isNativeOfflineStoreUnavailable,
+  OFFLINE_DATABASE_UNAVAILABLE,
+  OFFLINE_STORE_UNAVAILABLE_MESSAGE,
+  offlineStorage,
+} from '@/lib/offlineStorage';
 import { getMaxActiveSeason, isValidActiveSeason, MIN_SEASON_YEAR } from '@/lib/seasonYears';
+import { syncQueue } from '@/lib/syncQueue';
+import { setStorageLock } from './storageUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,6 +115,11 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
     if (!session) {
       toast.error('Season rollover requires a signed-in user.');
+      return false;
+    }
+
+    if (isNativeOfflineStoreUnavailable()) {
+      toast.error(OFFLINE_STORE_UNAVAILABLE_MESSAGE);
       return false;
     }
 
@@ -319,7 +329,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       } catch (err) {
         console.error('Failed to clear offline sync queue:', err);
         setStorageLock(false);
-        toast.error('Could not clear pending offline work. Cache was not cleared; please try again.');
+        const message = err instanceof Error && err.message === OFFLINE_DATABASE_UNAVAILABLE
+          ? OFFLINE_STORE_UNAVAILABLE_MESSAGE
+          : 'Could not clear pending offline work. Cache was not cleared; please try again.';
+        toast.error(message);
         return false;
       }
     }

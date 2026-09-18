@@ -574,6 +574,31 @@ describe('parseCluFile / parseCluZip', () => {
       .rejects.toThrow('could not tell which FSA farm and tract');
   });
 
+  it('rejects a year-like filename instead of minting a fabricated tract key', async () => {
+    const json = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+          properties: { clu_number: '11', clu_acres: 5 },
+        },
+      ],
+    });
+
+    await expect(parseCluFile(new File([json], 'clu_2025_02.geojson', { type: 'application/json' })))
+      .rejects.toThrow('could not tell which FSA farm and tract');
+
+    const buffer = buildShapefileZip({
+      features: [
+        { rings: [squareRing(-93.55, 38.47)], attributes: { CLU_NUMBER: '11', CALC_ACRES: 1 } },
+      ],
+      prj: GEOGRAPHIC_WGS84_PRJ,
+    });
+    await expect(parseCluZip(buffer.buffer as ArrayBuffer, 'clu_2025_02.zip'))
+      .rejects.toThrow('could not tell which FSA farm and tract');
+  });
+
   it('still imports from a generic filename when the boundaries identify their farm and tract', async () => {
     const buffer = buildShapefileZip({
       features: [

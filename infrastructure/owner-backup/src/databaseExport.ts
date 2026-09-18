@@ -1,7 +1,7 @@
 import { Client } from "pg";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { BackupConfig } from "./config.js";
+import { childProcessDatabaseEnv, databaseUrlWithoutPassword, type BackupConfig } from "./config.js";
 import { assertSuccess, defaultCommandRunner } from "./command.js";
 import { logEvent } from "./logging.js";
 import { withRetry } from "./retry.js";
@@ -306,12 +306,15 @@ export async function exportDatabase(options: {
       "db",
       "dump",
       "--db-url",
-      options.config.databaseUrl,
+      databaseUrlWithoutPassword(options.config.databaseUrl),
       "-f",
       dest,
       ...spec.args,
     ];
-    const result = await withRetry(() => runner.run("supabase", args), { attempts: 3, baseMs: 1000 });
+    const result = await withRetry(
+      () => runner.run("supabase", args, { env: childProcessDatabaseEnv(options.config.databaseUrl) }),
+      { attempts: 3, baseMs: 1000 },
+    );
     if (result.code !== 0) {
       if (spec.required) {
         assertSuccess(result, `supabase db dump ${spec.file}`);

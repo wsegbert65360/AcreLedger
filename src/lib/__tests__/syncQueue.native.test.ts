@@ -6,7 +6,10 @@ const db = {
 const nativeState = { database: db as typeof db | null };
 
 vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
-vi.doMock('../offlineStorage', () => ({ getDatabase: vi.fn(async () => nativeState.database) }));
+vi.doMock('../offlineStorage', () => ({
+  getDatabase: vi.fn(async () => nativeState.database),
+  OFFLINE_DATABASE_UNAVAILABLE: 'Offline database unavailable.',
+}));
 vi.doMock('../supabase', () => ({ supabase: { from: vi.fn() } }));
 vi.doMock('@/utils/crypto', () => ({
   encryptData: vi.fn(), decryptData: vi.fn(), getLocalEncryptionKey: vi.fn(),
@@ -47,5 +50,11 @@ describe('syncQueue native persistence', () => {
   it('deletes only the selected farm queue during cleanup', async () => {
     await syncQueue.clearQueue('farm-1');
     expect(db.run).toHaveBeenCalledWith('DELETE FROM sync_queue WHERE farm_id = ?;', ['farm-1']);
+  });
+
+  it('does not report an empty queue when the SQLite database is unavailable', async () => {
+    nativeState.database = null;
+    await expect(syncQueue.getQueue('farm-1')).rejects.toThrow('Offline database unavailable');
+    await expect(syncQueue.getPendingCount('farm-1')).rejects.toThrow('Offline database unavailable');
   });
 });

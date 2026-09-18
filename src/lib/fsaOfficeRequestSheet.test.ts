@@ -63,7 +63,10 @@ describe('FSA office request sheet', () => {
     expect(text).toContain('FSA-578');
     expect(text).toContain('A paper map or picture alone cannot be imported');
     expect(text).toContain('USB drive');
+    expect(text).toContain('This is a data request, not an official USDA form.');
     expect(text).toContain('support@acreledger.com');
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(doc.internal.pageSize.getHeight() - 268).toBeGreaterThanOrEqual(10);
   });
 
   it('prints provided contact values and leaves unknown values blank', () => {

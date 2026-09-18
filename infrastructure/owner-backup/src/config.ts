@@ -44,6 +44,32 @@ export function hashProjectRef(projectRef: string): string {
   return createHash("sha256").update(projectRef).digest("hex").slice(0, 16);
 }
 
+/**
+ * Libpq / supabase-CLI environment for child processes. Keeps the password in
+ * PGPASSWORD (and SUPABASE_DB_URL) instead of argv, so `ps` cannot read it.
+ */
+export function childProcessDatabaseEnv(databaseUrl: string): NodeJS.ProcessEnv {
+  const parsed = assertTlsDatabaseUrl(databaseUrl);
+  const database = decodeURIComponent(parsed.pathname.replace(/^\/+/, "")) || "postgres";
+  const sslmode = parsed.searchParams.get("sslmode") ?? "require";
+  return {
+    SUPABASE_DB_URL: databaseUrl,
+    PGHOST: parsed.hostname,
+    PGPORT: parsed.port || "5432",
+    PGUSER: decodeURIComponent(parsed.username),
+    PGPASSWORD: decodeURIComponent(parsed.password),
+    PGDATABASE: database,
+    PGSSLMODE: sslmode,
+  };
+}
+
+/** Connection URI safe for argv: host/user/db/tls only. Password stays in PGPASSWORD. */
+export function databaseUrlWithoutPassword(databaseUrl: string): string {
+  const parsed = assertTlsDatabaseUrl(databaseUrl);
+  parsed.password = "";
+  return parsed.toString();
+}
+
 export function assertTlsDatabaseUrl(rawUrl: string): URL {
   let parsed: URL;
   try {

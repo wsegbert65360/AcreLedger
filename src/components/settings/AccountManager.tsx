@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
-import { useFarm } from '@/store/farmStore';
-import { requestAccountDeletion } from '@/lib/accountDeletion';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+import { toast } from 'sonner';
+
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { requestAccountDeletion } from '@/lib/accountDeletion';
+import { isNativeOfflineStoreUnavailable, OFFLINE_STORE_UNAVAILABLE_MESSAGE } from '@/lib/offlineStorage';
+import { useFarm } from '@/store/farmStore';
 
 export default function AccountManager() {
   const { session, farm_id, farmName, updateFarmName, signOut, pendingSyncCount } = useFarm();
@@ -39,6 +42,10 @@ export default function AccountManager() {
   const handleSignOutClick = () => {
     // Signing out clears the local sync queue; queued offline changes that
     // have not synced yet would be permanently lost, so require confirmation.
+    if (isNativeOfflineStoreUnavailable()) {
+      toast.error(OFFLINE_STORE_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (pendingSyncCount > 0) {
       setConfirmSignOut(true);
       return;
@@ -48,6 +55,10 @@ export default function AccountManager() {
 
   const handleDeletionRequest = async () => {
     if (!session?.user.id || !farm_id || deletionConfirmation !== 'DELETE') return;
+    if (isNativeOfflineStoreUnavailable()) {
+      toast.error(OFFLINE_STORE_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (pendingSyncCount > 0) {
       toast.error('Sync your offline changes before requesting account deletion.');
       return;
@@ -120,7 +131,7 @@ export default function AccountManager() {
           </div>
           <Button
             variant="destructive"
-            className="w-full h-10"
+            className="w-full h-11"
             onClick={handleSignOutClick}
           >
             Sign Out
@@ -133,7 +144,7 @@ export default function AccountManager() {
             </p>
             <Button
               variant="outline"
-              className="w-full h-10 border-destructive/40 text-destructive hover:bg-destructive/10"
+              className="w-full h-11 border-destructive/40 text-destructive hover:bg-destructive/10"
               onClick={() => setConfirmDeletion(true)}
             >
               Delete Account

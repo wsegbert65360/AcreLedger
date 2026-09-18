@@ -9,6 +9,13 @@ import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
  * Preferences values are migrated on first read, then removed. The browser
  * keeps using Preferences because there is no OS keychain available there.
  */
+export const SECURE_VALUE_MISSING = 'Item with given key does not exist';
+
+export function isSecureValueMissing(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes(SECURE_VALUE_MISSING);
+}
+
 export const secureStorage = {
   async getItem(key: string): Promise<string | null> {
     if (!Capacitor.isNativePlatform()) {
@@ -18,7 +25,9 @@ export const secureStorage = {
     try {
       const result = await SecureStoragePlugin.get({ key });
       return result.value;
-    } catch {
+    } catch (error) {
+      if (!isSecureValueMissing(error)) throw error;
+
       const legacy = await Preferences.get({ key });
       if (!legacy.value) return null;
 
@@ -43,8 +52,8 @@ export const secureStorage = {
     if (Capacitor.isNativePlatform()) {
       try {
         await SecureStoragePlugin.remove({ key });
-      } catch {
-        // Missing secure values are already in the desired state.
+      } catch (error) {
+        if (!isSecureValueMissing(error)) throw error;
       }
     }
     await Preferences.remove({ key });

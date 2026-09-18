@@ -42,7 +42,7 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                             </div>
                             <div>
                                 <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 11, 2026</p>
+                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 16, 2026</p>
                             </div>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
@@ -128,6 +128,24 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                                         <p className="text-sm font-bold text-foreground">Visual Crossing Weather</p>
                                     </div>
                                     <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
+                                </div>
+                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold text-foreground">Iowa Environmental Mesonet (IEM) Stage IV</p>
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                            Field rainfall lookups use IEM Stage IV radar. AcreLedger sends field location coordinates to retrieve rainfall totals; it does not send your name or farm records.
+                                        </p>
+                                    </div>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
+                                </div>
+                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold text-foreground">Google Fonts</p>
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                            The web app loads Inter, JetBrains Mono, and landing-page fonts from Google Fonts. Your browser requests those files from Google.
+                                        </p>
+                                    </div>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">Fonts</span>
                                 </div>
                                 <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="min-w-0">

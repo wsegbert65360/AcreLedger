@@ -17,9 +17,16 @@ vi.mock('sonner', () => ({
 }));
 
 const requestAccountDeletion = vi.hoisted(() => vi.fn());
+const offlineStore = vi.hoisted(() => ({ unavailable: false }));
 
 vi.mock('@/lib/accountDeletion', () => ({
   requestAccountDeletion,
+}));
+
+vi.mock('@/lib/offlineStorage', () => ({
+  isNativeOfflineStoreUnavailable: () => offlineStore.unavailable,
+  OFFLINE_STORE_UNAVAILABLE_MESSAGE:
+    'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
 }));
 
 const farmState: {
@@ -55,6 +62,7 @@ describe('AccountManager deletion request', () => {
     requestAccountDeletion.mockReset().mockResolvedValue('requested');
     toastMocks.error.mockReset();
     toastMocks.success.mockReset();
+    offlineStore.unavailable = false;
   });
 
   it('requires the exact DELETE confirmation before recording a request', async () => {
@@ -110,5 +118,24 @@ describe('AccountManager deletion request', () => {
     });
     expect(farmState.signOut).toHaveBeenCalledTimes(1);
     expect(toastMocks.success).toHaveBeenCalled();
+  });
+
+  it('refuses sign-out and deletion when the phone offline store cannot be opened', async () => {
+    offlineStore.unavailable = true;
+    renderAccount();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
+    expect(farmState.signOut).not.toHaveBeenCalled();
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'DELETE' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Request deletion' }));
+    expect(requestAccountDeletion).not.toHaveBeenCalled();
+    expect(farmState.signOut).not.toHaveBeenCalled();
   });
 });

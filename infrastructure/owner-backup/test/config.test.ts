@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertTlsDatabaseUrl, ConfigError, loadConfig } from "../src/config.js";
+import { assertTlsDatabaseUrl, childProcessDatabaseEnv, ConfigError, databaseUrlWithoutPassword, loadConfig } from "../src/config.js";
 
 const validEnv = {
   OWNER_BACKUP_DATABASE_URL: "postgresql://postgres:secret@db.example.supabase.co:5432/postgres?sslmode=require",
@@ -47,5 +47,29 @@ describe("loadConfig", () => {
     const config = loadConfig(validEnv);
     expect(config.driveFolderId).toBe("folder-id");
     expect(config.chicagoTimeZone).toBe("America/Chicago");
+  });
+});
+
+describe("childProcessDatabaseEnv", () => {
+  it("puts the password in PGPASSWORD and SUPABASE_DB_URL, not a reconstructed argv URI", () => {
+    const env = childProcessDatabaseEnv(
+      "postgresql://postgres:p%40ss@db.example.supabase.co:5432/postgres?sslmode=require",
+    );
+    expect(env.PGPASSWORD).toBe("p@ss");
+    expect(env.PGHOST).toBe("db.example.supabase.co");
+    expect(env.PGPORT).toBe("5432");
+    expect(env.PGUSER).toBe("postgres");
+    expect(env.PGDATABASE).toBe("postgres");
+    expect(env.PGSSLMODE).toBe("require");
+    expect(env.SUPABASE_DB_URL).toContain("p%40ss");
+  });
+
+  it("strips the password from a dump/restore argv URL", () => {
+    const argvUrl = databaseUrlWithoutPassword(
+      "postgresql://postgres:p%40ss@db.example.supabase.co:5432/postgres?sslmode=require",
+    );
+    expect(argvUrl).not.toContain("p%40ss");
+    expect(argvUrl).not.toContain("p@ss");
+    expect(argvUrl).toContain("postgres@db.example.supabase.co");
   });
 });

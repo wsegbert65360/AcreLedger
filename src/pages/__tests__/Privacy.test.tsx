@@ -39,4 +39,11 @@ describe('Privacy', () => {
       '/support'
     );
   });
+
+  it('names the rainfall radar source and Google Fonts among third parties', () => {
+    renderPrivacy();
+    expect(screen.getByText('Iowa Environmental Mesonet (IEM) Stage IV')).toBeInTheDocument();
+    expect(screen.getByText(/IEM Stage IV radar/i)).toBeInTheDocument();
+    expect(screen.getByText('Google Fonts')).toBeInTheDocument();
+  });
 });

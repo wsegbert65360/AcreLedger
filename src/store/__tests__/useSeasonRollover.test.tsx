@@ -5,6 +5,7 @@ import { useSeasonManagement } from '@/store/useSeasonManagement';
 import { exportDataAsJson } from '@/utils/backup';
 
 const clearQueue = vi.hoisted(() => vi.fn());
+const offlineStore = vi.hoisted(() => ({ unavailable: false }));
 
 const cloud = vi.hoisted(() => ({
   result: { error: null as { message: string } | null, count: 1 as number | null },
@@ -34,7 +35,12 @@ vi.mock('@/lib/supabase', () => ({
 
 vi.mock('@/utils/backup', () => ({ exportDataAsJson: vi.fn().mockResolvedValue(true) }));
 vi.mock('@/lib/syncQueue', () => ({ syncQueue: { clearQueue } }));
-vi.mock('@/lib/offlineStorage', () => ({ offlineStorage: { clearCache: vi.fn().mockResolvedValue(undefined) } }));
+vi.mock('@/lib/offlineStorage', () => ({
+  offlineStorage: { clearCache: vi.fn().mockResolvedValue(undefined) },
+  isNativeOfflineStoreUnavailable: () => offlineStore.unavailable,
+  OFFLINE_DATABASE_UNAVAILABLE: 'Offline database unavailable.',
+  OFFLINE_STORE_UNAVAILABLE_MESSAGE: 'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
+}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function makeArgs(overrides: Record<string, unknown> = {}) {
@@ -65,6 +71,7 @@ describe('season rollover safety', () => {
     cloud.result = { error: null, count: 1 };
     cloud.failure = null;
     clearQueue.mockResolvedValue(undefined);
+    offlineStore.unavailable = false;
   });
 
   it('clears the farm offline queue as part of local sign-out cleanup', async () => {
@@ -85,6 +92,18 @@ describe('season rollover safety', () => {
 
     expect(args.setFields).not.toHaveBeenCalled();
     expect(args.setFarmId).not.toHaveBeenCalled();
+  });
+
+  it('uses the offline-store warning when the queue cannot be cleared because SQLite will not open', async () => {
+    const { toast } = await import('sonner');
+    clearQueue.mockRejectedValue(new Error('Offline database unavailable.'));
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.clearLocalCache()).resolves.toBe(false);
+    expect(toast.error).toHaveBeenCalledWith(
+      'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
+    );
   });
 
   it('downloads a versioned backup before changing both seasons', async () => {
@@ -125,6 +144,19 @@ describe('season rollover safety', () => {
 
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
     expect(exportDataAsJson).not.toHaveBeenCalled();
+  });
+
+  it('blocks rollover when the phone offline store cannot be opened', async () => {
+    const { toast } = await import('sonner');
+    offlineStore.unavailable = true;
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(exportDataAsJson).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
+    );
   });
 
   it('does not roll over when the generated backup fails schema validation', async () => {

@@ -583,6 +583,7 @@ export default function FieldDetailScreen() {
                 const start = latestPlanting?.plantDate
                   ? parseLocalDate(String(latestPlanting.plantDate).split('T')[0])
                   : new Date(viewingSeason, 2, 1);
+                if (isNaN(start.getTime())) return '—';
                 const days = Math.floor((Date.now() - start.getTime()) / 86_400_000);
                 return `${days}d`;})() : '—', unit: '' },
             ].map((stat, i) => (
