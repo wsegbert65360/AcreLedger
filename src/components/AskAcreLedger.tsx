@@ -124,10 +124,12 @@ export default function AskAcreLedger() {
     setLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Rotate the token immediately before posting the bearer so the
+      // assistant request can never carry a stale access token.
+      const { data: { session: refreshed }, error: refreshError } = await supabase.auth.refreshSession();
       if (requestId !== requestIdRef.current) return;
-      const token = session?.access_token;
-      if (!token) {
+      const token = refreshed?.access_token;
+      if (refreshError || !token) {
         throw new Error('The assistant is unavailable right now.');
       }
       const result = await askAcreLedger(trimmed, token, viewingSeason, history, abort.signal);
