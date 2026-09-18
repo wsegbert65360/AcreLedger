@@ -96,6 +96,57 @@ describe('WeatherService', () => {
             expect(fetchOptions.headers).toEqual(expect.any(Object));
         });
 
+        it('attaches the refreshed bearer to weather proxy requests', async () => {
+            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
+            vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
+            vi.resetModules();
+
+            const { supabase } = await import('@/lib/supabase');
+            vi.mocked(supabase.auth.refreshSession).mockResolvedValue({
+                data: { session: { access_token: 'refreshed-token' } },
+            } as never);
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: '72301',
+                    currentConditions: { temp: 72, humidity: 45, windspeed: 10, winddir: 180 },
+                    days: [{ datetime: '2026-03-25', precip: 0.1 }],
+                }),
+            });
+
+            await WeatherService.fetchCurrentWeather('72301');
+
+            const [, fetchOptions] = (global.fetch as any).mock.calls[0];
+            expect(fetchOptions.headers.Authorization).toBe('Bearer refreshed-token');
+        });
+
+        it('omits the Authorization header when the refresh yields no session', async () => {
+            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
+            vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
+            vi.resetModules();
+
+            const { supabase } = await import('@/lib/supabase');
+            vi.mocked(supabase.auth.refreshSession).mockResolvedValue({
+                data: { session: null },
+                error: null,
+            } as never);
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: '72301',
+                    currentConditions: { temp: 72, humidity: 45, windspeed: 10, winddir: 180 },
+                    days: [{ datetime: '2026-03-25', precip: 0.1 }],
+                }),
+            });
+
+            await WeatherService.fetchCurrentWeather('72301');
+
+            const [, fetchOptions] = (global.fetch as any).mock.calls[0];
+            expect(fetchOptions.headers.Authorization).toBeUndefined();
+        });
+
         it('should correctly map successful response', async () => {
             vi.useFakeTimers();
             vi.setSystemTime(new Date('2026-03-26T12:00:00Z'));
