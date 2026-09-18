@@ -213,7 +213,7 @@ describe('BillingManager', () => {
     expect(refreshSessionMock).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to the current token when the explicit refresh fails', async () => {
+  it('asks the user to sign in again when the explicit refresh yields no token', async () => {
     getSessionMock.mockResolvedValue({
       data: {
         session: {
@@ -224,23 +224,16 @@ describe('BillingManager', () => {
       },
     });
     refreshSessionMock.mockResolvedValue({ data: { session: null } });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ url: 'https://checkout.stripe.com/c/pay/test' }), { status: 200 }),
-    );
+    const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     renderBilling();
     fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/create-checkout-session',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({ Authorization: 'Bearer token-nearly-expired' }),
-        }),
-      );
+      expect(toastMocks.error).toHaveBeenCalledWith('Please sign in again to manage billing.');
     });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('routes the portal button through the same fresh-token path as checkout', async () => {

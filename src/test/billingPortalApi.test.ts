@@ -119,7 +119,7 @@ describe('create portal session API', () => {
       status: 401,
       body: { error: 'Invalid or expired token' },
     });
-    expect(console.error).toHaveBeenCalledWith('Portal auth token rejected:', 'JWT expired');
+    expect(console.error).toHaveBeenCalledWith('JWT expired');
     expect(mocks.createPortalSession).not.toHaveBeenCalled();
   });
 

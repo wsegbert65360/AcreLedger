@@ -122,7 +122,7 @@ describe('create checkout session API', () => {
       status: 401,
       body: { error: 'Invalid or expired token' },
     });
-    expect(console.error).toHaveBeenCalledWith('Checkout auth token rejected:', 'JWT expired');
+    expect(console.error).toHaveBeenCalledWith('JWT expired');
     expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
