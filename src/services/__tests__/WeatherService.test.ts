@@ -1,29 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const refreshSessionMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/supabase', () => ({
+    supabase: { auth: { refreshSession: refreshSessionMock } },
+}));
+
 describe('WeatherService', () => {
     const mockApiKey = 'test-api-key';
 
     beforeEach(() => {
         vi.stubEnv('VITE_VISUALCROSSING_KEY', mockApiKey);
         vi.clearAllMocks();
+        refreshSessionMock.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
         vi.resetModules();
         global.fetch = vi.fn();
         vi.spyOn(console, 'error').mockImplementation(() => {});
 
-        // Mock supabase session
-        vi.mock('@/lib/supabase', () => ({
-            supabase: {
-                auth: {
-                    refreshSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } })
-                }
-            }
-        }));
     });
 
     afterEach(() => {
         vi.useRealTimers();
         vi.unstubAllEnvs();
-        vi.unmock('@/lib/supabase');
     });
 
     describe('fetchCurrentWeather', () => {
@@ -102,7 +99,7 @@ describe('WeatherService', () => {
             vi.resetModules();
 
             const { supabase } = await import('@/lib/supabase');
-            vi.mocked(supabase.auth.refreshSession).mockResolvedValue({
+            refreshSessionMock.mockResolvedValue({
                 data: { session: { access_token: 'refreshed-token' } },
             } as never);
             const { WeatherService } = await import('../WeatherService');
@@ -127,7 +124,7 @@ describe('WeatherService', () => {
             vi.resetModules();
 
             const { supabase } = await import('@/lib/supabase');
-            vi.mocked(supabase.auth.refreshSession).mockResolvedValue({
+            refreshSessionMock.mockResolvedValue({
                 data: { session: null },
                 error: null,
             } as never);
