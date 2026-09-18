@@ -18,6 +18,14 @@ import { useFarm } from '@/store/farmStore';
 import type { FarmSubscription } from '@/types/farm';
 import { formatIsoDate } from '@/utils/dates';
 
+/**
+ * Billing clicks refresh the token explicitly when it expires within this
+ * window. getSession() already refreshes inside its own expiry margin, but it
+ * can still hand back a short-lived token when that refresh failed; the token
+ * must survive the round trip to the billing function.
+ */
+const TOKEN_REFRESH_MARGIN_MS = 60_000;
+
 function getStatusBadge(subscription: FarmSubscription | null): { label: string; className: string } {
   if (!subscription || subscription.deleted_at) {
     return { label: 'Not subscribed', className: 'bg-muted text-muted-foreground border-border' };
@@ -112,8 +120,20 @@ export default function BillingManager() {
 
   const openBillingSession = useCallback(
     async (kind: 'checkout' | 'portal') => {
-      const token = session?.access_token;
-      if (!token) return;
+      // Read the token at click time (WeatherService/AskAcreLedger pattern):
+      // the useFarm() snapshot can hold an expired JWT, while getSession()
+      // refreshes a near-expiry token before answering.
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      let token = freshSession?.access_token;
+      const expiresAtMs = freshSession?.expires_at != null ? freshSession.expires_at * 1000 : null;
+      if (token && expiresAtMs !== null && expiresAtMs - Date.now() < TOKEN_REFRESH_MARGIN_MS) {
+        const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+        token = refreshed?.access_token ?? token;
+      }
+      if (!token) {
+        toast.error('Please sign in again to manage billing.');
+        return;
+      }
       native.haptic.light();
       setIsBusy(true);
       try {
@@ -125,7 +145,7 @@ export default function BillingManager() {
         setIsBusy(false);
       }
     },
-    [session?.access_token],
+    [],
   );
 
   if (!billingUiEnabled || !session || !farm_id) return null;

@@ -101,6 +101,28 @@ describe('create portal session API', () => {
     });
   });
 
+  it('returns the unchanged 401 and logs the auth diagnostic when getUser fails', async () => {
+    mocks.createClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+          error: { message: 'JWT expired' },
+        }),
+      },
+      from: vi.fn(),
+    });
+    const response = createResponse();
+
+    await handler(createRequest(), response.response);
+
+    expect(response.state).toMatchObject({
+      status: 401,
+      body: { error: 'Invalid or expired token' },
+    });
+    expect(console.error).toHaveBeenCalledWith('Portal auth token rejected:', 'JWT expired');
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
   it('fails closed when the existing subscription cannot be verified', async () => {
     const client = mocks.createClient();
     client.from = vi.fn((table: string) => ({

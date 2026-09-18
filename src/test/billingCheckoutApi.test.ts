@@ -100,6 +100,32 @@ describe('create checkout session API', () => {
     );
   });
 
+  it('returns the unchanged 401 and logs the auth diagnostic when getUser fails', async () => {
+    mocks.createClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+          error: { message: 'JWT expired' },
+        }),
+      },
+      from: vi.fn(),
+    });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer stale-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state).toMatchObject({
+      status: 401,
+      body: { error: 'Invalid or expired token' },
+    });
+    expect(console.error).toHaveBeenCalledWith('Checkout auth token rejected:', 'JWT expired');
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
   it('fails closed when the caller profile cannot be read', async () => {
     mocks.createClient.mockReturnValue({
       auth: {

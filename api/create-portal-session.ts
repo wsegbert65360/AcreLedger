@@ -93,6 +93,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
+      if (authError) {
+        console.error('Portal auth token rejected:', authError.message);
+      }
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
