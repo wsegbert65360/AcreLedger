@@ -90,9 +90,11 @@ async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> 
     const headers: HeadersInit = {};
 
     if (isWeatherProxyUrl(url)) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-            headers.Authorization = `Bearer ${session.access_token}`;
+        // Rotate the token immediately before posting the bearer so proxy
+        // requests can never carry a stale access token.
+        const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+        if (refreshed?.access_token) {
+            headers.Authorization = `Bearer ${refreshed.access_token}`;
         }
     }
 

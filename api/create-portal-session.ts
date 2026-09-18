@@ -33,6 +33,23 @@ function getAllowedOrigins(): Set<string> {
   return new Set(raw.split(',').map(s => s.trim()).filter(Boolean));
 }
 
+/**
+ * Mirror of the client's cleanEnvValue (src/lib/supabase.ts): Vercel env
+ * values pasted with surrounding quotes or whitespace otherwise break the
+ * Supabase client bootstrap (a quoted anon key fails every getUser call).
+ */
+function cleanEnvValue(value: string | undefined): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   // ---------- CORS ----------
   const origin = getHeader(req.headers, 'origin');
@@ -75,8 +92,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = cleanEnvValue(process.env.SUPABASE_URL);
+  const supabaseAnonKey = cleanEnvValue(process.env.SUPABASE_ANON_KEY);
   if (!supabaseUrl || !supabaseAnonKey) {
     return res.status(500).json({ error: 'Server configuration error: missing Supabase credentials' });
   }
@@ -94,7 +111,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
       if (authError) {
-        console.error('Portal auth token rejected:', authError.message);
+        console.error(authError.message);
       }
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
