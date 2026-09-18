@@ -36,10 +36,13 @@ vi.mock('@/store/farmStore', () => ({
 type SubscriptionResult = { data: FarmSubscription | null; error: { message: string } | null };
 let subscriptionResult: SubscriptionResult = { data: null, error: null };
 const fromMock = vi.hoisted(() => vi.fn());
+const getSessionMock = vi.hoisted(() => vi.fn());
+const refreshSessionMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: fromMock,
+    auth: { getSession: getSessionMock, refreshSession: refreshSessionMock },
   },
 }));
 
@@ -75,6 +78,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_BILLING_UI_ENABLED', 'true');
   vi.stubEnv('VITE_BILLING_ALLOWLIST', 'owner@example.com');
   subscriptionResult = { data: null, error: null };
+  getSessionMock.mockResolvedValue({ data: { session: farmState.session } });
   fromMock.mockImplementation((table: string) => {
     expect(table).toBe('farm_subscriptions');
     return {
@@ -130,25 +134,144 @@ describe('BillingManager', () => {
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
-  it('posts to the checkout endpoint with the bearer token when starting the trial', async () => {
+  it('posts the freshly resolved session token, not the stale store snapshot', async () => {
+    // Regression: the useFarm() snapshot can hold the previous (expired)
+    // access token; the click must send the live token from getSession().
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          ...farmState.session,
+          access_token: 'token-2',
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+        },
+      },
+    });
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ url: 'https://checkout.stripe.com/c/pay/test' }), { status: 200 }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
     renderBilling();
-    const button = await screen.findByRole('button', { name: /start 4-month free trial/i });
-    fireEvent.click(button);
+    fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/create-checkout-session',
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ Authorization: 'Bearer token-1' }),
+          headers: expect.objectContaining({ Authorization: 'Bearer token-2' }),
         }),
       );
     });
+    expect(refreshSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('asks the user to sign in again when no fresh session token is available', async () => {
+    getSessionMock.mockResolvedValue({ data: { session: null } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderBilling();
+    fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
+
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalledWith('Please sign in again to manage billing.');
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refreshes a token inside the 60-second expiry window before posting', async () => {
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          ...farmState.session,
+          access_token: 'token-nearly-expired',
+          expires_at: Math.floor(Date.now() / 1000) + 30,
+        },
+      },
+    });
+    refreshSessionMock.mockResolvedValue({
+      data: { session: { ...farmState.session, access_token: 'token-refreshed' } },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://checkout.stripe.com/c/pay/test' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderBilling();
+    fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/create-checkout-session',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ Authorization: 'Bearer token-refreshed' }),
+        }),
+      );
+    });
+    expect(refreshSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the current token when the explicit refresh fails', async () => {
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          ...farmState.session,
+          access_token: 'token-nearly-expired',
+          expires_at: Math.floor(Date.now() / 1000) + 10,
+        },
+      },
+    });
+    refreshSessionMock.mockResolvedValue({ data: { session: null } });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://checkout.stripe.com/c/pay/test' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderBilling();
+    fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/create-checkout-session',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ Authorization: 'Bearer token-nearly-expired' }),
+        }),
+      );
+    });
+  });
+
+  it('routes the portal button through the same fresh-token path as checkout', async () => {
+    subscriptionResult = { data: makeSubscription({ status: 'active' }), error: null };
+    getSessionMock.mockResolvedValue({
+      data: {
+        session: {
+          ...farmState.session,
+          access_token: 'token-2',
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+        },
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ url: 'https://billing.stripe.com/p/session/test' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderBilling();
+    fireEvent.click(await screen.findByRole('button', { name: /manage billing/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/create-portal-session',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ Authorization: 'Bearer token-2' }),
+        }),
+      );
+    });
+    expect(refreshSessionMock).not.toHaveBeenCalled();
   });
 
   it('shows a read-only status without actions for a non-owner member', async () => {
