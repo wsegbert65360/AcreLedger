@@ -100,6 +100,25 @@ describe('create checkout session API', () => {
     );
   });
 
+  it('cleans quoted or padded Supabase env values before creating the client', async () => {
+    process.env.SUPABASE_URL = ' "https://example.supabase.co" ';
+    process.env.SUPABASE_ANON_KEY = " 'anon-key' ";
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state.status).toBe(200);
+    expect(mocks.createClient).toHaveBeenCalledWith(
+      'https://example.supabase.co',
+      'anon-key',
+      expect.anything(),
+    );
+  });
+
   it('returns the unchanged 401 and logs the auth diagnostic when getUser fails', async () => {
     mocks.createClient.mockReturnValue({
       auth: {
