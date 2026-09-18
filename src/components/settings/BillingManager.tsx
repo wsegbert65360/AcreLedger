@@ -128,7 +128,7 @@ export default function BillingManager() {
       const expiresAtMs = freshSession?.expires_at != null ? freshSession.expires_at * 1000 : null;
       if (token && expiresAtMs !== null && expiresAtMs - Date.now() < TOKEN_REFRESH_MARGIN_MS) {
         const { data: { session: refreshed } } = await supabase.auth.refreshSession();
-        token = refreshed?.access_token ?? token;
+        token = refreshed?.access_token;
       }
       if (!token) {
         toast.error('Please sign in again to manage billing.');
