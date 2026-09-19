@@ -102,10 +102,10 @@ function createResponse() {
   return { response, state };
 }
 
-async function invoke() {
+async function invoke(signature: string | null = 'valid-signature') {
   const request: RequestInput = {
     method: 'POST',
-    headers: { 'stripe-signature': 'valid-signature' },
+    headers: signature == null ? {} : { 'stripe-signature': signature },
     async *[Symbol.asyncIterator]() {
       yield Buffer.from('{}');
     },
@@ -153,6 +153,31 @@ describe('Stripe webhook delivery recovery', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+  });
+
+  it('rejects a missing Stripe signature before creating a database client', async () => {
+    const response = await invoke(null);
+
+    expect(response).toMatchObject({
+      status: 400,
+      body: { error: 'Missing stripe-signature header' },
+    });
+    expect(mocks.constructEvent).not.toHaveBeenCalled();
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid Stripe signature before creating a database client', async () => {
+    mocks.constructEvent.mockImplementationOnce(() => {
+      throw new Error('No signatures found matching the expected signature');
+    });
+
+    const response = await invoke('invalid-signature');
+
+    expect(response).toMatchObject({
+      status: 400,
+      body: { error: 'Invalid webhook signature or payload' },
+    });
+    expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
   it('retries an event whose first processing attempt failed before processed_at was set', async () => {

@@ -80,7 +80,7 @@ describe('create checkout session API', () => {
     vi.clearAllMocks();
   });
 
-  it('uses a farm-scoped idempotency key for repeated initial requests', async () => {
+  it('creates the configured annual checkout with a 122-day trial and farm-scoped idempotency', async () => {
     const request: RequestInput = {
       method: 'POST',
       headers: {
@@ -95,7 +95,20 @@ describe('create checkout session API', () => {
 
     expect(response.state.status).toBe(200);
     expect(mocks.createCheckoutSession).toHaveBeenCalledWith(
-      expect.objectContaining({ client_reference_id: 'farm-1' }),
+      expect.objectContaining({
+        mode: 'subscription',
+        payment_method_collection: 'always',
+        line_items: [{ price: 'price_test', quantity: 1 }],
+        subscription_data: {
+          trial_period_days: 122,
+          metadata: { farm_id: 'farm-1', user_id: 'user-1' },
+        },
+        metadata: { farm_id: 'farm-1', user_id: 'user-1' },
+        client_reference_id: 'farm-1',
+        customer_email: 'farmer@example.com',
+        success_url: 'https://acreledger.example/settings?billing=success',
+        cancel_url: 'https://acreledger.example/settings?billing=cancelled',
+      }),
       { idempotencyKey: 'acreledger-checkout:farm-1:initial' },
     );
   });
@@ -117,6 +130,66 @@ describe('create checkout session API', () => {
       'anon-key',
       expect.anything(),
     );
+  });
+
+  it('denies a caller missing from the server allowlist before reading billing state', async () => {
+    process.env.BILLING_ALLOWLIST = 'someone-else';
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state).toMatchObject({
+      status: 403,
+      body: { error: 'Billing is coming soon.' },
+    });
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('denies checkout when the active billing row belongs to another farm member', async () => {
+    mocks.createClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-1', email: 'farmer@example.com' } },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => ({
+        select: () => ({
+          eq: () => table === 'profiles'
+            ? { maybeSingle: vi.fn().mockResolvedValue({ data: { farm_id: 'farm-1' }, error: null }) }
+            : {
+                is: () => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      owner_user_id: 'user-2',
+                      status: 'active',
+                      deleted_at: null,
+                      stripe_subscription_id: 'sub-owner-2',
+                    },
+                    error: null,
+                  }),
+                }),
+              },
+        }),
+      })),
+    });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state).toMatchObject({
+      status: 403,
+      body: { error: 'Only the farm owner can start billing.' },
+    });
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('returns the unchanged 401 and logs the auth diagnostic when getUser fails', async () => {

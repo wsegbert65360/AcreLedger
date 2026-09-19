@@ -116,6 +116,38 @@ describe('create portal session API', () => {
     );
   });
 
+  it('denies Customer Portal access to a non-owner farm member', async () => {
+    const client = mocks.createClient();
+    client.from = vi.fn((table: string) => ({
+      select: () => ({
+        eq: () => table === 'profiles'
+          ? { maybeSingle: vi.fn().mockResolvedValue({ data: { farm_id: 'farm-1' }, error: null }) }
+          : {
+              is: () => ({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    owner_user_id: 'user-2',
+                    stripe_customer_id: 'cus_test_1',
+                    deleted_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            },
+      }),
+    }));
+    mocks.createClient.mockReturnValue(client);
+    const response = createResponse();
+
+    await handler(createRequest(), response.response);
+
+    expect(response.state).toMatchObject({
+      status: 403,
+      body: { error: 'Only the farm owner can manage billing.' },
+    });
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
   it('returns the unchanged 401 and logs the auth diagnostic when getUser fails', async () => {
     mocks.createClient.mockReturnValue({
       auth: {
