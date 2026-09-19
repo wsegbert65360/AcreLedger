@@ -1,4 +1,9 @@
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
+
+// Supabase's fluent test double intentionally accepts and returns heterogeneous
+// values. Pin the callable half of Vitest's Mock generic so Vitest 4 does not
+// infer the constructor/function union produced by ReturnType<typeof vi.fn>.
+type SupabaseMockFunction = Mock<(...args: any[]) => any>;
 
 /**
  * Minimal Supabase client mock for unit tests.
@@ -26,21 +31,21 @@ export interface SupabaseResult<T = unknown> {
 
 export interface SupabaseMock {
   /** The object to hand to `vi.doMock('@/lib/sabase', () => ({ supabase: mock.client }))`. */
-  client: { from: ReturnType<typeof vi.fn>; rpc: ReturnType<typeof vi.fn> };
+  client: { from: SupabaseMockFunction; rpc: SupabaseMockFunction };
   /** The underlying `vi.fn`s for `toHaveBeenCalledWith` / `toHaveBeenNthCalledWith` assertions. */
   fns: {
-    from: ReturnType<typeof vi.fn>;
-    rpc: ReturnType<typeof vi.fn>;
-    insert: ReturnType<typeof vi.fn>;
-    upsert: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-    select: ReturnType<typeof vi.fn>;
-    eq: ReturnType<typeof vi.fn>;
-    in: ReturnType<typeof vi.fn>;
-    is: ReturnType<typeof vi.fn>;
-    order: ReturnType<typeof vi.fn>;
-    range: ReturnType<typeof vi.fn>;
-    single: ReturnType<typeof vi.fn>;
+    from: SupabaseMockFunction;
+    rpc: SupabaseMockFunction;
+    insert: SupabaseMockFunction;
+    upsert: SupabaseMockFunction;
+    update: SupabaseMockFunction;
+    select: SupabaseMockFunction;
+    eq: SupabaseMockFunction;
+    in: SupabaseMockFunction;
+    is: SupabaseMockFunction;
+    order: SupabaseMockFunction;
+    range: SupabaseMockFunction;
+    single: SupabaseMockFunction;
   };
   /** Terminal result for the next awaited `from(...)` chain. */
   setResult: (result: Partial<SupabaseResult>) => void;

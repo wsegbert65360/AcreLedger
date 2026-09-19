@@ -7,6 +7,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "drill:local": "tsx local-recovery-drill.ts",
     "verify-backup": "tsx verify-backup.ts",
     "restore-isolated": "tsx restore-isolated.ts",
     "inventory-tenant": "tsx inventory-tenant.ts",
@@ -22,6 +23,6 @@
     "@types/pg": "8.23.1",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
-    "vitest": "3.2.7"
+    "vitest": "4.1.11"
   }
 }

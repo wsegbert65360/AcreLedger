@@ -72,7 +72,12 @@ interface WebSpeechStubs {
 
 function installWebSpeechApi(): WebSpeechStubs {
   const recognition = new FakeWebRecognition();
-  const recognizerCtor = vi.fn(() => recognition);
+  // Vitest 4 preserves JavaScript constructor semantics: an arrow mock cannot
+  // be called with `new`, while browsers expose SpeechRecognition as a real
+  // constructor. Use a constructable function and return the shared fixture.
+  const recognizerCtor = vi.fn(function SpeechRecognitionMock() {
+    return recognition;
+  });
   const speechSynthesis = { speak: vi.fn(), cancel: vi.fn() };
   const utterances: WebSpeechStubs['utterances'] = [];
 

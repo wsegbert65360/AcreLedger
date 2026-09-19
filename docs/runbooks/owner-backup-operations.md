@@ -65,6 +65,8 @@ If backups fail with `AUTH_REVOKED`:
 8. Failure alerts are deliberately triggered and received.
 9. Only then enable the nightly scheduler.
 
+For a no-credential rehearsal before those gates, run `npm run drill:local --prefix scripts/recovery`. Its proved scope and deliberate gaps are recorded in `docs/runbooks/local-recovery-drill.md`; it is not evidence of a real PostgreSQL, Supabase, Drive, or `age` restore.
+
 ## Owner setup still required
 
 Stop here until the owner chooses these. Do not put the values in git or chat:

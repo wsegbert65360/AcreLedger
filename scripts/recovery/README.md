@@ -15,6 +15,7 @@ The Settings backup that farmers download is unchanged. This toolkit reads the e
 
 ```bash
 npm test
+npm run drill:local
 npx tsx verify-backup.ts --archive path/to/file.tar.zst.age --identity path/to/age-identity --sha256 EXPECTED
 npx tsx restore-isolated.ts
 npx tsx inventory-tenant.ts
@@ -22,5 +23,7 @@ npx tsx extract-tenant.ts
 npx tsx apply-tenant-recovery.ts
 npx tsx recreate-auth-user.ts
 ```
+
+`npm run drill:local` uses only synthetic data in a temporary directory. It proves the local archive/checksum and tenant-plan seams but does not replace a disposable-project restore. See `docs/runbooks/local-recovery-drill.md` for its exact scope.
 
 See `docs/runbooks/single-farm-recovery.md` and `docs/runbooks/full-project-recovery.md`.
