@@ -9,6 +9,7 @@ import { calculateSprayProductFields, hasValidSprayRate } from '@/utils/unitConv
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { getLatestForField } from '@/lib/utils';
 import { toLocalIsoDate } from '@/utils/dates';
+import { getCarryForwardSource } from '@/lib/carryForward';
 
 export type SprayWizardStep = 'core' | 'mix' | 'conditions' | 'review';
 
@@ -113,7 +114,13 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [photoType, setPhotoType] = useState('');
   const [sensitiveAreaCheck, setSensitiveAreaCheck] = useState(initialData?.sensitiveAreaCheck || false);
   const [sensitiveAreaNotes, setSensitiveAreaNotes] = useState(initialData?.sensitiveAreaNotes || '');
-  const [complianceProfile] = useState(initialData?.complianceProfile || 'universal');
+  const [complianceProfile, setComplianceProfile] = useState(initialData?.complianceProfile || 'universal');
+  const [nozzleType, setNozzleType] = useState(initialData?.nozzleType || '');
+  const [nozzleSize, setNozzleSize] = useState(initialData?.nozzleSize || '');
+  const [pressurePsi, setPressurePsi] = useState<number | undefined>(initialData?.pressurePsi);
+  const [boomHeight, setBoomHeight] = useState<number | undefined>(initialData?.boomHeight);
+  const [actualSpeed, setActualSpeed] = useState<number | undefined>(initialData?.actualSpeed);
+  const [carryStatus, setCarryStatus] = useState<'hidden' | 'offered' | 'carried'>('hidden');
 
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -133,10 +140,20 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     targetPest: string;
   } | null>(null);
 
+  const todayLocalIso = toLocalIsoDate(Date.now());
+  const carryForwardSource = useMemo(() => {
+    if (initialData) return null;
+    return getCarryForwardSource(sprayRecords, field.id, viewingSeason, {
+      dateKey: 'sprayDate',
+      todayLocalIso,
+    });
+  }, [field.id, initialData, sprayRecords, todayLocalIso, viewingSeason]);
+
   const suggestedSpray = useMemo(() => {
     if (initialData) return null;
+    if (carryForwardSource) return null;
     return getLatestForField(sprayRecords, field.id, 'sprayDate', record => record.seasonYear === viewingSeason);
-  }, [field.id, initialData, sprayRecords, viewingSeason]);
+  }, [carryForwardSource, field.id, initialData, sprayRecords, viewingSeason]);
 
   useEffect(() => {
     if (!open) return;
@@ -146,6 +163,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     treatedAreaEditedRef.current = false;
     setStep('core');
     setSelectedRecipeId('');
+    setCarryStatus(carryForwardSource ? 'offered' : 'hidden');
 
     if (initialData) {
       setProducts(normalizeProducts(initialData));
@@ -177,6 +195,12 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
       setSensitiveAreaCheck(initialData.sensitiveAreaCheck || false);
       setSensitiveAreaNotes(initialData.sensitiveAreaNotes || '');
+      setComplianceProfile(initialData.complianceProfile || 'universal');
+      setNozzleType(initialData.nozzleType || '');
+      setNozzleSize(initialData.nozzleSize || '');
+      setPressurePsi(initialData.pressurePsi);
+      setBoomHeight(initialData.boomHeight);
+      setActualSpeed(initialData.actualSpeed);
 
       if (
         !isDuplicate &&
@@ -220,10 +244,66 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setNotes('');
       setSensitiveAreaCheck(false);
       setSensitiveAreaNotes('');
+      setComplianceProfile('universal');
+      setNozzleType('');
+      setNozzleSize('');
+      setPressurePsi(undefined);
+      setBoomHeight(undefined);
+      setActualSpeed(undefined);
       setWeather(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialData?.id, isDuplicate]);
+  }, [open, initialData?.id, isDuplicate, field.id, carryForwardSource?.id]);
+
+  const resetCarryFields = useCallback(() => {
+    setProducts([createEmptyProduct()]);
+    setApplicatorName(localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
+    setLicenseNumber(localStorage.getItem(`al_license_number_${userPrefix}`) || '');
+    setEquipmentId(localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
+    setApplicationMethod('Ground Broadcast');
+    setComplianceProfile('universal');
+    setRei('12h');
+    setTargetPest('grass/broadleaves');
+    setCropOrSiteTreated('');
+    setNozzleType('');
+    setNozzleSize('');
+    setPressurePsi(undefined);
+    setBoomHeight(undefined);
+    setActualSpeed(undefined);
+  }, [userPrefix]);
+
+  const carryForwardDetails = useCallback(() => {
+    if (!carryForwardSource) return;
+    setProducts(normalizeProducts(carryForwardSource).map(product => ({
+      ...product,
+      ui_id: crypto.randomUUID(),
+    })));
+    setApplicatorName(carryForwardSource.applicatorName || '');
+    setLicenseNumber(carryForwardSource.licenseNumber || '');
+    setEquipmentId(carryForwardSource.equipmentId || '');
+    setApplicationMethod(carryForwardSource.applicationMethod || 'Ground Broadcast');
+    setComplianceProfile(carryForwardSource.complianceProfile || 'universal');
+    setRei(carryForwardSource.rei || '12h');
+    setTargetPest(carryForwardSource.targetPest || '');
+    setCropOrSiteTreated(carryForwardSource.cropOrSiteTreated || '');
+    setNozzleType(carryForwardSource.nozzleType || '');
+    setNozzleSize(carryForwardSource.nozzleSize || '');
+    setPressurePsi(carryForwardSource.pressurePsi);
+    setBoomHeight(carryForwardSource.boomHeight);
+    setActualSpeed(carryForwardSource.actualSpeed);
+    setCarryStatus('carried');
+    toast.success(`Details carried from ${carryForwardSource.fieldName}`);
+  }, [carryForwardSource]);
+
+  const declineCarryForward = useCallback(() => {
+    resetCarryFields();
+    setCarryStatus('hidden');
+  }, [resetCarryFields]);
+
+  const removeCarriedDetails = useCallback(() => {
+    resetCarryFields();
+    setCarryStatus('hidden');
+  }, [resetCarryFields]);
 
   useEffect(() => {
     if (!open || initialData || treatedAreaEditedRef.current) return;
@@ -502,6 +582,11 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
         sensitiveAreaCheck,
         sensitiveAreaNotes: sensitiveAreaNotes.trim() || undefined,
         complianceProfile,
+        nozzleType: nozzleType.trim() || undefined,
+        nozzleSize: nozzleSize.trim() || undefined,
+        pressurePsi,
+        boomHeight,
+        actualSpeed,
         isPremixed,
         nonCompliant: !isFullyCompliant,
         deleted_at: null,
@@ -587,7 +672,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     } finally {
       setIsSaving(false);
     }
-  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, isPremixed, field.id, field.name, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose, isDuplicate, sprayRecipes, photoBase64, photoType]);
+  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, nozzleType, nozzleSize, pressurePsi, boomHeight, actualSpeed, isPremixed, field.id, field.name, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose, isDuplicate, sprayRecipes, photoBase64, photoType]);
 
   const confirmSaveRecipe = useCallback(async () => {
     const pending = pendingRecipeRef.current;
@@ -722,6 +807,11 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     isFullyCompliant,
     missingComplianceFields,
     stepValidation,
-    suggestedSpray
+    suggestedSpray,
+    carryForwardSource,
+    carryStatus,
+    carryForwardDetails,
+    declineCarryForward,
+    removeCarriedDetails,
   };
 }

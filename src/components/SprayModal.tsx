@@ -6,6 +6,7 @@ import { SprayWizardCoreStep } from '@/components/spray/SprayWizardCoreStep';
 import { SprayWizardMixStep } from '@/components/spray/SprayWizardMixStep';
 import { SprayWizardNav } from '@/components/spray/SprayWizardNav';
 import { SprayWizardReviewStep } from '@/components/spray/SprayWizardReviewStep';
+import { SprayWizardCarryChip } from '@/components/spray/SprayWizardCarryChip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +22,7 @@ import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { useFarm } from '@/store/farmStore';
 import { type Field, type SprayRecord } from '@/types/farm';
 import { native } from '@/lib/native';
+import { formatCarryForwardTime } from '@/lib/carryForward';
 interface SprayModalProps {
   field: Field;
   open: boolean;
@@ -140,6 +142,24 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
 
         {!form.isQuickMode && (
           <SprayWizardNav steps={WIZARD_STEPS} currentStep={step} onStepClick={goToStep} />
+        )}
+
+        {form.carryForwardSource
+          && form.carryStatus !== 'hidden'
+          && (form.carryStatus === 'carried' || form.isQuickMode || step === 'core') && (
+          <SprayWizardCarryChip
+            recordType="spray"
+            sourceFieldName={form.carryForwardSource.fieldName}
+            sourceTime={formatCarryForwardTime(
+              form.carryForwardSource.timestamp,
+              form.carryForwardSource.startTime,
+            )}
+            carryDescription="Applies products, applicator, and equipment. Area, time, and weather stay specific to this field."
+            carried={form.carryStatus === 'carried'}
+            onCarry={form.carryForwardDetails}
+            onDecline={form.declineCarryForward}
+            onRemove={form.removeCarriedDetails}
+          />
         )}
 
         {/* Collapsible compliance checklist */}

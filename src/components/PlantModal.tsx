@@ -3,6 +3,8 @@ import { AlertTriangle, Loader2, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLatestForField } from '@/lib/utils';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
+import { formatCarryForwardTime, getCarryForwardSource } from '@/lib/carryForward';
+import { SprayWizardCarryChip } from '@/components/spray/SprayWizardCarryChip';
 
 import { native } from '@/lib/native';
 
@@ -62,6 +64,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
   }, []);
   const [memo, setMemo] = useState(initialData?.memo || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [carryStatus, setCarryStatus] = useState<'hidden' | 'offered' | 'carried'>('hidden');
   const requiresSeedVariety = cropStatus !== 'Prevented Planting';
   const duplicatePlanting = useMemo(() => {
     const targetSeason = initialData && !isDuplicate ? initialData.seasonYear : viewingSeason;
@@ -84,19 +87,30 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
             : '')
     : '';
 
+  const todayLocalIso = toLocalIsoDate(Date.now());
+  const carryForwardSource = useMemo(() => {
+    if (initialData) return null;
+    return getCarryForwardSource(plantRecords, field.id, viewingSeason, {
+      dateKey: 'plantDate',
+      todayLocalIso,
+    });
+  }, [field.id, initialData, plantRecords, todayLocalIso, viewingSeason]);
+
   const suggestedPlanting = useMemo(() => {
     if (initialData) return null;
+    if (carryForwardSource) return null;
     return getLatestForField(
       plantRecords,
       field.id,
       'plantDate',
       record => (record.cropStatus ?? 'Planted') === 'Planted' && record.seasonYear === viewingSeason
     );
-  }, [field.id, initialData, plantRecords, viewingSeason]);
+  }, [carryForwardSource, field.id, initialData, plantRecords, viewingSeason]);
 
   useEffect(() => {
     if (!open) return;
     acreageEditedRef.current = false;
+    setCarryStatus(carryForwardSource ? 'offered' : 'hidden');
     if (initialData) {
       setSeedVariety(initialData.seedVariety || '');
       setCrop(initialData.crop || '');
@@ -110,8 +124,8 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setAcreageState((initialData.acreage ?? displayFieldAcres).toString());
       setMemo(initialData.memo || '');
     } else {
-      setSeedVariety(suggestedPlanting?.seedVariety || '');
-      setCrop(suggestedPlanting?.crop || '');
+      setSeedVariety(carryForwardSource ? '' : (suggestedPlanting?.seedVariety || ''));
+      setCrop(carryForwardSource ? '' : (suggestedPlanting?.crop || ''));
       setIntendedUse(fieldIntendedUse);
       setProducerShare(fieldProducerShare);
       setIrrigationPractice(fieldIrrigationPractice);
@@ -124,7 +138,21 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
     }
     // Depend only on open/initialData primitives per AGENTS.md (do not depend on `field` object reference).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.id, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open, isDuplicate]);
+  }, [initialData?.id, field.id, fieldIntendedUse, fieldIrrigationPractice, fieldProducerShare, open, isDuplicate, carryForwardSource?.id]);
+
+  const carryForwardDetails = useCallback(() => {
+    if (!carryForwardSource) return;
+    setSeedVariety(carryForwardSource.seedVariety || '');
+    setCrop(carryForwardSource.crop || '');
+    setCarryStatus('carried');
+    toast.success(`Details carried from ${carryForwardSource.fieldName}`);
+  }, [carryForwardSource]);
+
+  const clearCarryDetails = useCallback(() => {
+    setSeedVariety('');
+    setCrop('');
+    setCarryStatus('hidden');
+  }, []);
 
   // CLU assignments can finish hydrating after a new-record modal opens. Refresh
   // the default only until the farmer edits it; existing and duplicated records
@@ -233,6 +261,18 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {carryForwardSource && carryStatus !== 'hidden' && (
+            <SprayWizardCarryChip
+              recordType="plant"
+              sourceFieldName={carryForwardSource.fieldName}
+              sourceTime={formatCarryForwardTime(carryForwardSource.timestamp)}
+              carryDescription="Applies crop and seed variety. Date, acres, and field details stay specific to this field."
+              carried={carryStatus === 'carried'}
+              onCarry={carryForwardDetails}
+              onDecline={clearCarryDetails}
+              onRemove={clearCarryDetails}
+            />
+          )}
           {suggestedPlanting && !initialData && (
             <div className="bg-plant/5 border border-plant/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground">
               <div className="flex-grow">

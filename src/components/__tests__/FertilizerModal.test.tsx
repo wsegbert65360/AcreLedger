@@ -12,6 +12,7 @@ import { toLocalIsoDate } from '@/utils/dates';
 const addFertilizerApplicationMock = vi.fn().mockResolvedValue(true);
 const updateFertilizerApplicationMock = vi.fn().mockResolvedValue(true);
 let mockCluAssignments: FieldCluAssignment[] = [];
+let mockFertilizerApplications: FertilizerApplication[] = [];
 
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
@@ -21,7 +22,7 @@ vi.mock('@/store/farmStore', () => ({
     addFertilizerRecipe: vi.fn(),
     deleteFertilizerRecipe: vi.fn(),
     fertilizerRecipes: [],
-    fertilizerApplications: [],
+    fertilizerApplications: mockFertilizerApplications,
     cluAssignments: mockCluAssignments,
     viewingSeason: 2026,
   })
@@ -232,5 +233,66 @@ describe('FertilizerModal duplicate mode', () => {
     expect(arg.seasonYear).toBeUndefined();
     expect(arg.farm_id).toBeUndefined();
     expect(updateFertilizerApplicationMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('FertilizerModal sequential carry-forward', () => {
+  const destinationField: Field = {
+    id: 'field-b',
+    name: 'South Field',
+    acreage: 80,
+    lat: null,
+    lng: null,
+    farm_id: 'farm-1',
+    deleted_at: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCluAssignments = [];
+    mockFertilizerApplications = [{
+      id: 'fert-source',
+      fieldId: 'field-a',
+      fieldName: 'North Field',
+      date: toLocalIsoDate(Date.now()),
+      acres: 12,
+      fertilizer_formula: '28-0-0',
+      timestamp: Date.now(),
+      seasonYear: 2026,
+      farm_id: 'farm-1',
+      deleted_at: null,
+    }];
+  });
+
+  it('carries only the formula and one submit creates one destination-field record', async () => {
+    render(<FertilizerModal field={destinationField} open={true} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText(/suggestion available: carry fertilizer details from north field/i)).toBeInTheDocument();
+    expect((screen.getByLabelText(/fertilizer formula/i) as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: /carry details/i }));
+
+    expect((screen.getByLabelText(/fertilizer formula/i) as HTMLInputElement).value).toBe('28-0-0');
+    expect((screen.getByLabelText(/acres applied/i) as HTMLInputElement).value).toBe('80');
+    expect((screen.getByLabelText(/application date/i) as HTMLInputElement).value).toBe(toLocalIsoDate(Date.now()));
+
+    fireEvent.click(screen.getByRole('button', { name: /save application/i }));
+
+    await waitFor(() => expect(addFertilizerApplicationMock).toHaveBeenCalledTimes(1));
+    expect(addFertilizerApplicationMock.mock.calls[0][0]).toEqual({
+      fieldId: 'field-b',
+      date: toLocalIsoDate(Date.now()),
+      acres: 80,
+      fertilizer_formula: '28-0-0',
+    });
+  });
+
+  it('removes carried details without changing destination acreage or date', () => {
+    render(<FertilizerModal field={destinationField} open={true} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /carry details/i }));
+    fireEvent.click(screen.getByRole('button', { name: /remove details carried from north field/i }));
+
+    expect((screen.getByLabelText(/fertilizer formula/i) as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText(/acres applied/i) as HTMLInputElement).value).toBe('80');
+    expect((screen.getByLabelText(/application date/i) as HTMLInputElement).value).toBe(toLocalIsoDate(Date.now()));
   });
 });

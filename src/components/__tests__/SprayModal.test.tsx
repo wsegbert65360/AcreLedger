@@ -7,18 +7,20 @@ import SprayModal from '../SprayModal';
 import { Field, SprayRecord } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 import { WeatherService } from '@/services/WeatherService';
+import { toLocalIsoDate } from '@/utils/dates';
 
 // --- Mocks ---
 const addSprayRecordMock = vi.fn().mockResolvedValue(true);
 const updateSprayRecordMock = vi.fn().mockResolvedValue(true);
 let mockCluAssignments: FieldCluAssignment[] = [];
+let mockSprayRecords: SprayRecord[] = [];
 
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     addSprayRecord: addSprayRecordMock,
     updateSprayRecord: updateSprayRecordMock,
     sprayRecipes: [],
-    sprayRecords: [],
+    sprayRecords: mockSprayRecords,
     cluAssignments: mockCluAssignments,
     session: { user: { id: 'test-user-id' } },
     viewingSeason: 2026,
@@ -145,6 +147,8 @@ describe('SprayModal Data Retention', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCluAssignments = [];
+    mockSprayRecords = [];
+    localStorage.setItem('al_spray_quick_mode', 'false');
     vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
       wind: 0, temp: 0, humidity: 0, windDirection: '—', isError: true,
     });
@@ -500,6 +504,8 @@ describe('SprayModal product deletion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCluAssignments = [];
+    mockSprayRecords = [];
+    localStorage.setItem('al_spray_quick_mode', 'false');
     vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
       wind: 0, temp: 0, humidity: 0, windDirection: '—', isError: true,
     });
@@ -563,5 +569,115 @@ describe('SprayModal product deletion', () => {
 
     await waitFor(() => expect(screen.getAllByLabelText(/trade name/i).length).toBe(1));
     expect((screen.getByLabelText(/trade name/i) as HTMLInputElement).value).toBe('Dicamba');
+  });
+});
+
+describe('SprayModal sequential carry-forward', () => {
+  const destinationField: Field = {
+    id: 'field-b',
+    name: 'South Field',
+    acreage: 80,
+    lat: null,
+    lng: null,
+    farm_id: 'farm-1',
+    deleted_at: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCluAssignments = [];
+    localStorage.clear();
+    localStorage.setItem('al_spray_quick_mode', 'true');
+    mockSprayRecords = [{
+      id: 'spray-source',
+      fieldId: 'field-a',
+      fieldName: 'North Field',
+      products: [{
+        product: 'Run Mix',
+        rate: '22',
+        rateUnit: 'oz/ac',
+        epaRegNumber: '524-549',
+        activeIngredients: 'glyphosate',
+        ui_id: 'source-ui-id',
+      }],
+      applicatorName: 'Pat Operator',
+      licenseNumber: 'MO-123',
+      equipmentId: 'Sprayer 7',
+      applicationMethod: 'Ground Broadcast',
+      complianceProfile: 'universal',
+      rei: '24h',
+      targetPest: 'waterhemp',
+      cropOrSiteTreated: 'corn',
+      nozzleType: 'fan',
+      nozzleSize: '04',
+      pressurePsi: 40,
+      boomHeight: 24,
+      actualSpeed: 6,
+      sprayDate: toLocalIsoDate(Date.now()),
+      startTime: '06:00',
+      treatedAreaSize: 3,
+      treatedAreaUnit: 'ha',
+      windSpeed: 17,
+      windDirection: 'S',
+      temperature: 92,
+      relativeHumidity: 21,
+      sensitiveAreaCheck: true,
+      sensitiveAreaNotes: 'Source-only safety note',
+      notes: 'Source-only notes',
+      nonCompliant: false,
+      timestamp: Date.now(),
+      seasonYear: 2026,
+      farm_id: 'farm-1',
+      deleted_at: null,
+    }];
+    vi.mocked(WeatherService.fetchCurrentWeather).mockResolvedValue({
+      wind: 0, temp: 0, humidity: 0, windDirection: '—', isError: true,
+    });
+  });
+
+  it('carries only run details and one save creates one field-specific record', async () => {
+    render(<SprayModal field={destinationField} open={true} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText(/suggestion available: carry spray details from north field/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /carry details/i }));
+
+    expect(screen.getByDisplayValue('Run Mix')).toBeInTheDocument();
+    expect(screen.getByText(/App:/i).parentElement).toHaveTextContent('Pat Operator');
+    expect(screen.getByText(/Equip:/i).parentElement).toHaveTextContent('Sprayer 7');
+
+    const saveButton = screen.getByRole('button', { name: /log spray record/i });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(addSprayRecordMock).toHaveBeenCalledTimes(1));
+    const saved = addSprayRecordMock.mock.calls[0][0] as Record<string, any>;
+    expect(saved).toMatchObject({
+      fieldId: 'field-b',
+      fieldName: 'South Field',
+      treatedAreaSize: 80,
+      treatedAreaUnit: 'ac',
+      sprayDate: toLocalIsoDate(Date.now()),
+      applicatorName: 'Pat Operator',
+      licenseNumber: 'MO-123',
+      equipmentId: 'Sprayer 7',
+      targetPest: 'waterhemp',
+      cropOrSiteTreated: 'corn',
+      nozzleType: 'fan',
+      nozzleSize: '04',
+      pressurePsi: 40,
+      boomHeight: 24,
+      actualSpeed: 6,
+      windSpeed: 0,
+      sensitiveAreaCheck: false,
+      sensitiveAreaNotes: undefined,
+      notes: undefined,
+      seasonYear: 2026,
+    });
+    expect(saved.startTime).not.toBe('06:00');
+    expect(saved.temperature).toBeUndefined();
+    expect(saved.relativeHumidity).toBeUndefined();
+    expect(saved.products).toHaveLength(1);
+    expect(saved.products[0].product).toBe('Run Mix');
+    expect(saved.products[0].ui_id).not.toBe('source-ui-id');
   });
 });

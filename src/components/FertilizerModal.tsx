@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { getLatestForField } from '@/lib/utils';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { toLocalIsoDate } from '@/utils/dates';
+import { formatCarryForwardTime, getCarryForwardSource } from '@/lib/carryForward';
+import { SprayWizardCarryChip } from '@/components/spray/SprayWizardCarryChip';
 
 interface FertilizerModalProps {
     field: Field;
@@ -59,21 +61,33 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
     const [saveAsRecipe, setSaveAsRecipe] = useState(false);
     const [newRecipeName, setNewRecipeName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [carryStatus, setCarryStatus] = useState<'hidden' | 'offered' | 'carried'>('hidden');
     const [showDeleteAppConfirm, setShowDeleteAppConfirm] = useState(false);
     const [recipeToDelete, setRecipeToDelete] = useState<{ id: string; name: string } | null>(null);
 
+    const todayLocalIso = toLocalIsoDate(Date.now());
+    const carryForwardSource = useMemo(() => {
+        if (initialData) return null;
+        return getCarryForwardSource(fertilizerApplications, field.id, viewingSeason, {
+            dateKey: 'date',
+            todayLocalIso,
+        });
+    }, [fertilizerApplications, field.id, initialData, todayLocalIso, viewingSeason]);
+
     const suggestedFertilizer = useMemo(() => {
         if (initialData) return null;
+        if (carryForwardSource) return null;
         // Fertilizer product/formula intentionally prefills across seasons: a
         // field's fertilizer program carries year over year, unlike crop
         // rotation or a spray tank-mix. (Other activity modals scope to
         // viewingSeason; fertilizer is the deliberate exception.)
         return getLatestForField(fertilizerApplications, field.id, 'date');
-    }, [field.id, initialData, fertilizerApplications]);
+    }, [carryForwardSource, field.id, initialData, fertilizerApplications]);
 
     useEffect(() => {
         if (!open) return;
         acresEditedRef.current = false;
+        setCarryStatus(carryForwardSource ? 'offered' : 'hidden');
         if (initialData) {
             setDate(isDuplicate ? toLocalIsoDate(Date.now()) : initialData.date);
             setAcresState(initialData.acres?.toString() || displayFieldAcres.toString() || '');
@@ -81,11 +95,23 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
         } else {
             setDate(toLocalIsoDate(Date.now()));
             setAcresState(displayFieldAcres.toString() || '');
-            setFormula(suggestedFertilizer?.fertilizer_formula || '');
+            setFormula(carryForwardSource ? '' : (suggestedFertilizer?.fertilizer_formula || ''));
         }
         // Depend only on open/initialData primitives per AGENTS.md (do not depend on `field` object reference).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, initialData?.id, isDuplicate]);
+    }, [open, initialData?.id, isDuplicate, field.id, carryForwardSource?.id]);
+
+    const carryForwardDetails = useCallback(() => {
+        if (!carryForwardSource) return;
+        setFormula(carryForwardSource.fertilizer_formula);
+        setCarryStatus('carried');
+        toast.success(`Details carried from ${carryForwardSource.fieldName}`);
+    }, [carryForwardSource]);
+
+    const clearCarryDetails = useCallback(() => {
+        setFormula('');
+        setCarryStatus('hidden');
+    }, []);
 
     // CLU assignments can finish hydrating after a new-record modal opens. Refresh
     // the default only until the farmer edits it; existing and duplicated records
@@ -237,6 +263,18 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    {carryForwardSource && carryStatus !== 'hidden' && (
+                        <SprayWizardCarryChip
+                            recordType="fertilizer"
+                            sourceFieldName={carryForwardSource.fieldName}
+                            sourceTime={formatCarryForwardTime(carryForwardSource.timestamp)}
+                            carryDescription="Applies the fertilizer formula. Date and acres stay specific to this field."
+                            carried={carryStatus === 'carried'}
+                            onCarry={carryForwardDetails}
+                            onDecline={clearCarryDetails}
+                            onRemove={clearCarryDetails}
+                        />
+                    )}
                     {suggestedFertilizer && !initialData && (
                         <div className="bg-lime-500/5 border border-lime-500/20 rounded-lg p-2.5 flex items-start gap-2 text-xs text-foreground animate-in fade-in duration-200">
                             <div className="flex-grow">

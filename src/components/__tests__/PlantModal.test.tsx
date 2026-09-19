@@ -12,12 +12,13 @@ import { toLocalIsoDate } from '@/utils/dates';
 const addPlantRecordMock = vi.fn().mockResolvedValue(true);
 const updatePlantRecordMock = vi.fn().mockResolvedValue(true);
 let mockCluAssignments: FieldCluAssignment[] = [];
+let mockPlantRecords: PlantRecord[] = [];
 
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     addPlantRecord: addPlantRecordMock,
     updatePlantRecord: updatePlantRecordMock,
-    plantRecords: [],
+    plantRecords: mockPlantRecords,
     savedSeeds: [],
     cluAssignments: mockCluAssignments,
     viewingSeason: 2026,
@@ -298,5 +299,95 @@ describe('PlantModal producer share zero', () => {
       fieldId: field.id,
       producerShare: 60,
     });
+  });
+});
+
+describe('PlantModal sequential carry-forward', () => {
+  const destinationField: Field = {
+    id: 'field-b',
+    name: 'South Field',
+    acreage: 80,
+    lat: null,
+    lng: null,
+    intendedUse: 'Grain',
+    producerShare: 75,
+    irrigationPractice: 'Non-Irrigated',
+    farm_id: 'farm-1',
+    deleted_at: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCluAssignments = [];
+    mockPlantRecords = [{
+      id: 'plant-source',
+      fieldId: 'field-a',
+      fieldName: 'North Field',
+      seedVariety: 'P1197',
+      crop: 'Corn',
+      acreage: 12,
+      plantDate: toLocalIsoDate(Date.now()),
+      intendedUse: 'Seed',
+      producerShare: 20,
+      irrigationPractice: 'Irrigated',
+      cropStatus: 'Cover Crop',
+      cropSequence: 'Second Crop',
+      plantingPattern: 'Source pattern',
+      memo: 'Source memo',
+      timestamp: Date.now(),
+      seasonYear: 2026,
+      farm_id: 'farm-1',
+      deleted_at: null,
+    }];
+  });
+
+  it('carries crop and seed while one submit creates one destination-field record', async () => {
+    render(<PlantModal field={destinationField} open={true} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText(/suggestion available: carry plant details from north field/i)).toBeInTheDocument();
+    expect((screen.getByLabelText(/seed variety/i) as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: /carry details/i }));
+
+    expect((screen.getByLabelText(/seed variety/i) as HTMLInputElement).value).toBe('P1197');
+    expect((screen.getByLabelText(/crop type/i) as HTMLInputElement).value).toBe('Corn');
+    expect((screen.getByLabelText(/planted acres/i) as HTMLInputElement).value).toBe('80');
+    expect((screen.getByLabelText(/plant date/i) as HTMLInputElement).value).toBe(toLocalIsoDate(Date.now()));
+
+    fireEvent.click(screen.getByRole('button', { name: /log planting/i }));
+
+    await waitFor(() => expect(addPlantRecordMock).toHaveBeenCalledTimes(1));
+    expect(addPlantRecordMock.mock.calls[0][0]).toMatchObject({
+      fieldId: 'field-b',
+      fieldName: 'South Field',
+      seedVariety: 'P1197',
+      crop: 'Corn',
+      acreage: 80,
+      intendedUse: 'Grain',
+      producerShare: 75,
+      irrigationPractice: 'Non-Irrigated',
+      cropStatus: 'Planted',
+      cropSequence: 'First Crop',
+      plantingPattern: undefined,
+      memo: undefined,
+    });
+  });
+
+  it('starts fresh when declined and suppresses the chip in duplicate mode', () => {
+    const { unmount } = render(<PlantModal field={destinationField} open={true} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /start fresh/i }));
+    expect(screen.queryByRole('button', { name: /carry details/i })).not.toBeInTheDocument();
+    expect((screen.getByLabelText(/seed variety/i) as HTMLInputElement).value).toBe('');
+    unmount();
+
+    render(
+      <PlantModal
+        field={destinationField}
+        open={true}
+        onClose={vi.fn()}
+        initialData={mockPlantRecords[0]}
+        mode="duplicate"
+      />
+    );
+    expect(screen.queryByRole('button', { name: /carry details/i })).not.toBeInTheDocument();
   });
 });
