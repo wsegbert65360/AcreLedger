@@ -204,6 +204,19 @@ describe('farmStore composed behaviors', () => {
       expect(clearLocalCacheMock).toHaveBeenCalled();
       expect(authSignOut).toHaveBeenCalledTimes(1);
     });
+
+    it('forwards emergency sign-out so the session can end without a readable store', async () => {
+      clearLocalCacheMock.mockResolvedValue(true);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+
+      await act(async () => {
+        await result.current.signOut({ skipUnreadableOfflineStore: true });
+      });
+
+      expect(clearLocalCacheMock).toHaveBeenCalledWith({ skipUnreadableOfflineStore: true });
+      expect(authSignOut).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('viewing season selection', () => {

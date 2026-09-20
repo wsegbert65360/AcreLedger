@@ -44,6 +44,12 @@ export async function getDatabase() {
         sqliteConnection = new SQLiteConnection(CapacitorSQLite);
       }
 
+      try {
+        await sqliteConnection.checkConnectionsConsistency();
+      } catch (err) {
+        console.warn('[OfflineStorage] Connection consistency check failed:', err);
+      }
+
       const isConn = (await sqliteConnection.isConnection('acreledger_db', false)).result;
       if (isConn) {
         dbConnection = await sqliteConnection.retrieveConnection('acreledger_db', false);
@@ -59,14 +65,24 @@ export async function getDatabase() {
           await sqliteConnection.setEncryptionSecret(encKey);
         }
 
-        dbConnection = await sqliteConnection.createConnection(
-          'acreledger_db',
-          true, // encrypted
-          'secret', // mode
-          1, // version
-          false // readonly
-        );
-        await dbConnection.open();
+        try {
+          dbConnection = await sqliteConnection.createConnection(
+            'acreledger_db',
+            true, // encrypted
+            'secret', // mode
+            1, // version
+            false // readonly
+          );
+        } catch (createErr) {
+          // A JS reload can drop the wrapper while the native connection remains.
+          const leftover = (await sqliteConnection.isConnection('acreledger_db', false)).result;
+          if (!leftover) throw createErr;
+          dbConnection = await sqliteConnection.retrieveConnection('acreledger_db', false);
+        }
+        const isOpened = (await dbConnection.isOpened()).result;
+        if (!isOpened) {
+          await dbConnection.open();
+        }
       }
 
       // Older builds duplicated the database passphrase in plaintext

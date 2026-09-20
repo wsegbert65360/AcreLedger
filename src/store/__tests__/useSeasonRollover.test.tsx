@@ -38,6 +38,8 @@ vi.mock('@/lib/syncQueue', () => ({ syncQueue: { clearQueue } }));
 vi.mock('@/lib/offlineStorage', () => ({
   offlineStorage: { clearCache: vi.fn().mockResolvedValue(undefined) },
   isNativeOfflineStoreUnavailable: () => offlineStore.unavailable,
+  isOfflineDatabaseUnavailableError: (error: unknown) =>
+    error instanceof Error && error.message === 'Offline database unavailable.',
   OFFLINE_DATABASE_UNAVAILABLE: 'Offline database unavailable.',
   OFFLINE_STORE_UNAVAILABLE_MESSAGE: 'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
 }));
@@ -144,6 +146,27 @@ describe('season rollover safety', () => {
 
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
     expect(exportDataAsJson).not.toHaveBeenCalled();
+  });
+
+  it('allows confirmed sign-out cleanup when the unreadable store is skipped', async () => {
+    offlineStore.unavailable = true;
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.clearLocalCache({ skipUnreadableOfflineStore: true })).resolves.toBe(true);
+
+    expect(clearQueue).not.toHaveBeenCalled();
+    expect(args.setFields).toHaveBeenCalledWith([]);
+    expect(args.setFarmId).toHaveBeenCalledWith(null);
+  });
+
+  it('still clears the queue when skip is requested but the store is readable', async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.clearLocalCache({ skipUnreadableOfflineStore: true })).resolves.toBe(true);
+
+    expect(clearQueue).toHaveBeenCalledWith('farm-1');
   });
 
   it('blocks rollover when the phone offline store cannot be opened', async () => {

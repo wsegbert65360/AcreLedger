@@ -130,7 +130,7 @@ Every add, update, and delete mutation must follow this sequence:
 7. On success (e.g., `error` is null and `{ count: 'exact' }` matches), show success feedback and return `true`.
 8. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
 
-Bulk or cascading offline mutations must use `syncQueue.enqueueMutations(...)`, never a per-record `enqueueMutation` loop. The batch is a single encrypted localStorage write on web and a transactional SQLite `executeSet` on native. Offline field deletion must batch active `field_clu_assignments` before the field soft-delete; the database `fields_cascade_soft_delete_to_clu_assignments` trigger provides transactional protection when the field row replays. Online field deletion must use the atomic `soft_delete_field_with_clu_assignments` RPC. Sign-out must fail closed unless the selected farm's pending queue is cleared before the auth session is ended.
+Bulk or cascading offline mutations must use `syncQueue.enqueueMutations(...)`, never a per-record `enqueueMutation` loop. The batch is a single encrypted localStorage write on web and a transactional SQLite `executeSet` on native. Offline field deletion must batch active `field_clu_assignments` before the field soft-delete; the database `fields_cascade_soft_delete_to_clu_assignments` trigger provides transactional protection when the field row replays. Online field deletion must use the atomic `soft_delete_field_with_clu_assignments` RPC. Sign-out must fail closed unless the selected farm's pending queue is cleared before the auth session is ended. If the native offline store cannot be opened, the user may confirm an emergency sign-out that ends the session without clearing the unreadable store; the SQLite file stays on the device. Do not treat that confirmation as a successful queue clear. Account deletion stays blocked while the store is unreadable.
 
 When replay reconciliation compares queued values with a row already stored by Postgres, ISO timestamps must be compared as instants after strict timestamp validation. PostgreSQL may return `+00:00` while the client queued the equivalent `.000Z`; raw string equality would falsely retain an already-applied mutation. Keep recursive equality for all non-timestamp payload values.
 
@@ -348,7 +348,8 @@ This rule applies to **every** activity modal that captures a per-record acreage
 ### Native & Offline Capability
 
 - **Web Compatibility**: The codebase is a shared web/native hybrid. Never call Capacitor plugins unconditionally. All native device APIs must check `Capacitor.isNativePlatform()` or use `@/lib/native.ts` wrappers.
-- **Offline Operations**: Mutations must support offline caching. The app automatically pushes sync actions to a local queue when offline (`@/lib/syncQueue.ts`), saving them locally (`@/lib/offlineStorage.ts`) and auto-replaying them upon connection restoration or app foreground resume.
+- **Offline Operations**: Mutations must support offline caching. The app automatically pushes sync actions to a local queue when offline (`@/lib/syncQueue.ts`), saving them locally (`@/lib/offlineStorage.ts`) and auto-replaying them upon connection restoration or app foreground resume. Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true` in `capacitor.config.ts` and the copied iOS config). The plugin treats a missing key as encryption off, which prevents opening the encrypted store.
+
 - **Haptic Feedback**: Trigger native haptic feedback on major user interactions:
   - Navigation tab taps: light haptic feedback.
   - Record save/validation success: success notification haptic.

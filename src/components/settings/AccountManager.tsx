@@ -18,6 +18,7 @@ export default function AccountManager() {
   const [name, setName] = useState(farmName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [confirmUnavailableSignOut, setConfirmUnavailableSignOut] = useState(false);
   const [confirmDeletion, setConfirmDeletion] = useState(false);
   const [deletionConfirmation, setDeletionConfirmation] = useState('');
   const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
@@ -43,7 +44,7 @@ export default function AccountManager() {
     // Signing out clears the local sync queue; queued offline changes that
     // have not synced yet would be permanently lost, so require confirmation.
     if (isNativeOfflineStoreUnavailable()) {
-      toast.error(OFFLINE_STORE_UNAVAILABLE_MESSAGE);
+      setConfirmUnavailableSignOut(true);
       return;
     }
     if (pendingSyncCount > 0) {
@@ -167,6 +168,24 @@ export default function AccountManager() {
             <AlertDialogCancel>Stay signed in</AlertDialogCancel>
             <AlertDialogAction onClick={() => signOut()}>
               Sign out and discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmUnavailableSignOut} onOpenChange={(open) => { if (!open) setConfirmUnavailableSignOut(false); }}>
+        <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out without checking this phone?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This phone cannot open its offline records, so unsaved work cannot be checked or synced.
+              Signing out leaves those records on this phone. Stay signed in if you still need them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Stay signed in</AlertDialogCancel>
+            <AlertDialogAction onClick={() => signOut({ skipUnreadableOfflineStore: true })}>
+              Sign out anyway
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

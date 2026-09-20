@@ -24,7 +24,7 @@ import { useCustomSprayRecords } from './useCustomSprayRecords';
 import { useFertilizerRecords } from './useFertilizerRecords';
 import { useGrainMovements } from './useGrainMovements';
 import { useFieldsAndBins } from './useFieldsAndBins';
-import { useSeasonManagement } from './useSeasonManagement';
+import { useSeasonManagement, type ClearLocalCacheOptions } from './useSeasonManagement';
 import { useTillageRecords } from './useTillageRecords';
 import { useWorkRequests } from './useWorkRequests';
 import { useFsaTracts } from './useFsaTracts';
@@ -148,9 +148,9 @@ interface FarmState {
   updateFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'farm_id'>) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
   /** Global sign out and cache clearing */
-  signOut: () => Promise<void>;
+  signOut: (options?: ClearLocalCacheOptions) => Promise<void>;
   /** Clears all local application storage */
-  clearLocalCache: () => Promise<boolean>;
+  clearLocalCache: (options?: ClearLocalCacheOptions) => Promise<boolean>;
   /** Unique ID for the current farm */
   farm_id: string | null;
   /** Display name of the current farm */
@@ -644,8 +644,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Composed signOut (auth + cache clear) ---
   const clearLocalCache = seasonOps.clearLocalCache;
   const authSignOut = auth.signOut;
-  const signOut = useCallback(async () => {
-    const cacheCleared = await clearLocalCache();
+  const signOut = useCallback(async (options?: ClearLocalCacheOptions) => {
+    const cacheCleared = await clearLocalCache(options);
     if (!cacheCleared) return;
     await authSignOut();
   }, [authSignOut, clearLocalCache]);

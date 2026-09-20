@@ -120,15 +120,25 @@ describe('AccountManager deletion request', () => {
     expect(toastMocks.success).toHaveBeenCalled();
   });
 
-  it('refuses sign-out and deletion when the phone offline store cannot be opened', async () => {
+  it('asks before signing out when the phone offline store cannot be opened', async () => {
     offlineStore.unavailable = true;
     renderAccount();
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
     expect(farmState.signOut).not.toHaveBeenCalled();
-    expect(toastMocks.error).toHaveBeenCalledWith(
-      'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
-    );
+    expect(screen.getByText('Sign out without checking this phone?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stay signed in' }));
+    expect(farmState.signOut).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out anyway' }));
+    expect(farmState.signOut).toHaveBeenCalledWith({ skipUnreadableOfflineStore: true });
+  });
+
+  it('still refuses deletion when the phone offline store cannot be opened', async () => {
+    offlineStore.unavailable = true;
+    renderAccount();
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
     fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
@@ -137,5 +147,8 @@ describe('AccountManager deletion request', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Request deletion' }));
     expect(requestAccountDeletion).not.toHaveBeenCalled();
     expect(farmState.signOut).not.toHaveBeenCalled();
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
+    );
   });
 });

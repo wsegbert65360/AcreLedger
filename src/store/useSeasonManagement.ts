@@ -20,7 +20,7 @@ import { CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupC
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import {
   isNativeOfflineStoreUnavailable,
-  OFFLINE_DATABASE_UNAVAILABLE,
+  isOfflineDatabaseUnavailableError,
   OFFLINE_STORE_UNAVAILABLE_MESSAGE,
   offlineStorage,
 } from '@/lib/offlineStorage';
@@ -29,6 +29,11 @@ import { syncQueue } from '@/lib/syncQueue';
 import { setStorageLock } from './storageUtils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export type ClearLocalCacheOptions = {
+  /** Confirmed sign-out when the native store cannot be opened. Leaves the unreadable SQLite file on the device. */
+  skipUnreadableOfflineStore?: boolean;
+};
 
 interface UseSeasonManagementArgs {
   session: Session | null | undefined;
@@ -317,23 +322,31 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
   // ─── Clear Cache ─────────────────────────────────────────────────────────────
 
-  const clearLocalCache = useCallback(async () => {
+  const clearLocalCache = useCallback(async (options?: ClearLocalCacheOptions) => {
     setStorageLock(true);
     
     const userId = session?.user?.id;
     const userPrefix = userId ? `${userId}_al_` : null;
+    const skipUnreadableStore = options?.skipUnreadableOfflineStore === true
+      && isNativeOfflineStoreUnavailable();
 
     if (farm_id) {
       try {
-        await syncQueue.clearQueue(farm_id);
+        if (!skipUnreadableStore) {
+          await syncQueue.clearQueue(farm_id);
+        }
       } catch (err) {
-        console.error('Failed to clear offline sync queue:', err);
-        setStorageLock(false);
-        const message = err instanceof Error && err.message === OFFLINE_DATABASE_UNAVAILABLE
-          ? OFFLINE_STORE_UNAVAILABLE_MESSAGE
-          : 'Could not clear pending offline work. Cache was not cleared; please try again.';
-        toast.error(message);
-        return false;
+        if (options?.skipUnreadableOfflineStore && isOfflineDatabaseUnavailableError(err)) {
+          // User confirmed leaving the unreadable store on this device.
+        } else {
+          console.error('Failed to clear offline sync queue:', err);
+          setStorageLock(false);
+          const message = isOfflineDatabaseUnavailableError(err)
+            ? OFFLINE_STORE_UNAVAILABLE_MESSAGE
+            : 'Could not clear pending offline work. Cache was not cleared; please try again.';
+          toast.error(message);
+          return false;
+        }
       }
     }
 
@@ -387,7 +400,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setActiveSeason(getCurrentYear());
     setViewingSeason(getCurrentYear());
 
-    toast.success(`Local cache cleared (${keysToRemove.length} item${keysToRemove.length !== 1 ? 's' : ''} removed).`);
+    if (!skipUnreadableStore) {
+      toast.success(`Local cache cleared (${keysToRemove.length} item${keysToRemove.length !== 1 ? 's' : ''} removed).`);
+    }
     return true;
   }, [
     session, farm_id,

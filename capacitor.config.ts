@@ -16,6 +16,15 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: 'Dark',          // matches dark theme default
     },
+    // Native SQLite encryption is off unless this flag is explicit. The iOS
+    // plugin defaults a missing iosIsEncryption key to false, then rejects
+    // encrypted connections and secret APIs — which locked Sign Out.
+    CapacitorSQLite: {
+      iosDatabaseLocation: 'Library/CapacitorDatabase',
+      iosIsEncryption: true,
+      iosKeychainPrefix: 'acreledger',
+      androidIsEncryption: true,
+    },
   },
 };
 
