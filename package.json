@@ -4,6 +4,7 @@
   "version": "3.6.0-AcreLedger",
   "type": "module",
   "scripts": {
+    "postinstall": "patch-package",
     "dev": "vite",
     "prebuild": "npm run verify:tracked-assets",
     "build": "vite build",
@@ -14,6 +15,7 @@
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:db-integrity": "node scripts/test-tenant-harvest-grain-migration.mjs",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b",
     "typecheck:api": "tsc -p tsconfig.api.json",
@@ -28,6 +30,7 @@
     "cap:open": "npx cap open ios",
     "cap:build": "vite build --mode capacitor && npx cap sync ios",
     "verify:docs": "node scripts/verify-docs.mjs",
+    "verify:migrations": "node scripts/verify-supabase-migrations.mjs",
     "docs:toc": "node scripts/verify-docs.mjs --write"
   },
   "overrides": {
@@ -102,6 +105,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^6.2.1",
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
@@ -120,6 +124,7 @@
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
     "lovable-tagger": "^1.1.13",
+    "patch-package": "8.0.1",
     "postcss": "^8.5.6",
     "supabase": "2.107.0",
     "tailwindcss": "^3.4.17",

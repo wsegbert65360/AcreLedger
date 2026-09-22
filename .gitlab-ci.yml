@@ -1,18 +1,49 @@
-# GitLab CI configuration for AcreLedger (Node.js/Vite project)
 image: node:22
 
 stages:
+  - validate
   - test
+  - build
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm/
+
+default:
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+
+quality:
+  stage: validate
+  script:
+    - npm run lint
+    - npm run typecheck
+    - npm run typecheck:api
+
+database:
+  stage: validate
+  script:
+    - npm run test:db-integrity
+    # This intentionally blocks RC promotion until an authoritative core-schema
+    # baseline exists; it must not be weakened to a warning.
+    - npm run verify:migrations
 
 test_job:
   stage: test
   script:
-    - npm ci
-    # Owner-DR packages are separate npm projects. `npm test` includes
-    # their suites, so a root-only install leaves CI without vitest.
     - npm ci --prefix infrastructure/owner-backup
     - npm ci --prefix scripts/recovery
     - npm test
-  only:
-    - main
-    - master
+
+build:
+  stage: build
+  script:
+    - npm run build
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_MERGE_REQUEST_IID

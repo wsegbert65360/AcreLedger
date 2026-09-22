@@ -173,7 +173,8 @@ Farm-guard behavior is already covered for `useGrainMovements` and `useFsaTracts
 
 - [ ] Update the baseline table from a completed coverage run; replace roadmap observations with post-plan state.
 - [ ] Raise global thresholds to actuals-minus-buffer; add per-file thresholds for the P0 set (`sprayExport`, `fsa578PdfExport`, `pdfExport`). For glob patterns matching multiple files, set `perFile: true` so each matched file must independently pass.
-- [ ] Document the SQL/RLS blind spot (migrations, policies, triggers have no automated verification; the manual bot checklist is the interim protocol).
+- [ ] Resolve the database-bootstrap blocker reported by `npm run verify:migrations`: the checked-in history starts by mutating an assumed schema. Obtain and review an authoritative schema-only dump, establish a reconciled baseline, and only then enable a clean `supabase db reset` gate. GitLab intentionally fails its database job until this is resolved.
+- [x] `npm run test:db-integrity` executes the tenant-scoped harvest/grain migration against disposable PostgreSQL fixtures and proves dirty-data preflight, same-farm acceptance, cross-farm rejection, validated composite FK creation, and linked-harvest hard-delete rejection.
 - [ ] Record the Phase 2 `fetchData` exception-path toast asymmetry as a resolved-or-deferred product decision.
 
 ## MRMS Edge Function Investigation (Phase 0.5 — historical)
