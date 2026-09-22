@@ -3,6 +3,8 @@
 > **Purpose:** Single authoritative reference for AcreLedger's architecture, patterns, and rules.
 > Read this file before making any change or addition. A capable AI agent must be able to
 > reconstruct a functionally equivalent application from this document alone.
+> **Last reviewed:** 2026-09-21 against `main` @ 592fef7. Before trusting section details, check
+> `git log -- BLUEPRINT.md`; the entries under [Recent Changes](#recent-changes) are the freshest signals.
 
 ---
 
@@ -10,6 +12,33 @@
 - **Testing & Credentials**: [TESTING.md](./TESTING.md)
 - **Owner Disaster Recovery Plan**: [docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md](./docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md) — implemented tooling; deployment and live drills pending
 - **iOS Release Runbook**: [IOS_RELEASE.md](./IOS_RELEASE.md)
+
+---
+
+## Recent Changes
+
+Substantive edits, newest first. Update this list (and the **Last reviewed** date) whenever a rule
+in this file changes, so agents can skip re-reading unchanged sections.
+
+- **2026-09-21** — Added Recent Changes/TOC navigation, corrected the stale FAB-visibility section to match `showQuickAddFab` in `App.tsx`, and renumbered the tail sections (old 11→7, 12→8).
+- **2026-09-20** — iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); a missing key leaves the offline store unopenable and blocked Sign Out (592fef7).
+- **2026-09-11** — Owner disaster-recovery tooling documented; deployment and live drills still pending (b5cf439).
+- **2026-09-06** — Landlord Summary gains hay production; bales stay separate from bushels (734cb66).
+- **2026-09-05** — Sync replay invariants and atomic offline harvest replay documented (5807554, 3cfd62a).
+
+---
+
+## Contents
+
+- [1. Application Overview](#1-application-overview)
+- [2. Tech Stack](#2-tech-stack)
+- [2b. Visual Design System](#2b-visual-design-system) — [Typography](#typography-split) · [Accessibility](#accessibility-mandatory-standards) · [Text Case](#text-case--tracking) · [Dark Mode Palette](#dark-mode-palette) · [Color Mode Palette](#color-mode-palette) · [Radius Standard](#border-radius-standard) · [Page Header](#page-header-pattern) · [Field Card Pills](#field-card-status-pills) · [Bin Capacity Colors](#bin-capacity-bar-colors) · [Bottom Navigation](#bottom-navigation) · [Auth Screen](#auth-screen)
+- [3. Data Architecture](#3-data-architecture) — [Field](#field) · [Bin](#bin) · [PlantRecord](#plantrecord) · [SprayRecord](#sprayrecord-2026-standards) · [HarvestRecord](#harvestrecord) · [HayHarvestRecord](#hayharvestrecord) · [CustomSprayRecord](#customsprayrecord) · [TillageRecord](#tillagerecord) · [FertilizerApplication](#fertilizerapplication) · [GrainMovement](#grainmovement) · [SavedSeed](#savedseed) · [SprayRecipe](#sprayrecipe) · [FertilizerRecipe](#fertilizerrecipe) · [FsaTractImport](#fsatractimport) · [FieldCluAssignment](#fieldcluassignment) · [Rainfall](#rainfall) · [Weather Proxy](#weather-proxy-apiweather-proxyts) · [Weather Page](#weather-page-weather)
+- [4. State Management Rules](#4-state-management-rules) — [farmStore](#farmstore-react-context) · [Optimistic Update Pattern](#optimistic-update-pattern) · [OpResult Convention](#opresult-convention) · [farm_id Scoping](#farm_id-scoping) · [Backup / Restore Farm Ownership](#backup--restore-farm-ownership) · [Owner Disaster Recovery](#owner-whole-project-disaster-recovery-implemented-tooling-deploymentdrills-pending)
+- [5. Database Conventions](#5-database-conventions) — [Migration Strategy](#migration-strategy-mandatory) · [Data API Access](#data-api-access-mandatory) · [Tenant Isolation (RLS)](#tenant-isolation-rls) · [Profile Membership Protection](#profile-membership-protection) · [Stripe Billing](#stripe-billing-test-mode-web-only) · [Account Lifecycle](#account-lifecycle-and-native-credential-safety) · [Ask the Book Read Registry](#ask-the-book-read-registry) · [Mapper Pattern](#mapper-pattern) · [farm_id Rule](#farm_id-rule) · [FSA / CLU Upsert Exception](#fsa--clu-upsert-exception) · [Soft Delete](#soft-delete)
+- [6. Component Patterns](#6-component-patterns) — [Icon Shadowing](#icon-shadowing-prevention-critical) · [useMemo](#usememo-rules) · [fieldMap Pattern](#fieldmap-pattern) · [Module-Level Helpers](#module-level-pure-helpers) · [Spray Log Export](#universal-spray-log-export) · [Spray Entry Chooser](#spray-entry-chooser-spraytypechoosertsx) · [Field Dashboard](#field-dashboard-mobile-first) · [Crop-Filter Bar](#dashboard-crop-filter-bar-indextsx) · [Season Selector](#season-selector-seasonselecttsx) · [Bottom Padding & FAB](#bottom-padding--fab-visibility) · [ReportTable](#reporttable-responsive-preview-fallback) · [Report Readiness & Mobile Export](#report-readiness-and-mobile-export-workspace) · [FSA-578 Worksheet](#fsa-578-acreage-reporting-worksheet) · [Landlord Summary](#landlord-summary-report) · [FieldNotes](#fieldnotes-component-auto-save) · [PWA & Bundling](#pwa--bundling)
+- [7. Error Handling Standards](#7-error-handling-standards) — [Detailed Error Logging](#detailed-error-logging) · [CSP](#content-security-policy-csp)
+- [8. Coding Rules & Conventions](#8-coding-rules--conventions) — [Verification](#verification)
 
 ---
 
@@ -538,6 +567,7 @@ the full Auth restore path.
 ### Migration Strategy (Mandatory)
 - **Unique Timestamps**: Every migration filename MUST start with a unique **14-digit timestamp** (`YYYYMMDDHHMMSS_name.sql`). This prevents collisions in the Supabase CLI.
 - **Example**: `20260514100000_fix_security.sql`.
+- **Filename references are historical anchors**: migrations cited by name in these docs (acreage backfills, preserved grant/protection and quota migrations) document provenance. If a cited migration is ever renamed or squashed, the stated rule — not the filename — remains authoritative; update the citation instead of re-deriving the rule from the file.
 
 ### Data API Access (Mandatory)
 Starting May 2026, Supabase requires explicit `GRANT` statements for all tables exposed via the Data API (`supabase-js`). Every new table creation migration MUST include:
@@ -742,12 +772,13 @@ beyond `currentYear + 1`.
 ### Bottom Padding & FAB Visibility
 Page container bottom padding must clear the fixed `BottomNav` (`.touch-target` ≈ `4rem` +
 `pb-[env(safe-area-inset-bottom)]`). The exact value depends on whether the global Quick Add FAB is
-shown on that page (`App.tsx` → `hideQuickAddFab`):
-- **FAB shown** (Index, Reports, Settings, Weather, and other root pages): the FAB floats at
+shown on that route (`App.tsx` → `showQuickAddFab`, a route allowlist):
+- **FAB shown** (`/` Index and `/weather` only): the FAB floats at
   `bottom-[calc(4.5rem+...)]`, so the page container uses
   `pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` so the last card clears both the nav
   and the FAB.
-- **FAB hidden** (`/activity`, `/logistics`, `/onboarding`, `/privacy`, and `/field/*`): use
+- **FAB hidden** (everywhere else — `/activity`, `/logistics`, `/reports`, `/settings`,
+  `/onboarding`, `/privacy`, `/support`, `/field/*`, and unknown routes): use
   `pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` (nav only). `FieldDetailScreen` uses
   `6rem` because it renders its own in-flow Quick Actions grid and needs a little extra clearance.
 
@@ -878,7 +909,7 @@ event to automatically sync content to Supabase.
 
 ---
 
-## 11. Error Handling Standards
+## 7. Error Handling Standards
 
 ### Detailed Error Logging
 `useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging.
@@ -889,7 +920,7 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 
 ---
 
-## 12. Coding Rules & Conventions
+## 8. Coding Rules & Conventions
 
 - **Icon Shadowing**: Use `MapIcon`, `HistoryIcon` aliasing.
 - **No `upsert` for updates**: Use `.update().eq('id').eq('farm_id')`; only FSA tract/CLU insert and restore replay paths use the documented conflict-key upserts.

@@ -6,6 +6,20 @@ This file is the cross-agent operating guide for AcreLedger. It is written for C
 
 Use this file as the first-read instruction layer. Use `BLUEPRINT.md` as the full architecture reference, but do not load the entire blueprint unless the task truly needs broad architectural context.
 
+> **Last reviewed:** 2026-09-21 against `main` @ 592fef7. Before trusting a rule below, check
+> `git log -- AGENTS.md`; the entries under Recent Changes are the freshest signals.
+
+## Recent Changes
+
+Substantive edits, newest first. Update this list (and the **Last reviewed** date) whenever a rule
+in this file changes, so agents can skip re-reading unchanged sections.
+
+- **2026-09-21** — Added Recent Changes/last-reviewed freshness headers and tiered the Important Reference Files list into core files plus a feature-area index.
+- **2026-09-20** — Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); emergency sign-out documented for an unreadable offline store (592fef7).
+- **2026-09-14** — Layout/FAB rule corrected to match code (`showQuickAddFab` allowlists only `/` and `/weather`) and the Date Parsing and Sorting section added (d63d5d8).
+- **2026-09-11/12** — CI must `npm ci` the owner-DR packages before unit tests: CodeMagic Unit tests step (c07d73b) and GitLab `test_job` with Node 22 (38e46cf).
+- **2026-09-08** — Three-remote push hygiene documented (d0c52cc).
+
 ## Project Summary
 
 AcreLedger is a mobile-first, PWA-ready agricultural record keeping and compliance reporting app for row-crop farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports.
@@ -24,24 +38,30 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 
 ## Important Reference Files
 
+This list is a routing index, not required reading — identify the task area (see Context Loading
+Rules), then open only the files for that area.
+
+### Core (relevant to almost any task)
+
 - `BLUEPRINT.md` — full authoritative architecture, data model, conventions, and domain rules.
 - `TESTING.md` — verification protocols and test credentials.
-- `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md` — approved owner-only design implemented by `infrastructure/owner-backup/`, `scripts/recovery/`, and `docs/runbooks/`. Deployment and recovery capability remain unproven until the required live drills pass. This is distinct from the customer-facing JSON backup.
-- `docs/runbooks/full-project-recovery.md` and `docs/runbooks/single-farm-recovery.md` — owner operating procedures. Full-project SQL restore must use the checked-in `restore-isolated` command rather than a hand-written file sequence.
-- `api/weather-proxy.ts` — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
-- `src/test/weatherProxy.test.ts` — weather-proxy contract tests; keep API tests outside `api/` so Vercel does not deploy them as functions.
-- `api/ai-assistant.ts` + `server/ai-assistant-tools.ts` — weather-proxy-style Vercel Function and centralized allowlisted read catalog for Ask the book. Named read tools only (no raw SQL, no writes). Uses the caller’s JWT plus explicit farm filters so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
 - `@/types/farm.ts` — canonical TypeScript entity definitions.
 - `@/lib/mappers.ts` — entity to database row translation.
-- `@/lib/backupSchema.ts` — strict backup/restore validation schema.
-- `api/create-checkout-session.ts`, `api/create-portal-session.ts`, `api/stripe-webhook.ts`, `server/billing.ts`, and `@/lib/billing.ts` — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
-- `@/lib/secureStorage.ts`, `@/lib/authDeepLinks.ts`, and `@/lib/accountDeletion.ts` — native credential storage, password-recovery deep links, and the user-requested account-deletion intake path.
 - `farmStore.tsx` — global React Context store and CRUD actions.
-- `@/lib/native.ts` — centralized native capabilities (haptics, status bar, geolocation).
 - `@/lib/syncQueue.ts` — local sync queue and transaction retry engine for offline operation.
-- `@/test/hookTestHarness.tsx` — stateful hook-test array harness; use it when optimistic functional setters and rollback state must be asserted.
-- `@/lib/offlineStorage.ts` — offline persistent key-value store.
-- `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
+- `@/lib/backupSchema.ts` — strict backup/restore validation schema.
+
+### Feature-area index (read only what the task touches)
+
+**Weather & rainfall**
+- `api/weather-proxy.ts` — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
+- `src/test/weatherProxy.test.ts` — weather-proxy contract tests; keep API tests outside `api/` so Vercel does not deploy them as functions.
+- `@/lib/fieldLocation.ts` — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
+
+**AI assistant (Ask the Book)**
+- `api/ai-assistant.ts` + `server/ai-assistant-tools.ts` — weather-proxy-style Vercel Function and centralized allowlisted read catalog for Ask the book. Named read tools only (no raw SQL, no writes). Uses the caller’s JWT plus explicit farm filters so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
+
+**Reports & exports**
 - `@/lib/complianceReports` — report generation.
 - `@/lib/reportReadiness.ts` — shared report-readiness types, summary builder, and FSA/spray/fertilizer/hay/landlord readiness adapters.
 - `@/lib/reportExportHistory.ts` — per-user/farm/season/report local export fingerprints and changed-since-export status.
@@ -50,15 +70,17 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/lib/complianceReports/generateLandlordSummary.ts` — Landlord Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
 - `@/components/reports/LandlordSummaryReport.tsx` — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
 - `@/lib/sprayExport.ts` — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
+
+**FSA tracts & CLU**
 - `@/types/fsaTract.ts` — canonical FSA tract import and CLU assignment types.
 - `@/lib/cluImport.ts` — shared CLU/FSA GeoJSON and ESRI shapefile ZIP parsing, grouping, projection checks, and acreage validation.
 - `@/lib/fsaOfficeRequestSheet.ts` + `@/components/FsaRequestSheetDialog.tsx` — FSA boundary-file request worksheet data builder/PDF and its dialog.
 - `@/lib/tractLookup.ts` and `@/lib/bundledFsaTracts.ts` — bundled/imported FSA tract lookup and merge helpers; use `loadKeyedTractCollections` when code needs tract keys preserved alongside GeoJSON collections.
-- `@/lib/fieldLocation.ts` — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
 - `@/store/useFsaTracts.ts` — FSA tract import and CLU assignment CRUD actions.
 - `@/services/fsaTractService.ts` and `@/services/cluAssignmentService.ts` — Supabase persistence for FSA tract imports and CLU assignments.
-- `@/test/supabaseMock.ts` — shared thenable Supabase unit-test client for service/store tests; supports per-query table isolation, independent RPC controls, and reset-safe Vitest spies.
 - `@/components/TractAssignmentFlow.tsx`, `@/components/CluAssignmentMap.tsx`, `@/components/CluFieldSelector.tsx`, `@/components/FsaTractImporter.tsx` — FSA tract management UI.
+
+**Activity records & shared UI**
 - `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
 - `@/lib/utils.ts` — `cn` Tailwind class merge plus `getLatestForField` generic helper for finding the most recent non-deleted record for a field (used by activity modal suggested-record prefill).
 - `@/lib/activityIcons.ts` — centralized activity type icon and color maps (`ACTIVITY_ICONS`, `ACTIVITY_TEXT_COLORS`, `ACTIVITY_BG_COLORS`).
@@ -69,6 +91,25 @@ The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Post
 - `@/hooks/useCoachmarks.ts` + `@/components/CoachmarkOverlay.tsx` — onboarding coachmark overlay system.
 - `@/context/QuickAddContext.tsx` — global Quick Add provider managing modal states, preselected types, and active fields.
 - `@/components/QuickAddDialog.tsx` — global Quick Add dialog providing field selection and GPS-based nearest field detection.
+
+**Offline, native & accounts**
+- `@/lib/native.ts` — centralized native capabilities (haptics, status bar, geolocation).
+- `@/lib/offlineStorage.ts` — offline persistent key-value store.
+- `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
+- `@/lib/secureStorage.ts`, `@/lib/authDeepLinks.ts`, and `@/lib/accountDeletion.ts` — native credential storage, password-recovery deep links, and the user-requested account-deletion intake path.
+
+**Testing utilities**
+- `@/test/supabaseMock.ts` — shared thenable Supabase unit-test client for service/store tests; supports per-query table isolation, independent RPC controls, and reset-safe Vitest spies.
+- `@/test/hookTestHarness.tsx` — stateful hook-test array harness; use it when optimistic functional setters and rollback state must be asserted.
+
+**Owner disaster recovery**
+- `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md` — approved owner-only design implemented by `infrastructure/owner-backup/`, `scripts/recovery/`, and `docs/runbooks/`. Deployment and recovery capability remain unproven until the required live drills pass. This is distinct from the customer-facing JSON backup.
+- `docs/runbooks/full-project-recovery.md` and `docs/runbooks/single-farm-recovery.md` — owner operating procedures. Full-project SQL restore must use the checked-in `restore-isolated` command rather than a hand-written file sequence.
+
+**Billing**
+- `api/create-checkout-session.ts`, `api/create-portal-session.ts`, `api/stripe-webhook.ts`, `server/billing.ts`, and `@/lib/billing.ts` — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
+
+**CI/CD**
 - `codemagic.yaml` — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
 - `CODEMAGIC.md` — CodeMagic setup guide, credentials, and troubleshooting.
 
