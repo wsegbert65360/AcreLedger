@@ -31,23 +31,23 @@ const features = [
   {
     no: 'NO. 001',
     accent: ACCENTS.red,
-    title: 'An FSA-578 worksheet, ready to hand in',
+    title: 'An FSA-578 worksheet built for the office',
     copy:
-      'Acreage by tract and CLU, crops, planting dates, and reconciliation totals — set up for an FSA employee to enter, not for you to decode.',
+      'Acreage by tract and CLU, crops, planting dates, and reconciliation totals, laid out for your FSA appointment.',
   },
   {
     no: 'NO. 002',
     accent: ACCENTS.gold,
-    title: 'Spray logs that hold up to review',
+    title: 'Spray records that match the work',
     copy:
-      'Product, EPA registration number, rate, and the weather that day — recorded for every application, the details auditors and insurers ask about.',
+      'Each field keeps its own product, EPA number, rate, acreage, and weather. Carry the mix to the next field without combining the records.',
   },
   {
     no: 'NO. 003',
     accent: ACCENTS.green,
-    title: 'One book, whole season',
+    title: 'One book for the whole season',
     copy:
-      'Planting, spraying, fertilizer, harvest, hay, and every grain movement — organized by field instead of scattered across notebooks and camera rolls.',
+      'Planting, spraying, fertilizer, harvest, hay, and grain movements stay organized by field instead of scattered across notebooks and camera rolls.',
   },
   {
     no: 'NO. 004',
@@ -61,14 +61,14 @@ const features = [
     accent: ACCENTS.sky,
     title: 'Works where signal doesn’t',
     copy:
-      'No bars at the back forty? Entries save on your phone and sync when you’re back in town. The dead zone doesn’t get a vote.',
+      'No signal at the back forty? Save the entry on your phone. It syncs when you’re back in range.',
   },
   {
     no: 'NO. 006',
     accent: ACCENTS.red,
     title: 'Landlord summaries in two clicks',
     copy:
-      'Per-landlord activity, yields, and crop-share math — a clean PDF or CSV ready to send when the lease conversation comes up.',
+      'Get each landlord’s activity, yields, and crop-share math in a clean PDF or CSV when the lease conversation comes up.',
   },
 ];
 
@@ -78,42 +78,42 @@ const gallery = [
     alt: 'AcreLedger field screen: satellite map with the field boundary highlighted and quick-log buttons for spray, plant, till, and harvest',
     frame: 'landing-phone--pumpkin',
     caption: 'Every field, mapped',
-    detail: 'Boundaries and one-tap logging, right off the truck seat.',
+    detail: 'Boundaries and quick logging, right from the truck seat.',
   },
   {
     src: reportsShot,
     alt: 'AcreLedger reports screen showing the FSA-578 acreage worksheet ready to export, with all fields ready',
     frame: 'landing-phone--sky',
     caption: 'Office-ready, season-long',
-    detail: 'FSA-578 readiness checked before you drive to the office.',
+    detail: 'See missing details before you drive to the FSA office.',
   },
   {
     src: activityShot,
     alt: 'AcreLedger activity feed listing grain movements into a grain bin and harvested corn records with the season selector',
     frame: 'landing-phone--red',
     caption: 'The whole season, one feed',
-    detail: 'Grain, harvest, and every entry in between — searchable later.',
+    detail: 'Grain, harvest, and everything in between, ready when you need it.',
   },
 ];
 
 const steps = [
   {
     accent: ACCENTS.green,
-    title: 'Log it before you leave the field',
+    title: 'Log the field before you leave it',
     copy:
-      'Pick the field, tap what you did, save. Most entries take about half a minute — and it saves fine with no signal.',
+      'Choose the field, record the work, and save. Start the next field as a new record, then carry over the mix or other reusable details.',
   },
   {
     accent: ACCENTS.pumpkin,
-    title: 'The book keeps everything',
+    title: 'Each field stays separate',
     copy:
-      'Every entry lands organized by field, season, and landlord — as easy to find in December as it was to write in June.',
+      'Date, acreage, weather, and compliance checks stay with that field. Nothing gets lumped together at the end of the day.',
   },
   {
     accent: ACCENTS.sky,
     title: 'Print what the office needs',
     copy:
-      'FSA acreage worksheets, spray audit logs, landlord summaries — PDF or CSV, whenever the co-op, landlord, or FSA office asks.',
+      'Print FSA acreage worksheets, spray logs, and landlord summaries as a PDF or CSV when the co-op, landlord, or FSA office asks.',
   },
 ];
 
@@ -132,7 +132,7 @@ const faqs = [
   {
     question: 'Do I need FSA boundary files before I start?',
     answer:
-      'No. Add fields by hand and start recording the same day. Import FSA tract and CLU boundary files whenever your office provides them — your earlier records stay right where they are.',
+      'No. Add fields by hand and start recording the same day. Import FSA tract and CLU boundary files whenever your office provides them. Your earlier records stay with their fields.',
   },
   {
     question: 'Does AcreLedger replace official USDA or product-label requirements?',
@@ -147,12 +147,12 @@ const faqs = [
   {
     question: 'Does it work without cell service?',
     answer:
-      'Yes. Entries save on your phone first and sync when you are back in range. Coverage in the field doesn’t decide what gets written down.',
+      'Yes. Entries save on your phone first and sync when you are back in range.',
   },
   {
     question: 'Who owns the records I keep here?',
     answer:
-      'You do. Export PDFs and CSVs whenever you need them, or download a complete backup of your farm’s data. The book is yours — AcreLedger just keeps it.',
+      'You do. Export PDFs and CSVs whenever you need them, or download a complete backup of your farm’s data. AcreLedger keeps the book; the records stay yours.',
   },
 ];
 
@@ -213,23 +213,22 @@ const Landing = () => {
           <div className="landing-hero-grid">
             <div>
               <p className="landing-eyebrow" data-reveal>
-                Field record book · Row crop &amp; small operations
+                Farm records for row-crop operations
               </p>
               <h1 className="landing-h1" data-reveal style={revealDelay(80)}>
                 Field records in. <em>FSA paperwork out.</em>
               </h1>
               <p className="landing-hero-sub" data-reveal style={revealDelay(160)}>
-                AcreLedger keeps your season in one book — planting, spraying,
-                harvest, grain — and turns it into office-ready reports. An
-                entry takes half a minute from the truck cab, with or without
-                signal.
+                AcreLedger keeps planting, spraying, harvest, grain, and reports
+                in one farm book. Log each field from the truck cab, even without
+                signal, then print the paperwork you need.
               </p>
               <div className="landing-hero-actions" data-reveal style={revealDelay(240)}>
                 <Link className="landing-btn" to="/auth?mode=signup">
                   Open your farm book
                 </Link>
                 <a className="landing-btn landing-btn--ghost" href="#features">
-                  See what the book makes
+                  See what it handles
                 </a>
               </div>
               <p className="landing-hero-terms" data-reveal style={revealDelay(320)}>
@@ -251,7 +250,7 @@ const Landing = () => {
               </span>
               <figcaption className="landing-phone-caption">
                 <strong>The actual app</strong>
-                Your dashboard — weather, acres, every field at a glance.
+                Your weather, acres, and every field at a glance.
               </figcaption>
             </figure>
           </div>
@@ -264,7 +263,7 @@ const Landing = () => {
           <section className="landing-section landing-manifesto">
             <span className="landing-entry-no">Entry 002</span>
             <p data-reveal>
-              Every farm already keeps a book — a notebook in the truck,
+              Every farm already keeps a book: a notebook in the truck,
               receipts in the drawer, yields in your head.{' '}
               <strong>AcreLedger is that book</strong>, kept current, that also
               finishes the paperwork.
@@ -279,8 +278,8 @@ const Landing = () => {
             What goes in the book.
           </h2>
           <p className="landing-lede" data-reveal style={revealDelay(80)}>
-            Everything a season produces, kept the way you’d write it — and
-            organized the way an office reads it.
+            Keep the season the way you work it. AcreLedger organizes the
+            details the way the office needs them.
           </p>
           <ul className="landing-features">
             {features.map((feature, index) => (
@@ -306,7 +305,7 @@ const Landing = () => {
             See it work.
           </h2>
           <p className="landing-lede" data-reveal style={revealDelay(80)}>
-            Actual screens from a working farm’s book — not mock-ups.
+            These are screens from the working app, not mock-ups.
           </p>
           <ul className="landing-gallery">
             {gallery.map((shot, index) => (
@@ -329,10 +328,10 @@ const Landing = () => {
         <section className="landing-section" id="how">
           <span className="landing-entry-no">Entry 005</span>
           <h2 className="landing-h2" data-reveal>
-            Half a minute at a time.
+            One field at a time.
           </h2>
           <p className="landing-lede" data-reveal style={revealDelay(80)}>
-            Record keeping that fits the cab, not the office chair.
+            Recordkeeping that fits the cab, not the office chair.
           </p>
           <ol className="landing-steps">
             {steps.map((step, index) => (
@@ -360,7 +359,7 @@ const Landing = () => {
             Terms of the book.
           </h2>
           <p className="landing-lede" data-reveal style={revealDelay(80)}>
-            One price per farm. No per-seat math, no surprises at renewal.
+            One annual price per farm, with no per-seat charge.
           </p>
           <div className="landing-ticket-wrap">
             <dl className="landing-ticket" data-reveal>
@@ -395,10 +394,10 @@ const Landing = () => {
               </div>
               <p className="landing-ticket-note">
                 About $24.92 per month, billed annually. The price covers
-                access to AcreLedger; internet service, third-party services,
-                and any professional or government filing fees are not
-                included. You will not be charged when you create an account —
-                web subscriptions are rolling out in stages.
+                AcreLedger access. Internet service, third-party services, and
+                professional or government filing fees cost extra. You will not
+                be charged when you create an account; web subscriptions are
+                rolling out in stages.
               </p>
             </dl>
 
@@ -448,9 +447,6 @@ const Landing = () => {
           <section className="landing-section landing-final" id="start">
             <h2 data-reveal>Start this season’s book.</h2>
             <div className="landing-hero-actions" data-reveal style={revealDelay(120)}>
-              <Link className="landing-btn landing-btn--gold" to="/auth?mode=signup">
-                Create your account
-              </Link>
               <Link className="landing-btn landing-btn--light" to="/auth?mode=signup">
                 Open your farm book
               </Link>
@@ -460,8 +456,8 @@ const Landing = () => {
               billed annually
             </p>
             <div className="landing-stamp" data-reveal="stamp" style={revealDelay(320)}>
-              KEPT CURRENT
-              <small>ACRELEDGER · EST. RECORD</small>
+              FIELD NOTES IN
+              <small>REPORTS READY</small>
             </div>
           </section>
         </div>
@@ -475,8 +471,8 @@ const Landing = () => {
           <Link to="/privacy">Privacy policy</Link>
           <span>© 2026 AcreLedger</span>
           <span className="landing-footer-legal">
-            Working documents for your records and appointments — not a
-            guarantee of FSA acceptance. Follow labels and your county office.
+            Working documents for your records and appointments. FSA acceptance
+            is not guaranteed. Follow labels and your county office.
           </span>
         </div>
       </footer>

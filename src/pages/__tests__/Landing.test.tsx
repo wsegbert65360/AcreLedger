@@ -29,7 +29,7 @@ describe('Landing', () => {
       screen.getByRole('heading', { name: /what goes in the book\./i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /an fsa-578 worksheet, ready to hand in/i })
+      screen.getByRole('heading', { name: /an fsa-578 worksheet built for the office/i })
     ).toBeInTheDocument();
     expect(screen.getByText(/works where signal doesn’t/i)).toBeInTheDocument();
     expect(screen.getByAltText(/AcreLedger dashboard with live weather/i)).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('Landing', () => {
     renderLanding();
     expect(
       screen.getByText(
-        'Working documents for your records and appointments — not a guarantee of FSA acceptance. Follow labels and your county office.'
+        'Working documents for your records and appointments. FSA acceptance is not guaranteed. Follow labels and your county office.'
       )
     ).toBeInTheDocument();
   });
