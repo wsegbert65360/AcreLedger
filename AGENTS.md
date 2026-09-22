@@ -4,21 +4,46 @@
 
 This file is the cross-agent operating guide for AcreLedger. It is written for Codex, Gemini CLI, Pi/local agents, and any other AI coding assistant working in this repository.
 
-Use this file as the first-read instruction layer. Use `BLUEPRINT.md` as the full architecture reference, but do not load the entire blueprint unless the task truly needs broad architectural context.
+Read this file first for working instructions and essential safety rules. Then use the
+[feature-area index](#feature-area-index-read-only-what-the-task-touches) to open only the source
+files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
+architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last reviewed:** 2026-09-21 against `main` @ 592fef7. Before trusting a rule below, check
-> `git log -- AGENTS.md`; the entries under Recent Changes are the freshest signals.
+> **Last updated:** 2026-09-21 (reading guidance, navigation, and consolidation of design details).
+> **Verification scope:** This is not a whole-document code audit. Section-level verification
+> notes identify the implementation actually checked. Use `git log -- AGENTS.md` for edit history.
 
 ## Recent Changes
 
-Substantive edits, newest first. Update this list (and the **Last reviewed** date) whenever a rule
-in this file changes, so agents can skip re-reading unchanged sections.
+Keep the five most recent substantive entries, newest first; Git holds the full history.
+Update **Last updated** when editing guidance. Update a section’s **Verified against code** note
+only after checking that section’s implementation, recording the date, commit, and files inspected.
+Navigation checks and editorial changes do not constitute verification of architectural claims.
 
-- **2026-09-21** — Added Recent Changes/last-reviewed freshness headers and tiered the Important Reference Files list into core files plus a feature-area index.
+- **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and moved detailed design guidance into BLUEPRINT. Earlier today: added freshness headers and the feature-area file index.
 - **2026-09-20** — Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); emergency sign-out documented for an unreadable offline store (592fef7).
 - **2026-09-14** — Layout/FAB rule corrected to match code (`showQuickAddFab` allowlists only `/` and `/weather`) and the Date Parsing and Sorting section added (d63d5d8).
 - **2026-09-11/12** — CI must `npm ci` the owner-DR packages before unit tests: CodeMagic Unit tests step (c07d73b) and GitLab `test_job` with Node 22 (38e46cf).
 - **2026-09-08** — Three-remote push hygiene documented (d0c52cc).
+
+## Contents
+
+<!-- contents:start -->
+- [Purpose](#purpose)
+- [Recent Changes](#recent-changes)
+- [Project Summary](#project-summary)
+- [Context Loading Rules](#context-loading-rules)
+- [Important Reference Files](#important-reference-files)
+- [Non-Negotiable Rules](#non-negotiable-rules)
+- [UI and Component Rules](#ui-and-component-rules)
+- [Error Handling](#error-handling)
+- [React and Performance Rules](#react-and-performance-rules)
+- [Weather and Rainfall Rules](#weather-and-rainfall-rules)
+- [Coding Style](#coding-style)
+- [Change Workflow](#change-workflow)
+- [When to Use `BLUEPRINT.md`](#when-to-use-blueprintmd)
+- [Cross-Agent Consistency](#cross-agent-consistency)
+<!-- contents:end -->
 
 ## Project Summary
 
@@ -43,75 +68,75 @@ Rules), then open only the files for that area.
 
 ### Core (relevant to almost any task)
 
-- `BLUEPRINT.md` — full authoritative architecture, data model, conventions, and domain rules.
-- `TESTING.md` — verification protocols and test credentials.
-- `@/types/farm.ts` — canonical TypeScript entity definitions.
-- `@/lib/mappers.ts` — entity to database row translation.
-- `farmStore.tsx` — global React Context store and CRUD actions.
-- `@/lib/syncQueue.ts` — local sync queue and transaction retry engine for offline operation.
-- `@/lib/backupSchema.ts` — strict backup/restore validation schema.
+- [BLUEPRINT.md](./BLUEPRINT.md) — detailed architecture, data model, design values, and implementation patterns.
+- [TESTING.md](./TESTING.md) — verification protocols and test credentials.
+- [@/types/farm.ts](./src/types/farm.ts) — canonical TypeScript entity definitions.
+- [@/lib/mappers.ts](./src/lib/mappers.ts) — entity to database row translation.
+- [farmStore.tsx](./src/store/farmStore.tsx) — global React Context store and CRUD actions.
+- [@/lib/syncQueue.ts](./src/lib/syncQueue.ts) — local sync queue and transaction retry engine for offline operation.
+- [@/lib/backupSchema.ts](./src/lib/backupSchema.ts) — strict backup/restore validation schema.
 
 ### Feature-area index (read only what the task touches)
 
 **Weather & rainfall**
-- `api/weather-proxy.ts` — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
-- `src/test/weatherProxy.test.ts` — weather-proxy contract tests; keep API tests outside `api/` so Vercel does not deploy them as functions.
-- `@/lib/fieldLocation.ts` — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
+- [api/weather-proxy.ts](./api/weather-proxy.ts) — authenticated Vercel Function that validates and rate-limits Visual Crossing requests while keeping the API key server-side.
+- [src/test/weatherProxy.test.ts](./src/test/weatherProxy.test.ts) — weather-proxy contract tests; keep API tests outside [api/](./api) so Vercel does not deploy them as functions.
+- [@/lib/fieldLocation.ts](./src/lib/fieldLocation.ts) — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
 
 **AI assistant (Ask the Book)**
-- `api/ai-assistant.ts` + `server/ai-assistant-tools.ts` — weather-proxy-style Vercel Function and centralized allowlisted read catalog for Ask the book. Named read tools only (no raw SQL, no writes). Uses the caller’s JWT plus explicit farm filters so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
+- [api/ai-assistant.ts](./api/ai-assistant.ts) + [server/ai-assistant-tools.ts](./server/ai-assistant-tools.ts) — weather-proxy-style Vercel Function and centralized allowlisted read catalog for Ask the book. Named read tools only (no raw SQL, no writes). Uses the caller’s JWT plus explicit farm filters so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
 
 **Reports & exports**
-- `@/lib/complianceReports` — report generation.
-- `@/lib/reportReadiness.ts` — shared report-readiness types, summary builder, and FSA/spray/fertilizer/hay/landlord readiness adapters.
-- `@/lib/reportExportHistory.ts` — per-user/farm/season/report local export fingerprints and changed-since-export status.
-- `@/components/reports/MobileReportExportPanel.tsx` + `ReportReadinessPanel.tsx` + `ReportIssueList.tsx` — mobile export-first report workspace, readiness summary, and actionable grouped issues.
-- `@/lib/complianceReports/fsa578PdfExport.ts` — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
-- `@/lib/complianceReports/generateLandlordSummary.ts` — Landlord Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
-- `@/components/reports/LandlordSummaryReport.tsx` — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
-- `@/lib/sprayExport.ts` — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
+- [@/lib/complianceReports](./src/lib/complianceReports) — report generation.
+- [@/lib/reportReadiness.ts](./src/lib/reportReadiness.ts) — shared report-readiness types, summary builder, and FSA/spray/fertilizer/hay/landlord readiness adapters.
+- [@/lib/reportExportHistory.ts](./src/lib/reportExportHistory.ts) — per-user/farm/season/report local export fingerprints and changed-since-export status.
+- [@/components/reports/MobileReportExportPanel.tsx](./src/components/reports/MobileReportExportPanel.tsx) + [ReportReadinessPanel.tsx](./src/components/reports/ReportReadinessPanel.tsx) + [ReportIssueList.tsx](./src/components/reports/ReportIssueList.tsx) — mobile export-first report workspace, readiness summary, and actionable grouped issues.
+- [@/lib/complianceReports/fsa578PdfExport.ts](./src/lib/complianceReports/fsa578PdfExport.ts) — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
+- [@/lib/complianceReports/generateLandlordSummary.ts](./src/lib/complianceReports/generateLandlordSummary.ts) — Landlord Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
+- [@/components/reports/LandlordSummaryReport.tsx](./src/components/reports/LandlordSummaryReport.tsx) — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
+- [@/lib/sprayExport.ts](./src/lib/sprayExport.ts) — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
 
 **FSA tracts & CLU**
-- `@/types/fsaTract.ts` — canonical FSA tract import and CLU assignment types.
-- `@/lib/cluImport.ts` — shared CLU/FSA GeoJSON and ESRI shapefile ZIP parsing, grouping, projection checks, and acreage validation.
-- `@/lib/fsaOfficeRequestSheet.ts` + `@/components/FsaRequestSheetDialog.tsx` — FSA boundary-file request worksheet data builder/PDF and its dialog.
-- `@/lib/tractLookup.ts` and `@/lib/bundledFsaTracts.ts` — bundled/imported FSA tract lookup and merge helpers; use `loadKeyedTractCollections` when code needs tract keys preserved alongside GeoJSON collections.
-- `@/store/useFsaTracts.ts` — FSA tract import and CLU assignment CRUD actions.
-- `@/services/fsaTractService.ts` and `@/services/cluAssignmentService.ts` — Supabase persistence for FSA tract imports and CLU assignments.
-- `@/components/TractAssignmentFlow.tsx`, `@/components/CluAssignmentMap.tsx`, `@/components/CluFieldSelector.tsx`, `@/components/FsaTractImporter.tsx` — FSA tract management UI.
+- [@/types/fsaTract.ts](./src/types/fsaTract.ts) — canonical FSA tract import and CLU assignment types.
+- [@/lib/cluImport.ts](./src/lib/cluImport.ts) — shared CLU/FSA GeoJSON and ESRI shapefile ZIP parsing, grouping, projection checks, and acreage validation.
+- [@/lib/fsaOfficeRequestSheet.ts](./src/lib/fsaOfficeRequestSheet.ts) + [@/components/FsaRequestSheetDialog.tsx](./src/components/FsaRequestSheetDialog.tsx) — FSA boundary-file request worksheet data builder/PDF and its dialog.
+- [@/lib/tractLookup.ts](./src/lib/tractLookup.ts) and [@/lib/bundledFsaTracts.ts](./src/lib/bundledFsaTracts.ts) — bundled/imported FSA tract lookup and merge helpers; use `loadKeyedTractCollections` when code needs tract keys preserved alongside GeoJSON collections.
+- [@/store/useFsaTracts.ts](./src/store/useFsaTracts.ts) — FSA tract import and CLU assignment CRUD actions.
+- [@/services/fsaTractService.ts](./src/services/fsaTractService.ts) and [@/services/cluAssignmentService.ts](./src/services/cluAssignmentService.ts) — Supabase persistence for FSA tract imports and CLU assignments.
+- [@/components/TractAssignmentFlow.tsx](./src/components/TractAssignmentFlow.tsx), [@/components/CluAssignmentMap.tsx](./src/components/CluAssignmentMap.tsx), [@/components/CluFieldSelector.tsx](./src/components/CluFieldSelector.tsx), [@/components/FsaTractImporter.tsx](./src/components/FsaTractImporter.tsx) — FSA tract management UI.
 
 **Activity records & shared UI**
-- `@/utils/dates`, `@/utils/numbers`, `@/utils/text` — pure formatting helpers.
-- `@/lib/utils.ts` — `cn` Tailwind class merge plus `getLatestForField` generic helper for finding the most recent non-deleted record for a field (used by activity modal suggested-record prefill).
-- `@/lib/activityIcons.ts` — centralized activity type icon and color maps (`ACTIVITY_ICONS`, `ACTIVITY_TEXT_COLORS`, `ACTIVITY_BG_COLORS`).
-- `@/hooks/useSprayForm.ts` — shared spray form state for the SprayWizard step components.
-- `@/components/CustomSprayModal.tsx` + `@/components/SprayTypeChooser.tsx` + `@/store/useCustomSprayRecords.ts` — custom (outside-party) spray modal, the spray-entry chooser, and the CRUD hook (see Custom (Outside-Party) Spray Records).
-- `@/components/SeasonSelect.tsx` — centralized viewing-season dropdown (`variant="sidebar"` for the Sidebar); reads `activeSeason`/`viewingSeason`/`seasonOptions`/`setViewingSeason` from `useFarm()`. Do not re-declare inline season `Select`s — reuse this component.
-- `@/hooks/useUndoDelete.ts` — undo-safe soft-delete pattern for FieldManager and similar bulk-delete UI.
-- `@/hooks/useCoachmarks.ts` + `@/components/CoachmarkOverlay.tsx` — onboarding coachmark overlay system.
-- `@/context/QuickAddContext.tsx` — global Quick Add provider managing modal states, preselected types, and active fields.
-- `@/components/QuickAddDialog.tsx` — global Quick Add dialog providing field selection and GPS-based nearest field detection.
+- [@/utils/dates](./src/utils/dates.ts), [@/utils/numbers](./src/utils/numbers.ts), [@/utils/text](./src/utils/text.ts) — pure formatting helpers.
+- [@/lib/utils.ts](./src/lib/utils.ts) — `cn` Tailwind class merge plus `getLatestForField` generic helper for finding the most recent non-deleted record for a field (used by activity modal suggested-record prefill).
+- [@/lib/activityIcons.ts](./src/lib/activityIcons.ts) — centralized activity type icon and color maps (`ACTIVITY_ICONS`, `ACTIVITY_TEXT_COLORS`, `ACTIVITY_BG_COLORS`).
+- [@/hooks/useSprayForm.ts](./src/hooks/useSprayForm.ts) — shared spray form state for the SprayWizard step components.
+- [@/components/CustomSprayModal.tsx](./src/components/CustomSprayModal.tsx) + [@/components/SprayTypeChooser.tsx](./src/components/SprayTypeChooser.tsx) + [@/store/useCustomSprayRecords.ts](./src/store/useCustomSprayRecords.ts) — custom (outside-party) spray modal, the spray-entry chooser, and the CRUD hook (see Custom (Outside-Party) Spray Records).
+- [@/components/SeasonSelect.tsx](./src/components/SeasonSelect.tsx) — centralized viewing-season dropdown (`variant="sidebar"` for the Sidebar); reads `activeSeason`/`viewingSeason`/`seasonOptions`/`setViewingSeason` from `useFarm()`. Do not re-declare inline season `Select`s — reuse this component.
+- [@/hooks/useUndoDelete.ts](./src/hooks/useUndoDelete.ts) — undo-safe soft-delete pattern for FieldManager and similar bulk-delete UI.
+- [@/hooks/useCoachmarks.ts](./src/hooks/useCoachmarks.ts) + [@/components/CoachmarkOverlay.tsx](./src/components/CoachmarkOverlay.tsx) — onboarding coachmark overlay system.
+- [@/context/QuickAddContext.tsx](./src/context/QuickAddContext.tsx) — global Quick Add provider managing modal states, preselected types, and active fields.
+- [@/components/QuickAddDialog.tsx](./src/components/QuickAddDialog.tsx) — global Quick Add dialog providing field selection and GPS-based nearest field detection.
 
 **Offline, native & accounts**
-- `@/lib/native.ts` — centralized native capabilities (haptics, status bar, geolocation).
-- `@/lib/offlineStorage.ts` — offline persistent key-value store.
-- `@/hooks/useNetworkStatus.ts` — network connectivity monitoring hook.
-- `@/lib/secureStorage.ts`, `@/lib/authDeepLinks.ts`, and `@/lib/accountDeletion.ts` — native credential storage, password-recovery deep links, and the user-requested account-deletion intake path.
+- [@/lib/native.ts](./src/lib/native.ts) — centralized native capabilities (haptics, status bar, geolocation).
+- [@/lib/offlineStorage.ts](./src/lib/offlineStorage.ts) — offline persistent key-value store.
+- [@/hooks/useNetworkStatus.ts](./src/hooks/useNetworkStatus.ts) — network connectivity monitoring hook.
+- [@/lib/secureStorage.ts](./src/lib/secureStorage.ts), [@/lib/authDeepLinks.ts](./src/lib/authDeepLinks.ts), and [@/lib/accountDeletion.ts](./src/lib/accountDeletion.ts) — native credential storage, password-recovery deep links, and the user-requested account-deletion intake path.
 
 **Testing utilities**
-- `@/test/supabaseMock.ts` — shared thenable Supabase unit-test client for service/store tests; supports per-query table isolation, independent RPC controls, and reset-safe Vitest spies.
-- `@/test/hookTestHarness.tsx` — stateful hook-test array harness; use it when optimistic functional setters and rollback state must be asserted.
+- [@/test/supabaseMock.ts](./src/test/supabaseMock.ts) — shared thenable Supabase unit-test client for service/store tests; supports per-query table isolation, independent RPC controls, and reset-safe Vitest spies.
+- [@/test/hookTestHarness.tsx](./src/test/hookTestHarness.tsx) — stateful hook-test array harness; use it when optimistic functional setters and rollback state must be asserted.
 
 **Owner disaster recovery**
-- `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md` — approved owner-only design implemented by `infrastructure/owner-backup/`, `scripts/recovery/`, and `docs/runbooks/`. Deployment and recovery capability remain unproven until the required live drills pass. This is distinct from the customer-facing JSON backup.
-- `docs/runbooks/full-project-recovery.md` and `docs/runbooks/single-farm-recovery.md` — owner operating procedures. Full-project SQL restore must use the checked-in `restore-isolated` command rather than a hand-written file sequence.
+- [docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md](./docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md) — approved owner-only design implemented by [infrastructure/owner-backup/](./infrastructure/owner-backup), [scripts/recovery/](./scripts/recovery), and [docs/runbooks/](./docs/runbooks). Deployment and recovery capability remain unproven until the required live drills pass. This is distinct from the customer-facing JSON backup.
+- [docs/runbooks/full-project-recovery.md](./docs/runbooks/full-project-recovery.md) and [docs/runbooks/single-farm-recovery.md](./docs/runbooks/single-farm-recovery.md) — owner operating procedures. Full-project SQL restore must use the checked-in `restore-isolated` command rather than a hand-written file sequence.
 
 **Billing**
-- `api/create-checkout-session.ts`, `api/create-portal-session.ts`, `api/stripe-webhook.ts`, `server/billing.ts`, and `@/lib/billing.ts` — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
+- [api/create-checkout-session.ts](./api/create-checkout-session.ts), [api/create-portal-session.ts](./api/create-portal-session.ts), [api/stripe-webhook.ts](./api/stripe-webhook.ts), [server/billing.ts](./server/billing.ts), and [@/lib/billing.ts](./src/lib/billing.ts) — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
 
 **CI/CD**
-- `codemagic.yaml` — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
-- `CODEMAGIC.md` — CodeMagic setup guide, credentials, and troubleshooting.
+- [codemagic.yaml](./codemagic.yaml) — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
+- [CODEMAGIC.md](./CODEMAGIC.md) — CodeMagic setup guide, credentials, and troubleshooting.
 
 ## Non-Negotiable Rules
 
@@ -411,30 +436,16 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Interactive touch targets should be at least 44px high. Default form `Input` and `SelectTrigger` components must use `h-11` (44px) height. Custom height overrides (such as `h-9` or `h-10`) on form inputs and selectors should be avoided to prevent touch-target regressions.
 
 ### Light Mode Theme
-- The light mode theme is a high-contrast, vibrant palette.
-- Background uses a soft pastel denim-blue (`212 40% 91%`).
-- Cards and popover elements use pure white (`0 0% 100%`) for crisp visual elevation.
-- Typography foreground color uses deep navy-black (`212 80% 6%`) to guarantee high readability.
-- Brand colors are highly saturated: Plant/primary green (`142 90% 28%`), Spray/secondary blue (`212 100% 36%`), and Harvest/accent amber (`36 95% 44%`).
-- Outlines and borders use defined slate-denim gray (`212 25% 78%`).
-- Muted helper/secondary text uses a darker slate-denim gray (`212 25% 30%`) to meet WCAG AA contrast guidelines.
+
+Follow [BLUEPRINT → Light Mode Palette](./BLUEPRINT.md#light-mode-palette).
 
 ### Color Mode Theme
-- Color mode is a bright rainbow/neon alternative to light and dark. The stored theme key is `color` (html class `.color`).
-- Do not use pink or magenta as the dominant wash. Background is a warm cream (`48 55% 96%`) plus lime, cyan, sky, violet, gold, and orange page gradients.
-- Cards stay white. Foreground is deep navy (`222 47% 11%`) for contrast.
-- Chrome accents are lime primary (`142 90% 34%`), cyan secondary (`188 100% 36%`), and gold accent (`38 100% 46%`). Extra hues live on `--hue-lime`, `--hue-cyan`, `--hue-sky`, `--hue-violet`, `--hue-gold`, and `--hue-orange`.
-- Color-mode CSS paints nav tabs, field cards, stat cards, crop chips, settings accordions, and headers with those distinct hues. Keep that variety; do not collapse back to one accent.
-- Primary action buttons stay high-contrast in color mode: dark forest fill (`#14261a`), white label/icon, white outline. Do not put rainbow or neon fills on text-bearing buttons.
-- Farm tokens stay recognizable but neon: plant lime (`142 100% 36%`), spray sky (`210 100% 44%`), harvest orange (`32 100% 48%`).
-- Muted helper text uses `222 20% 32%` to stay WCAG AA.
-- Color mode is light-based: do not add `.dark` or rely on `dark:` variants. Status bar uses dark icons.
+
+Follow [BLUEPRINT → Color Mode Palette](./BLUEPRINT.md#color-mode-palette).
 
 ### Typography
 
-- Use Inter through `font-sans` for normal labels, headings, body text, buttons, navigation, empty states, and descriptions.
-- Use JetBrains Mono through `font-mono` for data values such as numbers, dates, timestamps, coordinates, table cells, IDs, registration numbers, ticket numbers, and version strings.
-- The AcreLedger brand text intentionally uses `font-mono` and `tracking-tighter`.
+Follow [BLUEPRINT → Typography Split](./BLUEPRINT.md#typography-split).
 
 ### Numeric Display
 
@@ -451,27 +462,16 @@ This rule applies to **every** activity modal that captures a per-record acreage
 
 ### Text Case
 
-- Prefer sentence case.
-- Avoid `uppercase` with `tracking-widest` for normal labels, buttons, and body text.
-- Uppercase is acceptable for tiny badges, report table headers, and legal/regulatory footers.
-- Field status indicators must render as high-contrast inline labeled pills (e.g., "Planted", "Activity logged", or "No activity") using opacity-friendly theme styles (e.g. `bg-plant/10 text-plant border-plant/20` / `bg-spray/10 text-spray border-spray/20` / `bg-muted text-muted-foreground border-border`) next to the entity header, rather than absolute-positioned corner status dots.
+Follow [BLUEPRINT → Text Case & Tracking](./BLUEPRINT.md#text-case--tracking) and
+[Field Card Status Pills](./BLUEPRINT.md#field-card-status-pills).
 
 ### Layout
 
-- Preserve the mobile-first design.
-- Page headers should follow the sticky header pattern from `BLUEPRINT.md`.
-- Mobile pages must reserve bottom padding for the fixed `BottomNav`. `BottomNav` uses `.touch-target` (`min-height: 64px` ≈ `4rem`) plus `pb-[env(safe-area-inset-bottom)]`. The page-container value depends on whether the global Quick Add FAB renders on that route (`App.tsx` → `showQuickAddFab`, a route allowlist):
-  - **FAB shown** (`/` Index and `/weather` only): use `pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` so the last card clears both the nav and the FAB.
-  - **FAB hidden** (everywhere else — `/activity`, `/logistics`, `/reports`, `/settings`, `/onboarding`, `/privacy`, `/support`, `/field/*`, and unknown routes): use `pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8` (nav only). `FieldDetailScreen` uses `6rem` because it renders its own in-flow Quick Actions grid.
-  - Never set page-container bottom padding below the nav height, or the last cards scroll under the tab bar.
-- Do not reintroduce floating/sticky bottom bars on the dashboard. Crop filters, totals, and quick actions live in the scrollable body (directly below the `WeatherBar`), not in an overlay footer.
-- `FieldDetailScreen` section order is canonical (see `BLUEPRINT.md` → Field Dashboard): header → boundary map → Quick Actions → Today at a Glance → Latest Spray → Field History → Rainfall Summary → CLU Summary → Field Details & Notes. Daily-use action sections (Quick Actions, Today at a Glance, Latest Spray, Field History) sit above reference sections (rainfall detail, CLU, field meta). The CLU section is a single row showing count + cropland/non-cropland totals + Manage/Assign button; the full per-CLU list lives in the management dialog, not inline on the page.
-- Horizontal tab bars on mobile viewports should support horizontal scrolling (`flex overflow-x-auto no-scrollbar`) with non-shrinking, non-wrapping tab labels (`shrink-0 whitespace-nowrap`) to guarantee that labels are always visible and readable on mobile without text cutoff.
-- Use consistent radius rules:
-  - Inline items, badges, small buttons: `rounded-lg`
-  - Cards, sections, containers: `rounded-2xl`
-  - Pills and avatars: `rounded-full`
-  - Progress bars: `rounded-full`
+- Preserve mobile-first design and clearance for fixed navigation and the Quick Add button.
+- Follow [Bottom Padding & FAB Visibility](./BLUEPRINT.md#bottom-padding--fab-visibility) for the route allowlist and exact spacing; maintain those values in BLUEPRINT only.
+- Follow [Page Header Pattern](./BLUEPRINT.md#page-header-pattern), [Border Radius Standard](./BLUEPRINT.md#border-radius-standard), and [Field Dashboard](./BLUEPRINT.md#field-dashboard-mobile-first) for presentation and section order.
+- Keep dashboard crop filters, totals, and quick actions in the scrollable body below the WeatherBar; do not add floating or sticky bottom bars.
+- Horizontal tab bars on mobile use horizontal scrolling and non-shrinking, non-wrapping labels so every tab remains reachable.
 
 ### Responsive Tables
 
@@ -660,17 +660,18 @@ While editing:
 After editing:
 
 1. Run the most relevant available checks. The repo defines:
+   - `npm run verify:docs` — verifies generated contents and local Markdown links in AGENTS and BLUEPRINT. After changing headings, run `npm run docs:toc` and review the generated diff. External URLs and inline code paths outside the linked file index are not checked.
    - `npm run lint` — `eslint .` (fast, run for any source change; the gate is **zero errors** — warnings are tracked, not blocked).
    - `npm run typecheck` — `tsc -b` (the **authoritative type gate** via project references in `tsconfig.json`). This is the real type check; `vite build` uses SWC and does **not** typecheck, so it cannot substitute for `typecheck`. Run this for any source/type change.
    - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts`, `api/ai-assistant.ts`, `server/ai-assistant-tools.ts`, or their imports change.
-   - `npm run test` — app unit suite plus owner-DR package tests (`test:unit && test:owner-dr`). Run `npm run test:unit` for the app suite alone. See Testing → Unit vs. Integration below.
+   - `npm run test` — documentation and tracked-asset checks, then app unit and owner-DR package tests. Run `npm run test:unit` for the app suite alone. See [Testing](#testing).
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
 3. Mention any unchecked risk clearly.
 
 ## When to Use `BLUEPRINT.md`
 
-Use targeted sections of `BLUEPRINT.md` when working on:
+Use targeted sections of [BLUEPRINT.md](./BLUEPRINT.md) when working on:
 
 - Data models or farm entity behavior.
 - Supabase writes, RLS, migrations, or restore flows.

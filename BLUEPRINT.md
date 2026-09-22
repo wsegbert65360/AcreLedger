@@ -1,10 +1,11 @@
 # BLUEPRINT.md — AcreLedger
 
-> **Purpose:** Single authoritative reference for AcreLedger's architecture, patterns, and rules.
-> Read this file before making any change or addition. A capable AI agent must be able to
-> reconstruct a functionally equivalent application from this document alone.
-> **Last reviewed:** 2026-09-21 against `main` @ 592fef7. Before trusting section details, check
-> `git log -- BLUEPRINT.md`; the entries under [Recent Changes](#recent-changes) are the freshest signals.
+> **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
+> Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
+> Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
+> **Last updated:** 2026-09-21 (reading guidance, navigation, and consolidation of design details).
+> **Verification scope:** This is not a whole-document code audit. Section-level verification
+> notes identify the implementation actually checked. Use `git log -- BLUEPRINT.md` for edit history.
 
 ---
 
@@ -17,10 +18,12 @@
 
 ## Recent Changes
 
-Substantive edits, newest first. Update this list (and the **Last reviewed** date) whenever a rule
-in this file changes, so agents can skip re-reading unchanged sections.
+Keep the five most recent substantive entries, newest first; Git holds the full history.
+Update **Last updated** when editing guidance. Update a section’s **Verified against code** note
+only after checking that section’s implementation, recording the date, commit, and files inspected.
+Navigation checks and editorial changes do not constitute verification of architectural claims.
 
-- **2026-09-21** — Added Recent Changes/TOC navigation, corrected the stale FAB-visibility section to match `showQuickAddFab` in `App.tsx`, and renumbered the tail sections (old 11→7, 12→8).
+- **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and consolidated design guidance. Earlier today: corrected FAB visibility and renumbered the tail sections (old 11→7, 12→8).
 - **2026-09-20** — iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); a missing key leaves the offline store unopenable and blocked Sign Out (592fef7).
 - **2026-09-11** — Owner disaster-recovery tooling documented; deployment and live drills still pending (b5cf439).
 - **2026-09-06** — Landlord Summary gains hay production; bales stay separate from bushels (734cb66).
@@ -30,15 +33,84 @@ in this file changes, so agents can skip re-reading unchanged sections.
 
 ## Contents
 
+<!-- contents:start -->
+- [Recent Changes](#recent-changes)
 - [1. Application Overview](#1-application-overview)
 - [2. Tech Stack](#2-tech-stack)
-- [2b. Visual Design System](#2b-visual-design-system) — [Typography](#typography-split) · [Accessibility](#accessibility-mandatory-standards) · [Text Case](#text-case--tracking) · [Dark Mode Palette](#dark-mode-palette) · [Color Mode Palette](#color-mode-palette) · [Radius Standard](#border-radius-standard) · [Page Header](#page-header-pattern) · [Field Card Pills](#field-card-status-pills) · [Bin Capacity Colors](#bin-capacity-bar-colors) · [Bottom Navigation](#bottom-navigation) · [Auth Screen](#auth-screen)
-- [3. Data Architecture](#3-data-architecture) — [Field](#field) · [Bin](#bin) · [PlantRecord](#plantrecord) · [SprayRecord](#sprayrecord-2026-standards) · [HarvestRecord](#harvestrecord) · [HayHarvestRecord](#hayharvestrecord) · [CustomSprayRecord](#customsprayrecord) · [TillageRecord](#tillagerecord) · [FertilizerApplication](#fertilizerapplication) · [GrainMovement](#grainmovement) · [SavedSeed](#savedseed) · [SprayRecipe](#sprayrecipe) · [FertilizerRecipe](#fertilizerrecipe) · [FsaTractImport](#fsatractimport) · [FieldCluAssignment](#fieldcluassignment) · [Rainfall](#rainfall) · [Weather Proxy](#weather-proxy-apiweather-proxyts) · [Weather Page](#weather-page-weather)
-- [4. State Management Rules](#4-state-management-rules) — [farmStore](#farmstore-react-context) · [Optimistic Update Pattern](#optimistic-update-pattern) · [OpResult Convention](#opresult-convention) · [farm_id Scoping](#farm_id-scoping) · [Backup / Restore Farm Ownership](#backup--restore-farm-ownership) · [Owner Disaster Recovery](#owner-whole-project-disaster-recovery-implemented-tooling-deploymentdrills-pending)
-- [5. Database Conventions](#5-database-conventions) — [Migration Strategy](#migration-strategy-mandatory) · [Data API Access](#data-api-access-mandatory) · [Tenant Isolation (RLS)](#tenant-isolation-rls) · [Profile Membership Protection](#profile-membership-protection) · [Stripe Billing](#stripe-billing-test-mode-web-only) · [Account Lifecycle](#account-lifecycle-and-native-credential-safety) · [Ask the Book Read Registry](#ask-the-book-read-registry) · [Mapper Pattern](#mapper-pattern) · [farm_id Rule](#farm_id-rule) · [FSA / CLU Upsert Exception](#fsa--clu-upsert-exception) · [Soft Delete](#soft-delete)
-- [6. Component Patterns](#6-component-patterns) — [Icon Shadowing](#icon-shadowing-prevention-critical) · [useMemo](#usememo-rules) · [fieldMap Pattern](#fieldmap-pattern) · [Module-Level Helpers](#module-level-pure-helpers) · [Spray Log Export](#universal-spray-log-export) · [Spray Entry Chooser](#spray-entry-chooser-spraytypechoosertsx) · [Field Dashboard](#field-dashboard-mobile-first) · [Crop-Filter Bar](#dashboard-crop-filter-bar-indextsx) · [Season Selector](#season-selector-seasonselecttsx) · [Bottom Padding & FAB](#bottom-padding--fab-visibility) · [ReportTable](#reporttable-responsive-preview-fallback) · [Report Readiness & Mobile Export](#report-readiness-and-mobile-export-workspace) · [FSA-578 Worksheet](#fsa-578-acreage-reporting-worksheet) · [Landlord Summary](#landlord-summary-report) · [FieldNotes](#fieldnotes-component-auto-save) · [PWA & Bundling](#pwa--bundling)
-- [7. Error Handling Standards](#7-error-handling-standards) — [Detailed Error Logging](#detailed-error-logging) · [CSP](#content-security-policy-csp)
-- [8. Coding Rules & Conventions](#8-coding-rules--conventions) — [Verification](#verification)
+- [2b. Visual Design System](#2b-visual-design-system)
+  - [Typography Split](#typography-split)
+  - [Accessibility (Mandatory Standards)](#accessibility-mandatory-standards)
+  - [Text Case & Tracking](#text-case--tracking)
+  - [Dark Mode Palette](#dark-mode-palette)
+  - [Light Mode Palette](#light-mode-palette)
+  - [Color Mode Palette](#color-mode-palette)
+  - [Border Radius Standard](#border-radius-standard)
+  - [Page Header Pattern](#page-header-pattern)
+  - [Field Card Status Pills](#field-card-status-pills)
+  - [Bin Capacity Bar Colors](#bin-capacity-bar-colors)
+  - [Bottom Navigation](#bottom-navigation)
+  - [Auth Screen](#auth-screen)
+- [3. Data Architecture](#3-data-architecture)
+  - [Field](#field)
+  - [Bin](#bin)
+  - [PlantRecord](#plantrecord)
+  - [SprayRecord (2026 Standards)](#sprayrecord-2026-standards)
+  - [HarvestRecord](#harvestrecord)
+  - [HayHarvestRecord](#hayharvestrecord)
+  - [CustomSprayRecord](#customsprayrecord)
+  - [TillageRecord](#tillagerecord)
+  - [FertilizerApplication](#fertilizerapplication)
+  - [GrainMovement](#grainmovement)
+  - [SavedSeed](#savedseed)
+  - [SprayRecipe](#sprayrecipe)
+  - [FertilizerRecipe](#fertilizerrecipe)
+  - [FsaTractImport](#fsatractimport)
+  - [FieldCluAssignment](#fieldcluassignment)
+  - [Rainfall](#rainfall)
+  - [Weather Proxy (`api/weather-proxy.ts`)](#weather-proxy-apiweather-proxyts)
+  - [Weather Page (`/weather`)](#weather-page-weather)
+- [4. State Management Rules](#4-state-management-rules)
+  - [farmStore (React Context)](#farmstore-react-context)
+  - [Optimistic Update Pattern](#optimistic-update-pattern)
+  - [OpResult Convention](#opresult-convention)
+  - [farm_id Scoping](#farm_id-scoping)
+  - [Backup / Restore Farm Ownership](#backup--restore-farm-ownership)
+  - [Owner Whole-Project Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)](#owner-whole-project-disaster-recovery-implemented-tooling-deploymentdrills-pending)
+- [5. Database Conventions](#5-database-conventions)
+  - [Migration Strategy (Mandatory)](#migration-strategy-mandatory)
+  - [Data API Access (Mandatory)](#data-api-access-mandatory)
+  - [Tenant Isolation (RLS)](#tenant-isolation-rls)
+  - [Profile Membership Protection](#profile-membership-protection)
+  - [Stripe Billing (Test Mode, Web Only)](#stripe-billing-test-mode-web-only)
+  - [Account Lifecycle and Native Credential Safety](#account-lifecycle-and-native-credential-safety)
+  - [Ask the Book Read Registry](#ask-the-book-read-registry)
+  - [Mapper Pattern](#mapper-pattern)
+  - [farm_id Rule](#farm_id-rule)
+  - [FSA / CLU Upsert Exception](#fsa--clu-upsert-exception)
+  - [Soft Delete](#soft-delete)
+- [6. Component Patterns](#6-component-patterns)
+  - [Icon Shadowing Prevention (Critical)](#icon-shadowing-prevention-critical)
+  - [useMemo Rules](#usememo-rules)
+  - [fieldMap Pattern](#fieldmap-pattern)
+  - [Module-Level Pure Helpers](#module-level-pure-helpers)
+  - [Universal Spray Log Export](#universal-spray-log-export)
+  - [Spray Entry Chooser (`SprayTypeChooser.tsx`)](#spray-entry-chooser-spraytypechoosertsx)
+  - [Field Dashboard (Mobile-First)](#field-dashboard-mobile-first)
+  - [Dashboard Crop-Filter Bar (`Index.tsx`)](#dashboard-crop-filter-bar-indextsx)
+  - [Season Selector (`SeasonSelect.tsx`)](#season-selector-seasonselecttsx)
+  - [Bottom Padding & FAB Visibility](#bottom-padding--fab-visibility)
+  - [ReportTable (Responsive Preview Fallback)](#reporttable-responsive-preview-fallback)
+  - [Report Readiness and Mobile Export Workspace](#report-readiness-and-mobile-export-workspace)
+  - [FSA-578 Acreage Reporting Worksheet](#fsa-578-acreage-reporting-worksheet)
+  - [Landlord Summary Report](#landlord-summary-report)
+  - [FieldNotes Component (Auto-Save)](#fieldnotes-component-auto-save)
+  - [PWA & Bundling](#pwa--bundling)
+- [7. Error Handling Standards](#7-error-handling-standards)
+  - [Detailed Error Logging](#detailed-error-logging)
+  - [Content Security Policy (CSP)](#content-security-policy-csp)
+- [8. Coding Rules & Conventions](#8-coding-rules--conventions)
+  - [Verification](#verification)
+<!-- contents:end -->
 
 ---
 
@@ -116,19 +188,27 @@ Dark mode uses near-black with a subtle blue undertone — never pure `#000000`.
 --sidebar-bg:   240 6% 3%
 ```
 
+### Light Mode Palette
+
+- The light mode theme is a high-contrast, vibrant palette.
+- Background uses a soft pastel denim-blue (`212 40% 91%`).
+- Cards and popover elements use pure white (`0 0% 100%`) for crisp visual elevation.
+- Typography foreground color uses deep navy-black (`212 80% 6%`) to guarantee high readability.
+- Brand colors are highly saturated: Plant/primary green (`142 90% 28%`), Spray/secondary blue (`212 100% 36%`), and Harvest/accent amber (`36 95% 44%`).
+- Outlines and borders use defined slate-denim gray (`212 25% 78%`).
+- Muted helper/secondary text uses a darker slate-denim gray (`212 25% 30%`) to meet WCAG AA contrast guidelines.
+
 ### Color Mode Palette
-Color mode (`html.color`) is a bright rainbow/neon theme, not a dark variant and not a pink theme. Do not apply `.dark` when it is active.
-```
---background:  48 55% 96%
---foreground:  222 47% 11%
---primary:     142 90% 34%
---secondary:   188 100% 36%
---accent:      38 100% 46%
---plant:       142 100% 36%
---spray:       210 100% 44%
---harvest:     32 100% 48%
---hue-lime / cyan / sky / violet / gold / orange
-```
+
+- Color mode is a bright rainbow/neon alternative to light and dark. The stored theme key is `color` (html class `.color`).
+- Do not use pink or magenta as the dominant wash. Background is a warm cream (`48 55% 96%`) plus lime, cyan, sky, violet, gold, and orange page gradients.
+- Cards stay white. Foreground is deep navy (`222 47% 11%`) for contrast.
+- Chrome accents are lime primary (`142 90% 34%`), cyan secondary (`188 100% 36%`), and gold accent (`38 100% 46%`). Extra hues live on `--hue-lime`, `--hue-cyan`, `--hue-sky`, `--hue-violet`, `--hue-gold`, and `--hue-orange`.
+- Color-mode CSS paints nav tabs, field cards, stat cards, crop chips, settings accordions, and headers with those distinct hues. Keep that variety; do not collapse back to one accent.
+- Primary action buttons stay high-contrast in color mode: dark forest fill (`#14261a`), white label/icon, white outline. Do not put rainbow or neon fills on text-bearing buttons.
+- Farm tokens stay recognizable but neon: plant lime (`142 100% 36%`), spray sky (`210 100% 44%`), harvest orange (`32 100% 48%`).
+- Muted helper text uses `222 20% 32%` to stay WCAG AA.
+- Color mode is light-based: do not add `.dark` or rely on `dark:` variants. Status bar uses dark icons.
 
 ### Border Radius Standard
 One consistent radius per element type — no mixing on the same page:
@@ -770,6 +850,10 @@ next season so farmers can enter pre-season plans before rollover, while never e
 beyond `currentYear + 1`.
 
 ### Bottom Padding & FAB Visibility
+
+> **Verified against code:** 2026-09-21 at `551c694`; `src/App.tsx` and the Index, Weather,
+> Reports, Settings, and FieldDetailScreen pages. Scope: FAB route allowlist and page bottom padding.
+
 Page container bottom padding must clear the fixed `BottomNav` (`.touch-target` ≈ `4rem` +
 `pb-[env(safe-area-inset-bottom)]`). The exact value depends on whether the global Quick Add FAB is
 shown on that route (`App.tsx` → `showQuickAddFab`, a route allowlist):
@@ -930,6 +1014,11 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 - **Zero vs Falsy**: `0` is a valid farm value. Use `value != null ? value : '—'`.
 
 ### Verification
+
+Documentation navigation is checked by `npm run verify:docs` as part of `npm test`. It validates
+generated contents and local inline Markdown links in AGENTS and BLUEPRINT, including linked
+reference files. After changing headings, run `npm run docs:toc` and review the generated diff.
+This check does not verify external URLs or the accuracy of architecture claims.
 
 - The default Vitest suite is offline-only; live Rain API and authentication checks are isolated in `*.integration.test.*` and run through `vitest.integration.config.ts`.
 - Supabase service/store unit tests use the shared `src/test/supabaseMock.ts` factory. It provides reset-safe Vitest spies, thenable query builders, independent table/RPC results, and a separate table-bound builder for every `from(table)` call so concurrent `Promise.all` queries remain isolated.

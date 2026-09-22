@@ -10,7 +10,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "npm run verify:tracked-assets && npm run test:unit && npm run test:owner-dr",
+    "test": "npm run verify:docs && npm run verify:tracked-assets && npm run test:unit && npm run test:owner-dr",
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -26,7 +26,9 @@
     "test:owner-dr": "npm run test:owner-backup && npm run test:recovery && npm run typecheck:owner-backup && npm run typecheck:recovery",
     "cap:sync": "npx cap sync ios",
     "cap:open": "npx cap open ios",
-    "cap:build": "vite build --mode capacitor && npx cap sync ios"
+    "cap:build": "vite build --mode capacitor && npx cap sync ios",
+    "verify:docs": "node scripts/verify-docs.mjs",
+    "docs:toc": "node scripts/verify-docs.mjs --write"
   },
   "overrides": {
     "picomatch": "^2.3.2"
