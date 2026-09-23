@@ -98,7 +98,7 @@ describe('WeatherService', () => {
             vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
             vi.resetModules();
 
-            const { supabase } = await import('@/lib/supabase');
+            await import('@/lib/supabase');
             refreshSessionMock.mockResolvedValue({
                 data: { session: { access_token: 'refreshed-token' } },
             } as never);
@@ -123,7 +123,7 @@ describe('WeatherService', () => {
             vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
             vi.resetModules();
 
-            const { supabase } = await import('@/lib/supabase');
+            await import('@/lib/supabase');
             refreshSessionMock.mockResolvedValue({
                 data: { session: null },
                 error: null,
