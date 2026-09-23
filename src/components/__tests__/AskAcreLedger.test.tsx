@@ -11,7 +11,7 @@ const askState = vi.hoisted(() => ({
   isOnline: true,
   viewingSeason: 2026,
   askAcreLedger: vi.fn(),
-  getSession: vi.fn(),
+  refreshSession: vi.fn(),
 }));
 
 vi.mock('@/context/AskAcreLedgerContext', () => ({
@@ -36,7 +36,7 @@ vi.mock('@/services/aiAssistantService', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: {
-      getSession: (...args: unknown[]) => askState.getSession(...args),
+      refreshSession: (...args: unknown[]) => askState.refreshSession(...args),
     },
   },
 }));
@@ -119,8 +119,8 @@ describe('AskAcreLedger', () => {
     askState.viewingSeason = 2026;
     askState.closeAsk.mockReset();
     askState.askAcreLedger.mockReset();
-    askState.getSession.mockReset();
-    askState.getSession.mockResolvedValue({ data: { session: { access_token: 'token-1' } } });
+    askState.refreshSession.mockReset();
+    askState.refreshSession.mockResolvedValue({ data: { session: { access_token: 'token-refreshed' } } });
     askState.askAcreLedger.mockResolvedValue({
       answer: 'April 12 on Home Place.',
       lookups: ['Earliest dated corn plantings in 2026'],
@@ -158,6 +158,50 @@ describe('AskAcreLedger', () => {
     expect(askState.askAcreLedger.mock.calls[0][2]).toBe(2026);
     expect(screen.getByText('How much grain is still in my bins?')).toBeTruthy();
     expect(screen.queryByText('Try a question from this farm’s book')).toBeNull();
+  });
+
+  it('refreshes the session before sending and posts the refreshed token', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'When was corn planted?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+    expect(askState.refreshSession).toHaveBeenCalledTimes(1);
+    expect(askState.askAcreLedger.mock.calls[0][1]).toBe('token-refreshed');
+  });
+
+  it('fails closed with the unavailable message when the refresh errors', async () => {
+    askState.refreshSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Invalid Refresh Token' },
+    });
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'When was corn planted?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+
+    await waitFor(() => {
+      expect(screen.getByText('The assistant is unavailable right now.')).toBeTruthy();
+      expect(screen.getByLabelText('Question')).toHaveProperty('value', 'When was corn planted?');
+    });
+    expect(askState.askAcreLedger).not.toHaveBeenCalled();
+  });
+
+  it('fails closed with the unavailable message when the refresh yields no session', async () => {
+    askState.refreshSession.mockResolvedValue({ data: { session: null }, error: null });
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'When was corn planted?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+
+    await waitFor(() => {
+      expect(screen.getByText('The assistant is unavailable right now.')).toBeTruthy();
+    });
+    expect(askState.askAcreLedger).not.toHaveBeenCalled();
   });
 
   it('does not render a persistent disclaimer or retention footer', () => {

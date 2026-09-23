@@ -1,29 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const refreshSessionMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/supabase', () => ({
+    supabase: { auth: { refreshSession: refreshSessionMock } },
+}));
+
 describe('WeatherService', () => {
     const mockApiKey = 'test-api-key';
 
     beforeEach(() => {
         vi.stubEnv('VITE_VISUALCROSSING_KEY', mockApiKey);
         vi.clearAllMocks();
+        refreshSessionMock.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
         vi.resetModules();
         global.fetch = vi.fn();
         vi.spyOn(console, 'error').mockImplementation(() => {});
 
-        // Mock supabase session
-        vi.mock('@/lib/supabase', () => ({
-            supabase: {
-                auth: {
-                    getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } })
-                }
-            }
-        }));
     });
 
     afterEach(() => {
         vi.useRealTimers();
         vi.unstubAllEnvs();
-        vi.unmock('@/lib/supabase');
     });
 
     describe('fetchCurrentWeather', () => {
@@ -94,6 +91,57 @@ describe('WeatherService', () => {
             expect(fetchUrl).toContain('location=72301');
             expect(fetchUrl).toContain('endpoint=last3days%2Ftoday');
             expect(fetchOptions.headers).toEqual(expect.any(Object));
+        });
+
+        it('attaches the refreshed bearer to weather proxy requests', async () => {
+            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
+            vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
+            vi.resetModules();
+
+            const { supabase } = await import('@/lib/supabase');
+            refreshSessionMock.mockResolvedValue({
+                data: { session: { access_token: 'refreshed-token' } },
+            } as never);
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: '72301',
+                    currentConditions: { temp: 72, humidity: 45, windspeed: 10, winddir: 180 },
+                    days: [{ datetime: '2026-03-25', precip: 0.1 }],
+                }),
+            });
+
+            await WeatherService.fetchCurrentWeather('72301');
+
+            const [, fetchOptions] = (global.fetch as any).mock.calls[0];
+            expect(fetchOptions.headers.Authorization).toBe('Bearer refreshed-token');
+        });
+
+        it('omits the Authorization header when the refresh yields no session', async () => {
+            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
+            vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
+            vi.resetModules();
+
+            const { supabase } = await import('@/lib/supabase');
+            refreshSessionMock.mockResolvedValue({
+                data: { session: null },
+                error: null,
+            } as never);
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    address: '72301',
+                    currentConditions: { temp: 72, humidity: 45, windspeed: 10, winddir: 180 },
+                    days: [{ datetime: '2026-03-25', precip: 0.1 }],
+                }),
+            });
+
+            await WeatherService.fetchCurrentWeather('72301');
+
+            const [, fetchOptions] = (global.fetch as any).mock.calls[0];
+            expect(fetchOptions.headers.Authorization).toBeUndefined();
         });
 
         it('should correctly map successful response', async () => {
