@@ -1,16 +1,59 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner';
 import packageJson from '../../package.json';
+import {
+  ACRELEDGER_IOS_BUNDLE_ID,
+  isStoreVersionNewer,
+  lookupIosStoreVersion,
+} from '@/lib/iosStoreVersion';
+
+type IosUpdateStatus = 'update' | 'current' | 'hidden';
+
+async function installedIosVersion(fallback: string): Promise<string> {
+  try {
+    const info = await App.getInfo();
+    if (info.version.trim()) return info.version.trim();
+  } catch {
+    // The bundled package version is the marketing version written at release.
+  }
+  return fallback.split('-')[0] || fallback;
+}
 
 export default function VersionFooter() {
   const version = packageJson.version;
+  const ios = Capacitor.getPlatform() === 'ios';
   const [checking, setChecking] = useState(false);
+  const [iosStatus, setIosStatus] = useState<IosUpdateStatus>('hidden');
+  const [storeUrl, setStoreUrl] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  useEffect(() => {
+    if (!ios) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const installed = await installedIosVersion(version);
+        const listing = await lookupIosStoreVersion(ACRELEDGER_IOS_BUNDLE_ID);
+        if (cancelled || !mountedRef.current || !listing) return;
+        const needsUpdate = isStoreVersionNewer(installed, listing.version);
+        if (needsUpdate == null) return;
+        setStoreUrl(listing.url);
+        setIosStatus(needsUpdate ? 'update' : 'current');
+      } catch {
+        // Offline or an unpublished build: show the version and nothing else.
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [ios, version]);
 
   const handleUpdateCheck = async () => {
     if (!('serviceWorker' in navigator)) {
@@ -91,13 +134,40 @@ export default function VersionFooter() {
         </p>
       </div>
 
-      <button
-        onClick={handleUpdateCheck}
-        disabled={checking}
-        className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
-      >
-        {checking ? 'Checking…' : 'Check for updates'}
-      </button>
+      {ios ? (
+        <IosUpdateStatus status={iosStatus} storeUrl={storeUrl} />
+      ) : (
+        <button
+          onClick={handleUpdateCheck}
+          disabled={checking}
+          className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm transition-all hover:bg-muted active:scale-95 disabled:opacity-50"
+        >
+          {checking ? 'Checking…' : 'Check for updates'}
+        </button>
+      )}
     </div>
   );
+}
+
+function IosUpdateStatus({ status, storeUrl }: { status: IosUpdateStatus; storeUrl: string | null }) {
+  if (status === 'hidden') return null;
+
+  if (status === 'update') {
+    const label = 'You need to update';
+    if (!storeUrl) {
+      return <p className="text-sm font-semibold text-foreground">{label}</p>;
+    }
+    return (
+      <a
+        href={storeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sm font-semibold text-foreground underline underline-offset-2"
+      >
+        {label}
+      </a>
+    );
+  }
+
+  return <p className="text-sm font-semibold text-muted-foreground">Up to date</p>;
 }
