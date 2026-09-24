@@ -10,4 +10,10 @@ describe('native SQLite encryption config', () => {
     const source = readFileSync(resolve(repoRoot, 'capacitor.config.ts'), 'utf8');
     expect(source).toMatch(/iosIsEncryption:\s*true/);
   });
+
+  it('verifies the generated iOS config in the release workflow', () => {
+    const workflow = readFileSync(resolve(repoRoot, 'codemagic.yaml'), 'utf8');
+    expect(workflow).toContain('ios/App/App/capacitor.config.json');
+    expect(workflow).toContain('iosIsEncryption');
+  });
 });

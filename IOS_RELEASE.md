@@ -17,9 +17,11 @@
   linked to the user; app functionality; no tracking.
 - [ ] Complete the App Store Connect age-rating questionnaire and export
   compliance answers.
-- [ ] Assign an owner to review `account_deletion_requests` at least weekly,
-  complete each request within 30 days, remove account-associated data unless
-  legally required to retain it, and notify the requester when complete.
+- [x] Owner assigned: **Will Egbert** (confirmed September 23, 2026) reviews
+  `account_deletion_requests` at least weekly, completes each request within
+  30 days, removes account-associated data unless legally required to retain
+  it, and notifies the requester when complete. Operational execution remains
+  subject to ongoing review; this checkbox records ownership.
 - [x] Run a CodeMagic build from `main`; confirm the Xcode 26 gate, tests,
   privacy manifest validation, signed IPA creation, and TestFlight upload pass.
 
@@ -71,3 +73,34 @@ within 30 days.
   Five consecutive `main` pushes have produced successful signed builds with
   App Store Connect uploads, which indicates the ASC credentials, signing
   certificate, provisioning profile, and app record are configured and working.
+
+- 2026-09-23 — Will Egbert accepted account-deletion ownership. TestFlight
+  3.6.0 (185) installed and launched on the paired iPhone. Device testing
+  initially exposed an unavailable offline store: the legacy on-device database
+  was plaintext while the current build expected SQLCipher encryption. A local
+  device build converted the database in place and confirmed its file is no
+  longer readable as SQLite. A second defect then surfaced: the app called the
+  plugin's nonexistent `isOpened()` method. After changing both paths to
+  `isDBOpen()`, the signed device build opened the encrypted store, cleared eight
+  cached items during normal sign-out, and returned to the signed-out screen
+  without the emergency warning. The disposable account remains signed out.
+- 2026-09-23 — Password-recovery request submitted on the iPhone for the
+  disposable test account; the app confirmed that the reset email was sent.
+  Opening the email link, changing the password, and signing back in remain to
+  be completed by the account owner because they change an authentication
+  credential.
+- 2026-09-23 — App Store Connect verified for app ID `6772299437`, bundle
+  `com.wsegbert.acreledger`: TestFlight build 3.6.0 (185) is Validated and Ready
+  to Submit, uses no non-exempt encryption, includes symbols, targets iOS 15+,
+  and is assigned to internal group `mine`. Version 1.0 is still Prepare for
+  Submission with no selected build or screenshots. Listing text, support and
+  marketing URLs, copyright, review contact/account fields, privacy answers,
+  age rating, content rights, and category remain incomplete. An updated Apple
+  Developer Program License Agreement must be accepted by October 1, 2026 and
+  currently blocks submission; acceptance requires the account holder's express
+  confirmation. DSA trader status also remains outstanding for EU distribution.
+- 2026-09-23 — CodeMagic's app page rendered blank after reload, so production
+  variable-group values and stage-by-stage logs could not be inspected directly.
+  App Store Connect independently confirms build 185 was uploaded and validated.
+  The workflow now fails the build if the generated iOS configuration omits
+  `CapacitorSQLite.iosIsEncryption: true`.

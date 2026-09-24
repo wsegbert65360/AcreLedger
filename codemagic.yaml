@@ -79,6 +79,13 @@ workflows:
             echo "Capacitor bundle is missing the Ask the book endpoint" >&2
             exit 1
           fi
+          node -e '
+            const config = require("./ios/App/App/capacitor.config.json");
+            const sqlite = config.plugins?.CapacitorSQLite;
+            if (sqlite?.iosIsEncryption !== true) {
+              throw new Error("Generated iOS config must enable CapacitorSQLite encryption");
+            }
+          '
 
       - name: Install CocoaPods dependencies
         script: |

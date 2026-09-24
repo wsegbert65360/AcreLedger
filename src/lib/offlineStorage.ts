@@ -1,5 +1,9 @@
 import { Capacitor } from '@capacitor/core';
-import { SQLiteConnection, CapacitorSQLite } from '@capacitor-community/sqlite';
+import {
+  SQLiteConnection,
+  CapacitorSQLite,
+  type SQLiteDBConnection,
+} from '@capacitor-community/sqlite';
 import { Preferences } from '@capacitor/preferences';
 import { toast } from 'sonner';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
@@ -14,9 +18,9 @@ export function isOfflineDatabaseUnavailableError(error: unknown): boolean {
   return error instanceof Error && error.message === OFFLINE_DATABASE_UNAVAILABLE;
 }
 
-let dbConnection: any = null;
-let sqliteConnection: any = null;
-let initPromise: Promise<any> | null = null;
+let dbConnection: SQLiteDBConnection | null = null;
+let sqliteConnection: SQLiteConnection | null = null;
+let initPromise: Promise<SQLiteDBConnection | null> | null = null;
 let nativeStoreFailed = false;
 let unavailableToastShown = false;
 
@@ -53,7 +57,7 @@ export async function getDatabase() {
       const isConn = (await sqliteConnection.isConnection('acreledger_db', false)).result;
       if (isConn) {
         dbConnection = await sqliteConnection.retrieveConnection('acreledger_db', false);
-        const isOpened = (await dbConnection.isOpened()).result;
+        const isOpened = (await dbConnection.isDBOpen()).result;
         if (!isOpened) {
           await dbConnection.open();
         }
@@ -63,6 +67,27 @@ export async function getDatabase() {
         const isSecretStored = (await sqliteConnection.isSecretStored()).result;
         if (!isSecretStored) {
           await sqliteConnection.setEncryptionSecret(encKey);
+        }
+
+        // Builds before native encryption was enabled created a plaintext
+        // SQLite file. Opening that existing file directly in `secret` mode
+        // fails closed and leaves sign-out/offline sync permanently blocked.
+        // Convert it once with the plugin's supported encryption mode, then
+        // reopen it normally with the Keychain-backed secret.
+        const databaseExists = (await sqliteConnection.isDatabase('acreledger_db')).result;
+        if (databaseExists) {
+          const isEncrypted = (await sqliteConnection.isDatabaseEncrypted('acreledger_db')).result;
+          if (!isEncrypted) {
+            const migrationConnection = await sqliteConnection.createConnection(
+              'acreledger_db',
+              true,
+              'encryption',
+              1,
+              false
+            );
+            await migrationConnection.open();
+            await sqliteConnection.closeConnection('acreledger_db', false);
+          }
         }
 
         try {
@@ -79,7 +104,7 @@ export async function getDatabase() {
           if (!leftover) throw createErr;
           dbConnection = await sqliteConnection.retrieveConnection('acreledger_db', false);
         }
-        const isOpened = (await dbConnection.isOpened()).result;
+        const isOpened = (await dbConnection.isDBOpen()).result;
         if (!isOpened) {
           await dbConnection.open();
         }
