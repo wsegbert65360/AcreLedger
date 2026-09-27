@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-09-21 (reading guidance, navigation, and consolidation of design details).
+> **Last updated:** 2026-09-27 (App Store release sources, native purchase boundary, and verification gates).
 > **Verification scope:** This is not a whole-document code audit. Section-level verification
 > notes identify the implementation actually checked. Use `git log -- AGENTS.md` for edit history.
 
@@ -20,11 +20,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-09-27** — Added the App Store submission sources, native purchase-boundary rules, screenshot evidence standard, and `verify:app-store` release gate; reconciled test-command guidance with `package.json` and the iOS runbook, verified against 5cc6503.
 - **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and moved detailed design guidance into BLUEPRINT. Earlier today: added freshness headers and the feature-area file index.
 - **2026-09-20** — Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); emergency sign-out documented for an unreadable offline store (592fef7).
 - **2026-09-14** — Layout/FAB rule corrected to match code (`showQuickAddFab` allowlists only `/` and `/weather`) and the Date Parsing and Sorting section added (d63d5d8).
 - **2026-09-11/12** — CI must `npm ci` the owner-DR packages before unit tests: CodeMagic Unit tests step (c07d73b) and GitLab `test_job` with Node 22 (38e46cf).
-- **2026-09-08** — Three-remote push hygiene documented (d0c52cc).
 
 ## Contents
 
@@ -137,6 +137,10 @@ Rules), then open only the files for that area.
 **CI/CD**
 - [codemagic.yaml](./codemagic.yaml) — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
 - [CODEMAGIC.md](./CODEMAGIC.md) — CodeMagic setup guide, credentials, and troubleshooting.
+- [IOS_RELEASE.md](./IOS_RELEASE.md) — October 1 iOS release gates, device checks, submission notes, and dated validation evidence.
+- [docs/app-store/2026-10-01-submission-package.md](./docs/app-store/2026-10-01-submission-package.md) — prepared App Store listing, review, privacy, age-rating, screenshot, and build-selection package.
+- [docs/app-store/metadata.en-US.json](./docs/app-store/metadata.en-US.json) + [scripts/verify-app-store-metadata.mjs](./scripts/verify-app-store-metadata.mjs) — machine-readable English (U.S.) metadata and its length/URL/version gate.
+- [ios/App/App/PrivacyInfo.xcprivacy](./ios/App/App/PrivacyInfo.xcprivacy) + [src/pages/Privacy.tsx](./src/pages/Privacy.tsx) — native privacy declarations and matching public policy; keep both aligned with App Store Connect answers and actual data use.
 
 ## Non-Negotiable Rules
 
@@ -397,6 +401,9 @@ This rule applies to **every** activity modal that captures a per-record acreage
 - Capacitor iOS builds depend on `npm run cap:build` using `vite build --mode capacitor`; keep `base: "./"` for capacitor mode so bundled JS/CSS load from `capacitor://localhost`.
 - Native builds include `capacitor-secure-storage-plugin`; keep the lockfile, CocoaPods resolution, and iOS Keychain-backed credential migration aligned.
 - Preserve the `com.wsegbert.acreledger` recovery URL scheme in `Info.plist` and the privacy manifest declarations in `ios/App/App/PrivacyInfo.xcprivacy`. Use `IOS_RELEASE.md` as the App Store/TestFlight release checklist.
+- Keep iOS free of subscription prices, trial offers, sign-up/purchase calls to action, Stripe checkout, and external purchase links. Web pricing may remain on web, but Capacitor must show the sign-in-only product path guarded by `Capacitor.isNativePlatform()`; preserve the native coverage in `src/pages/__tests__/Landing.test.tsx` and `src/pages/__tests__/Settings.test.tsx`.
+- App Store metadata is sourced from `docs/app-store/metadata.en-US.json` and the matching submission package. Run `npm run verify:app-store` after changing listing copy, URLs, or the marketing version. Keep the privacy manifest, public privacy page, App Store questionnaire answers, and review notes consistent with actual behavior.
+- Final App Store screenshots must come from the exact selected release build using the approved fictional review account/dataset. Simulator or locally staged captures are draft evidence until their build provenance is tied to that release. Required captures must meet Apple's current device-family dimensions and contain no alpha channel. Never commit review-account credentials.
 - Do not add a global `tar` override in `package.json`. Capacitor 6 CLI requires its compatible nested `tar@6` dependency shape; forcing `tar@7` breaks `npx cap sync ios` with `Cannot read properties of undefined (reading 'extract')`.
 - Do not re-enable automatic external TestFlight submission unless App Store Connect Beta App Information and Beta App Review Information are complete.
 - **Marketing version** is read from `package.json` at build time. **Build number** uses CodeMagic's `$BUILD_NUMBER`.
@@ -618,7 +625,7 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 
 ### Testing
 
-- The test suite is split into **unit** and **integration**. `npm run test:unit` runs the app unit suite, which excludes `**/*.integration.test.{ts,tsx}`. `npm run test` runs that suite plus owner disaster-recovery package tests (`test:owner-dr`). CodeMagic's Unit tests step and GitLab's `test_job` both run `npm run test`, so those workflows must `npm ci` `infrastructure/owner-backup` and `scripts/recovery` after the root install — a root-only `npm ci` leaves those packages without vitest and fails the step. GitLab must use Node 22 to match the owner-backup engine range. `npm run test:integration` runs the integration suite via `vitest.integration.config.ts` — those tests hit live services and require credentials/network (`RainService.integration.test.ts` for the real Rain API, `auth.integration.test.ts` for bot auth). Integration tests skip cleanly when their env/credentials are absent (`describe.skipIf` / early-return on `import.meta.env`). Do not add live-network tests to the unit suite; name them `*.integration.test.*`.
+- The test suite is split into **unit** and **integration**. `npm run test:unit` runs the app unit suite, which excludes `**/*.integration.test.{ts,tsx}`. `npm run test` runs documentation, tracked-asset, and App Store metadata verification before that suite plus owner disaster-recovery package tests (`test:owner-dr`). CodeMagic's Unit tests step and GitLab's `test_job` both run `npm run test`, so those workflows must `npm ci` `infrastructure/owner-backup` and `scripts/recovery` after the root install — a root-only `npm ci` leaves those packages without vitest and fails the step. GitLab must use Node 22 to match the owner-backup engine range. `npm run test:integration` runs the integration suite via `vitest.integration.config.ts` — those tests hit live services and require credentials/network (`RainService.integration.test.ts` for the real Rain API, `auth.integration.test.ts` for bot auth). Integration tests skip cleanly when their env/credentials are absent (`describe.skipIf` / early-return on `import.meta.env`). Do not add live-network tests to the unit suite; name them `*.integration.test.*`.
 - `npm run test:coverage` collects V8 coverage over the production-surface scope defined in the `coverage` block of `vite.config.ts` (tests, generated data, type declarations, shadcn/ui primitives, and entry-point boilerplate are excluded). The baseline is recorded in `TESTING.md`; no thresholds are enforced yet.
 - Keep Vercel Function unit tests in `src/test/weatherProxy.test.ts` and `src/test/aiAssistant.test.ts`, never under `api/`; Vercel treats TypeScript files under `api/` as deployable functions. Run `npm run typecheck:api` whenever the weather proxy or AI assistant function changes.
 - Authentication integration tests must keep forbidden profile-write probes non-mutating and assert the exact `42501` authorization code. Positive profile-update checks should use same-value writes unless the test explicitly owns and restores the changed value.
@@ -661,6 +668,7 @@ After editing:
 
 1. Run the most relevant available checks. The repo defines:
    - `npm run verify:docs` — verifies generated contents and local Markdown links in AGENTS and BLUEPRINT. After changing headings, run `npm run docs:toc` and review the generated diff. External URLs and inline code paths outside the linked file index are not checked.
+   - `npm run verify:app-store` — validates App Store metadata field limits, HTTPS URLs, and the marketing version. Run for App Store copy/URL/version changes; it is also part of `npm test`.
    - `npm run lint` — `eslint .` (fast, run for any source change; the gate is **zero errors** — warnings are tracked, not blocked).
    - `npm run typecheck` — `tsc -b` (the **authoritative type gate** via project references in `tsconfig.json`). This is the real type check; `vite build` uses SWC and does **not** typecheck, so it cannot substitute for `typecheck`. Run this for any source/type change.
    - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts`, `api/ai-assistant.ts`, `server/ai-assistant-tools.ts`, or their imports change.
