@@ -61,9 +61,14 @@ export default function HarvestMoveFieldDialog({
     <Dialog open={open} onOpenChange={value => { if (!value && !isMoving) onClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowRightLeft size={16} className="text-harvest" />
-            Move Harvest to Another Field
+          <DialogTitle className="flex items-center flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <ArrowRightLeft size={16} className="text-harvest" />
+              <span>Move Harvest to Another Field</span>
+            </div>
+            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+              {record.seasonYear} Season
+            </span>
           </DialogTitle>
           <DialogDescription>
             Reassign this truckload to a different field without deleting and re-entering it.
@@ -75,7 +80,7 @@ export default function HarvestMoveFieldDialog({
           <div className="space-y-2">
             <Label htmlFor="harvestMoveField">New field</Label>
             <Select value={targetFieldId} onValueChange={setTargetFieldId}>
-              <SelectTrigger id="harvestMoveField" aria-label="New field" className="h-11 w-full">
+              <SelectTrigger id="harvestMoveField" name="harvestMoveField" aria-label="New field" className="h-11 w-full">
                 {targetField ? targetField.name : 'Choose a field…'}
               </SelectTrigger>
               <SelectContent>
