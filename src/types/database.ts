@@ -134,6 +134,7 @@ export interface HarvestRecordRow {
     crop: string;
     landlord_name?: string | null;
     scale_ticket_number?: string | null;
+    move_reason?: string | null;
     deleted_at?: string | null;
 }
 

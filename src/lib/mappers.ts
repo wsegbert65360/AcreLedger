@@ -149,6 +149,7 @@ export const mapHarvestFromDb = (db: HarvestRecordRow): HarvestRecord => ({
     crop: safeStr(db.crop),
     landlordName: safeStr(db.landlord_name),
     scaleTicketNumber: safeStr(db.scale_ticket_number),
+    moveReason: db.move_reason ?? undefined,
     farm_id: db.farm_id,
     deleted_at: db.deleted_at ?? null
 });
@@ -506,6 +507,7 @@ export const mapHarvestToDb = (r: HarvestRecord) => {
         landlord_split_percent: r.landlordSplitPercent,
         landlord_name: r.landlordName ?? null,
         scale_ticket_number: r.scaleTicketNumber ?? null,
+        move_reason: r.moveReason?.trim() ? r.moveReason.trim() : null,
         harvest_date: r.harvestDate ?? null,
         fsa_farm_number: r.fsaFarmNumber ?? null,
         fsa_tract_number: r.fsaTractNumber ?? null,

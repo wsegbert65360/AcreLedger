@@ -9,6 +9,7 @@ interface HarvestTabProps {
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: HarvestRecord) => void;
   onDuplicate?: (record: HarvestRecord) => void;
+  onMoveField?: (record: HarvestRecord) => void;
 }
 function buildSubtitle(r: HarvestRecord): string {
   return `${r.crop || 'UNSPECIFIED'} · ${r.bushels} BU`;
@@ -24,7 +25,7 @@ function buildDate(r: HarvestRecord): string {
   return formatIsoDate(r.harvestDate) || formatDate(r.timestamp);
 }
 
-export default function HarvestTab({ records, selected, onToggle, onEdit, onDuplicate }: HarvestTabProps) {
+export default function HarvestTab({ records, selected, onToggle, onEdit, onDuplicate, onMoveField }: HarvestTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -48,6 +49,7 @@ export default function HarvestTab({ records, selected, onToggle, onEdit, onDupl
           onToggle={onToggle}
           onEdit={() => onEdit(r)}
           onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
+          onMoveField={onMoveField ? () => onMoveField(r) : undefined}
         />
       ))}
     </div>

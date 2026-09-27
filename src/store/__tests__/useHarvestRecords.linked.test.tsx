@@ -55,6 +55,7 @@ function renderLinkedHook(
     const ops = useHarvestRecords({
       farm_id: '00000000-0000-0000-0000-000000000100',
       viewingSeason: 2026,
+      fields: [],
       harvestRecords: harvests.value,
       setHarvestRecords: harvests.setValue,
       grainMovements: grains.value,

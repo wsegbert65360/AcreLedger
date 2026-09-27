@@ -26,6 +26,7 @@ import TractAssignmentFlow from '@/components/TractAssignmentFlow';
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
+import HarvestMoveFieldDialog from '@/components/HarvestMoveFieldDialog';
 import HayModal from '@/components/HayModal';
 import FertilizerModal from '@/components/FertilizerModal';
 import TillageModal from '@/components/TillageModal';
@@ -64,6 +65,7 @@ export default function FieldDetailScreen() {
     tillageRecords,
     cluAssignments,
     fsaTracts,
+    reassignHarvestField,
     viewingSeason,
     farmName
   } = useFarm();
@@ -94,6 +96,7 @@ export default function FieldDetailScreen() {
   }, [fieldClus]);
   const [editingRecord, setEditingRecord] = useState<EditingRecordType>(null);
   const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
+  const [movingRecord, setMovingRecord] = useState<HarvestRecord | null>(null);
   const fetchingRainRef = useRef(false);
   const inFlightRainFetchKeyRef = useRef<string | null>(null);
   const lastSuccessfulRainFetchKeyRef = useRef<string | null>(null);
@@ -536,6 +539,7 @@ export default function FieldDetailScreen() {
               year={viewingSeason}
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
+              onMoveHarvestField={setMovingRecord}
               hideHeader
             />
             {unifiedRecords.length > 8 && (
@@ -717,6 +721,16 @@ export default function FieldDetailScreen() {
       {modal === 'tillage' && (
         <TillageModal field={field} open initialData={editingRecord ? editingRecord as TillageRecord : undefined} mode={editingMode} onClose={closeModal} />
       )}
+
+      <HarvestMoveFieldDialog
+        open={!!movingRecord}
+        record={movingRecord}
+        fields={fields}
+        onClose={() => setMovingRecord(null)}
+        onConfirm={(newFieldId, reason) => movingRecord
+          ? reassignHarvestField(movingRecord.id, newFieldId, reason)
+          : Promise.resolve(false)}
+      />
 
       <Dialog open={isCluDialogOpen} onOpenChange={setIsCluDialogOpen}>
         <DialogContent className="max-w-2xl h-[80vh] p-0 flex flex-col gap-0">
