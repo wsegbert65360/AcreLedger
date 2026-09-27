@@ -2,6 +2,10 @@
 -- Source: current TypeScript row types plus later ADD COLUMN IF NOT EXISTS
 -- migrations. This is not a production schema dump. CREATE IF NOT EXISTS is
 -- safe on databases that already have these tables.
+-- It does not make reset reproducible: 20260320100000_align_saved_seeds.sql
+-- still alters public.saved_seeds, which this history never creates.
+-- verify:migrations must keep failing closed until a reviewed schema-only
+-- dump replaces this reconstruction.
 --
 -- Columns introduced by later migrations are intentionally omitted:
 -- harvest_records.scale_ticket_number, harvest_records.landlord_name,
