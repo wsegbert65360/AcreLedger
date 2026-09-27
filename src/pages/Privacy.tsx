@@ -42,7 +42,7 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                             </div>
                             <div>
                                 <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 16, 2026</p>
+                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 27, 2026</p>
                             </div>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
@@ -70,12 +70,24 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                                     Your email address, user ID, farm name, and sign-in information needed to operate and secure your account.
                                 </li>
                                 <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Contact Details:</span>
+                                    Phone numbers, email addresses, and physical or billing addresses that you choose to save in work requests or application records.
+                                </li>
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
                                     <span className="shrink-0 font-bold text-foreground">Activity Logs:</span>
                                     Records of Planting, Spraying, Harvesting, and Fertilizer applications, including product formulas and dates.
                                 </li>
                                 <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Photos:</span>
+                                    Spray-ticket or product-label photos that you attach to a field record.
+                                </li>
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
                                     <span className="shrink-0 font-bold text-foreground">Location Services:</span>
                                     We use GPS data to provide hyper-local weather from Visual Crossing and to "Pin" activity locations in the field.
+                                </li>
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Ask the Book:</span>
+                                    Text questions and answers are kept in an operational log for 30 days. Voice audio is not stored by AcreLedger.
                                 </li>
                             </ul>
                         </section>

@@ -10,13 +10,23 @@
 - [ ] Confirm the production CodeMagic `appstore` environment group provides
   `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, App Store Connect credentials,
   and signing credentials.
-- [ ] Point the App Store privacy URL and support URL at live, non-parked pages.
-  The current `acreledger.com` domain must not remain parked at submission.
+- [x] Point the App Store privacy URL and support URL at live, non-parked pages:
+  `https://acreledger.vercel.app/privacy` and
+  `https://acreledger.vercel.app/support` (both returned HTTP 200 on September
+  27, 2026).
 - [ ] Mirror `ios/App/App/PrivacyInfo.xcprivacy` in the App Store Connect privacy
-  questionnaire: email address, user ID, precise location, and other user content;
-  linked to the user; app functionality; no tracking.
+  questionnaire. The prepared answer set covers email address, phone number,
+  physical address, user ID, precise location, photos or videos, search history,
+  and other user content; linked to the user; app functionality; no tracking.
 - [ ] Complete the App Store Connect age-rating questionnaire and export
   compliance answers.
+- [x] Prepare English (U.S.) listing copy, review notes, privacy answers,
+  age-rating answers, screenshot plan, and build-selection checklist in
+  `docs/app-store/2026-10-01-submission-package.md`.
+- [ ] Capture and upload the required iPhone 6.9-inch and iPad 13-inch screenshot
+  sets from the exact selected release build.
+- [ ] Enter App Review contact phone and disposable review-account credentials
+  directly in App Store Connect. Never commit the password.
 - [x] Owner assigned: **Will Egbert** (confirmed September 23, 2026) reviews
   `account_deletion_requests` at least weekly, completes each request within
   30 days, removes account-associated data unless legally required to retain
@@ -104,3 +114,16 @@ within 30 days.
   App Store Connect independently confirms build 185 was uploaded and validated.
   The workflow now fails the build if the generated iOS configuration omits
   `CapacitorSQLite.iosIsEncryption: true`.
+- 2026-09-27 — Prepared the version 3.6.0 App Store submission package and added
+  a metadata length/URL verifier to the normal test gate. The privacy audit found
+  four missing disclosure categories in the checked-in manifest: optional phone
+  numbers, physical addresses, spray-ticket photos, and Ask the Book search
+  history. The native privacy manifest and public policy now disclose them;
+  focused coverage, all 1,241 app tests, 52 owner-DR tests, lint (0 errors),
+  typecheck, and production build passed. Public marketing, support, and privacy
+  URLs returned HTTP 200. The isolated Mac pipeline then proved unsigned builds,
+  launch, exact-size RGB/no-alpha capture, and cleanup on the required iPhone and
+  iPad simulator families. Draft inspection exposed web pricing and trial prompts
+  in the native signed-out view; those prompts are now hidden on Capacitor while
+  the web landing page remains unchanged. Final screenshots still require an
+  approved fictional review dataset and the exact selected TestFlight build.

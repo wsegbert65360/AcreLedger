@@ -1,0 +1,15 @@
+{
+  "name": "AcreLedger",
+  "subtitle": "Farm records, ready to report",
+  "promotionalText": "Keep field records in the cab, work offline, track grain, and export the reports your farm needs when the office asks.",
+  "description": "AcreLedger is a field record book built for working farms. Keep planting, spray, fertilizer, harvest, hay, and grain records together instead of chasing notebooks, camera rolls, and spreadsheets.\n\nIN THE FIELD\n\n• Map fields and keep acreage, crop, and season details with each one.\n• Log work one field at a time so dates, rates, products, weather, and applicator details stay with the right acres.\n• Save records without a signal and sync them when you reconnect.\n• Attach spray-ticket or product-label photos to the record.\n\nBACK AT THE SHOP\n\n• Follow the season in one activity feed.\n• Track grain movements and current bin inventory.\n• Review planting, spraying, fertilizer, harvest, hay, and landlord records before export.\n• Create PDF and CSV reports for your own records, landlords, applicators, and office visits.\n• Prepare an FSA-578 acreage worksheet from the fields already in your book.\n\nASK THE BOOK\n\nAsk a plain-language question about this farm's saved records. Type your question or use optional voice input. AcreLedger answers from the farm book and does not change your records.\n\nYour farm data stays separated from other farms. Location and microphone access are optional, and the app remains usable if you decline them.",
+  "keywords": "farm records,field log,spray records,grain inventory,FSA reports,offline farming",
+  "supportUrl": "https://acreledger.vercel.app/support",
+  "marketingUrl": "https://acreledger.vercel.app/",
+  "privacyPolicyUrl": "https://acreledger.vercel.app/privacy",
+  "copyright": "2026 Will Egbert",
+  "primaryCategory": "Business",
+  "secondaryCategory": "Productivity",
+  "version": "3.6.0",
+  "releaseOption": "manual"
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Link } from 'react-router-dom';
 import './landing.css';
 import dashboardShot from '@/assets/landing/dashboard.png';
@@ -158,6 +159,7 @@ const faqs = [
 
 const Landing = () => {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
     const root = rootRef.current;
@@ -196,12 +198,14 @@ const Landing = () => {
             <Link className="landing-header-signin" to="/auth?mode=signin">
               Sign in
             </Link>
-            <Link
-              className="landing-header-cta landing-header-cta--solid"
-              to="/auth?mode=signup"
-            >
-              Open the book
-            </Link>
+            {!isNative && (
+              <Link
+                className="landing-header-cta landing-header-cta--solid"
+                to="/auth?mode=signup"
+              >
+                Open the book
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -224,21 +228,28 @@ const Landing = () => {
                 signal, then print the paperwork you need.
               </p>
               <div className="landing-hero-actions" data-reveal style={revealDelay(240)}>
-                <Link className="landing-btn" to="/auth?mode=signup">
-                  Open your farm book
+                <Link
+                  className="landing-btn"
+                  to={isNative ? '/auth?mode=signin' : '/auth?mode=signup'}
+                >
+                  {isNative ? 'Sign in to AcreLedger' : 'Open your farm book'}
                 </Link>
                 <a className="landing-btn landing-btn--ghost" href="#features">
                   See what it handles
                 </a>
               </div>
-              <p className="landing-hero-terms" data-reveal style={revealDelay(320)}>
-                Free for four months · No charge today · Then $299 per farm,
-                billed annually
-              </p>
-              <div className="landing-stamp" data-reveal="stamp" style={revealDelay(480)}>
-                NO CHARGE TODAY
-                <small>4 MONTHS FREE</small>
-              </div>
+              {!isNative && (
+                <>
+                  <p className="landing-hero-terms" data-reveal style={revealDelay(320)}>
+                    Free for four months · No charge today · Then $299 per farm,
+                    billed annually
+                  </p>
+                  <div className="landing-stamp" data-reveal="stamp" style={revealDelay(480)}>
+                    NO CHARGE TODAY
+                    <small>4 MONTHS FREE</small>
+                  </div>
+                </>
+              )}
             </div>
 
             <figure className="landing-hero-shot" data-reveal style={revealDelay(200)}>
@@ -350,75 +361,79 @@ const Landing = () => {
           </ol>
         </section>
 
-        <hr className="landing-hr" data-reveal="rule" />
+        {!isNative && (
+          <>
+            <hr className="landing-hr" data-reveal="rule" />
 
-        {/* ENTRY 006 — Pricing as a scale ticket */}
-        <section className="landing-section" id="pricing">
-          <span className="landing-entry-no">Entry 006</span>
-          <h2 className="landing-h2" data-reveal>
-            Terms of the book.
-          </h2>
-          <p className="landing-lede" data-reveal style={revealDelay(80)}>
-            One annual price per farm, with no per-seat charge.
-          </p>
-          <div className="landing-ticket-wrap">
-            <dl className="landing-ticket" data-reveal>
-              <div className="landing-ticket-head">
-                <span>AcreLedger</span>
-                <span>No. 2026-001</span>
-              </div>
-              <div className="landing-ticket-line" style={accent(ACCENTS.green)}>
-                <dt>Trial</dt>
-                <dd>
-                  4 months
-                  <small>full access, no charge</small>
-                </dd>
-              </div>
-              <div className="landing-ticket-line" style={accent(ACCENTS.red)}>
-                <dt>Thereafter</dt>
-                <dd>
-                  $299.00
-                  <small>per farm / year, billed annually</small>
-                </dd>
-              </div>
-              <div className="landing-ticket-line" style={accent(ACCENTS.gold)}>
-                <dt>Your records</dt>
-                <dd>
-                  Yours
-                  <small>PDF · CSV · full backup export</small>
-                </dd>
-              </div>
-              <div className="landing-ticket-net">
-                <span>Net due after trial</span>
-                <span>$299.00 / year</span>
-              </div>
-              <p className="landing-ticket-note">
-                About $24.92 per month, billed annually. The price covers
-                AcreLedger access. Internet service, third-party services, and
-                professional or government filing fees cost extra. You will not
-                be charged when you create an account; web subscriptions are
-                rolling out in stages.
+            {/* ENTRY 006 — Pricing as a scale ticket */}
+            <section className="landing-section" id="pricing">
+              <span className="landing-entry-no">Entry 006</span>
+              <h2 className="landing-h2" data-reveal>
+                Terms of the book.
+              </h2>
+              <p className="landing-lede" data-reveal style={revealDelay(80)}>
+                One annual price per farm, with no per-seat charge.
               </p>
-            </dl>
+              <div className="landing-ticket-wrap">
+                <dl className="landing-ticket" data-reveal>
+                  <div className="landing-ticket-head">
+                    <span>AcreLedger</span>
+                    <span>No. 2026-001</span>
+                  </div>
+                  <div className="landing-ticket-line" style={accent(ACCENTS.green)}>
+                    <dt>Trial</dt>
+                    <dd>
+                      4 months
+                      <small>full access, no charge</small>
+                    </dd>
+                  </div>
+                  <div className="landing-ticket-line" style={accent(ACCENTS.red)}>
+                    <dt>Thereafter</dt>
+                    <dd>
+                      $299.00
+                      <small>per farm / year, billed annually</small>
+                    </dd>
+                  </div>
+                  <div className="landing-ticket-line" style={accent(ACCENTS.gold)}>
+                    <dt>Your records</dt>
+                    <dd>
+                      Yours
+                      <small>PDF · CSV · full backup export</small>
+                    </dd>
+                  </div>
+                  <div className="landing-ticket-net">
+                    <span>Net due after trial</span>
+                    <span>$299.00 / year</span>
+                  </div>
+                  <p className="landing-ticket-note">
+                    About $24.92 per month, billed annually. The price covers
+                    AcreLedger access. Internet service, third-party services, and
+                    professional or government filing fees cost extra. You will not
+                    be charged when you create an account; web subscriptions are
+                    rolling out in stages.
+                  </p>
+                </dl>
 
-            <div data-reveal style={revealDelay(120)}>
-              <p className="landing-included-title">Included in every book</p>
-              <ul className="landing-included">
-                {included.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              <div className="landing-hero-actions">
-                <Link className="landing-btn" to="/auth?mode=signup">
-                  Open your farm book
-                </Link>
+                <div data-reveal style={revealDelay(120)}>
+                  <p className="landing-included-title">Included in every book</p>
+                  <ul className="landing-included">
+                    {included.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  <div className="landing-hero-actions">
+                    <Link className="landing-btn" to="/auth?mode=signup">
+                      Open your farm book
+                    </Link>
+                  </div>
+                  <p className="landing-hero-terms">
+                    No charge when you create an account today.
+                  </p>
+                </div>
               </div>
-              <p className="landing-hero-terms">
-                No charge when you create an account today.
-              </p>
-            </div>
-          </div>
-        </section>
+            </section>
+          </>
+        )}
 
         <hr className="landing-hr" data-reveal="rule" />
 
@@ -433,12 +448,17 @@ const Landing = () => {
             <a href="mailto:support@acreledger.com">support@acreledger.com</a>.
           </p>
           <div className="landing-faq" data-reveal style={revealDelay(120)}>
-            {faqs.map((faq) => (
-              <details key={faq.question}>
-                <summary>{faq.question}</summary>
-                <p>{faq.answer}</p>
-              </details>
-            ))}
+            {faqs
+              .filter(
+                (faq) =>
+                  !isNative || faq.question !== 'What happens after the four free months?',
+              )
+              .map((faq) => (
+                <details key={faq.question}>
+                  <summary>{faq.question}</summary>
+                  <p>{faq.answer}</p>
+                </details>
+              ))}
           </div>
         </section>
 
@@ -447,14 +467,19 @@ const Landing = () => {
           <section className="landing-section landing-final" id="start">
             <h2 data-reveal>Start this season’s book.</h2>
             <div className="landing-hero-actions" data-reveal style={revealDelay(120)}>
-              <Link className="landing-btn landing-btn--light" to="/auth?mode=signup">
-                Open your farm book
+              <Link
+                className="landing-btn landing-btn--light"
+                to={isNative ? '/auth?mode=signin' : '/auth?mode=signup'}
+              >
+                {isNative ? 'Sign in to AcreLedger' : 'Open your farm book'}
               </Link>
             </div>
-            <p className="landing-final-terms" data-reveal style={revealDelay(200)}>
-              Free for four months · No charge today · Then $299 per farm,
-              billed annually
-            </p>
+            {!isNative && (
+              <p className="landing-final-terms" data-reveal style={revealDelay(200)}>
+                Free for four months · No charge today · Then $299 per farm,
+                billed annually
+              </p>
+            )}
             <div className="landing-stamp" data-reveal="stamp" style={revealDelay(320)}>
               FIELD NOTES IN
               <small>REPORTS READY</small>

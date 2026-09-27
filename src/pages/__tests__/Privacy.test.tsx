@@ -46,4 +46,12 @@ describe('Privacy', () => {
     expect(screen.getByText(/IEM Stage IV radar/i)).toBeInTheDocument();
     expect(screen.getByText('Google Fonts')).toBeInTheDocument();
   });
+
+  it('discloses optional contact details, record photos, and Ask the Book history', () => {
+    renderPrivacy();
+    expect(screen.getByText('Contact Details:')).toBeInTheDocument();
+    expect(screen.getByText('Photos:')).toBeInTheDocument();
+    expect(screen.getByText('Ask the Book:')).toBeInTheDocument();
+    expect(screen.getByText(/operational log for 30 days/i)).toBeInTheDocument();
+  });
 });

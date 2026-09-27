@@ -6,8 +6,9 @@
  * and privacy/support plus the approved FSA footer disclaimer stay intact.
  */
 import { MemoryRouter } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { render, screen, within } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import Landing from '../Landing';
 
 const renderLanding = () =>
@@ -18,6 +19,10 @@ const renderLanding = () =>
   );
 
 describe('Landing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders the ledger product story and reporting benefits', () => {
     renderLanding();
 
@@ -105,5 +110,23 @@ describe('Landing', () => {
       'href',
       'mailto:support@acreledger.com'
     );
+  });
+
+  it('removes web purchase prompts from the native app landing page', () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    renderLanding();
+
+    expect(screen.queryByText(/\$299/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/free for four months/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no charge today/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /terms of the book/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/what happens after the four free months/i)
+    ).not.toBeInTheDocument();
+
+    const signInLinks = screen.getAllByRole('link', { name: /sign in/i });
+    expect(signInLinks.length).toBeGreaterThanOrEqual(3);
+    signInLinks.forEach((link) => expect(link).toHaveAttribute('href', '/auth?mode=signin'));
+    expect(screen.queryByRole('link', { name: /open the book/i })).not.toBeInTheDocument();
   });
 });
