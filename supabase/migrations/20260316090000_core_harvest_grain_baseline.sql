@@ -1,16 +1,144 @@
--- Reconstructed harvest/grain bootstrap for empty `supabase db reset`.
+-- Reviewed core-table bootstrap for empty `supabase db reset`.
 -- Source: current TypeScript row types plus later ADD COLUMN IF NOT EXISTS
 -- migrations. This is not a production schema dump. CREATE IF NOT EXISTS is
 -- safe on databases that already have these tables.
--- It does not make reset reproducible: 20260320100000_align_saved_seeds.sql
--- still alters public.saved_seeds, which this history never creates.
--- verify:migrations must keep failing closed until a reviewed schema-only
--- dump replaces this reconstruction.
 --
 -- Columns introduced by later migrations are intentionally omitted:
+-- fields.notes/FSA attributes/operational_acreage/clu_numbers/landlord_name,
+-- plant_records FSA attributes/memo/crop_status/crop_sequence/planting_pattern,
+-- spray_records universal/advanced compliance columns,
+-- fertilizer_applications.field_name,
+-- tillage_records.field_name,
+-- hay_harvest_records.temperature/conditions,
+-- saved_seeds crop/variety/supplier/lot_number/year/notes,
+-- profiles.onboarding_complete,
 -- harvest_records.scale_ticket_number, harvest_records.landlord_name,
 -- harvest_records.crop/fsa_farm_number/fsa_tract_number/harvest_date,
 -- grain_movements.price/destination/harvest_record_id/version.
+
+CREATE TABLE IF NOT EXISTS public.farms (
+  id uuid PRIMARY KEY,
+  name text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.fields (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  name text NOT NULL,
+  acreage numeric NOT NULL,
+  lat numeric,
+  lng numeric,
+  boundary jsonb,
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.bins (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  name text NOT NULL,
+  capacity numeric NOT NULL,
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.plant_records (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  field_id uuid NOT NULL,
+  field_name text NOT NULL,
+  seed_variety text NOT NULL,
+  acreage numeric NOT NULL,
+  crop text,
+  season_year integer NOT NULL,
+  timestamp timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.spray_records (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  field_id uuid NOT NULL,
+  field_name text NOT NULL,
+  products jsonb,
+  wind_speed numeric NOT NULL,
+  temperature numeric,
+  spray_date date,
+  start_time text,
+  applicator_name text,
+  license_number text,
+  epa_reg_number text,
+  application_rate text,
+  rate_unit text,
+  treated_area_size numeric,
+  total_amount_applied numeric,
+  season_year integer NOT NULL,
+  timestamp timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.hay_harvest_records (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  field_id uuid NOT NULL,
+  field_name text NOT NULL,
+  date date NOT NULL,
+  bale_count integer NOT NULL,
+  cutting_number integer NOT NULL,
+  bale_type text NOT NULL,
+  season_year integer NOT NULL,
+  timestamp timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.saved_seeds (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  name text NOT NULL,
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.spray_recipes (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  name text NOT NULL,
+  products jsonb NOT NULL DEFAULT '[]'::jsonb,
+  applicator_name text,
+  license_number text,
+  target_pest text,
+  epa_reg_number text,
+  crop_or_site_treated text,
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.fertilizer_applications (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  field_id uuid NOT NULL,
+  date date NOT NULL,
+  acres numeric NOT NULL,
+  fertilizer_formula text NOT NULL,
+  season_year integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.tillage_records (
+  id uuid PRIMARY KEY,
+  farm_id uuid NOT NULL,
+  field_id uuid NOT NULL,
+  date date NOT NULL,
+  implement_type text NOT NULL,
+  notes text,
+  season_year integer NOT NULL,
+  timestamp timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid PRIMARY KEY,
+  farm_id uuid,
+  active_season integer
+);
 
 CREATE TABLE IF NOT EXISTS public.harvest_records (
   id uuid PRIMARY KEY,

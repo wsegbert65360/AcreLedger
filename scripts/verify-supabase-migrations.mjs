@@ -56,6 +56,29 @@ const db = new PGlite();
 let applied = 0;
 let replayFailure = null;
 try {
+  // Supabase supplies these roles and auth helper before project migrations run.
+  // Recreate only that platform bootstrap in the disposable PostgreSQL fixture.
+  await db.exec(`
+    CREATE ROLE anon;
+    CREATE ROLE authenticated;
+    CREATE ROLE service_role;
+    CREATE SCHEMA auth;
+    CREATE TABLE auth.users (id uuid PRIMARY KEY);
+    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
+      'SELECT NULL::uuid';
+    CREATE SCHEMA cron;
+    CREATE TABLE cron.job (jobid bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, jobname text);
+    CREATE FUNCTION cron.schedule(text, text, text) RETURNS bigint LANGUAGE sql AS
+      'SELECT 1::bigint';
+    CREATE FUNCTION cron.unschedule(text) RETURNS boolean LANGUAGE sql AS
+      'SELECT true';
+    CREATE PUBLICATION supabase_realtime;
+    CREATE SCHEMA vault;
+    CREATE TABLE vault.decrypted_secrets (name text PRIMARY KEY, decrypted_secret text NOT NULL);
+    INSERT INTO vault.decrypted_secrets (name, decrypted_secret) VALUES
+      ('mrms_automation_api_key', 'sb_secret_disposable_replay_only'),
+      ('mrms_project_url', 'https://replay.supabase.co');
+  `);
   for (const file of files) {
     try {
       await db.exec(migrationSql.get(file));
