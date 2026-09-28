@@ -128,7 +128,12 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
     const m = parseFloat(moisture);
     const ls = parseFloat(landlordSplit);
     const bu = parseFloat(bushels);
-    if (isNaN(m) || isNaN(ls) || isNaN(bu) || !destination) {
+    if (
+      isNaN(m) || isNaN(ls) || isNaN(bu) ||
+      !Number.isFinite(m) || !Number.isFinite(ls) || !Number.isFinite(bu) ||
+      bu <= 0 || m < 0 || m > 100 || ls < 0 || ls > 100 ||
+      !destination
+    ) {
       native.haptic.error();
       return;
     }
@@ -166,13 +171,6 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
 
       let success = false;
       if (initialData && !isDuplicate) {
-        success = await updateHarvestRecord({ ...initialData, ...harvestData });
-        if (!success) {
-          toast.error('Failed to update harvest record.');
-          native.haptic.error();
-          return;
-        }
-
         const linkedMovement = findLinkedHarvestMovement(grainMovements, initialData, field.name);
         const leftoverIds = findUnlinkedHarvestLeftoverIds(
           grainMovements,
@@ -199,6 +197,14 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
         };
 
         if (destination !== 'bin') {
+          // The public grain API cannot undelete a versioned movement, so this
+          // path commits the harvest first and compensates it if deletion fails.
+          success = await updateHarvestRecord({ ...initialData, ...harvestData });
+          if (!success) {
+            toast.error('Failed to update harvest record.');
+            native.haptic.error();
+            return;
+          }
           const idsToDelete = [
             ...(linkedMovement ? [linkedMovement.id] : []),
             ...leftoverIds,
@@ -222,11 +228,30 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             harvestRecordId: initialData.id,
           });
           if (!gmSuccess) {
-            await rollbackHarvest('Could not update the linked grain movement.');
+            toast.error('Could not update the linked grain movement.');
+            native.haptic.error();
             return;
           }
-          if (!(await removeLeftovers())) return;
+          if (!(await removeLeftovers())) {
+            await updateGrainMovement(linkedMovement);
+            return;
+          }
+          success = await updateHarvestRecord({ ...initialData, ...harvestData });
+          if (!success) {
+            const restored = await updateGrainMovement(linkedMovement);
+            toast.error(restored
+              ? 'Failed to update harvest record. The grain movement was restored.'
+              : 'Failed to update harvest record and restore its grain movement. Retry the save.');
+            native.haptic.error();
+            return;
+          }
         } else {
+          success = await updateHarvestRecord({ ...initialData, ...harvestData });
+          if (!success) {
+            toast.error('Failed to update harvest record.');
+            native.haptic.error();
+            return;
+          }
           const bin = bins.find(b => b.id === binId);
           const gmSuccess = await addGrainMovement({
             binId,

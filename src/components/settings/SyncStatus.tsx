@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SyncState = 'connecting' | 'connected' | 'disconnected' | 'offline';
+type SyncState = 'connecting' | 'connected' | 'pending' | 'disconnected' | 'offline';
 
 interface StatusConfig {
   dot: string;
@@ -58,6 +58,13 @@ const STATUS_CONFIG: Record<SyncState, StatusConfig> = {
     description: 'Your records are being saved and synced in real time.',
     pulse: false,
   },
+  pending: {
+    dot: 'bg-amber-400',
+    label: 'Pending Sync',
+    icon: <Cloud size={18} className="text-amber-400" />,
+    description: 'Local changes are waiting to finish syncing to the cloud.',
+    pulse: true,
+  },
   disconnected: {
     dot: 'bg-destructive',
     label: 'Sync Unavailable',
@@ -77,7 +84,7 @@ const STATUS_CONFIG: Record<SyncState, StatusConfig> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SyncStatus() {
-  const { session } = useFarm();
+  const { session, pendingSyncCount } = useFarm();
   const [syncState, setSyncState] = useState<SyncState>(
     navigator.onLine ? 'connecting' : 'offline'
   );
@@ -111,10 +118,14 @@ export default function SyncStatus() {
     channel
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          setSyncState('connected');
-          const now = new Date();
-          saveLastSync();
-          setLastSync(now);
+          if (pendingSyncCount > 0) {
+            setSyncState('pending');
+          } else {
+            setSyncState('connected');
+            const now = new Date();
+            saveLastSync();
+            setLastSync(now);
+          }
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           setSyncState(navigator.onLine ? 'disconnected' : 'offline');
         } else if (status === 'CLOSED') {
@@ -125,7 +136,7 @@ export default function SyncStatus() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [session]);
+  }, [session, pendingSyncCount]);
 
   // Don't render until we know if there's a session
   if (session === undefined) {

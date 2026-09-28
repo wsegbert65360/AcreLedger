@@ -248,7 +248,7 @@ describe('syncQueue web queue management', () => {
       status: 409,
     });
 
-    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
 
     const queue = await syncQueue.getQueue('farm-1');
     expect(queue).toHaveLength(2);
@@ -264,7 +264,7 @@ describe('syncQueue web queue management', () => {
       { error: null, status: 201 },
     );
 
-    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
 
     const queue = await syncQueue.getQueue('farm-1');
     expect(queue).toHaveLength(1);

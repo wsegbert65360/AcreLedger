@@ -451,7 +451,9 @@ export const syncQueue = {
 
   /**
    * Replays the queued mutations to Supabase in FIFO order.
-   * Returns true if the entire queue was processed, false if paused due to a network error.
+   * Returns true only if the entire queue was processed. A transient pause or
+   * a permanent rejection that remains queued returns false so callers do not
+   * replace optimistic local records with a cloud snapshot that lacks them.
    *
    * Overlapping replays (reconnect during a long drain, farm switch) would
    * otherwise double-apply inserts. A concurrent caller records its farmId
@@ -637,5 +639,5 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
     } else {
       toast.success('Sync complete. All offline changes uploaded.');
     }
-    return true;
+    return pendingRetryCount === 0;
 }

@@ -277,7 +277,7 @@ describe('HarvestModal linked grain movement', () => {
     });
   });
 
-  it('does not restore the harvest when leftover grain cannot be removed after a successful bin update', () => {
+  it('does not commit the harvest when leftover grain cleanup fails', () => {
     const legacy = linkedMovement({ id: 'gm-legacy', harvestRecordId: undefined });
     state.grainMovements = [legacy, linkedMovement()];
     state.deleteGrainMovements.mockResolvedValue(false);
@@ -295,9 +295,9 @@ describe('HarvestModal linked grain movement', () => {
     fireEvent.click(screen.getByRole('button', { name: /update record/i }));
 
     return waitFor(() => {
-      expect(state.updateGrainMovement).toHaveBeenCalledTimes(1);
+      expect(state.updateGrainMovement).toHaveBeenCalledTimes(2);
       expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-legacy']);
-      expect(state.updateHarvestRecord).toHaveBeenCalledTimes(1);
+      expect(state.updateHarvestRecord).not.toHaveBeenCalled();
     });
   });
 
@@ -381,6 +381,48 @@ describe('HarvestModal linked grain movement', () => {
       expect(state.updateHarvestRecord.mock.calls[1][0]).toEqual(original);
     });
   });
+
+  it('restores the linked movement when the harvest update fails', async () => {
+    const originalMovement = linkedMovement();
+    state.grainMovements = [originalMovement];
+    state.updateHarvestRecord.mockResolvedValue(false);
+
+    render(<HarvestModal field={field} open onClose={() => {}} initialData={binHarvest()} />);
+    fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '4200' } });
+    fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+
+    await waitFor(() => expect(state.updateGrainMovement).toHaveBeenCalledTimes(2));
+    expect(state.updateGrainMovement.mock.calls[0][0]).toMatchObject({ bushels: 4200 });
+    expect(state.updateHarvestRecord).toHaveBeenCalledTimes(1);
+    expect(state.updateGrainMovement.mock.calls[1][0]).toEqual(originalMovement);
+    expect(state.updateGrainMovement.mock.invocationCallOrder[0])
+      .toBeLessThan(state.updateHarvestRecord.mock.invocationCallOrder[0]);
+  });
+});
+
+it.each([
+  ['non-finite bushels', '1e309', '15', '0'],
+  ['zero bushels', '0', '15', '0'],
+  ['negative bushels', '-1', '15', '0'],
+  ['negative moisture', '100', '-1', '0'],
+  ['moisture over 100', '100', '101', '0'],
+  ['negative landlord split', '100', '15', '-1'],
+  ['landlord split over 100', '100', '15', '101'],
+])('rejects %s', async (_label, bushelValue, moistureValue, splitValue) => {
+  vi.clearAllMocks();
+  state.grainMovements = [];
+  state.updateHarvestRecord.mockResolvedValue(true);
+  state.addHarvestWithGrain.mockResolvedValue(true);
+  render(<HarvestModal field={field} open onClose={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: /town/i }));
+  fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: bushelValue } });
+  fireEvent.change(screen.getByLabelText(/moisture/i), { target: { value: moistureValue } });
+  fireEvent.change(screen.getByLabelText(/landlord %/i), { target: { value: splitValue } });
+  fireEvent.click(screen.getByRole('button', { name: /log harvest/i }));
+
+  await Promise.resolve();
+  expect(state.addHarvestWithGrain).not.toHaveBeenCalled();
+  expect(state.updateHarvestRecord).not.toHaveBeenCalled();
 });
 
 it('uses retry-stable IDs for atomic creation of a new bin harvest', async () => {
