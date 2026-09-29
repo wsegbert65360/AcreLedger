@@ -141,9 +141,9 @@ const faqs = [
       'No. AcreLedger creates working documents from the information you enter. Follow product labels and confirm filing requirements with your county FSA office or other authority.',
   },
   {
-    question: 'What happens after the four free months?',
+    question: 'What does the limited rollout cost?',
     answer:
-      'The standard price is $299 per farm for a year, billed annually. Everything you have recorded stays in the book, and you can export any of it at any time.',
+      'There is no charge during the limited rollout, and billing is coming soon. The planned price after the rollout is $299 per farm for a year, billed annually. Everything you have recorded stays in the book, and you can export any of it at any time.',
   },
   {
     question: 'Does it work without cell service?',
@@ -241,12 +241,12 @@ const Landing = () => {
               {!isNative && (
                 <>
                   <p className="landing-hero-terms" data-reveal style={revealDelay(320)}>
-                    Free for four months · No charge today · Then $299 per farm,
-                    billed annually
+                    Limited rollout · No charge today · Billing coming soon ·
+                    Planned price: $299 per farm, billed annually
                   </p>
                   <div className="landing-stamp" data-reveal="stamp" style={revealDelay(480)}>
-                    NO CHARGE TODAY
-                    <small>4 MONTHS FREE</small>
+                    NO CHARGE
+                    <small>LIMITED ROLLOUT</small>
                   </div>
                 </>
               )}
@@ -372,7 +372,7 @@ const Landing = () => {
                 Terms of the book.
               </h2>
               <p className="landing-lede" data-reveal style={revealDelay(80)}>
-                One annual price per farm, with no per-seat charge.
+                No charge during the limited rollout. Billing is coming soon.
               </p>
               <div className="landing-ticket-wrap">
                 <dl className="landing-ticket" data-reveal>
@@ -381,14 +381,14 @@ const Landing = () => {
                     <span>No. 2026-001</span>
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.green)}>
-                    <dt>Trial</dt>
+                    <dt>Limited rollout</dt>
                     <dd>
-                      4 months
-                      <small>full access, no charge</small>
+                      No charge
+                      <small>billing coming soon</small>
                     </dd>
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.red)}>
-                    <dt>Thereafter</dt>
+                    <dt>Planned price</dt>
                     <dd>
                       $299.00
                       <small>per farm / year, billed annually</small>
@@ -402,15 +402,14 @@ const Landing = () => {
                     </dd>
                   </div>
                   <div className="landing-ticket-net">
-                    <span>Net due after trial</span>
-                    <span>$299.00 / year</span>
+                    <span>Net due today</span>
+                    <span>$0.00</span>
                   </div>
                   <p className="landing-ticket-note">
-                    About $24.92 per month, billed annually. The price covers
-                    AcreLedger access. Internet service, third-party services, and
-                    professional or government filing fees cost extra. You will not
-                    be charged when you create an account; web subscriptions are
-                    rolling out in stages.
+                    Billing is coming soon, and no payment method is collected when
+                    you create an account. The planned future price is $299 per farm
+                    per year, billed annually. Internet service, third-party services,
+                    and professional or government filing fees cost extra.
                   </p>
                 </dl>
 
@@ -451,7 +450,7 @@ const Landing = () => {
             {faqs
               .filter(
                 (faq) =>
-                  !isNative || faq.question !== 'What happens after the four free months?',
+                  !isNative || faq.question !== 'What does the limited rollout cost?',
               )
               .map((faq) => (
                 <details key={faq.question}>
@@ -476,8 +475,8 @@ const Landing = () => {
             </div>
             {!isNative && (
               <p className="landing-final-terms" data-reveal style={revealDelay(200)}>
-                Free for four months · No charge today · Then $299 per farm,
-                billed annually
+                Limited rollout · No charge today · Billing coming soon ·
+                Planned price: $299 per farm, billed annually
               </p>
             )}
             <div className="landing-stamp" data-reveal="stamp" style={revealDelay(320)}>

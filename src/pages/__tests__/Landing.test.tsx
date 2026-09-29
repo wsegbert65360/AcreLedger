@@ -40,19 +40,22 @@ describe('Landing', () => {
     expect(screen.getByAltText(/AcreLedger dashboard with live weather/i)).toBeInTheDocument();
   });
 
-  it('explains the introductory period and standard annual price', () => {
+  it('explains the no-charge limited rollout and planned annual price', () => {
     renderLanding();
 
-    expect(screen.getByText('full access, no charge')).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/Planned price: \$299 per farm, billed annually/i)
+    ).toHaveLength(2);
+    expect(screen.getByText('billing coming soon')).toBeInTheDocument();
     expect(screen.getByText('per farm / year, billed annually')).toBeInTheDocument();
-    expect(screen.getByText('$299.00 / year')).toBeInTheDocument();
+    expect(screen.getByText('$0.00')).toBeInTheDocument();
     expect(
-      screen.getByText(/no charge when you create an account today/i)
+      screen.getByText(/no payment method is collected when you create an account/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/web subscriptions are rolling out in stages/i)
+      screen.getByText(/the planned future price is \$299 per farm per year/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/about \$24\.92 per month, billed annually/i)).toBeInTheDocument();
+    expect(screen.getByRole('main')).not.toHaveTextContent(/four[- ]month|4[- ]month/i);
   });
 
   it('carries the approved FSA footer disclaimer', () => {
@@ -116,17 +119,18 @@ describe('Landing', () => {
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
     renderLanding();
 
-    expect(screen.queryByText(/\$299/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/free for four months/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/no charge today/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('main')).not.toHaveTextContent(
+      /\$299|limited rollout|billing|trial|sign ?up|subscribe|checkout|purchase/i
+    );
     expect(screen.queryByRole('heading', { name: /terms of the book/i })).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/what happens after the four free months/i)
+      screen.queryByText(/what does the limited rollout cost/i)
     ).not.toBeInTheDocument();
 
     const signInLinks = screen.getAllByRole('link', { name: /sign in/i });
     expect(signInLinks.length).toBeGreaterThanOrEqual(3);
     signInLinks.forEach((link) => expect(link).toHaveAttribute('href', '/auth?mode=signin'));
     expect(screen.queryByRole('link', { name: /open the book/i })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href*="mode=signup"]')).not.toBeInTheDocument();
   });
 });

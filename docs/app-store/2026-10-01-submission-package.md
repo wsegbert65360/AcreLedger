@@ -138,6 +138,10 @@ new build; do not change the answer if the cryptography changes.
 
 ## Screenshot package
 
+Acceptance for the review account and the 12 final screenshots is in
+[`2026-10-01-review-acceptance.md`](./2026-10-01-review-acceptance.md). Draft
+captures do not meet that bar.
+
 The target supports iPhone and iPad (`TARGETED_DEVICE_FAMILY = "1,2"`), so both
 sets are required. Capture clean, current screens from the exact release build
 with representative sample data and no real customer information.
