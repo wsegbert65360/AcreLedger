@@ -13,7 +13,7 @@ import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { buildSeasonOptions, getMaxViewingSeason, isValidViewingSeason } from '@/lib/seasonYears';
 
-import { getSignedBushels } from '@/utils/numbers';
+import { getSignedBushels, roundTo } from '@/utils/numbers';
 import { saveToStorage } from './storageUtils';
 import { useAuth } from './useAuth';
 import { usePlantRecords } from './usePlantRecords';
@@ -704,6 +704,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       const aKey = `${m.binId}-all`;
       totals[aKey] = (totals[aKey] || 0) + delta;
     });
+    // Raw float sums drift (0.1 + 0.2 = 0.30000000000000004), so a bin showing
+    // "3,000" could reject a 3,000 sale. Round to the 3 decimals the UI displays.
+    for (const key of Object.keys(totals)) totals[key] = roundTo(totals[key], 3);
     return totals;
   }, [grainMovements]);
 

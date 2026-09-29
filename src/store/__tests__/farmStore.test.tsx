@@ -182,6 +182,21 @@ describe('farmStore composed behaviors', () => {
     });
   });
 
+  describe('getBinTotal float precision', () => {
+    it('does not let float drift make a displayed total unsellable', async () => {
+      cacheControl.data['grain_movements'] = [
+        makeMovement({ id: 'f-1', type: 'in', bushels: 0.1 }),
+        makeMovement({ id: 'f-2', type: 'in', bushels: 0.2 }),
+        makeMovement({ id: 'f-3', type: 'in', bushels: 2999.7, seasonYear: 2025 }),
+      ];
+      const { result } = renderHook(() => useFarm(), { wrapper });
+
+      // Raw float sum of 0.1 + 0.2 is 0.30000000000000004.
+      await waitFor(() => expect(result.current.getBinTotal('bin-1', 2026)).toBe(0.3));
+      expect(result.current.getBinTotal('bin-1')).toBe(3000);
+    });
+  });
+
   describe('signOut composition', () => {
     it('does not end the auth session when the local cache cannot be cleared', async () => {
       clearLocalCacheMock.mockResolvedValue(false);
