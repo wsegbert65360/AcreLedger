@@ -11,6 +11,8 @@ type BackfillRequest = {
 
 type FieldCoord = { id: string; lat: number; lng: number }
 
+const FIELD_PAGE_SIZE = 1000
+
 export default {
   fetch: withSupabase({ auth: 'secret:automations' }, async (req, ctx) => {
     if (req.method !== 'POST') {
@@ -65,14 +67,23 @@ export default {
       const currentHour = hours[0]
       const remainingHours = hours.slice(1)
 
-      let fieldsQuery = supabaseClient.from('fields').select('id, lat, lng')
-      fieldsQuery = fieldId
-        ? fieldsQuery.eq('id', fieldId)
-        : fieldsQuery.neq('id', '00000000-0000-0000-0000-000000000000')
+      const fields: FieldCoord[] = []
+      for (let from = 0; ; from += FIELD_PAGE_SIZE) {
+        let fieldsQuery = supabaseClient
+          .from('fields')
+          .select('id, lat, lng')
+          .order('id', { ascending: true })
+          .range(from, from + FIELD_PAGE_SIZE - 1)
+        fieldsQuery = fieldId
+          ? fieldsQuery.eq('id', fieldId)
+          : fieldsQuery.neq('id', '00000000-0000-0000-0000-000000000000')
 
-      const { data: fields, error: fieldsError } = await fieldsQuery
-      if (fieldsError) throw fieldsError
-      if (!fields?.length) throw new Error('No fields found')
+        const { data, error } = await fieldsQuery
+        if (error || !data) throw error ?? new Error('Failed to fetch fields')
+        fields.push(...(data as FieldCoord[]))
+        if (data.length < FIELD_PAGE_SIZE) break
+      }
+      if (!fields.length) throw new Error('No fields found')
 
       if (fieldId) {
         const { error: coverageError } = await supabaseClient

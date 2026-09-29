@@ -34,6 +34,13 @@ export interface QueuedMutation {
   retry_count: number;
 }
 
+export class WebSyncQueueUnreadableError extends Error {
+  constructor() {
+    super('The encrypted web sync queue is unreadable.');
+    this.name = 'WebSyncQueueUnreadableError';
+  }
+}
+
 async function getEncryptionSecret(): Promise<string> {
   return getLocalEncryptionKey();
 }
@@ -45,7 +52,9 @@ async function getWebQueue(): Promise<QueuedMutation[]> {
     if (!raw) return [];
     const secret = await getEncryptionSecret();
     const decrypted = await decryptData(raw, secret);
-    return JSON.parse(decrypted);
+    const queue: unknown = JSON.parse(decrypted);
+    if (!Array.isArray(queue)) throw new Error('Decrypted sync queue is not an array');
+    return queue as QueuedMutation[];
   } catch (err) {
     console.error('Failed to parse web sync queue:', err);
     // Quarantine the unreadable blob instead of silently treating the queue as
@@ -59,11 +68,17 @@ async function getWebQueue(): Promise<QueuedMutation[]> {
     }
     if (!corruptQueueToastShown) {
       corruptQueueToastShown = true;
-      toast.error('Offline sync queue was unreadable and has been reset.', {
-        description: 'Queued changes may not sync. A copy was preserved locally for support.',
+      toast.error('Offline changes could not be read.', {
+        description: 'They remain preserved on this device and were not uploaded. Retry recovery after unlocking local data.',
+        action: {
+          label: 'Retry recovery',
+          onClick: () => {
+            void syncQueue.recoverCorruptQueue();
+          },
+        },
       });
     }
-    return [];
+    throw new WebSyncQueueUnreadableError();
   }
 }
 
@@ -204,6 +219,37 @@ async function reconcileZeroRowMutation(mutation: QueuedMutation, farmId: string
 
 export const syncQueue = {
   /**
+   * Revalidates the preserved encrypted queue and restores it in place. The
+   * quarantine copy is retained so a failed recovery never deletes the user's
+   * only copy of pending offline mutations.
+   */
+  recoverCorruptQueue: async (): Promise<boolean> => {
+    if (isNative) return false;
+    const raw = localStorage.getItem(CORRUPT_QUEUE_KEY);
+    if (!raw) {
+      toast.error('No preserved offline queue was found on this device.');
+      return false;
+    }
+
+    try {
+      const secret = await getEncryptionSecret();
+      const recovered = JSON.parse(await decryptData(raw, secret));
+      if (!Array.isArray(recovered)) throw new Error('Recovered queue is not an array');
+      await saveWebQueue(recovered as QueuedMutation[]);
+      webQueuePromise = Promise.resolve();
+      corruptQueueToastShown = false;
+      toast.success('Offline changes recovered. They are ready to sync.');
+      return true;
+    } catch (err) {
+      console.error('Failed to recover corrupt web sync queue:', err);
+      toast.error('Offline changes are still locked.', {
+        description: 'The preserved copy remains on this device. Retry after local data access is restored.',
+      });
+      return false;
+    }
+  },
+
+  /**
    * Enqueues a new mutation to be processed when online.
    */
   enqueueMutation: async (
@@ -343,6 +389,7 @@ export const syncQueue = {
         result = queue.filter(item => item.farm_id === farmId);
       }).catch(err => {
         console.error('Failed to serialize web sync queue getQueue:', err);
+        if (err instanceof WebSyncQueueUnreadableError) throw err;
       }));
       return result;
     }
@@ -444,6 +491,7 @@ export const syncQueue = {
         result = queue.filter(item => item.farm_id === farmId).length;
       }).catch(err => {
         console.error('Failed to serialize web sync queue getPendingCount:', err);
+        if (err instanceof WebSyncQueueUnreadableError) throw err;
       }));
       return result;
     }

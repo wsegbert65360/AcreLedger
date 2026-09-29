@@ -77,7 +77,8 @@ vi.mock('sonner', () => ({
   }),
 }));
 
-import { syncQueue } from '../syncQueue';
+import { syncQueue, WebSyncQueueUnreadableError } from '../syncQueue';
+import { toast } from 'sonner';
 
 describe('syncQueue web queue management', () => {
   beforeEach(() => {
@@ -483,17 +484,35 @@ describe('syncQueue web queue management', () => {
 
   // ─── Corruption Quarantine ─────────────────────────────────────────────────
 
-  it('quarantines an unreadable queue blob instead of silently wiping it', async () => {
-    localStorage.setItem('al_sync_queue', 'not-valid-queue-json');
+  it('quarantines an unreadable queue and blocks false replay success', async () => {
+    const malformedQueue = `enc:fake:${btoa(JSON.stringify({ mutation: 'not-an-array' }))}`;
+    localStorage.setItem('al_sync_queue', malformedQueue);
 
-    const queue = await syncQueue.getQueue('farm-1');
-    expect(queue).toEqual([]);
-    expect(localStorage.getItem('al_sync_queue_corrupt')).toBe('not-valid-queue-json');
+    await expect(syncQueue.getQueue('farm-1')).rejects.toBeInstanceOf(WebSyncQueueUnreadableError);
+    expect(localStorage.getItem('al_sync_queue_corrupt')).toBe(malformedQueue);
+    expect(toast.error).toHaveBeenCalledWith(
+      'Offline changes could not be read.',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Retry recovery' }) }),
+    );
 
-    // The next enqueue starts a fresh queue without touching the quarantine copy.
+    await expect(syncQueue.replayQueue('farm-1')).rejects.toBeInstanceOf(WebSyncQueueUnreadableError);
+    await expect(syncQueue.enqueueMutation('fields', 'insert', { id: 'f1' }, 'farm-1'))
+      .rejects.toBeInstanceOf(WebSyncQueueUnreadableError);
+    expect(localStorage.getItem('al_sync_queue_corrupt')).toBe(malformedQueue);
+    expect(localStorage.getItem('al_sync_queue')).toBe(malformedQueue);
+  });
+
+  it('restores a preserved queue through the recovery action', async () => {
     await syncQueue.enqueueMutation('fields', 'insert', { id: 'f1' }, 'farm-1');
+    const encryptedQueue = localStorage.getItem('al_sync_queue');
+    expect(encryptedQueue).not.toBeNull();
+    localStorage.setItem('al_sync_queue_corrupt', encryptedQueue!);
+    localStorage.setItem('al_sync_queue', 'broken-current-copy');
+
+    await expect(syncQueue.recoverCorruptQueue()).resolves.toBe(true);
     expect(await syncQueue.getPendingCount('farm-1')).toBe(1);
-    expect(localStorage.getItem('al_sync_queue_corrupt')).toBe('not-valid-queue-json');
+    expect(localStorage.getItem('al_sync_queue_corrupt')).toBe(encryptedQueue);
+    expect(toast.success).toHaveBeenCalledWith('Offline changes recovered. They are ready to sync.');
   });
 
   // ─── Retry Count ──────────────────────────────────────────────────────────

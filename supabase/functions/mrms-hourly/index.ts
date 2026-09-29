@@ -4,6 +4,8 @@ import { downloadAndDecompress, MRMS_CONFIG, extractRainfall, validateGridConfig
 
 interface FieldCoord { lat: number; lng: number; id: string }
 
+const FIELD_PAGE_SIZE = 1000
+
 export default {
   fetch: withSupabase({ auth: 'secret:automations' }, async (req, ctx) => {
     if (req.method !== 'POST') {
@@ -33,12 +35,19 @@ export default {
     validateGridConfig()
     console.log(`Processing hour: ${targetTs.toISOString()}`)
 
-    // 1. Fetch all fields
-    const { data: fields, error: fieldsError } = await supabaseClient
-      .from('fields')
-      .select('id, lat, lng')
-    
-    if (fieldsError || !fields) throw new Error('Failed to fetch fields')
+    // 1. Fetch all fields. PostgREST caps one response at max_rows (1,000),
+    // so an unpaged select silently omitted farms after the first page.
+    const fields: FieldCoord[] = []
+    for (let from = 0; ; from += FIELD_PAGE_SIZE) {
+      const { data, error } = await supabaseClient
+        .from('fields')
+        .select('id, lat, lng')
+        .order('id', { ascending: true })
+        .range(from, from + FIELD_PAGE_SIZE - 1)
+      if (error || !data) throw error ?? new Error('Failed to fetch fields')
+      fields.push(...(data as FieldCoord[]))
+      if (data.length < FIELD_PAGE_SIZE) break
+    }
 
     // 2. Download and Decompress (Try Pass 2, then Pass 1)
     let gribData = await downloadAndDecompress(pass2Url)
@@ -58,9 +67,9 @@ export default {
     console.log(`Using ${source} data from ${source === 'Pass 2' ? pass2Url : pass1Url}`)
 
     // 3. Extract logic
-    const rainfallValues = extractRainfall(gribData, fields.map((f: FieldCoord) => ({ lat: f.lat, lng: f.lng })))
+    const rainfallValues = extractRainfall(gribData, fields.map((f) => ({ lat: f.lat, lng: f.lng })))
 
-    const records = fields.map((f: FieldCoord, i: number) => ({
+    const records = fields.map((f, i: number) => ({
       field_id: f.id,
       timestamp_utc: targetTs.toISOString(),
       rainfall_in: rainfallValues[i],
