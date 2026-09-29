@@ -80,14 +80,19 @@ ALLOWED_ORIGINS=https://your-app.vercel.app,capacitor://localhost
 OPENROUTER_API_KEY=sk-or-v1-...
 AI_MODEL=minimax/minimax-m3:free
 VITE_AI_ASSISTANT_URL=https://your-app.vercel.app
+
+# Optional client crash collector (public browser endpoint; never include credentials)
+VITE_ERROR_REPORTING_DSN=https://errors.example/ingest
 ```
 
 `VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly. For iOS/Capacitor weather, provide an absolute `VITE_WEATHER_PROXY_URL` or set `VITE_VISUALCROSSING_KEY`; the proxy URL is preferred when both are set, while the web app can continue using the server-side `/api/weather-proxy`.
 
+`VITE_ERROR_REPORTING_DSN` is optional and disabled when empty. When set, it must be an HTTPS collector URL with no credentials, query, or fragment. The browser sends bounded, token-redacted error details and the pathname only; it omits cookies and URL query strings. Because every `VITE_*` value is public, the collector must accept CORS JSON posts without embedded secrets and enforce its own rate limits and retention policy.
+
 ## Deployment
 
 ### Web (Vercel)
-The frontend deploys to **Vercel**. Vercel is linked to the GitLab remote and auto-deploys on pushes to `main` / `master`. `vercel.json` configures cache headers for `index.html`, `/`, and the service worker.
+The frontend deploys to **Vercel**. Vercel is linked to the GitLab remote and auto-deploys on pushes to `main` / `master`. `vercel.json` configures cache headers for `index.html`, `/`, and the service worker. Its `buildCommand` is `npm run ci:vercel-gate && npm run build`. The gate runs lint, unit tests, and both typechecks; a non-zero exit fails that deployment and does not move the production alias. GitLab pipeline success is not itself a Vercel required check. Changing `vercel.json` does not start a deployment.
 
 The `/api/weather-proxy` function requires the four server-only variables shown above in every Vercel environment. `ALLOWED_ORIGINS` is an exact, comma-separated allowlist and fails closed for browser/native requests that send an unlisted origin. Apply Supabase migrations before deploying the function. Environment-variable changes apply only to new deployments, so redeploy after changing them. The proxy verifies the caller's Supabase access token and enforces a database-backed limit of 30 weather requests per user per one-minute window.
 

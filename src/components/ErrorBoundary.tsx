@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
+import { reportClientError } from '@/utils/errorReporting';
 
 interface Props {
     children?: ReactNode;
@@ -16,12 +17,18 @@ class ErrorBoundary extends Component<Props, State> {
         hasError: false
     };
 
-    public static getDerivedStateFromError(_: Error): State {
+    public static getDerivedStateFromError(): State {
         return { hasError: true };
     }
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        console.error("Uncaught error:", error, errorInfo);
+        reportClientError({
+            source: 'error-boundary',
+            message: error.message,
+            name: error.name,
+            stack: error.stack,
+            componentStack: errorInfo.componentStack ?? undefined,
+        });
     }
 
     private handleRetry = () => {

@@ -6,7 +6,10 @@ import App from "./App.tsx";
 import "./index.css";
 
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
+import { installGlobalErrorHandlers } from "./utils/errorReporting.ts";
 import { registerSW } from 'virtual:pwa-register';
+
+installGlobalErrorHandlers();
 
 if (import.meta.env.DEV) {
   if ('serviceWorker' in navigator) {
