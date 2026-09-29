@@ -233,18 +233,19 @@ export interface ExistingEntitlementIdentity {
 /**
  * Decide whether a Stripe snapshot may replace the subscription currently
  * mirrored for a farm. Updates for the same subscription are always safe.
- * A different subscription must come through an explicit replacement event
- * (Checkout completion) and be newer than the current subscription.
+ * A different subscription must have completed Checkout evidence and be newer
+ * than the current subscription. Subscription lifecycle metadata alone is not
+ * sufficient evidence to replace a farm's entitlement.
  */
 export function shouldApplySubscriptionSnapshot(
   existing: ExistingEntitlementIdentity | null | undefined,
   incoming: StripeSubscriptionLike,
-  allowReplacement: boolean,
+  checkoutCompleted: boolean,
 ): boolean {
   if (!existing?.stripe_subscription_id || existing.stripe_subscription_id === incoming.id) {
     return true;
   }
-  if (!allowReplacement) return false;
+  if (!checkoutCompleted) return false;
 
   const incomingCreatedAt = stripeEpochToIso(incoming.created);
   if (!incomingCreatedAt) return false;

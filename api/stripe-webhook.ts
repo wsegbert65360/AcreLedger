@@ -54,7 +54,7 @@ export async function upsertFarmSubscriptionEntitlement(
   supabase: SupabaseClient,
   subscription: StripeSubscriptionLike,
   metadata: Record<string, string> | null | undefined,
-  options: { allowReplacement?: boolean } = {},
+  options: { checkoutCompleted?: boolean } = {},
 ): Promise<boolean> {
   const { farmId, userId } = readSubscriptionMetadata(
     metadata ?? subscription.metadata ?? null,
@@ -66,7 +66,7 @@ export async function upsertFarmSubscriptionEntitlement(
 
   const { data: existing, error: selectError } = await supabase
     .from('farm_subscriptions')
-    .select('id, owner_user_id, stripe_subscription_id, stripe_subscription_created_at')
+    .select('id, owner_user_id, stripe_subscription_id, stripe_subscription_created_at, updated_at')
     .eq('farm_id', farmId)
     .is('deleted_at', null)
     .maybeSingle();
@@ -74,14 +74,40 @@ export async function upsertFarmSubscriptionEntitlement(
     throw new Error(`Failed to read farm subscription: ${selectError.message}`);
   }
 
-  if (!shouldApplySubscriptionSnapshot(existing, subscription, options.allowReplacement === true)) {
+  const isReplacement = Boolean(
+    existing?.stripe_subscription_id && existing.stripe_subscription_id !== subscription.id,
+  );
+  if ((!existing || isReplacement) && options.checkoutCompleted !== true) {
+    console.warn(
+      `Ignoring Stripe subscription ${subscription.id} for farm ${farmId} without completed Checkout evidence.`,
+    );
+    return false;
+  }
+
+  if (!shouldApplySubscriptionSnapshot(existing, subscription, options.checkoutCompleted === true)) {
     console.warn(
       `Ignoring stale Stripe subscription ${subscription.id} for farm ${farmId}; current subscription is ${existing?.stripe_subscription_id}.`,
     );
     return false;
   }
 
-  const ownerId = userId ?? existing?.owner_user_id ?? null;
+  if (userId && options.checkoutCompleted === true) {
+    const { data: member, error: memberError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .eq('farm_id', farmId)
+      .maybeSingle();
+    if (memberError) {
+      throw new Error(`Failed to verify checkout owner: ${memberError.message}`);
+    }
+    if (!member) {
+      console.error(`Checkout owner ${userId} is not a member of farm ${farmId}; skipping upsert.`);
+      return false;
+    }
+  }
+
+  const ownerId = existing?.owner_user_id ?? userId ?? null;
   if (!ownerId) {
     console.error(`No owner resolvable for farm ${farmId}; skipping subscription upsert.`);
     return false;
@@ -92,15 +118,29 @@ export async function upsertFarmSubscriptionEntitlement(
     updated_at: new Date().toISOString(),
   };
 
-  const { error, count } = existing
-    ? await supabase
-        .from('farm_subscriptions')
-        .update(payload, { count: 'exact' })
-        .eq('id', existing.id)
-        .eq('farm_id', farmId)
-    : await supabase
+  let writeResult;
+  if (existing) {
+    let update = supabase
+      .from('farm_subscriptions')
+      .update(payload, { count: 'exact' })
+      .eq('id', existing.id)
+      .eq('farm_id', farmId);
+    update = existing.stripe_subscription_id == null
+      ? update.is('stripe_subscription_id', null)
+      : update.eq('stripe_subscription_id', existing.stripe_subscription_id);
+    update = existing.stripe_subscription_created_at == null
+      ? update.is('stripe_subscription_created_at', null)
+      : update.eq('stripe_subscription_created_at', existing.stripe_subscription_created_at);
+    update = existing.updated_at == null
+      ? update.is('updated_at', null)
+      : update.eq('updated_at', existing.updated_at);
+    writeResult = await update;
+  } else {
+    writeResult = await supabase
         .from('farm_subscriptions')
         .insert({ ...payload, farm_id: farmId, owner_user_id: ownerId });
+  }
+  const { error, count } = writeResult;
   if (error) {
     throw new Error(`Failed to upsert farm subscription: ${error.message}`);
   }
@@ -115,7 +155,7 @@ async function retrieveAndUpsertSubscription(
   supabase: SupabaseClient,
   subscriptionId: string,
   metadata: Record<string, string> | null | undefined,
-  options: { allowReplacement?: boolean } = {},
+  options: { checkoutCompleted?: boolean } = {},
 ): Promise<boolean> {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   return upsertFarmSubscriptionEntitlement(supabase, subscription, metadata, options);
@@ -130,6 +170,11 @@ function readInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const nested = invoice.parent?.subscription_details?.subscription;
   if (typeof nested === 'string' && nested) return nested;
   if (nested && typeof nested === 'object' && nested.id) return nested.id;
+  const legacy = (invoice as Stripe.Invoice & {
+    subscription?: string | { id?: string | null } | null;
+  }).subscription;
+  if (typeof legacy === 'string' && legacy) return legacy;
+  if (legacy && typeof legacy === 'object' && legacy.id) return legacy.id;
   return null;
 }
 
@@ -206,9 +251,15 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+        const { farmId } = readSubscriptionMetadata(session.metadata);
         const subscriptionId =
           typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
-        if (subscriptionId) {
+        if (
+          subscriptionId &&
+          farmId &&
+          session.mode === 'subscription' &&
+          session.client_reference_id === farmId
+        ) {
           // Fetch the full subscription so the entitlement row lands complete
           // even if the paired customer.subscription.created event was missed.
           await retrieveAndUpsertSubscription(
@@ -216,8 +267,10 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
             supabase,
             subscriptionId,
             session.metadata ?? null,
-            { allowReplacement: true },
+            { checkoutCompleted: true },
           );
+        } else {
+          console.warn('Ignoring completed Checkout session without matching AcreLedger farm evidence.');
         }
         break;
       }
@@ -232,7 +285,6 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
           supabase,
           subscription.id,
           subscription.metadata,
-          { allowReplacement: event.type === 'customer.subscription.created' },
         );
         break;
       }
