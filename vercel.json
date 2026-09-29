@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm ci --include=dev",
   "buildCommand": "npm run ci:vercel-gate && npm run build",
   "headers": [
     {
