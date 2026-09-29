@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapGrainFromDb, mapGrainToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 
 interface UseGrainMovementsArgs {
   farm_id: string | null;
@@ -166,6 +167,29 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
 
       if (error || affectedRows !== 1) {
         if (error) {
+          // Unknown outcome: the update may have committed. Enqueue the same
+          // mutation (same id/version) rather than rolling back, so a retry
+          // cannot apply the delta twice or silently revert the row.
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Grain update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('grain_movements', 'update', {
+                ...mapped,
+                id: r.id,
+                __expected_version: previousVersion,
+              }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Grain movement saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue grain update after unknown outcome:', enqueueErr);
+              rollback();
+              toast.error('Failed to update record.');
+              return false;
+            }
+          }
           const { consolePayload, toastOptions } = describeSupabaseError(error);
           console.error('Error updating grain movement:', consolePayload);
           toast.error('Failed to update record.', toastOptions);
@@ -194,7 +218,10 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       return false;
     }
     if (ids.length === 0) return true;
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = grainMovements
@@ -263,6 +290,35 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
 
       if (error || affectedRows !== ids.length) {
         if (error) {
+          // Unknown outcome: some or all deletes may have committed. Queue the
+          // same soft-deletes (FIFO after the original) instead of restoring
+          // the rows, so a later replay converges without resurrecting them.
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Grain delete outcome unknown; queuing for retry:', error);
+            try {
+              const deletedAt = new Date().toISOString();
+              await syncQueue.enqueueMutations(
+                snapshot.map(({ record }) => ({
+                  tableName: 'grain_movements',
+                  operation: 'soft_delete' as const,
+                  payload: {
+                    id: record.id,
+                    deleted_at: deletedAt,
+                    __expected_version: record.version ?? 1,
+                  },
+                  farmId: farm_id,
+                }))
+              );
+              if (onMutation) await onMutation();
+              const count = ids.length;
+              toast.success(`${count} record${count !== 1 ? 's' : ''} deleted locally.`, {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue grain deletes after unknown outcome:', enqueueErr);
+            }
+          }
           const { consolePayload, toastOptions } = describeSupabaseError(error);
           console.error('Error deleting grain movements:', consolePayload);
           toast.error('Failed to delete records.', toastOptions);
@@ -344,7 +400,10 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       }
     }
 
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const id = crypto.randomUUID();
@@ -391,6 +450,27 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       }
 
       if (error) {
+        // Unknown outcome (timeout/network): the row may already be committed
+        // server-side. Preserve the optimistic record and enqueue the SAME id
+        // so replay adopts the existing row via the 23505 reconcile path
+        // instead of inserting a second one (which would double bin inventory).
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Grain add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('grain_movements', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Grain movement saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue grain movement after unknown outcome:', enqueueErr);
+            setGrainMovements(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save grain movement.');
+            return false;
+          }
+        }
+
         const { consolePayload, toastOptions } = describeSupabaseError(error);
         console.error('Error adding grain movement record:', consolePayload);
         setGrainMovements(prev => prev.filter(rec => rec.id !== id));

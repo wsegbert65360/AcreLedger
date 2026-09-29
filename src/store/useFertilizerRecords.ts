@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapFertilizerToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 
 interface UseFertilizerRecordsArgs {
   farm_id: string | null;
@@ -32,7 +33,10 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
       return false;
     }
 
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const id = crypto.randomUUID();
@@ -90,6 +94,22 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
       }
 
       if (error) {
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Fertilizer add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('fertilizer_applications', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Fertilizer application saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue fertilizer record after unknown outcome:', enqueueErr);
+            setFertilizerApplications(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save fertilizer application.');
+            return false;
+          }
+        }
         console.error('Error adding fertilizer record:', error);
         setFertilizerApplications(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save fertilizer application.');
@@ -117,7 +137,10 @@ function useUpdateFertilizerRecord({ farm_id, fields, fertilizerApplications, se
       return false;
     }
 
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     let mapped: ReturnType<typeof mapFertilizerToDb>;
@@ -180,6 +203,19 @@ function useUpdateFertilizerRecord({ farm_id, fields, fertilizerApplications, se
 
       if (error || affectedRows !== 1) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Fertilizer update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('fertilizer_applications', 'update', { ...mapped, id: r.id }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Fertilizer application saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue fertilizer update after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error updating fertilizer application:', error);
         } else {
           console.warn('Fertilizer update affected zero rows:', r.id);
@@ -217,7 +253,10 @@ function useDeleteFertilizerRecord({ farm_id, fertilizerApplications, setFertili
 
     if (ids.length === 0) return true;
 
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = fertilizerApplications
@@ -270,6 +309,24 @@ function useDeleteFertilizerRecord({ farm_id, fertilizerApplications, setFertili
 
       if (error || affectedRows !== ids.length) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Fertilizer delete outcome unknown; queuing for retry:', error);
+            try {
+              const deletedAt = new Date().toISOString();
+              await syncQueue.enqueueMutations(ids.map(id => ({
+                tableName: 'fertilizer_applications', operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+              })));
+              if (onMutation) await onMutation();
+              const count = ids.length;
+              toast.success(`${count} record${count !== 1 ? 's' : ''} deleted locally.`, {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue fertilizer deletes after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error deleting fertilizer applications:', error);
         } else {
           console.warn('Fertilizer delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });

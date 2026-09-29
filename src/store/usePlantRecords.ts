@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapPlantToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 
 interface UsePlantRecordsArgs {
   farm_id: string | null;
@@ -27,7 +28,10 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const id = crypto.randomUUID();
@@ -74,6 +78,22 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
       }
 
       if (error) {
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Plant add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('plant_records', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Planting record saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue plant record after unknown outcome:', enqueueErr);
+            setPlantRecords(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save planting record.');
+            return false;
+          }
+        }
         console.error('Error adding plant record:', error);
         setPlantRecords(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save planting record.');
@@ -93,7 +113,10 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     let mapped: ReturnType<typeof mapPlantToDb>;
@@ -151,6 +174,19 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
 
       if (error || affectedRows !== 1) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Plant update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('plant_records', 'update', { ...mapped, id: r.id }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Record saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue plant update after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error updating plant record:', error);
         } else {
           console.warn('Plant update affected zero rows:', r.id);
@@ -179,7 +215,10 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
       return false;
     }
     if (ids.length === 0) return true;
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = plantRecords
@@ -232,6 +271,24 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
 
       if (error || affectedRows !== ids.length) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Plant delete outcome unknown; queuing for retry:', error);
+            try {
+              const deletedAt = new Date().toISOString();
+              await syncQueue.enqueueMutations(ids.map(id => ({
+                tableName: 'plant_records', operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+              })));
+              if (onMutation) await onMutation();
+              const count = ids.length;
+              toast.success(`${count} record${count !== 1 ? 's' : ''} deleted locally.`, {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue plant deletes after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error deleting plant records:', error);
         } else {
           console.warn('Plant delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });

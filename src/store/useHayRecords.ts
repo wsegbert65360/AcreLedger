@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapHayToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 
 interface UseHayRecordsArgs {
   farm_id: string | null;
@@ -27,7 +28,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const id = crypto.randomUUID();
@@ -74,6 +78,22 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
       }
 
       if (error) {
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Hay add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('hay_harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Hay harvest saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue hay record after unknown outcome:', enqueueErr);
+            setHayHarvestRecords(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save hay harvest record.');
+            return false;
+          }
+        }
         console.error('Error adding hay harvest record:', error);
         setHayHarvestRecords(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save hay harvest record.');
@@ -93,7 +113,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     let mapped: ReturnType<typeof mapHayToDb>;
@@ -151,6 +174,19 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
 
       if (error || affectedRows !== 1) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Hay update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('hay_harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Hay harvest saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue hay update after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error updating hay harvest record:', error);
         } else {
           console.warn('Hay harvest update affected zero rows:', r.id);
@@ -178,7 +214,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
       return false;
     }
     if (ids.length === 0) return true;
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = hayHarvestRecords
@@ -231,6 +270,24 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
 
       if (error || affectedRows !== ids.length) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Hay delete outcome unknown; queuing for retry:', error);
+            try {
+              const deletedAt = new Date().toISOString();
+              await syncQueue.enqueueMutations(ids.map(id => ({
+                tableName: 'hay_harvest_records', operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+              })));
+              if (onMutation) await onMutation();
+              const count = ids.length;
+              toast.success(`${count} record${count !== 1 ? 's' : ''} deleted locally.`, {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue hay deletes after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error deleting hay harvest records:', error);
         } else {
           console.warn('Hay delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });

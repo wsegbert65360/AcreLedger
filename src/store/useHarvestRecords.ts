@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapGrainToDb, mapHarvestToDb } from '@/lib/mappers';
 import { LINKED_GRAIN_MUTATION_KEY, syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 
 interface UseHarvestRecordsArgs {
   farm_id: string | null;
@@ -32,7 +33,10 @@ export function useHarvestRecords({
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const newHarvest: HarvestRecord = {
@@ -115,6 +119,28 @@ export function useHarvestRecords({
         error = err;
       }
       if (error) {
+        // Unknown outcome on the linked RPC: the harvest+grain pair may already
+        // be committed under this idempotency key. Queue the SAME key so replay
+        // adopts it instead of inserting a second grain movement.
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Linked harvest/grain outcome unknown; queuing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('harvest_records', 'insert', {
+              ...mappedHarvest,
+              [LINKED_GRAIN_MUTATION_KEY]: mappedGrain,
+            }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Harvest and grain movement saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue linked harvest/grain after unknown outcome:', enqueueErr);
+            rollback();
+            toast.error('Failed to save harvest and grain movement.');
+            return false;
+          }
+        }
         console.error('Error adding linked harvest and grain movement:', error);
         rollback();
         toast.error('Failed to save harvest and grain movement.');
@@ -136,7 +162,10 @@ export function useHarvestRecords({
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const id = r.id ?? crypto.randomUUID();
@@ -183,6 +212,22 @@ export function useHarvestRecords({
       }
 
       if (error) {
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Harvest add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Harvest saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue harvest after unknown outcome:', enqueueErr);
+            setHarvestRecords(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save harvest record.');
+            return false;
+          }
+        }
         console.error('Error adding harvest record:', error);
         setHarvestRecords(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save harvest record.');
@@ -202,7 +247,10 @@ export function useHarvestRecords({
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     let mapped: ReturnType<typeof mapHarvestToDb>;
@@ -260,6 +308,19 @@ export function useHarvestRecords({
 
       if (error || affectedRows !== 1) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Harvest update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Harvest record saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue harvest update after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error updating harvest record:', error);
         } else {
           console.warn('Harvest update affected zero rows:', r.id);
@@ -287,7 +348,10 @@ export function useHarvestRecords({
       return false;
     }
     if (ids.length === 0) return true;
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = harvestRecords
@@ -368,9 +432,36 @@ export function useHarvestRecords({
       }
 
       if (error) {
-        if (error) {
-          console.error('Error deleting harvest records:', error);
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Harvest delete outcome unknown; queuing for retry:', error);
+          try {
+            const deletedAt = new Date().toISOString();
+            await syncQueue.enqueueMutations([
+              ...ids.map(id => ({
+                tableName: 'harvest_records', operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+              })),
+              ...grainSnapshot.map(({ record }) => ({
+                tableName: 'grain_movements', operation: 'soft_delete' as const,
+                payload: {
+                  id: record.id,
+                  deleted_at: deletedAt,
+                  __expected_version: record.version ?? 1,
+                },
+                farmId: farm_id,
+              })),
+            ]);
+            if (onMutation) await onMutation();
+            const count = ids.length;
+            toast.success(`${count} record${count !== 1 ? 's' : ''} deleted locally.`, {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue harvest deletes after unknown outcome:', enqueueErr);
+          }
         }
+        console.error('Error deleting harvest records:', error);
         rollback();
         toast.error('Failed to delete records.');
         return false;

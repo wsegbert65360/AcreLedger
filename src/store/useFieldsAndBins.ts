@@ -6,6 +6,7 @@ import { fieldService } from '@/services/fieldService';
 import { binService } from '@/services/binService';
 import { mapFieldToDb, mapBinToDb, mapSeedToDb, mapRecipeToDb, mapFertilizerRecipeToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 
 function restoreAtIndex<T>(
@@ -97,6 +98,22 @@ export function useFieldsAndBins({
       try {
         const { error } = await fieldService.createField(f, id, farm_id);
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Field add outcome unknown; preserving record and queueing for reconcile:', error);
+            try {
+              await syncQueue.enqueueMutation('fields', 'insert', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Field saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue field after unknown outcome:', enqueueErr);
+              setFields(prev => prev.filter(field => field.id !== id));
+              toast.error('Failed to save field');
+              return false;
+            }
+          }
           console.error('Supabase error adding field:', error);
           setFields(prev => prev.filter(field => field.id !== id));
           toast.error('Failed to save field');
@@ -105,6 +122,20 @@ export function useFieldsAndBins({
         toast.success('Field created!');
         return true;
       } catch (err) {
+        // Network error: request may have committed. Preserve and queue.
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Field add network outcome unknown; preserving record and queueing:', err);
+          try {
+            await syncQueue.enqueueMutation('fields', 'insert', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Field saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue field after network error:', enqueueErr);
+          }
+        }
         console.error('Network error adding field:', err);
         setFields(prev => prev.filter(field => field.id !== id));
         toast.error('Failed to save field due to a network error');
@@ -163,6 +194,19 @@ export function useFieldsAndBins({
       try {
         const { count: affectedRows, error } = await fieldService.updateField(f, farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Field update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('fields', 'update', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Field saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue field update after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Supabase error updating field:', error);
           } else {
@@ -175,6 +219,19 @@ export function useFieldsAndBins({
         toast.success('Field updated');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Field update network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('fields', 'update', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Field saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue field update after network error:', enqueueErr);
+          }
+        }
         console.error('Network error updating field:', err);
         if (previous) setFields(prev => prev.map(item => item.id === f.id ? previous : item));
         toast.error('Failed to update field due to a network error');
@@ -246,6 +303,32 @@ export function useFieldsAndBins({
       try {
         const { count: affectedRows, error } = await fieldService.softDeleteField(id, farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Field delete outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutations([
+                ...assignmentsToDelete.map(a => ({
+                  tableName: 'field_clu_assignments',
+                  operation: 'soft_delete' as const,
+                  payload: { id: a.id, deleted_at: deletedAt },
+                  farmId: farm_id,
+                })),
+                {
+                  tableName: 'fields',
+                  operation: 'soft_delete' as const,
+                  payload: { id, deleted_at: deletedAt },
+                  farmId: farm_id,
+                },
+              ]);
+              if (onMutation) await onMutation();
+              toast.success('Field deleted locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue field delete after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error deleting field:', error);
           } else {
@@ -259,6 +342,32 @@ export function useFieldsAndBins({
         toast.success('Field deleted');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Field delete network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutations([
+              ...assignmentsToDelete.map(a => ({
+                tableName: 'field_clu_assignments',
+                operation: 'soft_delete' as const,
+                payload: { id: a.id, deleted_at: deletedAt },
+                farmId: farm_id,
+              })),
+              {
+                tableName: 'fields',
+                operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt },
+                farmId: farm_id,
+              },
+            ]);
+            if (onMutation) await onMutation();
+            toast.success('Field deleted locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue field delete after network error:', enqueueErr);
+          }
+        }
         console.error('Network error deleting field:', err);
         if (previous) setFields(prev => prev.map(f => f.id === id ? previous : f));
         rollbackAssignments();
@@ -318,6 +427,22 @@ export function useFieldsAndBins({
       try {
         const { error } = await binService.createBin(b, id, farm_id);
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Bin add outcome unknown; preserving record and queueing for reconcile:', error);
+            try {
+              await syncQueue.enqueueMutation('bins', 'insert', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Bin saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue bin after unknown outcome:', enqueueErr);
+              setBins(prev => prev.filter(bin => bin.id !== id));
+              toast.error('Failed to save bin');
+              return false;
+            }
+          }
           console.error('Error adding bin:', error);
           setBins(prev => prev.filter(bin => bin.id !== id));
           toast.error('Failed to save bin');
@@ -326,6 +451,19 @@ export function useFieldsAndBins({
         toast.success('Bin created!');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Bin add network outcome unknown; preserving record and queueing:', err);
+          try {
+            await syncQueue.enqueueMutation('bins', 'insert', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Bin saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue bin after network error:', enqueueErr);
+          }
+        }
         console.error('Network error adding bin:', err);
         setBins(prev => prev.filter(bin => bin.id !== id));
         toast.error('Failed to save bin due to a network error');
@@ -379,6 +517,19 @@ export function useFieldsAndBins({
       try {
         const { count: affectedRows, error } = await binService.updateBin(b, farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Bin update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('bins', 'update', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Bin saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue bin update after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error updating bin:', error);
           } else {
@@ -391,6 +542,19 @@ export function useFieldsAndBins({
         toast.success('Bin updated');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Bin update network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('bins', 'update', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Bin saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue bin update after network error:', enqueueErr);
+          }
+        }
         console.error('Network error updating bin:', err);
         if (previous) setBins(prev => prev.map(item => item.id === b.id ? previous : item));
         toast.error('Failed to update bin due to a network error');
@@ -437,6 +601,19 @@ export function useFieldsAndBins({
       try {
         const { count: affectedRows, error } = await binService.softDeleteBin(id, farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Bin delete outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('bins', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Bin deleted locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue bin delete after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error deleting bin:', error);
           } else {
@@ -449,6 +626,19 @@ export function useFieldsAndBins({
         toast.success('Bin deleted');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Bin delete network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('bins', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Bin deleted locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue bin delete after network error:', enqueueErr);
+          }
+        }
         console.error('Network error deleting bin:', err);
         if (previous) setBins(prev => prev.map(b => b.id === id ? previous : b));
         toast.error('Failed to delete bin due to a network error');
@@ -508,6 +698,22 @@ export function useFieldsAndBins({
       try {
         const { error } = await supabase.from('saved_seeds').insert([mapped]);
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Seed add outcome unknown; preserving record and queueing for reconcile:', error);
+            try {
+              await syncQueue.enqueueMutation('saved_seeds', 'insert', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Seed variety saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue seed after unknown outcome:', enqueueErr);
+              setSavedSeeds(prev => prev.filter(s => s.id !== id));
+              toast.error('Failed to save seed');
+              return false;
+            }
+          }
           console.error('Error adding seed:', error);
           setSavedSeeds(prev => prev.filter(s => s.id !== id));
           toast.error('Failed to save seed');
@@ -516,6 +722,19 @@ export function useFieldsAndBins({
         toast.success('Seed variety added!');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Seed add network outcome unknown; preserving record and queueing:', err);
+          try {
+            await syncQueue.enqueueMutation('saved_seeds', 'insert', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Seed variety saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue seed after network error:', enqueueErr);
+          }
+        }
         console.error('Network error adding seed:', err);
         setSavedSeeds(prev => prev.filter(s => s.id !== id));
         toast.error('Failed to save seed due to a network error');
@@ -565,6 +784,19 @@ export function useFieldsAndBins({
           .eq('id', id)
           .eq('farm_id', farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Seed delete outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('saved_seeds', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Seed variety removed locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue seed delete after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error deleting seed:', error);
           } else {
@@ -577,6 +809,19 @@ export function useFieldsAndBins({
         toast.success('Seed variety removed');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Seed delete network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('saved_seeds', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Seed variety removed locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue seed delete after network error:', enqueueErr);
+          }
+        }
         console.error('Network error deleting seed:', err);
         restoreAtIndex(setSavedSeeds, previous, previousIndex);
         toast.error('Failed to delete seed due to a network error');
@@ -632,6 +877,22 @@ export function useFieldsAndBins({
       try {
         const { error } = await supabase.from('spray_recipes').insert([mapped]);
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Spray recipe add outcome unknown; preserving record and queueing for reconcile:', error);
+            try {
+              await syncQueue.enqueueMutation('spray_recipes', 'insert', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Spray recipe saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue spray recipe after unknown outcome:', enqueueErr);
+              setSprayRecipes(prev => prev.filter(rec => rec.id !== id));
+              toast.error('Failed to save recipe');
+              return false;
+            }
+          }
           console.error('Error adding spray recipe:', error);
           setSprayRecipes(prev => prev.filter(rec => rec.id !== id));
           toast.error('Failed to save recipe');
@@ -640,6 +901,19 @@ export function useFieldsAndBins({
         toast.success('Spray recipe created!');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Spray recipe add network outcome unknown; preserving record and queueing:', err);
+          try {
+            await syncQueue.enqueueMutation('spray_recipes', 'insert', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Spray recipe saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue spray recipe after network error:', enqueueErr);
+          }
+        }
         console.error('Network error adding spray recipe:', err);
         setSprayRecipes(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save recipe due to a network error');
@@ -698,6 +972,19 @@ export function useFieldsAndBins({
           .eq('id', r.id)
           .eq('farm_id', farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Spray recipe update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('spray_recipes', 'update', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Spray recipe saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue spray recipe update after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error updating spray recipe:', error);
           } else {
@@ -710,6 +997,19 @@ export function useFieldsAndBins({
         toast.success('Recipe updated');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Spray recipe update network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('spray_recipes', 'update', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Spray recipe saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue spray recipe update after network error:', enqueueErr);
+          }
+        }
         console.error('Network error updating spray recipe:', err);
         if (previous) setSprayRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
         toast.error('Failed to update recipe due to a network error');
@@ -759,6 +1059,19 @@ export function useFieldsAndBins({
           .eq('id', id)
           .eq('farm_id', farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Spray recipe delete outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('spray_recipes', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Recipe removed locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue spray recipe delete after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error deleting spray recipe:', error);
           } else {
@@ -771,6 +1084,19 @@ export function useFieldsAndBins({
         toast.success('Recipe removed');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Spray recipe delete network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('spray_recipes', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Recipe removed locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue spray recipe delete after network error:', enqueueErr);
+          }
+        }
         console.error('Network error deleting spray recipe:', err);
         restoreAtIndex(setSprayRecipes, previous, previousIndex);
         toast.error('Failed to delete recipe due to a network error');
@@ -826,6 +1152,22 @@ export function useFieldsAndBins({
       try {
         const { error } = await supabase.from('fertilizer_recipes').insert([mapped]);
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Fertilizer recipe add outcome unknown; preserving record and queueing for reconcile:', error);
+            try {
+              await syncQueue.enqueueMutation('fertilizer_recipes', 'insert', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Fertilizer recipe saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue fertilizer recipe after unknown outcome:', enqueueErr);
+              setFertilizerRecipes(prev => prev.filter(rec => rec.id !== id));
+              toast.error('Failed to save recipe');
+              return false;
+            }
+          }
           console.error('Error adding fertilizer recipe:', error);
           setFertilizerRecipes(prev => prev.filter(rec => rec.id !== id));
           toast.error('Failed to save recipe');
@@ -834,6 +1176,19 @@ export function useFieldsAndBins({
         toast.success('Fertilizer recipe created!');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Fertilizer recipe add network outcome unknown; preserving record and queueing:', err);
+          try {
+            await syncQueue.enqueueMutation('fertilizer_recipes', 'insert', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Fertilizer recipe saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue fertilizer recipe after network error:', enqueueErr);
+          }
+        }
         console.error('Network error adding fertilizer recipe:', err);
         setFertilizerRecipes(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save recipe due to a network error');
@@ -893,6 +1248,19 @@ export function useFieldsAndBins({
           .eq('id', r.id)
           .eq('farm_id', farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Fertilizer recipe update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('fertilizer_recipes', 'update', mapped, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Fertilizer recipe saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue fertilizer recipe update after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error updating fertilizer recipe:', error);
           } else {
@@ -905,6 +1273,19 @@ export function useFieldsAndBins({
         toast.success('Recipe updated');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Fertilizer recipe update network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('fertilizer_recipes', 'update', mapped, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Fertilizer recipe saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue fertilizer recipe update after network error:', enqueueErr);
+          }
+        }
         console.error('Network error updating fertilizer recipe:', err);
         if (previous) setFertilizerRecipes(prev => prev.map(item => item.id === r.id ? previous : item));
         toast.error('Failed to update recipe due to a network error');
@@ -954,6 +1335,19 @@ export function useFieldsAndBins({
           .eq('id', id)
           .eq('farm_id', farm_id);
         if (error || affectedRows !== 1) {
+          if (error && isUnknownMutationOutcome(error)) {
+            console.warn('Fertilizer recipe delete outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('fertilizer_recipes', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Recipe removed locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue fertilizer recipe delete after unknown outcome:', enqueueErr);
+            }
+          }
           if (error) {
             console.error('Error deleting fertilizer recipe:', error);
           } else {
@@ -966,6 +1360,19 @@ export function useFieldsAndBins({
         toast.success('Recipe removed');
         return true;
       } catch (err) {
+        if (isUnknownMutationOutcome(err)) {
+          console.warn('Fertilizer recipe delete network outcome unknown; queuing for retry:', err);
+          try {
+            await syncQueue.enqueueMutation('fertilizer_recipes', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Recipe removed locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue fertilizer recipe delete after network error:', enqueueErr);
+          }
+        }
         console.error('Network error deleting fertilizer recipe:', err);
         restoreAtIndex(setFertilizerRecipes, previous, previousIndex);
         toast.error('Failed to delete recipe due to a network error');

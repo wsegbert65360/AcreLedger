@@ -45,6 +45,20 @@ export const isSupabaseConfigured = hasValidSupabaseUrl && Boolean(configuredSup
 
 const isNative = Capacitor.isNativePlatform();
 
+// A network "online" signal only proves a link exists; the request can still
+// hang forever (dead socket, captive portal, dropped LTE). Without a timeout an
+// insert below can block its hook's `isMutating` lock and the caller sees no
+// result. Abort after 15s so the hooks can treat it as an unknown outcome and
+// re-queue instead of hanging or double-counting grain.
+const SUPABASE_FETCH_TIMEOUT_MS = 15000;
+
+function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SUPABASE_FETCH_TIMEOUT_MS);
+    const signal = init?.signal ?? controller.signal;
+    return fetch(input, { ...init, signal }).finally(() => clearTimeout(timeout));
+}
+
 // Native auth sessions contain refresh tokens and must stay in the OS secure store.
 const nativeStorageAdapter = {
     getItem: (key: string) => secureStorage.getItem(key),
@@ -53,6 +67,9 @@ const nativeStorageAdapter = {
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+        fetch: fetchWithTimeout,
+    },
     auth: {
         storage: isNative ? nativeStorageAdapter : undefined,
         autoRefreshToken: true,

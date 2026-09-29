@@ -25,7 +25,7 @@ export default function SecurityManager() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground font-mono leading-relaxed">
-            Remove all sensitive farm data from this device's local storage. This will require a fresh cloud sync.
+            Remove cached farm data from this device. Unsynced offline work is kept and uploaded first — this will require a fresh cloud sync.
           </p>
           <Button
             variant="outline"
@@ -53,13 +53,15 @@ export default function SecurityManager() {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">Clear Local Cache?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
-              This will remove all farm records from this device. All data on Supabase remains safe. You will need to re-sync.
+              This removes cached farm records from this device. Supabase data stays safe and you will re-sync.
+              If you still have unsynced offline work, it is uploaded first and the clear is refused while any
+              change is pending — so nothing is lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { clearLocalCache(); setShowConfirm(false); }}
+              onClick={() => { void clearLocalCache({ keepPendingSync: true }); setShowConfirm(false); }}
               className="touch-target bg-destructive text-destructive-foreground glow-destructive"
             >
               Clear Now

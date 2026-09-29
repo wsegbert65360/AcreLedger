@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapWorkRequestToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import { generateRequestNumber } from '@/lib/workRequests/requestNumber';
 
 interface UseWorkRequestsArgs {
@@ -28,7 +29,10 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const nowIso = new Date().toISOString();
@@ -117,6 +121,23 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
       }
 
       if (error) {
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Work request add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('work_requests', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Work request saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            onCreated?.(newRecord);
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue work request after unknown outcome:', enqueueErr);
+            setWorkRequests(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save work request.');
+            return false;
+          }
+        }
         console.error('Error adding work request:', error);
         setWorkRequests(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save work request.');
@@ -137,7 +158,10 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const stamped: WorkRequest = { ...r, updatedAt: new Date().toISOString() };
@@ -193,6 +217,19 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
 
       if (error || affectedRows !== 1) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Work request update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('work_requests', 'update', { ...mapped, id: r.id }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Work request saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue work request update after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error updating work request:', error);
         } else {
           console.warn('Work request update affected zero rows:', r.id);
@@ -216,7 +253,10 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
       return false;
     }
     if (ids.length === 0) return true;
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = workRequests
@@ -269,6 +309,24 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
 
       if (error || affectedRows !== ids.length) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Work request delete outcome unknown; queuing for retry:', error);
+            try {
+              const deletedAt = new Date().toISOString();
+              await syncQueue.enqueueMutations(ids.map(id => ({
+                tableName: 'work_requests', operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+              })));
+              if (onMutation) await onMutation();
+              const count = ids.length;
+              toast.success(`${count} work request${count !== 1 ? 's' : ''} deleted locally.`, {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue work request deletes after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error deleting work requests:', error);
         } else {
           console.warn('Work request delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });

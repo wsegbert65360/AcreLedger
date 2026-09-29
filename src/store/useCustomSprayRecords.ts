@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapCustomSprayToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 
 interface UseCustomSprayRecordsArgs {
   farm_id: string | null;
@@ -27,7 +28,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const id = crypto.randomUUID();
@@ -74,6 +78,22 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
       }
 
       if (error) {
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Custom spray add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('custom_spray_records', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Custom spray saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue custom spray record after unknown outcome:', enqueueErr);
+            setCustomSprayRecords(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save custom spray record.');
+            return false;
+          }
+        }
         console.error('Error adding custom spray record:', error);
         setCustomSprayRecords(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save custom spray record.');
@@ -93,7 +113,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     let mapped: ReturnType<typeof mapCustomSprayToDb>;
@@ -151,6 +174,19 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
 
       if (error || affectedRows !== 1) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Custom spray update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('custom_spray_records', 'update', { ...mapped, id: r.id }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Custom spray record saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue custom spray update after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error updating custom spray record:', error);
         } else {
           console.warn('Custom spray update affected zero rows:', r.id);
@@ -178,7 +214,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
       return false;
     }
     if (ids.length === 0) return true;
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = customSprayRecords
@@ -231,6 +270,24 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
 
       if (error || affectedRows !== ids.length) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Custom spray delete outcome unknown; queuing for retry:', error);
+            try {
+              const deletedAt = new Date().toISOString();
+              await syncQueue.enqueueMutations(ids.map(id => ({
+                tableName: 'custom_spray_records', operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+              })));
+              if (onMutation) await onMutation();
+              const count = ids.length;
+              toast.success(`${count} record${count !== 1 ? 's' : ''} deleted locally.`, {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue custom spray deletes after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error deleting custom spray records:', error);
         } else {
           console.warn('Custom spray delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });

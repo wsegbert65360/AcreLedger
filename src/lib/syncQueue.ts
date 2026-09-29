@@ -7,6 +7,8 @@ import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto'
 const isNative = Capacitor.isNativePlatform();
 const WEB_QUEUE_KEY = 'al_sync_queue';
 const CORRUPT_QUEUE_KEY = 'al_sync_queue_corrupt';
+/** Keys that hold unsynced farmer work; never removed by a plain cache clear. */
+export const SYNC_QUEUE_KEYS = [WEB_QUEUE_KEY, CORRUPT_QUEUE_KEY] as const;
 export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
 let webQueuePromise: Promise<void> = Promise.resolve();
 // Set after the first corruption toast so repeated getWebQueue calls while the
@@ -218,6 +220,10 @@ async function reconcileZeroRowMutation(mutation: QueuedMutation, farmId: string
 }
 
 export const syncQueue = {
+  /** localStorage keys that carry unsynced work (the queue and its quarantine copy). */
+  SYNC_QUEUE_KEY: WEB_QUEUE_KEY,
+  CORRUPT_QUEUE_KEY: CORRUPT_QUEUE_KEY,
+
   /**
    * Revalidates the preserved encrypted queue and restores it in place. The
    * quarantine copy is retained so a failed recovery never deletes the user's

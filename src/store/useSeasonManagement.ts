@@ -33,7 +33,54 @@ import { setStorageLock } from './storageUtils';
 export type ClearLocalCacheOptions = {
   /** Confirmed sign-out when the native store cannot be opened. Leaves the unreadable SQLite file on the device. */
   skipUnreadableOfflineStore?: boolean;
+  /**
+   * Clears only the offline cache keys (and per-table `al_<table>` keys).
+   * Unlike the confirmed sign-out path, this never touches the encrypted sync
+   * queue, so unsynced offline work is preserved on the device.
+   */
+  keepPendingSync?: boolean;
 };
+
+/**
+ * Keys the cache-clear path may remove. It deliberately excludes the sync
+ * queue (`al_sync_queue`) and its quarantine copy (`al_sync_queue_corrupt`),
+ * which carry unsynced farmer work and another user's pending queue — those
+ * are owned by the confirmed sign-out path only.
+ *
+ *   al_<table>                 legacy un-namespaced per-table cache
+ *   <userId>_al_<table>        per-user per-table cache
+ *   al_cache_*                 versioned cache metadata markers
+ */
+export function selectCacheKeysToRemove(
+  allKeys: string[],
+  userId: string | null,
+): string[] {
+  const userPrefix = userId ? `${userId}_al_` : null;
+  return allKeys.filter(key => {
+    if (key === syncQueue.SYNC_QUEUE_KEY || key === syncQueue.CORRUPT_QUEUE_KEY) return false;
+    if (userPrefix && key.startsWith(userPrefix)) return true;
+    if (key.startsWith('al_')) return true;
+    return false;
+  });
+}
+
+/** Enumerate every localStorage key in a way that works for both real Storage and test doubles. */
+function listLocalStorageKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * True when a queued mutation cannot be safely discarded: the user still has
+ * pending offline work for the farm and the replay could not drain it.
+ */
+export function shouldRefuseCacheClear(pendingCount: number): boolean {
+  return pendingCount > 0;
+}
 
 interface UseSeasonManagementArgs {
   session: Session | null | undefined;
@@ -324,13 +371,15 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
   const clearLocalCache = useCallback(async (options?: ClearLocalCacheOptions) => {
     setStorageLock(true);
-    
+
     const userId = session?.user?.id;
-    const userPrefix = userId ? `${userId}_al_` : null;
     const skipUnreadableStore = options?.skipUnreadableOfflineStore === true
       && isNativeOfflineStoreUnavailable();
+    // Only the confirmed sign-out path may discard a farm's pending queue.
+    // A plain "Clear cache" preserves it so unsynced offline work survives.
+    const isSignOut = options?.keepPendingSync !== true;
 
-    if (farm_id) {
+    if (isSignOut && farm_id) {
       try {
         if (!skipUnreadableStore) {
           await syncQueue.clearQueue(farm_id);
@@ -348,6 +397,37 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
           return false;
         }
       }
+    } else if (isSignOut === false) {
+      // Plain cache clear: never delete unsynced work. First try to drain it;
+      // if anything remains queued (offline, transient failure, permanent
+      // rejection), refuse so the farmer can decide, rather than silently
+      // discarding it. The caller surfaces the discard confirmation.
+      if (farm_id && !skipUnreadableStore) {
+        let pending = 0;
+        try {
+          pending = await syncQueue.getPendingCount(farm_id);
+        } catch (err) {
+          console.error('Failed to read pending offline work count:', err);
+          setStorageLock(false);
+          toast.error('Could not check for unsynced work. Cache was not cleared; please try again.');
+          return false;
+        }
+        if (shouldRefuseCacheClear(pending)) {
+          try {
+            await syncQueue.replayQueue(farm_id);
+            pending = await syncQueue.getPendingCount(farm_id);
+          } catch (err) {
+            console.error('Failed to replay pending offline work before cache clear:', err);
+          }
+        }
+        if (shouldRefuseCacheClear(pending)) {
+          setStorageLock(false);
+          toast.error('Unsynced offline work is still pending.', {
+            description: `${pending} change${pending !== 1 ? 's' : ''} have not reached the cloud yet. Connect to the internet and sync, or sign out to discard them.`,
+          });
+          return false;
+        }
+      }
     }
 
     try {
@@ -356,9 +436,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       console.error('Failed to clear SQLite cache:', err);
     }
 
-    const keysToRemove = Object.keys(localStorage).filter(key =>
-      key.startsWith('al_') || (userPrefix && key.startsWith(userPrefix))
-    );
+    const keysToRemove = selectCacheKeysToRemove(listLocalStorageKeys(), userId ?? null);
 
     await new Promise<void>(resolve => {
       const batchRemove = (startIndex: number) => {
@@ -396,9 +474,18 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setFsaTracts([]);
     setCluAssignments([]);
     setWorkRequests([]);
-    setFarmId(null);
     setActiveSeason(getCurrentYear());
     setViewingSeason(getCurrentYear());
+
+    // Sign-out clears the farm scope (the session is ending). A plain cache
+    // clear must NOT unset farm_id on a still-authenticated session — doing so
+    // left the app looking empty and made writes fail with "No farm selected."
+    // Instead re-derive scope so cached rows repopulate from the cloud.
+    if (isSignOut) {
+      setFarmId(null);
+    } else if (farm_id) {
+      void refetchFarmData();
+    }
 
     if (!skipUnreadableStore) {
       toast.success(`Local cache cleared (${keysToRemove.length} item${keysToRemove.length !== 1 ? 's' : ''} removed).`);
@@ -410,6 +497,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setFsaTracts, setCluAssignments, setWorkRequests, setFarmId, setActiveSeason, setViewingSeason,
+    refetchFarmData,
   ]);
 
   return useMemo(() => ({

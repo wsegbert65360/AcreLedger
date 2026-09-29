@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapTillageToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 
 interface UseTillageRecordsArgs {
   farm_id: string | null;
@@ -27,7 +28,10 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const id = crypto.randomUUID();
@@ -74,6 +78,22 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
       }
 
       if (error) {
+        if (isUnknownMutationOutcome(error)) {
+          console.warn('Tillage add outcome unknown; preserving record and queueing for reconcile:', error);
+          try {
+            await syncQueue.enqueueMutation('tillage_records', 'insert', { ...mapped, farm_id }, farm_id);
+            if (onMutation) await onMutation();
+            toast.success('Tillage application saved locally.', {
+              description: 'The connection dropped before confirmation — it will reconcile automatically.',
+            });
+            return true;
+          } catch (enqueueErr) {
+            console.error('Failed to queue tillage record after unknown outcome:', enqueueErr);
+            setTillageRecords(prev => prev.filter(rec => rec.id !== id));
+            toast.error('Failed to save tillage record.');
+            return false;
+          }
+        }
         console.error('Error adding tillage record:', error);
         setTillageRecords(prev => prev.filter(rec => rec.id !== id));
         toast.error('Failed to save tillage record.');
@@ -93,7 +113,10 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     let mapped: ReturnType<typeof mapTillageToDb>;
@@ -151,6 +174,19 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
 
       if (error || affectedRows !== 1) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Tillage update outcome unknown; queuing for retry:', error);
+            try {
+              await syncQueue.enqueueMutation('tillage_records', 'update', { ...mapped, id: r.id }, farm_id);
+              if (onMutation) await onMutation();
+              toast.success('Tillage record saved locally.', {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue tillage update after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error updating tillage record:', error);
         } else {
           console.warn('Tillage update affected zero rows:', r.id);
@@ -178,7 +214,10 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
       return false;
     }
     if (ids.length === 0) return true;
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const snapshot = tillageRecords
@@ -231,6 +270,24 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
 
       if (error || affectedRows !== ids.length) {
         if (error) {
+          if (isUnknownMutationOutcome(error)) {
+            console.warn('Tillage delete outcome unknown; queuing for retry:', error);
+            try {
+              const deletedAt = new Date().toISOString();
+              await syncQueue.enqueueMutations(ids.map(id => ({
+                tableName: 'tillage_records', operation: 'soft_delete' as const,
+                payload: { id, deleted_at: deletedAt }, farmId: farm_id,
+              })));
+              if (onMutation) await onMutation();
+              const count = ids.length;
+              toast.success(`${count} record${count !== 1 ? 's' : ''} deleted locally.`, {
+                description: 'The connection dropped before confirmation — it will reconcile automatically.',
+              });
+              return true;
+            } catch (enqueueErr) {
+              console.error('Failed to queue tillage deletes after unknown outcome:', enqueueErr);
+            }
+          }
           console.error('Error deleting tillage records:', error);
         } else {
           console.warn('Tillage delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
