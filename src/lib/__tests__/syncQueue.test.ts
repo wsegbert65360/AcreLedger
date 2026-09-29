@@ -571,6 +571,58 @@ describe('syncQueue web queue management', () => {
     localStorage.setItem = original;
   });
 
+  // A persistence failure must not poison the shared web chain: later readers
+  // previously inherited the rejected promise, so `.then(fn)` was skipped and
+  // the catch swallowed the error — the queue looked empty and pending work
+  // was invisible to the pending-count guards.
+  it('does not poison later reads after a failed enqueue', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'A' }, 'farm-1');
+    const queuedA = await syncQueue.getQueue('farm-1');
+
+    const original = localStorage.setItem;
+    localStorage.setItem = vi.fn(() => { throw new Error('QuotaExceededError'); });
+    await expect(
+      syncQueue.enqueueMutation('bins', 'insert', { id: 'B' }, 'farm-1')
+    ).rejects.toThrow('QuotaExceededError');
+    localStorage.setItem = original;
+
+    // A is still durable and must remain visible to later readers.
+    expect(await syncQueue.getPendingCount('farm-1')).toBe(1);
+    expect(await syncQueue.getQueue('farm-1')).toEqual(queuedA);
+  });
+
+  it('dequeues a real mutation after a failed enqueue', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'A' }, 'farm-1');
+    const [queued] = await syncQueue.getQueue('farm-1');
+
+    const original = localStorage.setItem;
+    localStorage.setItem = vi.fn(() => { throw new Error('QuotaExceededError'); });
+    await expect(
+      syncQueue.enqueueMutation('bins', 'insert', { id: 'B' }, 'farm-1')
+    ).rejects.toThrow('QuotaExceededError');
+    localStorage.setItem = original;
+
+    await syncQueue.dequeueMutation(queued.id);
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('increments retry count after a failed enqueue', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'A' }, 'farm-1');
+    const [queued] = await syncQueue.getQueue('farm-1');
+
+    const original = localStorage.setItem;
+    localStorage.setItem = vi.fn(() => { throw new Error('QuotaExceededError'); });
+    await expect(
+      syncQueue.enqueueMutation('bins', 'insert', { id: 'B' }, 'farm-1')
+    ).rejects.toThrow('QuotaExceededError');
+    localStorage.setItem = original;
+
+    await syncQueue.incrementRetry(queued.id, queued.retry_count);
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(1);
+    expect(queue[0].retry_count).toBe(1);
+  });
+
   // ─── Atomic Batch (enqueueMutations) ─────────────────────────────────────
 
   it('enqueueMutations writes all rows on success', async () => {

@@ -93,6 +93,20 @@ async function saveWebQueue(queue: QueuedMutation[]) {
   localStorage.setItem(WEB_QUEUE_KEY, encrypted);
 }
 
+/**
+ * Serializes a web-queue operation behind the shared chain without ever leaving
+ * that chain rejected. A rejected shared promise would be inherited by every
+ * later reader, whose `.then(fn).catch(...)` would skip `fn` and swallow the
+ * error — making getQueue/getPendingCount report an empty queue and dequeue/
+ * incrementRetry silently no-op. The caller still receives its own error via
+ * the returned promise.
+ */
+function runWebQueue<T>(fn: () => Promise<T>): Promise<T> {
+  const result = webQueuePromise.catch(() => {}).then(fn);
+  webQueuePromise = result.then(() => {}, () => {});
+  return result;
+}
+
 interface MutationResponse {
   error: any;
   status?: number;
@@ -303,7 +317,7 @@ export const syncQueue = {
         await saveWebQueue(queue);
       };
       try {
-        await (webQueuePromise = webQueuePromise.then(run, run));
+        await runWebQueue(run);
       } catch (err) {
         console.error('Failed to serialize web sync queue enqueue:', err);
         throw err;
@@ -357,7 +371,7 @@ export const syncQueue = {
         await saveWebQueue(queue);
       };
       try {
-        await (webQueuePromise = webQueuePromise.then(run, run));
+        await runWebQueue(run);
       } catch (err) {
         console.error('Failed to serialize web sync queue enqueueMutations:', err);
         throw err;
@@ -390,13 +404,13 @@ export const syncQueue = {
       return [];
     } else {
       let result: QueuedMutation[] = [];
-      await (webQueuePromise = webQueuePromise.then(async () => {
+      await runWebQueue(async () => {
         const queue = await getWebQueue();
         result = queue.filter(item => item.farm_id === farmId);
       }).catch(err => {
         console.error('Failed to serialize web sync queue getQueue:', err);
         if (err instanceof WebSyncQueueUnreadableError) throw err;
-      }));
+      });
       return result;
     }
   },
@@ -415,7 +429,7 @@ export const syncQueue = {
       await saveWebQueue(queue.filter(item => item.farm_id !== farmId));
     };
     try {
-      await (webQueuePromise = webQueuePromise.then(run, run));
+      await runWebQueue(run);
     } catch (err) {
       console.error('Failed to clear web sync queue:', err);
       throw err;
@@ -436,13 +450,13 @@ export const syncQueue = {
         console.error('Failed to dequeue native mutation:', err);
       }
     } else {
-      await (webQueuePromise = webQueuePromise.then(async () => {
+      await runWebQueue(async () => {
         const queue = await getWebQueue();
         const updated = queue.filter(item => item.id !== id);
         await saveWebQueue(updated);
       }).catch(err => {
         console.error('Failed to serialize web sync queue dequeue:', err);
-      }));
+      });
     }
   },
 
@@ -460,7 +474,7 @@ export const syncQueue = {
         console.error('Failed to update native retry count:', err);
       }
     } else {
-      await (webQueuePromise = webQueuePromise.then(async () => {
+      await runWebQueue(async () => {
         const queue = await getWebQueue();
         const idx = queue.findIndex(item => item.id === id);
         if (idx !== -1) {
@@ -469,7 +483,7 @@ export const syncQueue = {
         }
       }).catch(err => {
         console.error('Failed to serialize web sync queue increment retry:', err);
-      }));
+      });
     }
   },
 
@@ -492,13 +506,13 @@ export const syncQueue = {
       return 0;
     } else {
       let result = 0;
-      await (webQueuePromise = webQueuePromise.then(async () => {
+      await runWebQueue(async () => {
         const queue = await getWebQueue();
         result = queue.filter(item => item.farm_id === farmId).length;
       }).catch(err => {
         console.error('Failed to serialize web sync queue getPendingCount:', err);
         if (err instanceof WebSyncQueueUnreadableError) throw err;
-      }));
+      });
       return result;
     }
   },
