@@ -111,7 +111,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
             <div className="flex items-center flex-wrap gap-2">
               <CloudRain size={20} />
               <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Spray'} — {field.name}</span>
-              <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
+              <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
                 {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
               </span>
             </div>
@@ -122,12 +122,12 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                   form.setIsQuickMode(!form.isQuickMode);
                   native.haptic.light();
                 }}
-                className="text-[10px] font-bold uppercase border border-spray/30 px-2 py-0.5 rounded-lg text-spray bg-spray/5 hover:bg-spray/10 transition-colors mr-1 flex items-center gap-1"
+                className="text-xs font-bold uppercase border border-spray/30 px-2 py-0.5 rounded-lg text-spray bg-spray/5 hover:bg-spray/10 transition-colors mr-1 flex items-center gap-1"
               >
                 🚜 {form.isQuickMode ? 'Wizard View' : 'In-Cab View'}
               </button>
               {!form.isQuickMode && (
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
+                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
                   {stepTitle}
                 </span>
               )}
@@ -168,7 +168,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
             <button
               type="button"
               onClick={() => setShowMissingChecklist(!showMissingChecklist)}
-              className="w-full flex items-center justify-between text-[11px] font-mono font-bold text-yellow-600 uppercase"
+              className="w-full flex items-center justify-between text-xs font-mono font-bold text-yellow-600 uppercase"
             >
               <span className="flex items-center gap-1.5">
                 <AlertTriangle size={14} className="text-yellow-600" />
@@ -177,7 +177,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
               <span className="underline">{showMissingChecklist ? 'Hide Checklist' : 'Show Checklist'}</span>
             </button>
             {showMissingChecklist && (
-              <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-muted-foreground font-mono">
+              <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground font-mono">
                 {missingComplianceFields.map((field) => (
                   <li key={field} className="flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
@@ -237,7 +237,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                   <BookOpen size={14} /> Load Saved Recipe
                 </Label>
                 {sprayRecipes.length === 0 && (
-                  <span className="text-[10px] text-muted-foreground font-mono">None saved</span>
+                  <span className="text-xs text-muted-foreground font-mono">None saved</span>
                 )}
               </div>
               {sprayRecipes.length > 0 ? (
@@ -252,7 +252,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                   </SelectContent>
                 </Select>
               ) : (
-                <p className="text-[10px] text-muted-foreground leading-normal">
+                <p className="text-xs text-muted-foreground leading-normal">
                   No recipes saved. You can save your chemical mix after logging this spray.
                 </p>
               )}
@@ -278,7 +278,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                       placeholder="Rate"
                       className="h-11 bg-background text-center px-1 font-mono w-14"
                     />
-                    <span className="text-[10px] font-mono text-muted-foreground">{p.rateUnit}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{p.rateUnit}</span>
                   </div>
                 </div>
               ))}
@@ -364,7 +364,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
               {parseFloat(form.manualWindSpeed) > WIND_ALERT_MPH && (
                 <div className="flex items-start gap-1.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-yellow-600 animate-in fade-in duration-200 mt-1">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-yellow-700/80 leading-normal font-semibold">
+                  <p className="text-xs text-yellow-700/80 leading-normal font-semibold">
                     Warning: Wind ({form.manualWindSpeed} mph) exceeds {WIND_ALERT_MPH} mph. High drift risk.
                   </p>
                 </div>
@@ -372,7 +372,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
 
               {/* Weather fetching inline row */}
               <div className="flex items-center justify-between border-t border-border/30 pt-2 mt-1">
-                <span className="text-[10px] font-mono text-muted-foreground">
+                <span className="text-xs font-mono text-muted-foreground">
                   Temp: <span className="font-bold text-foreground">{form.weather ? `${form.weather.temp}°F` : '—'}</span> &middot; Hum: <span className="font-bold text-foreground">{form.weather ? `${form.weather.humidity}%` : '—'}</span>
                 </span>
                 <Button
@@ -380,7 +380,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                   size="sm"
                   disabled={form.isRecovering || !field.lat || !field.lng}
                   onClick={form.handleRecoverWeather}
-                  className="h-6 px-1.5 text-[10px] font-bold text-spray"
+                  className="h-6 px-1.5 text-xs font-bold text-spray"
                 >
                   <RefreshCw size={10} className={`mr-1 ${form.isRecovering ? 'animate-spin' : ''}`} />
                   PULL CURRENT WEATHER
@@ -409,7 +409,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
               ) : (
                 <div className="space-y-2 pt-1 animate-in fade-in duration-200">
                   <div>
-                    <Label htmlFor="quickApplicator" className="text-[10px] font-mono text-muted-foreground uppercase">Applicator Name</Label>
+                    <Label htmlFor="quickApplicator" className="text-xs font-mono text-muted-foreground uppercase">Applicator Name</Label>
                     <Input
                       id="quickApplicator"
                       value={form.applicatorName}
@@ -419,7 +419,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Label htmlFor="quickLicense" className="text-[10px] font-mono text-muted-foreground uppercase">License #</Label>
+                      <Label htmlFor="quickLicense" className="text-xs font-mono text-muted-foreground uppercase">License #</Label>
                       <Input
                         id="quickLicense"
                         value={form.licenseNumber}
@@ -428,7 +428,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                       />
                     </div>
                     <div>
-                      <Label htmlFor="quickEquipment" className="text-[10px] font-mono text-muted-foreground uppercase">Equipment ID</Label>
+                      <Label htmlFor="quickEquipment" className="text-xs font-mono text-muted-foreground uppercase">Equipment ID</Label>
                       <Input
                         id="quickEquipment"
                         value={form.equipmentId}
@@ -444,7 +444,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
             {/* Compliance warning if incomplete */}
             {!isFullyCompliant && (
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-2.5 flex items-center justify-between">
-                <span className="text-[10px] font-mono font-bold text-yellow-600 flex items-center gap-1.5">
+                <span className="text-xs font-mono font-bold text-yellow-600 flex items-center gap-1.5">
                   <AlertTriangle size={14} className="text-yellow-600" />
                   {missingComplianceFields.length} compliance fields missing. Will save as incomplete.
                 </span>

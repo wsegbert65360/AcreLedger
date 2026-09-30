@@ -252,7 +252,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
               <Sprout size={20} />
               <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Plant'} — {field.name}</span>
             </div>
-            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-plant/10 text-plant border border-plant/20">
+            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-plant/10 text-plant border border-plant/20">
               {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
             </span>
           </DialogTitle>

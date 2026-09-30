@@ -60,6 +60,8 @@
     "@capacitor/share": "^6.0.4",
     "@capacitor/splash-screen": "^6.0.0",
     "@capacitor/status-bar": "^6.0.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",

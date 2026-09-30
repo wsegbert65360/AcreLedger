@@ -140,7 +140,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                             <Tractor size={20} />
                             <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Record'} Hay/Forage — {field.name}</span>
                         </div>
-                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20 normal-case tracking-normal">
+                        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20 normal-case tracking-normal">
                             {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                         </span>
                     </DialogTitle>
@@ -160,7 +160,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                     )}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <Label htmlFor="baleCount" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
+                            <Label htmlFor="baleCount" className="text-muted-foreground font-mono text-xs flex items-center gap-1.5 uppercase">
                                 <Hash size={12} /> Bale Count *
                             </Label>
                             <Input
@@ -175,7 +175,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                             />
                         </div>
                         <div>
-                            <Label htmlFor="cuttingNumber" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
+                            <Label htmlFor="cuttingNumber" className="text-muted-foreground font-mono text-xs flex items-center gap-1.5 uppercase">
                                 <Layers size={12} /> Cutting #
                             </Label>
                             <Input
@@ -191,7 +191,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                     </div>
 
                     <div>
-                        <Label htmlFor="baleType" className="text-muted-foreground font-mono text-[11px] uppercase">Bale Type</Label>
+                        <Label htmlFor="baleType" className="text-muted-foreground font-mono text-xs uppercase">Bale Type</Label>
                         <Select value={baleType} onValueChange={(v: 'Round' | 'Square') => setBaleType(v)}>
                             <SelectTrigger className="mt-1 bg-muted border-border text-foreground">
                                 <SelectValue />
@@ -204,7 +204,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                     </div>
 
                     <div>
-                        <Label htmlFor="hayDate" className="text-muted-foreground font-mono text-[11px] uppercase">Harvest Date</Label>
+                        <Label htmlFor="hayDate" className="text-muted-foreground font-mono text-xs uppercase">Harvest Date</Label>
                         <Input
                             id="hayDate"
                             name="hayDate"
@@ -217,7 +217,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
 
                     <div className="grid grid-cols-2 gap-3 border-t border-border/20 pt-3">
                         <div>
-                            <Label htmlFor="hayTemp" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
+                            <Label htmlFor="hayTemp" className="text-muted-foreground font-mono text-xs flex items-center gap-1.5 uppercase">
                                 <Thermometer size={12} /> Temp (°F)
                             </Label>
                             <Input
@@ -231,7 +231,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
                             />
                         </div>
                         <div>
-                            <Label htmlFor="hayConditions" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
+                            <Label htmlFor="hayConditions" className="text-muted-foreground font-mono text-xs flex items-center gap-1.5 uppercase">
                                 <Cloud size={12} /> Conditions
                             </Label>
                             <Input

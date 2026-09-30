@@ -334,7 +334,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
               variant="outline"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full justify-center font-mono text-[11px]"
+              className="w-full justify-center font-mono text-xs"
             >
               <FileUp size={14} className="mr-2" />
               IMPORT FSA GEOJSON
@@ -392,7 +392,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
                 variant={isCapturing ? "secondary" : "outline"}
                 size="sm"
                 onClick={() => setIsCapturing(!isCapturing)}
-                className="flex-1 font-mono text-[11px]"
+                className="flex-1 font-mono text-xs"
               >
                 <MapIcon size={14} className="mr-2" />
                 {isCapturing ? 'TAP MAP TO DRAW' : 'ENABLE MAP DRAWING'}
@@ -424,7 +424,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             </div>
             <div>
               <Label htmlFor="acreage" className="text-muted-foreground font-mono text-xs flex items-center gap-1">
-                BOUNDARY ACRES {points.length >= 3 && <span className="text-[11px] text-primary">(AUTO)</span>}
+                BOUNDARY ACRES {points.length >= 3 && <span className="text-xs text-primary">(AUTO)</span>}
               </Label>
               <Input
                 id="acreage"
@@ -482,7 +482,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
 
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-primary font-mono text-[11px] font-bold block">FSA COMPLIANCE DATA</span>
+              <span className="text-primary font-mono text-xs font-bold block">FSA COMPLIANCE DATA</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

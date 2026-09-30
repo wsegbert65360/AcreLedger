@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { navTabs } from './navConfig';
 import SeasonSelect from '@/components/SeasonSelect';
 import { CalendarDays, MessageCircle, Sprout, Plus } from 'lucide-react';
@@ -9,13 +9,12 @@ import pkg from '../../package.json';
 
 export default function Sidebar() {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
 
   const { openQuickAdd } = useQuickAdd();
   const { openAsk } = useAskAcreLedger();
 
   return (
-    <nav className="fixed left-0 top-0 bottom-0 w-60 z-30 bg-sidebar border-r border-sidebar-border flex-col hidden lg:flex print:hidden">
+    <nav aria-label="Primary" className="fixed left-0 top-0 bottom-0 w-60 z-30 bg-sidebar border-r border-sidebar-border flex-col hidden lg:flex print:hidden">
       <div className="px-5 py-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -23,7 +22,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-sidebar-primary tracking-wide">AcreLedger</h1>
-            <p className="text-[11px] text-sidebar-foreground/50">Farm Management</p>
+            <p className="text-xs text-sidebar-foreground/50">Farm Management</p>
           </div>
         </div>
       </div>
@@ -56,9 +55,10 @@ export default function Sidebar() {
           {navTabs.map(({ path, icon: Icon, label }) => {
             const active = pathname === path;
             return (
-              <button
+              <Link
                 key={path}
-                onClick={() => navigate(path)}
+                to={path}
+                aria-current={active ? 'page' : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                   active
                     ? 'bg-sidebar-accent text-sidebar-primary border-l-2 border-sidebar-primary'
@@ -67,7 +67,7 @@ export default function Sidebar() {
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
                 <span>{label}</span>
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -76,10 +76,10 @@ export default function Sidebar() {
       <div className="px-5 py-3 border-t border-sidebar-border space-y-3">
         <div className="flex items-center gap-2">
           <CalendarDays size={14} className="text-sidebar-foreground/50" />
-          <span className="text-[11px] font-semibold text-sidebar-foreground/50">Season</span>
+          <span className="text-xs font-semibold text-sidebar-foreground/50">Season</span>
         </div>
         <SeasonSelect variant="sidebar" />
-        <p className="text-[11px] font-mono text-sidebar-foreground/40">v{pkg.version}</p>
+        <p className="text-xs font-mono text-sidebar-foreground/40">v{pkg.version}</p>
       </div>
     </nav>
   );

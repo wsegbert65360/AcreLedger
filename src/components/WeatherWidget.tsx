@@ -234,7 +234,7 @@ export default function WeatherBar() {
               </span>
             )}
           </div>
-          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Wind</span>
+          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Wind</span>
         </div>
 
         {/* Humidity */}
@@ -242,7 +242,7 @@ export default function WeatherBar() {
           <span className="font-mono text-lg font-bold">
             {weather.isError || !hasData ? '—' : `${weather.humidity}%`}
           </span>
-          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">Humidity</span>
+          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Humidity</span>
         </div>
 
         {/* Rain Amount */}
@@ -254,7 +254,7 @@ export default function WeatherBar() {
                 ? `${weather.precip24h.toFixed(2)}"`
                 : '—'}
           </span>
-          <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400">{weather.rainfallBasis === 'calendar' ? 'Yesterday' : 'Rain · 24h'}</span>
+          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">{weather.rainfallBasis === 'calendar' ? 'Yesterday' : 'Rain · 24h'}</span>
         </div>
 
         {/* Navigate hint */}

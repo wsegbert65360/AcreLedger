@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
-
 /*
  * Leaflet panes default to z-index 200-1000, which sits above shadcn's Dialog
  * overlay (z-50) and causes the underlying map to bleed through modals. Lower
@@ -384,7 +382,7 @@
       text-align: left;
       font-weight: bold;
       color: hsl(var(--muted-foreground));
-      font-size: 0.65rem;
+      font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
@@ -455,36 +453,36 @@ html.color button.bg-primary:disabled {
   box-shadow: none;
 }
 
-html.color nav.fixed.bottom-0 > div > button:nth-child(1),
-html.color nav.fixed.left-0 .space-y-1 > button:nth-child(1) {
+html.color nav.fixed.bottom-0 > div > a:nth-child(1),
+html.color nav.fixed.left-0 .space-y-1 > a:nth-child(1) {
   --primary: var(--hue-lime);
   --sidebar-primary: var(--hue-lime);
   color: hsl(var(--hue-lime));
 }
 
-html.color nav.fixed.bottom-0 > div > button:nth-child(2),
-html.color nav.fixed.left-0 .space-y-1 > button:nth-child(2) {
+html.color nav.fixed.bottom-0 > div > a:nth-child(2),
+html.color nav.fixed.left-0 .space-y-1 > a:nth-child(2) {
   --primary: var(--hue-gold);
   --sidebar-primary: var(--hue-gold);
   color: hsl(var(--hue-gold));
 }
 
-html.color nav.fixed.bottom-0 > div > button:nth-child(3),
-html.color nav.fixed.left-0 .space-y-1 > button:nth-child(3) {
+html.color nav.fixed.bottom-0 > div > a:nth-child(3),
+html.color nav.fixed.left-0 .space-y-1 > a:nth-child(3) {
   --primary: var(--hue-sky);
   --sidebar-primary: var(--hue-sky);
   color: hsl(var(--hue-sky));
 }
 
-html.color nav.fixed.bottom-0 > div > button:nth-child(4),
-html.color nav.fixed.left-0 .space-y-1 > button:nth-child(4) {
+html.color nav.fixed.bottom-0 > div > a:nth-child(4),
+html.color nav.fixed.left-0 .space-y-1 > a:nth-child(4) {
   --primary: var(--hue-orange);
   --sidebar-primary: var(--hue-orange);
   color: hsl(var(--hue-orange));
 }
 
-html.color nav.fixed.bottom-0 > div > button:nth-child(5),
-html.color nav.fixed.left-0 .space-y-1 > button:nth-child(5) {
+html.color nav.fixed.bottom-0 > div > a:nth-child(5),
+html.color nav.fixed.left-0 .space-y-1 > a:nth-child(5) {
   --primary: var(--hue-violet);
   --sidebar-primary: var(--hue-violet);
   color: hsl(var(--hue-violet));
@@ -553,4 +551,15 @@ html.color [data-theme-choice="color"] {
     hsl(var(--hue-gold) / 0.18)
   );
   border-color: hsl(var(--hue-cyan) / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

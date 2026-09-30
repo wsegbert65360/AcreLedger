@@ -50,7 +50,7 @@ export function SprayWizardMixStep({
             Load Saved Mix / Recipe
           </Label>
           {sprayRecipes.length === 0 && (
-            <span className="text-[10px] font-mono text-muted-foreground">None saved</span>
+            <span className="text-xs font-mono text-muted-foreground">None saved</span>
           )}
         </div>
         {sprayRecipes.length > 0 ? (
@@ -65,7 +65,7 @@ export function SprayWizardMixStep({
             </SelectContent>
           </Select>
         ) : (
-          <p className="text-[11px] text-muted-foreground leading-normal">
+          <p className="text-xs text-muted-foreground leading-normal">
             No saved recipes yet. You can save any custom mix as a recipe after successfully logging a spray.
           </p>
         )}
@@ -74,7 +74,7 @@ export function SprayWizardMixStep({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground font-mono text-xs font-bold uppercase tracking-wider block">Herbicide Mix (Granular Audit) *</span>
-          <div className="text-[11px] font-mono text-muted-foreground">EPA REG # REQUIRED PER ITEM</div>
+          <div className="text-xs font-mono text-muted-foreground">EPA REG # REQUIRED PER ITEM</div>
         </div>
 
         {products.map((p, i) => (

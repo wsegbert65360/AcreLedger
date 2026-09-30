@@ -222,7 +222,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                             <Plus size={24} className="bg-harvest/20 rounded p-1" />
                             <span>Add Grain — {bin.name}</span>
                         </div>
-                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+                        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
                             {viewingSeason} Season
                         </span>
                     </DialogTitle>
@@ -242,7 +242,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                             >
                                 <Wheat size={22} />
                                 <span className="font-mono text-sm">Harvest from field</span>
-                                <span className="text-[11px] text-muted-foreground">Crop is tracked for FSA reports</span>
+                                <span className="text-xs text-muted-foreground">Crop is tracked for FSA reports</span>
                             </Button>
                             <Button
                                 onClick={() => setPath('adjust')}

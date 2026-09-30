@@ -66,7 +66,7 @@ export default function FieldList({ fields }: FieldListProps) {
     <div className="relative">
       {/* Pull indicator */}
       {refreshing && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-2 text-xs text-muted-foreground font-medium">
           <RefreshCw size={14} className="animate-spin text-primary" />
           Refreshing…
         </div>

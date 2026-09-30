@@ -172,14 +172,14 @@ export default function SyncStatus() {
           </div>
           {/* Last synced timestamp */}
           {lastSync && (
-            <span className="text-[11px] font-mono text-muted-foreground">
+            <span className="text-xs font-mono text-muted-foreground">
               Last sync: {formatLastSync(lastSync)}
             </span>
           )}
         </div>
 
         {/* Contextual description */}
-        <p className={`text-[11px] font-mono leading-relaxed px-1 ${
+        <p className={`text-xs font-mono leading-relaxed px-1 ${
           syncState === 'disconnected' || syncState === 'offline'
             ? 'text-destructive/80'
             : 'text-muted-foreground'

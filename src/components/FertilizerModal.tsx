@@ -250,11 +250,11 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                         <div>
                             <div className="flex items-center gap-2">
                                 <DialogTitle className="text-lg font-bold text-foreground leading-tight">{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'New'} Fertilizer</DialogTitle>
-                                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-lime-600/10 text-lime-600 border border-lime-600/20">
+                                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-lime-600/10 text-lime-600 border border-lime-600/20">
                                     {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                                 </span>
                             </div>
-                            <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
+                            <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
                     <DialogDescription className="sr-only">
@@ -398,7 +398,7 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-0.5">
                                         <Label htmlFor="save-recipe" className="text-sm font-bold">Save as Recipe?</Label>
-                                        <p className="text-[11px] text-muted-foreground uppercase font-mono tracking-wider">Add to your reusable templates</p>
+                                        <p className="text-xs text-muted-foreground uppercase font-mono tracking-wider">Add to your reusable templates</p>
                                     </div>
                                     <Switch
                                         id="save-recipe"
@@ -409,7 +409,7 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
 
                                 {saveAsRecipe && (
                                     <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                                        <Label htmlFor="recipe-name" className="text-[11px] font-mono font-bold text-muted-foreground uppercase ml-1">Recipe Name</Label>
+                                        <Label htmlFor="recipe-name" className="text-xs font-mono font-bold text-muted-foreground uppercase ml-1">Recipe Name</Label>
                                         <Input
                                             id="recipe-name"
                                             value={newRecipeName}

@@ -425,7 +425,7 @@ export default function Activity() {
                       <t.icon size={14} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
                       <span>{t.label}</span>
                       {count > 0 && (
-                        <span className="bg-muted px-1.5 py-0.5 rounded-full text-[11px] font-bold text-muted-foreground">
+                        <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs font-bold text-muted-foreground">
                           {count}
                         </span>
                       )}
@@ -474,7 +474,7 @@ export default function Activity() {
             <span className="hidden sm:inline">Review Queue</span>
             <span className="inline sm:hidden">Review</span>
             {reviewQueueCount > 0 && (
-              <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
                 reviewQueueOnly ? 'bg-white/25 text-white' : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
               }`}>
                 {reviewQueueCount}

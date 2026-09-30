@@ -47,7 +47,7 @@ export default function RecordListItem({
           </div>
           <p className="mt-1 line-clamp-1 text-xs text-muted-foreground/70">{details}</p>
           {date && (
-            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{date}</p>
+            <p className="mt-0.5 font-mono text-xs text-muted-foreground">{date}</p>
           )}
         </div>
         <div className="flex flex-col gap-2 items-center justify-center ml-2">
