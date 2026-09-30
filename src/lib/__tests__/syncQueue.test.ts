@@ -22,6 +22,7 @@ const supabaseControl = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
   rpc: vi.fn(),
+  refreshSession: vi.fn(),
 }));
 
 function updateBuilder(...args: unknown[]) {
@@ -60,6 +61,9 @@ vi.mock('@/lib/supabase', () => ({
       update: updateBuilder,
       select: selectBuilder,
     }),
+    auth: {
+      refreshSession: (...args: unknown[]) => supabaseControl.refreshSession(...args),
+    },
     rpc: (...args: unknown[]) => {
       supabaseControl.rpc(...args);
       return Promise.resolve(
@@ -333,6 +337,38 @@ describe('syncQueue web queue management', () => {
     });
 
     await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(2);
+    expect(queue.every(item => item.retry_count === 0)).toBe(true);
+    expect(supabaseControl.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes an expired session and retries without burning retry counts', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'offline-all-day' }, 'farm-1');
+    supabaseControl.insertResponses.push(
+      { error: { code: 'PGRST301', message: 'JWT expired' }, status: 401 },
+      { error: null, status: 201 },
+    );
+    supabaseControl.refreshSession.mockResolvedValue({ data: { session: { access_token: 'new' } }, error: null });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+
+    expect(supabaseControl.refreshSession).toHaveBeenCalledTimes(1);
+    expect(supabaseControl.insert).toHaveBeenCalledTimes(2);
+    expect(await syncQueue.getQueue('farm-1')).toHaveLength(0);
+  });
+
+  it('pauses without incrementing retries when the session cannot be refreshed', async () => {
+    await syncQueue.enqueueMutation('fields', 'insert', { id: 'a' }, 'farm-1');
+    await syncQueue.enqueueMutation('bins', 'insert', { id: 'b' }, 'farm-1');
+    supabaseControl.insertResponses.push({
+      error: { code: 'PGRST301', message: 'JWT expired' },
+      status: 401,
+    });
+    supabaseControl.refreshSession.mockResolvedValue({ data: { session: null }, error: { message: 'refresh token revoked' } });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+
     const queue = await syncQueue.getQueue('farm-1');
     expect(queue).toHaveLength(2);
     expect(queue.every(item => item.retry_count === 0)).toBe(true);

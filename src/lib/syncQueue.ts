@@ -130,6 +130,18 @@ function isTransientMutationError(response: MutationResponse): boolean {
   return false;
 }
 
+// An access token that expired while the device was offline is an auth problem,
+// not a bad mutation: refresh and retry instead of burning the item's retries.
+function isAuthExpiredError(response: MutationResponse): boolean {
+  const { error, status } = response;
+  if (!error) return false;
+  if (status === 401) return true;
+  const code = typeof error.code === 'string' ? error.code.toUpperCase() : '';
+  if (code === 'PGRST301' || code === 'PGRST303') return true;
+  const msg = (error.message || '').toLowerCase();
+  return msg.includes('jwt expired') || msg.includes('invalid jwt');
+}
+
 function equivalentTimestampStrings(actual: unknown, expected: unknown): boolean {
   if (typeof actual !== 'string' || typeof expected !== 'string') return false;
   const isoTimestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -540,7 +552,7 @@ export const syncQueue = {
         let result = true;
         while (currentFarmId) {
           trailingReplayFarmId = null;
-          result = await replayQueueOnce(currentFarmId);
+          result = await replayQueueOnce(currentFarmId, false);
           currentFarmId = trailingReplayFarmId;
         }
         return result;
@@ -557,7 +569,7 @@ export const syncQueue = {
 let inFlightReplay: Promise<boolean> | null = null;
 let trailingReplayFarmId: string | null = null;
 
-async function replayQueueOnce(farmId: string): Promise<boolean> {
+async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<boolean> {
     const queue = await syncQueue.getQueue(farmId);
     if (queue.length === 0) return true;
 
@@ -652,6 +664,27 @@ async function replayQueueOnce(farmId: string): Promise<boolean> {
         }
 
         if (response.error) {
+          if (isAuthExpiredError(response)) {
+            // Refresh once per drain, then restart from the (shorter) queue.
+            // If refresh fails the session is truly gone: pause without
+            // touching retry counts so nothing is lost or marked failed.
+            if (!authRetried) {
+              try {
+                const { data, error: refreshError } = await supabase.auth.refreshSession();
+                if (!refreshError && data?.session) {
+                  return replayQueueOnce(farmId, true);
+                }
+              } catch (refreshErr) {
+                console.warn('Session refresh failed during sync replay:', refreshErr);
+              }
+            }
+            console.warn('Sync queue replay paused: session expired.', response.error);
+            toast.warning('Sync paused: your session expired.', {
+              description: 'Sign in again to upload your offline changes. They are still saved on this device.',
+            });
+            return false;
+          }
+
           if (
             mutation.operation === 'insert'
             && !linkedHarvest
