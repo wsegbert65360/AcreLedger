@@ -108,8 +108,8 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
 }
 
 /** Billing UI flag: strictly `VITE_BILLING_UI_ENABLED=true` enables the card. */
-export function isBillingUiEnabled(env: Record<string, string | undefined> = import.meta.env): boolean {
-  return env.VITE_BILLING_UI_ENABLED === 'true';
+export function isBillingUiEnabled(env: Record<string, string | undefined> | undefined): boolean {
+  return env?.VITE_BILLING_UI_ENABLED === 'true';
 }
 
 /**

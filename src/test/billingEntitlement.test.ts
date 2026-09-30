@@ -167,6 +167,7 @@ describe('isBillingUiEnabled', () => {
     expect(isBillingUiEnabled({ VITE_BILLING_UI_ENABLED: 'True' })).toBe(false);
     expect(isBillingUiEnabled({ VITE_BILLING_UI_ENABLED: '1' })).toBe(false);
     expect(isBillingUiEnabled({})).toBe(false);
+
     expect(isBillingUiEnabled(undefined as unknown as Record<string, string | undefined>)).toBe(false);
   });
 });
