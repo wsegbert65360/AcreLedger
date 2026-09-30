@@ -261,7 +261,7 @@ function FieldReviewCard({ entry, draft, lookupInProgress, navUrl, resolve, onRe
           <Textarea id={`notes-${entry.fieldId}`} value={overrideNotes} onChange={e => onOverrideNotes(e.target.value)} placeholder="Leave blank to use the request notes" />
         </div>
         {(entry.overrides?.products?.length ?? 0) > 0 && (
-          <p className="text-[10px] text-muted-foreground">This field has {entry.overrides!.products!.length} product override(s) applied from a saved request.</p>
+          <p className="text-[10px] text-muted-foreground">This field has {entry.overrides?.products?.length ?? 0} product override(s) applied from a saved request.</p>
         )}
       </div>
     </div>
