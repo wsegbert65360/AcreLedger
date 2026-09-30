@@ -6,6 +6,7 @@ import {
   buildCheckoutCustomerParams,
   buildCheckoutIdempotencyKey,
   canStartCheckout,
+  hasLiveStripeSubscription,
   isBillingAllowlisted,
   shouldGrantTrial,
 } from '../server/billing.js';
@@ -169,6 +170,29 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     const stripe = new Stripe(billing.config.secretKey);
+
+    // ---------- Stripe-side double-subscription guard ----------
+    // With no mirrored row yet (first webhook not landed) two members, or one
+    // member from two origins, could otherwise each complete Checkout and end
+    // up with two live subscriptions. Fail closed if Stripe can't be asked.
+    if (!/^[A-Za-z0-9_-]+$/.test(farmId)) {
+      return res.status(400).json({ error: 'No farm selected.' });
+    }
+    try {
+      const found = await stripe.subscriptions.search({
+        query: `metadata['farm_id']:'${farmId}'`,
+        limit: 10,
+      });
+      if (hasLiveStripeSubscription(found.data)) {
+        return res.status(409).json({
+          error: 'This farm already has a subscription. Use Manage billing to update payment or renew.',
+        });
+      }
+    } catch (err: unknown) {
+      console.error('Stripe subscription lookup error:', err);
+      return res.status(502).json({ error: 'Could not verify billing status' });
+    }
+
     try {
       const session = await stripe.checkout.sessions.create(
         {

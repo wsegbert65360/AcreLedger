@@ -137,6 +137,22 @@ export function canStartCheckout(
 }
 
 /**
+ * True when Stripe itself reports a live subscription for the farm. Used before
+ * creating a Checkout Session: until the first webhook lands there is no
+ * mirrored row, so `canStartCheckout` alone cannot see a subscription that was
+ * just created by another member or origin. Stripe search is eventually
+ * consistent (about a minute), so this narrows the window rather than
+ * eliminating it.
+ */
+export function hasLiveStripeSubscription(
+  subscriptions: ReadonlyArray<{ status?: string | null }> | null | undefined,
+): boolean {
+  return (subscriptions ?? []).some(
+    subscription => typeof subscription.status === 'string' && LIVE_SUBSCRIPTION_STATUSES.has(subscription.status),
+  );
+}
+
+/**
  * Keep repeated Checkout requests for the same farm/subscription state on one
  * Stripe Checkout Session. A changed mirrored subscription state produces a
  * new key, so a later recovery attempt can create a fresh session.
