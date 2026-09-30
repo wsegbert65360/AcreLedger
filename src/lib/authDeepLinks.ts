@@ -26,24 +26,14 @@ async function establishRecoverySession(value: string): Promise<boolean> {
   if (!isNativeRecoveryUrl(value)) return false;
 
   const url = new URL(value);
+  // PKCE only: the code is bound to a verifier stored on this device, so a
+  // link crafted by another app cannot sign the user into a foreign session.
+  // Raw access/refresh tokens in the URL are deliberately rejected.
   const code = url.searchParams.get('code');
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) throw error;
-    return true;
-  }
-
-  const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
-  const accessToken = hash.get('access_token');
-  const refreshToken = hash.get('refresh_token');
-  if (!accessToken || !refreshToken) {
+  if (!code) {
     throw new Error('The password recovery link is incomplete or expired.');
   }
-
-  const { error } = await supabase.auth.setSession({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-  });
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) throw error;
   return true;
 }

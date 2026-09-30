@@ -155,20 +155,19 @@ describe('listenForNativePasswordRecovery', () => {
     stop();
   });
 
-  it('establishes a session from a legacy token fragment', async () => {
+  it('rejects a raw token fragment without a PKCE code and never sets a session', async () => {
     const onRecovery = vi.fn();
-    const stop = listenForNativePasswordRecovery(onRecovery, vi.fn());
+    const onError = vi.fn();
+    const stop = listenForNativePasswordRecovery(onRecovery, onError);
     await flush();
 
     capApp.emitUrlOpen(`${RECOVERY}#access_token=access&refresh_token=refresh`);
     await flush();
 
-    expect(auth.setSession).toHaveBeenCalledWith({
-      access_token: 'access',
-      refresh_token: 'refresh',
-    });
+    expect(auth.setSession).not.toHaveBeenCalled();
     expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
-    expect(onRecovery).toHaveBeenCalledTimes(1);
+    expect(onRecovery).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
     stop();
   });
 
