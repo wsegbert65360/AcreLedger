@@ -5,6 +5,7 @@ import {
   PAST_DUE_GRACE_DAYS,
   TRIAL_PERIOD_DAYS,
   assertTestModeBilling,
+  buildCheckoutCustomerParams,
   buildCheckoutIdempotencyKey,
   buildSubscriptionUpsert,
   canOpenPortal,
@@ -14,7 +15,9 @@ import {
   mapStripeStatusToBillingStatus,
   parseBillingAllowlist,
   readSubscriptionMetadata,
+  resolveCurrentPeriodEnd,
   shouldApplySubscriptionSnapshot,
+  shouldGrantTrial,
 } from '../../server/billing';
 
 const TEST_ENV = {
@@ -104,7 +107,9 @@ describe('canStartCheckout (owner gate)', () => {
   });
 
   it('refuses a duplicate checkout for the owner of an active subscription', () => {
-    for (const status of ['trialing', 'active'] as const) {
+    // past_due/unpaid subscriptions are still live in Stripe: a second Checkout
+    // would create a parallel subscription, so they go to the portal instead.
+    for (const status of ['trialing', 'active', 'past_due', 'unpaid'] as const) {
       const existing = { owner_user_id: caller, status, deleted_at: null };
       expect(canStartCheckout(existing, caller)).toEqual({
         ok: false,
@@ -113,8 +118,8 @@ describe('canStartCheckout (owner gate)', () => {
     }
   });
 
-  it('allows the owner to recover from non-active states with a new checkout', () => {
-    for (const status of ['past_due', 'canceled', 'unpaid', 'incomplete'] as const) {
+  it('allows the owner to start a new checkout only from canceled or incomplete rows', () => {
+    for (const status of ['canceled', 'incomplete'] as const) {
       const existing = { owner_user_id: caller, status, deleted_at: null };
       expect(canStartCheckout(existing, caller)).toEqual({ ok: true });
     }
@@ -146,6 +151,34 @@ describe('buildCheckoutIdempotencyKey', () => {
     expect(buildCheckoutIdempotencyKey('farm-1', { ...canceled, status: 'unpaid' })).not.toBe(
       buildCheckoutIdempotencyKey('farm-1', canceled),
     );
+  });
+});
+
+describe('buildCheckoutIdempotencyKey request fingerprint', () => {
+  it('changes when origin or email changes so Stripe never sees mismatched params', () => {
+    const a = buildCheckoutIdempotencyKey('farm-1', null, 'https://a.example|x@y.com');
+    const b = buildCheckoutIdempotencyKey('farm-1', null, 'https://b.example|x@y.com');
+    expect(a).toMatch(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/);
+    expect(a).not.toBe(b);
+    expect(buildCheckoutIdempotencyKey('farm-1', null, 'https://a.example|x@y.com')).toBe(a);
+  });
+});
+
+describe('shouldGrantTrial', () => {
+  it('grants the trial only to farms that never had a Stripe subscription', () => {
+    expect(shouldGrantTrial(null)).toBe(true);
+    expect(shouldGrantTrial({ stripe_subscription_id: null })).toBe(true);
+    expect(shouldGrantTrial({ stripe_subscription_id: 'sub_old' })).toBe(false);
+  });
+});
+
+describe('buildCheckoutCustomerParams', () => {
+  it('reuses the existing Stripe customer, otherwise seeds from email', () => {
+    expect(buildCheckoutCustomerParams({ stripe_customer_id: 'cus_1' }, 'a@b.com')).toEqual({
+      customer: 'cus_1',
+    });
+    expect(buildCheckoutCustomerParams(null, 'a@b.com')).toEqual({ customer_email: 'a@b.com' });
+    expect(buildCheckoutCustomerParams(null, null)).toEqual({});
   });
 });
 
@@ -246,6 +279,30 @@ describe('buildSubscriptionUpsert (webhook mapper)', () => {
     });
     expect(upsert.trial_ends_at).toBeNull();
     expect(upsert.current_period_end).toBeNull();
+  });
+});
+
+describe('current period end (Stripe basil API: field lives on items)', () => {
+  it('reads current_period_end from subscription items', () => {
+    const sub = {
+      id: 'sub_basil',
+      status: 'active',
+      items: {
+        data: [
+          { price: { id: 'price_1' }, current_period_end: 1799366400 },
+          { price: { id: 'price_2' }, current_period_end: 1799452800 },
+        ],
+      },
+    };
+    expect(resolveCurrentPeriodEnd(sub)).toBe(1799452800);
+    expect(buildSubscriptionUpsert(sub).current_period_end).toBe('2027-01-09T00:00:00.000Z');
+  });
+
+  it('falls back to the legacy top-level field and then to null', () => {
+    expect(resolveCurrentPeriodEnd({ id: 's', status: 'active', current_period_end: 1799366400 })).toBe(
+      1799366400,
+    );
+    expect(resolveCurrentPeriodEnd({ id: 's', status: 'active', items: { data: [{}] } })).toBeNull();
   });
 });
 

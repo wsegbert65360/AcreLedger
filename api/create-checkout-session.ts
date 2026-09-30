@@ -3,9 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import {
   TRIAL_PERIOD_DAYS,
   assertTestModeBilling,
+  buildCheckoutCustomerParams,
   buildCheckoutIdempotencyKey,
   canStartCheckout,
   isBillingAllowlisted,
+  shouldGrantTrial,
 } from '../server/billing.js';
 
 type QueryValue = string | string[] | undefined;
@@ -142,7 +144,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // ---------- Owner gate ----------
     const { data: existing, error: subscriptionError } = await supabase
       .from('farm_subscriptions')
-      .select('owner_user_id, status, deleted_at, stripe_subscription_id')
+      .select('owner_user_id, status, deleted_at, stripe_subscription_id, stripe_customer_id')
       .eq('farm_id', farmId)
       .is('deleted_at', null)
       .maybeSingle();
@@ -156,7 +158,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (checkoutGate.reason === 'not_owner') {
         return res.status(403).json({ error: 'Only the farm owner can start billing.' });
       }
-      return res.status(409).json({ error: 'This farm already has an active subscription.' });
+      return res.status(409).json({
+        error: 'This farm already has a subscription. Use Manage billing to update payment or renew.',
+      });
     }
 
     // ---------- Hosted Checkout (privacy link only; ToS is deferred) ----------
@@ -174,17 +178,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           payment_method_collection: 'always',
           line_items: [{ price: billing.config.priceId, quantity: 1 }],
           subscription_data: {
-            trial_period_days: TRIAL_PERIOD_DAYS,
+            // Trial is a first-subscription offer; re-checkout after a
+            // cancellation starts billing immediately.
+            ...(shouldGrantTrial(existing) ? { trial_period_days: TRIAL_PERIOD_DAYS } : {}),
             metadata: { farm_id: farmId, user_id: user.id },
           },
           metadata: { farm_id: farmId, user_id: user.id },
           client_reference_id: farmId,
-          customer_email: email ?? undefined,
+          ...buildCheckoutCustomerParams(existing, email),
           consent_collection: { terms_of_service: 'none' },
           success_url: `${origin}/settings?billing=success`,
           cancel_url: `${origin}/settings?billing=cancelled`,
         },
-        { idempotencyKey: buildCheckoutIdempotencyKey(farmId, existing) },
+        { idempotencyKey: buildCheckoutIdempotencyKey(farmId, existing, `${origin}|${email ?? ''}`) },
       );
       if (!session.url) {
         return res.status(502).json({ error: 'Stripe did not return a checkout URL' });

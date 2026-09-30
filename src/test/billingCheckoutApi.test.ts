@@ -109,7 +109,7 @@ describe('create checkout session API', () => {
         success_url: 'https://acreledger.example/settings?billing=success',
         cancel_url: 'https://acreledger.example/settings?billing=cancelled',
       }),
-      { idempotencyKey: 'acreledger-checkout:farm-1:initial' },
+      { idempotencyKey: expect.stringMatching(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/) },
     );
   });
 
@@ -287,6 +287,90 @@ describe('create checkout session API', () => {
       status: 500,
       body: { error: 'Could not verify billing status' },
     });
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+  it('reuses the existing customer and skips the trial when re-subscribing after a cancellation', async () => {
+    mocks.createClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-1', email: 'farmer@example.com' } },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => ({
+        select: () => ({
+          eq: () => table === 'profiles'
+            ? { maybeSingle: vi.fn().mockResolvedValue({ data: { farm_id: 'farm-1' }, error: null }) }
+            : {
+                is: () => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      owner_user_id: 'user-1',
+                      status: 'canceled',
+                      deleted_at: null,
+                      stripe_subscription_id: 'sub_old',
+                      stripe_customer_id: 'cus_old',
+                    },
+                    error: null,
+                  }),
+                }),
+              },
+        }),
+      })),
+    });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state.status).toBe(200);
+    const params = mocks.createCheckoutSession.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.customer).toBe('cus_old');
+    expect(params).not.toHaveProperty('customer_email');
+    expect(params.subscription_data).toEqual({ metadata: { farm_id: 'farm-1', user_id: 'user-1' } });
+  });
+
+  it('sends a past_due owner to the portal instead of creating a second subscription', async () => {
+    mocks.createClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-1', email: 'farmer@example.com' } },
+          error: null,
+        }),
+      },
+      from: vi.fn((table: string) => ({
+        select: () => ({
+          eq: () => table === 'profiles'
+            ? { maybeSingle: vi.fn().mockResolvedValue({ data: { farm_id: 'farm-1' }, error: null }) }
+            : {
+                is: () => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      owner_user_id: 'user-1',
+                      status: 'past_due',
+                      deleted_at: null,
+                      stripe_subscription_id: 'sub_live',
+                      stripe_customer_id: 'cus_live',
+                    },
+                    error: null,
+                  }),
+                }),
+              },
+        }),
+      })),
+    });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state.status).toBe(409);
     expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 });

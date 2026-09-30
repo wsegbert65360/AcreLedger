@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  getFarmBillingAccess,
   isBillingAllowlisted,
   isBillingUiAvailable,
   requestBillingSession,
@@ -141,13 +140,19 @@ export default function BillingManager() {
     { email: userEmail, userId },
     import.meta.env.VITE_BILLING_ALLOWLIST as string | undefined,
   );
-  const access = getFarmBillingAccess({ subscription });
   const hasActiveRow = subscription != null && subscription.deleted_at == null;
   const isOwner = hasActiveRow && subscription.owner_user_id === userId;
   // No row yet: the first allowlisted member to check out becomes the owner.
   const canManage = !hasActiveRow || isOwner;
   const badge = getStatusBadge(subscription);
-  const needsCheckout = subscription == null || access.phase === 'locked' || subscription.status === 'canceled';
+  // past_due/unpaid subscriptions are still live in Stripe, so those owners fix
+  // payment in the portal; a second Checkout would create a parallel subscription.
+  const needsCheckout =
+    subscription == null ||
+    subscription.deleted_at != null ||
+    subscription.status === 'canceled' ||
+    subscription.status === 'incomplete';
+  const hadPriorSubscription = subscription?.stripe_subscription_id != null;
   const canOpenPortal = hasActiveRow && isOwner && subscription.stripe_customer_id != null;
 
   return (
@@ -184,7 +189,7 @@ export default function BillingManager() {
                   size="sm"
                   className="min-h-11 bg-plant text-plant-foreground hover:bg-plant/90"
                 >
-                  Start 4-month free trial
+                  {hadPriorSubscription ? 'Reactivate subscription' : 'Start 4-month free trial'}
                 </Button>
               </div>
             )}

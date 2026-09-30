@@ -100,9 +100,23 @@ export type CheckoutGate =
   | { ok: false; reason: 'not_owner' | 'already_subscribed' };
 
 /**
+ * Statuses whose Stripe subscription is still live (billing or retrying). A
+ * second Checkout would create a parallel subscription, so these owners are
+ * pointed at the Customer Portal to fix payment instead.
+ */
+const LIVE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
+  'trialing',
+  'active',
+  'past_due',
+  'unpaid',
+]);
+
+/**
  * Owner gate for starting Checkout. With no active row the caller becomes the
  * recorded farm owner; an active row owned by someone else refuses; the owner
- * of an already trialing/active subscription is pointed at the portal instead.
+ * of a live (trialing/active/past_due/unpaid) subscription is pointed at the
+ * portal instead. Only canceled or never-completed (incomplete) rows may
+ * start a fresh Checkout.
  */
 export function canStartCheckout(
   existing: ExistingSubscriptionRow | null | undefined,
@@ -115,7 +129,7 @@ export function canStartCheckout(
     existing &&
     !existing.deleted_at &&
     existing.owner_user_id === callerUserId &&
-    (existing.status === 'trialing' || existing.status === 'active')
+    LIVE_SUBSCRIPTION_STATUSES.has(existing.status)
   ) {
     return { ok: false, reason: 'already_subscribed' };
   }
@@ -130,12 +144,50 @@ export function canStartCheckout(
 export function buildCheckoutIdempotencyKey(
   farmId: string,
   existing: ExistingSubscriptionRow | null | undefined,
+  requestFingerprint?: string,
 ): string {
+  // Stripe rejects a reused idempotency key whose parameters differ, so
+  // request-dependent inputs (origin, email) must be part of the key.
+  const suffix = requestFingerprint ? `:${fingerprint(requestFingerprint)}` : '';
   if (!existing || existing.deleted_at) {
-    return `acreledger-checkout:${farmId}:initial`;
+    return `acreledger-checkout:${farmId}:initial${suffix}`;
   }
   const subscriptionId = existing.stripe_subscription_id?.trim() || 'untracked';
-  return `acreledger-checkout:${farmId}:${subscriptionId}:${existing.status}`;
+  return `acreledger-checkout:${farmId}:${subscriptionId}:${existing.status}${suffix}`;
+}
+
+/** Short, stable, non-cryptographic fingerprint (FNV-1a, base36). */
+function fingerprint(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+/**
+ * The 122-day trial is a first-subscription offer only. A farm whose mirrored
+ * row ever carried a Stripe subscription (for example a canceled one) must not
+ * get another free trial by re-running Checkout.
+ */
+export function shouldGrantTrial(
+  existing: { stripe_subscription_id?: string | null } | null | undefined,
+): boolean {
+  return !existing?.stripe_subscription_id?.trim();
+}
+
+/**
+ * Reuse the farm's existing Stripe customer on re-checkout so payment methods
+ * and invoices stay on one customer; otherwise seed a new one from the email.
+ */
+export function buildCheckoutCustomerParams(
+  existing: { stripe_customer_id?: string | null } | null | undefined,
+  email: string | null,
+): { customer: string } | { customer_email?: string } {
+  const customerId = existing?.stripe_customer_id?.trim();
+  if (customerId) return { customer: customerId };
+  return email ? { customer_email: email } : {};
 }
 
 export interface PortalSubscriptionRow {
@@ -188,13 +240,35 @@ export interface StripeSubscriptionLike {
   cancel_at_period_end?: boolean | null;
   metadata?: Record<string, string> | null;
   items?: {
-    data?: Array<{ price?: { id?: string | null } | null } | undefined> | null;
+    data?: Array<
+      | {
+          price?: { id?: string | null } | null;
+          /** Stripe API 2025-03-31.basil moved the billing period onto items. */
+          current_period_end?: number | null;
+        }
+      | undefined
+    > | null;
   } | null;
 }
 
 function stripeEpochToIso(epochSeconds: number | null | undefined): string | null {
   if (typeof epochSeconds !== 'number' || !Number.isFinite(epochSeconds)) return null;
   return new Date(epochSeconds * 1000).toISOString();
+}
+
+/**
+ * Resolve the subscription's current period end. Since Stripe API
+ * 2025-03-31.basil (stripe-node >= 18) the field lives on each subscription
+ * item, not on the Subscription itself. Use the latest item end and fall back
+ * to the legacy top-level field for older payloads.
+ */
+export function resolveCurrentPeriodEnd(subscription: StripeSubscriptionLike): number | null {
+  const itemEnds = (subscription.items?.data ?? [])
+    .map(item => item?.current_period_end)
+    .filter((end): end is number => typeof end === 'number' && Number.isFinite(end));
+  if (itemEnds.length > 0) return Math.max(...itemEnds);
+  const legacy = subscription.current_period_end;
+  return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : null;
 }
 
 /**
@@ -215,7 +289,7 @@ export function buildSubscriptionUpsert(subscription: StripeSubscriptionLike): {
   return {
     status: mapStripeStatusToBillingStatus(subscription.status),
     trial_ends_at: stripeEpochToIso(subscription.trial_end),
-    current_period_end: stripeEpochToIso(subscription.current_period_end),
+    current_period_end: stripeEpochToIso(resolveCurrentPeriodEnd(subscription)),
     cancel_at_period_end: subscription.cancel_at_period_end === true,
     stripe_customer_id:
       typeof customer === 'string' ? customer : customer?.id != null ? customer.id : null,
