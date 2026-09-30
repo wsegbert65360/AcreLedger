@@ -89,6 +89,10 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                                     <span className="shrink-0 font-bold text-foreground">Ask the Book:</span>
                                     Text questions and answers are kept in an operational log for 30 days. Voice audio is not stored by AcreLedger.
                                 </li>
+                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
+                                    <span className="shrink-0 font-bold text-foreground">Crash Diagnostics:</span>
+                                    When crash reporting is enabled in your version of the app, an error report (the error message, stack trace, and the page you were on) is sent to our crash-reporting provider. Sign-in tokens and attached photos are removed first, and the report does not include your farm records. It is used only to fix bugs, never for advertising or tracking. You can turn this off in Settings under Security &amp; Privacy.
+                                </li>
                             </ul>
                         </section>
 
@@ -133,13 +137,13 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                                             Provides account authentication and encrypted cloud storage for farm records.
                                         </p>
                                     </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">Account and farm data</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">Account and farm data</span>
                                 </div>
                                 <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="min-w-0">
                                         <p className="text-sm font-bold text-foreground">Visual Crossing Weather</p>
                                     </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
                                 </div>
                                 <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="min-w-0">
@@ -148,22 +152,22 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                                             Field rainfall lookups use IEM Stage IV radar. AcreLedger sends field location coordinates to retrieve rainfall totals; it does not send your name or farm records.
                                         </p>
                                     </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
                                 </div>
                                 <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="min-w-0">
                                         <p className="text-sm font-bold text-foreground">Google Fonts</p>
                                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                            The web app loads Inter, JetBrains Mono, and landing-page fonts from Google Fonts. Your browser requests those files from Google.
+                                            The marketing landing page loads its display fonts (Fraunces, Newsreader, IBM Plex Mono) from Google Fonts, so your browser requests those files from Google. The application's own fonts (Inter, JetBrains Mono) are bundled with the app and are not fetched from Google.
                                         </p>
                                     </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">Fonts</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">Fonts</span>
                                 </div>
                                 <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="min-w-0">
                                         <p className="text-sm font-bold text-foreground">Vercel</p>
                                     </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-[11px] font-bold uppercase text-primary sm:shrink-0">Hosting/SSL</span>
+                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">Hosting/SSL</span>
                                 </div>
                                 <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
                                     <div>
@@ -248,7 +252,7 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                 </Card>
 
                 <footer className="text-center py-8">
-                    <p className="text-[11px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em]">
+                    <p className="text-xs font-mono text-muted-foreground/60 uppercase tracking-[0.2em]">
                         &copy; 2026 AcreLedger Precision Agriculture. All Rights Isolated.
                     </p>
                 </footer>
