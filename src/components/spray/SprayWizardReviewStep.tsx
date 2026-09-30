@@ -31,7 +31,7 @@ interface SprayWizardReviewStepProps {
 function ReviewRow({ label, value, icon: Icon }: { label: string; value: React.ReactNode; icon?: React.ElementType }) {
   return (
     <div className="flex items-start justify-between gap-2 py-1.5 border-b border-border/40 last:border-0">
-      <span className="text-[11px] font-mono text-muted-foreground uppercase flex items-center gap-1.5">
+      <span className="text-xs font-mono text-muted-foreground uppercase flex items-center gap-1.5">
         {Icon && <Icon size={12} />}
         {label}
       </span>
@@ -59,7 +59,7 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
           <CloudRain size={18} />
           <span>{isExisting ? 'Update' : 'Save'} Spray Record</span>
         </div>
-        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
+        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20">
           {seasonYear} Season
         </span>
       </div>
@@ -78,7 +78,7 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
       </div>
 
       <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
-        <div className="text-[11px] font-mono text-muted-foreground uppercase font-bold">Chemical Mix</div>
+        <div className="text-xs font-mono text-muted-foreground uppercase font-bold">Chemical Mix</div>
         {products.filter(p => p.product.trim()).map((p, i) => (
           <div key={p.ui_id || i} className="text-xs font-mono space-y-0.5">
             <div className="font-bold text-foreground">{p.product}</div>
@@ -93,7 +93,7 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
       </div>
 
       <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-1">
-        <div className="text-[11px] font-mono text-muted-foreground uppercase font-bold flex items-center gap-1.5">
+        <div className="text-xs font-mono text-muted-foreground uppercase font-bold flex items-center gap-1.5">
           <Wind size={12} /> Conditions
         </div>
         <ReviewRow label="Wind" value={`${manualWindSpeed || '—'} mph ${manualWindDirection || ''}`} />
@@ -103,13 +103,13 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
 
       {(notes.trim() || photoBase64) && (
         <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
-          <div className="text-[11px] font-mono text-muted-foreground uppercase font-bold">Notes & Attachment</div>
+          <div className="text-xs font-mono text-muted-foreground uppercase font-bold">Notes & Attachment</div>
           {notes.trim() && (
             <p className="text-xs font-mono text-foreground whitespace-pre-wrap">{notes}</p>
           )}
           {photoBase64 && (
             <div className="mt-2 space-y-1">
-              <span className="text-[10px] font-mono text-muted-foreground block uppercase">Attached Ticket / Label:</span>
+              <span className="text-xs font-mono text-muted-foreground block uppercase">Attached Ticket / Label:</span>
               <img
                 src={`data:${photoType || 'image/jpeg'};base64,${photoBase64}`}
                 alt="Attached Ticket"
@@ -131,12 +131,12 @@ export function SprayWizardReviewStep(props: SprayWizardReviewStepProps) {
             <AlertTriangle size={14} />
             Record will be saved as incomplete
           </div>
-          <p className="text-[11px] text-yellow-600/80 leading-relaxed">
+          <p className="text-xs text-yellow-600/80 leading-relaxed">
             The following compliance fields are missing. You can complete them later by editing this record.
           </p>
           <ul className="mt-1 space-y-0.5">
             {missingComplianceFields.map(f => (
-              <li key={f} className="text-[11px] font-mono text-yellow-600/90">· {f}</li>
+              <li key={f} className="text-xs font-mono text-yellow-600/90">· {f}</li>
             ))}
           </ul>
         </div>

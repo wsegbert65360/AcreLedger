@@ -38,7 +38,7 @@ function StatCard({
           <span className="text-xs font-medium text-muted-foreground">{label}</span>
         </div>
         {badge && (
-          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${badge.color}`}>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.color}`}>
             {badge.text}
           </span>
         )}

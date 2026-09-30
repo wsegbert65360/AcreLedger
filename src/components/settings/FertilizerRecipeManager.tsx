@@ -105,7 +105,7 @@ export default function FertilizerRecipeManager() {
         {adding && (
           <div className="bg-muted p-3 rounded-lg space-y-3 animate-in fade-in slide-in-from-top-2">
             <div className="space-y-1.5">
-              <Label htmlFor="newRecipeName" className="text-[10px] uppercase font-mono text-muted-foreground">Recipe Name</Label>
+              <Label htmlFor="newRecipeName" className="text-xs uppercase font-mono text-muted-foreground">Recipe Name</Label>
               <Input 
                 id="newRecipeName"
                 name="newRecipeName"
@@ -116,7 +116,7 @@ export default function FertilizerRecipeManager() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="newRecipeFormula" className="text-[10px] uppercase font-mono text-muted-foreground">Formula / NPK</Label>
+              <Label htmlFor="newRecipeFormula" className="text-xs uppercase font-mono text-muted-foreground">Formula / NPK</Label>
               <Input 
                 id="newRecipeFormula"
                 name="newRecipeFormula"
@@ -147,7 +147,7 @@ export default function FertilizerRecipeManager() {
             editingId === recipe.id ? (
               <div key={recipe.id} className="bg-muted p-3 rounded-lg space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor={`editRecipeName-${recipe.id}`} className="text-[10px] uppercase font-mono text-muted-foreground">Recipe Name</Label>
+                  <Label htmlFor={`editRecipeName-${recipe.id}`} className="text-xs uppercase font-mono text-muted-foreground">Recipe Name</Label>
                   <Input 
                     id={`editRecipeName-${recipe.id}`}
                     name={`editRecipeName-${recipe.id}`}
@@ -157,7 +157,7 @@ export default function FertilizerRecipeManager() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor={`editRecipeFormula-${recipe.id}`} className="text-[10px] uppercase font-mono text-muted-foreground">Formula / NPK</Label>
+                  <Label htmlFor={`editRecipeFormula-${recipe.id}`} className="text-xs uppercase font-mono text-muted-foreground">Formula / NPK</Label>
                   <Input 
                     id={`editRecipeFormula-${recipe.id}`}
                     name={`editRecipeFormula-${recipe.id}`}

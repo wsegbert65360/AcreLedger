@@ -79,16 +79,16 @@ export default function FallFsaReport({
     >
       {fsaFallRows.map(row => (
         <tr key={`${row.recordType}-${row.id}`} className="hover:bg-muted/30 transition-colors">
-          <td data-label="DATE" className="px-4 py-3 font-mono text-[10px] text-foreground">{fmtDate(row.harvestDate) || '—'}</td>
+          <td data-label="DATE" className="px-4 py-3 font-mono text-xs text-foreground">{fmtDate(row.harvestDate) || '—'}</td>
           <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
-          <td data-label="CROP/USE" className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{row.crop || '—'}</td>
-          <td data-label="PROD." className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.production != null ? row.production.toLocaleString() : '—'}</td>
-          <td data-label="UNIT" className="px-4 py-3 font-mono text-[10px] text-muted-foreground">{row.productionUnit}</td>
-          <td data-label="MOIST %" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{row.moisturePercent != null ? `${row.moisturePercent}%` : '—'}</td>
-          <td data-label="DEST/STORAGE" className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.destination || '—'}</td>
-          <td data-label="EVIDENCE #" className="px-4 py-3 font-mono text-[10px] text-foreground truncate max-w-[80px]">{row.evidenceReference || '—'}</td>
-          <td data-label="FARM #" className="px-4 py-3 font-mono text-[10px] text-foreground">{row.farmNumber || '—'}</td>
-          <td data-label="TRACT #" className="px-4 py-3 font-mono text-[10px] text-foreground">{row.tractNumber || '—'}</td>
+          <td data-label="CROP/USE" className="px-4 py-3 font-mono text-xs text-harvest font-bold">{row.crop || '—'}</td>
+          <td data-label="PROD." className="px-4 py-3 font-mono text-xs text-foreground text-right">{row.production != null ? row.production.toLocaleString() : '—'}</td>
+          <td data-label="UNIT" className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.productionUnit}</td>
+          <td data-label="MOIST %" className="px-4 py-3 font-mono text-xs text-foreground text-right">{row.moisturePercent != null ? `${row.moisturePercent}%` : '—'}</td>
+          <td data-label="DEST/STORAGE" className="px-4 py-3 font-mono text-xs text-foreground truncate max-w-[80px]">{row.destination || '—'}</td>
+          <td data-label="EVIDENCE #" className="px-4 py-3 font-mono text-xs text-foreground truncate max-w-[80px]">{row.evidenceReference || '—'}</td>
+          <td data-label="FARM #" className="px-4 py-3 font-mono text-xs text-foreground">{row.farmNumber || '—'}</td>
+          <td data-label="TRACT #" className="px-4 py-3 font-mono text-xs text-foreground">{row.tractNumber || '—'}</td>
         </tr>
       ))}
       {fsaFallRows.length === 0 && (

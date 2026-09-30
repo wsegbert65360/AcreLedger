@@ -254,7 +254,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
       </MapContainer>
 
       {features.length === 0 && !loading && (
-        <div className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur px-2 py-1 rounded text-[11px] font-medium text-muted-foreground">
+        <div className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs font-medium text-muted-foreground">
           No boundary data
         </div>
       )}

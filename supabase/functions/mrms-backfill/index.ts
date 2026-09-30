@@ -12,6 +12,9 @@ type BackfillRequest = {
 type FieldCoord = { id: string; lat: number; lng: number }
 
 const FIELD_PAGE_SIZE = 1000
+// One invocation is chained per hour, so an unbounded range is an unbounded
+// fan-out. 31 days of hours is more than any legitimate backfill needs.
+const MAX_BACKFILL_HOURS = 24 * 31
 
 export default {
   fetch: withSupabase({ auth: 'secret:automations' }, async (req, ctx) => {
@@ -44,6 +47,9 @@ export default {
         if (Number.isNaN(current.getTime()) || Number.isNaN(end.getTime()) || current > end) {
           return Response.json({ error: 'Invalid backfill date range' }, { status: 400 })
         }
+        if ((end.getTime() - current.getTime()) / (60 * 60 * 1000) > MAX_BACKFILL_HOURS) {
+          return Response.json({ error: 'Backfill range too large' }, { status: 400 })
+        }
         while (current <= end) {
           hours.push(new Date(current))
           current = new Date(current.getTime() + 60 * 60 * 1000)
@@ -72,6 +78,11 @@ export default {
         let fieldsQuery = supabaseClient
           .from('fields')
           .select('id, lat, lng')
+          // Deleted fields and fields without coordinates must not receive
+          // genuine-looking zero rainfall.
+          .is('deleted_at', null)
+          .not('lat', 'is', null)
+          .not('lng', 'is', null)
           .order('id', { ascending: true })
           .range(from, from + FIELD_PAGE_SIZE - 1)
         fieldsQuery = fieldId
@@ -115,6 +126,10 @@ export default {
         }
       }
 
+      if (!gribData) {
+        console.warn(`[MRMS-Backfill] No MRMS data for ${currentHour.toISOString()}; hour left unfilled`)
+      }
+
       if (gribData) {
         const typedFields = fields as FieldCoord[]
         const rainfallValues = extractRainfall(
@@ -155,9 +170,20 @@ export default {
           if (!response.ok) {
             throw new Error(`Next backfill chunk failed with HTTP ${response.status}`)
           }
-        }).catch((error: unknown) => {
+        }).catch(async (error: unknown) => {
           const message = error instanceof Error ? error.message : String(error)
           console.error(`[MRMS-Backfill] Failed to trigger next chunk: ${message}`)
+          // Don't leave a field's coverage stuck at 'processing' when the chain
+          // breaks: mark it failed so it can be retried.
+          if (fieldId) {
+            const { error: chainFailureError } = await supabaseClient
+              .from('field_rainfall_coverage')
+              .update({ status: 'failed', last_checked_at: new Date().toISOString() })
+              .eq('field_id', fieldId)
+            if (chainFailureError) {
+              console.error(`[MRMS-Backfill] Failed to save chain failure state: ${chainFailureError.message}`)
+            }
+          }
         })
 
         EdgeRuntime.waitUntil(nextRequest)

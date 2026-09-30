@@ -99,7 +99,7 @@ export default function RecipeForm({
             />
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-1">
-                <Label htmlFor={`rate-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Rate / Ac</Label>
+                <Label htmlFor={`rate-${i}`} className="text-xs font-mono text-muted-foreground uppercase">Rate / Ac</Label>
                 <div className="flex gap-1.5 mt-0.5">
                   <Input
                     id={`rate-${i}`}
@@ -128,7 +128,7 @@ export default function RecipeForm({
                 </div>
               </div>
               <div className="col-span-1">
-                <Label htmlFor={`epa-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">EPA Reg #</Label>
+                <Label htmlFor={`epa-${i}`} className="text-xs font-mono text-muted-foreground uppercase">EPA Reg #</Label>
                 <Input
                   id={`epa-${i}`}
                   name={`epa-${i}`}
@@ -140,7 +140,7 @@ export default function RecipeForm({
               </div>
             </div>
             <div>
-              <Label htmlFor={`active-${i}`} className="text-[11px] font-mono text-muted-foreground uppercase">Active Ingredients</Label>
+              <Label htmlFor={`active-${i}`} className="text-xs font-mono text-muted-foreground uppercase">Active Ingredients</Label>
               <Input
                 id={`active-${i}`}
                 name={`active-${i}`}
@@ -169,7 +169,7 @@ export default function RecipeForm({
         <h4 className="text-muted-foreground font-mono text-xs font-bold">DEFAULT AUDIT INFO</h4>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <Label htmlFor="applicator" className="text-muted-foreground font-mono text-[11px]">APPLICATOR</Label>
+            <Label htmlFor="applicator" className="text-muted-foreground font-mono text-xs">APPLICATOR</Label>
             <Input
               id="applicator"
               name="applicator"
@@ -180,7 +180,7 @@ export default function RecipeForm({
             />
           </div>
           <div>
-            <Label htmlFor="license" className="text-muted-foreground font-mono text-[11px]">LICENSE #</Label>
+            <Label htmlFor="license" className="text-muted-foreground font-mono text-xs">LICENSE #</Label>
             <Input
               id="license"
               name="license"
@@ -192,7 +192,7 @@ export default function RecipeForm({
           </div>
         </div>
         <div>
-          <Label htmlFor="target" className="text-muted-foreground font-mono text-[11px]">GENERAL TARGET PEST</Label>
+          <Label htmlFor="target" className="text-muted-foreground font-mono text-xs">GENERAL TARGET PEST</Label>
           <Input
             id="target"
             name="target"

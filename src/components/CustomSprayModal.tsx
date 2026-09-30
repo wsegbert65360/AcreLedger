@@ -173,7 +173,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                             <Cloud size={20} />
                             <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Record'} Custom Spray — {field.name}</span>
                         </div>
-                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20 normal-case tracking-normal">
+                        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-spray/10 text-spray border border-spray/20 normal-case tracking-normal">
                             {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                         </span>
                     </DialogTitle>
@@ -192,7 +192,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                     )}
 
                     <div>
-                        <Label htmlFor="csApplicator" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
+                        <Label htmlFor="csApplicator" className="text-muted-foreground font-mono text-xs flex items-center gap-1.5 uppercase">
                             <User size={12} /> Who Sprayed *
                         </Label>
                         <Input
@@ -208,7 +208,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <Label htmlFor="csDate" className="text-muted-foreground font-mono text-[11px] uppercase">
+                            <Label htmlFor="csDate" className="text-muted-foreground font-mono text-xs uppercase">
                                 Application Date *
                             </Label>
                             <Input
@@ -221,7 +221,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                             />
                         </div>
                         <div>
-                            <Label htmlFor="csTime" className="flex items-center gap-1 text-[11px] font-mono uppercase text-muted-foreground">
+                            <Label htmlFor="csTime" className="flex items-center gap-1 text-xs font-mono uppercase text-muted-foreground">
                                 <Clock3 size={11} /> Time *
                             </Label>
                             <Input
@@ -236,7 +236,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                     </div>
 
                     <div>
-                        <Label htmlFor="csRecipe" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
+                        <Label htmlFor="csRecipe" className="text-muted-foreground font-mono text-xs flex items-center gap-1.5 uppercase">
                             <FlaskConical size={12} /> Recipe / Mix
                         </Label>
                         <textarea
@@ -275,7 +275,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                         </Button>
                         <div className="grid grid-cols-3 gap-3">
                             <div>
-                                <Label htmlFor="csWind" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1 uppercase">
+                                <Label htmlFor="csWind" className="text-muted-foreground font-mono text-xs flex items-center gap-1 uppercase">
                                     <Wind size={11} /> Wind
                                 </Label>
                                 <Input
@@ -289,7 +289,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="csWindDir" className="text-muted-foreground font-mono text-[11px] uppercase">Dir</Label>
+                                <Label htmlFor="csWindDir" className="text-muted-foreground font-mono text-xs uppercase">Dir</Label>
                                 <Input
                                     id="csWindDir"
                                     name="csWindDir"
@@ -300,7 +300,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="csTemp" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1 uppercase">
+                                <Label htmlFor="csTemp" className="text-muted-foreground font-mono text-xs flex items-center gap-1 uppercase">
                                     <Thermometer size={11} /> °F
                                 </Label>
                                 <Input
@@ -317,7 +317,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
                     </div>
 
                     <div>
-                        <Label htmlFor="csNotes" className="text-muted-foreground font-mono text-[11px] flex items-center gap-1.5 uppercase">
+                        <Label htmlFor="csNotes" className="text-muted-foreground font-mono text-xs flex items-center gap-1.5 uppercase">
                             <StickyNote size={12} /> Notes
                         </Label>
                         <textarea

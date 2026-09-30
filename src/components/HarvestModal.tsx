@@ -332,7 +332,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
               <Wheat size={20} />
               <span>{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'Harvest'} — {field.name}</span>
             </div>
-            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
               {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
             </span>
           </DialogTitle>

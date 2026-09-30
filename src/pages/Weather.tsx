@@ -323,7 +323,7 @@ export default function Weather() {
               </button>
             </div>
             {searchError && (
-              <p className="text-[10px] font-semibold text-destructive mt-0.5 ml-1 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-destructive mt-0.5 ml-1 uppercase tracking-wider">
                 {searchError}
               </p>
             )}
@@ -364,12 +364,12 @@ export default function Weather() {
                     <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
                     <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
                   </div>
-                  <span className="text-[10px] font-bold text-amber-400/80 uppercase tracking-wider">Needs GPS</span>
+                  <span className="text-xs font-bold text-amber-400/80 uppercase tracking-wider">Needs GPS</span>
                 </div>
                 <div className="h-48 flex flex-col items-center justify-center gap-2">
                   <Crosshair size={24} className="text-muted-foreground/20" />
                   <p className="text-xs font-semibold text-muted-foreground">Radar requires GPS coordinates</p>
-                  <p className="text-[10px] text-muted-foreground/60">Allow location access or add field coordinates</p>
+                  <p className="text-xs text-muted-foreground/60">Allow location access or add field coordinates</p>
                 </div>
               </div>
             )}
@@ -394,7 +394,7 @@ export default function Weather() {
             {/* Last Updated */}
             {lastUpdated && (
               <div className="text-center py-2">
-                <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">
+                <p className="text-xs font-semibold text-muted-foreground/50 uppercase tracking-wider">
                   Updated {lastUpdated} · Auto-refreshes every 5 min
                 </p>
               </div>
@@ -422,7 +422,7 @@ export function CurrentConditionsCard({ weather, lastUpdated }: { weather: Exten
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Current</h2>
         </div>
         {lastUpdated && (
-          <span className="text-[10px] font-medium text-muted-foreground/60 bg-muted/30 px-2 py-0.5 rounded-full">
+          <span className="text-xs font-medium text-muted-foreground/60 bg-muted/30 px-2 py-0.5 rounded-full">
             {lastUpdated}
           </span>
         )}
@@ -440,10 +440,10 @@ export function CurrentConditionsCard({ weather, lastUpdated }: { weather: Exten
               {weather.isError ? '—' : `${weather.temp}°`}
             </span>
             {weather.feelsLike !== weather.temp && (
-              <span className="text-[10px] text-muted-foreground mt-1">Feels {weather.feelsLike}°</span>
+              <span className="text-xs text-muted-foreground mt-1">Feels {weather.feelsLike}°</span>
             )}
             {weather.conditions && (
-              <span className="text-[10px] text-muted-foreground/80 font-medium mt-0.5 capitalize">
+              <span className="text-xs text-muted-foreground/80 font-medium mt-0.5 capitalize">
                 {weather.conditions}
               </span>
             )}
@@ -511,7 +511,7 @@ export function CurrentConditionsCard({ weather, lastUpdated }: { weather: Exten
 
       {/* Sunrise / Sunset strip */}
       {(weather.sunrise || weather.sunset) && (
-        <div className="mx-4 mb-2.5 flex items-center justify-between px-3 py-1.5 rounded-lg bg-muted/20 text-[10px] font-mono text-muted-foreground">
+        <div className="mx-4 mb-2.5 flex items-center justify-between px-3 py-1.5 rounded-lg bg-muted/20 text-xs font-mono text-muted-foreground">
           <span>☀️ {weather.sunrise || '—'}</span>
           <span className="text-muted-foreground/40">|</span>
           <span>🌙 {weather.sunset || '—'}</span>
@@ -531,7 +531,7 @@ function MiniStat({ icon, label, value, highlight = false }: {
     <div className="flex flex-col items-center gap-0.5">
       <div className="flex items-center gap-1">
         {icon}
-        <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</span>
       </div>
       <span className={`text-xs font-semibold font-mono flex items-center justify-center gap-0.5 ${highlight ? 'text-blue-400' : 'text-foreground'}`}>
         {value}
@@ -543,8 +543,8 @@ function MiniStat({ icon, label, value, highlight = false }: {
 function RainCell({ label, value, suffix = '"', isError = false }: { label: string; value: number | null; suffix?: string; isError?: boolean }) {
   return (
     <div className="flex-1 text-center py-2">
-      <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider">{label}</p>
-      <p className="text-[11px] font-bold font-mono text-foreground">{isError || value == null ? '—' : `${value}${suffix}`}</p>
+      <p className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">{label}</p>
+      <p className="text-xs font-bold font-mono text-foreground">{isError || value == null ? '—' : `${value}${suffix}`}</p>
     </div>
   );
 }

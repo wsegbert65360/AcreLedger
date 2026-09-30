@@ -61,10 +61,10 @@ export default function HaySummaryReport({
           return (
             <tr key={f.id} className="hover:bg-muted/30 transition-colors">
               <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{f.name}</td>
-              <td data-label="CUTTING #1" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c1 > 0 ? c1 : '—'}</td>
-              <td data-label="CUTTING #2" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c2 > 0 ? c2 : '—'}</td>
-              <td data-label="CUTTING #3+" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{c3plus > 0 ? c3plus : '—'}</td>
-              <td data-label="TOTAL" className="px-4 py-3 font-mono text-[10px] font-bold text-harvest text-right border-l border-border/20">
+              <td data-label="CUTTING #1" className="px-4 py-3 font-mono text-xs text-foreground text-right">{c1 > 0 ? c1 : '—'}</td>
+              <td data-label="CUTTING #2" className="px-4 py-3 font-mono text-xs text-foreground text-right">{c2 > 0 ? c2 : '—'}</td>
+              <td data-label="CUTTING #3+" className="px-4 py-3 font-mono text-xs text-foreground text-right">{c3plus > 0 ? c3plus : '—'}</td>
+              <td data-label="TOTAL" className="px-4 py-3 font-mono text-xs font-bold text-harvest text-right border-l border-border/20">
                 {total != null ? total.toLocaleString() : '—'}
               </td>
             </tr>

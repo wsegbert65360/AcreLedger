@@ -126,10 +126,10 @@ export default function VersionFooter() {
   return (
     <div className="max-w-lg mx-auto w-full py-10 px-6 flex items-center justify-between gap-4 border-t border-border/10 lg:max-w-4xl">
       <div className="flex flex-col">
-        <p className="text-[11px] text-muted-foreground font-bold">
+        <p className="text-xs text-muted-foreground font-bold">
           AcreLedger
         </p>
-        <p className="font-mono text-[11px] text-muted-foreground">
+        <p className="font-mono text-xs text-muted-foreground">
           v{version}
         </p>
       </div>

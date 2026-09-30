@@ -127,7 +127,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
               <Warehouse size={20} />
               <span>{isDuplicate ? 'Duplicate' : 'Edit'} Grain Movement</span>
             </div>
-            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
               {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
             </span>
           </DialogTitle>
@@ -149,7 +149,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
                 {initialData.type === 'in' ? 'Inventory In' : 'Sale / Out'}
               </span>
             </div>
-            <span className="text-[11px] font-mono opacity-70 italic">
+            <span className="text-xs font-mono opacity-70 italic">
               ID: {initialData.id?.slice(0, 8) ?? '—'}
             </span>
           </div>
@@ -190,7 +190,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
               {isNegativeBushels && !errors.bushels && (
                 <div className="flex items-center gap-1 mt-1 text-amber-500 dark:text-amber-400">
                   <AlertTriangle size={12} />
-                  <p className="text-[11px] font-mono">Negative — adjustment recorded</p>
+                  <p className="text-xs font-mono">Negative — adjustment recorded</p>
                 </div>
               )}
             </div>
@@ -268,7 +268,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
             <div className="pt-2 border-t border-border/50">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar size={14} />
-                <span className="text-[11px] font-mono uppercase">
+                <span className="text-xs font-mono uppercase">
                   Recorded: {new Date(initialData.timestamp).toLocaleString()}
                 </span>
               </div>

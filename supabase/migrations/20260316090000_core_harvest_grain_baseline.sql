@@ -1,3 +1,13 @@
+-- REPLAY-ONLY BASELINE. Do not `supabase db push` this file to an existing
+-- project. It is back-dated before every already-applied migration so a
+-- disposable database (scripts/verify-supabase-migrations.mjs, PGlite) can
+-- rebuild the core schema from checked-in history. On a linked database it
+-- would be treated as an out-of-order pending migration and could create
+-- missing tables bare (no RLS, grants, or foreign keys) because the later
+-- migrations that harden them are already marked applied. Mark it as applied
+-- (`supabase migration repair --status applied 20260316090000`) instead.
+-- It is a reconstruction, not an authoritative schema-only dump.
+
 -- Reviewed core-table bootstrap for empty `supabase db reset`.
 -- Source: current TypeScript row types plus later ADD COLUMN IF NOT EXISTS
 -- migrations. This is not a production schema dump. CREATE IF NOT EXISTS is

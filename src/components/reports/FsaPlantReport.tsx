@@ -70,7 +70,7 @@ export default function FsaPlantReport({
           </div>
           {plantedAcresByField.length > 0 && (
             <div className="border-t border-border pt-3 print:pt-2">
-              <div className="text-[10px] font-bold uppercase text-muted-foreground mb-2 print:mb-1">
+              <div className="text-xs font-bold uppercase text-muted-foreground mb-2 print:mb-1">
                 Planted acres by field
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1 print:grid-cols-3 print:gap-x-4">
@@ -105,21 +105,21 @@ export default function FsaPlantReport({
       )}
       {fsaPlantRows.map(row => (
         <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-          <td data-label="FARM #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.farmNumber || '-'}</td>
-          <td data-label="TRACT #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.tractNumber || '-'}</td>
-          <td data-label="CLU/FIELD #" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.fieldNumber || '-'}</td>
-          <td data-label="FIELD" className="px-2 py-2 text-[11px] font-bold text-foreground print:px-1 print:py-1">{row.fieldName}</td>
-          <td data-label="LAND USE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.landUse}</td>
-          <td data-label="CROP" className="px-2 py-2 font-mono text-[11px] text-harvest font-bold print:px-1 print:py-1">{row.crop || '-'}</td>
-          <td data-label="SEQ" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropSequence || '-'}</td>
-          <td data-label="TYPE/VARIETY" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.seedVariety || '-'}</td>
-          <td data-label="PATTERN" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.plantingPattern || '-'}</td>
-          <td data-label="ACRES" className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.acreage}</td>
-          <td data-label="PLANT DATE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.date ? fmtDate(row.date) : '-'}</td>
-          <td data-label="USE" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.intendedUse || '-'}</td>
-          <td data-label="IRR" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.irrigationCode}</td>
-          <td data-label="SHARE %" className="px-2 py-2 font-mono text-[11px] text-foreground text-right print:px-1 print:py-1">{row.producerShare}</td>
-          <td data-label="STATUS" className="px-2 py-2 font-mono text-[11px] text-foreground print:px-1 print:py-1">{row.cropStatus || '-'}</td>
+          <td data-label="FARM #" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.farmNumber || '-'}</td>
+          <td data-label="TRACT #" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.tractNumber || '-'}</td>
+          <td data-label="CLU/FIELD #" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.fieldNumber || '-'}</td>
+          <td data-label="FIELD" className="px-2 py-2 text-xs font-bold text-foreground print:px-1 print:py-1">{row.fieldName}</td>
+          <td data-label="LAND USE" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.landUse}</td>
+          <td data-label="CROP" className="px-2 py-2 font-mono text-xs text-harvest font-bold print:px-1 print:py-1">{row.crop || '-'}</td>
+          <td data-label="SEQ" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.cropSequence || '-'}</td>
+          <td data-label="TYPE/VARIETY" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.seedVariety || '-'}</td>
+          <td data-label="PATTERN" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.plantingPattern || '-'}</td>
+          <td data-label="ACRES" className="px-2 py-2 font-mono text-xs text-foreground text-right print:px-1 print:py-1">{row.acreage}</td>
+          <td data-label="PLANT DATE" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.date ? fmtDate(row.date) : '-'}</td>
+          <td data-label="USE" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.intendedUse || '-'}</td>
+          <td data-label="IRR" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.irrigationCode}</td>
+          <td data-label="SHARE %" className="px-2 py-2 font-mono text-xs text-foreground text-right print:px-1 print:py-1">{row.producerShare}</td>
+          <td data-label="STATUS" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.cropStatus || '-'}</td>
         </tr>
       ))}
       {fsaPlantRows.length === 0 && (

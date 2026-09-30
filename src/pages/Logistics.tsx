@@ -337,7 +337,7 @@ export default function Logistics() {
                       <p className="mt-1 font-mono text-sm text-muted-foreground">
                         {formatMeasurement(bin.total, 'bu', 1)} of {formatMeasurement(bin.capacity, 'bu', 1)}
                       </p>
-                      <span className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold', status.statusClassName)}>
+                      <span className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', status.statusClassName)}>
                         {status.statusLabel}
                       </span>
                     </div>

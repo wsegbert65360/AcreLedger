@@ -52,16 +52,17 @@ export default function OfflineBanner() {
   } else if (showStatus === 'synced') {
     bgClass = 'bg-emerald-600 text-white';
     icon = <CheckCircle2 size={14} />;
-    text = 'All synced ✓';
+    text = 'All synced';
   }
 
   return (
-    <>
-      <div className="h-[calc(2.25rem+env(safe-area-inset-top,0px))] flex-shrink-0" />
-      <div className={`fixed top-0 left-0 right-0 z-[100] ${bgClass} flex items-center justify-center gap-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] pb-2 px-4 text-xs font-bold lg:pl-60 transition-colors duration-300`}>
-        {icon}
-        <span>{text}</span>
-      </div>
-    </>
+    <div
+      role="status"
+      aria-live="polite"
+      className={`relative z-[100] ${bgClass} flex items-center justify-center gap-2 py-2 px-4 text-xs font-bold lg:pl-60 transition-colors duration-300 print:hidden`}
+    >
+      {icon}
+      <span>{text}</span>
+    </div>
   );
 }

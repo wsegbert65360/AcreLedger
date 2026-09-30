@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   createCheckoutSession: vi.fn(),
+  searchSubscriptions: vi.fn(),
   createClient: vi.fn(),
 }));
 
 vi.mock('stripe', () => ({
   default: class StripeMock {
     checkout = { sessions: { create: mocks.createCheckoutSession } };
+    subscriptions = { search: mocks.searchSubscriptions };
   },
 }));
 
@@ -72,6 +74,7 @@ describe('create checkout session API', () => {
       })),
     });
     mocks.createCheckoutSession.mockResolvedValue({ url: 'https://checkout.stripe.test/session' });
+    mocks.searchSubscriptions.mockResolvedValue({ data: [] });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -371,6 +374,48 @@ describe('create checkout session API', () => {
     }, response.response);
 
     expect(response.state.status).toBe(409);
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses when Stripe already shows a live subscription for the farm (no mirrored row yet)', async () => {
+    mocks.searchSubscriptions.mockResolvedValue({ data: [{ id: 'sub_new', status: 'trialing' }] });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state.status).toBe(409);
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('ignores canceled Stripe subscriptions when checking for a live one', async () => {
+    mocks.searchSubscriptions.mockResolvedValue({ data: [{ id: 'sub_old', status: 'canceled' }] });
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state.status).toBe(200);
+    expect(mocks.createCheckoutSession).toHaveBeenCalled();
+  });
+
+  it('fails closed when the Stripe subscription lookup errors', async () => {
+    mocks.searchSubscriptions.mockRejectedValue(new Error('stripe down'));
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state.status).toBe(502);
     expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 });

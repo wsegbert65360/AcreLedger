@@ -146,7 +146,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
                 End Time <span className="text-destructive ml-0.5">*</span>
               </Label>
               <div className="flex items-center gap-1">
-                <span className="text-[10px] font-mono text-muted-foreground">MANUAL</span>
+                <span className="text-xs font-mono text-muted-foreground">MANUAL</span>
                 <Switch
                   id="endTimeManual"
                   checked={isEndTimeManual}
@@ -308,7 +308,7 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
             <Label htmlFor="sensitiveAreaCheck" className="text-xs font-bold text-spray uppercase leading-tight cursor-pointer">
               Sensitive Area Check Performed
             </Label>
-            <p className="text-[10px] text-muted-foreground leading-tight">
+            <p className="text-xs text-muted-foreground leading-tight">
               Verified nearby sensitive crops/bees via DriftWatch or visual check.
             </p>
           </div>
