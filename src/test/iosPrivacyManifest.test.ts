@@ -14,6 +14,7 @@ const collectedDataTypes = [
   'NSPrivacyCollectedDataTypePhotosorVideos',
   'NSPrivacyCollectedDataTypeSearchHistory',
   'NSPrivacyCollectedDataTypeOtherUserContent',
+  'NSPrivacyCollectedDataTypeCrashData',
 ];
 
 describe('iOS privacy manifest', () => {
