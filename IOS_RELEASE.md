@@ -62,6 +62,30 @@ within 30 days.
 
 ## Validation log
 
+- 2026-09-29 — Windows validation on the reconciled review-fix tree (rebased
+  onto the 13-commit remote head `e039a0d`, Node 22.22.3): lint 0 errors and 72
+  warnings; app and API typechecks passed; `verify:docs`, `verify:app-store`,
+  and tracked production assets verified; `verify:migrations` passed (75
+  ordered migrations plus a disposable PGlite replay, so the
+  database-bootstrap blocker is resolved); `test:db-integrity` passed;
+  1,285/1,285 unit tests in 137 files passed in test mode (`NODE_ENV=test`);
+  31/31 owner-backup tests, 21/21 recovery tests, and both owner-DR typechecks
+  passed; and the production bundle built with the PWA service worker
+  regenerated. CocoaPods, Xcode 26 validation, signing/archive creation,
+  TestFlight processing, and the device checklist were not run because they
+  require macOS, App Store access, or a physical iPhone.
+- 2026-09-23 — Current-version Windows validation at `41588b9`
+  (`3.6.0-AcreLedger`, Node 22.22.3): lint completed with 0 errors and 73
+  warnings; application and API typechecks passed; 1,217/1,217 app tests,
+  31/31 owner-backup tests, and 21/21 recovery tests passed; documentation and
+  tracked production assets verified; and the Capacitor bundle built and synced
+  all 13 iOS plugins. The generated bundle contains the production Ask the Book
+  endpoint, native SQLite encryption remains enabled, the recovery URL scheme is
+  present, the privacy manifest is tracked, and the secure-storage plugin remains
+  locked. The migration verification gate remains intentionally blocked pending
+  an authoritative production schema baseline. CocoaPods, Xcode 26 validation,
+  signing/archive creation, TestFlight processing, and the device checklist were
+  not run because they require macOS, App Store access, or a physical iPhone.
 - 2026-09-11 — Local macOS validation at `06e8b17` (Xcode 26.5, Node 22.23.2,
   CocoaPods 1.16.2): lint 0 errors, typecheck and typecheck:api clean,
   1128/1128 unit tests, Capacitor bundle built and synced, `pod install` with

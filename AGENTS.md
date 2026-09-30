@@ -2,16 +2,21 @@
 
 ## Purpose
 
-This file is the cross-agent operating guide for AcreLedger. It is written for Codex, Gemini CLI, Pi/local agents, and any other AI coding assistant working in this repository.
+This file is the cross-agent operating guide for AcreLedger. It is written for Claude Code, Codex, Gemini CLI, Pi/local agents, and any other AI coding assistant working in this repository.
 
 Read this file first for working instructions and essential safety rules. Then use the
 [feature-area index](#feature-area-index-read-only-what-the-task-touches) to open only the source
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-09-27 (App Store release sources, native purchase boundary, and verification gates).
-> **Verification scope:** This is not a whole-document code audit. Section-level verification
-> notes identify the implementation actually checked. Use `git log -- AGENTS.md` for edit history.
+> **Last updated:** 2026-09-29 (review-fix pass: Stripe period end, checkout gate, recovery-link PKCE-only, auth-expiry sync replay).
+> **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
+> verified against code; only a section carrying a **Verified against code** note has been, and only
+> for the scope that note states. Use `git log -- AGENTS.md` for edit history.
+>
+> **Where detail lives:** A rule stated here in summary form has its full, canonical version in the
+> linked BLUEPRINT section. If the two disagree, fix the drift; until it is fixed, follow the stricter
+> data-safety reading.
 
 ## Recent Changes
 
@@ -20,11 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-09-29** — Review-fix pass, rebased onto the 13-commit remote head (`e039a0d`). Billing: `current_period_end` is read from Stripe subscription items (basil API); checkout is refused for live `past_due`/`unpaid` subscriptions, skips the trial when the farm ever had a subscription, and reuses the Stripe customer. Recovery deep link accepts a PKCE `code` only. Sync replay refreshes an expired session once and pauses without spending retries. Verified on the merged tree: lint 0 errors/72 warnings, app and API typechecks, `verify:docs`, `verify:app-store`, `verify:migrations` (75-migration PGlite replay), `test:db-integrity`, 1,285 unit tests in 137 files, 31 owner-backup and 21 recovery tests, and the production bundle build.
+- **2026-09-28** — Consistency pass: fixed the field-delete queueing contradiction (one batched `enqueueMutations`, never a per-record loop) and the optimistic-update step order (capture the snapshot before the optimistic setter); replaced duplicated feature detail with summaries that link to BLUEPRINT; AI model IDs now referenced by code constant; documented `verify:migrations`, `test:db-integrity`, and `install:owner-dr`.
 - **2026-09-27** — Added the App Store submission sources, native purchase-boundary rules, screenshot evidence standard, and `verify:app-store` release gate; reconciled test-command guidance with `package.json` and the iOS runbook, verified against 5cc6503.
 - **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and moved detailed design guidance into BLUEPRINT. Earlier today: added freshness headers and the feature-area file index.
 - **2026-09-20** — Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); emergency sign-out documented for an unreadable offline store (592fef7).
-- **2026-09-14** — Layout/FAB rule corrected to match code (`showQuickAddFab` allowlists only `/` and `/weather`) and the Date Parsing and Sorting section added (d63d5d8).
-- **2026-09-11/12** — CI must `npm ci` the owner-DR packages before unit tests: CodeMagic Unit tests step (c07d73b) and GitLab `test_job` with Node 22 (38e46cf).
 
 ## Contents
 
@@ -49,7 +54,7 @@ Navigation checks and editorial changes do not constitute verification of archit
 
 AcreLedger is a mobile-first, PWA-ready agricultural record keeping and compliance reporting app for row-crop farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports.
 
-The app uses React 18, TypeScript strict mode, Vite, React Router, Supabase Postgres/Auth/RLS, React Context state, shadcn/ui, Tailwind CSS, Lucide React, Sonner, Zod, Visual Crossing weather, IEM Stage IV rainfall integration, and **Capacitor 6 for native iOS wrapper and device capabilities**.
+The app uses React 18, TypeScript strict mode, Vite 7, React Router 7, Supabase Postgres/Auth/RLS, React Context state, shadcn/ui, Tailwind CSS, Lucide React, Sonner, Zod, Visual Crossing weather, IEM Stage IV rainfall integration, and **Capacitor 6 for native iOS wrapper and device capabilities**.
 
 ## Context Loading Rules
 
@@ -84,7 +89,7 @@ Rules), then open only the files for that area.
 - [@/lib/fieldLocation.ts](./src/lib/fieldLocation.ts) — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
 
 **AI assistant (Ask the Book)**
-- [api/ai-assistant.ts](./api/ai-assistant.ts) + [server/ai-assistant-tools.ts](./server/ai-assistant-tools.ts) — weather-proxy-style Vercel Function and centralized allowlisted read catalog for Ask the book. Named read tools only (no raw SQL, no writes). Uses the caller’s JWT plus explicit farm filters so farm RLS applies. Quota/audit live in `ai_assistant_private` (not backup/restore). OpenRouter calls require full tool-parameter support and deny providers that collect user data; local operational rows are retained for 30 days.
+- [api/ai-assistant.ts](./api/ai-assistant.ts) + [server/ai-assistant-tools.ts](./server/ai-assistant-tools.ts) — read-only Ask the Book Vercel Function and its allowlisted named-tool read catalog. Rules: [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
 
 **Reports & exports**
 - [@/lib/complianceReports](./src/lib/complianceReports) — report generation.
@@ -137,7 +142,7 @@ Rules), then open only the files for that area.
 **CI/CD**
 - [codemagic.yaml](./codemagic.yaml) — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
 - [CODEMAGIC.md](./CODEMAGIC.md) — CodeMagic setup guide, credentials, and troubleshooting.
-- [IOS_RELEASE.md](./IOS_RELEASE.md) — October 1 iOS release gates, device checks, submission notes, and dated validation evidence.
+- [IOS_RELEASE.md](./IOS_RELEASE.md) — iOS release gates, device checks, submission notes, and dated validation evidence.
 - [docs/app-store/2026-10-01-submission-package.md](./docs/app-store/2026-10-01-submission-package.md) — prepared App Store listing, review, privacy, age-rating, screenshot, and build-selection package.
 - [docs/app-store/metadata.en-US.json](./docs/app-store/metadata.en-US.json) + [scripts/verify-app-store-metadata.mjs](./scripts/verify-app-store-metadata.mjs) — machine-readable English (U.S.) metadata and its length/URL/version gate.
 - [ios/App/App/PrivacyInfo.xcprivacy](./ios/App/App/PrivacyInfo.xcprivacy) + [src/pages/Privacy.tsx](./src/pages/Privacy.tsx) — native privacy declarations and matching public policy; keep both aligned with App Store Connect answers and actual data use.
@@ -189,75 +194,76 @@ if (!farm_id) {
 
 ### Optimistic Update Pattern
 
+Full pattern and reference hooks: [BLUEPRINT → Optimistic Update Pattern](./BLUEPRINT.md#optimistic-update-pattern).
+
 Every add, update, and delete mutation must follow this sequence:
 
-1. Guard `farm_id` and return `false` if missing.
+1. Guard `farm_id` (first line) and return `false` if missing.
 2. Validate inputs and return `false` on invalid data.
-3. Call mapper before state changes.
-4. Apply optimistic React state update with a functional setter.
-5. **Capture the rollback snapshot from the render closure *before* the optimistic setter, never by mutating an outer variable inside the state updater.** Each hook receives its current entity array as an argument (e.g. `fields`, `bins`, `grainMovements`) and captures `previous = collection.find(item => item.id === id)` before the `setState` call. Mutating an outer variable inside the updater depends on React's eager-update timing and is the pattern the grain hook was specifically refactored away from. See `useGrainMovements` and `useFieldsAndBins` for the reference implementation.
-6. Await the Supabase operation inside a `try...catch` block. You MUST catch unexpected fetch exceptions and assign them to an `error` variable so your existing rollback logic triggers gracefully instead of skipping it.
-7. On success (e.g., `error` is null and `{ count: 'exact' }` matches), show success feedback and return `true`.
-8. On error, roll back state to the previous snapshot, show detailed error feedback, and return `false`.
-
-Bulk or cascading offline mutations must use `syncQueue.enqueueMutations(...)`, never a per-record `enqueueMutation` loop. The batch is a single encrypted localStorage write on web and a transactional SQLite `executeSet` on native. Offline field deletion must batch active `field_clu_assignments` before the field soft-delete; the database `fields_cascade_soft_delete_to_clu_assignments` trigger provides transactional protection when the field row replays. Online field deletion must use the atomic `soft_delete_field_with_clu_assignments` RPC. Sign-out must fail closed unless the selected farm's pending queue is cleared before the auth session is ended. If the native offline store cannot be opened, the user may confirm an emergency sign-out that ends the session without clearing the unreadable store; the SQLite file stays on the device. Do not treat that confirmation as a successful queue clear. Account deletion stays blocked while the store is unreadable.
-
-When replay reconciliation compares queued values with a row already stored by Postgres, ISO timestamps must be compared as instants after strict timestamp validation. PostgreSQL may return `+00:00` while the client queued the equivalent `.000Z`; raw string equality would falsely retain an already-applied mutation. Keep recursive equality for all non-timestamp payload values.
+3. Call the mapper before any state change. If it throws, return `false` without touching state or the database.
+4. Capture the rollback snapshot from the render closure (`previous = collection.find(item => item.id === id)`). Never capture it by mutating an outer variable inside a state updater. Reference: `useGrainMovements`, `useFieldsAndBins`.
+5. Apply the optimistic update with a functional setter.
+6. Await the Supabase operation inside `try...catch`, assigning a thrown exception to `error` so rollback still runs.
+7. On success (`error` is null and the exact count matches), show success feedback and return `true`.
+8. On error, restore the snapshot, show detailed error feedback, and return `false`.
 
 All add, update, and delete operations return `Promise<boolean>` — `true` on success, `false` on failure. Never return `undefined`.
 
+Offline and cascading mutations:
+
+- Bulk or cascading offline mutations use one `syncQueue.enqueueMutations(...)` batch — **never** a per-record `enqueueMutation` loop.
+- Field deletion: online uses the atomic `soft_delete_field_with_clu_assignments` RPC; offline puts the field's active `field_clu_assignments` before the field soft-delete in one batch.
+- Sign-out fails closed unless the selected farm's pending queue is cleared. The emergency sign-out for an unreadable native store is not a successful clear, and account deletion stays blocked while the store is unreadable.
+- Replay reconciliation compares ISO timestamps as instants (PostgreSQL `+00:00` equals queued `.000Z`) and all other values by exact recursive equality.
+- Replay treats an expired session (HTTP 401, `PGRST301`/`PGRST303`, "JWT expired") as an auth problem, not a bad mutation: refresh once per drain, restart the queue, and if refresh fails pause without incrementing `retry_count`. Never count auth errors toward the permanent-failure retries.
+
 ### Supabase and Database
 
+Canonical detail: [BLUEPRINT → Database Conventions](./BLUEPRINT.md#5-database-conventions).
+
 - Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
-- **Do not use `.select()` in update or soft-delete mutations** to verify success. The `deleted_at IS NULL` RLS SELECT policy will hide newly soft-deleted rows from the returning clause, making the client think 0 rows were updated (triggering a false rollback). Instead, use `.update(payload, { count: 'exact' })` and verify `count === 1` or `count === ids.length`.
-- Scoped exception: `fsa_tract_imports` and `field_clu_assignments` MUST use `.upsert(..., { onConflict: ... })` (`farm_id,tract_key` and `farm_id,tract_key,clu_number` respectively) for inserts, and the offline sync queue and backup restore RPC MUST replay those inserts the same way. These tables carry non-partial unique constraints plus mandatory soft delete, so re-importing a tract, reassigning a CLU, or restoring a backup must restore a soft-deleted row by conflict key rather than `insert` (which would violate the constraint). Do not "fix" these upserts into plain inserts/updates. `update`/`soft_delete` paths for these tables still use `.update().eq('id', id).eq('farm_id', farm_id)`.
-- New migrations must use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql`.
-- `profiles.active_season` must remain protected by the database range `[2000, currentYear + 1]`. Any `SECURITY DEFINER` RPC that writes it, including `restore_farm_backup`, must validate the same range before changing farm records.
-- `profiles` is a security boundary, not a normal farm-owned CRUD table. Authenticated clients may select their own profile and update only `active_season` and `onboarding_complete`; they must not receive direct grants to update `id` or `farm_id`, insert profiles, or delete profiles. Farm membership is assigned by the trusted `ensure_user_farm` path. Preserve migration `20260720165352_protect_profile_farm_membership.sql` and its column-level grants.
-- Live profile-security tests must assert PostgreSQL `42501` for forbidden operations and use non-mutating probes: same-value updates for protected columns, an existing ID for an insert-denial probe, and contradictory filters for delete-denial probes. Never risk changing or deleting the QA profile while testing grants.
-- Weather-proxy quota state belongs in the non-exposed `weather_proxy_private` schema. The public `consume_weather_proxy_request()` wrapper must remain `SECURITY DEFINER`, derive identity from `auth.uid()`, use an empty `search_path`, and deny `PUBLIC`/`anon`; only `authenticated` and `service_role` may execute it. Preserve migration `20260721211903_add_weather_proxy_rate_limit.sql`.
-- Every Data API table must include explicit grants for `authenticated`, `anon` where appropriate, and `service_role`.
-- Every farm-owned table must have RLS enabled.
-- RLS policies must restrict access by the user's farm through `public.profiles`.
+- **Do not use `.select()` in update or soft-delete mutations** to verify success. The `deleted_at IS NULL` SELECT policy hides a just-soft-deleted row from the returning clause, so the client sees 0 rows and falsely rolls back. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
+- Sole exception to the upsert rule: inserts, offline replay, and backup restore for `fsa_tract_imports` (`farm_id,tract_key`) and `field_clu_assignments` (`farm_id,tract_key,clu_number`) must upsert on those conflict keys so soft-deleted rows are resurrected. Do not "fix" them into plain inserts. Details: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
+- New migrations use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql` (checked by `npm run verify:migrations`).
+- New farm-owned tables follow the strict template in [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory): RLS enabled, farm-scoped policies through `public.profiles`, `SELECT, INSERT, UPDATE` (no `DELETE`) for `authenticated`, no `anon` grant, `deleted_at IS NULL` in the SELECT policy, and the restrictive "no updates on deleted rows" policy.
+- `profiles` is a security boundary: clients may update only `active_season` and `onboarding_complete`; farm membership is assigned only through `ensure_user_farm`. `active_season` stays within `[2000, currentYear + 1]`, including inside any `SECURITY DEFINER` RPC such as `restore_farm_backup`. Details: [BLUEPRINT → Profile Membership Protection](./BLUEPRINT.md#profile-membership-protection).
+- Live profile-security tests assert PostgreSQL `42501` using non-mutating probes only (see [Testing](#testing)).
+- Private quota state (weather proxy, Ask the Book) lives in non-exposed schemas behind `SECURITY DEFINER` wrappers that derive identity from `auth.uid()`, use an empty `search_path`, and deny `PUBLIC`/`anon`.
 - Do not bypass RLS assumptions in client code.
 
 ### AI Assistant / Ask the Book
 
-- The assistant is intentionally **read-only**. It may answer from every allowlisted active farm record across all available seasons, but it must never add, edit, delete, restore, or otherwise mutate farm data.
-- `server/ai-assistant-tools.ts` is the single allowlisted database-read registry. The model receives named tools only—never raw SQL, caller-selected table names, a Supabase service-role/secret key, or a generic database client.
-- Every read must use the authenticated caller's JWT and the publishable/anon key so Supabase RLS remains active. Resolve the authoritative `farm_id` from the caller's profile and also apply it explicitly to every direct or joined farm query. Request input may never select or override a farm.
-- The registry covers farm/profile context, fields, bins, planting, spray, custom spray, fertilizer, tillage, harvest, hay, grain movements, saved seeds, spray/fertilizer recipes, FSA tract imports, CLU assignments, work requests, and stored rainfall. Exclude soft-deleted rows, other farms, auth data, private quota/audit state, and infrastructure schemas.
-- When a user-facing farm table is added or renamed, update the assistant registry and its catalog-isolation tests in the same change, or document why it is intentionally unavailable to the assistant. Filters, aggregate fields, grouping fields, and search targets must remain hardcoded and fail closed.
-- Preserve data minimization at the model boundary: strip embedded base64 image payloads and summarize raw geometry coordinate arrays. Ordinary permitted scalar fields, notes, product details, and other record JSON remain readable so the assistant can answer detailed farm questions.
-- `OPENROUTER_API_KEY` is server-only. Never expose it through a `VITE_*` variable or client bundle. Native Capacitor builds instead require the public HTTPS base URL in `VITE_AI_ASSISTANT_URL`; `codemagic.yaml` must validate that the value is embedded in the production bundle.
-- **Model routing:** default primary is MiniMax M3 Free (`minimax/minimax-m3:free`) via OpenRouter, with `models` fallback to OpenRouter Free Tool Call (`openrouter/free`). If that request still fails as unavailable or rate-limited (HTTP 429/502/503 or matching error text), the same tool round retries once with `openrouter/free` only. `AI_MODEL` overrides the primary only and does not remove the `openrouter/free` fallback unless the primary is already that model.
-- Keep the bounded tool loop, query/result budgets, daily database-backed quota, exact origin allowlist, provider `data_collection: "deny"`, and `require_parameters: true` controls described in `BLUEPRINT.md`.
-- **Voice is on-device/OS STT+TTS** (`src/lib/speech.ts` + `src/hooks/useAskVoice.ts`; production UI never calls Capacitor plugins or the Web Speech API directly): the mic auto-sends the transcribed text on stop (30 s cap), spoken answers play only for voice-originated questions, and the assistant stays read-only. The phone or browser turns speech into words (Apple on iPhone, often Google in Chrome); AcreLedger servers receive only the text question, the same payload as typing. Audio is not stored in the farm book.
-- **Intentional product decision:** Ask the Book has no persistent AI disclaimer, compliance warning, verification reminder, or retention footer beneath answers. Future reviews must not reintroduce recurring disclaimer copy unless the product owner explicitly reverses this decision. Factual data-handling information belongs in the privacy policy and project documentation.
-- Keep function contract tests outside `api/`; Vercel deploys TypeScript files under that directory as functions. Run the assistant unit tests, live RLS integration coverage when credentials are available, `typecheck:api`, and a Vercel build whenever the read registry or endpoint changes.
+Canonical detail: [BLUEPRINT → Ask the Book Read Registry](./BLUEPRINT.md#ask-the-book-read-registry).
+
+- The assistant is **read-only**: no add, edit, delete, restore, arbitrary RPC, or other mutation path.
+- `server/ai-assistant-tools.ts` is the single allowlisted read registry. The model gets named tools only — never raw SQL, caller-chosen table names, a service-role/secret key, or a generic database client. Filters, aggregates, grouping, and search targets stay hardcoded and fail closed.
+- Every read uses the caller's JWT with the publishable/anon key (RLS stays on) **and** applies the authoritative `farm_id` resolved from the caller's profile. Request input never selects a farm.
+- Adding or renaming a user-facing farm table requires updating the registry and its catalog-isolation tests in the same change, or documenting why the table is excluded.
+- `OPENROUTER_API_KEY` is server-only. Native builds require `VITE_AI_ASSISTANT_URL`, validated in `codemagic.yaml`.
+- Model routing (primary, fallback, one retry, `AI_MODEL` override) is described in BLUEPRINT. The current model IDs are the `DEFAULT_PRIMARY_MODEL` and `FALLBACK_MODEL` constants in `api/ai-assistant.ts`; do not copy IDs into the docs.
+- Voice uses on-device/OS speech through `src/lib/speech.ts` and `src/hooks/useAskVoice.ts`; only text reaches the server.
+- **Intentional product decision:** no persistent AI disclaimer beneath answers. Do not reintroduce one unless the product owner reverses the decision (canonical statement in BLUEPRINT).
+- Keep function tests outside `api/`. When the registry or endpoint changes, run the assistant unit tests, live RLS integration coverage when credentials exist, `npm run typecheck:api`, and a Vercel build.
 
 ### Grain Movement
 
-- `bushels` may be negative.
-- Negative bushels represent estimate-vs-actual corrections.
-- Do not clamp negative grain movement values.
-- Display negative bushels with a warning, not as a validation error.
-- Bin inventory is season-independent (see Season Scoping). Validate sales against `getBinTotal(bin.id)` (all-season), not just the current season's movements.
-- Grain movement edits need a concurrency guard to prevent ghost rows and inventory drift. `grain_movements.version` is database-managed and increments on every update. `useGrainMovements` captures the expected version from the render closure, requires it for online and replayed updates/deletes, and optimistically advances the local version only after mapping. Legacy cached rows without a version use `1`, matching the database migration default. Do not use the activity `timestamp` as a concurrency token or capture a token by mutating a ref/state-updater outer variable.
-- A new bin harvest and its incoming grain movement must be created through `create_harvest_with_grain` with retry-stable harvest and movement IDs. Offline creation stores one harvest mutation containing the mapped grain payload under `LINKED_GRAIN_MUTATION_KEY` in one `enqueueMutations` batch; replay sends that envelope through the same RPC. Replay must also recognize the legacy adjacent harvest/grain mutation pair. Soft-deleting a harvest must remove its linked active movement through `soft_delete_harvests_with_grain`; the database trigger preserves that invariant for offline replay and other harvest update paths. Client rollback/restoration must cover both collections together.
+Canonical detail: [BLUEPRINT → GrainMovement](./BLUEPRINT.md#grainmovement).
+
+- `bushels` may be negative (estimate-vs-actual correction). Never clamp; display a warning, not a validation error.
+- Bin inventory is season-independent (see Season Scoping). Validate sales against `getBinTotal(bin.id)`.
+- Online and replayed updates/deletes carry the expected `grain_movements.version` captured from the render closure. Never use the activity `timestamp` as the concurrency token.
+- A bin harvest and its incoming movement are one operation: create through `create_harvest_with_grain`, soft-delete through `soft_delete_harvests_with_grain`, queue offline as one envelope, and roll back both collections together.
 
 ### Spray Compliance
 
-- Spray records support multiple products per application.
-- Product identity in tank-mix UI rows must use a temporary `ui_id`, not the array index.
-- Missing `epaRegNumber` marks the record non-compliant.
-- A missing, zero, negative, or unitless per-product application rate also marks the record as needing compliance review. Derive this for legacy rows at read time; do not backfill or rewrite historical spray records merely to change the flag.
-- Per-product chemical totals are canonical and must be recalculated synchronously from the stored rate, rate unit, and treated acreage before save. `totalAmountApplied` is a legacy first-product numeric compatibility summary, not a sum across products with potentially different units.
-- Active ingredients are tracked per product.
+Canonical detail: [BLUEPRINT → SprayRecord](./BLUEPRINT.md#sprayrecord-2026-standards).
+
+- Multiple products per application; tank-mix UI rows key on a temporary `ui_id`, never the array index.
+- A missing `epaRegNumber`, or a missing, zero, negative, or unitless product rate, marks the record for compliance review. Derive this for legacy rows at read time; do not rewrite historical records to change the flag.
+- Per-product totals are canonical and recalculated synchronously before save. `totalAmountApplied` is a legacy first-product value; never sum unlike units into it.
 - Keep spray terminology state-neutral unless a specific legal report requires state wording.
-- `WIND_ALERT_MPH = 10` is the named wind alert threshold. Its canonical export is `@/lib/weatherHelpers.ts`; import from there rather than re-declaring a local constant.
-- Past weather recovery uses Visual Crossing based on field location and start time.
-- **Treated area default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`, `sprayExport.ts`) must use the FSA crop acreage, never a raw `field.acreage` read. Read-time resolution goes through the shared `getEffectiveSprayTreatedAcres(record, field, cluAssignments)` helper in `@/lib/fieldAcreage.ts`: it returns the stored `treatedAreaSize` when present and positive, otherwise falls back to `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, then boundary, then `field.acreage`). This matches the acreage shown on the field. Current form edits preserve an explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray). The one-time migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql` intentionally normalized every active historical treated-area value because legacy automatic defaults could not be distinguished from manual entries. That migration changes only `treated_area_size`; it must not rewrite products, totals, weather, wind, temperature, humidity, application times, or notes. Reports may derive product-total display values from the normalized acreage without persisting those calculations back to the record.
+- Import `WIND_ALERT_MPH` from `@/lib/weatherHelpers.ts`; do not re-declare it.
+- Treated-area defaults and every report/export fallback go through `getEffectiveSprayTreatedAcres(record, field, cluAssignments)`, never a raw `field.acreage` read. An explicitly stored `treatedAreaSize` is always preserved.
 
 ### Activity Record Acreage Defaults
 
@@ -271,122 +277,90 @@ This rule applies to **every** activity modal that captures a per-record acreage
 
 ### Custom (Outside-Party) Spray Records
 
-- Custom spray records (`custom_spray_records` / `CustomSprayRecord`) are a lightweight log for applications performed by an outside applicator (co-op / custom sprayer), modeled on the hay record — NOT a compliance `SprayRecord`.
-- They are reached from the **Spray** button via `SprayTypeChooser` (`src/components/SprayTypeChooser.tsx`), which offers a full spray entry vs. a custom spray and remembers the last choice (per-user `al_spray_entry_choice_<userId>`). The chooser intercepts the spray click in both `FieldDetailScreen.tsx` (`FIELD_ACTIONS`) and `QuickAddDialog.tsx`.
-- Fields are minimal: `applicator`, `date`, and `applicationTime` (`HH:mm`, local field/application time) are required; `recipe` (free text), `windSpeed` / `windDirection` / `temperature`, and `notes` are optional. `CustomSprayModal` does not fetch weather automatically: the user explicitly selects the application date/time and taps **Pull historical weather**, which calls `WeatherService.fetchHistoricalConditions` with the field coordinates. Recovered values remain editable, and a failed/no-data lookup must preserve manual weather values.
-- Custom sprays appear in the Spray tab (via `CustomSprayTab`, rendered under the regular `SprayTab`) and in All / field history, but are **excluded** from the universal spray-log PDF (`sprayExport.ts`) and the non-compliant review queue, which stay driven by `SprayRecord`.
-- `customSpray` is a member of `ActivityType` and the `ActivityRecord` union (reuses the spray icon/colors). `custom_spray_records` is in the sync queue `ALLOWED_TABLES` set and in the backup/restore payload + `restore_farm_backup` RPC. Add/update/delete go through `useCustomSprayRecords.ts` with the same farm-scope, season-stamp, soft-delete, and optimistic-update rules as the other activity hooks.
-- `ActivityRecord` in `@/types/farm` is a **discriminated union**: each `{ type: '<literal>'; data: <RecordType> }` member pairs a literal with its exact record type, so switching on `type` narrows `data`. Mismatched pairs (e.g. `{ type: 'plant', data: SprayRecord }`) are a compile error. Components that consume the feed use `Exclude<ActivityRecord, { type: 'grain' }>` (grain movements are not shown in the activity feed). Do not loosen this back to a loose `{ type: string; data: SomeUnion }`.
+Canonical detail: [BLUEPRINT → CustomSprayRecord](./BLUEPRINT.md#customsprayrecord) and [Spray Entry Chooser](./BLUEPRINT.md#spray-entry-chooser-spraytypechoosertsx).
+
+- Custom sprays are a lightweight log for outside applicators, not compliance `SprayRecord`s. They are excluded from the universal spray-log PDF and the non-compliant review queue.
+- The Spray button opens `SprayTypeChooser`; keep both interception points (`FieldDetailScreen.tsx` and `QuickAddDialog.tsx`) in sync.
+- `CustomSprayModal` never auto-fetches weather. **Pull historical weather** is explicit, and a failed lookup preserves manual values.
+- CRUD follows the same farm-scope, season-stamp, soft-delete, optimistic-update, sync-queue, and backup/restore rules as the other activity hooks.
+- `ActivityRecord` in `@/types/farm` is a **discriminated union** (`{ type: '<literal>'; data: <RecordType> }`), so mismatched pairs are a compile error. Feed consumers use `Exclude<ActivityRecord, { type: 'grain' }>`. Do not loosen it to `{ type: string; data: SomeUnion }`.
 
 ### FSA Tracts and CLU Assignments
 
-- FSA tract imports and field CLU assignments are farm-owned records and must follow farm scoping, mapper discipline, optimistic updates, and soft delete rules.
-- FSA tract and CLU assignment changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup/restore schema, bundled tract helpers, assignment UI, and FSA report generation/tests.
-- Central mapper names are `mapFsaTractFromDb`, `mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`, and `mapFieldCluAssignmentToDb`; use them before React state changes and before backup restore RPC payload construction.
-- CLU parsing and GeoJSON rendering logic must support both `Polygon` and `MultiPolygon` geometries. Downstream systems (like map rendering and FSA reports) must extract coordinates or centroids correctly from deeply nested `MultiPolygon` structures.
-- `parseCluFile` is the shared import entry point and accepts GeoJSON (`.json`/`.geojson`) plus ESRI shapefile ZIPs (`.zip`). Do not add a component-only parser or unzip path.
-- Shapefile ZIP import runs locally through `shpjs`, requires usable geometry and DBF attributes, rejects an unidentifiable coordinate system when the PRJ information is missing, groups features by farm/tract, and applies the same positive-acreage validation as GeoJSON. When feature attributes cannot identify a tract, a filename such as `4251-9747.zip` may supply the farm/tract key; generic unidentified files fail with actionable guidance.
-- `FsaRequestSheetDialog` and `fsaOfficeRequestSheet.ts` generate a boundary-file request worksheet for the local FSA office. Preserve its statement that AcreLedger accepts GeoJSON and ESRI shapefile ZIPs, the farmers.gov/service-center guidance, operator/contact blanks, and the disclaimer that the sheet requests digital boundary data rather than acting as an official USDA form.
-- `field_clu_assignments` stores one active assignment per farm/tract/CLU. Assignment actions must preserve the authoritative current `farm_id`, restore soft-deleted rows when reassigning, and never hard-delete assignments.
-- `fsa_tract_imports` stores parsed GeoJSON per farm/tract key. Imported tracts may replace bundled tract data with the same tract key in assignment flows.
-- Backup exports MUST include `fsaTracts` and `cluAssignments`. Restore must validate those arrays through `backupSchema.ts`, map them to `fsa_tract_imports` and `field_clu_assignments`, and replay them through the restore RPC using the CLU conflict keys above.
-- When showing CLU totals, assigned counts, or unassigned counts, compare assignments against the same CLU universe being displayed. Do not subtract bundled or legacy assignment keys from imported-only tract totals.
-- Active CLU assignment counts must exclude soft-deleted assignments (`deletedAt` / `deleted_at`).
-- When a field is soft-deleted, its active field CLU assignments must also be soft-deleted. These deletion mutations must be enqueued via `syncQueue.enqueueMutation` to guarantee offline synchronization.
-- Bundled FSA tract data may be used for display and assignment flows, but imported tract counts should be labeled and calculated as imported-only unless the UI explicitly says it includes bundled tracts.
-- Persisting assignments back to fields should round computed field acreage for display/state, but not mutate the source CLU feature acres.
-- Use `@/lib/geoHelpers.ts` for converting Polygon and MultiPolygon coordinates for Leaflet map render layers and centroid calculations.
-- FSA CLU assignments automatically synchronize only their associated field's `cluNumbers` immediately on each assignment toggle via `syncFieldAcreageAndClus` in `TractAssignmentFlow.tsx`. Never overwrite the field's boundary/manual acreage with the CLU total. The stable boundary acreage is exposed as `Field.boundaryAcreage` and stored in the legacy `fields.operational_acreage` column; `getDisplayFieldAcres` independently derives the current FSA cropland total from active CLU assignments. The sync reads from `displayAssignments` (persisted + legacy) through `getFieldAssignmentsWithDelta`, and its order-independent no-op guard prevents redundant writes on idempotent toggles.
-- `mapFieldToDb` must omit `operational_acreage` when `boundaryAcreage` is unknown; never default an update to zero. Backup restore resolves boundary acreage in this order: explicit backup value, existing database value for the same field, boundary geometry, then raw acreage only when the restored field has no active CLU assignments. Ambiguous new legacy fields remain unknown (`0`) rather than guessing.
-- CLU imports must parse positive finite acreage (including comma-formatted strings), fall back to Polygon/MultiPolygon geometry when the source property is missing or invalid, and reject assignment persistence when acres are not greater than zero.
-- Acreage is validated as positive throughout the stack: `backupSchema.ts` requires positive acreage on CLU feature acres, CLU assignment acres, plant `acreage`, spray `treatedAreaSize`, and fertilizer `acres` (field `acreage` is non-negative because a brand-new unmeasured field may be 0). The database enforces `field_clu_assignments.acres` as `NOT NULL` with a `CHECK (acres > 0)` constraint (migration `20260716013504_enforce_positive_clu_acres.sql`); that migration fails closed (raises) if any historical non-positive rows exist, so they get manual review instead of a silent rewrite.
-- FSA-578 and fall production worksheets are supporting worksheets, not official USDA forms. The FSA-578 PDF is designed to be handed to an FSA employee for crop-acreage entry and reconciliation. Preserve the disclaimer wording and keep CSV/PDF source semantics aligned when changing columns, summaries, footers, or readiness checks.
-- FSA report readiness checks should surface missing farm/tract/CLU/crop/acreage issues without blocking export unless the user explicitly asks for blocking validation.
-- All report readiness findings are advisory: errors and warnings must never disable PDF/CSV export. Keep authoritative FSA validation in `validateFsa578Rows` / `validateFsaFallProductionRows`; `reportReadiness.ts` adapts those results for presentation instead of duplicating their rules.
-- The Reports page is export-first on mobile. FSA-578, Fall FSA, Spray Audit, Fertilizer, Hay, and the selected Landlord report render `MobileReportExportPanel` below the `lg` breakpoint; full report previews remain desktop/print-only. Do not reintroduce large report previews as the default mobile experience.
-- Spray readiness headline counts are per application record, not per expanded tank-mix product row. Product-specific issues may be multiple, but `affectedItems` must count the application once.
-- Readiness issue actions route field-setup issues to `/field/:fieldId` and record issues to `/activity?tab=...&record=...&type=...`; `Activity.tsx` must keep query-driven tab selection and one-time editor opening working.
-- Successful report exports record a deterministic fingerprint in local storage, scoped by user ID, farm ID, viewing season, and report type (`al_report_export_<user>_<farm>_<season>_<report>`). Storage failure must never fail the export. Do not include volatile generation timestamps in fingerprints.
-- The FSA-578 PDF must use the dedicated `exportFsa578WorksheetPdf` generator in `fsa578PdfExport.ts`, not the generic `exportToPdf` footer mechanism. Its section order is canonical: cropland reporting rows → crop/use and farm/tract reconciliation totals → items to review/FSA correction notes → all-CLU reference.
-- Keep non-cropland CLUs out of the primary crop-entry table. Include them in the all-CLU appendix as boundary-reconciliation rows explicitly labeled reference-only, so they cannot be mistaken for planted acreage.
-- Every FSA-578 PDF page must repeat farm name, crop year, producer and county/state blanks or values, section identity, and `Page X of Y`. Use explicit column widths and render verification so farm/tract/CLU columns never clip on continuation pages.
-- The main FSA-578 PDF table must provide the data needed for FSA entry: farm, tract, CLU, field, crop, crop status, acres, planting date, intended use, irrigation, producer share, crop sequence, and practice/notes. Type/variety remains omitted from the PDF unless explicitly requested; it remains available in preview/CSV.
-- Dated crop rows without an explicit status may display as `Planted`. Undated hay/pasture cropland may display as `Existing stand` and must not generate a missing-status readiness error. Other undated cropland requires an explicit FSA status or a readiness error.
-- Reconciliation totals in the PDF must include crop/intended-use totals, farm/tract cropland totals, and a clearly labeled total cropland acreage. Do not label hay/pasture acreage as “planted acreage” when no planting event exists.
-- Readiness issues must be included inside the exported PDF, followed by usable FSA office correction lines and review/date/producer-initial fields. A clean report must still state that county FSA review is required.
-- Do not call the text-only CLU section a “map appendix.” It is the “All CLU Reference.” If actual maps are added later, they must contain rendered CLU/field geometry rather than text-only assignments.
-- FSA acreage reports must preserve multiple planting records for the same field/CLU as separate rows instead of collapsing to latest-only.
-- `buildFsa578Rows` derives each row's acreage from CLU assignments (`a.acres`, one row per cropland CLU), not from the stored `PlantRecord.acreage`. It only falls back to `getDisplayFieldAcres(field, cluAssignments)` for fields with no cropland CLU assignments. This means the FSA-578 worksheet acreage is correct independently of the stored plant-acreage value, so backfilling `plant_records.acreage` does not change report output (it reconciles on-screen/record values with what the report already showed).
-- Assigned cropland CLUs with no planting record must appear as review rows so missing FSA reporting is visible.
-- If an assigned cropland field is labeled hay or pasture by `intendedUse`, use that hay/pasture label as the FSA crop instead of flagging crop as missing.
-- Plant records support FSA status (`Planted`, `Prevented Planting`, `Failed`, `Volunteer`, `Cover Crop`) and optional planting pattern/practice notes. Update `types/farm.ts`, `types/database.ts`, mappers, backup schema, migrations, UI, reports, and tests together when changing these fields.
-- Prevented planting records may omit seed variety; normal planted/failed/volunteer/cover-crop records should still require the expected crop/seed details.
-- FSA PDF output intentionally omits type/variety unless the user asks otherwise; preview/print/CSV may include it for farmer review.
-- FSA compliance reports (both FSA-578 and Fall Production worksheets) must include the farm name in their header subtitles for both on-screen UI preview tables and generated PDF exports.
+Canonical detail: [BLUEPRINT → FsaTractImport](./BLUEPRINT.md#fsatractimport), [FieldCluAssignment](./BLUEPRINT.md#fieldcluassignment), [Field](./BLUEPRINT.md#field), [FSA-578 Acreage Reporting Worksheet](./BLUEPRINT.md#fsa-578-acreage-reporting-worksheet), and [Report Readiness](./BLUEPRINT.md#report-readiness-and-mobile-export-workspace).
+
+Data and assignments:
+
+- FSA tract imports and CLU assignments are farm-owned: farm scoping, mapper discipline (`mapFsaTractFromDb`/`mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`/`mapFieldCluAssignmentToDb`), optimistic updates, and soft delete all apply. Never hard-delete assignments.
+- Changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup schema, bundled tract helpers, assignment UI, and FSA reports/tests.
+- CLU parsing, map rendering, and centroids must support `Polygon` and `MultiPolygon`; use `@/lib/geoHelpers.ts`.
+- `parseCluFile` is the only import entry point (GeoJSON and ESRI shapefile ZIP). Do not add a component-only parser or unzip path.
+- Preserve the FSA office request sheet's accepted-format statement, farmers.gov/service-center guidance, operator/contact blanks, and "not an official USDA form" disclaimer.
+- Soft-deleting a field also soft-deletes its active CLU assignments, through the batched offline queue or the online RPC described under [Optimistic Update Pattern](#optimistic-update-pattern) — never a per-record loop.
+- Assignment toggles sync only the field's `cluNumbers` (`syncFieldAcreageAndClus`). Never overwrite boundary/manual acreage with a CLU total; `mapFieldToDb` omits `operational_acreage` when `boundaryAcreage` is unknown instead of writing zero.
+- CLU totals and assigned/unassigned counts compare against the same CLU universe being displayed and exclude soft-deleted assignments. Imported-only counts are labeled imported-only unless the UI says it includes bundled tracts.
+- Acreage is positive throughout the stack (backup schema, and `field_clu_assignments.acres > 0` in the database); field `acreage` may be `0` for an unmeasured new field. Never mutate source CLU feature acres.
+
+Reports:
+
+- FSA-578 and fall production worksheets are supporting worksheets, not official USDA forms. Preserve the disclaimer wording, include the farm name in header subtitles (preview and PDF), and keep CSV and PDF describing the same facts.
+- The FSA-578 PDF uses `exportFsa578WorksheetPdf` (never the generic `exportToPdf`) with the canonical four-section order. Non-cropland CLUs never appear in the crop-entry table.
+- Row-construction rules (multiple plantings per field/CLU, CLU-derived acreage, review rows, hay/pasture labeling, status display) live in BLUEPRINT; change them there and in `fsaReports.ts` together.
+- Readiness findings are advisory and never disable export. Authoritative FSA validation stays in `validateFsa578Rows` / `validateFsaFallProductionRows`; `reportReadiness.ts` only adapts it.
+- Reports are export-first on mobile (`MobileReportExportPanel` below `lg`). Do not reintroduce large previews as the default mobile experience.
+- Plant FSA status fields (`Planted`, `Prevented Planting`, `Failed`, `Volunteer`, `Cover Crop`) change across types, mappers, backup schema, migrations, UI, reports, and tests together. Prevented planting may omit seed variety.
 
 ### Landlord Summary
 
-- The **Landlord** report tab (`LandlordSummaryReport.tsx` + `generateLandlordSummary.ts`) is a per-landlord overview driven by the **field-level** `Field.landlordName`, NOT the legacy harvest-only `HarvestRecord.landlordName`.
-- A landlord is selectable only if at least one non-deleted field carries their name (`getFieldLandlordNames` filters on `deleted_at`). Soft-deleting a landlord's last field removes them from the dropdown.
-- The summary aggregates all season-scoped activity (plant, spray, custom spray, fertilizer, tillage, grain harvest, hay harvest) across the landlord's fields into a date-sorted timeline, plus a per-field production summary (acres via `getDisplayFieldAcres`, total bushels, bu/acre, total bales, and landlord crop-share bushels computed from each grain harvest's `landlordSplitPercent`). Hay production stays separate from bushels and does not infer a landlord bale share because `HayHarvestRecord` has no crop-share field.
-- Acreage must use `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, `field.acreage` fallback) — the canonical display acreage, never a raw `field.acreage` read.
-- Activity dates must format via `parseLocalDate` (from `@/utils/dates`), not `new Date(iso)`, to avoid the one-day-early UTC shift on date-only strings.
-- The desktop/print report renders through `ReportTable`; every `<td>` must carry `data-label` matching its header. Mobile uses the shared export-first workspace after a landlord is selected.
-- Exports: CSV (`generateLandlordSummaryCSV`, per-field + totals) and a landscape **Detailed PDF** via `exportToPdf` with the activity timeline in the footer. The PDF subtitle must include the farm name (per the FSA rule above). Long footer lines are wrapped via `doc.splitTextToSize` inside `exportToPdf`.
-- The older `LandlordStatementReport` / `generateLandlordStatement` (harvest-only crop-share statement) is retained for its tests but no longer rendered in the UI. Do not delete it without migrating its coverage.
-- **Grain delivered-vs-owed is intentionally out of scope.** The owed side (crop-share bushels) is computed; the delivered side is not, because `GrainMovement` has no field/landlord link (only an optional `harvestRecordId` that `SellModal` doesn't populate). Adding it is a separate schema change.
+Canonical detail: [BLUEPRINT → Landlord Summary Report](./BLUEPRINT.md#landlord-summary-report).
+
+- Driven by field-level `Field.landlordName`, not the legacy `HarvestRecord.landlordName`. Only landlords with at least one non-deleted field are selectable.
+- Acreage uses `getDisplayFieldAcres`; dates use `parseLocalDate` (see [Date Parsing and Sorting](#date-parsing-and-sorting)); every `ReportTable` cell carries `data-label`.
+- Hay bales stay separate from bushels, with no inferred landlord bale share.
+- Keep the retired `LandlordStatementReport` / `generateLandlordStatement` until its test coverage is migrated.
+- Grain delivered-vs-owed is out of scope until grain movements gain a field/landlord link (a schema change).
 
 ### Backup and Restore
 
-- Backup restore must treat the current selected `farm_id` as authoritative.
-- Before mapping restored records, merge `{ ...record, farm_id }` into each restored record.
-- For FSA tract imports and CLU assignments, the app type uses `farmId`; merge `{ ...record, farmId: farm_id }` before calling `mapFsaTractToDb` or `mapFieldCluAssignmentToDb`.
-- Backups must preserve CLU setup with `fsaTracts` and `cluAssignments`; the restore RPC payload must send those as `fsa_tract_imports` and `field_clu_assignments`.
-- Do not hydrate React state directly from raw backup arrays.
-- Normalize restored records first.
-- New exports must include `backupVersion`; unversioned backups are legacy and must pass through `normalizeBackupForRestore` before strict schema validation. Known legacy zero acreage may be derived only from matching field/CLU/tract data; negative or unrecoverable acreage must still fail closed.
-- Restore helpers must insert and update only columns present in each payload row. Never enumerate every table column and feed missing JSON properties through `jsonb_populate_record(set)`, because that converts omissions to `NULL`, defeats database defaults, and can erase columns introduced after an older backup was created.
-- Spray recipe backup and mapper paths must preserve `cropOrSiteTreated` / `crop_or_site_treated`.
-- Season rollover must require completed cloud loading with no pending sync mutations, verify exactly one farm-scoped profile row changed, and catch unexpected network exceptions before changing local season state.
-- Manual season rollover advances exactly one year from `activeSeason`, up to the `[currentYear + 1]` ceiling. Never target `currentYear` unconditionally, and reject no-op or backwards rollovers before creating a backup.
-- Settings and pre-rollover backup objects must pass `backupSchema` before download. Season rollover must stop before changing the profile if its generated backup is not currently restorable.
-- `profiles` must remain in the `supabase_realtime` publication so an active-season rollover reaches other signed-in devices during the same session.
-- If the restore RPC fails, do not mutate React state.
+Canonical detail: [BLUEPRINT → Backup / Restore Farm Ownership](./BLUEPRINT.md#backup--restore-farm-ownership).
+
+- The currently selected `farm_id` is authoritative: merge `{ ...record, farm_id }` (or `{ ...record, farmId: farm_id }` for FSA tract/CLU app types) before every mapper call.
+- Backups include `backupVersion`, `fsaTracts`, and `cluAssignments`. Unversioned backups pass through `normalizeBackupForRestore` before strict validation. Settings and pre-rollover backups must pass `backupSchema` before download.
+- Restore helpers write only JSON-present columns; never enumerate every column through `jsonb_populate_record(set)`.
+- Never hydrate React state from raw backup arrays. If the restore RPC fails, do not mutate state.
+- Season rollover requires a completed cloud load and an empty sync queue, advances exactly one year up to `currentYear + 1`, verifies exactly one profile row changed, and stops if its backup is not restorable. `profiles` must stay in the `supabase_realtime` publication.
 
 ### Owner Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)
 
-- The authoritative implementation plan is `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`. Do not treat this section as evidence that scheduling or Drive uploads are already deployed.
-- This is owner-only infrastructure for the entire AcreLedger Supabase project, not a Drive connection per farm and not a replacement for Settings → Backup Data.
-- Locked decisions: personal Google Drive, nightly at 02:00 `America/Chicago`, complete database/Auth/Storage coverage, 30 successful daily archives, and 12 successful monthly archives.
-- The checked-in worker is a containerized Google Cloud Run Job intended to be triggered by Cloud Scheduler. Full dumps and Storage copies must not run inside the browser, Capacitor app, a public Vercel endpoint, or a customer-accessible RPC.
-- Backups must include roles/schema/data, `auth`, `storage` metadata, application/private schemas, soft-deleted rows, configuration inventory, and actual Supabase Storage object bytes. Supabase database dumps alone do not contain Storage object bytes.
-- Current spray image attachments are embedded as base64 tokens in database rows; the owner backup must retain those bytes. Do not apply the AI assistant's image-stripping boundary to disaster-recovery exports.
-- Compress and public-key-encrypt the complete package before Google Drive upload. The worker receives only the encryption public key; the owner keeps the private recovery key offline. Runtime credentials live in Google Secret Manager and never in `VITE_*`, client code, logs, or the repository.
-- A whole-database archive must never be restored directly into live production merely to recover one customer. Restore it into an isolated temporary project with `npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory>`, keep external email/secret/consumer configuration absent, verify manifest counts/checksums, and extract one exact `farm_id` through the checked-in tenant ownership registry. Do not substitute a hand-written `psql` file order.
-- Single-farm recovery is an owner CLI with dry-run and conflict reporting. It must reject bundles containing another farm, reject IDs owned by another farm, create a verified pre-recovery backup, scope every write to the selected farm/user IDs, and never hard-delete farm records.
-- `restore-isolated.ts` is the authority for the full SQL restore order, including `auth-schema.sql`, `storage-schema.sql`, and optional migration schema/data files. It must load every present dump artifact in `ISOLATED_RESTORE_ORDER`, fail when a required dump is absent, execute `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after schema load and before any data file, and then probe that Cron schedules, outbound database webhook triggers, and application Realtime publications were neutralized. Do not refuse merely because the restored schema recreated these side effects, and do not reduce the controls to printed advice.
-- Tenant extraction currently attributes no Storage object automatically. Its dry-run bundle/report must list every restored-project Storage key—including keys from other farms—in `manualReview`; operators may copy only objects they can tie to the selected farm with certainty.
-- If an Auth user still exists, preserve it. If a selectively recovered user was deleted, use `scripts/recovery/recreate-auth-user.ts`; it requires a verified pre-recovery backup, exact typed confirmation, an Auth Admin invite, an empty generated farm, and checksum-safe remapping of registered user columns. If the old profile survived, atomically remount it onto the new Auth ID instead of leaving two farm members. A failed attach must compensate by removing the newly invited Auth user and its unusable output bundle. Do not normally insert selected `auth` rows or restore old sessions into production. A full-project disaster uses the complete Auth restore path.
-- A same-day Drive archive suppresses another run only when ledger, status, archive verification marker, manifest ID, and SHA-256 all agree. Unverified uploads must never participate in retention; a failed verification deletes its upload immediately, and the next successful run removes fully identified same-folder encrypted archives left unverified by an interrupted worker.
-- Every new or renamed farm-owned table must update `scripts/recovery/tenant-registry.ts` and its `information_schema` coverage test in the same change. Update the manifest version when archive layout or recovery semantics change.
+> **Status: not yet deployed.** Scheduling, Drive uploads, and both recovery drills are unproven. Do not describe this as operational.
+
+Canonical detail: [BLUEPRINT → Owner Whole-Project Disaster Recovery](./BLUEPRINT.md#owner-whole-project-disaster-recovery-implemented-tooling-deploymentdrills-pending) and the plan in `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`.
+
+- Owner-only, whole-project infrastructure: not a per-farm Drive connection and not a replacement for Settings → Backup Data. Never run dumps in the browser, the Capacitor app, a public Vercel endpoint, or a customer-accessible RPC.
+- Archives keep everything, including soft-deleted rows, Auth, Storage bytes, and base64 spray images (the AI image-stripping boundary does not apply). Encrypt with the public key before upload; runtime secrets stay in Google Secret Manager.
+- Never restore a whole archive into live production to recover one customer. Restore into an isolated project with `npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory>`; do not substitute a hand-written `psql` order.
+- Single-farm recovery and Auth-user recreation must dry-run first, create a verified pre-recovery backup, stay scoped to one farm, and never hard-delete farm records.
+- Every new or renamed farm-owned table updates `scripts/recovery/tenant-registry.ts` and its `information_schema` coverage test in the same change. Bump the manifest version when archive layout or recovery semantics change.
 
 ### Stripe Billing (Test Mode Only)
 
-- Billing v1 is web-only and hidden unless `VITE_BILLING_UI_ENABLED === 'true'`; Capacitor builds render no billing surface. The internal rollout also requires the caller's email or user ID in both the client and server allowlists. Empty allowlists fail closed.
-- `BILLING_LIVE_CHARGES` must remain absent or exactly `false`, and server validation accepts only `sk_test_` Stripe secret keys. Do not enable live charges until the product owner explicitly approves the legal and production billing rollout.
-- Product access enforcement is off by default: a missing or soft-deleted subscription row remains `unmanaged` with full access unless a future owner-approved enforcement path explicitly passes `enforce: true`. Do not turn an absent billing row into a production paywall accidentally.
-- Locked terms are a 122-day trial and a three-day `past_due` grace window. `farm_subscriptions` is the local entitlement mirror; the client never treats query parameters or client-reported Stripe state as authoritative.
-- Checkout and portal endpoints authenticate the Supabase bearer token, resolve the caller's current profile/farm, apply owner gates, and accept only trusted HTTPS Stripe redirect URLs. Repeated Checkout requests use state-derived idempotency keys.
-- `stripe-webhook.ts` verifies the raw-body Stripe signature, runs with the server-only service-role key, claims `billing_webhook_events` for idempotency, ignores stale replacement subscriptions, and writes `farm_subscriptions`. Clients have read-only farm-scoped access to subscriptions and no access to the webhook ledger.
-- Billing tables are infrastructure and remain outside the customer farm JSON backup/`restore_farm_backup`. They are included in the owner whole-project disaster-recovery archive and must remain classified in the tenant recovery registry.
+Canonical detail: [BLUEPRINT → Stripe Billing](./BLUEPRINT.md#stripe-billing-test-mode-web-only).
+
+- Web-only, and hidden unless `VITE_BILLING_UI_ENABLED === 'true'` and the caller matches both the client and server allowlists (empty allowlists fail closed). Capacitor renders no billing surface.
+- `BILLING_LIVE_CHARGES` stays absent or exactly `false`, and the server accepts only `sk_test_` keys, until the product owner approves the legal and production rollout.
+- Enforcement is off by default: a missing or soft-deleted subscription row is `unmanaged` with full access. Do not let absent billing data become a paywall.
+- Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` lives on subscription **items**, not the Subscription; use `resolveCurrentPeriodEnd` (`server/billing.ts`). Build webhook tests from the basil shape.
+- Checkout is refused (409, use the portal) for a live `trialing`/`active`/`past_due`/`unpaid` subscription; only `canceled`/`incomplete` rows may start a new Checkout. The 122-day trial is granted only when the farm's row has never carried a Stripe subscription, and an existing `stripe_customer_id` is reused.
+- `farm_subscriptions` is written only by the signed webhook (service role). Clients never trust query parameters or client-reported Stripe state.
+- Billing tables stay out of the customer JSON backup and stay classified in the owner recovery registry.
 
 ### Account, Credential, and Password-Recovery Safety
 
-- Account deletion is a request workflow, not an immediate client deletion. `AccountManager` requires the exact `DELETE` confirmation, blocks while offline mutations are pending, inserts into `account_deletion_requests`, treats the unique-user conflict as already pending, and signs out after a successful request.
-- `account_deletion_requests` grants authenticated users only their own `SELECT` and a constrained pending `INSERT`; completion/cancellation is service-role/operator work. Never add client update/delete grants or let request input choose a different user/farm.
-- Native credential and encryption material must go through `secureStorage`: iOS/Android use the secure-storage plugin (Keychain/Keystore), migrate a legacy Preferences value on first read, and remove the plaintext Preferences copy only after the secure write succeeds. Browser builds continue to use Preferences because no OS keychain is available.
-- Password reset redirects use `getPasswordRecoveryRedirectUrl`. Native recovery uses the exact `com.wsegbert.acreledger://auth/recovery` scheme, handles both authorization-code and legacy token-fragment callbacks, deduplicates repeated app URL events, and establishes the Supabase session before opening reset UI. Web recovery remains `/auth?mode=recovery`.
-- Keep the native URL scheme, Supabase redirect allowlist, `Info.plist`, app listener, and recovery tests synchronized. Do not accept arbitrary custom-scheme hosts or paths.
+Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety](./BLUEPRINT.md#account-lifecycle-and-native-credential-safety).
+
+- Account deletion is a request (`account_deletion_requests`), never a client-side delete. Never add client update/delete grants or let request input choose another user or farm.
+- Native credentials and encryption material go through `secureStorage` (Keychain/Keystore).
+- Keep the native recovery scheme `com.wsegbert.acreledger://auth/recovery`, the Supabase redirect allowlist, `Info.plist`, the app listener, and recovery tests synchronized. Never accept arbitrary custom-scheme hosts or paths, and never establish a session from raw `access_token`/`refresh_token` values in the URL: the native listener accepts only a PKCE `code` (`exchangeCodeForSession`).
 
 ### CI/CD (CodeMagic)
 
@@ -421,7 +395,7 @@ This rule applies to **every** activity modal that captures a per-record acreage
 ### Native & Offline Capability
 
 - **Web Compatibility**: The codebase is a shared web/native hybrid. Never call Capacitor plugins unconditionally. All native device APIs must check `Capacitor.isNativePlatform()` or use `@/lib/native.ts` wrappers.
-- **Offline Operations**: Mutations must support offline caching. The app automatically pushes sync actions to a local queue when offline (`@/lib/syncQueue.ts`), saving them locally (`@/lib/offlineStorage.ts`) and auto-replaying them upon connection restoration or app foreground resume. Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true` in `capacitor.config.ts` and the copied iOS config). The plugin treats a missing key as encryption off, which prevents opening the encrypted store.
+- **Offline Operations**: Mutations queue locally when offline (`@/lib/syncQueue.ts`, `@/lib/offlineStorage.ts`) and replay on reconnect or foreground resume; batching rules are under [Optimistic Update Pattern](#optimistic-update-pattern). Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true` in `capacitor.config.ts` and the copied iOS config). The plugin treats a missing key as encryption off, which prevents opening the encrypted store.
 
 - **Haptic Feedback**: Trigger native haptic feedback on major user interactions:
   - Navigation tab taps: light haptic feedback.
@@ -526,10 +500,7 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 
 - Weather uses Visual Crossing, routed through `WeatherService.buildWeatherUrl`. In dev (or Capacitor builds with `VITE_VISUALCROSSING_KEY` set and no proxy), it calls the Visual Crossing API directly; otherwise it goes through the `/api/weather-proxy` Vercel Function. Production proxy requests require a Supabase bearer token, validated server-side with `auth.getUser(token)`. `WeatherService` resolves the proxy base via `resolveWeatherProxyUrl()`.
 - `VITE_WEATHER_PROXY_URL` (optional) overrides the proxy base for Capacitor builds. If set, it must be HTTPS (or `localhost`/`127.0.0.1`), have no surrounding quotes, and not already include the `/api/weather-proxy` path suffix — `WeatherService` appends it. A Capacitor build with neither `VITE_VISUALCROSSING_KEY` nor `VITE_WEATHER_PROXY_URL` throws at URL-build time rather than failing silently. `WeatherService.cleanEnvValue` strips stray quotes/whitespace from these env vars at load.
-- The deployed function requires server-only `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VISUALCROSSING_API_KEY`, and `ALLOWED_ORIGINS`. `ALLOWED_ORIGINS` is a comma-separated exact allowlist and must include each deployed web origin plus `capacitor://localhost` when native builds use the proxy. Never use a wildcard or silently allow an origin when configuration is missing; requests carrying a disallowed `Origin` fail before authentication or upstream work.
-- The proxy accepts only `GET` and `OPTIONS`, allowlisted Visual Crossing timeline endpoints/query keys, and safely encoded locations. It has a 10-second upstream timeout and returns generic errors rather than leaking credentials or upstream internals.
-- Authenticated weather requests are limited to 30 requests per user per fixed one-minute window through `consume_weather_proxy_request`. Rate-limit RPC failure must fail closed with `503`; quota exhaustion returns `429` with `Retry-After`.
-- Apply the rate-limit migration before deploying proxy code. Vercel environment-variable changes affect only new deployments, so redeploy after adding or changing any proxy variable.
+- The proxy's server-only variables, exact-origin CORS allowlist, method and endpoint allowlists, timeout, and per-user quota (`429` with `Retry-After` on exhaustion, `503` fail-closed on RPC failure) are specified in [BLUEPRINT → Weather Proxy](./BLUEPRINT.md#weather-proxy-apiweather-proxyts). Never use a wildcard origin. Apply the rate-limit migration before deploying proxy code, and redeploy after any Vercel variable change.
 - Rainfall uses the Rain API with IEM Stage IV radar plus Supabase RPC merge.
 - Rainfall lookups should use coordinates when available so the radar merge remains active.
 - Lat/lng should be rounded to 4 decimals for radar grid consistency.
@@ -625,7 +596,7 @@ The hook is enabled only when `session && onboardingComplete && location.pathnam
 
 ### Testing
 
-- The test suite is split into **unit** and **integration**. `npm run test:unit` runs the app unit suite, which excludes `**/*.integration.test.{ts,tsx}`. `npm run test` runs documentation, tracked-asset, and App Store metadata verification before that suite plus owner disaster-recovery package tests (`test:owner-dr`). CodeMagic's Unit tests step and GitLab's `test_job` both run `npm run test`, so those workflows must `npm ci` `infrastructure/owner-backup` and `scripts/recovery` after the root install — a root-only `npm ci` leaves those packages without vitest and fails the step. GitLab must use Node 22 to match the owner-backup engine range. `npm run test:integration` runs the integration suite via `vitest.integration.config.ts` — those tests hit live services and require credentials/network (`RainService.integration.test.ts` for the real Rain API, `auth.integration.test.ts` for bot auth). Integration tests skip cleanly when their env/credentials are absent (`describe.skipIf` / early-return on `import.meta.env`). Do not add live-network tests to the unit suite; name them `*.integration.test.*`.
+- The test suite is split into **unit** and **integration**. `npm run test:unit` runs the app unit suite, which excludes `**/*.integration.test.{ts,tsx}`. `npm run test` runs documentation, tracked-asset, and App Store metadata verification before that suite plus owner disaster-recovery package tests (`test:owner-dr`). CodeMagic's Unit tests step and GitLab's `test_job` both run `npm run test`, so those workflows must `npm ci` `infrastructure/owner-backup` and `scripts/recovery` after the root install (`npm run install:owner-dr` does both) — a root-only `npm ci` leaves those packages without vitest and fails the step. GitLab must use Node 22 to match the owner-backup engine range. `npm run test:integration` runs the integration suite via `vitest.integration.config.ts` — those tests hit live services and require credentials/network (`RainService.integration.test.ts` for the real Rain API, `auth.integration.test.ts` for bot auth). Integration tests skip cleanly when their env/credentials are absent (`describe.skipIf` / early-return on `import.meta.env`). Do not add live-network tests to the unit suite; name them `*.integration.test.*`.
 - `npm run test:coverage` collects V8 coverage over the production-surface scope defined in the `coverage` block of `vite.config.ts` (tests, generated data, type declarations, shadcn/ui primitives, and entry-point boilerplate are excluded). The baseline is recorded in `TESTING.md`; no thresholds are enforced yet.
 - Keep Vercel Function unit tests in `src/test/weatherProxy.test.ts` and `src/test/aiAssistant.test.ts`, never under `api/`; Vercel treats TypeScript files under `api/` as deployable functions. Run `npm run typecheck:api` whenever the weather proxy or AI assistant function changes.
 - Authentication integration tests must keep forbidden profile-write probes non-mutating and assert the exact `42501` authorization code. Positive profile-update checks should use same-value writes unless the test explicitly owns and restores the changed value.
@@ -674,6 +645,8 @@ After editing:
    - `npm run typecheck:api` — checks the Vercel Function TypeScript project. Run whenever `api/weather-proxy.ts`, `api/ai-assistant.ts`, `server/ai-assistant-tools.ts`, or their imports change.
    - `npm run test` — documentation and tracked-asset checks, then app unit and owner-DR package tests. Run `npm run test:unit` for the app suite alone. See [Testing](#testing).
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
+   - `npm run verify:migrations` — checks migration filename format, unique timestamps, and disabled seed configuration, then replays every migration in order against a disposable in-memory PostgreSQL (PGlite) with the Supabase platform bootstrap, failing if any migration alters a relation that no migration creates. Run after adding or renaming a migration. It is not part of `npm test`; the GitLab `database` job runs it together with `test:db-integrity`. As of 2026-09-29 it passes: `supabase/migrations/20260316090000_core_harvest_grain_baseline.sql` reconstructs the core schema so the full history replays.
+   - `npm run test:db-integrity` — runs the tenant-scoped harvest/grain foreign-key migration and the harvest/grain baseline checks against in-memory PGlite. Run when changing those migrations or harvest/grain linkage.
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
 3. Mention any unchecked risk clearly.
 

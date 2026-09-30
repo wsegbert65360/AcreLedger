@@ -3,9 +3,12 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-09-21 (reading guidance, navigation, and consolidation of design details).
-> **Verification scope:** This is not a whole-document code audit. Section-level verification
-> notes identify the implementation actually checked. Use `git log -- BLUEPRINT.md` for edit history.
+> **Last updated:** 2026-09-29 (Stripe period end and checkout gate, PKCE-only recovery link, auth-expiry sync replay).
+> **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
+> verified against code; only a section carrying a **Verified against code** note has been, and only
+> for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
+> **Canonical detail:** Where AGENTS summarizes a rule and links here, this file holds the full version.
+> Update both in the same change.
 
 ---
 
@@ -23,11 +26,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-09-29** — Billing: period end read from subscription items, live-subscription checkout gate, first-subscription-only trial, customer reuse, request-fingerprinted idempotency key. Recovery deep link is PKCE-code-only. Sync replay handles an expired session. Code and tests changed in the same pass but were not run.
+- **2026-09-28** — Became the canonical home for detail AGENTS now summarizes (FSA-578 row construction, grain versioning, DR archive rules, AI retention); rewrote the new-table template to the strict pattern and corrected which tables hide soft-deleted rows (verified against migrations); tech stack updated to Vite 7 / React Router 7; weather roadmap moved to [ROADMAP.md](./ROADMAP.md).
 - **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and consolidated design guidance. Earlier today: corrected FAB visibility and renumbered the tail sections (old 11→7, 12→8).
 - **2026-09-20** — iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); a missing key leaves the offline store unopenable and blocked Sign Out (592fef7).
 - **2026-09-11** — Owner disaster-recovery tooling documented; deployment and live drills still pending (b5cf439).
-- **2026-09-06** — Landlord Summary gains hay production; bales stay separate from bushels (734cb66).
-- **2026-09-05** — Sync replay invariants and atomic offline harvest replay documented (5807554, 3cfd62a).
 
 ---
 
@@ -137,11 +140,11 @@ be described as operationally proven until deployment verification and both reco
 | Layer | Library / Service | Role |
 |---|---|---|
 | Framework | React 18 + TypeScript (strict) | UI, hooks, JSX transform |
-| Build | Vite + Vite PWA Plugin | Bundler, dev server, service worker |
-| Routing | React Router v6 | Page navigation |
+| Build | Vite 7 + Vite PWA Plugin | Bundler, dev server, service worker |
+| Routing | React Router v7 | Page navigation |
 | Database | Supabase (Postgres + RLS) | Persistent storage, Row Level Security |
 | Auth | Supabase Auth | Session, JWT, user identity |
-| Realtime | Supabase Realtime channels | Connection health probe (sync status) |
+| Realtime | Supabase Realtime channels | Connection health probe (sync status) and cross-device `profiles.active_season` sync |
 | State | React Context (`farmStore.tsx`) | Global client state + CRUD actions |
 | UI Components | shadcn/ui (Radix primitives) | Dialog, Select, Alert, Button, Card, etc. |
 | Styling | Tailwind CSS v3 | Utility classes, CSS variables for theming |
@@ -258,7 +261,10 @@ Dark background matching the app's default theme. Uses a `Sprout` icon hero with
 All entities are strictly typed in `@/types/farm.ts`. Every season-specific record carries
 `seasonYear: number`. Every record supports soft-delete via `deleted_at: string | null`
 (ISO timestamp). Active records always have `deleted_at === null`. Soft-deleted records are
-excluded by RLS policies server-side and by `.filter(r => !r.deleted_at)` client-side.
+hidden by `deleted_at IS NULL` SELECT policies server-side and by `.filter(r => !r.deleted_at)`
+client-side. Exception: `fsa_tract_imports` and `field_clu_assignments` tombstones stay visible to
+their farm so conflict-key upserts can resurrect them; client code must filter them. See
+[Tenant Isolation (RLS)](#tenant-isolation-rls).
 
 ### Field
 Physical farm field. Referenced by `fieldId` on all activity records.
@@ -390,6 +396,7 @@ Display with an amber `AlertTriangle` warning only.
 #### The "Ghost Row" Prevention Rule
 To prevent inventory drift if two sessions edit the same bin simultaneously, all Grain Movement edits must include a **Concurrency Guard**:
 - `grain_movements.version` is database-managed and increments on every update. Capture the expected version from the render closure and include it in online and replayed update/delete predicates; never use the activity timestamp as the concurrency token.
+- `useGrainMovements` requires the version for online and replayed updates/deletes and optimistically advances the local version only after mapping. Legacy cached rows without a version use `1`, matching the migration default. Never capture the token by mutating a ref or a state-updater outer variable.
 - If the count of updated rows is 0, reconcile an already-applied operation, otherwise retain the mutation and notify the user that the record has changed.
 - Reconciliation compares strictly validated ISO timestamp strings by their parsed instant, so PostgreSQL `+00:00` serialization matches an equivalent queued `.000Z` value. Other payload values retain recursive exact comparison.
 
@@ -434,6 +441,11 @@ Imported FSA tract/CLU boundary data owned by a farm and stored canonically as G
 - **Tract grouping**: A single source file may yield multiple farm/tract collections. Farm and
   tract attributes take priority; a filename such as `4251-9747.zip` is the fallback when the
   features lack those identifiers. Generic unidentified files fail with corrective guidance.
+- **Acreage parsing**: CLU acres must parse as positive finite numbers (comma-formatted strings
+  allowed). When the source property is missing or invalid, fall back to Polygon/MultiPolygon
+  geometry; reject assignment persistence when acres are not greater than zero.
+- **Bundled data**: imported tracts may replace bundled tract data with the same tract key in
+  assignment flows. Use `loadKeyedTractCollections` when tract keys must stay attached to GeoJSON.
 - **Office request workflow**: `FsaRequestSheetDialog.tsx` uses `fsaOfficeRequestSheet.ts` to
   generate a worksheet requesting digital CLU boundaries from FSA. The user guidance links to
   farmers.gov and the service-center locator and states that both GeoJSON and shapefile ZIPs load
@@ -450,6 +462,8 @@ Farm-owned assignment from one CLU inside a tract to one AcreLedger field. Not s
 - **Mappers**: Use `mapFieldCluAssignmentFromDb` and `mapFieldCluAssignmentToDb` from `@/lib/mappers.ts`.
 - **Counts**: Assigned/unassigned totals must compare assignments against the same CLU universe being displayed, and must exclude soft-deleted assignments.
 - **Acreage**: Persisted field acreage may be rounded for display/state, but the source CLU feature acres must not be mutated.
+- **Positive acreage**: `backupSchema.ts` requires positive CLU feature acres, CLU assignment acres, plant `acreage`, spray `treatedAreaSize`, and fertilizer `acres` (field `acreage` is non-negative because a new unmeasured field may be 0). The database enforces `field_clu_assignments.acres` as `NOT NULL CHECK (acres > 0)`; that migration raises on historical non-positive rows so they get manual review instead of a silent rewrite.
+- **Field sync**: each assignment toggle calls `syncFieldAcreageAndClus` (`TractAssignmentFlow.tsx`), which updates only the field's `cluNumbers`. It reads `displayAssignments` (persisted + legacy) through `getFieldAssignmentsWithDelta`, and an order-independent no-op guard skips redundant writes.
 
 ### Rainfall
 High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar + field-based historical lookups).
@@ -499,14 +513,7 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 - **`ForecastGrid`**: 2×5 grid of `ForecastDay` cells with weather emojis, rain-chance progress bars, high/low temps. Today cell highlighted with blue border.
 - **`SprayDecisionMatrix`**: Renders a GO / CAUTION / WAIT verdict from `evaluateSprayConditions` in `@/lib/weatherHelpers.ts` using current temp, humidity, wind, wind direction, and precip probability. Rendered on `/weather` alongside the radar and forecast.
 
-#### Future Expansion (Planned)
-Additional agricultural decision-support cards are planned, ported from FarmCMD's feature set:
-- **Field Workability** — composite score (0–100) factoring soil temp, rainfall, wind, forecast
-- **Frost & Freeze** — 3-night outlook with advisory/warning thresholds
-- **Rain Window** — dry stretch analysis with soil saturation estimate
-- **Atmosphere** — humidity, dew point, sunrise/sunset, daylight hours
-
-All calculators will be pure functions in `@/lib/` (no config dependency) using named constants for thresholds.
+Planned decision-support cards (field workability, frost and freeze, rain window, atmosphere) are tracked in [ROADMAP.md](./ROADMAP.md). They are not built; do not treat them as architecture.
 
 ---
 
@@ -519,17 +526,29 @@ via `useFarm()`.
 
 ### Optimistic Update Pattern
 Every mutation follows this exact sequence — no exceptions:
-1. Guard: `if (!farm_id) → toast.error('No farm selected.'), return false`
+1. Guard: `if (!farm_id) → toast.error('No farm selected.'), return false` (always the first line)
 2. Validate inputs → return false on invalid
 3. Call mapper (`mapXToDb`) — **BEFORE** touching state. Ensuring all optional fields default to **`null`** (not `undefined`).
    → mapper throws: toast.error, return false, do NOT touch state or DB
 4. **Capture the rollback snapshot from the render closure *before* the optimistic setter.** Each hook receives its current entity array as an argument and resolves `previous = collection.find(item => item.id === id)` before calling `setState`. Do not mutate an outer variable inside the state updater to capture the snapshot — that depends on React's eager-update timing and is the pattern the grain hook was refactored away from. See `useGrainMovements` / `useFieldsAndBins` for the reference form.
 5. Apply optimistic state update via functional setter
-6. Await Supabase operation
-7a. Success: toast.success, return true
+6. Await the Supabase operation inside `try...catch`; assign a thrown exception to `error` so rollback still runs
+7a. Success (`error` is null and the `{ count: 'exact' }` result matches the expected row count): toast.success, return true
 7b. Error: roll back state to the closure-captured snapshot, toast.error (with detailed Postgres message), return false
 
-Offline bulk/cascade operations use `syncQueue.enqueueMutations`. Web persists the whole batch in one encrypted localStorage update; native uses transactional SQLite `executeSet`. This is required for bulk activity deletes and offline field/tract deletion cascades so local rollback cannot disagree with a partially persisted queue. Field-delete batches place assignments before the field, and the `fields_cascade_soft_delete_to_clu_assignments` trigger makes direct field replay transactionally cascade any remaining assignments. Online field deletion uses the `SECURITY INVOKER` `soft_delete_field_with_clu_assignments` RPC. Sign-out fails closed unless cache cleanup removes the current farm's pending queue before ending the auth session. If the native SQLite store cannot be opened, a confirmed emergency sign-out may end the session without clearing that unreadable store; the file remains on the device and is not treated as a successful queue clear. Account deletion stays blocked while the store is unreadable. Native iOS builds must keep `CapacitorSQLite.iosIsEncryption: true` in `capacitor.config.ts` (the plugin treats a missing key as encryption off, which prevents opening the store and previously blocked Sign Out).
+Offline bulk/cascade operations use one `syncQueue.enqueueMutations` batch — never a per-record `enqueueMutation` loop. Web persists the whole batch in one encrypted localStorage update; native uses transactional SQLite `executeSet`. This is required for bulk activity deletes and offline field/tract deletion cascades so local rollback cannot disagree with a partially persisted queue. Field-delete batches place assignments before the field, and the `fields_cascade_soft_delete_to_clu_assignments` trigger makes direct field replay transactionally cascade any remaining assignments. Online field deletion uses the `SECURITY INVOKER` `soft_delete_field_with_clu_assignments` RPC. Sign-out fails closed unless cache cleanup removes the current farm's pending queue before ending the auth session. If the native SQLite store cannot be opened, a confirmed emergency sign-out may end the session without clearing that unreadable store; the file remains on the device and is not treated as a successful queue clear. Account deletion stays blocked while the store is unreadable. Native iOS builds must keep `CapacitorSQLite.iosIsEncryption: true` in `capacitor.config.ts` (the plugin treats a missing key as encryption off, which prevents opening the store and previously blocked Sign Out).
+
+Replay reconciliation (all tables, not only grain) compares queued values with the row Postgres
+already stored. ISO timestamps are compared as instants after strict validation, because PostgreSQL
+may return `+00:00` where the client queued the equivalent `.000Z`; raw string equality would
+falsely retain an already-applied mutation. All other payload values use exact recursive equality.
+
+Expired sessions are handled separately from mutation failures. A device that was offline long
+enough for its access token to lapse gets HTTP 401 / `PGRST301` / "JWT expired" on replay. Replay
+refreshes the session once per drain (`supabase.auth.refreshSession()`) and restarts from the
+remaining queue; if the refresh fails it pauses, shows a "session expired" warning, returns `false`
+(so the store does not overwrite local state with a cloud snapshot), and leaves every `retry_count`
+untouched. Only genuinely permanent errors (constraint, RLS) increment retries.
 
 ### OpResult Convention
 All add / update / delete operations on every hook return `Promise<boolean>`:
@@ -577,11 +596,15 @@ older exports or pre-fix local cache data. Restore must always treat the current
 - `profiles.active_season` is constrained in Postgres to `[2000, currentYear + 1]`, and the
   `restore_farm_backup` RPC validates the same range before replaying any entity rows.
 - Active-season changes propagate across devices through a user-filtered Supabase Realtime
-  subscription on `profiles`; focus, visibility, and online refreshes recover after socket suspension.
+  subscription on `profiles` (which must stay in the `supabase_realtime` publication); focus,
+  visibility, and online refreshes recover after socket suspension.
   A device viewing the previous active season advances to the new active season; an intentionally
   different historical selection is preserved when valid and otherwise clamped.
 
 ### Owner Whole-Project Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)
+
+> **Status: not yet deployed.** The tooling is implemented; scheduling, Drive uploads, and both live
+> recovery drills are unproven. Do not describe this as operational.
 
 The customer-facing JSON backup above is a portable active-record snapshot for one signed-in farm.
 It is not the system disaster-recovery archive. The authoritative implementation plan is
@@ -608,6 +631,10 @@ Implemented design:
   app-created archives and fully identified same-folder encrypted archives left unverified by an
   interrupted worker. It must never delete unrelated or merely malformed files or the last
   known-good archive.
+- A same-day archive suppresses another run only when ledger, status, archive verification marker,
+  manifest ID, and SHA-256 all agree. Unverified uploads never participate in retention; a failed
+  verification deletes its upload immediately.
+- Bump the manifest version whenever archive layout or recovery semantics change.
 
 Single-farm recovery is deliberately indirect. Restore the whole encrypted archive into a
 temporary isolated Supabase project, disable Cron/webhooks/email/`pg_net` and other outbound side
@@ -626,7 +653,7 @@ cross-farm rows/ID collisions, and scope all production writes to the selected f
 IDs. Default merge mode inserts missing data and reports conflicts. Snapshot mode may upsert the
 selected snapshot and soft-delete target-farm rows absent from it, but it never hard-deletes farm
 records or changes another farm. Existing Auth users are preserved; selectively deleted users are
-recreated through `scripts/recovery/recreate-auth-user.ts`, which invites through the Auth Admin API,
+recreated through `scripts/recovery/recreate-auth-user.ts`, which requires a verified pre-recovery backup and exact typed confirmation, invites through the Auth Admin API,
 accepts only an empty trigger-created farm for reassignment, atomically remounts a surviving old
 profile onto the new Auth ID, compensates a failed attach by deleting the new Auth user, and remaps
 only registry-declared user columns in a newly checksummed bundle. They receive fresh sessions rather
@@ -650,32 +677,52 @@ the full Auth restore path.
 - **Filename references are historical anchors**: migrations cited by name in these docs (acreage backfills, preserved grant/protection and quota migrations) document provenance. If a cited migration is ever renamed or squashed, the stated rule — not the filename — remains authoritative; update the citation instead of re-deriving the rule from the file.
 
 ### Data API Access (Mandatory)
-Starting May 2026, Supabase requires explicit `GRANT` statements for all tables exposed via the Data API (`supabase-js`). Every new table creation migration MUST include:
+Starting May 2026, Supabase requires explicit `GRANT` statements for all tables exposed via the Data API (`supabase-js`). Every new **farm-owned** table uses this strict template (the `custom_spray_records` / `work_requests` pattern):
 ```sql
--- Grant access to standard roles
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.your_table TO authenticated;
-GRANT SELECT ON public.your_table TO anon;
+-- Grants: no DELETE (soft delete only) and no anon access
+GRANT SELECT, INSERT, UPDATE ON public.your_table TO authenticated;
 GRANT ALL ON public.your_table TO service_role;
 
--- Always pair with RLS
 ALTER TABLE public.your_table ENABLE ROW LEVEL SECURITY;
-```
 
-### Tenant Isolation (RLS)
-Every table MUST have Row Level Security enabled with a policy that restricts access to the user's `farm_id`.
-```sql
-CREATE POLICY "Users can access their farm data" ON public.your_table
-  FOR ALL TO authenticated
+-- Soft-deleted rows stay unreadable even if a client query forgets the filter
+CREATE POLICY your_table_select ON public.your_table
+  FOR SELECT TO authenticated
+  USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
+         AND deleted_at IS NULL);
+
+CREATE POLICY your_table_insert ON public.your_table
+  FOR INSERT TO authenticated
+  WITH CHECK (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()));
+
+CREATE POLICY your_table_update ON public.your_table
+  FOR UPDATE TO authenticated
   USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()))
   WITH CHECK (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()));
+
+-- Block edits to already-deleted rows; still allows the soft-delete transition itself
+CREATE POLICY "Restrict updates on deleted rows" ON public.your_table
+  AS RESTRICTIVE FOR UPDATE USING (deleted_at IS NULL) WITH CHECK (true);
+
+CREATE INDEX ON public.your_table (farm_id, deleted_at);
 ```
-**Soft-delete enforcement:** farm record tables grant `SELECT, INSERT, UPDATE` to `authenticated`
-and do not grant `DELETE`, since the app never hard-deletes. Core activity tables rely on the
-client `deleted_at IS NULL` filter for reads. Newer tables such as `custom_spray_records` also add
-`AND deleted_at IS NULL` at the SELECT-policy level so soft-deleted rows stay unreadable even if a
-client query forgets the filter. Restore still works through the authenticated
-`restore_farm_backup` `SECURITY DEFINER` wrapper; its internal restore helpers must not be granted
-to `anon` or `authenticated`. Match this stricter table pattern for new farm records.
+Also add the table to the sync queue `ALLOWED_TABLES`, backup schema and `restore_farm_backup` (if it belongs in the customer backup), the AI read registry, and `scripts/recovery/tenant-registry.ts`. Non-farm infrastructure tables (billing, quotas) use their own reviewed grants and usually no client write access.
+
+### Tenant Isolation (RLS)
+
+> **Verified against code:** 2026-09-28 against migrations only (commit not recorded):
+> `20260628100000_revoke_core_hard_deletes`, `20260629110000_update_policies`,
+> `20260709120000_custom_spray_records`, `20260723140134_work_requests`, and
+> `20260905092000_soft_delete_parity_fsa_clu`. Later migrations were not audited for policy changes.
+> Scope: farm-table grants and soft-delete policies.
+
+Every farm-owned table has RLS enabled with policies that restrict access to the caller's `farm_id` through `public.profiles`. Current state:
+
+- **Core tables** (`fields`, `bins`, `plant_records`, `spray_records`, `harvest_records`, `hay_harvest_records`, `fertilizer_applications`, `tillage_records`, `grain_movements`, `saved_seeds`, `fertilizer_recipes`, `spray_recipes`), plus `custom_spray_records` and `work_requests`: no `DELETE` grant for `authenticated`, a SELECT policy with `deleted_at IS NULL`, and the restrictive "Restrict updates on deleted rows" policy. Soft-deleted rows are therefore invisible and immutable to clients; restores go through `restore_farm_backup`.
+- **`fsa_tract_imports` and `field_clu_assignments`**: no `DELETE` grant, but the SELECT policy intentionally omits `deleted_at IS NULL` and there is no restrictive update policy, so their conflict-key upserts can resurrect tombstones. Client code must filter soft-deleted rows for these two tables.
+- **Legacy grant:** the core tables still carry a `GRANT SELECT ... TO anon` from `20260628100000`. It exposes no rows because every policy targets `authenticated`, but new tables must not copy it.
+
+Restore works through the authenticated `restore_farm_backup` `SECURITY DEFINER` wrapper; its internal restore helpers must not be granted to `anon` or `authenticated`.
 
 ### Profile Membership Protection
 `public.profiles` is the farm-membership security boundary used by RLS. Authenticated clients may select only their own profile and directly update only `active_season` and `onboarding_complete`. They must not be granted direct authority to change `id` or `farm_id`, insert a profile, or delete one; trusted farm assignment remains behind the `ensure_user_farm` security-definer flow. Migration `20260720165352_protect_profile_farm_membership.sql` owns these column grants and policies.
@@ -695,11 +742,27 @@ Product access enforcement is off by default. A missing or soft-deleted subscrip
 passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
 
 The locked product terms are a 122-day trial and a three-day `past_due` grace period.
-`farm_subscriptions` is the authoritative local entitlement mirror. Farm members may select their
+`farm_subscriptions` is the authoritative local entitlement mirror; the client never treats query
+parameters or client-reported Stripe state as authoritative. Farm members may select their
 farm's active row, but only service-role server paths write it. The checkout and portal endpoints
 authenticate the caller's Supabase bearer token, resolve the authoritative profile/farm, apply the
-subscription-owner gate, and accept only HTTPS Stripe URLs. Checkout uses a state-derived
-idempotency key.
+subscription-owner gate, and accept only HTTPS Stripe URLs.
+
+Checkout rules (`server/billing.ts`, `api/create-checkout-session.ts`): a live subscription
+(`trialing`, `active`, `past_due`, `unpaid`) returns 409 and the owner manages payment in the
+Customer Portal, because a second Checkout would create a parallel subscription; only a `canceled`
+or `incomplete` row may start a new Checkout. The 122-day trial is a first-subscription offer,
+granted only when the farm's row has never carried a Stripe subscription (`shouldGrantTrial`);
+re-subscribing after cancellation bills immediately. An existing `stripe_customer_id` is reused
+(`buildCheckoutCustomerParams`), otherwise the customer is seeded from the caller's email. The
+idempotency key is state-derived and also carries a fingerprint of the request origin and email,
+since Stripe rejects a reused key whose parameters differ. The Settings card offers Checkout only
+for no row, `canceled`, or `incomplete`; `past_due`/`unpaid` owners see Manage billing.
+
+Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` is a property of each
+subscription item, not the Subscription. `resolveCurrentPeriodEnd` uses the latest item end and
+falls back to the legacy top-level field. Entitlement grace for `canceled`/`unpaid`/`past_due`
+depends on this value, so webhook tests should use the basil payload shape.
 
 `api/stripe-webhook.ts` verifies the Stripe raw-body signature, claims `billing_webhook_events` as
 an idempotency ledger, fetches complete subscription state when needed, ignores stale replacement
@@ -723,8 +786,12 @@ builds continue to use Preferences because they have no OS keychain surface.
 
 Password recovery uses `src/lib/authDeepLinks.ts`. Web callbacks use `/auth?mode=recovery`; native
 callbacks must match the exact `com.wsegbert.acreledger://auth/recovery` scheme/host/path. The native
-listener handles an authorization code or the legacy access/refresh-token fragment, establishes the
-Supabase session, deduplicates repeated launch/open events, and only then opens the reset UI. Keep
+listener accepts only a PKCE authorization `code` and exchanges it with
+`exchangeCodeForSession` (the code is bound to a verifier stored on the device, so a link crafted
+by another app cannot sign the user into a foreign session). Raw `access_token`/`refresh_token`
+values in the URL, including the former legacy fragment, are rejected and surfaced as an
+incomplete-link error. The listener deduplicates repeated launch/open events and only then opens
+the reset UI. Keep
 the Supabase redirect allowlist, `Info.plist` URL registration, app listener, and tests synchronized.
 
 ### Ask the Book Read Registry
@@ -738,13 +805,13 @@ The public tool surface consists of flexible full-farm tools (`farm_overview`, `
 
 The assistant remains read-only at every layer. It has no mutation tool, no restore path, no arbitrary RPC execution, and no client capable of bypassing RLS. `api/ai-assistant.ts` runs a bounded named-tool loop through OpenRouter: at most four tool-capable rounds, eight tool executions, 1,000 rows per database page, ten pages, 12,000 serialized tool-result characters, a 45-second handler abort, and one answer-only synthesis round after tool access ends. These limits prevent open-ended model-driven queries and partial aggregate answers.
 
-Ask the Book uses the database-backed `ai_assistant_private` quota/audit flow. The public wrappers derive identity from `auth.uid()`, use an empty `search_path`, and deny `PUBLIC`/`anon`; private operational data is not part of the farm read catalog or backup/restore. OpenRouter requests must keep `data_collection: "deny"` and `require_parameters: true`, and account-level prompt logging must stay disabled.
+Ask the Book uses the database-backed `ai_assistant_private` quota/audit flow; local operational rows are retained for 30 days. The public wrappers derive identity from `auth.uid()`, use an empty `search_path`, and deny `PUBLIC`/`anon`; private operational data is not part of the farm read catalog or backup/restore. OpenRouter requests must keep `data_collection: "deny"` and `require_parameters: true`, and account-level prompt logging must stay disabled.
 
-Ask the Book defaults to MiniMax M3 Free (`minimax/minimax-m3:free`) and sends OpenRouter's `models` fallback list of `openrouter/free` so one request can continue on OpenRouter Free Tool Call when MiniMax is unavailable or rate-limited. If that response is still unavailable or rate-limited (HTTP 429, 502, 503, or matching error text), the same tool round retries once with `openrouter/free` and no `models` array, without consuming another quota token. `AI_MODEL` overrides the primary model only.
+Model routing: each request names a primary model and sends OpenRouter's `models` fallback list containing the fallback model, so one request can continue when the primary is unavailable or rate-limited. If the response is still unavailable or rate-limited (HTTP 429, 502, 503, or matching error text), the same tool round retries once with the fallback model alone and no `models` array, without consuming another quota token. `AI_MODEL` overrides the primary only and does not remove the fallback unless the primary already is the fallback. The current model IDs are the `DEFAULT_PRIMARY_MODEL` and `FALLBACK_MODEL` constants in `api/ai-assistant.ts`; that file is authoritative, and these docs intentionally do not repeat the IDs.
 
 The web client calls the same-origin `/api/ai-assistant` endpoint. Capacitor builds cannot rely on that relative Vercel route and require the public HTTPS deployment base in `VITE_AI_ASSISTANT_URL`; CodeMagic validates that the production bundle contains the configured endpoint. `OPENROUTER_API_KEY` remains server-only and must never appear in a `VITE_*` variable or compiled client asset.
 
-Voice ask-and-answer is on-device/OS speech: `src/lib/speech.ts` adapts the Capacitor community speech-recognition/text-to-speech plugins on iOS and the browser Web Speech API on the web, and `src/hooks/useAskVoice.ts` drives the drawer mic. The phone or browser transcribes speech into text; only that text is sent through the same read-only endpoint, quota, farm scope, and 500-character limit as a typed question, and audio bytes are never uploaded. Tap-to-start/tap-to-stop auto-sends on stop with a 30-second safety cap, spoken answers play only for voice-originated questions, and any answer can be replayed or stopped from its bubble. Typing, sending another question, or closing the drawer interrupts listening/speech, and the assistant remains read-only.
+Voice ask-and-answer is on-device/OS speech: `src/lib/speech.ts` adapts the Capacitor community speech-recognition/text-to-speech plugins on iOS and the browser Web Speech API on the web (production UI never calls those plugins or the Web Speech API directly), and `src/hooks/useAskVoice.ts` drives the drawer mic. The phone or browser transcribes speech into text; only that text is sent through the same read-only endpoint, quota, farm scope, and 500-character limit as a typed question, and audio bytes are never uploaded. Tap-to-start/tap-to-stop auto-sends on stop with a 30-second safety cap, spoken answers play only for voice-originated questions, and any answer can be replayed or stopped from its bubble. Typing, sending another question, or closing the drawer interrupts listening/speech, and the assistant remains read-only.
 
 **Intentional product decision:** the Ask the Book interface does not display a persistent AI disclaimer, compliance warning, verification reminder, or retention footer beneath its answers. Do not reintroduce recurring disclaimer text during future reviews unless the product owner explicitly reverses this decision. Keep factual provider and data-handling disclosures in the privacy policy and project documentation. This decision applies to Ask the Book only and does not remove required wording from compliance reports or work-request exports.
 
@@ -773,8 +840,11 @@ for `fsa_tract_imports` and `field_clu_assignments`:
 - Offline sync and `restore_farm_backup` must preserve these conflict keys so soft-deleted rows can be restored safely.
 
 ### Soft Delete
-`.update({ deleted_at: new Date().toISOString() }).in('id', ids).eq('farm_id', farm_id)`
-Never use Supabase `.delete()` on user records.
+`.update({ deleted_at: new Date().toISOString() }, { count: 'exact' }).in('id', ids).eq('farm_id', farm_id)`
+Never use Supabase `.delete()` on user records (clients have no `DELETE` grant on farm tables).
+Do not chain `.select()` to confirm a soft delete: the `deleted_at IS NULL` SELECT policy hides the
+updated row from the returning clause, so the client would see 0 rows and falsely roll back. Check
+the exact count instead (`count === ids.length`).
 
 ---
 
@@ -914,7 +984,8 @@ matching editor once. `Reports.tsx` also reads `?tab=` so report deep links sele
 report.
 
 Successful exports are fingerprinted by `src/lib/reportExportHistory.ts`. The local-storage key
-is scoped to user, farm, viewing season, and report type. The fingerprint is deterministic and
+is scoped to user, farm, viewing season, and report type
+(`al_report_export_<user>_<farm>_<season>_<report>`). The fingerprint is deterministic and
 uses normalized report source data (not generated timestamps), allowing the mobile panel to show
 "Never exported," the last export date, or "data changed since last export." Export-history
 storage is best-effort local metadata: a storage failure must not fail or block the actual export,
@@ -950,10 +1021,23 @@ does not catch continuation-page clipping.
 
 Status presentation rules are reporting-specific: a dated crop row without an explicit status
 may display as `Planted`; undated hay/pasture cropland may display as `Existing stand`; all other
-undated cropland requires an explicit FSA status and produces a readiness error. Type/variety is
+undated cropland requires an explicit FSA status and produces a readiness error. A clean report
+still states that county FSA review is required. Type/variety is
 intentionally omitted from the PDF unless requested, while preview and CSV retain it for farmer
 review. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
-farm/tract/CLU acreage and reporting facts.
+farm/tract/CLU acreage and reporting facts. Both FSA-578 and Fall Production outputs include the
+farm name in their header subtitles, in the on-screen preview and the PDF.
+
+Row construction rules (`buildFsa578Rows`):
+
+- Acreage comes from CLU assignments (one row per cropland CLU, using `assignment.acres`), not the
+  stored `PlantRecord.acreage`. Only fields with no cropland CLU assignments fall back to
+  `getDisplayFieldAcres(field, cluAssignments)`. Backfilling stored plant acreage therefore does not
+  change report output.
+- Multiple planting records for the same field/CLU remain separate rows; never collapse to latest-only.
+- Assigned cropland CLUs with no planting record appear as review rows so missing reporting is visible.
+- When an assigned cropland field's `intendedUse` is hay or pasture, that label is the FSA crop
+  rather than a missing-crop error.
 
 ### Landlord Summary Report
 
@@ -967,8 +1051,9 @@ harvest-only `HarvestRecord.landlordName`). Selecting a landlord shows:
 - **Activity Timeline** — all season-scoped activity (plant, spray, custom spray, fertilizer,
   tillage, grain harvest, hay harvest) across the landlord's fields, sorted by date, with colored
   activity pills. Hay entries show bale count/type and cutting number.
-- **Exports** — CSV (per-field summary + totals) and a **Detailed PDF** (landscape, fields
-  table + activity timeline in the footer).
+- **Exports** — CSV (`generateLandlordSummaryCSV`, per-field summary + totals) and a **Detailed
+  PDF** via `exportToPdf` (landscape, fields table + activity timeline in the footer). The PDF
+  subtitle includes the farm name, and long footer lines wrap through `doc.splitTextToSize`.
 
 Generation lives in `src/lib/complianceReports/generateLandlordSummary.ts` (pure data builder,
 no React). A landlord appears in the selector only if they own at least one non-deleted field
@@ -1006,12 +1091,9 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 
 ## 8. Coding Rules & Conventions
 
-- **Icon Shadowing**: Use `MapIcon`, `HistoryIcon` aliasing.
-- **No `upsert` for updates**: Use `.update().eq('id').eq('farm_id')`; only FSA tract/CLU insert and restore replay paths use the documented conflict-key upserts.
-- **Radix Modals**: Always include `DialogDescription`.
-- **Form Inputs**: Always include `id`, `name`, and linked `Label`.
-- **Data Safety**: Optional fields default to `null` in mappers.
-- **Zero vs Falsy**: `0` is a valid farm value. Use `value != null ? value : '—'`.
+Coding rules, file naming, import order, and the change workflow are maintained in
+[AGENTS.md](./AGENTS.md#coding-style). Rationale for the component rules is in
+[§6 Component Patterns](#6-component-patterns).
 
 ### Verification
 
@@ -1020,12 +1102,8 @@ generated contents and local inline Markdown links in AGENTS and BLUEPRINT, incl
 reference files. After changing headings, run `npm run docs:toc` and review the generated diff.
 This check does not verify external URLs or the accuracy of architecture claims.
 
-- The default Vitest suite is offline-only; live Rain API and authentication checks are isolated in `*.integration.test.*` and run through `vitest.integration.config.ts`.
-- Supabase service/store unit tests use the shared `src/test/supabaseMock.ts` factory. It provides reset-safe Vitest spies, thenable query builders, independent table/RPC results, and a separate table-bound builder for every `from(table)` call so concurrent `Promise.all` queries remain isolated.
-- The required consumer lifecycle is one mock per suite, `vi.doMock('@/lib/supabase', ...)`, a dynamic import of the system under test, and `mock.reset()` before each test. The factory must not be constructed through `vi.hoisted`.
-- Query-contract coverage exists for fields, bins, FSA tract imports, and CLU assignments. The tests lock farm/id scoping, exact-count update shapes, soft deletes without returning selects, and the two sanctioned conflict-key upserts. Raw-result interpretation and optimistic rollback are tested at the hook layer rather than duplicated in these thin services.
-- Hook suites use `src/test/hookTestHarness.tsx` so functional setters run against real React state. Coverage includes fields/bins, grain movements, FSA tract/CLU cascades, all activity-hook rollback/bulk-delete contracts, auth season synchronization, and composed sign-out cleanup.
-- Weather-proxy tests live in `src/test/weatherProxy.test.ts`; no test file belongs under `api/` because Vercel deploys TypeScript files there as functions. Proxy changes require both the unit suite and `npm run typecheck:api`.
-- Live auth security checks use non-mutating probes and require exact `42501` failures for forbidden profile membership writes.
+Test-suite rules (unit vs. integration split, the shared Supabase mock lifecycle, hook harness,
+query-contract suites, and Vercel Function test placement) are maintained in
+[AGENTS → Testing](./AGENTS.md#testing).
 
 See [TESTING.md](./TESTING.md) for commands, current coverage measurements, detailed verification protocols, and bot credentials.
