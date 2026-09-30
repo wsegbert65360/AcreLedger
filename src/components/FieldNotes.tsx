@@ -16,7 +16,23 @@ export default function FieldNotes({ field }: FieldNotesProps) {
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const confirmationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
+  const fieldRef = useRef(field);
+  const notesRef = useRef(notes);
+  const updateFieldRef = useRef(updateField);
+  const saveSequenceRef = useRef(0);
   const notesId = `field-notes-${field.id}`;
+
+  useEffect(() => {
+    fieldRef.current = field;
+  }, [field]);
+
+  useEffect(() => {
+    updateFieldRef.current = updateField;
+  }, [updateField]);
+
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
 
   useEffect(() => {
     setStatus('idle');
@@ -44,6 +60,10 @@ export default function FieldNotes({ field }: FieldNotesProps) {
 
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
+        // A field detail navigation must not discard a draft merely because the
+        // debounce has not elapsed yet. Use the most recent field snapshot so
+        // this notes-only save cannot overwrite another field edit.
+        void updateFieldRef.current({ ...fieldRef.current, notes: notesRef.current });
       }
 
       if (confirmationTimerRef.current) {
@@ -56,6 +76,7 @@ export default function FieldNotes({ field }: FieldNotesProps) {
     const newValue = e.target.value;
     setNotes(newValue);
     setStatus('syncing');
+    const saveSequence = ++saveSequenceRef.current;
 
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -63,9 +84,9 @@ export default function FieldNotes({ field }: FieldNotesProps) {
 
     saveTimerRef.current = setTimeout(async () => {
       saveTimerRef.current = null;
-      const success = await updateField({ ...field, notes: newValue });
+      const success = await updateField({ ...fieldRef.current, notes: newValue });
 
-      if (!mountedRef.current) {
+      if (!mountedRef.current || saveSequence !== saveSequenceRef.current) {
         return;
       }
 
