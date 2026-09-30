@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const metadataPath = resolve(root, 'docs/app-store/metadata.en-US.json');
+const packagePath = resolve(root, 'package.json');
 const metadata = JSON.parse(readFileSync(metadataPath, 'utf8'));
+const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+const marketingVersion = packageJson.version?.split('-')[0];
 const problems = [];
 
 const limits = {
@@ -37,7 +40,9 @@ for (const field of ['supportUrl', 'marketingUrl', 'privacyPolicyUrl']) {
   }
 }
 
-if (metadata.version !== '3.6.0') {
+if (typeof marketingVersion !== 'string' || marketingVersion.length === 0) {
+  problems.push('package.json must define a marketing version');
+} else if (metadata.version !== marketingVersion) {
   problems.push('version must match the iOS marketing version produced from package.json');
 }
 
