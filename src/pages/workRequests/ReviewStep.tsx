@@ -109,7 +109,7 @@ export default function ReviewStep({ draft, issues, canGenerate, goToStep, onDow
         </ul>
       </ReviewSection>
 
-      <p className="text-[11px] italic text-muted-foreground">{WORK_REQUEST_DISCLAIMER}</p>
+      <p className="text-xs italic text-muted-foreground">{WORK_REQUEST_DISCLAIMER}</p>
 
       {/* Terminal actions */}
       <div className="flex flex-col gap-2 pt-2">

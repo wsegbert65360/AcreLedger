@@ -136,7 +136,7 @@ const Index = () => {
           <div className="flex min-w-0 items-center gap-3">
             <Logo />
             <div className="hidden min-w-0 flex-col sm:flex">
-              <h1 className="text-sm font-bold text-foreground tracking-tight hidden xs:block">Farm Overview</h1>
+              <h1 className="text-sm font-bold text-foreground tracking-tight">Farm Overview</h1>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="whitespace-nowrap">{allFields.length} fields</span>
                 <SeasonSelect className="min-w-[4.75rem] border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />

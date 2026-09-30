@@ -87,7 +87,7 @@ export default function LandlordSummaryReport({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-[11px] font-mono border-blue-500/30 text-blue-600 hover:bg-blue-50"
+                className="h-8 text-xs font-mono border-blue-500/30 text-blue-600 hover:bg-blue-50"
                 onClick={onExportCsv}
               >
                 <Download size={12} className="mr-1.5" />
@@ -96,7 +96,7 @@ export default function LandlordSummaryReport({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-[11px] font-mono border-primary/30 text-primary hover:bg-primary/10"
+                className="h-8 text-xs font-mono border-primary/30 text-primary hover:bg-primary/10"
                 onClick={onExportPdf}
               >
                 <Download size={12} className="mr-1.5" />
@@ -150,12 +150,12 @@ export default function LandlordSummaryReport({
                 landlordSummary.fields.map(f => (
                   <tr key={f.fieldId} className="hover:bg-muted/30 transition-colors">
                     <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{f.fieldName}</td>
-                    <td data-label="CROP" className="px-4 py-3 font-mono text-[10px] text-harvest font-bold">{f.crop ?? '—'}</td>
-                    <td data-label="ACRES" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.acres.toLocaleString()}</td>
-                    <td data-label="TOTAL BU." className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.totalBushels.toLocaleString()}</td>
-                    <td data-label="BU/ACRE" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.buPerAcre != null ? f.buPerAcre.toLocaleString() : '—'}</td>
-                    <td data-label="BALES" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{f.totalBales.toLocaleString()}</td>
-                    <td data-label="LANDLORD SHARE" className="px-4 py-3 font-mono text-[10px] text-blue-600 font-bold text-right">{f.landlordShareBushels.toLocaleString()}</td>
+                    <td data-label="CROP" className="px-4 py-3 font-mono text-xs text-harvest font-bold">{f.crop ?? '—'}</td>
+                    <td data-label="ACRES" className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.acres.toLocaleString()}</td>
+                    <td data-label="TOTAL BU." className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.totalBushels.toLocaleString()}</td>
+                    <td data-label="BU/ACRE" className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.buPerAcre != null ? f.buPerAcre.toLocaleString() : '—'}</td>
+                    <td data-label="BALES" className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.totalBales.toLocaleString()}</td>
+                    <td data-label="LANDLORD SHARE" className="px-4 py-3 font-mono text-xs text-blue-600 font-bold text-right">{f.landlordShareBushels.toLocaleString()}</td>
                   </tr>
                 ))
               )}
@@ -178,14 +178,14 @@ export default function LandlordSummaryReport({
                   const typeKey = a.activityType;
                   return (
                     <tr key={i} className="hover:bg-muted/30 transition-colors">
-                      <td data-label="DATE" className="px-4 py-3 font-mono text-[10px] text-foreground whitespace-nowrap">{a.date}</td>
+                      <td data-label="DATE" className="px-4 py-3 font-mono text-xs text-foreground whitespace-nowrap">{a.date}</td>
                       <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{a.fieldName}</td>
                       <td data-label="TYPE" className="px-4 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-mono text-[10px] font-bold border ${ACTIVITY_BG_COLORS[typeKey]} ${ACTIVITY_TEXT_COLORS[typeKey]} border-current/20`}>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-mono text-xs font-bold border ${ACTIVITY_BG_COLORS[typeKey]} ${ACTIVITY_TEXT_COLORS[typeKey]} border-current/20`}>
                           {ACTIVITY_LABEL[a.activityType]}
                         </span>
                       </td>
-                      <td data-label="CROP" className="px-4 py-3 font-mono text-[10px] text-foreground">{a.crop ?? '—'}</td>
+                      <td data-label="CROP" className="px-4 py-3 font-mono text-xs text-foreground">{a.crop ?? '—'}</td>
                       <td data-label="DETAIL" className="px-4 py-3 text-xs text-muted-foreground">{a.detail}</td>
                     </tr>
                   );

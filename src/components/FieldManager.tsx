@@ -134,7 +134,7 @@ export default function FieldManager() {
                 <p className="text-xs text-destructive font-bold mb-1">
                   Cloud Sync Failed
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Showing local cache. Check your connection.
                 </p>
               </>

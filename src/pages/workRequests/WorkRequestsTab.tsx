@@ -210,12 +210,12 @@ function WorkRequestCard({ request, exporting, onEdit, onDuplicate, onDownload, 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-mono text-sm font-bold text-foreground">{request.requestNumber}</span>
-              <Badge variant="outline" className={`text-[10px] ${STATUS_STYLES[request.status]}`}>{request.status}</Badge>
+              <Badge variant="outline" className={`text-xs ${STATUS_STYLES[request.status]}`}>{request.status}</Badge>
             </div>
             <p className="text-xs text-muted-foreground truncate">
               {workTypeLabel(request.workType)} · {request.customerName} · {farms.join(', ') || 'Farm'}
             </p>
-            <p className="text-[11px] font-mono text-muted-foreground">
+            <p className="text-xs font-mono text-muted-foreground">
               {request.fields.length} field{request.fields.length !== 1 ? 's' : ''} · {totalAcres.toLocaleString()} ac · created {formatIsoDate(request.createdAt)}
             </p>
           </div>
@@ -309,7 +309,7 @@ function WorkRequestWizard({ open, onClose, initial, mode, fsaTracts, onSave }: 
               type="button"
               onClick={() => i <= form.stepIndex && form.goToStep(s.key)}
               disabled={i > form.stepIndex}
-              className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
                 i === form.stepIndex
                   ? 'bg-primary text-primary-foreground'
                   : i < form.stepIndex

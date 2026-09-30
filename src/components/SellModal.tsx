@@ -85,7 +85,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
                             <Banknote size={24} />
                             <span>Sell Harvest — {bin.name}</span>
                         </div>
-                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
+                        <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-harvest/10 text-harvest border border-harvest/20">
                             {viewingSeason} Season
                         </span>
                     </DialogTitle>
@@ -97,7 +97,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
                 <div className="space-y-4 py-2">
                     {/* Inventory Info */}
                     <div className="bg-muted/50 rounded-lg p-3 border border-border">
-                        <div className="text-[11px] font-mono text-muted-foreground uppercase tracking-widest">Available Inventory</div>
+                        <div className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Available Inventory</div>
                         <div className="text-xl font-bold text-foreground font-mono">{currentInventory.toLocaleString()} bu</div>
                     </div>
 
@@ -117,7 +117,7 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
                                 autoFocus
                             />
                             {parseFloat(bushels) > currentInventory && (
-                                <p className="text-[11px] text-destructive mt-1 font-mono font-bold">⚠️ EXCEEDS BIN INVENTORY</p>
+                                <p className="text-xs text-destructive mt-1 font-mono font-bold">⚠️ EXCEEDS BIN INVENTORY</p>
                             )}
                         </div>
 

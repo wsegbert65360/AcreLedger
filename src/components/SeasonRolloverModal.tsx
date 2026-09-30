@@ -142,12 +142,12 @@ export default function SeasonRolloverModal() {
             <div className="bg-muted p-3 rounded-lg border border-border/50">
               <div className="flex items-center justify-center gap-4 py-2">
                 <div className="text-center">
-                  <div className="text-[11px] text-muted-foreground font-mono">Current active season</div>
+                  <div className="text-xs text-muted-foreground font-mono">Current active season</div>
                   <div className="text-xl font-bold font-mono opacity-50">{activeSeason}</div>
                 </div>
                 <ArrowRight className="text-muted-foreground" size={20} />
                 <div className="text-center">
-                  <div className="text-[11px] text-amber-500 font-mono">New active season</div>
+                  <div className="text-xs text-amber-500 font-mono">New active season</div>
                   <div className="text-2xl font-bold font-mono text-amber-500">{targetSeason ?? 'At limit'}</div>
                 </div>
               </div>
@@ -177,8 +177,8 @@ export default function SeasonRolloverModal() {
             <div className="pt-2 border-t border-border/50">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5 min-w-0">
-                  <h4 className="text-[11px] font-semibold font-mono text-muted-foreground">Restore from backup</h4>
-                  <p className="text-[11px] font-mono text-muted-foreground/70">
+                  <h4 className="text-xs font-semibold font-mono text-muted-foreground">Restore from backup</h4>
+                  <p className="text-xs font-mono text-muted-foreground/70">
                     Merges backup rows into your cloud farm, then reloads from the cloud.
                   </p>
                 </div>
@@ -197,7 +197,7 @@ export default function SeasonRolloverModal() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-9 min-h-[44px] text-[11px] font-mono gap-1.5 border-dashed"
+                    className="h-9 min-h-[44px] text-xs font-mono gap-1.5 border-dashed"
                     disabled={busy}
                     type="button"
                   >

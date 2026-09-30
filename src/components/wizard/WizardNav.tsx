@@ -70,7 +70,7 @@ export function WizardNav<TStep extends string>({
             >
               <div
                 className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold transition-colors',
+                  'flex h-7 w-7 items-center justify-center rounded-full border-2 font-mono text-xs font-bold transition-colors',
                   isActive && mergedTheme.activeStep,
                   isCompleted && mergedTheme.completedStep,
                   !isActive && !isCompleted && mergedTheme.inactiveStep,
@@ -80,7 +80,7 @@ export function WizardNav<TStep extends string>({
               </div>
               <span
                 className={cn(
-                  'hidden text-[9px] font-bold uppercase tracking-wider sm:block',
+                  'hidden text-xs font-bold uppercase tracking-wider sm:block',
                   isActive ? mergedTheme.activeLabel : mergedTheme.inactiveLabel,
                 )}
               >

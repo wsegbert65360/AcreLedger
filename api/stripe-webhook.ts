@@ -34,6 +34,18 @@ function getHeader(
   return first ?? null;
 }
 
+function cleanEnvValue(value: string | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 async function readRawBody(req: WebhookRequest): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -189,13 +201,13 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
     return res.status(403).json({ error: billingCheck.reason });
   }
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = cleanEnvValue(process.env.STRIPE_WEBHOOK_SECRET);
   if (!webhookSecret) {
     return res.status(500).json({ error: 'Server configuration error: missing webhook secret' });
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = cleanEnvValue(process.env.SUPABASE_URL);
+  const supabaseServiceRoleKey = cleanEnvValue(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!supabaseUrl || !supabaseServiceRoleKey) {
     return res.status(500).json({ error: 'Server configuration error: missing Supabase credentials' });
   }

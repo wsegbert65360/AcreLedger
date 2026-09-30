@@ -55,8 +55,22 @@ const SUPABASE_FETCH_TIMEOUT_MS = 15000;
 function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), SUPABASE_FETCH_TIMEOUT_MS);
-    const signal = init?.signal ?? controller.signal;
-    return fetch(input, { ...init, signal }).finally(() => clearTimeout(timeout));
+    // Honor a caller-supplied signal without losing the timeout cap: abort our
+    // controller when the caller's signal fires.
+    const callerSignal = init?.signal;
+    let onCallerAbort: (() => void) | undefined;
+    if (callerSignal) {
+        if (callerSignal.aborted) {
+            controller.abort();
+        } else {
+            onCallerAbort = () => controller.abort();
+            callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+        }
+    }
+    return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+        clearTimeout(timeout);
+        if (callerSignal && onCallerAbort) callerSignal.removeEventListener('abort', onCallerAbort);
+    });
 }
 
 // Native auth sessions contain refresh tokens and must stay in the OS secure store.

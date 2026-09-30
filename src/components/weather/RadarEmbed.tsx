@@ -73,11 +73,11 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
             <div className="w-1.5 h-1.5 bg-destructive rounded-full" />
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
           </div>
-          <span className="text-[10px] font-bold text-destructive/80 uppercase tracking-wider">Unavailable</span>
+          <span className="text-xs font-bold text-destructive/80 uppercase tracking-wider">Unavailable</span>
         </div>
         <div className="h-48 flex flex-col items-center justify-center gap-2">
           <p className="text-xs font-semibold text-muted-foreground">Radar unavailable</p>
-          <p className="text-[10px] text-muted-foreground/60">Check your connection and try again</p>
+          <p className="text-xs text-muted-foreground/60">Check your connection and try again</p>
         </div>
       </div>
     );
@@ -94,7 +94,7 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
           </div>
           <div className="flex items-center gap-2">
             {lastUpdated ? (
-              <span className="hidden min-[380px]:inline text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider font-mono">
+              <span className="hidden min-[380px]:inline text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider font-mono">
                 Loaded {lastUpdated}
               </span>
             ) : null}
@@ -129,10 +129,10 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
 
         {/* Footer */}
         <div className="px-4 py-1.5 bg-muted/30 flex items-center justify-between">
-          <p className="text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-wider">Drag to pan · Pinch to zoom</p>
+          <p className="text-xs font-semibold text-muted-foreground/50 uppercase tracking-wider">Drag to pan · Pinch to zoom</p>
           <div className="flex items-center gap-1">
             <div className="w-1 h-1 bg-emerald-500 rounded-full" />
-            <span className="text-[9px] font-bold text-emerald-500/70 uppercase">Real-time</span>
+            <span className="text-xs font-bold text-emerald-500/70 uppercase">Real-time</span>
           </div>
         </div>
       </div>

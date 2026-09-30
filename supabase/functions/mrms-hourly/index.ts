@@ -42,6 +42,11 @@ export default {
       const { data, error } = await supabaseClient
         .from('fields')
         .select('id, lat, lng')
+        // Skip soft-deleted fields and fields with no coordinates so they don't
+        // receive genuine-looking zero rainfall.
+        .is('deleted_at', null)
+        .not('lat', 'is', null)
+        .not('lng', 'is', null)
         .order('id', { ascending: true })
         .range(from, from + FIELD_PAGE_SIZE - 1)
       if (error || !data) throw error ?? new Error('Failed to fetch fields')
@@ -61,7 +66,9 @@ export default {
 
     if (!gribData) {
         console.log(`No MRMS data available for ${targetTs.toISOString()}`)
-        return new Response(JSON.stringify({ message: 'No data available yet' }), { status: 200 })
+        // 503 (not 200) so scheduler/monitoring logs show a missed pass instead of
+        // a silent success. The nightly backfill window still picks the hour up.
+        return Response.json({ message: 'No data available yet' }, { status: 503 })
     }
 
     console.log(`Using ${source} data from ${source === 'Pass 2' ? pass2Url : pass1Url}`)

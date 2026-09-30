@@ -4,6 +4,12 @@ import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShieldAlert, Trash2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import {
+  isErrorReportingConfigured,
+  isErrorReportingOptedOut,
+  setErrorReportingOptOut,
+} from '@/utils/errorReporting';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -13,6 +19,8 @@ export default function SecurityManager() {
   const { clearLocalCache } = useFarm();
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [sendCrashReports, setSendCrashReports] = useState(() => !isErrorReportingOptedOut());
+  const crashReportingAvailable = isErrorReportingConfigured();
 
   return (
     <>
@@ -36,10 +44,32 @@ export default function SecurityManager() {
             Clear Local Cache
           </Button>
 
+          {crashReportingAvailable && (
+            <div className="flex items-start justify-between gap-4 pt-4 border-t border-border/10">
+              <div className="space-y-1">
+                <label htmlFor="crash-reports-switch" className="text-sm font-medium text-foreground">
+                  Send crash reports
+                </label>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  When the app hits an error, send the error details to help us fix it. Sign-in tokens and attached
+                  photos are removed first. Turn off to stop sending from this device.
+                </p>
+              </div>
+              <Switch
+                id="crash-reports-switch"
+                checked={sendCrashReports}
+                onCheckedChange={(checked) => {
+                  setSendCrashReports(checked);
+                  setErrorReportingOptOut(!checked);
+                }}
+              />
+            </div>
+          )}
+
           <div className="pt-4 border-t border-border/10">
             <Button
               variant="link"
-              className="text-[11px] font-mono text-muted-foreground uppercase p-0 h-auto hover:text-primary tracking-widest"
+              className="text-xs font-mono text-muted-foreground uppercase p-0 h-auto hover:text-primary tracking-widest"
               onClick={() => navigate('/privacy')}
             >
               Review Full Privacy Policy & Compliance

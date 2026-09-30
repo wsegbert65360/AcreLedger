@@ -145,7 +145,7 @@ export default function FieldReviewStep({ draft, patchFieldEntry, resolve, navUr
         onOverrideNotes={notes => setOverrideNotes(activeEntry, notes)}
       />
 
-      <p className="text-[10px] text-muted-foreground">{NOMINATIM_ATTRIBUTION}</p>
+      <p className="text-xs text-muted-foreground">{NOMINATIM_ATTRIBUTION}</p>
     </div>
   );
 }
@@ -239,7 +239,7 @@ function FieldReviewCard({ entry, draft, lookupInProgress, navUrl, resolve, onRe
           onChange={e => onRoadChange(e.target.value)}
           placeholder="Type the road name or re-lookup"
         />
-        {entry.roadSource === 'nominatim' && <p className="text-[10px] text-muted-foreground">Auto-detected — edit if incorrect.</p>}
+        {entry.roadSource === 'nominatim' && <p className="text-xs text-muted-foreground">Auto-detected — edit if incorrect.</p>}
       </div>
 
       {/* Per-field overrides */}
@@ -254,14 +254,14 @@ function FieldReviewCard({ entry, draft, lookupInProgress, navUrl, resolve, onRe
             onChange={e => onOverrideCrop(e.target.value)}
             placeholder="Enter the crop"
           />
-          <p className="text-[10px] text-muted-foreground">Defaulted from this field's current planting record. Change it here if needed.</p>
+          <p className="text-xs text-muted-foreground">Defaulted from this field's current planting record. Change it here if needed.</p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`notes-${entry.fieldId}`} className="text-xs">Notes for this field</Label>
           <Textarea id={`notes-${entry.fieldId}`} value={overrideNotes} onChange={e => onOverrideNotes(e.target.value)} placeholder="Leave blank to use the request notes" />
         </div>
         {(entry.overrides?.products?.length ?? 0) > 0 && (
-          <p className="text-[10px] text-muted-foreground">This field has {entry.overrides?.products?.length ?? 0} product override(s) applied from a saved request.</p>
+          <p className="text-xs text-muted-foreground">This field has {entry.overrides?.products?.length ?? 0} product override(s) applied from a saved request.</p>
         )}
       </div>
     </div>

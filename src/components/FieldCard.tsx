@@ -69,7 +69,7 @@ export default function FieldCard({ field }: FieldCardProps) {
         <div className="min-w-0 flex-1">
           <h3 className="line-clamp-2 font-bold leading-tight text-foreground">{field.name}</h3>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border leading-none whitespace-nowrap ${statusPillClass}`}>
+            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border leading-none whitespace-nowrap ${statusPillClass}`}>
               {statusLabel}
             </span>
             <span className="font-mono text-xs font-medium text-muted-foreground">
@@ -84,18 +84,22 @@ export default function FieldCard({ field }: FieldCardProps) {
           <div
             className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.plant} opacity-80`}
             title="Planting activity"
+            role="img"
+            aria-label="Planted"
           >
-            <ACTIVITY_ICONS.plant size={16} />
+            <ACTIVITY_ICONS.plant size={16} aria-hidden="true" />
           </div>
         )}
         {(summary?.sprayed ?? 0) > 0 && (
           <div
             className={`h-8 w-auto min-w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.spray} opacity-85`}
             title="Spraying activity"
+            role="img"
+            aria-label={`Sprayed ${summary?.sprayed} time${summary?.sprayed === 1 ? '' : 's'}`}
           >
             <div className="flex items-center">
               <ACTIVITY_ICONS.spray size={16} />
-              <span className="ml-0.5 rounded-full bg-spray/10 px-1 py-0.5 text-[10px] font-mono font-bold leading-none text-spray">x{summary?.sprayed}</span>
+              <span className="ml-0.5 rounded-full bg-spray/10 px-1 py-0.5 text-xs font-mono font-bold leading-none text-spray">x{summary?.sprayed}</span>
             </div>
           </div>
         )}
@@ -103,8 +107,10 @@ export default function FieldCard({ field }: FieldCardProps) {
           <div
             className={`h-8 w-8 flex items-center justify-center ${ACTIVITY_TEXT_COLORS.fertilizer} opacity-80`}
             title="Fertilizer activity"
+            role="img"
+            aria-label="Fertilized"
           >
-            <ACTIVITY_ICONS.fertilizer size={16} />
+            <ACTIVITY_ICONS.fertilizer size={16} aria-hidden="true" />
           </div>
         )}
       </div>

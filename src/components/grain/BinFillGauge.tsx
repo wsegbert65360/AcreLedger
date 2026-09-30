@@ -210,7 +210,7 @@ export default function BinFillGauge({ bushels, capacity, percentFull }: BinFill
                   style={{ bottom: `${tick}%`, transform: 'translateY(50%)' }}
                 >
                   <span className="h-px w-3 bg-slate-400 dark:bg-slate-600" />
-                  <span className={cn('font-mono text-[10px]', tick === 100 ? 'text-red-500/80 dark:text-red-400' : 'text-slate-500 dark:text-slate-400')}>
+                  <span className={cn('font-mono text-xs', tick === 100 ? 'text-red-500/80 dark:text-red-400' : 'text-slate-500 dark:text-slate-400')}>
                     {tick}%
                   </span>
                 </div>

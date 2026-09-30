@@ -59,14 +59,14 @@ export function SprayDecisionMatrix({
             <h3 className={cn('text-sm font-bold uppercase tracking-wider', status.color)}>
               Spray Conditions: {status.label}
             </h3>
-            <p className={cn('text-[10px] font-medium', status.color, 'opacity-80')}>
+            <p className={cn('text-xs font-medium', status.color, 'opacity-80')}>
               {status.subtext}
             </p>
           </div>
         </div>
         {windDirection && windDirection !== '—' && (
           <div className="text-right">
-            <div className="text-[10px] font-mono text-muted-foreground uppercase">Wind Dir</div>
+            <div className="text-xs font-mono text-muted-foreground uppercase">Wind Dir</div>
             <div className={cn('text-xs font-mono font-bold', status.color)}>{windDirection}</div>
           </div>
         )}
@@ -86,14 +86,14 @@ export function SprayDecisionMatrix({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase">
+                  <span className="text-xs font-mono font-bold text-muted-foreground uppercase">
                     {factor.label}
                   </span>
-                  <span className={cn('text-[11px] font-mono font-bold', factorStatus.color)}>
+                  <span className={cn('text-xs font-mono font-bold', factorStatus.color)}>
                     {factor.value}
                   </span>
                 </div>
-                <p className={cn('text-[10px] leading-tight mt-0.5', factorStatus.color, 'opacity-90')}>
+                <p className={cn('text-xs leading-tight mt-0.5', factorStatus.color, 'opacity-90')}>
                   {factor.note}
                 </p>
               </div>
@@ -103,7 +103,7 @@ export function SprayDecisionMatrix({
       </div>
 
       <div className="px-4 py-2 border-t border-border/30 bg-muted/10">
-        <p className="text-[9px] text-muted-foreground/70 leading-tight">
+        <p className="text-xs text-muted-foreground/70 leading-tight">
           Delta-T (ΔT) is an estimate based on temperature and humidity. Always follow label directions and local regulations; this guidance is advisory only.
         </p>
       </div>

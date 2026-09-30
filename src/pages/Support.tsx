@@ -106,7 +106,7 @@ export default function Support({ withBottomNav = false }: SupportProps) {
         </Card>
 
         <footer className="py-8 text-center">
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground/60">
             &copy; 2026 AcreLedger Precision Agriculture.
           </p>
         </footer>

@@ -104,7 +104,7 @@ export default function WorkRequestFieldMap({
           No crop-acre boundary available
         </div>
       )}
-      <div className="pointer-events-none absolute bottom-1 right-1 z-[500] max-w-[85%] rounded bg-white/85 px-1.5 py-0.5 text-right text-[8px] leading-tight text-slate-600">
+      <div className="pointer-events-none absolute bottom-1 right-1 z-[500] max-w-[85%] rounded bg-white/85 px-1.5 py-0.5 text-right text-xs leading-tight text-slate-600">
         {ESRI_STREET_MAP_ATTRIBUTION}
       </div>
     </div>

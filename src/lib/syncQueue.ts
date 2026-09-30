@@ -224,6 +224,13 @@ async function reconcileZeroRowMutation(mutation: QueuedMutation, farmId: string
   if (error || !data) return false;
 
   if (mutation.operation === 'soft_delete') {
+    // The row is already soft-deleted. That is the state this mutation wants, and
+    // it can only be reached here if an earlier attempt (whose response was lost)
+    // or another device committed it. Re-queued deletes carry a fresh timestamp
+    // and the "Restrict updates on deleted rows" policy makes the replay affect
+    // 0 rows, so exact timestamp equality would never hold and the mutation
+    // would fail forever.
+    if (data.deleted_at) return true;
     const versionMatches = mutation.table_name !== 'grain_movements'
       || typeof mutation.payload.__expected_version !== 'number'
       || data.version === mutation.payload.__expected_version + 1;

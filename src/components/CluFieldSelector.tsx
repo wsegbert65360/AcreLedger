@@ -71,7 +71,7 @@ export default function CluFieldSelector({
         <div className="text-xs text-muted-foreground flex items-center gap-1">
           <Check size={12} className="text-green-500" />
           {selectedField.name}: {activeAssignments.length} CLU{activeAssignments.length !== 1 ? 's' : ''} ({totalAcres.toFixed(1)} ac)
-          <span className="font-mono text-[10px]">
+          <span className="font-mono text-xs">
             {croplandAcres.toFixed(1)} crop / {nonCroplandAcres.toFixed(1)} non-crop
           </span>
         </div>
@@ -97,7 +97,7 @@ export default function CluFieldSelector({
           Non-cropland
         </Button>
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Select a field and land use, then tap CLUs. Tap an assigned CLU with the other land use selected to re-label it.
       </p>
 

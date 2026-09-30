@@ -90,11 +90,11 @@ export default function RecipeManager() {
                   <div key={p.id ?? p.product} className="text-muted-foreground text-xs pl-2 leading-relaxed">
                     <span>• {p.product} — </span>
                     <span className="font-mono">{p.rate} {p.rateUnit}</span>
-                    {p.epaRegNumber && <span className="ml-2 font-mono text-[11px] opacity-70">(EPA: {p.epaRegNumber})</span>}
+                    {p.epaRegNumber && <span className="ml-2 font-mono text-xs opacity-70">(EPA: {p.epaRegNumber})</span>}
                   </div>
                 ))}
                 {(recipe.applicatorName || recipe.licenseNumber || recipe.targetPest || recipe.epaRegNumber) && (
-                  <div className="text-muted-foreground text-[11px] pl-2 pt-1 border-t border-border/50 mt-1 flex flex-wrap gap-x-3 gap-y-0.5 leading-relaxed">
+                  <div className="text-muted-foreground text-xs pl-2 pt-1 border-t border-border/50 mt-1 flex flex-wrap gap-x-3 gap-y-0.5 leading-relaxed">
                     {recipe.applicatorName && <div>Applicator: <span className="text-foreground/70">{recipe.applicatorName}<span className="font-mono">{recipe.licenseNumber ? ` (${recipe.licenseNumber})` : ''}</span></span></div>}
                     {recipe.epaRegNumber && <div>Gen EPA: <span className="font-mono text-foreground/70">{recipe.epaRegNumber}</span></div>}
                     {recipe.targetPest && <div>Target: <span className="text-foreground/70">{recipe.targetPest}</span></div>}

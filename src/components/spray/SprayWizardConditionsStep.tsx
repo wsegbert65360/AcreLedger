@@ -55,7 +55,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
     <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
       <div className={`rounded-lg border p-3 space-y-3 ${weather ? 'border-spray/20 bg-muted/30' : 'border-destructive/30 bg-destructive/5'}`}>
         <div className="flex items-center justify-between">
-          <span className={`font-mono text-[11px] font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
+          <span className={`font-mono text-xs font-bold uppercase tracking-wider ${weather ? 'text-spray' : 'text-destructive'}`}>
             Environmental Conditions *
           </span>
           <div className="flex items-center gap-2">
@@ -63,7 +63,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
               variant="ghost"
               size="sm"
               onClick={() => setShowRecover(s => !s)}
-              className="h-6 px-2 text-[10px] font-bold text-spray hover:bg-spray/10"
+              className="h-6 px-2 text-xs font-bold text-spray hover:bg-spray/10"
             >
               <HistoryIcon size={10} className="mr-1" />
               {showRecover ? 'HIDE' : 'RECOVER'}
@@ -79,7 +79,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
               size="sm"
               onClick={onRecoverWeather}
               disabled={isRecovering || !fieldLat || !fieldLng}
-              className="h-7 px-2 text-[10px] font-bold border-spray/30 text-spray hover:bg-spray/10"
+              className="h-7 px-2 text-xs font-bold border-spray/30 text-spray hover:bg-spray/10"
             >
               {isRecovering ? <Loader2 size={10} className="animate-spin mr-1" /> : <HistoryIcon size={10} className="mr-1" />}
               Pull historical weather
@@ -125,7 +125,7 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <div className="text-xs font-mono font-bold uppercase">High Drift Risk!</div>
-              <p className="text-[10px] text-yellow-700/80 leading-normal">
+              <p className="text-xs text-yellow-700/80 leading-normal">
                 Wind speed ({windNum} mph) exceeds the recommended limit of {WIND_ALERT_MPH} mph. High risk of chemical drift.
               </p>
             </div>
@@ -145,11 +145,11 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
         {weather && (
           <div className="grid grid-cols-2 gap-2 border-t border-border/30 pt-2">
             <div className="space-y-0.5">
-              <div className="text-[11px] font-mono text-muted-foreground uppercase">Temp (°F) *</div>
+              <div className="text-xs font-mono text-muted-foreground uppercase">Temp (°F) *</div>
               <div className="text-xs font-mono font-bold">{weather.temp}°F</div>
             </div>
             <div className="space-y-0.5 text-right">
-              <div className="text-[11px] font-mono text-muted-foreground uppercase">Humidity (%)</div>
+              <div className="text-xs font-mono text-muted-foreground uppercase">Humidity (%)</div>
               <div className="text-xs font-mono font-bold">{weather.humidity}%</div>
             </div>
           </div>

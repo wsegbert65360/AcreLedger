@@ -145,11 +145,11 @@ export default function TillageModal({ field, open, onClose, initialData, mode =
                         <div>
                             <div className="flex items-center gap-2">
                                 <DialogTitle className="text-lg font-bold text-foreground leading-tight">{isDuplicate ? 'Duplicate' : initialData ? 'Edit' : 'New'} Tillage</DialogTitle>
-                                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-orange-600/10 text-orange-600 border border-orange-600/20">
+                                <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg bg-orange-600/10 text-orange-600 border border-orange-600/20">
                                     {initialData && !isDuplicate ? initialData.seasonYear : viewingSeason} Season
                                 </span>
                             </div>
-                            <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
+                            <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{field.name}</p>
                         </div>
                     </div>
                     <DialogDescription className="sr-only">

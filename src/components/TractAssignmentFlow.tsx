@@ -757,7 +757,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                 <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="font-bold text-sm text-foreground">Download it yourself</h4>
-                    <span className="bg-primary/10 text-primary text-[10px] font-semibold px-2 py-0.5 rounded-full">Easiest</span>
+                    <span className="bg-primary/10 text-primary text-xs font-semibold px-2 py-0.5 rounded-full">Easiest</span>
                   </div>
                   <ol className="list-decimal pl-5 text-xs space-y-2 text-muted-foreground">
                     <li>
@@ -818,7 +818,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                     <ExternalLink size={12} className="inline shrink-0" />
                   </a>
                   <div className="relative bg-muted p-3.5 rounded-lg border border-border/80 text-xs font-mono text-muted-foreground leading-relaxed">
-                    <span className="absolute -top-2 left-3 bg-card px-1.5 text-[9px] uppercase font-sans font-bold tracking-wider text-muted-foreground border rounded-sm">Wording for a call or email</span>
+                    <span className="absolute -top-2 left-3 bg-card px-1.5 text-xs uppercase font-sans font-bold tracking-wider text-muted-foreground border rounded-sm">Wording for a call or email</span>
                     <p className="pt-2 text-foreground/95 select-all font-sans">
                       “{FSA_BOUNDARY_REQUEST_TEXT}”
                     </p>

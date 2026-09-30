@@ -62,12 +62,12 @@ export default function FertilizerReport({
     >
       {fertilizerRecords.map(r => (
         <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-          <td data-label="DATE" className="px-4 py-3 font-mono text-[10px] text-foreground uppercase tracking-tighter">{fmtDate(r.date)}</td>
+          <td data-label="DATE" className="px-4 py-3 font-mono text-xs text-foreground uppercase tracking-tighter">{fmtDate(r.date)}</td>
           <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground sm:min-w-[120px]">
             {fieldMap.get(r.fieldId)?.name || r.fieldName}
           </td>
-          <td data-label="FORMULA" className="px-4 py-3 font-mono text-[10px] text-lime-600 dark:text-lime-400 font-bold">{r.fertilizer_formula}</td>
-          <td data-label="ACRES" className="px-4 py-3 font-mono text-[10px] text-foreground text-right">{r.acres}</td>
+          <td data-label="FORMULA" className="px-4 py-3 font-mono text-xs text-lime-600 dark:text-lime-400 font-bold">{r.fertilizer_formula}</td>
+          <td data-label="ACRES" className="px-4 py-3 font-mono text-xs text-foreground text-right">{r.acres}</td>
         </tr>
       ))}
       {fertilizerRecords.length === 0 && (

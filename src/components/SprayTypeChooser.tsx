@@ -70,7 +70,7 @@ export default function SprayTypeChooser({ open, field, userPrefix, onChoose, on
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-foreground">Spray Entry</span>
                 {last === 'spray' && (
-                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">LAST USED</span>
+                  <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">LAST USED</span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">Full compliance record — you (or your operation) applied it.</p>
@@ -89,7 +89,7 @@ export default function SprayTypeChooser({ open, field, userPrefix, onChoose, on
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-foreground">Custom Spray</span>
                 {last === 'customSpray' && (
-                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">LAST USED</span>
+                  <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">LAST USED</span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">Outside party applied it — just who, what, and the weather.</p>

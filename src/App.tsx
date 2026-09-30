@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 
 import { Auth } from "@/components/Auth";
 import BottomNav from "@/components/BottomNav";
@@ -28,39 +28,45 @@ import { listenForNativePasswordRecovery } from "@/lib/authDeepLinks";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import PlantModal from "@/components/PlantModal";
-import SprayModal from "@/components/SprayModal";
-import HarvestModal from "@/components/HarvestModal";
-import HayModal from "@/components/HayModal";
-import FertilizerModal from "@/components/FertilizerModal";
-import TillageModal from "@/components/TillageModal";
-import CustomSprayModal from "@/components/CustomSprayModal";
-
-import Activity from "./pages/Activity";
-import FieldDetailScreen from "./pages/FieldDetailScreen";
-import Index from "./pages/Index";
 import Landing from "./pages/Landing";
-import Logistics from "./pages/Logistics";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
-import Reports from "./pages/Reports";
-import Settings from "./pages/Settings";
 import Support from "./pages/Support";
-import Onboarding from "./pages/Onboarding";
-import Weather from "./pages/Weather";
+
+const PlantModal = lazy(() => import("@/components/PlantModal"));
+const SprayModal = lazy(() => import("@/components/SprayModal"));
+const HarvestModal = lazy(() => import("@/components/HarvestModal"));
+const HayModal = lazy(() => import("@/components/HayModal"));
+const FertilizerModal = lazy(() => import("@/components/FertilizerModal"));
+const TillageModal = lazy(() => import("@/components/TillageModal"));
+const CustomSprayModal = lazy(() => import("@/components/CustomSprayModal"));
+const Activity = lazy(() => import("./pages/Activity"));
+const FieldDetailScreen = lazy(() => import("./pages/FieldDetailScreen"));
+const Index = lazy(() => import("./pages/Index"));
+const Logistics = lazy(() => import("./pages/Logistics"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Weather = lazy(() => import("./pages/Weather"));
 
 const queryClient = new QueryClient();
 
 const pageVariants = {
-  initial: { opacity: 0, y: 8 },
+  initial: { opacity: 0, y: 6 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
 };
 
 const pageTransition = {
-  duration: 0.2,
+  duration: 0.15,
   ease: [0.4, 0, 0.2, 1] as const, // Cast to constant for Framer Motion types
 };
+
+const RouteFallback = () => (
+  <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-live="polite">
+    <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    <span className="sr-only">Loading…</span>
+  </div>
+);
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -74,15 +80,14 @@ const AnimatedRoutes = () => {
   const location = useLocation();
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={location.pathname}
-        variants={pageVariants}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        transition={pageTransition}
-      >
+    <motion.div
+      key={location.pathname}
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      transition={pageTransition}
+    >
+      <Suspense fallback={<RouteFallback />}>
         <Routes location={location}>
           <Route path="/" element={<ErrorBoundary><Index /></ErrorBoundary>} />
           <Route path="/auth" element={<Navigate to="/" replace />} />
@@ -97,8 +102,8 @@ const AnimatedRoutes = () => {
           <Route path="/field/:id" element={<ErrorBoundary><FieldDetailScreen /></ErrorBoundary>} />
           <Route path="*" element={<ErrorBoundary><NotFound /></ErrorBoundary>} />
         </Routes>
-      </motion.div>
-    </AnimatePresence>
+      </Suspense>
+    </motion.div>
   );
 };
 
@@ -246,11 +251,13 @@ const AppContent = () => {
         const TargetModal = activeModal ? ModalMap[activeModal] : null;
         if (!TargetModal) return null;
         return (
-          <TargetModal
-            open={true}
-            field={selectedField}
-            onClose={clearActiveModal}
-          />
+          <Suspense fallback={null}>
+            <TargetModal
+              open={true}
+              field={selectedField}
+              onClose={clearActiveModal}
+            />
+          </Suspense>
         );
       })()}
 

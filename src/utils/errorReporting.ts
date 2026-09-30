@@ -14,16 +14,46 @@ export type ClientErrorReport = {
 };
 
 const INSTALL_FLAG = '__acreLedgerErrorReportingInstalled';
+const OPT_OUT_KEY = 'al_error_reporting_optout';
+
+/** True when the user has switched crash reports off on this device. */
+export function isErrorReportingOptedOut(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(OPT_OUT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setErrorReportingOptOut(optedOut: boolean): void {
+  try {
+    if (optedOut) localStorage.setItem(OPT_OUT_KEY, '1');
+    else localStorage.removeItem(OPT_OUT_KEY);
+  } catch {
+    // Storage unavailable: the choice can't persist, but nothing else breaks.
+  }
+}
+
+/** True when this build has a reporting endpoint configured at all. */
+export function isErrorReportingConfigured(): boolean {
+  return reportingEndpoint() !== null;
+}
 
 function clip(value: string, max: number): string {
   return value.length > max ? value.slice(0, max) : value;
 }
 
 function redact(value: string): string {
-  return value.replace(
-    /([?&#](?:code|access_token|refresh_token|token|apikey|api_key)=)[^&\s#]+/gi,
-    '$1[redacted]',
-  );
+  return value
+    // Auth material in URLs.
+    .replace(
+      /([?&#](?:code|access_token|refresh_token|token|apikey|api_key)=)[^&\s#]+/gi,
+      '$1[redacted]',
+    )
+    // Inline attachments (data URIs, e.g. spray-note photos) and any long
+    // base64-looking run must never leave the device.
+    .replace(/data:[a-z0-9.+-]+\/[a-z0-9.+-]+(?:;[^,\s]*)?,[A-Za-z0-9+/=%_-]+/gi, '[redacted-data]')
+    .replace(/[A-Za-z0-9+/_-]{200,}={0,2}/g, '[redacted-blob]');
 }
 
 function reportingEndpoint(): string | null {
@@ -42,21 +72,25 @@ function reportingEndpoint(): string | null {
 }
 
 export function reportClientError(report: ClientErrorReport): void {
-  const message = clip(redact(report.message || 'Unknown client error'), 500);
+  let message = 'Unknown client error';
+  try {
+    message = clip(redact(report.message || 'Unknown client error'), 500);
+  } catch {
+    // Reporting must never take down the page.
+  }
   console.error(`[client-error] ${report.source}:`, message);
   const endpoint = reportingEndpoint();
-  if (!endpoint) return;
-
-  const payload = {
-    source: report.source,
-    message,
-    name: report.name ? clip(redact(report.name), 80) : undefined,
-    stack: report.stack ? clip(redact(report.stack), 2000) : undefined,
-    componentStack: report.componentStack ? clip(redact(report.componentStack), 2000) : undefined,
-    path: typeof location !== 'undefined' ? location.pathname : undefined,
-  };
+  if (!endpoint || isErrorReportingOptedOut()) return;
 
   try {
+    const payload = {
+      source: report.source,
+      message,
+      name: report.name ? clip(redact(report.name), 80) : undefined,
+      stack: report.stack ? clip(redact(report.stack), 2000) : undefined,
+      componentStack: report.componentStack ? clip(redact(report.componentStack), 2000) : undefined,
+      path: typeof location !== 'undefined' ? location.pathname : undefined,
+    };
     void fetch(endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

@@ -256,17 +256,17 @@ export default function QuickAddDialog() {
               <div className="flex justify-between items-center">
                 <Label htmlFor="quickAddField" className="text-xs font-mono text-muted-foreground uppercase">Target Field</Label>
                 {gpsLoading && (
-                  <span className="text-[10px] text-primary flex items-center gap-1 font-mono">
+                  <span className="text-xs text-primary flex items-center gap-1 font-mono">
                     <Loader2 size={10} className="animate-spin" /> GPS LOOKUP...
                   </span>
                 )}
                 {gpsFieldId && (
-                  <span className="text-[10px] text-plant font-bold flex items-center gap-1 font-mono">
+                  <span className="text-xs text-plant font-bold flex items-center gap-1 font-mono">
                     <Navigation size={10} className="fill-current animate-pulse" /> GPS DETECTED
                   </span>
                 )}
                 {gpsError && !gpsLoading && (
-                  <span className="text-[10px] text-muted-foreground font-mono">GPS UNAVAILABLE</span>
+                  <span className="text-xs text-muted-foreground font-mono">GPS UNAVAILABLE</span>
                 )}
               </div>
               <Select value={selectedFieldId} onValueChange={(val) => {
@@ -285,10 +285,10 @@ export default function QuickAddDialog() {
                         <div className="flex items-center justify-between w-full gap-2">
                           <span>{f.name} <span className="text-xs text-muted-foreground font-mono">({formatMeasurement(displayAcreMap.get(f.id) ?? 0, 'ac')} FSA crop)</span></span>
                           {isGpsNearest && (
-                            <span className="ml-2 bg-plant/10 text-plant border border-plant/20 text-[9px] px-1.5 py-0.5 rounded-full font-bold">NEAREST</span>
+                            <span className="ml-2 bg-plant/10 text-plant border border-plant/20 text-xs px-1.5 py-0.5 rounded-full font-bold">NEAREST</span>
                           )}
                           {!isGpsNearest && isLastUsed && (
-                            <span className="ml-2 bg-primary/10 text-primary border border-primary/20 text-[9px] px-1.5 py-0.5 rounded-full font-bold">RECENT</span>
+                            <span className="ml-2 bg-primary/10 text-primary border border-primary/20 text-xs px-1.5 py-0.5 rounded-full font-bold">RECENT</span>
                           )}
                         </div>
                       </SelectItem>
