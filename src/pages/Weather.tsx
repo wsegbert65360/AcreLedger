@@ -137,19 +137,21 @@ export default function Weather() {
     setLoading(true);
     setUsingGps(!hasSavedOrFields);
 
-    resolveCoords(fieldsRef.current, saved).then(({ lat, lng, locationString }) => {
-      if (cancelled) return;
-
-      const hasCoords = lat !== 0 && lng !== 0;
-      setCoords(hasCoords ? { lat, lng } : null);
-      setUsingGps(false);
-
-      if (locationString) {
-        loadWeather(locationString);
-      } else {
+    resolveCoords(fieldsRef.current, saved)
+      .then(({ lat, lng, locationString }) => {
+        if (cancelled) return;
+        const hasCoords = lat !== 0 && lng !== 0;
+        setCoords(hasCoords ? { lat, lng } : null);
+        setUsingGps(false);
+        if (locationString) loadWeather(locationString);
+        else setLoading(false);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        console.error('[Weather] Failed to resolve the initial location:', error);
+        setUsingGps(false);
         setLoading(false);
-      }
-    });
+      });
 
     return () => { cancelled = true; };
   }, [userId, locationEffectKey, loadWeather]);
@@ -164,11 +166,13 @@ export default function Weather() {
   useEffect(() => {
     const interval = setInterval(() => {
       const saved = loadZip(userId);
-      resolveCoords(fieldsRef.current, saved).then(({ lat, lng, locationString }) => {
-        const hasCoords = lat !== 0 && lng !== 0;
-        setCoords(hasCoords ? { lat, lng } : null);
-        if (locationString) loadWeather(locationString);
-      });
+      resolveCoords(fieldsRef.current, saved)
+        .then(({ lat, lng, locationString }) => {
+          const hasCoords = lat !== 0 && lng !== 0;
+          setCoords(hasCoords ? { lat, lng } : null);
+          if (locationString) loadWeather(locationString);
+        })
+        .catch((error: unknown) => console.error('[Weather] Failed to resolve refresh location:', error));
     }, 300_000);
     return () => clearInterval(interval);
   }, [userId, loadWeather]);
@@ -227,13 +231,19 @@ export default function Weather() {
     const hasSavedOrFields = saved.trim() !== '' || fields.some(f => f.lat != null && f.lng != null);
     setUsingGps(!hasSavedOrFields);
 
-    resolveCoords(fields, saved).then(({ lat, lng, locationString }) => {
-      const gotGps = lat !== 0 && lng !== 0;
-      setCoords(gotGps ? { lat, lng } : null);
-      setUsingGps(false);
-      if (locationString) loadWeather(locationString);
-      else setLoading(false);
-    });
+    resolveCoords(fields, saved)
+      .then(({ lat, lng, locationString }) => {
+        const gotGps = lat !== 0 && lng !== 0;
+        setCoords(gotGps ? { lat, lng } : null);
+        setUsingGps(false);
+        if (locationString) loadWeather(locationString);
+        else setLoading(false);
+      })
+      .catch((error: unknown) => {
+        console.error('[Weather] Failed to resolve refresh location:', error);
+        setUsingGps(false);
+        setLoading(false);
+      });
   }, [userId, fields, loadWeather]);
 
   // Condition-aware gradient

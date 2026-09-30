@@ -89,7 +89,9 @@ export function extractRainfall(data: Uint8Array, coords: Coordinate[]): number[
         offset += sectLen;
     }
 
-    if (!section5 || section7Offset === -1) return coords.map(() => 0);
+    if (!section5 || section7Offset === -1) {
+      throw new Error('MRMS GRIB2 payload is missing a data-representation or data section');
+    }
 
     const { ref, exp, decimal } = section5;
     const pngData = data.slice(section7Offset);
@@ -105,13 +107,11 @@ export function extractRainfall(data: Uint8Array, coords: Coordinate[]): number[
 
         const expectedPixels = MRMS_CONFIG.grid.rows * MRMS_CONFIG.grid.cols;
         if (pixels.length < expectedPixels) {
-            console.warn(`[MRMS] Pixel buffer too small: ${pixels.length} < ${expectedPixels}`);
-            return coords.map(() => 0);
+            throw new Error(`MRMS pixel buffer too small: ${pixels.length} < ${expectedPixels}`);
         }
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error(`[MRMS] PNG decode failed: ${msg}`);
-        return coords.map(() => 0);
+        throw new Error(`MRMS PNG decode failed: ${msg}`);
     }
 
     const values: number[] = [];
