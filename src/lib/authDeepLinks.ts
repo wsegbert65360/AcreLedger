@@ -26,16 +26,30 @@ async function establishRecoverySession(value: string): Promise<boolean> {
   if (!isNativeRecoveryUrl(value)) return false;
 
   const url = new URL(value);
-  // PKCE only: the code is bound to a verifier stored on this device, so a
-  // link crafted by another app cannot sign the user into a foreign session.
-  // Raw access/refresh tokens in the URL are deliberately rejected.
   const code = url.searchParams.get('code');
-  if (!code) {
-    throw new Error('The password recovery link is incomplete or expired.');
+  if (code) {
+    // A PKCE code is bound to a verifier stored on this device, so a link
+    // crafted by another app cannot sign the user into a foreign session.
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    return true;
   }
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) throw error;
-  return true;
+
+  const tokenHash = url.searchParams.get('token_hash');
+  if (tokenHash && url.searchParams.get('type') === 'recovery') {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+    if (error) throw error;
+    return true;
+  }
+
+  const fragment = new URLSearchParams(url.hash.slice(1));
+  if (fragment.has('access_token') || fragment.has('refresh_token')) {
+    throw new Error(
+      "This password-reset link is from an older email and can't be used. Request a new reset email and open the newest link.",
+    );
+  }
+
+  throw new Error('The password recovery link is incomplete or expired.');
 }
 
 export function listenForNativePasswordRecovery(

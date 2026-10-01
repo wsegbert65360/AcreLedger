@@ -31,6 +31,7 @@ const capApp = vi.hoisted(() => {
 
 const auth = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
+  verifyOtp: vi.fn(),
   setSession: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: {
       exchangeCodeForSession: auth.exchangeCodeForSession,
+      verifyOtp: auth.verifyOtp,
       setSession: auth.setSession,
     },
   },
@@ -94,8 +96,10 @@ describe('listenForNativePasswordRecovery', () => {
     capApp.getLaunchUrl.mockResolvedValue(undefined);
     capApp.addListener.mockClear();
     auth.exchangeCodeForSession.mockReset();
+    auth.verifyOtp.mockReset();
     auth.setSession.mockReset();
     auth.exchangeCodeForSession.mockResolvedValue({ error: null });
+    auth.verifyOtp.mockResolvedValue({ error: null });
     auth.setSession.mockResolvedValue({ error: null });
   });
 
@@ -155,6 +159,23 @@ describe('listenForNativePasswordRecovery', () => {
     stop();
   });
 
+  it('verifies a recovery token hash from the email callback', async () => {
+    const onRecovery = vi.fn();
+    const onError = vi.fn();
+    const stop = listenForNativePasswordRecovery(onRecovery, onError);
+    await flush();
+
+    capApp.emitUrlOpen(`${RECOVERY}?token_hash=recovery-hash&type=recovery`);
+    await flush();
+
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'recovery-hash', type: 'recovery' });
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(auth.setSession).not.toHaveBeenCalled();
+    expect(onRecovery).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    stop();
+  });
+
   it('rejects a raw token fragment without a PKCE code and never sets a session', async () => {
     const onRecovery = vi.fn();
     const onError = vi.fn();
@@ -168,6 +189,9 @@ describe('listenForNativePasswordRecovery', () => {
     expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
     expect(onRecovery).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: "This password-reset link is from an older email and can't be used. Request a new reset email and open the newest link.",
+    }));
     stop();
   });
 

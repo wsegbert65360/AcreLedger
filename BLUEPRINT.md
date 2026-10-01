@@ -786,11 +786,12 @@ builds continue to use Preferences because they have no OS keychain surface.
 
 Password recovery uses `src/lib/authDeepLinks.ts`. Web callbacks use `/auth?mode=recovery`; native
 callbacks must match the exact `com.wsegbert.acreledger://auth/recovery` scheme/host/path. The native
-listener accepts only a PKCE authorization `code` and exchanges it with
+listener accepts a PKCE authorization `code` and exchanges it with
 `exchangeCodeForSession` (the code is bound to a verifier stored on the device, so a link crafted
-by another app cannot sign the user into a foreign session). Raw `access_token`/`refresh_token`
-values in the URL, including the former legacy fragment, are rejected and surfaced as an
-incomplete-link error. The listener deduplicates repeated launch/open events and only then opens
+by another app cannot sign the user into a foreign session), or a `token_hash` only when
+`type=recovery` and verifies it with `verifyOtp`. Raw `access_token`/`refresh_token` values in the
+URL, including the former legacy fragment, are rejected and surfaced with guidance to request a
+new reset email. The listener deduplicates repeated launch/open events and only then opens
 the reset UI. Keep
 the Supabase redirect allowlist, `Info.plist` URL registration, app listener, and tests synchronized.
 

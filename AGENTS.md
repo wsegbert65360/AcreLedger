@@ -360,7 +360,7 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 
 - Account deletion is a request (`account_deletion_requests`), never a client-side delete. Never add client update/delete grants or let request input choose another user or farm.
 - Native credentials and encryption material go through `secureStorage` (Keychain/Keystore).
-- Keep the native recovery scheme `com.wsegbert.acreledger://auth/recovery`, the Supabase redirect allowlist, `Info.plist`, the app listener, and recovery tests synchronized. Never accept arbitrary custom-scheme hosts or paths, and never establish a session from raw `access_token`/`refresh_token` values in the URL: the native listener accepts only a PKCE `code` (`exchangeCodeForSession`).
+- Keep the native recovery scheme `com.wsegbert.acreledger://auth/recovery`, the Supabase redirect allowlist, `Info.plist`, the app listener, and recovery tests synchronized. Never accept arbitrary custom-scheme hosts or paths, and never establish a session from raw `access_token`/`refresh_token` values in the URL: the native listener accepts a PKCE `code` (`exchangeCodeForSession`) or a `token_hash` only when `type=recovery` (`verifyOtp`).
 
 ### CI/CD (CodeMagic)
 
