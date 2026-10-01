@@ -24,7 +24,7 @@ import { QuickAddProvider, useQuickAdd } from "@/context/QuickAddContext";
 import AskAcreLedger from "@/components/AskAcreLedger";
 import QuickAddDialog from "@/components/QuickAddDialog";
 import { native } from "@/lib/native";
-import { listenForNativePasswordRecovery } from "@/lib/authDeepLinks";
+import { establishWebPasswordRecoverySession, listenForNativePasswordRecovery } from "@/lib/authDeepLinks";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -152,6 +152,13 @@ const AppContent = () => {
     () => navigate('/auth?mode=recovery', { replace: true }),
     error => toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.'),
   ), [navigate]);
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform() || !isPasswordRecovery) return;
+    void establishWebPasswordRecoverySession().catch(error => {
+      toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.');
+    });
+  }, [isPasswordRecovery]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;

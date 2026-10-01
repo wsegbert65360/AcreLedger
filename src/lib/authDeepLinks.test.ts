@@ -59,6 +59,7 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import {
+  establishWebPasswordRecoverySession,
   getPasswordRecoveryRedirectUrl,
   listenForNativePasswordRecovery,
   NATIVE_AUTH_SCHEME,
@@ -251,5 +252,21 @@ describe('listenForNativePasswordRecovery', () => {
     await flush();
 
     expect(auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('establishWebPasswordRecoverySession', () => {
+  beforeEach(() => {
+    coreState.isNative = false;
+    auth.verifyOtp.mockReset();
+    auth.verifyOtp.mockResolvedValue({ error: null });
+    window.history.replaceState(null, '', '/auth?mode=recovery&token_hash=web-token&type=recovery');
+  });
+
+  it('explicitly redeems a recovery token hash because detectSessionInUrl does not handle it', async () => {
+    await expect(establishWebPasswordRecoverySession()).resolves.toBe(true);
+
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'web-token', type: 'recovery' });
+    expect(window.location.search).toBe('?mode=recovery');
   });
 });

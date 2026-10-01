@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 
 export const NATIVE_AUTH_SCHEME = 'com.wsegbert.acreledger';
+const LEGACY_RECOVERY_LINK_ERROR = "This password-reset link is from an older email and can't be used. Request a new reset email and open the newest link.";
 
 export function getPasswordRecoveryRedirectUrl(): string {
   if (Capacitor.isNativePlatform()) {
@@ -44,12 +45,36 @@ async function establishRecoverySession(value: string): Promise<boolean> {
 
   const fragment = new URLSearchParams(url.hash.slice(1));
   if (fragment.has('access_token') || fragment.has('refresh_token')) {
-    throw new Error(
-      "This password-reset link is from an older email and can't be used. Request a new reset email and open the newest link.",
-    );
+    throw new Error(LEGACY_RECOVERY_LINK_ERROR);
   }
 
   throw new Error('The password recovery link is incomplete or expired.');
+}
+
+let handledWebRecoveryUrl: string | null = null;
+
+export async function establishWebPasswordRecoverySession(value = window.location.href): Promise<boolean> {
+  const url = new URL(value);
+  if (url.pathname !== '/auth' || url.searchParams.get('mode') !== 'recovery') return false;
+
+  const tokenHash = url.searchParams.get('token_hash');
+  if (!tokenHash || url.searchParams.get('type') !== 'recovery' || handledWebRecoveryUrl === url.href) {
+    return false;
+  }
+
+  handledWebRecoveryUrl = url.href;
+  try {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+    if (error) throw error;
+  } catch (error) {
+    handledWebRecoveryUrl = null;
+    throw error;
+  }
+
+  url.searchParams.delete('token_hash');
+  url.searchParams.delete('type');
+  window.history.replaceState(window.history.state, '', url.toString());
+  return true;
 }
 
 export function listenForNativePasswordRecovery(
