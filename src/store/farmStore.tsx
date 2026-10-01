@@ -131,6 +131,11 @@ interface FarmState {
   /** Operations for managing field definitions */
   addField: (field: Omit<Field, 'id' | 'farm_id'>, requestedId?: string) => Promise<boolean>;
   updateField: (field: Field) => Promise<boolean>;
+  /**
+   * Notes-only unmount flush for FieldNotes. Serializes behind an in-flight
+   * field update so newer keystrokes cannot lose to an older autosave draft.
+   */
+  flushFieldNotes: (field: Field) => Promise<boolean>;
   deleteField: (id: string) => Promise<boolean>;
   /** Operations for managing bin definitions */
   addBin: (bin: Omit<Bin, 'id' | 'farm_id'>) => Promise<boolean>;
