@@ -362,6 +362,16 @@ export const TENANT_REGISTRY: TenantTable[] = [
   },
   {
     schema: "public",
+    table: "mrms_ingestion_runs",
+    ownership: "global",
+    hasDeletedAt: false,
+    restoreOrder: 0,
+    primaryKeys: ["target_hour"],
+    includeInTenantBundle: false,
+    notes: "MRMS scheduled-ingestion outcome ledger keyed by target hour. Global operational state; never include in a single-farm bundle.",
+  },
+  {
+    schema: "public",
     table: "rainfall_settings",
     ownership: "global",
     hasDeletedAt: false,

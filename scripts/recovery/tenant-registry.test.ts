@@ -45,6 +45,9 @@ describe("tenant registry", () => {
     const billing = TENANT_REGISTRY.find((entry) => entry.table === "billing_webhook_events");
     expect(billing?.ownership).toBe("global");
     expect(billing?.includeInTenantBundle).toBe(false);
+    const mrmsRuns = TENANT_REGISTRY.find((entry) => entry.table === "mrms_ingestion_runs");
+    expect(mrmsRuns?.ownership).toBe("global");
+    expect(mrmsRuns?.includeInTenantBundle).toBe(false);
   });
 
   it("extract SQL is always farm or user scoped", () => {
