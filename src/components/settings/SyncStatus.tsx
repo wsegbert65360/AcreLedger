@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useFarm } from '@/store/farmStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Cloud, CloudOff, WifiOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,12 +85,28 @@ const STATUS_CONFIG: Record<SyncState, StatusConfig> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SyncStatus() {
-  const { session, pendingSyncCount } = useFarm();
+  const { session, pendingSyncCount, failedSyncCount = 0, getFailedSyncChanges, discardFailedSyncChanges } = useFarm();
   const [syncState, setSyncState] = useState<SyncState>(
     navigator.onLine ? 'connecting' : 'offline'
   );
   const [lastSync, setLastSync] = useState<Date | null>(loadLastSync);
   const [, forceRender] = useState(0);
+
+  const exportFailed = async () => {
+    const changes = await getFailedSyncChanges?.();
+    const blob = new Blob([JSON.stringify(changes ?? [], null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `acreledger-unsynced-changes-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const discardFailed = async () => {
+    if (!window.confirm(`Discard ${failedSyncCount} change(s) that could not sync? Export them first if you may need them.`)) return;
+    await discardFailedSyncChanges?.();
+  };
 
   // Re-render every minute so "Xm ago" stays current
   useEffect(() => {
@@ -186,6 +203,19 @@ export default function SyncStatus() {
         }`}>
           {config.description}
         </p>
+
+        {failedSyncCount > 0 && (
+          <div className="p-3 rounded-lg border border-destructive/30 space-y-2">
+            <p className="text-xs font-mono text-destructive">
+              {failedSyncCount} change{failedSyncCount === 1 ? '' : 's'} could not sync and {failedSyncCount === 1 ? 'was' : 'were'} not uploaded.
+              They are still saved on this device.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => void exportFailed()}>Export</Button>
+              <Button size="sm" variant="outline" className="text-destructive" onClick={() => void discardFailed()}>Discard</Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

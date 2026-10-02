@@ -9,6 +9,11 @@ const WEB_QUEUE_KEY = 'al_sync_queue';
 const CORRUPT_QUEUE_KEY = 'al_sync_queue_corrupt';
 /** Keys that hold unsynced farmer work; never removed by a plain cache clear. */
 export const SYNC_QUEUE_KEYS = [WEB_QUEUE_KEY, CORRUPT_QUEUE_KEY] as const;
+/**
+ * After this many permanent failures a queued change stops being retried and is
+ * surfaced as "couldn't sync" (export / discard). It is never deleted silently.
+ */
+export const MAX_SYNC_RETRIES = 10;
 export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
 let webQueuePromise: Promise<void> = Promise.resolve();
 // Set after the first corruption toast so repeated getWebQueue calls while the
@@ -407,7 +412,7 @@ export const syncQueue = {
       if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
       try {
         const res = await db.query(
-          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC;',
+          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC, rowid ASC;',
           [farmId]
         );
         if (res.values) {
@@ -536,6 +541,19 @@ export const syncQueue = {
     }
   },
 
+  /** Changes that exhausted their retries and need the user's attention. */
+  getFailed: async (farmId: string): Promise<QueuedMutation[]> => {
+    const queue = await syncQueue.getQueue(farmId);
+    return queue.filter(item => item.retry_count >= MAX_SYNC_RETRIES);
+  },
+
+  /** Removes exhausted changes for a farm (only on the user's explicit request). */
+  discardFailed: async (farmId: string): Promise<number> => {
+    const failed = await syncQueue.getFailed(farmId);
+    for (const item of failed) await syncQueue.dequeueMutation(item.id);
+    return failed.length;
+  },
+
   /**
    * Replays the queued mutations to Supabase in FIFO order.
    * Returns true only if the entire queue was processed. A transient pause or
@@ -582,6 +600,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
 
     console.log(`Replaying sync queue: ${queue.length} mutations pending.`);
     let pendingRetryCount = 0;
+    let failedParkedCount = 0;
 
     const handledMutationIds = new Set<string>();
     for (const mutation of queue) {
@@ -597,6 +616,17 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
       const linkedMutationIds = linkedHarvest?.legacyGrainMutation
         ? [mutation.id, linkedHarvest.legacyGrainMutation.id]
         : [mutation.id];
+
+      // Exhausted changes (and any change linked to one) are parked, not retried:
+      // retrying forever just burns requests and the user's attention.
+      const exhausted = linkedMutationIds.some(
+        id => (queue.find(item => item.id === id)?.retry_count ?? 0) >= MAX_SYNC_RETRIES,
+      );
+      if (exhausted) {
+        for (const id of linkedMutationIds) handledMutationIds.add(id);
+        failedParkedCount++;
+        continue;
+      }
 
       try {
         if (mutation.operation === 'insert') {
@@ -717,7 +747,11 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
               handledMutationIds.add(id);
             }
             pendingRetryCount++;
-            if (nextRetries === 3) {
+            if (nextRetries === MAX_SYNC_RETRIES) {
+              toast.error(`An offline change to ${mutation.table_name} could not be synced.`, {
+                description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
+              });
+            } else if (nextRetries === 3) {
               toast.error(`Offline ${mutation.operation} to ${mutation.table_name} still cannot sync.`, {
                 description: 'The change remains safely queued for recovery; it was not discarded.',
               });
@@ -744,6 +778,10 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
       const parts: string[] = [];
       if (pendingRetryCount > 0) parts.push(`${pendingRetryCount} still pending retry`);
       toast.warning('Sync finished with unfinished items.', { description: `${parts.join('; ')}. They will retry on the next sync.` });
+    } else if (failedParkedCount > 0) {
+      toast.warning(`${failedParkedCount} change${failedParkedCount === 1 ? '' : 's'} could not sync.`, {
+        description: 'Open Settings → Cloud Sync to export or discard them.',
+      });
     } else {
       toast.success('Sync complete. All offline changes uploaded.');
     }

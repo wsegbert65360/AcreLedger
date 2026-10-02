@@ -1,3 +1,5 @@
+const NETWORK_MESSAGE = /failed to fetch|load failed|networkerror|network request failed|network error|timeout|timed out/;
+
 /**
  * A write whose outcome we cannot know. The request may have been committed
  * server-side and only the response was lost (dead socket, 15s abort timeout,
@@ -24,8 +26,11 @@ export function isUnknownMutationOutcome(error: unknown): boolean {
     const e = error as { name?: string; status?: number; message?: string; code?: string; hint?: string };
     if (e.name === 'AbortError' || e.name === 'TimeoutError') return true;
     if (e.status === 0) return true;
-    if (e.name === 'TypeError') return true;
     const message = (e.message ?? '').toLowerCase();
+    // fetch() rejects with a TypeError on network failure, but a TypeError is also
+    // what ordinary code bugs throw. Only treat the network-shaped ones as a lost
+    // response so real bugs still roll back instead of being silently re-queued.
+    if (e.name === 'TypeError' && NETWORK_MESSAGE.test(message)) return true;
     const hint = (e.hint ?? '').toLowerCase();
     // Wrapped abort from postgrest-js. Real Postgres/PostgREST errors always carry
     // a non-empty code, so requiring an empty code keeps e.g. "transaction is

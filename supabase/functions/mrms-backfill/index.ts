@@ -51,6 +51,12 @@ export default {
       recordCount?: number | null
       errorMessage?: string | null
     }) => {
+      // The ledger is keyed by hour and covers every field. A field-scoped
+      // (user-triggered) run only processes one field, so letting it write here
+      // could overwrite a scheduled 'failed'/'no_data' row with 'success' and hide
+      // the hour from the nightly retry sweep. Its state lives in
+      // field_rainfall_coverage instead.
+      if (fieldId) return
       const { error } = await supabaseClient
         .from('mrms_ingestion_runs')
         .upsert({

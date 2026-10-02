@@ -42,6 +42,10 @@ interface FarmState {
   isOnline: boolean;
   /** Number of pending operations in the sync queue */
   pendingSyncCount: number;
+  /** Queued changes that exhausted their retries and need export or discard. */
+  failedSyncCount: number;
+  getFailedSyncChanges: () => Promise<unknown[]>;
+  discardFailedSyncChanges: () => Promise<number>;
   /** Global loading state for data fetching */
   loading: boolean;
   /** True once the initial data load has settled for the current session (online fetch when online, cache hydration when offline). Gates decisions that must not race with the transient empty-fields render. */
@@ -226,6 +230,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Network & Offline State ---
   const { isOnline } = useNetworkStatus();
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [failedSyncCount, setFailedSyncCount] = useState(0);
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [stateOwnerKey, setStateOwnerKey] = useState<string | null>(null);
   // True once the authoritative initial data load has settled for this session.
@@ -263,16 +268,36 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     const requestIdentity = identityKey;
     if (farm_id && requestIdentity) {
       try {
-        const count = await syncQueue.getPendingCount(farm_id);
-        if (identityRef.current === requestIdentity) setPendingSyncCount(count);
+        const [count, failed] = await Promise.all([
+          syncQueue.getPendingCount(farm_id),
+          syncQueue.getFailed(farm_id),
+        ]);
+        if (identityRef.current === requestIdentity) {
+          // Exhausted changes stay queued but must not block sign-out or
+          // account deletion forever.
+          setPendingSyncCount(Math.max(0, count - failed.length));
+          setFailedSyncCount(failed.length);
+        }
       } catch (err) {
         console.error('Failed to read pending sync count:', err);
         // Leave the previous count. An unreadable store must not look empty.
       }
     } else {
       setPendingSyncCount(0);
+      setFailedSyncCount(0);
     }
   }, [farm_id, identityKey]);
+
+  const getFailedSyncChanges = useCallback(
+    async () => (farm_id ? syncQueue.getFailed(farm_id) : []),
+    [farm_id],
+  );
+  const discardFailedSyncChanges = useCallback(async () => {
+    if (!farm_id) return 0;
+    const removed = await syncQueue.discardFailed(farm_id);
+    await updatePendingSyncCount();
+    return removed;
+  }, [farm_id, updatePendingSyncCount]);
 
   useEffect(() => {
     updatePendingSyncCount();
@@ -771,7 +796,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   return (
     <FarmContext.Provider value={{
-      session, isOnline, pendingSyncCount, loading, initialFetchComplete, fetchError,
+      session, isOnline, pendingSyncCount, failedSyncCount, getFailedSyncChanges, discardFailedSyncChanges, loading, initialFetchComplete, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,
