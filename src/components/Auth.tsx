@@ -65,6 +65,10 @@ export function Auth() {
                     return;
                 }
                 if (mode === 'recovery') {
+                    const { data, error: sessionError } = await supabase.auth.getSession();
+                    if (sessionError || !data?.session) {
+                        throw new Error('Your password-reset session has expired. Request a new reset email and open the newest link.');
+                    }
                     const { error } = await supabase.auth.updateUser({ password });
                     if (error) throw error;
                     await supabase.auth.signOut();

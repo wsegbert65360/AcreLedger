@@ -99,8 +99,8 @@ describe('listenForNativePasswordRecovery', () => {
     auth.exchangeCodeForSession.mockReset();
     auth.verifyOtp.mockReset();
     auth.setSession.mockReset();
-    auth.exchangeCodeForSession.mockResolvedValue({ error: null });
-    auth.verifyOtp.mockResolvedValue({ error: null });
+    auth.exchangeCodeForSession.mockResolvedValue({ data: { session: {} }, error: null });
+    auth.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
     auth.setSession.mockResolvedValue({ error: null });
   });
 
@@ -216,8 +216,8 @@ describe('listenForNativePasswordRecovery', () => {
     const onRecovery = vi.fn();
     const onError = vi.fn();
     auth.exchangeCodeForSession
-      .mockResolvedValueOnce({ error: new Error('expired') })
-      .mockResolvedValueOnce({ error: null });
+      .mockResolvedValueOnce({ data: { session: null }, error: new Error('expired') })
+      .mockResolvedValueOnce({ data: { session: {} }, error: null });
 
     const stop = listenForNativePasswordRecovery(onRecovery, onError);
     await flush();
@@ -259,7 +259,7 @@ describe('establishWebPasswordRecoverySession', () => {
   beforeEach(() => {
     coreState.isNative = false;
     auth.verifyOtp.mockReset();
-    auth.verifyOtp.mockResolvedValue({ error: null });
+    auth.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
     window.history.replaceState(null, '', '/auth?mode=recovery&token_hash=web-token&type=recovery');
   });
 
@@ -268,5 +268,20 @@ describe('establishWebPasswordRecoverySession', () => {
 
     expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'web-token', type: 'recovery' });
     expect(window.location.search).toBe('?mode=recovery');
+  });
+
+  it('exchanges a web PKCE code and removes it after establishing a session', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery&code=web-pkce-code');
+
+    await expect(establishWebPasswordRecoverySession()).resolves.toBe(true);
+
+    expect(auth.exchangeCodeForSession).toHaveBeenCalledWith('web-pkce-code');
+    expect(window.location.search).toBe('?mode=recovery');
+  });
+
+  it('rejects an expired web callback that does not establish a session', async () => {
+    auth.verifyOtp.mockResolvedValue({ data: { session: null }, error: null });
+
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');
   });
 });

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 
 import { App as CapApp } from "@capacitor/app";
@@ -122,6 +122,7 @@ const AppContent = () => {
   const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
   const navigate = useNavigate();
+  const [webRecoveryReady, setWebRecoveryReady] = useState(false);
   const isPasswordRecovery = location.pathname === '/auth'
     && new URLSearchParams(location.search).get('mode') === 'recovery';
   const coachmarks = useCoachmarks({
@@ -155,10 +156,16 @@ const AppContent = () => {
 
   useEffect(() => {
     if (Capacitor.isNativePlatform() || !isPasswordRecovery) return;
-    void establishWebPasswordRecoverySession().catch(error => {
-      toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.');
-    });
-  }, [isPasswordRecovery]);
+    setWebRecoveryReady(false);
+    void establishWebPasswordRecoverySession()
+      .then(established => {
+        if (established) setWebRecoveryReady(true);
+      })
+      .catch(error => {
+        toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.');
+        navigate('/', { replace: true });
+      });
+  }, [isPasswordRecovery, navigate]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -176,7 +183,7 @@ const AppContent = () => {
     };
   }, []);
 
-  if (isPasswordRecovery) {
+  if (isPasswordRecovery && (Capacitor.isNativePlatform() || webRecoveryReady)) {
     return <ErrorBoundary><Auth /></ErrorBoundary>;
   }
 
@@ -214,7 +221,7 @@ const AppContent = () => {
     return (
       <Routes>
         <Route path="/" element={<ErrorBoundary><Landing /></ErrorBoundary>} />
-        <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+        <Route path="/auth" element={isPasswordRecovery ? null : <ErrorBoundary><Auth /></ErrorBoundary>} />
         <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
         <Route path="/support" element={<ErrorBoundary><Support /></ErrorBoundary>} />
         <Route path="*" element={<Navigate to="/" replace />} />

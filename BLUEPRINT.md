@@ -789,8 +789,8 @@ callbacks must match the exact `com.wsegbert.acreledger://auth/recovery` scheme/
 listener redeems a PKCE authorization `code` with `exchangeCodeForSession` (the code is bound to a
 verifier stored on the device, so a link crafted by another app cannot sign the user into a foreign
 session) or a recovery-only email `token_hash` with `verifyOtp({ token_hash, type: 'recovery' })`.
-The web recovery route explicitly redeems that token hash too: installed `gotrue-js` URL detection
-does not recognize it. Raw `access_token`/`refresh_token` values in the URL, including the former
+The web recovery route explicitly redeems either the PKCE `code` or recovery token hash: installed
+`gotrue-js` URL detection does not recognize the token hash. Raw `access_token`/`refresh_token` values in the URL, including the former
 legacy fragment, are rejected and tell the user to request a new email. The listener deduplicates
 repeated launch/open events and only then opens
 the reset UI. Keep

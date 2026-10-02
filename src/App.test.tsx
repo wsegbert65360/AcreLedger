@@ -177,12 +177,10 @@ describe('signed-out routing (ticket C)', () => {
     expect(screen.getByRole('heading', { name: 'Welcome Back' })).toBeInTheDocument();
   });
 
-  it('deep-links password recovery into the new-password screen', () => {
+  it('does not show the new-password screen for a recovery route without a callback', () => {
     navigate('/auth?mode=recovery');
     renderApp();
-    expect(screen.getByRole('heading', { name: 'Choose New Password' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Update Password' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
   });
 
   it('links the auth screen to the privacy policy and support page', () => {
@@ -253,10 +251,10 @@ describe('signed-in routing (preserved behavior)', () => {
     expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
   });
 
-  it('allows an authenticated recovery session to set a new password', () => {
+  it('does not expose the recovery form to an existing session without a callback', () => {
     navigate('/auth?mode=recovery');
     renderApp();
-    expect(screen.getByRole('heading', { name: 'Choose New Password' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
   });
 
   it('still renders /privacy inside the app shell', async () => {
