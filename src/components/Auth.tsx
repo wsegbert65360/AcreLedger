@@ -1,38 +1,102 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { toast } from 'sonner';
 import { Sprout, Mail, ArrowLeft } from 'lucide-react';
-import { getAuthErrorMessage } from '@/lib/authErrors';
+import { getAuthErrorMessage, getPasswordResetErrorMessage } from '@/lib/authErrors';
 import { getPasswordRecoveryRedirectUrl } from '@/lib/authDeepLinks';
 
-type AuthMode = 'signin' | 'signup' | 'forgot' | 'recovery' | 'verification_sent';
+type AuthMode = 'signin' | 'signup' | 'forgot' | 'verify_code' | 'recovery' | 'verification_sent';
 
-export function Auth() {
+type AuthProps = {
+    passwordRecoveryPending?: boolean;
+    onPasswordRecoveryPendingChange?: (pending: boolean) => void;
+};
+
+export function Auth({
+    passwordRecoveryPending = false,
+    onPasswordRecoveryPendingChange,
+}: AuthProps) {
     const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
+    const [code, setCode] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [resendCooldown, setResendCooldown] = useState(0);
     const [mode, setMode] = useState<AuthMode>(() => {
         const requestedMode = searchParams.get('mode');
-        return requestedMode === 'signup' || requestedMode === 'recovery' ? requestedMode : 'signin';
+        if (passwordRecoveryPending || requestedMode === 'recovery') return 'recovery';
+        return requestedMode === 'signup' ? 'signup' : 'signin';
     });
 
     useEffect(() => {
-        if (searchParams.get('mode') === 'recovery') setMode('recovery');
-    }, [searchParams]);
+        if (passwordRecoveryPending || searchParams.get('mode') === 'recovery') setMode('recovery');
+    }, [passwordRecoveryPending, searchParams]);
+
+    useEffect(() => {
+        if (mode !== 'verify_code' || resendCooldown <= 0) return;
+        const timeout = window.setTimeout(() => setResendCooldown(seconds => seconds - 1), 1000);
+        return () => window.clearTimeout(timeout);
+    }, [mode, resendCooldown]);
 
     const handleModeChange = (newMode: AuthMode) => {
         setMode(newMode);
+        setCode('');
         setPassword('');
         setConfirmPassword('');
         setSearchParams(
             newMode === 'signup' || newMode === 'signin' ? { mode: newMode } : {},
             { replace: true }
         );
+    };
+
+    const sendResetCode = async () => {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: getPasswordRecoveryRedirectUrl(),
+        });
+        if (error) throw error;
+        toast.success('If an account exists for that email, we sent a code.');
+        setCode('');
+        setResendCooldown(60);
+        setMode('verify_code');
+    };
+
+    const verifyResetCode = async (token: string) => {
+        if (token.length !== 6 || loading) return;
+
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
+            if (error || !data?.session) throw error || new Error('That code is incorrect or has expired.');
+            onPasswordRecoveryPendingChange?.(true);
+            setCode('');
+            setMode('recovery');
+        } catch (error) {
+            setCode('');
+            toast.error(getPasswordResetErrorMessage(error, 'verify'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const cancelPasswordRecovery = async () => {
+        setLoading(true);
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            onPasswordRecoveryPendingChange?.(false);
+            handleModeChange('signin');
+        } catch (error) {
+            toast.error(getAuthErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleAuth = async (e: React.FormEvent) => {
@@ -47,12 +111,7 @@ export function Auth() {
 
         try {
             if (mode === 'forgot') {
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: getPasswordRecoveryRedirectUrl(),
-                });
-                if (error) throw error;
-                toast.success('Password reset email sent! Check your inbox.');
-                handleModeChange('signin');
+                await sendResetCode();
             } else if (mode === 'signup' || mode === 'recovery') {
                 if (password.length < 8) {
                     toast.error('Password must be at least 8 characters long');
@@ -67,13 +126,13 @@ export function Auth() {
                 if (mode === 'recovery') {
                     const { data, error: sessionError } = await supabase.auth.getSession();
                     if (sessionError || !data?.session) {
-                        throw new Error('Your password-reset session has expired. Request a new reset email and open the newest link.');
+                        throw new Error('Your reset session expired. Request a new code.');
                     }
                     const { error } = await supabase.auth.updateUser({ password });
                     if (error) throw error;
-                    await supabase.auth.signOut();
-                    toast.success('Password updated. Sign in with your new password.');
-                    handleModeChange('signin');
+                    onPasswordRecoveryPendingChange?.(false);
+                    toast.success('Password updated.');
+                    navigate('/', { replace: true });
                 } else {
                     const { error } = await supabase.auth.signUp({
                         email,
@@ -91,7 +150,9 @@ export function Auth() {
                 toast.success('Logged in successfully!');
             }
         } catch (error) {
-            toast.error(getAuthErrorMessage(error));
+            toast.error(mode === 'forgot'
+                ? getPasswordResetErrorMessage(error, 'request')
+                : getAuthErrorMessage(error));
         } finally {
             setLoading(false);
         }
@@ -99,6 +160,8 @@ export function Auth() {
 
     const title = mode === 'forgot'
         ? 'Reset Password'
+        : mode === 'verify_code'
+            ? 'Enter Reset Code'
         : mode === 'recovery'
             ? 'Choose New Password'
         : mode === 'signup'
@@ -108,7 +171,9 @@ export function Auth() {
                 : 'Welcome Back';
 
     const subtitle = mode === 'forgot'
-        ? 'Enter your email to receive a reset link'
+        ? 'Enter your email to receive a password reset code'
+        : mode === 'verify_code'
+            ? `Enter the 6-digit code we sent to ${email}`
         : mode === 'recovery'
             ? 'Enter a new password for your AcreLedger account'
         : mode === 'signup'
@@ -118,7 +183,7 @@ export function Auth() {
                 : 'Sign in to your farm';
 
     const buttonLabel = mode === 'forgot'
-        ? 'Send Reset Link'
+        ? 'Send code'
         : mode === 'recovery'
             ? 'Update Password'
         : mode === 'signup'
@@ -192,6 +257,66 @@ export function Auth() {
                                 Back to Sign In
                             </Button>
                         </div>
+                    ) : mode === 'verify_code' ? (
+                        <form onSubmit={(event) => {
+                            event.preventDefault();
+                            void verifyResetCode(code);
+                        }}>
+                            <div className="px-6 py-4 space-y-4">
+                                <div className="space-y-2">
+                                    <label htmlFor="passwordResetCode" className="text-sm font-medium">6-digit reset code</label>
+                                    <InputOTP
+                                        id="passwordResetCode"
+                                        maxLength={6}
+                                        pattern={REGEXP_ONLY_DIGITS}
+                                        value={code}
+                                        onChange={(value) => {
+                                            setCode(value);
+                                            if (value.length === 6) void verifyResetCode(value);
+                                        }}
+                                        inputMode="numeric"
+                                        autoComplete="one-time-code"
+                                        aria-label="6-digit reset code"
+                                        disabled={loading}
+                                        containerClassName="justify-center"
+                                    >
+                                        <InputOTPGroup>
+                                            {Array.from({ length: 6 }, (_, index) => (
+                                                <InputOTPSlot key={index} index={index} />
+                                            ))}
+                                        </InputOTPGroup>
+                                    </InputOTP>
+                                </div>
+                            </div>
+                            <div className="px-6 pb-6 flex flex-col space-y-2">
+                                <Button type="submit" className="w-full" disabled={loading || code.length !== 6}>
+                                    {loading ? 'Verifying...' : 'Verify'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full"
+                                    disabled={loading || resendCooldown > 0}
+                                    onClick={() => {
+                                        setLoading(true);
+                                        void sendResetCode()
+                                            .catch(error => toast.error(getPasswordResetErrorMessage(error, 'request')))
+                                            .finally(() => setLoading(false));
+                                    }}
+                                >
+                                    {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full"
+                                    disabled={loading}
+                                    onClick={() => handleModeChange('forgot')}
+                                >
+                                    Use a different email
+                                </Button>
+                            </div>
+                        </form>
                     ) : (
                         <form onSubmit={handleAuth}>
                             <div className="px-6 py-4 space-y-4">
@@ -290,7 +415,8 @@ export function Auth() {
                                         type="button"
                                         variant="ghost"
                                         className="w-full"
-                                        onClick={() => handleModeChange('signin')}
+                                        disabled={loading}
+                                        onClick={() => void cancelPasswordRecovery()}
                                     >
                                         Cancel and Sign In
                                     </Button>

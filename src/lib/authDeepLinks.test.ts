@@ -33,6 +33,7 @@ const auth = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
   verifyOtp: vi.fn(),
   setSession: vi.fn(),
+  getSession: vi.fn(),
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -54,6 +55,7 @@ vi.mock('@/lib/supabase', () => ({
       exchangeCodeForSession: auth.exchangeCodeForSession,
       verifyOtp: auth.verifyOtp,
       setSession: auth.setSession,
+      getSession: auth.getSession,
     },
   },
 }));
@@ -99,9 +101,11 @@ describe('listenForNativePasswordRecovery', () => {
     auth.exchangeCodeForSession.mockReset();
     auth.verifyOtp.mockReset();
     auth.setSession.mockReset();
+    auth.getSession.mockReset();
     auth.exchangeCodeForSession.mockResolvedValue({ data: { session: {} }, error: null });
     auth.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
     auth.setSession.mockResolvedValue({ error: null });
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
   });
 
   it('is a no-op on web', () => {
@@ -253,13 +257,42 @@ describe('listenForNativePasswordRecovery', () => {
 
     expect(auth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
   });
+
+  it('reports a missing PKCE verifier as the wrong browser or app', async () => {
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: {
+        name: 'AuthPKCECodeVerifierMissingError',
+        code: 'pkce_code_verifier_not_found',
+        message: 'PKCE code verifier not found in storage.',
+      },
+    });
+
+    const onRecovery = vi.fn();
+    const onError = vi.fn();
+    const stop = listenForNativePasswordRecovery(onRecovery, onError);
+    await flush();
+
+    capApp.emitUrlOpen(`${RECOVERY}?code=other-device`);
+    await flush();
+
+    expect(onRecovery).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'This password-reset link was opened in a different browser or app than the one used to request it. Open the newest link in that same browser or app, or request a new reset email there.',
+    }));
+    stop();
+  });
 });
 
 describe('establishWebPasswordRecoverySession', () => {
   beforeEach(() => {
     coreState.isNative = false;
+    auth.exchangeCodeForSession.mockReset();
     auth.verifyOtp.mockReset();
+    auth.getSession.mockReset();
+    auth.exchangeCodeForSession.mockResolvedValue({ data: { session: {} }, error: null });
     auth.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
     window.history.replaceState(null, '', '/auth?mode=recovery&token_hash=web-token&type=recovery');
   });
 
@@ -283,5 +316,74 @@ describe('establishWebPasswordRecoverySession', () => {
     auth.verifyOtp.mockResolvedValue({ data: { session: null }, error: null });
 
     await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');
+  });
+
+  it('rejects a failed code exchange even when a session already exists', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery&code=already-redeemed');
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: {
+        name: 'AuthPKCECodeVerifierMissingError',
+        code: 'pkce_code_verifier_not_found',
+        message: 'PKCE code verifier not found in storage.',
+      },
+    });
+    auth.getSession.mockResolvedValue({ data: { session: { access_token: 'existing' } }, error: null });
+
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow('same browser or app');
+
+    expect(auth.getSession).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?mode=recovery&code=already-redeemed');
+  });
+
+  it('rejects an expired code exchange with the expired message even when a session already exists', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery&code=expired-while-signed-in');
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'invalid request: code challenge does not match' },
+    });
+    auth.getSession.mockResolvedValue({ data: { session: { access_token: 'existing' } }, error: null });
+
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');
+    expect(auth.getSession).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?mode=recovery&code=expired-while-signed-in');
+  });
+
+  it('tells the user to open the link where they requested it when the verifier is missing', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery&code=other-browser');
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'PKCE code verifier not found in storage.' },
+    });
+
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow('same browser or app');
+    expect(auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the expired message when a code exchange fails and no session exists', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery&code=expired-code');
+    auth.exchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'invalid request: code challenge does not match' },
+    });
+
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');
+    expect(auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a legacy token fragment without exchanging a code', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery#access_token=access&refresh_token=refresh');
+
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow("older email");
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a recovery URL that has no code and no token hash', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery');
+
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(auth.getSession).not.toHaveBeenCalled();
   });
 });

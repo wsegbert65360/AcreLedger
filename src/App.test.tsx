@@ -7,23 +7,39 @@
  * unchanged — the app renders at / and /auth bounces back into the app.
  */
 import type { ReactNode } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Auth reads credentials through this module; stub auth calls so the signup
 // flow can reach the verification screen without network.
+const auth = vi.hoisted(() => ({
+  signUp: vi.fn(),
+  signInWithPassword: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
+  verifyOtp: vi.fn(),
+  updateUser: vi.fn(),
+  getSession: vi.fn(),
+  signOut: vi.fn(),
+  onAuthStateChange: vi.fn(),
+}));
+
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+
 vi.mock('@/lib/supabase', () => ({
   isSupabaseConfigured: true,
   supabase: {
-    auth: {
-      signUp: vi.fn().mockResolvedValue({ data: null, error: null }),
-      signInWithPassword: vi.fn().mockResolvedValue({ data: null, error: null }),
-      resetPasswordForEmail: vi.fn().mockResolvedValue({ data: null, error: null }),
-      verifyOtp: vi.fn().mockResolvedValue({ data: null, error: null }),
-      updateUser: vi.fn().mockResolvedValue({ data: null, error: null }),
-      signOut: vi.fn().mockResolvedValue({ error: null }),
-    },
+    auth,
   },
+}));
+
+vi.mock('sonner', () => ({ toast, Toaster: () => null }));
+
+vi.mock('@/components/ui/input-otp', () => ({
+  InputOTP: ({ containerClassName: _containerClassName, children: _children, onChange, ...props }: any) => (
+    <input {...props} onChange={(event) => onChange(event.target.value)} />
+  ),
+  InputOTPGroup: ({ children }: any) => <>{children}</>,
+  InputOTPSlot: () => null,
 }));
 
 // --- Shared farm-store mock (App reads session/loading + onboarding gates) ---
@@ -131,10 +147,30 @@ const navigate = (path: string) => {
 
 const renderApp = () => render(<App />);
 
+Object.defineProperty(window, 'scrollTo', { value: vi.fn(), writable: true });
+
+const startPasswordReset = async () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot your password?' }));
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'farmer@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
+  await screen.findByRole('heading', { name: 'Enter Reset Code' });
+};
+
 describe('signed-out routing (ticket C)', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     navigate('/');
     farmState.current = { ...signedOutState };
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    auth.signUp.mockResolvedValue({ data: null, error: null });
+    auth.signInWithPassword.mockResolvedValue({ data: null, error: null });
+    auth.resetPasswordForEmail.mockResolvedValue({ data: null, error: null });
+    auth.verifyOtp.mockResolvedValue({ data: { session: { access_token: 'reset-session' } }, error: null });
+    auth.updateUser.mockResolvedValue({ data: null, error: null });
+    auth.getSession.mockResolvedValue({ data: { session: { access_token: 'reset-session' } }, error: null });
+    auth.signOut.mockResolvedValue({ error: null });
+    auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
   });
 
   it('shows the landing, not the auth screen, at /', () => {
@@ -226,6 +262,110 @@ describe('signed-out routing (ticket C)', () => {
     ).toBeInTheDocument();
   });
 
+  it('sends a reset code and shows the address on the verification screen', async () => {
+    navigate('/auth');
+    renderApp();
+
+    await startPasswordReset();
+
+    expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('farmer@example.com', expect.any(Object));
+    expect(screen.getByText('Enter the 6-digit code we sent to farmer@example.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resend code \(60s\)/i })).toBeDisabled();
+  });
+
+  it('verifies a correct code and keeps the new-password screen ahead of the dashboard', async () => {
+    navigate('/auth');
+    renderApp();
+    await startPasswordReset();
+
+    fireEvent.change(screen.getByLabelText('6-digit reset code'), { target: { value: '123456' } });
+
+    await screen.findByRole('heading', { name: 'Choose New Password' });
+    expect(auth.verifyOtp).toHaveBeenCalledWith({
+      email: 'farmer@example.com',
+      token: '123456',
+      type: 'recovery',
+    });
+    expect(screen.queryByTestId('app-dashboard')).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('al_password_recovery_pending')).toBe('true');
+  });
+
+  it('shows a wrong-code error, remains on the code screen, and clears the input', async () => {
+    auth.verifyOtp.mockResolvedValue({ data: { session: null }, error: { message: 'Token has expired' } });
+    navigate('/auth');
+    renderApp();
+    await startPasswordReset();
+
+    const codeInput = screen.getByLabelText('6-digit reset code') as HTMLInputElement;
+    fireEvent.change(codeInput, { target: { value: '123456' } });
+
+    await screen.findByRole('heading', { name: 'Enter Reset Code' });
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'That code is incorrect or has expired. Check the newest email or tap Resend code.'
+    ));
+    expect(codeInput.value).toBe('');
+  });
+
+  it('guards the password screen when recovery is emitted before verifyOtp resolves', async () => {
+    let finishVerification!: (value: unknown) => void;
+    auth.verifyOtp.mockImplementation(() => new Promise(resolve => { finishVerification = resolve; }));
+    navigate('/auth');
+    const view = renderApp();
+    await startPasswordReset();
+    fireEvent.change(screen.getByLabelText('6-digit reset code'), { target: { value: '123456' } });
+
+    act(() => {
+      farmState.current = { ...signedInState };
+      auth.onAuthStateChange.mock.calls.at(-1)?.[0]('PASSWORD_RECOVERY', signedInState.session);
+    });
+    view.rerender(<App />);
+    expect(screen.getByRole('heading', { name: 'Choose New Password' })).toBeInTheDocument();
+    expect(screen.queryByTestId('app-dashboard')).not.toBeInTheDocument();
+    await act(async () => {
+      finishVerification({ data: { session: signedInState.session }, error: null });
+    });
+  });
+
+  it('leaves an established legacy recovery route when the session signs out', async () => {
+    navigate('/auth?mode=recovery&token_hash=signout-test&type=recovery');
+    const view = renderApp();
+    await screen.findByRole('heading', { name: 'Choose New Password' });
+
+    act(() => {
+      farmState.current = { ...signedOutState };
+      auth.onAuthStateChange.mock.calls.at(-1)?.[0]('SIGNED_OUT', null);
+    });
+    view.rerender(<App />);
+    expect(await screen.findByRole('heading', { name: 'Welcome Back' })).toBeInTheDocument();
+    expect(window.location.search).toBe('?mode=signin');
+    expect(sessionStorage.getItem('al_password_recovery_pending')).toBeNull();
+  });
+
+  it('enables resend after 60 seconds and sends a new code', async () => {
+    vi.useFakeTimers();
+    try {
+      navigate('/auth');
+      renderApp();
+      fireEvent.click(screen.getByRole('button', { name: 'Forgot your password?' }));
+      fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'farmer@example.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
+      await act(async () => undefined);
+      expect(screen.getByRole('heading', { name: 'Enter Reset Code' })).toBeInTheDocument();
+
+      const resend = screen.getByRole('button', { name: /resend code/i });
+      expect(resend).toBeDisabled();
+      for (let second = 0; second < 60; second += 1) {
+        await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+      }
+      expect(screen.getByRole('button', { name: 'Resend code' })).toBeEnabled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Resend code' }));
+      await vi.waitFor(() => expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('redirects unknown signed-out paths to the landing', () => {
     navigate('/reports');
     renderApp();
@@ -235,8 +375,13 @@ describe('signed-out routing (ticket C)', () => {
 
 describe('signed-in routing (preserved behavior)', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     navigate('/');
     farmState.current = { ...signedInState };
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    auth.signOut.mockResolvedValue({ error: null });
+    auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
   });
 
   it('renders the app at /', async () => {
@@ -255,6 +400,36 @@ describe('signed-in routing (preserved behavior)', () => {
     navigate('/auth?mode=recovery');
     renderApp();
     expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a verified recovery session on the new-password screen until it is completed', () => {
+    sessionStorage.setItem('al_password_recovery_pending', 'true');
+    renderApp();
+
+    expect(screen.getByRole('heading', { name: 'Choose New Password' })).toBeInTheDocument();
+    expect(screen.queryByTestId('app-dashboard')).not.toBeInTheDocument();
+  });
+
+  it('cancels a pending recovery by signing out and clearing its saved state', async () => {
+    sessionStorage.setItem('al_password_recovery_pending', 'true');
+    renderApp();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel and Sign In' }));
+
+    await vi.waitFor(() => expect(auth.signOut).toHaveBeenCalledTimes(1));
+    expect(sessionStorage.getItem('al_password_recovery_pending')).toBeNull();
+  });
+
+  it('clears a pending recovery when Supabase reports any sign-out', async () => {
+    sessionStorage.setItem('al_password_recovery_pending', 'true');
+    renderApp();
+
+    const onAuthStateChange = auth.onAuthStateChange.mock.calls.at(-1)?.[0];
+    onAuthStateChange?.('SIGNED_OUT', null);
+
+    await vi.waitFor(() => expect(sessionStorage.getItem('al_password_recovery_pending')).toBeNull());
+    expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('app-dashboard')).toBeInTheDocument();
   });
 
   it('still renders /privacy inside the app shell', async () => {

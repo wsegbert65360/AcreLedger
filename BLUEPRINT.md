@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-09-29 (Stripe period end and checkout gate, PKCE-only recovery link, auth-expiry sync replay).
+> **Last updated:** 2026-10-02 (web password recovery no longer double-spends the PKCE code; a missing verifier names the wrong browser or app).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,11 +26,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-02** — Web password recovery turns `detectSessionInUrl` off only on `/auth?mode=recovery`, so the one-time PKCE code is exchanged once by the recovery handler. A failed exchange is rejected even when a session already exists. A missing verifier tells the user to use the same browser or app that requested the reset. Sign-in and sign-up keep auto-detect.
 - **2026-09-29** — Billing: period end read from subscription items, live-subscription checkout gate, first-subscription-only trial, customer reuse, request-fingerprinted idempotency key. Recovery deep link is PKCE-code-only. Sync replay handles an expired session. Code and tests changed in the same pass but were not run.
 - **2026-09-28** — Became the canonical home for detail AGENTS now summarizes (FSA-578 row construction, grain versioning, DR archive rules, AI retention); rewrote the new-table template to the strict pattern and corrected which tables hide soft-deleted rows (verified against migrations); tech stack updated to Vite 7 / React Router 7; weather roadmap moved to [ROADMAP.md](./ROADMAP.md).
 - **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and consolidated design guidance. Earlier today: corrected FAB visibility and renumbered the tail sections (old 11→7, 12→8).
 - **2026-09-20** — iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); a missing key leaves the offline store unopenable and blocked Sign Out (592fef7).
-- **2026-09-11** — Owner disaster-recovery tooling documented; deployment and live drills still pending (b5cf439).
 
 ---
 
@@ -790,7 +790,15 @@ listener redeems a PKCE authorization `code` with `exchangeCodeForSession` (the 
 verifier stored on the device, so a link crafted by another app cannot sign the user into a foreign
 session) or a recovery-only email `token_hash` with `verifyOtp({ token_hash, type: 'recovery' })`.
 The web recovery route explicitly redeems either the PKCE `code` or recovery token hash: installed
-`gotrue-js` URL detection does not recognize the token hash. Raw `access_token`/`refresh_token` values in the URL, including the former
+`gotrue-js` URL detection does not recognize the token hash. The browser client also turns
+`detectSessionInUrl` off when the page is exactly `/auth?mode=recovery`, so client startup does not
+spend that one-time code before `establishWebPasswordRecoverySession` exchanges it. Sign-in, sign-up,
+and every other URL keep auto-detect. If the web code exchange fails or returns no session, the
+handler rejects the link even when `getSession()` already holds a session. An ordinary sign-in must
+not be treated as this reset. Duplicate attempts on the same URL are ignored by the in-memory guard
+instead. A missing PKCE verifier is a different failure: the link was opened in a different browser
+or app than the one that requested the reset, and the message says to open the newest link there or
+request a new email in that same place. Raw `access_token`/`refresh_token` values in the URL, including the former
 legacy fragment, are rejected and tell the user to request a new email. The listener deduplicates
 repeated launch/open events and only then opens
 the reset UI. Keep

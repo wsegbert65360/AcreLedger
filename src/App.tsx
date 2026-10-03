@@ -18,6 +18,7 @@ import { useCoachmarks } from "@/hooks/useCoachmarks";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { syncQueue } from "@/lib/syncQueue";
+import { supabase } from "@/lib/supabase";
 import { FarmProvider, useFarm } from "@/store/farmStore";
 import { AskAcreLedgerProvider } from "@/context/AskAcreLedgerContext";
 import { QuickAddProvider, useQuickAdd } from "@/context/QuickAddContext";
@@ -50,6 +51,27 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Weather = lazy(() => import("./pages/Weather"));
 
 const queryClient = new QueryClient();
+const PASSWORD_RECOVERY_PENDING_STORAGE_KEY = 'al_password_recovery_pending';
+
+function getPasswordRecoveryPending(): boolean {
+  try {
+    return sessionStorage.getItem(PASSWORD_RECOVERY_PENDING_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function setStoredPasswordRecoveryPending(pending: boolean): void {
+  try {
+    if (pending) {
+      sessionStorage.setItem(PASSWORD_RECOVERY_PENDING_STORAGE_KEY, 'true');
+    } else {
+      sessionStorage.removeItem(PASSWORD_RECOVERY_PENDING_STORAGE_KEY);
+    }
+  } catch {
+    // Private browsing or a disabled storage surface should not block recovery.
+  }
+}
 
 const pageVariants = {
   initial: { opacity: 0, y: 6 },
@@ -123,8 +145,13 @@ const AppContent = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [webRecoveryReady, setWebRecoveryReady] = useState(false);
+  const [passwordRecoveryPending, setPasswordRecoveryPending] = useState(getPasswordRecoveryPending);
   const isPasswordRecovery = location.pathname === '/auth'
     && new URLSearchParams(location.search).get('mode') === 'recovery';
+  const updatePasswordRecoveryPending = (pending: boolean) => {
+    setStoredPasswordRecoveryPending(pending);
+    setPasswordRecoveryPending(pending);
+  };
   const coachmarks = useCoachmarks({
     userId: session?.user?.id,
     enabled: !!session && onboardingComplete && location.pathname === '/'
@@ -155,6 +182,26 @@ const AppContent = () => {
   ), [navigate]);
 
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setStoredPasswordRecoveryPending(true);
+        setPasswordRecoveryPending(true);
+      }
+      if (event === 'SIGNED_OUT') {
+        setStoredPasswordRecoveryPending(false);
+        setPasswordRecoveryPending(false);
+        setWebRecoveryReady(false);
+        if (window.location.pathname === '/auth'
+          && new URLSearchParams(window.location.search).get('mode') === 'recovery') {
+          navigate('/auth?mode=signin', { replace: true });
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
     if (Capacitor.isNativePlatform() || !isPasswordRecovery) return;
     setWebRecoveryReady(false);
     void establishWebPasswordRecoverySession()
@@ -183,8 +230,15 @@ const AppContent = () => {
     };
   }, []);
 
-  if (isPasswordRecovery && (Capacitor.isNativePlatform() || webRecoveryReady)) {
-    return <ErrorBoundary><Auth /></ErrorBoundary>;
+  if (passwordRecoveryPending || (isPasswordRecovery && (Capacitor.isNativePlatform() || webRecoveryReady))) {
+    return (
+      <ErrorBoundary>
+        <Auth
+          passwordRecoveryPending={passwordRecoveryPending}
+          onPasswordRecoveryPendingChange={updatePasswordRecoveryPending}
+        />
+      </ErrorBoundary>
+    );
   }
 
   if (loading) {
@@ -221,7 +275,17 @@ const AppContent = () => {
     return (
       <Routes>
         <Route path="/" element={<ErrorBoundary><Landing /></ErrorBoundary>} />
-        <Route path="/auth" element={isPasswordRecovery ? null : <ErrorBoundary><Auth /></ErrorBoundary>} />
+        <Route
+          path="/auth"
+          element={isPasswordRecovery ? null : (
+            <ErrorBoundary>
+              <Auth
+                passwordRecoveryPending={passwordRecoveryPending}
+                onPasswordRecoveryPendingChange={updatePasswordRecoveryPending}
+              />
+            </ErrorBoundary>
+          )}
+        />
         <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
         <Route path="/support" element={<ErrorBoundary><Support /></ErrorBoundary>} />
         <Route path="*" element={<Navigate to="/" replace />} />

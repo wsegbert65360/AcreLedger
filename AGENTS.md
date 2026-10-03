@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-01 (password recovery: native and web token-hash redemption; legacy fragment links require a new email).
+> **Last updated:** 2026-10-02 (password recovery: the web client no longer spends the one-time code before the recovery screen; a link opened in the wrong browser says so).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,12 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-02** — Web password recovery no longer lets the Supabase client auto-exchange `?code=` on `/auth?mode=recovery` before the manual handler. A failed code exchange is rejected even when the browser already has a session, so an expired link cannot open the set-password screen for an ordinary sign-in. A missing PKCE verifier tells the user to open the link in the same browser or app that requested it. Sign-in and sign-up URLs still auto-detect.
 - **2026-10-01** — Password recovery accepts the supported Supabase email `token_hash` recovery link through `verifyOtp`, alongside the PKCE authorization-code exchange, on the exact native scheme and web recovery route. Raw URL session-token fragments remain forbidden and show a re-request message instead. The iPhone/dashboard verification protocol is in `docs/runbooks/ios-password-recovery-device-test.md`.
 - **2026-09-30** — MRMS ingestion reliability: added `public.mrms_ingestion_runs` (service-role-only outcome ledger keyed by target hour) so the nightly backfill's `field_id = null` runs persist `success`/`no_data`/`failed` like the hourly pass; the overnight job now folds recently failed/no-data hours back into its window (bounded and de-duplicated) so an hour that aged out of the ten-hour window is still retried; a chain-trigger failure records the un-run chunk instead of only logging; and a Pass 1 retry no longer downgrades a Pass 2 `finalized` row. Pure scheduling arithmetic lives in `supabase/functions/shared/mrmsSchedule.ts` with Vitest coverage. `mrms_ingestion_runs` is classified in the owner recovery registry.
 - **2026-09-29** — Review-fix pass, rebased onto the 13-commit remote head (`e039a0d`). Billing: `current_period_end` is read from Stripe subscription items (basil API); checkout is refused for live `past_due`/`unpaid` subscriptions, skips the trial when the farm ever had a subscription, and reuses the Stripe customer. Recovery deep link accepts a PKCE `code` only. Sync replay refreshes an expired session once and pauses without spending retries. Verified on the merged tree: lint 0 errors/72 warnings, app and API typechecks, `verify:docs`, `verify:app-store`, `verify:migrations` (75-migration PGlite replay), `test:db-integrity`, 1,285 unit tests in 137 files, 31 owner-backup and 21 recovery tests, and the production bundle build.
 - **2026-09-28** — Consistency pass: fixed the field-delete queueing contradiction (one batched `enqueueMutations`, never a per-record loop) and the optimistic-update step order (capture the snapshot before the optimistic setter); replaced duplicated feature detail with summaries that link to BLUEPRINT; AI model IDs now referenced by code constant; documented `verify:migrations`, `test:db-integrity`, and `install:owner-dr`.
-- **2026-09-27** — Added the App Store submission sources, native purchase-boundary rules, screenshot evidence standard, and `verify:app-store` release gate; reconciled test-command guidance with `package.json` and the iOS runbook, verified against 5cc6503.
-- **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and moved detailed design guidance into BLUEPRINT. Earlier today: added freshness headers and the feature-area file index.
 
 ## Contents
 
@@ -362,6 +361,7 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 - Account deletion is a request (`account_deletion_requests`), never a client-side delete. Never add client update/delete grants or let request input choose another user or farm.
 - Native credentials and encryption material go through `secureStorage` (Keychain/Keystore).
 - Keep the native recovery scheme `com.wsegbert.acreledger://auth/recovery`, the Supabase redirect allowlist, `Info.plist`, the app listener, and recovery tests synchronized. Never accept arbitrary custom-scheme hosts or paths, and never establish a session from raw `access_token`/`refresh_token` values in the URL: the native listener accepts a PKCE `code` (`exchangeCodeForSession`) or a `token_hash` only when `type=recovery` (`verifyOtp`).
+- On `/auth?mode=recovery` the browser client must leave `detectSessionInUrl` off so the one-time PKCE code is exchanged only by `establishWebPasswordRecoverySession`. If that exchange fails or returns no session, reject it — do not treat an existing `getSession()` as this reset. A missing PKCE verifier tells the user to open the link in the same browser or app that requested the reset. Other URLs, including sign-in and sign-up, keep auto-detect.
 
 ### CI/CD (CodeMagic)
 

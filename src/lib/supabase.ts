@@ -45,6 +45,15 @@ export const isSupabaseConfigured = hasValidSupabaseUrl && Boolean(configuredSup
 
 const isNative = Capacitor.isNativePlatform();
 
+// Password-recovery links (/auth?mode=recovery&code=...) are exchanged manually
+// by establishWebPasswordRecoverySession(). If the client also auto-detects the
+// code on init, it burns the one-time PKCE code first and the manual exchange
+// fails with "expired, invalid, or already used". Skip auto-detect on that URL only.
+const isRecoveryUrl =
+    typeof window !== 'undefined' &&
+    window.location.pathname === '/auth' &&
+    new URLSearchParams(window.location.search).get('mode') === 'recovery';
+
 // A network "online" signal only proves a link exists; the request can still
 // hang forever (dead socket, captive portal, dropped LTE). Without a timeout an
 // insert below can block its hook's `isMutating` lock and the caller sees no
@@ -98,7 +107,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         storage: isNative ? nativeStorageAdapter : undefined,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: !isRecoveryUrl,
         flowType: 'pkce',
     },
 });
