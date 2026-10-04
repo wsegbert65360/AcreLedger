@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { GrainMovement, HarvestRecord } from '@/types/farm';
+import { Field, GrainMovement, HarvestRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { mapGrainToDb, mapHarvestToDb } from '@/lib/mappers';
@@ -9,6 +9,7 @@ import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 interface UseHarvestRecordsArgs {
   farm_id: string | null;
   viewingSeason: number;
+  fields: Field[];
   harvestRecords: HarvestRecord[];
   setHarvestRecords: React.Dispatch<React.SetStateAction<HarvestRecord[]>>;
   grainMovements: GrainMovement[];
@@ -20,7 +21,7 @@ interface UseHarvestRecordsArgs {
 type OpResult = boolean;
 
 export function useHarvestRecords({
-  farm_id, viewingSeason, harvestRecords, setHarvestRecords,
+  farm_id, viewingSeason, fields, harvestRecords, setHarvestRecords,
   grainMovements, setGrainMovements, isOnline, onMutation,
 }: UseHarvestRecordsArgs) {
   const isMutating = useRef(false);
@@ -475,5 +476,199 @@ export function useHarvestRecords({
     }
   }, [farm_id, harvestRecords, setHarvestRecords, grainMovements, setGrainMovements, isOnline, onMutation]);
 
-  return { addHarvestRecord, addHarvestWithGrain, updateHarvestRecord, deleteHarvestRecords };
+  // ─── Reassign field (move a truckload without delete/re-enter) ─────────────
+  const reassignHarvestField = useCallback(async (
+    loadId: string,
+    newFieldId: string,
+    reason?: string,
+  ): Promise<OpResult> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+    if (isMutating.current) return false;
+    isMutating.current = true;
+
+    const current = harvestRecords.find(record => record.id === loadId && !record.deleted_at);
+    if (!current) {
+      isMutating.current = false;
+      toast.error('Could not move harvest — refresh and try again.');
+      return false;
+    }
+    const targetField = fields.find(field => field.id === newFieldId && !field.deleted_at);
+    if (!targetField) {
+      isMutating.current = false;
+      toast.error('Choose an active field to move this harvest to.');
+      return false;
+    }
+    if (targetField.id === current.fieldId) {
+      isMutating.current = false;
+      toast.error('This harvest is already on that field.');
+      return false;
+    }
+
+    const trimmedReason = reason?.trim();
+    const movedHarvest: HarvestRecord = {
+      ...current,
+      fieldId: targetField.id,
+      fieldName: targetField.name,
+      // A new move replaces any prior note; moving without a reason clears it.
+      moveReason: trimmedReason || undefined,
+    };
+
+    // Mapper discipline: validate the full updated record, then persist only
+    // the reassigned columns so a concurrent edit to other fields survives.
+    let mapped: ReturnType<typeof mapHarvestToDb>;
+    try {
+      mapped = mapHarvestToDb(movedHarvest);
+    } catch (err) {
+      console.error('mapHarvestToDb failed:', err);
+      isMutating.current = false;
+      toast.error('Failed to prepare record — check inputs.');
+      return false;
+    }
+
+    // Active linked grain movements carry the source field name on their rows.
+    const linkedMovements = grainMovements.filter(
+      movement => movement.harvestRecordId === loadId && !movement.deleted_at,
+    );
+    const movedMovements = linkedMovements.map(movement => {
+      const expectedVersion = Number.isInteger(movement.version) && (movement.version ?? 0) > 0
+        ? movement.version as number
+        : 1;
+      return {
+        previous: movement,
+        expectedVersion,
+        next: {
+          ...movement,
+          sourceFieldName: targetField.name,
+          version: expectedVersion + 1,
+        },
+      };
+    });
+
+    // Capture rollback snapshots from the render closure before the optimistic
+    // setters, never by mutating an outer variable inside a state updater.
+    const previousHarvest = current;
+    const rollback = () => {
+      setHarvestRecords(prev => prev.map(item => item.id === loadId ? previousHarvest : item));
+      setGrainMovements(prev => prev.map(item => {
+        const restored = movedMovements.find(entry => entry.next.id === item.id);
+        return restored ? restored.previous : item;
+      }));
+    };
+
+    setHarvestRecords(prev => prev.map(item => item.id === loadId ? movedHarvest : item));
+    setGrainMovements(prev => prev.map(item => {
+      const moved = movedMovements.find(entry => entry.previous.id === item.id);
+      return moved ? moved.next : item;
+    }));
+
+    try {
+      if (!isOnline) {
+        try {
+          await syncQueue.enqueueMutations([
+            {
+              tableName: 'harvest_records',
+              operation: 'update',
+              payload: {
+                id: loadId,
+                field_id: mapped.field_id,
+                field_name: mapped.field_name,
+                move_reason: mapped.move_reason,
+              },
+              farmId: farm_id,
+            },
+            ...movedMovements.map(({ previous, expectedVersion }) => ({
+              tableName: 'grain_movements',
+              operation: 'update' as const,
+              payload: {
+                id: previous.id,
+                source_field_name: targetField.name,
+                __expected_version: expectedVersion,
+              },
+              farmId: farm_id,
+            })),
+          ]);
+          await onMutation();
+          toast.success(`Harvest moved to ${targetField.name} offline.`, {
+            description: 'Queued locally — will sync automatically when connection is restored.',
+          });
+          return true;
+        } catch (err) {
+          console.error('Failed to enqueue harvest field reassignment offline:', err);
+          rollback();
+          toast.error('Failed to move harvest offline.');
+          return false;
+        }
+      }
+
+      let error;
+      let affectedRows;
+      try {
+        const res = await supabase
+          .from('harvest_records')
+          .update({
+            field_id: mapped.field_id,
+            field_name: mapped.field_name,
+            move_reason: mapped.move_reason,
+          }, { count: 'exact' })
+          .eq('id', loadId)
+          .eq('farm_id', farm_id);
+        error = res.error;
+        affectedRows = res.count;
+      } catch (err) {
+        error = err;
+      }
+
+      if (error || affectedRows !== 1) {
+        if (error) {
+          console.error('Error reassigning harvest field:', error);
+        } else {
+          console.warn('Harvest reassignment affected zero rows:', loadId);
+        }
+        rollback();
+        toast.error('Failed to move harvest.');
+        return false;
+      }
+
+      for (const { previous, expectedVersion } of movedMovements) {
+        let grainError;
+        let grainRows;
+        try {
+          const res = await supabase
+            .from('grain_movements')
+            .update({ source_field_name: targetField.name }, { count: 'exact' })
+            .eq('id', previous.id)
+            .eq('farm_id', farm_id)
+            .eq('version', expectedVersion);
+          grainError = res.error;
+          grainRows = res.count;
+        } catch (err) {
+          grainError = err;
+        }
+
+        if (grainError || grainRows !== 1) {
+          if (grainError) {
+            console.error('Error updating linked grain movement source field:', grainError);
+          } else {
+            console.warn('Linked grain movement concurrency conflict detected:', {
+              id: previous.id,
+              expectedVersion,
+            });
+          }
+          rollback();
+          toast.error('This load changed elsewhere. Please refresh and try again.');
+          return false;
+        }
+      }
+
+      toast.success(`Harvest moved to ${targetField.name}.`);
+      return true;
+    } finally {
+      isMutating.current = false;
+    }
+  }, [farm_id, fields, grainMovements, harvestRecords, isOnline, onMutation, setGrainMovements, setHarvestRecords]);
+
+  return { addHarvestRecord, addHarvestWithGrain, updateHarvestRecord, deleteHarvestRecords, reassignHarvestField };
 }

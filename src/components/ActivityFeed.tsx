@@ -1,7 +1,7 @@
-import { Edit2 } from 'lucide-react';
+import { Edit2, ArrowRightLeft } from 'lucide-react';
 import { ModalType } from '@/pages/FieldDetailScreen';
 
-import type { ActivityRecord, ActivityRecordBase } from '@/types/farm';
+import type { ActivityRecord, ActivityRecordBase, HarvestRecord } from '@/types/farm';
 import { formatDate, formatIsoDate } from '@/utils/dates';
 
 type FeedRecord = Exclude<ActivityRecord, { type: 'grain' }>;
@@ -12,10 +12,11 @@ interface ActivityFeedProps {
   year: number;
   onEdit: (type: ModalType, data: FeedRecordData) => void;
   onDuplicate?: (type: ModalType, data: FeedRecordData) => void;
+  onMoveHarvestField?: (record: HarvestRecord) => void;
   hideHeader?: boolean;
 }
 
-export default function ActivityFeed({ records, year, onEdit, onDuplicate, hideHeader }: ActivityFeedProps) {
+export default function ActivityFeed({ records, year, onEdit, onDuplicate, onMoveHarvestField, hideHeader }: ActivityFeedProps) {
   const getFeedInfo = (record: FeedRecord) => {
     const { type, data } = record;
 
@@ -74,6 +75,17 @@ export default function ActivityFeed({ records, year, onEdit, onDuplicate, hideH
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {record.type === 'harvest' && onMoveHarvestField && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onMoveHarvestField(r as HarvestRecord); }}
+                    type="button"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    title="Move to another field"
+                    aria-label="Move harvest to another field"
+                  >
+                    <ArrowRightLeft size={12} />
+                  </button>
+                )}
                 {onDuplicate && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onDuplicate(record.type as ModalType, record.data); }}

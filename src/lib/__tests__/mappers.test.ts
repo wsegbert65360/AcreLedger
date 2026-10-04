@@ -6,7 +6,7 @@ import {
     mapCustomSprayFromDb, mapCustomSprayToDb,
     mapSeedFromDb, mapSeedToDb,
     mapRecipeFromDb, mapRecipeToDb, mapFertilizerToDb,
-    mapHarvestToDb, mapHayToDb, mapHayFromDb, mapGrainToDb,
+    mapHarvestToDb, mapHarvestFromDb, mapHayToDb, mapHayFromDb, mapGrainToDb,
 } from '../mappers';
 import { SprayRecord, SavedSeed, CustomSprayRecord } from '../../types/farm';
 
@@ -308,6 +308,20 @@ describe('Optional column null semantics', () => {
         expect(db.harvest_date).toBeNull();
         expect(db.crop).toBeNull();
         expect(db.fsa_tract_number).toBeNull();
+        expect(db.move_reason).toBeNull();
+    });
+
+    it('preserves a trimmed harvest move reason through the round trip', () => {
+        const db = mapHarvestToDb({
+            id: 'harvest-2', farm_id: 'farm-1', fieldId: 'field-2', fieldName: 'South',
+            destination: 'bin', moisturePercent: 14, landlordSplitPercent: 0,
+            bushels: 900, timestamp: Date.now(), seasonYear: 2026, deleted_at: null,
+            moveReason: '  Loaded from the wrong field  ',
+        });
+
+        expect(db.move_reason).toBe('Loaded from the wrong field');
+        expect(mapHarvestFromDb(db as any).moveReason).toBe('Loaded from the wrong field');
+        expect(mapHarvestFromDb({ ...db, move_reason: null } as any).moveReason).toBeUndefined();
     });
 
     it('sends cleared grain optionals as null', () => {

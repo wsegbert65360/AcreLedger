@@ -158,6 +158,7 @@ export const harvestRecordSchema = z.object({
   crop: z.string().optional(),
   landlordName: z.string().optional(),
   scaleTicketNumber: z.string().optional(),
+  moveReason: z.string().optional(),
   farm_id: z.string(),
   deleted_at: z.string().nullable().optional(),
 }).strict();

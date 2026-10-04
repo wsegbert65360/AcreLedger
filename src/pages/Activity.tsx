@@ -24,6 +24,7 @@ import type {
 import PlantModal from '@/components/PlantModal';
 import SprayModal from '@/components/SprayModal';
 import HarvestModal from '@/components/HarvestModal';
+import HarvestMoveFieldDialog from '@/components/HarvestMoveFieldDialog';
 import HayModal from '@/components/HayModal';
 import CustomSprayModal from '@/components/CustomSprayModal';
 import FertilizerModal from '@/components/FertilizerModal';
@@ -92,6 +93,7 @@ export default function Activity() {
     deleteTillageRecords,
     viewingSeason,
     deleteGrainMovements,
+    reassignHarvestField,
     farmName
   } = useFarm();
 
@@ -105,6 +107,7 @@ export default function Activity() {
   const [editingRecord, setEditingRecord] = useState<EditableRecord | null>(null);
   const [editingRecordType, setEditingRecordType] = useState<ActivityRecord['type'] | null>(null);
   const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
+  const [movingRecord, setMovingRecord] = useState<HarvestRecord | null>(null);
   const openedRecordRef = useRef<string | null>(null);
 
   const openModal = (type: ActivityRecord['type'], record: EditableRecord, mode: 'edit' | 'duplicate') => {
@@ -543,7 +546,7 @@ export default function Activity() {
                   </div>
                 );
               })()}
-              {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} />}
+              {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} onMoveField={setMovingRecord} />}
               {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('hay', r, 'edit')} onDuplicate={(r) => openModal('hay', r, 'duplicate')} />}
               {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('fertilizer', r, 'edit')} onDuplicate={(r) => openModal('fertilizer', r, 'duplicate')} />}
               {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('tillage', r, 'edit')} onDuplicate={(r) => openModal('tillage', r, 'duplicate')} />}
@@ -659,6 +662,16 @@ export default function Activity() {
           />
         );
       })()}
+
+      <HarvestMoveFieldDialog
+        open={!!movingRecord}
+        record={movingRecord}
+        fields={fields}
+        onClose={() => setMovingRecord(null)}
+        onConfirm={(newFieldId, reason) => movingRecord
+          ? reassignHarvestField(movingRecord.id, newFieldId, reason)
+          : Promise.resolve(false)}
+      />
     </div>
   );
 }

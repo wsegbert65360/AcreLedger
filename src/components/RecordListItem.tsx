@@ -1,4 +1,4 @@
-import { Check, Edit2, AlertTriangle, Copy } from 'lucide-react';
+import { Check, Edit2, AlertTriangle, Copy, ArrowRightLeft } from 'lucide-react';
 import {
   ACTIVITY_ICONS,
   ACTIVITY_TEXT_COLORS,
@@ -16,12 +16,13 @@ interface RecordListItemProps {
   onToggle: (id: string, shift: boolean) => void;
   onEdit: () => void;
   onDuplicate?: () => void;
+  onMoveField?: () => void;
   type: ActivityType;
   warning?: boolean;
 }
 
 export default function RecordListItem({
-  id, title, subtitle, details, date, isSelected, onToggle, onEdit, onDuplicate, type, warning
+  id, title, subtitle, details, date, isSelected, onToggle, onEdit, onDuplicate, onMoveField, type, warning
 }: RecordListItemProps) {
   const Icon = ACTIVITY_ICONS[type];
   const colorClass = ACTIVITY_TEXT_COLORS[type];
@@ -65,6 +66,17 @@ export default function RecordListItem({
                 title="Duplicate record"
               >
                 <Copy size={16} />
+              </button>
+            )}
+            {onMoveField && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onMoveField(); }}
+                type="button"
+                aria-label="Move record to another field"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                title="Move to another field"
+              >
+                <ArrowRightLeft size={16} />
               </button>
             )}
             <button

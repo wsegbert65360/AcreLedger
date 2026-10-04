@@ -110,6 +110,8 @@ interface FarmState {
   }) => Promise<boolean>;
   updateHarvestRecord: (r: HarvestRecord) => Promise<boolean>;
   deleteHarvestRecords: (ids: string[]) => Promise<boolean>;
+  /** Moves a harvest truckload to a different field, updating linked grain movements in the same path */
+  reassignHarvestField: (loadId: string, newFieldId: string, reason?: string) => Promise<boolean>;
   /** Operations for managing hay harvest records */
   addHayHarvestRecord: (r: Omit<HayHarvestRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updateHayHarvestRecord: (r: HayHarvestRecord) => Promise<boolean>;
@@ -628,7 +630,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const plantOps = usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlantRecords, isOnline, onMutation: updatePendingSyncCount });
   const sprayOps = useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSprayRecords, isOnline, onMutation: updatePendingSyncCount });
   const harvestOps = useHarvestRecords({
-    farm_id, viewingSeason, harvestRecords, setHarvestRecords,
+    farm_id, viewingSeason, fields, harvestRecords, setHarvestRecords,
     grainMovements, setGrainMovements, isOnline, onMutation: updatePendingSyncCount,
   });
   const hayOps = useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHayHarvestRecords, isOnline, onMutation: updatePendingSyncCount });
