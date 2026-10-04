@@ -8,6 +8,28 @@ export interface ActivityRecordBase {
   harvestDate?: string;
 }
 
+/**
+ * Property identifier abstraction (Australia pilot, Phase 2a).
+ *
+ * Canonical in-app representation for property IDs, replacing the embedded
+ * US-only FSA fields. Schemes:
+ *   'us-fsa' — USDA Farm Service Agency numbers (kinds: farm, tract, field)
+ *   'au-pic' — Australian Property Identification Code (kind: property)
+ *
+ * The legacy fsa* fields stay on Field/PlantRecord as a read-compat shim
+ * for one release; the mappers keep both directions in sync so existing
+ * US consumers see zero change.
+ */
+export type PropertyIdScheme = 'us-fsa' | 'au-pic';
+export type PropertyIdKind = 'farm' | 'tract' | 'field' | 'property';
+
+export interface PropertyIdentifier {
+  scheme: PropertyIdScheme;
+  kind: PropertyIdKind;
+  value: string;
+  status?: string;
+}
+
 export interface Field {
   id: string;
   name: string;
@@ -19,6 +41,11 @@ export interface Field {
   fsaFarmNumber?: string;
   fsaTractNumber?: string;
   fsaFieldNumber?: string;
+  /**
+   * Canonical property identifiers (Phase 2a). The fsa* fields above are a
+   * read-compat shim; new code should read/write through propertyIdentifiers.
+   */
+  propertyIdentifiers?: PropertyIdentifier[];
   producerShare?: number; // 0 to 100 (%)
   landlordName?: string; // field-level owner/landlord for landlord summary reporting
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated';
@@ -54,6 +81,8 @@ export interface PlantRecord {
   fsaFarmNumber?: string;
   fsaTractNumber?: string;
   fsaFieldNumber?: string;
+  /** Canonical property identifiers (Phase 2a); fsa* fields are a read-compat shim. */
+  propertyIdentifiers?: PropertyIdentifier[];
   intendedUse?: string;
   plantDate?: string;
   producerShare?: number; // FSA 578 mandatory: 0 to 100 (%)

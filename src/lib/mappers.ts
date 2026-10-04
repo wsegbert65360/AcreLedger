@@ -13,6 +13,10 @@ import {
 } from '../types/database';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import {
+    migrateFsaToPropertyIdentifiers,
+    syncFsaLegacyFields,
+} from './propertyIdentifiers';
+import {
     fieldSchema, binSchema, plantRecordSchema, sprayRecordSchema,
     harvestRecordSchema, hayHarvestRecordSchema, customSprayRecordSchema, grainMovementSchema,
     savedSeedSchema, fertilizerRecipeSchema, sprayRecipeSchema,
@@ -50,6 +54,11 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     fsaFarmNumber: safeStr(db.fsa_farm_number),
     fsaTractNumber: safeStr(db.fsa_tract_number),
     fsaFieldNumber: safeStr(db.fsa_field_number),
+    propertyIdentifiers: migrateFsaToPropertyIdentifiers({
+        fsaFarmNumber: safeStr(db.fsa_farm_number),
+        fsaTractNumber: safeStr(db.fsa_tract_number),
+        fsaFieldNumber: safeStr(db.fsa_field_number),
+    }),
     producerShare: db.producer_share ?? undefined,
     landlordName: safeStr(db.landlord_name),
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
@@ -72,6 +81,11 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     fsaFarmNumber: safeStr(db.fsa_farm_number),
     fsaTractNumber: safeStr(db.fsa_tract_number),
     fsaFieldNumber: safeStr(db.fsa_field_number),
+    propertyIdentifiers: migrateFsaToPropertyIdentifiers({
+        fsaFarmNumber: safeStr(db.fsa_farm_number),
+        fsaTractNumber: safeStr(db.fsa_tract_number),
+        fsaFieldNumber: safeStr(db.fsa_field_number),
+    }),
     intendedUse: safeStr(db.intended_use),
     producerShare: db.producer_share ?? undefined,
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
@@ -368,6 +382,9 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 
 export const mapFieldToDb = (f: Field) => {
     validateRequired(f, ['id', 'farm_id', 'name'], 'mapFieldToDb');
+    // propertyIdentifiers (us-fsa) are canonical; legacy fsa* fields are the
+    // read-compat shim. Either write path persists to the same fsa columns.
+    const fsaIds = syncFsaLegacyFields(f);
     const appShape = {
         id: f.id,
         farm_id: f.farm_id,
@@ -397,9 +414,9 @@ export const mapFieldToDb = (f: Field) => {
         ...(f.boundaryAcreage != null ? { operational_acreage: f.boundaryAcreage } : {}),
         lat: f.lat ?? null,
         lng: f.lng ?? null,
-        fsa_farm_number: f.fsaFarmNumber ?? null,
-        fsa_tract_number: f.fsaTractNumber ?? null,
-        fsa_field_number: f.fsaFieldNumber ?? null,
+        fsa_farm_number: fsaIds.fsaFarmNumber ?? null,
+        fsa_tract_number: fsaIds.fsaTractNumber ?? null,
+        fsa_field_number: fsaIds.fsaFieldNumber ?? null,
         producer_share: f.producerShare ?? null,
         landlord_name: f.landlordName ?? null,
         irrigation_practice: f.irrigationPractice ?? null,
@@ -414,6 +431,7 @@ export const mapFieldToDb = (f: Field) => {
 export const mapPlantToDb = (r: PlantRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapPlantToDb');
     plantRecordSchema.parse(r);
+    const fsaIds = syncFsaLegacyFields(r);
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -423,9 +441,9 @@ export const mapPlantToDb = (r: PlantRecord) => {
         acreage: r.acreage,
         crop: r.crop ?? null,
         plant_date: r.plantDate ?? null,
-        fsa_farm_number: r.fsaFarmNumber ?? null,
-        fsa_tract_number: r.fsaTractNumber ?? null,
-        fsa_field_number: r.fsaFieldNumber ?? null,
+        fsa_farm_number: fsaIds.fsaFarmNumber ?? null,
+        fsa_tract_number: fsaIds.fsaTractNumber ?? null,
+        fsa_field_number: fsaIds.fsaFieldNumber ?? null,
         intended_use: r.intendedUse ?? null,
         producer_share: r.producerShare ?? null,
         irrigation_practice: r.irrigationPractice ?? null,

@@ -41,6 +41,14 @@ const sprayProductSchema = z.object({
   totalProductUnit: z.string().optional(),
 });
 
+/** Property identifier (Phase 2a): us-fsa farm/tract/field or au-pic property. */
+export const propertyIdentifierSchema = z.object({
+  scheme: z.enum(['us-fsa', 'au-pic']),
+  kind: z.enum(['farm', 'tract', 'field', 'property']),
+  value: z.string(),
+  status: z.string().optional(),
+}).strict();
+
 export const fieldSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -51,6 +59,7 @@ export const fieldSchema = z.object({
   fsaFarmNumber: z.string().optional(),
   fsaTractNumber: z.string().optional(),
   fsaFieldNumber: z.string().optional(),
+  propertyIdentifiers: z.array(propertyIdentifierSchema).optional(),
   producerShare: z.number().optional(),
   landlordName: z.string().optional(),
   irrigationPractice: z.string().optional(),
@@ -81,6 +90,7 @@ export const plantRecordSchema = z.object({
   fsaFarmNumber: z.string().optional(),
   fsaTractNumber: z.string().optional(),
   fsaFieldNumber: z.string().optional(),
+  propertyIdentifiers: z.array(propertyIdentifierSchema).optional(),
   intendedUse: z.string().optional(),
   producerShare: z.number().optional(),
   irrigationPractice: z.string().optional(),
