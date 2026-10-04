@@ -22,9 +22,9 @@ export function toLocalIsoDate(ts: number): string {
 /**
  * Format a Date for display using the user's local timezone.
  */
-export function formatDisplayDate(date: Date): string {
+export function formatDisplayDate(date: Date, locale?: string): string {
     if (isNaN(date.getTime())) return '';
-    return date.toLocaleDateString(undefined, {
+    return date.toLocaleDateString(locale ?? undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -34,26 +34,26 @@ export function formatDisplayDate(date: Date): string {
 /**
  * Format a date-only ISO string for display without timezone shift.
  */
-export function formatIsoDate(iso?: string | null): string {
+export function formatIsoDate(iso?: string | null, locale?: string): string {
     if (!iso) return '';
     // Handle full ISO strings by taking only the date part
     const datePart = iso.split('T')[0];
-    return formatDisplayDate(parseLocalDate(datePart));
+    return formatDisplayDate(parseLocalDate(datePart), locale);
 }
 
 /**
  * Format a timestamp into a short date/time string.
  */
-export const formatDate = (ts: number) =>
-    new Date(ts).toLocaleDateString('en-US', {
+export const formatDate = (ts: number, locale: string = 'en-US') =>
+    new Date(ts).toLocaleDateString(locale, {
         month: 'short',
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit'
     });
 
-export const formatShortDate = (ts: number) =>
-    new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+export const formatShortDate = (ts: number, locale?: string) =>
+    new Date(ts).toLocaleDateString(locale ?? undefined, { month: 'short', day: 'numeric' });
 
 /** Fields used to sort an activity record by the date shown to the user. */
 export interface WorkDateFields {
