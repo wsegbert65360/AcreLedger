@@ -22,6 +22,8 @@ interface SprayWizardConditionsStepProps {
   totalAmountApplied: string;
   mixtureRate: string;
   totalMixtureVolume: string;
+  waterRate: string;
+  waterRateUnit: string;
   isPremixed: boolean;
   showValidation: boolean;
   onRecoverWeather: () => void;
@@ -32,6 +34,8 @@ interface SprayWizardConditionsStepProps {
   setTotalAmountApplied: (v: string) => void;
   setMixtureRate: (v: string) => void;
   setTotalMixtureVolume: (v: string) => void;
+  setWaterRate: (v: string) => void;
+  setWaterRateUnit: (v: string) => void;
   setIsPremixed: (v: boolean) => void;
 }
 
@@ -40,10 +44,11 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
   const {
     fieldLat, fieldLng, weather, loading, isRecovering,
     manualWindDirection, manualWindSpeed, treatedAreaSize, treatedAreaUnit,
-    totalAmountApplied, mixtureRate, totalMixtureVolume, isPremixed, showValidation,
+    totalAmountApplied, mixtureRate, totalMixtureVolume, waterRate, waterRateUnit,
+    isPremixed, showValidation,
     onRecoverWeather, setManualWindDirection, setManualWindSpeed,
     setTreatedAreaSize, setTreatedAreaUnit, setTotalAmountApplied,
-    setMixtureRate, setTotalMixtureVolume, setIsPremixed
+    setMixtureRate, setTotalMixtureVolume, setWaterRate, setWaterRateUnit, setIsPremixed
   } = props;
 
   const inputError = (missing: boolean) => missing && showValidation ? 'border-destructive ring-1 ring-destructive' : '';
@@ -217,6 +222,28 @@ export function SprayWizardConditionsStep(props: SprayWizardConditionsStepProps)
               placeholder="e.g. 1200 gal"
               className="mt-0.5 bg-muted border-border text-foreground h-11"
             />
+          </div>
+          <div>
+            <Label htmlFor="waterRate" className="text-xs font-semibold text-muted-foreground">Water Rate (Australia)</Label>
+            <div className="flex gap-2 mt-0.5">
+              <Input
+                id="waterRate"
+                value={waterRate}
+                onChange={e => setWaterRate(e.target.value)}
+                placeholder="e.g. 100"
+                inputMode="decimal"
+                className="bg-muted border-border text-foreground h-11 flex-1"
+              />
+              <Select value={waterRateUnit} onValueChange={setWaterRateUnit}>
+                <SelectTrigger className="w-24 bg-muted border-border text-foreground h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="L/ha">L/ha</SelectItem>
+                  <SelectItem value="gal/ac">gal/ac</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
         <div className="flex items-center space-x-2 pt-1">

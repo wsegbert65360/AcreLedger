@@ -116,6 +116,11 @@ export interface SprayRecordRow {
     temp_end?: number | null;
     sensitive_area_check?: boolean | null;
     sensitive_area_notes?: string | null;
+    /** Australia pilot: carrier water rate. */
+    water_rate?: string | null;
+    water_rate_unit?: string | null;
+    /** Australia pilot: Property Identification Code (denormalized from field). */
+    pic?: string | null;
 }
 
 export interface HarvestRecordRow {

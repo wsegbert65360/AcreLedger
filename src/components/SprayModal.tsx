@@ -528,6 +528,8 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 totalAmountApplied={form.totalAmountApplied}
                 mixtureRate={form.mixtureRate}
                 totalMixtureVolume={form.totalMixtureVolume}
+                waterRate={form.waterRate}
+                waterRateUnit={form.waterRateUnit}
                 isPremixed={form.isPremixed}
                 showValidation={form.showValidation}
                 onRecoverWeather={form.handleRecoverWeather}
@@ -538,6 +540,8 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 setTotalAmountApplied={form.setTotalAmountApplied}
                 setMixtureRate={form.setMixtureRate}
                 setTotalMixtureVolume={form.setTotalMixtureVolume}
+                setWaterRate={form.setWaterRate}
+                setWaterRateUnit={form.setWaterRateUnit}
                 setIsPremixed={form.setIsPremixed}
               />}
 
