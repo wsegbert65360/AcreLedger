@@ -130,6 +130,12 @@ export interface SprayRecord {
   notes?: string;
   complianceProfile?: string; // e.g. 'universal'
   nonCompliant?: boolean;
+  // Australia pilot: Property Identification Code (denormalized from the field
+  // at spray time; part of the NSW EPA record).
+  pic?: string;
+  // Australia pilot: carrier water rate.
+  waterRate?: string;
+  waterRateUnit?: string;
   // Advanced Compliance (2026 Standards)
   nozzleType?: string;
   nozzleSize?: string;

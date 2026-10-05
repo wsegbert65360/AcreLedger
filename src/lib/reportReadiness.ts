@@ -2,6 +2,7 @@ import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import type { Field } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 import { hasValidSprayRate } from '@/utils/unitConversion';
+import { getComplianceProfileFor } from '@/lib/compliance/profiles';
 
 export type ReportReadinessStatus = 'ready' | 'review' | 'empty';
 
@@ -47,6 +48,7 @@ interface SprayReadinessRecord {
   licenseNumber?: string;
   treatedAreaSize?: number;
   windSpeed: number;
+  complianceProfile?: string;
 }
 
 interface FertilizerReadinessRecord {
@@ -240,9 +242,13 @@ export function buildSprayReadiness(
         message: `${record.fieldName} has no pesticide product recorded.`,
       });
     } else {
+      // EPA registration numbers are required for us-epa; the au-apvma
+      // profile explicitly allows them to be absent (permit "when relevant").
+      const requireRegNumber = getComplianceProfileFor(record.complianceProfile ?? null)
+        .productChecks.requireRegistrationNumber;
       record.products.forEach((product, productIndex) => {
         const productLabel = product.product.trim() || `Product ${productIndex + 1}`;
-        if (!product.epaRegNumber?.trim()) {
+        if (requireRegNumber && !product.epaRegNumber?.trim()) {
           issues.push({
             ...baseIssue,
             id: `spray-${record.id}-epa-${productIndex}`,

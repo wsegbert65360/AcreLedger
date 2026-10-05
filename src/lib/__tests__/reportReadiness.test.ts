@@ -236,3 +236,41 @@ describe('FSA readiness adapters', () => {
     expect(summary.issues[0]).toMatchObject({ recordId: 'hay-1', recordType: 'hay' });
   });
 });
+
+describe('buildSprayReadiness with compliance profiles (P2)', () => {
+  it('does not report a missing EPA number as an error for au-apvma records', () => {
+    const summary = buildSprayReadiness([{
+      id: 'spray-au',
+      fieldId: 'field-1',
+      fieldName: 'Paddock 1',
+      products: [
+        { product: 'Glyphosate', rate: '1', rateUnit: 'L/ha', epaRegNumber: '' },
+      ],
+      complianceProfile: 'au-apvma',
+      applicatorName: 'Jack',
+      treatedAreaSize: 40,
+      windSpeed: 10,
+    }], 10);
+
+    const messages = summary.issues.map(i => i.message);
+    expect(messages.some(m => m.includes('EPA registration number'))).toBe(false);
+  });
+
+  it('still reports a missing EPA number as an error for us-epa records', () => {
+    const summary = buildSprayReadiness([{
+      id: 'spray-us',
+      fieldId: 'field-1',
+      fieldName: 'North',
+      products: [
+        { product: 'Atrazine', rate: '1', rateUnit: 'qt/ac', epaRegNumber: '' },
+      ],
+      complianceProfile: 'universal',
+      applicatorName: 'Farmer',
+      treatedAreaSize: 20,
+      windSpeed: 12,
+    }], 10);
+
+    const messages = summary.issues.map(i => i.message);
+    expect(messages.some(m => m.includes('EPA registration number'))).toBe(true);
+  });
+});

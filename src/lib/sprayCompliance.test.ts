@@ -6,6 +6,8 @@ function recordWithProduct(overrides: Record<string, unknown> = {}): SprayRecord
   return {
     id: 'spray-1', fieldId: 'field-1', fieldName: 'North', timestamp: 1,
     windSpeed: 2, temperature: 70, applicatorName: 'Farmer', licenseNumber: '123',
+    startTime: '06:00', endTime: '08:00', windDirection: 'N',
+    cropOrSiteTreated: 'Corn', applicationMethod: 'Ground', equipmentId: 'Sprayer 1',
     products: [{ product: 'Test', rate: '1', rateUnit: 'qt/ac', epaRegNumber: '1-2', ...overrides }],
   } as SprayRecord;
 }

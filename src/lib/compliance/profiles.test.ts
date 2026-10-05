@@ -10,6 +10,7 @@ import {
 import {
   sprayProductsNeedReview,
   sprayRecordNeedsReview,
+  missingComplianceFields,
 } from '../sprayCompliance';
 import type { SprayRecord } from '@/types/farm';
 
@@ -151,7 +152,16 @@ describe('sprayRecordNeedsReview with profiles (US regression)', () => {
   });
 
   it("does not flag an au-apvma record missing only the reg number", () => {
-    const record = recordWith([product({ epaRegNumber: '' })], 'au-apvma');
+    const record = {
+      id: 'spray-au', fieldId: 'field-1', fieldName: 'Paddock 1', timestamp: 1,
+      windSpeed: 10, applicatorName: 'Jack',
+      sprayDate: '2026-10-01', startTime: '06:00', endTime: '08:00',
+      pic: 'NABC1234', cropOrSiteTreated: 'Wheat', targetPest: 'Ryegrass',
+      treatedAreaSize: 40, waterRate: '100', equipmentId: 'Sprayer 1',
+      windDirection: 'NW', sensitiveAreaCheck: true,
+      products: [product({ epaRegNumber: '' })],
+      complianceProfile: 'au-apvma',
+    } as SprayRecord;
     expect(sprayRecordNeedsReview(record)).toBe(false);
   });
 
@@ -160,5 +170,59 @@ describe('sprayRecordNeedsReview with profiles (US regression)', () => {
     const auRecord = { ...recordWith([product()], 'au-apvma'), nonCompliant: true } as SprayRecord;
     expect(sprayRecordNeedsReview(usRecord)).toBe(true);
     expect(sprayRecordNeedsReview(auRecord)).toBe(true);
+  });
+});
+
+describe('missingComplianceFields (P1)', () => {
+  function auRecord(overrides: Record<string, unknown> = {}): SprayRecord {
+    return {
+      id: 'spray-au', fieldId: 'f1', fieldName: 'Paddock 1', timestamp: 1,
+      windSpeed: 10, applicatorName: 'Jack',
+      sprayDate: '2026-10-01', startTime: '06:00', endTime: '08:00',
+      pic: 'NABC1234', cropOrSiteTreated: 'Wheat', targetPest: 'Ryegrass',
+      treatedAreaSize: 40, waterRate: '100', equipmentId: 'Sprayer 1',
+      windDirection: 'NW', sensitiveAreaCheck: true,
+      products: [{ product: 'Glyphosate', rate: '1', rateUnit: 'L/ha' }],
+      complianceProfile: 'au-apvma',
+      ...overrides,
+    } as SprayRecord;
+  }
+
+  it('returns no missing fields for a complete AU record', () => {
+    expect(missingComplianceFields(auRecord(), 'au-apvma')).toEqual([]);
+  });
+
+  it('flags missing PIC, treated area, and water rate on an AU record', () => {
+    const missing = missingComplianceFields(
+      auRecord({ pic: '', treatedAreaSize: 0, waterRate: '' }),
+      'au-apvma',
+    );
+    expect(missing).toContain('Property / PIC');
+    expect(missing).toContain('Treated area (ha)');
+    expect(missing).toContain('Water rate');
+  });
+
+  it('sprayRecordNeedsReview flags an AU record missing required details', () => {
+    // Valid product, flag false — but PIC absent.
+    const record = auRecord({ pic: '' });
+    expect(sprayRecordNeedsReview(record)).toBe(true);
+  });
+
+  it('sprayRecordNeedsReview passes a complete AU record', () => {
+    expect(sprayRecordNeedsReview(auRecord())).toBe(false);
+  });
+
+  it('US records are unaffected by AU-only fields', () => {
+    const usRecord = {
+      id: 'spray-us', fieldId: 'f1', fieldName: 'North 40', timestamp: 1,
+      windSpeed: 5, applicatorName: 'Farmer', licenseNumber: '123',
+      startTime: '06:00', endTime: '08:00', cropOrSiteTreated: 'Corn',
+      applicationMethod: 'Ground', equipmentId: 'Sprayer',
+      windDirection: 'N',
+      products: [{ product: 'Atrazine', rate: '1', rateUnit: 'qt/ac', epaRegNumber: '1-2' }],
+      complianceProfile: 'universal',
+    } as SprayRecord;
+    expect(missingComplianceFields(usRecord, 'us-epa')).toEqual([]);
+    expect(sprayRecordNeedsReview(usRecord)).toBe(false);
   });
 });
