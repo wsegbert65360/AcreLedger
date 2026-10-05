@@ -62,7 +62,7 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
             fsaFieldNumber: safeStr(db.fsa_field_number),
         }),
         // Australia pilot: PIC persisted in the pic column (see migration
-        // 20261005011100). Without this, an au-pic identifier was lost on reload.
+        // 20261005013057). Without this, an au-pic identifier was lost on reload.
         ...(safeStr(db.pic) ? [{ scheme: 'au-pic', kind: 'property', value: safeStr(db.pic) } as const] : []),
     ],
     producerShare: db.producer_share ?? undefined,
