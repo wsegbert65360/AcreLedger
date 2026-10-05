@@ -3,6 +3,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Globe } from 'lucide-react';
 import { useAppPreferences, type CountryCode } from '@/store/useAppPreferences';
+import { useFarm } from '@/store/farmStore';
 
 /**
  * Region settings for the Australia pilot.
@@ -10,7 +11,10 @@ import { useAppPreferences, type CountryCode } from '@/store/useAppPreferences';
  * unit system (imperial / metric), and locale (en-US / en-AU).
  */
 export default function RegionManager() {
-  const { preferences, updatePreferences } = useAppPreferences();
+  // Use the same per-user preference scope as the spray form (useSprayForm),
+  // otherwise the country choice is written to a key the form never reads.
+  const { session } = useFarm();
+  const { preferences, updatePreferences } = useAppPreferences(session?.user?.id);
 
   const handleCountryChange = (country: CountryCode) => {
     // Keep locale and units in sync with the country; the user can still

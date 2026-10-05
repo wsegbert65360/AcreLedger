@@ -24,6 +24,7 @@ vi.mock('@/components/settings/AccountManager', () => ({
   default: () => <div data-testid="account-manager">Delete Account</div>,
 }));
 vi.mock('@/components/settings/DevTools', () => ({ default: () => null }));
+vi.mock('@/components/settings/RegionManager', () => ({ default: () => null }));
 vi.mock('@/components/VersionFooter', () => ({ default: () => null }));
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
 
