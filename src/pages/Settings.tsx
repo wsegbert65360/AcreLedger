@@ -4,6 +4,7 @@ import SeedManager from '@/components/settings/SeedManager';
 import RecipeManager from '@/components/settings/RecipeManager';
 import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManager';
 import DisplayManager from '@/components/settings/DisplayManager';
+import RegionManager from '@/components/settings/RegionManager';
 import BillingManager from '@/components/settings/BillingManager';
 import { isBillingUiAvailable } from '@/lib/billing';
 import SyncStatus from '@/components/settings/SyncStatus';
@@ -104,6 +105,7 @@ export default function Settings() {
                 <div className="space-y-6">
                   <AccountManager />
                   <DisplayManager />
+                  <RegionManager />
                 </div>
                 <div className="space-y-6">
                   <SecurityManager />
