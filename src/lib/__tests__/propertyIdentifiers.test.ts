@@ -5,6 +5,7 @@ import {
   getPropertyIdentifier,
   isValidPicFormat,
   migrateFsaToPropertyIdentifiers,
+  removePropertyIdentifier,
   syncFsaLegacyFields,
   upsertPropertyIdentifier,
   withFsaFields,
@@ -262,5 +263,22 @@ describe('P2 regression: au-pic survives a save/reload round-trip', () => {
 
     expect(db.pic).toBeNull();
     expect(mapFieldFromDb(db as any).propertyIdentifiers).toEqual([]);
+  });
+
+  it('removePropertyIdentifier deletes the au-pic identifier', () => {
+    const ids = [
+      { scheme: 'us-fsa', kind: 'farm', value: '1234' },
+      { scheme: 'au-pic', kind: 'property', value: 'NABC1234' },
+    ] as const;
+    const result = removePropertyIdentifier(ids as any, 'au-pic', 'property');
+    expect(result).toHaveLength(1);
+    expect(result[0].scheme).toBe('us-fsa');
+    expect(getPropertyIdentifier(result, 'au-pic', 'property')).toBeUndefined();
+  });
+
+  it('removePropertyIdentifier is a no-op when the identifier is absent', () => {
+    const ids = [{ scheme: 'us-fsa', kind: 'farm', value: '1234' }] as const;
+    const result = removePropertyIdentifier(ids as any, 'au-pic', 'property');
+    expect(result).toHaveLength(1);
   });
 });

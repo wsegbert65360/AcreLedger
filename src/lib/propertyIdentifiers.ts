@@ -61,6 +61,20 @@ export function upsertPropertyIdentifier(
 }
 
 /**
+ * Remove a property identifier by scheme+kind. Used when the user clears
+ * the PIC input — otherwise the stale identifier would survive the save.
+ */
+export function removePropertyIdentifier(
+  ids: readonly PropertyIdentifier[] | undefined,
+  scheme: PropertyIdentifier['scheme'],
+  kind: PropertyIdentifier['kind'],
+): PropertyIdentifier[] {
+  return (ids ?? []).filter(
+    existing => !(existing.scheme === scheme && existing.kind === kind),
+  );
+}
+
+/**
  * Read-compat shim: derives the legacy fsa* fields from propertyIdentifiers.
  * When the record carries us-fsa identifiers they are canonical; otherwise
  * falls back to the record's own fsa* fields (old write paths that never

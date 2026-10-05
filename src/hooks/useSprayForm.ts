@@ -11,7 +11,7 @@ import { getLatestForField } from '@/lib/utils';
 import { toLocalIsoDate } from '@/utils/dates';
 import { getCarryForwardSource } from '@/lib/carryForward';
 import { useAppPreferences } from '@/store/useAppPreferences';
-import { defaultProfileForCountry, resolveComplianceProfileId } from '@/lib/compliance/profiles';
+import { defaultProfileForCountry, resolveComplianceProfileId, getComplianceProfile } from '@/lib/compliance/profiles';
 import { missingComplianceFields as getMissingComplianceFields } from '@/lib/sprayCompliance';
 import { getPropertyIdentifier } from '@/lib/propertyIdentifiers';
 
@@ -488,12 +488,19 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     return missing;
   }, [formRecordForCompliance, activeProfileId, weather]);
 
-  const stepValidation = useMemo(() => ({
-    core: Boolean(sprayDate && startTime.trim() && applicatorName.trim() && licenseNumber.trim() && targetPest.trim()),
-    mix: products.some(p => p.product.trim()),
-    conditions: true,
-    review: true
-  }), [sprayDate, startTime, applicatorName, licenseNumber, targetPest, products]);
+  const stepValidation = useMemo(() => {
+    // License is required by us-epa but not au-apvma; gate the core step
+    // on the active profile's field set so AU users aren't blocked.
+    const profile = getComplianceProfile(activeProfileId);
+    const licenseRequired = profile.fields.some(f => f.key === 'licenseNumber' && f.required);
+    const licenseOk = licenseRequired ? licenseNumber.trim() : true;
+    return {
+      core: Boolean(sprayDate && startTime.trim() && applicatorName.trim() && licenseOk && targetPest.trim()),
+      mix: products.some(p => p.product.trim()),
+      conditions: true,
+      review: true
+    };
+  }, [sprayDate, startTime, applicatorName, licenseNumber, targetPest, products, activeProfileId]);
 
   const canGoNext = useMemo(() => {
     if (step === 'core') return stepValidation.core;

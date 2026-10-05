@@ -20,7 +20,7 @@ import { Field } from '@/types/farm';
 import { calculateAcreage } from '@/lib/gisService';
 import { getBoundaryFieldAcres } from '@/lib/fieldAcreage';
 import { FsaImportCandidate, parseFsaGeoJson } from '@/lib/fsaImport';
-import { withFsaFields, getPropertyIdentifier, upsertPropertyIdentifier, isValidPicFormat } from '@/lib/propertyIdentifiers';
+import { withFsaFields, getPropertyIdentifier, upsertPropertyIdentifier, removePropertyIdentifier, isValidPicFormat } from '@/lib/propertyIdentifiers';
 
 function MapInteraction({ onPointAdd, isCapturing }: { onPointAdd: (latlng: [number, number]) => void; isCapturing: boolean }) {
   useMapEvents({
@@ -300,7 +300,8 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
           },
         );
         // Australia pilot: persist the PIC as an au-pic identifier (validated
-        // loosely; the mapper writes it to the pic column).
+        // loosely; the mapper writes it to the pic column). Clearing the
+        // input removes the identifier.
         const trimmedPic = pic.trim().toUpperCase();
         if (trimmedPic) {
           if (!isValidPicFormat(trimmedPic)) {
@@ -313,6 +314,15 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             propertyIdentifiers: upsertPropertyIdentifier(
               updatedField.propertyIdentifiers,
               { scheme: 'au-pic', kind: 'property', value: trimmedPic },
+            ),
+          };
+        } else {
+          updatedField = {
+            ...updatedField,
+            propertyIdentifiers: removePropertyIdentifier(
+              updatedField.propertyIdentifiers,
+              'au-pic',
+              'property',
             ),
           };
         }
