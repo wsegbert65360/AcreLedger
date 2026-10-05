@@ -321,6 +321,19 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         const newField: Omit<Field, 'id' | 'farm_id'> = {
           ...fieldData
         };
+        // Australia pilot: persist the PIC for new fields too.
+        const trimmedPic = pic.trim().toUpperCase();
+        if (trimmedPic) {
+          if (!isValidPicFormat(trimmedPic)) {
+            toast.error('PIC format looks invalid. Expected an 8-character code like NABC1234.');
+            setIsSaving(false);
+            return;
+          }
+          newField.propertyIdentifiers = upsertPropertyIdentifier(
+            newField.propertyIdentifiers,
+            { scheme: 'au-pic', kind: 'property', value: trimmedPic },
+          );
+        }
         success = await addField(newField);
       }
       if (success) {
