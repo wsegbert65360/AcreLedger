@@ -20,6 +20,7 @@ import { Field } from '@/types/farm';
 import { calculateAcreage } from '@/lib/gisService';
 import { getBoundaryFieldAcres } from '@/lib/fieldAcreage';
 import { FsaImportCandidate, parseFsaGeoJson } from '@/lib/fsaImport';
+import { withFsaFields } from '@/lib/propertyIdentifiers';
 
 function MapInteraction({ onPointAdd, isCapturing }: { onPointAdd: (latlng: [number, number]) => void; isCapturing: boolean }) {
   useMapEvents({
@@ -279,12 +280,22 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     try {
       let success = false;
       if (isEdit) {
-        const updatedField: Field = {
-          ...editField,
-          ...fieldData,
-          farm_id: editField.farm_id,
-          deleted_at: editField.deleted_at ?? null
-        };
+        // withFsaFields keeps propertyIdentifiers in sync with the edited
+        // FSA numbers; without it the stale identifiers would win in
+        // syncFsaLegacyFields and the edit would disappear after reload.
+        const updatedField: Field = withFsaFields(
+          {
+            ...editField,
+            ...fieldData,
+            farm_id: editField.farm_id,
+            deleted_at: editField.deleted_at ?? null,
+          },
+          {
+            fsaFarmNumber: fieldData.fsaFarmNumber,
+            fsaTractNumber: fieldData.fsaTractNumber,
+            fsaFieldNumber: fieldData.fsaFieldNumber,
+          },
+        );
         success = await updateField(updatedField);
       } else {
         const newField: Omit<Field, 'id' | 'farm_id'> = {

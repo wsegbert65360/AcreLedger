@@ -85,6 +85,33 @@ export function syncFsaLegacyFields<T extends FsaFields & { propertyIdentifiers?
 }
 
 /**
+ * Returns a copy of the record with fsa* fields AND us-fsa identifiers
+ * updated together from the given FSA values. Non-us-fsa identifiers
+ * (e.g. au-pic) are preserved.
+ *
+ * Use this whenever FSA numbers are edited (e.g. FieldManageModal) so the
+ * two representations cannot diverge. Without it, the stale
+ * propertyIdentifiers array would win in syncFsaLegacyFields and the edit
+ * would silently disappear on the next save.
+ */
+export function withFsaFields<T extends FsaFields & { propertyIdentifiers?: PropertyIdentifier[] }>(
+  record: T,
+  fsa: FsaFields,
+): T {
+  const fsaFarmNumber = fsa.fsaFarmNumber?.trim() || undefined;
+  const fsaTractNumber = fsa.fsaTractNumber?.trim() || undefined;
+  const fsaFieldNumber = fsa.fsaFieldNumber?.trim() || undefined;
+  const otherIds = (record.propertyIdentifiers ?? []).filter(id => id.scheme !== 'us-fsa');
+  return {
+    ...record,
+    fsaFarmNumber,
+    fsaTractNumber,
+    fsaFieldNumber,
+    propertyIdentifiers: [...migrateFsaToPropertyIdentifiers({ fsaFarmNumber, fsaTractNumber, fsaFieldNumber }), ...otherIds],
+  };
+}
+
+/**
  * Loose PIC format check (Phase 0 verification): 8-character state-issued
  * code whose leading character(s) indicate the state (N=NSW, Q=QLD, V=VIC…).
  * Kept loose on purpose — live register validation is out of pilot scope.

@@ -7,6 +7,7 @@ import {
   migrateFsaToPropertyIdentifiers,
   syncFsaLegacyFields,
   upsertPropertyIdentifier,
+  withFsaFields,
 } from '../propertyIdentifiers';
 
 describe('migrateFsaToPropertyIdentifiers', () => {
@@ -129,10 +130,13 @@ describe('mapper property-identifier sync', () => {
     expect(db.fsa_field_number).toBe('7');
 
     const reread = mapFieldFromDb(db as any);
+    // The au-pic identifier now survives via the pic column (P2 fix); it was
+    // previously dropped on reload.
     expect(reread.propertyIdentifiers).toEqual([
       { scheme: 'us-fsa', kind: 'farm', value: '1234' },
       { scheme: 'us-fsa', kind: 'tract', value: '56' },
       { scheme: 'us-fsa', kind: 'field', value: '7' },
+      { scheme: 'au-pic', kind: 'property', value: 'NABC1234' },
     ]);
   });
 
@@ -147,5 +151,116 @@ describe('mapper property-identifier sync', () => {
     const reread = mapPlantFromDb(db as any);
     expect(reread.fsaFarmNumber).toBe('1234');
     expect(getPropertyIdentifier(reread.propertyIdentifiers, 'us-fsa', 'farm')).toBe('1234');
+  });
+});
+
+describe('withFsaFields', () => {
+  it('updates fsa* fields and us-fsa identifiers together', () => {
+    const record = {
+      fsaFarmNumber: '1234',
+      fsaTractNumber: '56',
+      propertyIdentifiers: migrateFsaToPropertyIdentifiers({ fsaFarmNumber: '1234', fsaTractNumber: '56' }),
+    };
+    const updated = withFsaFields(record, { fsaFarmNumber: '9999', fsaTractNumber: '56' });
+
+    expect(updated.fsaFarmNumber).toBe('9999');
+    expect(getPropertyIdentifier(updated.propertyIdentifiers, 'us-fsa', 'farm')).toBe('9999');
+    expect(getPropertyIdentifier(updated.propertyIdentifiers, 'us-fsa', 'tract')).toBe('56');
+    // Input record is not mutated.
+    expect(record.fsaFarmNumber).toBe('1234');
+  });
+
+  it('preserves au-pic identifiers while replacing us-fsa ones', () => {
+    const record = {
+      fsaFarmNumber: '1234',
+      propertyIdentifiers: [
+        ...migrateFsaToPropertyIdentifiers({ fsaFarmNumber: '1234' }),
+        { scheme: 'au-pic', kind: 'property', value: 'NABC1234' } as const,
+      ],
+    };
+    const updated = withFsaFields(record, { fsaFarmNumber: '9999' });
+
+    expect(getPropertyIdentifier(updated.propertyIdentifiers, 'us-fsa', 'farm')).toBe('9999');
+    expect(getPropertyIdentifier(updated.propertyIdentifiers, 'au-pic', 'property')).toBe('NABC1234');
+  });
+
+  it('drops us-fsa identifiers when the fields are cleared', () => {
+    const record = {
+      fsaFarmNumber: '1234',
+      propertyIdentifiers: migrateFsaToPropertyIdentifiers({ fsaFarmNumber: '1234' }),
+    };
+    const updated = withFsaFields(record, {});
+
+    expect(updated.fsaFarmNumber).toBeUndefined();
+    expect(updated.propertyIdentifiers).toEqual([]);
+  });
+});
+
+describe('P1 regression: edited FSA numbers persist', () => {
+  it('saves the modal-edited numbers, not the stale identifiers', () => {
+    // Simulates FieldManageModal: user edits farm number on a record whose
+    // propertyIdentifiers still hold the old values.
+    const editField = {
+      id: 'f1', farm_id: 'farm-1', name: 'North 40', acreage: 40,
+      lat: null, lng: null, deleted_at: null,
+      fsaFarmNumber: '1234', fsaTractNumber: '56',
+      propertyIdentifiers: migrateFsaToPropertyIdentifiers({ fsaFarmNumber: '1234', fsaTractNumber: '56' }),
+    };
+    const updatedField = withFsaFields(
+      { ...editField, fsaFarmNumber: '9999', fsaTractNumber: '56' },
+      { fsaFarmNumber: '9999', fsaTractNumber: '56' },
+    );
+
+    const db = mapFieldToDb(updatedField as any);
+    expect(db.fsa_farm_number).toBe('9999');
+    expect(db.fsa_tract_number).toBe('56');
+
+    const reread = mapFieldFromDb(db as any);
+    expect(reread.fsaFarmNumber).toBe('9999');
+    expect(getPropertyIdentifier(reread.propertyIdentifiers, 'us-fsa', 'farm')).toBe('9999');
+  });
+});
+
+describe('P2 regression: au-pic survives a save/reload round-trip', () => {
+  it('persists the PIC to the pic column and rebuilds the identifier on read', () => {
+    const db = mapFieldToDb({
+      id: 'f1', farm_id: 'farm-1', name: 'Paddock 1', acreage: 40,
+      lat: null, lng: null, deleted_at: null,
+      propertyIdentifiers: [{ scheme: 'au-pic', kind: 'property', value: 'NABC1234' }],
+    } as any);
+
+    expect(db.pic).toBe('NABC1234');
+
+    const reread = mapFieldFromDb(db as any);
+    expect(getPropertyIdentifier(reread.propertyIdentifiers, 'au-pic', 'property')).toBe('NABC1234');
+  });
+
+  it('round-trips FSA identifiers and PIC together', () => {
+    const db = mapFieldToDb({
+      id: 'f1', farm_id: 'farm-1', name: 'Paddock 1', acreage: 40,
+      lat: null, lng: null, deleted_at: null,
+      fsaFarmNumber: '1234',
+      propertyIdentifiers: [
+        { scheme: 'us-fsa', kind: 'farm', value: '1234' },
+        { scheme: 'au-pic', kind: 'property', value: 'NABC1234' },
+      ],
+    } as any);
+
+    expect(db.fsa_farm_number).toBe('1234');
+    expect(db.pic).toBe('NABC1234');
+
+    const reread = mapFieldFromDb(db as any);
+    expect(getPropertyIdentifier(reread.propertyIdentifiers, 'us-fsa', 'farm')).toBe('1234');
+    expect(getPropertyIdentifier(reread.propertyIdentifiers, 'au-pic', 'property')).toBe('NABC1234');
+  });
+
+  it('leaves pic null for fields without a PIC', () => {
+    const db = mapFieldToDb({
+      id: 'f1', farm_id: 'farm-1', name: 'North 40', acreage: 40,
+      lat: null, lng: null, deleted_at: null,
+    } as any);
+
+    expect(db.pic).toBeNull();
+    expect(mapFieldFromDb(db as any).propertyIdentifiers).toEqual([]);
   });
 });

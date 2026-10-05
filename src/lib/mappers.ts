@@ -14,6 +14,7 @@ import {
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import {
     migrateFsaToPropertyIdentifiers,
+    getPropertyIdentifier,
     syncFsaLegacyFields,
 } from './propertyIdentifiers';
 import {
@@ -54,11 +55,16 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     fsaFarmNumber: safeStr(db.fsa_farm_number),
     fsaTractNumber: safeStr(db.fsa_tract_number),
     fsaFieldNumber: safeStr(db.fsa_field_number),
-    propertyIdentifiers: migrateFsaToPropertyIdentifiers({
-        fsaFarmNumber: safeStr(db.fsa_farm_number),
-        fsaTractNumber: safeStr(db.fsa_tract_number),
-        fsaFieldNumber: safeStr(db.fsa_field_number),
-    }),
+    propertyIdentifiers: [
+        ...migrateFsaToPropertyIdentifiers({
+            fsaFarmNumber: safeStr(db.fsa_farm_number),
+            fsaTractNumber: safeStr(db.fsa_tract_number),
+            fsaFieldNumber: safeStr(db.fsa_field_number),
+        }),
+        // Australia pilot: PIC persisted in the pic column (see migration
+        // 20261005011100). Without this, an au-pic identifier was lost on reload.
+        ...(safeStr(db.pic) ? [{ scheme: 'au-pic', kind: 'property', value: safeStr(db.pic) } as const] : []),
+    ],
     producerShare: db.producer_share ?? undefined,
     landlordName: safeStr(db.landlord_name),
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
@@ -417,6 +423,9 @@ export const mapFieldToDb = (f: Field) => {
         fsa_farm_number: fsaIds.fsaFarmNumber ?? null,
         fsa_tract_number: fsaIds.fsaTractNumber ?? null,
         fsa_field_number: fsaIds.fsaFieldNumber ?? null,
+        // Australia pilot: persist the au-pic identifier; without this column
+        // write the PIC survived only in memory and was lost on reload.
+        pic: getPropertyIdentifier(f.propertyIdentifiers, 'au-pic', 'property') ?? null,
         producer_share: f.producerShare ?? null,
         landlord_name: f.landlordName ?? null,
         irrigation_practice: f.irrigationPractice ?? null,

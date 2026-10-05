@@ -210,9 +210,15 @@ const AppContent = () => {
       })
       .catch(error => {
         toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.');
-        navigate('/', { replace: true });
+        // A failed fresh link must not tear down an already-pending recovery
+        // session (e.g. from a verified email code): the pending flag keeps
+        // the Auth recovery form rendered, so navigating away would contradict
+        // the visible UI. Only leave when no recovery is pending.
+        if (!passwordRecoveryPending) {
+          navigate('/', { replace: true });
+        }
       });
-  }, [isPasswordRecovery, navigate]);
+  }, [isPasswordRecovery, navigate, passwordRecoveryPending]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;

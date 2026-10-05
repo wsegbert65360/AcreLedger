@@ -17,6 +17,8 @@ export interface FieldRow {
     fsa_farm_number?: string | null;
     fsa_tract_number?: string | null;
     fsa_field_number?: string | null;
+    /** Australia pilot: Property Identification Code (au-pic scheme). */
+    pic?: string | null;
     producer_share?: number | null;
     landlord_name?: string | null;
     irrigation_practice?: string | null;
