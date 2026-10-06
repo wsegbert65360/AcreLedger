@@ -1,7 +1,6 @@
 import { getComplianceProfileFor } from '@/lib/compliance/profiles';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { missingComplianceFields } from '@/lib/sprayCompliance';
-import { convertMphToKmh } from '@/lib/sprayExportFormatters';
 import type { Field, SprayRecord } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 import { hasValidSprayRate } from '@/utils/unitConversion';
@@ -67,7 +66,7 @@ const NSW_PIC_LABEL = 'Property / PIC';
 const NSW_DETAILS_CATEGORY = 'NSW record details';
 /** mph → km/h at one decimal, the same conversion the AU spray PDF uses. */
 export function storedWindMphToKmh(windSpeedMph: number): number {
-  return convertMphToKmh(windSpeedMph);
+  return Math.round(windSpeedMph * 1.60934 * 10) / 10;
 }
 
 export function windAlertInKmh(windAlertMph: number): number {
