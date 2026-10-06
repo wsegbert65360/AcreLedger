@@ -104,7 +104,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
     }
 
     return undefined;
-  }, [step, initialData, isDuplicate, isSaving, isMinimumValid, farmName, handleSubmit, form.isQuickMode, field, cluAssignments]);
+  }, [step, initialData, isDuplicate, isSaving, isMinimumValid, farmName, handleSubmit, form.isQuickMode, field, cluAssignments, complianceProfile]);
 
   return (
     <>
