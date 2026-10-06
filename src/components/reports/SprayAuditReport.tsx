@@ -2,11 +2,12 @@ import { type ReactNode } from 'react';
 import { AlertTriangle, CircleAlert, Download } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { resolveComplianceProfileId } from '@/lib/compliance/profiles';
 import { cn } from '@/lib/utils';
+import { storedWindMphToKmh, windAlertInKmh, type ReportReadinessIssue, type ReportReadinessSummary } from '@/lib/reportReadiness';
+import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { formatIsoDate } from '@/utils/dates';
-import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
-import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 const EMPTY_VALUE = '\u2014';
@@ -17,6 +18,11 @@ function fmt(ts: number): string {
 
 function fmtDate(d?: string): string {
   return d ? formatIsoDate(d) : '—';
+}
+
+/** Stored wind is mph. AU reports show and judge the km/h value. */
+function reportWind(windSpeedMph: number, isAu: boolean): number {
+  return isAu ? storedWindMphToKmh(windSpeedMph) : windSpeedMph;
 }
 
 interface AuditDetailProps {
@@ -68,6 +74,7 @@ interface SprayAuditReportProps {
   readinessSummary: ReportReadinessSummary;
   onIssueAction?: (issue: ReportReadinessIssue) => void;
   exportStatus?: ReportExportStatus;
+  complianceProfile?: string;
 }
 
 export default function SprayAuditReport({
@@ -78,7 +85,11 @@ export default function SprayAuditReport({
   readinessSummary,
   onIssueAction,
   exportStatus,
+  complianceProfile,
 }: SprayAuditReportProps) {
+  const isAu = resolveComplianceProfileId(complianceProfile) === 'au-apvma';
+  const windAlert = isAu ? windAlertInKmh(WIND_ALERT_MPH) : WIND_ALERT_MPH;
+  const windUnit = isAu ? 'km/h' : 'mph';
   return (
     <>
       <MobileReportExportPanel
@@ -95,7 +106,9 @@ export default function SprayAuditReport({
         <div>
           <h2 className="text-lg font-bold text-foreground">Pesticide Application Record</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            Private applicator license compliance audit trail. Generated {reportDate}.
+            {isAu
+              ? `NSW EPA pesticide application record. Generated ${reportDate}.`
+              : `Private applicator license compliance audit trail. Generated ${reportDate}.`}
           </p>
         </div>
 
@@ -167,7 +180,7 @@ export default function SprayAuditReport({
                     <AuditDetail label="License">{r.licenseNumber || EMPTY_VALUE}</AuditDetail>
                   </div>
                   <div className="col-span-2 grid grid-cols-3 gap-3 border-t border-border/60 pt-3">
-                    <AuditDetail label="Wind">{r.windSpeed} mph {r.windDirection || ''}</AuditDetail>
+                    <AuditDetail label="Wind">{reportWind(r.windSpeed, isAu)} {windUnit} {r.windDirection || ''}</AuditDetail>
                     <AuditDetail label="Temp">
                       {r.temperature != null ? `${r.temperature}\u00B0F` : EMPTY_VALUE}
                     </AuditDetail>
@@ -177,13 +190,13 @@ export default function SprayAuditReport({
                   </div>
                 </dl>
                 <div className="flex flex-wrap gap-2 print:hidden">
-                  {r.windSpeed > WIND_ALERT_MPH && (
+                  {reportWind(r.windSpeed, isAu) > windAlert && (
                     <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="h-3.5 w-3.5" />
                       Wind alert
                     </span>
                   )}
-                  {!r.epaRegNumber && (
+                  {!isAu && !r.epaRegNumber && (
                     <span className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/20 bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive">
                       <CircleAlert className="h-3.5 w-3.5" />
                       Missing EPA registration

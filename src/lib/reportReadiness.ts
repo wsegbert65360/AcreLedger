@@ -1,8 +1,10 @@
+import { getComplianceProfileFor } from '@/lib/compliance/profiles';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
-import type { Field } from '@/types/farm';
+import { missingComplianceFields } from '@/lib/sprayCompliance';
+import { convertMphToKmh } from '@/lib/sprayExportFormatters';
+import type { Field, SprayRecord } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 import { hasValidSprayRate } from '@/utils/unitConversion';
-import { getComplianceProfileFor } from '@/lib/compliance/profiles';
 
 export type ReportReadinessStatus = 'ready' | 'review' | 'empty';
 
@@ -49,6 +51,36 @@ interface SprayReadinessRecord {
   treatedAreaSize?: number;
   windSpeed: number;
   complianceProfile?: string;
+  sprayDate?: string;
+  startTime?: string;
+  endTime?: string;
+  pic?: string;
+  cropOrSiteTreated?: string;
+  targetPest?: string;
+  waterRate?: string;
+  equipmentId?: string;
+  windDirection?: string;
+  sensitiveAreaCheck?: boolean;
+}
+
+const NSW_PIC_LABEL = 'Property / PIC';
+const NSW_DETAILS_CATEGORY = 'NSW record details';
+/** mph → km/h at one decimal, the same conversion the AU spray PDF uses. */
+export function storedWindMphToKmh(windSpeedMph: number): number {
+  return convertMphToKmh(windSpeedMph);
+}
+
+export function windAlertInKmh(windAlertMph: number): number {
+  return storedWindMphToKmh(windAlertMph);
+}
+
+function nswIssueKey(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/** SprayReadinessRecord is the subset missingComplianceFields actually reads. */
+function asComplianceRecord(record: SprayReadinessRecord): SprayRecord {
+  return record as SprayRecord;
 }
 
 interface FertilizerReadinessRecord {
@@ -215,6 +247,8 @@ export function buildSprayReadiness(
   const fieldById = new Map(fields.map(f => [f.id, f]));
 
   for (const record of records) {
+    const profile = getComplianceProfileFor(record.complianceProfile ?? null);
+    const isAu = profile.id === 'au-apvma';
     const baseIssue = {
       itemId: record.id,
       fieldId: record.fieldId,
@@ -244,8 +278,7 @@ export function buildSprayReadiness(
     } else {
       // EPA registration numbers are required for us-epa; the au-apvma
       // profile explicitly allows them to be absent (permit "when relevant").
-      const requireRegNumber = getComplianceProfileFor(record.complianceProfile ?? null)
-        .productChecks.requireRegistrationNumber;
+      const requireRegNumber = profile.productChecks.requireRegistrationNumber;
       record.products.forEach((product, productIndex) => {
         const productLabel = product.product.trim() || `Product ${productIndex + 1}`;
         if (requireRegNumber && !product.epaRegNumber?.trim()) {
@@ -255,6 +288,15 @@ export function buildSprayReadiness(
             severity: 'error',
             category: 'Product details',
             message: `${record.fieldName}: ${productLabel} is missing an EPA registration number.`,
+          });
+        }
+        if (isAu && !product.product.trim()) {
+          issues.push({
+            ...baseIssue,
+            id: `spray-${record.id}-name-${productIndex}`,
+            severity: 'error',
+            category: 'Product details',
+            message: `${record.fieldName}: ${productLabel} is missing a product label name.`,
           });
         }
         // Canonical rule (sprayCompliance): a missing, zero, negative, or
@@ -271,34 +313,76 @@ export function buildSprayReadiness(
       });
     }
 
-    // Exports resolve the treated area through the same effective-acreage
-    // fallback the spray log uses (stored value, then CLU cropland, boundary,
-    // raw acreage), so a missing stored value is advisory: only flag it when
-    // the fallback cannot resolve a positive acreage either.
-    const effectiveAcres = getEffectiveSprayTreatedAcres(
-      record,
-      fieldById.get(record.fieldId),
-      cluAssignments,
-    );
-    if (effectiveAcres == null || effectiveAcres <= 0) {
-      issues.push({
-        ...baseIssue,
-        id: `spray-${record.id}-area`,
-        severity: 'warning',
-        category: 'Application details',
-        message: `${record.fieldName} has no stored treated area and no resolvable field acreage.`,
-      });
+    if (isAu) {
+      // NSW EPA required-field list from the au-apvma profile. US license /
+      // EPA / treated-area-fallback checks do not apply to these records.
+      for (const label of missingComplianceFields(asComplianceRecord(record))) {
+        if (label === NSW_PIC_LABEL) {
+          // PIC is copied from the paddock at save time; the spray form
+          // cannot type it. Open the field so the operator can set it there.
+          issues.push({
+            id: `spray-${record.id}-nsw-${nswIssueKey(label)}`,
+            severity: 'error',
+            category: NSW_DETAILS_CATEGORY,
+            message: `${record.fieldName} has no Property Identification Code (PIC). Set it on the paddock.`,
+            itemId: record.id,
+            fieldId: record.fieldId,
+            actionLabel: 'Open field',
+          });
+          continue;
+        }
+        issues.push({
+          ...baseIssue,
+          id: `spray-${record.id}-nsw-${nswIssueKey(label)}`,
+          severity: 'error',
+          category: NSW_DETAILS_CATEGORY,
+          message: `${record.fieldName} is missing ${label}.`,
+        });
+      }
+    } else {
+      // Exports resolve the treated area through the same effective-acreage
+      // fallback the spray log uses (stored value, then CLU cropland, boundary,
+      // raw acreage), so a missing stored value is advisory: only flag it when
+      // the fallback cannot resolve a positive acreage either.
+      const effectiveAcres = getEffectiveSprayTreatedAcres(
+        record,
+        fieldById.get(record.fieldId),
+        cluAssignments,
+      );
+      if (effectiveAcres == null || effectiveAcres <= 0) {
+        issues.push({
+          ...baseIssue,
+          id: `spray-${record.id}-area`,
+          severity: 'warning',
+          category: 'Application details',
+          message: `${record.fieldName} has no stored treated area and no resolvable field acreage.`,
+        });
+      }
+      if (!record.applicatorName?.trim() || !record.licenseNumber?.trim()) {
+        issues.push({
+          ...baseIssue,
+          id: `spray-${record.id}-applicator`,
+          severity: 'warning',
+          category: 'Applicator details',
+          message: `${record.fieldName} is missing applicator or license information.`,
+        });
+      }
     }
-    if (!record.applicatorName?.trim() || !record.licenseNumber?.trim()) {
-      issues.push({
-        ...baseIssue,
-        id: `spray-${record.id}-applicator`,
-        severity: 'warning',
-        category: 'Applicator details',
-        message: `${record.fieldName} is missing applicator or license information.`,
-      });
-    }
-    if (record.windSpeed > windAlertMph) {
+    if (isAu) {
+      // Stored wind is mph. Convert before the km/h threshold and the message,
+      // or a 10 mph wind is labeled 10 km/h and the warning fires ~6 mph late.
+      const windKmh = storedWindMphToKmh(record.windSpeed);
+      const windAlertKmh = windAlertInKmh(windAlertMph);
+      if (windKmh > windAlertKmh) {
+        issues.push({
+          ...baseIssue,
+          id: `spray-${record.id}-wind`,
+          severity: 'warning',
+          category: 'Weather conditions',
+          message: `${record.fieldName} recorded wind at ${windKmh} km/h, above the ${windAlertKmh} km/h review threshold.`,
+        });
+      }
+    } else if (record.windSpeed > windAlertMph) {
       issues.push({
         ...baseIssue,
         id: `spray-${record.id}-wind`,
