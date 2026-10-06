@@ -25,6 +25,7 @@ import { formatIsoDate, getWorkDateMs } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
+import { areaForProductTotal, effectiveTreatedAreaUnit } from '@/lib/sprayExportFormatters';
 import { Field } from '@/types/farm';
 import {
   buildFertilizerReadiness,
@@ -42,6 +43,8 @@ import {
   recordReportExport,
   type ReportExportType,
 } from '@/lib/reportExportHistory';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -89,6 +92,9 @@ export default function Reports() {
     session,
     farm_id,
   } = useFarm();
+
+  const { preferences } = useAppPreferences(session?.user?.id);
+  const complianceProfile = defaultProfileForCountry(preferences.country);
 
   const requestedTab = searchParams.get('tab');
   const [tab, setTab] = useState<ReportTab>(() =>
@@ -169,6 +175,7 @@ export default function Reports() {
     const treatedArea = getEffectiveSprayTreatedAcres(r, field, cluAssignments) ?? 0;
 
     if (r.products && r.products.length > 0) {
+      const treatedAreaUnit = effectiveTreatedAreaUnit(r);
       return r.products.map((p, i) => ({
         ...r,
         _rowKey: `${r.id}-${i}`,                     // index-based key — no collision on duplicate product names
@@ -176,7 +183,7 @@ export default function Reports() {
         epaRegNumber: p.epaRegNumber,
         applicationRate: p.rate,
         rateUnit: p.rateUnit,
-        amountDisplay: formatSprayProductTotal(p, treatedArea),
+        amountDisplay: formatSprayProductTotal(p, areaForProductTotal(treatedArea, treatedAreaUnit, p.rateUnit, complianceProfile)),
       }));
     }
 
@@ -188,7 +195,7 @@ export default function Reports() {
         ? `${r.totalAmountApplied} ${r.rateUnit?.replace('/ac', '') || 'gal'}` 
         : '—',
     }];
-  }), [sprayRecords, fieldMap, cluAssignments]);
+  }), [sprayRecords, fieldMap, cluAssignments, complianceProfile]);
   const sprayReadinessSummary = useMemo(
     () => buildSprayReadiness(sprayRecords, WIND_ALERT_MPH, fields, cluAssignments),
     [sprayRecords, fields, cluAssignments],
@@ -389,7 +396,7 @@ export default function Reports() {
 
   const handleExportSprayAuditPdf = () => {
     runTrackedExport('spray-audit', () => {
-      generateSprayPDF(sprayRecords, farmName, { fields, cluAssignments });
+      generateSprayPDF(sprayRecords, farmName, { fields, cluAssignments, profile: complianceProfile });
     }, 'spray audit PDF');
   };
 
@@ -602,6 +609,7 @@ export default function Reports() {
             readinessSummary={sprayReadinessSummary}
             exportStatus={getExportStatus('spray-audit')}
             reportDate={reportDate}
+            complianceProfile={complianceProfile}
             onExportCsv={() => runTrackedExport('spray-audit', () => generateMissouriLog(sprayRecords, fields, cluAssignments), 'spray log')}
             onExportPdf={handleExportSprayAuditPdf}
             onIssueAction={handleIssueAction}

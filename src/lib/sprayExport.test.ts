@@ -5,6 +5,8 @@ import {
   getComplianceStatus, 
   getChronologicalDateRange,
   getRecordOmissions,
+  normalizeTreatedArea,
+  areaForProductTotal,
   formatTime, 
   formatReportDate,
   sanitizeFilename 
@@ -95,6 +97,54 @@ describe('sprayExportFormatters', () => {
       } as never;
 
       expect(getRecordOmissions(record)).toEqual([]);
+    });
+
+    it('keeps a US omission list on the stored area number for tiny areas', () => {
+      // 100 sq ft is 0.0023 ac; rounding it to whole hundredths would drop the
+      // total and add an omission the US export never reported.
+      const record = {
+        temperature: 70,
+        relativeHumidity: 40,
+        treatedAreaSize: 100,
+        treatedAreaUnit: 'sqft',
+        products: [{ product: 'Test', rate: '1', rateUnit: 'qt/ac' }],
+      } as never;
+
+      expect(getRecordOmissions(record)).toEqual([]);
+      expect(getRecordOmissions(record, 100, 'us-epa')).toEqual([]);
+    });
+
+    it('still reports a missing total when no area is known', () => {
+      const record = {
+        temperature: 70,
+        relativeHumidity: 40,
+        products: [{ product: 'Test', rate: '1', rateUnit: 'L/ha' }],
+      } as never;
+
+      expect(getRecordOmissions(record, undefined, 'us-epa')).toEqual(['one or more product totals']);
+      expect(getRecordOmissions(record, undefined, 'au-apvma')).toEqual(['one or more product totals']);
+    });
+  });
+
+  describe('treated area conversion', () => {
+    it('returns a same-unit area unchanged instead of rounding it', () => {
+      expect(normalizeTreatedArea(20.23456, 'ha', 'ha')).toBe(20.23456);
+      expect(normalizeTreatedArea(12.345, undefined, 'ac')).toBe(12.345);
+    });
+
+    it('converts between units at full precision', () => {
+      expect(normalizeTreatedArea(50, 'ac', 'ha')).toBeCloseTo(20.2343, 10);
+      expect(normalizeTreatedArea(20.2343, 'ha', 'ac')).toBeCloseTo(50, 3);
+      expect(normalizeTreatedArea(43560, 'sqft', 'ac')).toBe(1);
+    });
+
+    it('converts product-total area only for the AU profile', () => {
+      expect(areaForProductTotal(20, 'ha', 'oz/ac', 'us-epa')).toBe(20);
+      expect(areaForProductTotal(20, 'ha', 'oz/ac', undefined)).toBe(20);
+      expect(areaForProductTotal(50, 'ac', 'L/ha', 'us-epa')).toBe(50);
+      expect(areaForProductTotal(20.2343, 'ha', 'oz/ac', 'au-apvma')).toBeCloseTo(50, 3);
+      expect(areaForProductTotal(50, 'ac', 'L/ha', 'au-apvma')).toBeCloseTo(20.2343, 10);
+      expect(areaForProductTotal(undefined, 'ac', 'L/ha', 'au-apvma')).toBeUndefined();
     });
   });
 

@@ -20,6 +20,8 @@ import { useSprayForm } from '@/hooks/useSprayForm';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { type Field, type SprayRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { formatCarryForwardTime } from '@/lib/carryForward';
@@ -33,7 +35,9 @@ interface SprayModalProps {
 
 function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { sprayRecipes, farmName, viewingSeason, cluAssignments } = useFarm();
+  const { sprayRecipes, farmName, viewingSeason, cluAssignments, session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id);
+  const complianceProfile = defaultProfileForCountry(preferences.country);
   const form = useSprayForm({ field, open, onClose, initialData, mode });
 
   const [showMissingChecklist, setShowMissingChecklist] = useState(false);
@@ -71,7 +75,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
     const exportBtn = initialData && (
       <Button
         variant="outline"
-        onClick={() => generateSprayPDF([initialData], farmName, { fields: [field], cluAssignments })}
+        onClick={() => generateSprayPDF([initialData], farmName, { fields: [field], cluAssignments, profile: complianceProfile })}
         className="touch-target w-full border-spray/30 py-6 text-base font-bold text-spray hover:bg-spray/10"
       >
         <FileDown size={20} className="mr-2" />

@@ -1,6 +1,7 @@
 import { formatIsoDate } from '@/utils/dates';
 import type { SprayRecord } from '@/types/farm';
-import { formatSprayProductTotal } from '@/utils/unitConversion';
+import { formatSprayProductTotal, HECTARES_PER_ACRE } from '@/utils/unitConversion';
+import { resolveComplianceProfileId } from '@/lib/compliance/profiles';
 
 export const MISSING_VALUE = '-';
 
@@ -27,14 +28,21 @@ export function formatUnit(unit: string | undefined | null): string {
 /**
  * Returns a readable compliance status string.
  */
-export function getRecordOmissions(record: SprayRecord, treatedArea = record.treatedAreaSize): string[] {
+export function getRecordOmissions(
+  record: SprayRecord,
+  treatedArea = record.treatedAreaSize,
+  profile?: string | null,
+  treatedAreaUnit = effectiveTreatedAreaUnit(record),
+): string[] {
   const omissions: string[] = [];
 
   if (record.temperature == null) omissions.push('temperature');
   if (record.relativeHumidity == null) omissions.push('relative humidity');
   if (!record.products?.length) {
     omissions.push('products');
-  } else if (record.products.some(product => formatSprayProductTotal(product, treatedArea) === '—')) {
+  } else if (record.products.some(product =>
+    formatSprayProductTotal(product, areaForProductTotal(treatedArea, treatedAreaUnit, product.rateUnit, profile)) === '—'
+  )) {
     omissions.push('one or more product totals');
   }
 
@@ -108,4 +116,79 @@ export function getChronologicalDateRange(records: SprayRecord[]): { start?: str
 export function sanitizeFilename(name: string): string {
   if (!name) return 'export';
   return name.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+}
+
+function canonicalAreaUnit(unit?: string | null): 'ac' | 'ha' | 'sqft' {
+  const normalized = (unit || 'ac').toLowerCase();
+  if (normalized === 'ha' || normalized === 'hectares') return 'ha';
+  if (normalized === 'sqft' || normalized === 'sq ft') return 'sqft';
+  return 'ac';
+}
+
+/**
+ * Converts a treated area between acres, hectares and square feet. A missing
+ * or unknown unit is read as acres. The result is not rounded; callers round
+ * once for display (formatNumber) or for the product total.
+ */
+export function normalizeTreatedArea(value: number, unit?: string, targetUnit: string = 'ha'): number {
+  if (value == null || !Number.isFinite(value)) return 0;
+
+  const from = canonicalAreaUnit(unit);
+  const to = canonicalAreaUnit(targetUnit);
+  if (from === to) return value;
+
+  const acres = from === 'ha' ? value / HECTARES_PER_ACRE : from === 'sqft' ? value / 43560 : value;
+  if (to === 'ha') return acres * HECTARES_PER_ACRE;
+  if (to === 'sqft') return acres * 43560;
+  return acres;
+}
+
+/**
+ * Converts treated area to the unit a rate is expressed in: hectares for a
+ * metric (/ha) rate, acres otherwise.
+ */
+export function normalizeAreaForRate(value: number, unit?: string, rateUnit?: string): number {
+  const targetUnit = rateUnit?.includes('/ha') ? 'ha' : 'ac';
+  return normalizeTreatedArea(value, unit, targetUnit);
+}
+
+/**
+ * Unit of the area getEffectiveSprayTreatedAcres returns for a record. A
+ * stored treated area keeps its own unit; the field-acreage fallback is acres.
+ */
+export function effectiveTreatedAreaUnit(record: Pick<SprayRecord, 'treatedAreaSize' | 'treatedAreaUnit'>): string {
+  const stored = record.treatedAreaSize;
+  return stored != null && Number.isFinite(stored) && stored > 0 ? record.treatedAreaUnit || 'ac' : 'ac';
+}
+
+/**
+ * Area to pass to formatSprayProductTotal. Only the AU profile converts the
+ * area into the rate's unit; every other profile gets the area unchanged so
+ * US product totals stay exactly as they were.
+ */
+export function areaForProductTotal(
+  area: number | null | undefined,
+  areaUnit: string | undefined,
+  rateUnit: string | undefined,
+  profile?: string | null,
+): number | null | undefined {
+  if (resolveComplianceProfileId(profile) !== 'au-apvma') return area;
+  if (area == null || !Number.isFinite(area)) return area;
+  return normalizeAreaForRate(area, areaUnit, rateUnit);
+}
+
+/**
+ * Converts Fahrenheit to Celsius.
+ */
+export function convertFahrenheitToCelsius(fahrenheit: number): number {
+  if (fahrenheit == null) return 0;
+  return Math.round((fahrenheit - 32) * (5 / 9) * 10) / 10;
+}
+
+/**
+ * Converts wind speed from mph to km/h (1 mph = 1.60934 km/h).
+ */
+export function convertMphToKmh(mph: number): number {
+  if (mph == null) return 0;
+  return Math.round(mph * 1.60934 * 10) / 10;
 }
