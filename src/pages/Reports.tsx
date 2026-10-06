@@ -126,38 +126,40 @@ export default function Reports() {
   const activeFieldIds = useMemo(() => new Set(fields.filter(field => !field.deleted_at).map(field => field.id)), [fields]);
 
 
-  // Season-filtered record sets — memoized, sorted, non-mutating
+  // Season lists also feed the exports on this page. Drop soft-deleted rows
+  // from every collection, matching Activity. Cloud reads already exclude
+  // them; this covers an offline cache that still holds a deleted row.
   const plantRecords = useMemo(() =>
-    [...allPlant.filter(r => r.seasonYear === viewingSeason)]
+    [...allPlant.filter(r => r.seasonYear === viewingSeason && !r.deleted_at)]
       .sort((a, b) => a.timestamp - b.timestamp),
   [allPlant, viewingSeason]);
 
   const sprayRecords = useMemo(() =>
-    [...allSpray.filter(r => r.seasonYear === viewingSeason)]
+    [...allSpray.filter(r => r.seasonYear === viewingSeason && !r.deleted_at)]
       .sort((a, b) => a.timestamp - b.timestamp),
   [allSpray, viewingSeason]);
 
   const harvestRecords = useMemo(() =>
-    [...allHarvest.filter(r => r.seasonYear === viewingSeason)]
+    [...allHarvest.filter(r => r.seasonYear === viewingSeason && !r.deleted_at)]
       .sort((a, b) => a.timestamp - b.timestamp),
   [allHarvest, viewingSeason]);
 
   const hayRecords = useMemo(() =>
-    allHay.filter(r => r.seasonYear === viewingSeason),
+    allHay.filter(r => r.seasonYear === viewingSeason && !r.deleted_at),
   [allHay, viewingSeason]);
 
   const fertilizerRecords = useMemo(() =>
-    [...allFertilizer.filter(r => r.seasonYear === viewingSeason)]
+    [...allFertilizer.filter(r => r.seasonYear === viewingSeason && !r.deleted_at)]
       .sort((a, b) => getWorkDateMs(a) - getWorkDateMs(b)),
   [allFertilizer, viewingSeason]);
 
   const tillageRecords = useMemo(() =>
-    [...allTillage.filter(r => r.seasonYear === viewingSeason)]
+    [...allTillage.filter(r => r.seasonYear === viewingSeason && !r.deleted_at)]
       .sort((a, b) => getWorkDateMs(a) - getWorkDateMs(b)),
   [allTillage, viewingSeason]);
 
   const customSprayRecords = useMemo(() =>
-    [...allCustomSpray.filter(r => r.seasonYear === viewingSeason)]
+    [...allCustomSpray.filter(r => r.seasonYear === viewingSeason && !r.deleted_at)]
       .sort((a, b) => getWorkDateMs(a) - getWorkDateMs(b)),
   [allCustomSpray, viewingSeason]);
 
