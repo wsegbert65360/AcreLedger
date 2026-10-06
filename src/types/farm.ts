@@ -176,6 +176,8 @@ export interface HarvestRecord {
   harvestDate?: string;
   landlordName?: string;
   scaleTicketNumber?: string;
+  /** Optional note recorded when the load was moved to a different field. */
+  moveReason?: string;
   farm_id: string;
   deleted_at: string | null;
 }
