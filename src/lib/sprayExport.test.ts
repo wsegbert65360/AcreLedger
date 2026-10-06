@@ -143,6 +143,8 @@ describe('sprayExportFormatters', () => {
       expect(areaForProductTotal(20, 'ha', 'oz/ac', undefined)).toBe(20);
       expect(areaForProductTotal(50, 'ac', 'L/ha', 'us-epa')).toBe(50);
       expect(areaForProductTotal(20.2343, 'ha', 'oz/ac', 'au-apvma')).toBeCloseTo(50, 3);
+      expect(areaForProductTotal(20, 'ha', 'L/ha', 'au-apvma')).toBe(20);
+      expect(areaForProductTotal(50, 'ac', 'oz/ac', 'au-apvma')).toBe(50);
       expect(areaForProductTotal(50, 'ac', 'L/ha', 'au-apvma')).toBeCloseTo(20.2343, 10);
       expect(areaForProductTotal(undefined, 'ac', 'L/ha', 'au-apvma')).toBeUndefined();
     });

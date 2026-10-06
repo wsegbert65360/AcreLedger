@@ -276,6 +276,19 @@ describe('generateSprayPDF', () => {
       expect(text).toContain('Area: 20 ha');
     });
 
+    it('keeps a hectare area unchanged for a metric rate', () => {
+      const record = makeRecord({
+        treatedAreaSize: 20,
+        treatedAreaUnit: 'ha',
+        products: [{ product: 'Herbicide', rate: '2', rateUnit: 'L/ha', epaRegNumber: '524-549' }],
+      });
+
+      generateSprayPDF([record], 'Test Farm', { fields: [field], profile: 'au-apvma' });
+
+      // 20 ha * 2 L/ha = 40 L, with no conversion
+      expect(pdf.autoTables()[0].body[0][3]).toBe('40 L');
+    });
+
     it('converts acres to hectares for a metric rate', () => {
       const record = makeRecord({
         treatedAreaSize: 50,
