@@ -327,6 +327,25 @@ describe('generateSprayPDF', () => {
       expect(pdf.autoTables()[0].body[0][3]).toBe('68.75 lb');
     });
 
+    it('ignores a stored wizard total that read hectares as acres', () => {
+      const record = makeRecord({
+        treatedAreaSize: 20.2343,
+        treatedAreaUnit: 'ha',
+        products: [{
+          product: 'Herbicide',
+          rate: '22',
+          rateUnit: 'oz/ac',
+          epaRegNumber: '524-549',
+          totalProductAmount: '27.5',
+          totalProductUnit: 'lb',
+        }],
+      });
+
+      generateSprayPDF([record], 'Test Farm', { fields: [field], profile: 'au-apvma' });
+
+      expect(pdf.autoTables()[0].body[0][3]).toBe('68.75 lb');
+    });
+
     it('reads the field-acreage fallback as acres even when the record unit is ha', () => {
       const record = makeRecord({ treatedAreaSize: undefined, treatedAreaUnit: 'ha' });
 
