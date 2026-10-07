@@ -32,6 +32,7 @@ function updateBuilder(...args: unknown[]) {
   );
   const builder: any = {
     eq: () => builder,
+    lte: () => builder,
     then: response.then.bind(response),
   };
   return builder;
@@ -81,7 +82,7 @@ vi.mock('sonner', () => ({
   }),
 }));
 
-import { syncQueue, WebSyncQueueUnreadableError } from '../syncQueue';
+import { MAX_SYNC_RETRIES, syncQueue, WebSyncQueueUnreadableError } from '../syncQueue';
 import { toast } from 'sonner';
 
 describe('syncQueue web queue management', () => {
@@ -568,6 +569,7 @@ describe('syncQueue web queue management', () => {
       'harvest_records', 'hay_harvest_records', 'custom_spray_records', 'fertilizer_applications',
       'tillage_records', 'grain_movements', 'saved_seeds',
       'fertilizer_recipes', 'spray_recipes',
+      'equipment', 'maintenance_schedules', 'maintenance_logs',
     ];
 
     for (const table of tables) {
@@ -585,6 +587,46 @@ describe('syncQueue web queue management', () => {
 
     const queue = await syncQueue.getQueue('farm-1');
     expect(queue[0].id).not.toBe(queue[1].id);
+  });
+
+  it('replays equipment, schedule, then atomic maintenance RPC in FIFO order', async () => {
+    await syncQueue.enqueueMutation('equipment', 'insert', { id: 'e1' }, 'farm-1');
+    await syncQueue.enqueueMutation('maintenance_schedules', 'insert', { id: 's1', equipment_id: 'e1' }, 'farm-1');
+    await syncQueue.enqueueMutation('maintenance_logs', 'insert', {
+      id: 'l1',
+      equipment_id: 'e1',
+      __maintenance_rpc: { p_farm_id: 'farm-1', p_log_id: 'l1', p_equipment_id: 'e1' },
+    }, 'farm-1');
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    expect(supabaseControl.insert).toHaveBeenCalledTimes(2);
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('log_maintenance', expect.objectContaining({
+      p_log_id: 'l1', p_equipment_id: 'e1',
+    }));
+    expect(supabaseControl.insert.mock.invocationCallOrder[1])
+      .toBeLessThan(supabaseControl.rpc.mock.invocationCallOrder[0]);
+  });
+
+  it('accepts a higher cloud equipment reading as a completed queued update', async () => {
+    await syncQueue.enqueueMutation('equipment', 'update', {
+      id: 'e1', current_reading: 1100, __force_lower_reading: false,
+    }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: null, count: 0, status: 204 });
+    supabaseControl.selectResponses.push({ data: { current_reading: 1200 }, error: null, status: 200 });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('returns false while exhausted work remains parked', async () => {
+    await syncQueue.enqueueMutation('equipment', 'insert', { id: 'e1' }, 'farm-1');
+    const [queued] = await syncQueue.getQueue('farm-1');
+    for (let retry = 0; retry < MAX_SYNC_RETRIES; retry++) {
+      await syncQueue.incrementRetry(queued.id, retry);
+    }
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    expect(await syncQueue.getFailed('farm-1')).toHaveLength(1);
   });
 
   // ─── Persistence Failure Propagation ─────────────────────────────────────

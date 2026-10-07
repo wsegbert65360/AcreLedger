@@ -15,6 +15,8 @@ export const SYNC_QUEUE_KEYS = [WEB_QUEUE_KEY, CORRUPT_QUEUE_KEY] as const;
  */
 export const MAX_SYNC_RETRIES = 10;
 export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
+export const MAINTENANCE_RPC_KEY = '__maintenance_rpc';
+export const READING_FORCE_KEY = '__force_lower_reading';
 let webQueuePromise: Promise<void> = Promise.resolve();
 // Set after the first corruption toast so repeated getWebQueue calls while the
 // blob is still broken don't re-toast on every enqueue/read.
@@ -29,6 +31,7 @@ const ALLOWED_TABLES = new Set([
   'fertilizer_recipes', 'spray_recipes',
   'fsa_tract_imports', 'field_clu_assignments',
   'work_requests',
+  'equipment', 'maintenance_schedules', 'maintenance_logs',
 ]);
 
 export interface QueuedMutation {
@@ -255,6 +258,26 @@ async function reconcileZeroRowMutation(mutation: QueuedMutation, farmId: string
     return versionMatches && expectedValueMatches(data, expectedPayload);
   }
   return false;
+}
+
+async function reconcileHigherEquipmentReading(
+  mutation: QueuedMutation,
+  farmId: string,
+): Promise<boolean> {
+  if (
+    mutation.table_name !== 'equipment'
+    || mutation.operation !== 'update'
+    || mutation.payload?.[READING_FORCE_KEY] === true
+    || typeof mutation.payload?.current_reading !== 'number'
+  ) return false;
+  const { data, error } = await supabase
+    .from('equipment')
+    .select('current_reading')
+    .eq('id', mutation.payload.id)
+    .eq('farm_id', farmId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return Number(data.current_reading) >= mutation.payload.current_reading;
 }
 
 export const syncQueue = {
@@ -637,6 +660,8 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
               p_harvest: { ...linkedHarvest.harvestPayload, farm_id: farmId },
               p_grain_movement: { ...linkedHarvest.grainPayload, farm_id: farmId },
             });
+          } else if (mutation.table_name === 'maintenance_logs' && mutation.payload?.[MAINTENANCE_RPC_KEY]) {
+            response = await supabase.rpc('log_maintenance', mutation.payload[MAINTENANCE_RPC_KEY]);
           } else {
             const conflictColumns = mutation.table_name === 'fsa_tract_imports'
               ? 'farm_id,tract_key'
@@ -658,6 +683,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             id: _i,
             version: _version,
             __expected_version: expectedVersion,
+            [READING_FORCE_KEY]: forceLowerReading,
             ...payload
           } = mutation.payload;
           const base = supabase
@@ -667,7 +693,11 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             .eq('farm_id', farmId);
           response = mutation.table_name === 'grain_movements' && typeof expectedVersion === 'number'
             ? await base.eq('version', expectedVersion)
-            : await base;
+            : mutation.table_name === 'equipment'
+              && typeof payload.current_reading === 'number'
+              && forceLowerReading !== true
+              ? await base.lte('current_reading', payload.current_reading)
+              : await base;
         } else if (mutation.operation === 'soft_delete') {
           // Perform soft delete update
           const base = supabase
@@ -686,7 +716,13 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
           && mutation.operation !== 'insert'
           && response.count !== 1
         ) {
-          if (response.count === 0 && await reconcileZeroRowMutation(mutation, farmId)) {
+          if (
+            response.count === 0
+            && (
+              await reconcileHigherEquipmentReading(mutation, farmId)
+              || await reconcileZeroRowMutation(mutation, farmId)
+            )
+          ) {
             await syncQueue.dequeueMutation(mutation.id);
             continue;
           }
@@ -785,5 +821,8 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
     } else {
       toast.success('Sync complete. All offline changes uploaded.');
     }
-    return pendingRetryCount === 0;
+    // A parked item is still authoritative local work. Returning true here
+    // lets farmStore fetch a cloud snapshot that cannot contain it and erases
+    // the optimistic record from the visible collection.
+    return pendingRetryCount === 0 && failedParkedCount === 0;
 }
