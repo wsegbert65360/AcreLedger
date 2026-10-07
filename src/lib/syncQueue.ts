@@ -893,8 +893,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
     } else {
       toast.success('Sync complete. All offline changes uploaded.');
     }
-    // A parked item is still authoritative local work. Returning true here
-    // lets farmStore fetch a cloud snapshot that cannot contain it and erases
-    // the optimistic record from the visible collection.
-    return pendingRetryCount === 0 && failedParkedCount === 0;
+    // Parked items stay in the queue for Settings → Cloud Sync. They must not
+    // freeze fetchData for every other table; equipment fetch re-applies them.
+    return pendingRetryCount === 0;
 }

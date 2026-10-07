@@ -4,12 +4,14 @@ import {
   FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe, FertilizerRecipe, TillageRecord,
   WorkRequest
 } from '@/types/farm';
+import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import {
   mapFieldToDb, mapBinToDb, mapPlantToDb, mapSprayToDb,
   mapHarvestToDb, mapHayToDb, mapCustomSprayToDb, mapGrainToDb, mapSeedToDb,
   mapRecipeToDb, mapFertilizerToDb, mapFertilizerRecipeToDb, mapTillageToDb,
-  mapFsaTractToDb, mapFieldCluAssignmentToDb, mapWorkRequestToDb
+  mapFsaTractToDb, mapFieldCluAssignmentToDb, mapWorkRequestToDb,
+  mapEquipmentToDb, mapMaintenanceScheduleToDb, mapMaintenanceLogToDb,
 } from '@/lib/mappers';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -101,6 +103,9 @@ interface UseSeasonManagementArgs {
   fsaTracts: FsaTractImport[];
   cluAssignments: FieldCluAssignment[];
   workRequests: WorkRequest[];
+  equipment: Equipment[];
+  maintenanceSchedules: MaintenanceSchedule[];
+  maintenanceLogs: MaintenanceLog[];
   activeSeason: number;
   setActiveSeason: React.Dispatch<React.SetStateAction<number>>;
   setViewingSeason: React.Dispatch<React.SetStateAction<number>>;
@@ -121,6 +126,9 @@ interface UseSeasonManagementArgs {
   setFsaTracts: React.Dispatch<React.SetStateAction<FsaTractImport[]>>;
   setCluAssignments: React.Dispatch<React.SetStateAction<FieldCluAssignment[]>>;
   setWorkRequests: React.Dispatch<React.SetStateAction<WorkRequest[]>>;
+  setEquipment: React.Dispatch<React.SetStateAction<Equipment[]>>;
+  setMaintenanceSchedules: React.Dispatch<React.SetStateAction<MaintenanceSchedule[]>>;
+  setMaintenanceLogs: React.Dispatch<React.SetStateAction<MaintenanceLog[]>>;
   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
   /** Reload all farm entities from Supabase after restore (source of truth). */
   refetchFarmData: () => Promise<boolean>;
@@ -142,12 +150,14 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords,
-    fsaTracts, cluAssignments, workRequests, activeSeason,
+    fsaTracts, cluAssignments, workRequests,
+    equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
-    setTillageRecords, setFsaTracts, setCluAssignments, setWorkRequests, setFarmId,
+    setTillageRecords, setFsaTracts, setCluAssignments, setWorkRequests,
+    setEquipment, setMaintenanceSchedules, setMaintenanceLogs, setFarmId,
     refetchFarmData,
     isOnline, initialFetchComplete, fetchError, pendingSyncCount,
   } = args;
@@ -198,7 +208,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         backupVersion: CURRENT_BACKUP_VERSION,
         fields, bins, plantRecords, sprayRecords, harvestRecords,
         hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
-        savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests, activeSeason,
+        savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
+        equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
         rolloverDate: new Date().toISOString(),
       };
       const validatedBackup = backupSchema.parse(backupData);
@@ -239,7 +250,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
   }, [
     session, fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
-    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests, activeSeason,
+    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
+    equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
     isOnline, farm_id, initialFetchComplete, fetchError, pendingSyncCount,
     setActiveSeason, setViewingSeason, setLoading,
   ]);
@@ -304,6 +316,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const tractsToDb      = (backupData.fsaTracts            ?? []).map((t) => mapFsaTractToDb({ ...t, farmId: farm_id } as FsaTractImport));
       const assignmentsToDb = (backupData.cluAssignments       ?? []).map((a) => mapFieldCluAssignmentToDb({ ...a, farmId: farm_id } as FieldCluAssignment));
       const workRequestsToDb = (backupData.workRequests        ?? []).map((w) => mapWorkRequestToDb({ ...w, farm_id } as unknown as WorkRequest));
+      const equipmentToDb = (backupData.equipment ?? []).map((row) => mapEquipmentToDb({ ...row, farm_id } as Equipment));
+      const schedulesToDb = (backupData.maintenanceSchedules ?? []).map((row) => mapMaintenanceScheduleToDb({ ...row, farm_id } as MaintenanceSchedule));
+      const logsToDb = (backupData.maintenanceLogs ?? []).map((row) => mapMaintenanceLogToDb({ ...row, farm_id } as MaintenanceLog));
 
       const payload = {
         fields: fieldsToDb,
@@ -322,6 +337,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         fsa_tract_imports: tractsToDb,
         field_clu_assignments: assignmentsToDb,
         work_requests: workRequestsToDb,
+        equipment: equipmentToDb,
+        maintenance_schedules: schedulesToDb,
+        maintenance_logs: logsToDb,
       };
 
       if (backupData.activeSeason !== undefined) {
@@ -474,6 +492,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setFsaTracts([]);
     setCluAssignments([]);
     setWorkRequests([]);
+    setEquipment([]);
+    setMaintenanceSchedules([]);
+    setMaintenanceLogs([]);
     setActiveSeason(getCurrentYear());
     setViewingSeason(getCurrentYear());
 
@@ -496,7 +517,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
-    setFsaTracts, setCluAssignments, setWorkRequests, setFarmId, setActiveSeason, setViewingSeason,
+    setFsaTracts, setCluAssignments, setWorkRequests,
+    setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
+    setFarmId, setActiveSeason, setViewingSeason,
     refetchFarmData,
   ]);
 

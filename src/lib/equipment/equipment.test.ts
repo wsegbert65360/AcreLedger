@@ -33,31 +33,57 @@ function log(overrides: Partial<MaintenanceLog> = {}): MaintenanceLog {
 }
 
 describe('computeDueStatus', () => {
-  it('starts a never-done meter schedule at the current reading', () => {
-    expect(computeDueStatus(schedule(), equipment, new Date('2026-01-01'))).toEqual({
+  it('uses a stored last-done snapshot rather than the live meter', () => {
+    expect(computeDueStatus(schedule({ lastDoneReading: 1000 }), equipment, '2026-01-01')).toEqual({
+      status: 'ok', remainingReading: 250, remainingDays: undefined,
+    });
+    expect(computeDueStatus(
+      schedule({ lastDoneReading: 1000 }),
+      { ...equipment, currentReading: 1250 },
+      '2026-01-01',
+    ).status).toBe('overdue');
+  });
+
+  it('does not let a missing snapshot track a rising live meter', () => {
+    expect(computeDueStatus(
+      schedule(),
+      { ...equipment, currentReading: 2000 },
+      '2026-01-01',
+    )).toEqual({
       status: 'ok', remainingReading: 250, remainingDays: undefined,
     });
   });
 
   it('marks the exact reading boundary overdue and ten percent due soon', () => {
-    expect(computeDueStatus(schedule({ lastDoneReading: 750 }), equipment, new Date()).status).toBe('overdue');
-    expect(computeDueStatus(schedule({ lastDoneReading: 775 }), equipment, new Date()).status).toBe('due_soon');
+    expect(computeDueStatus(schedule({ lastDoneReading: 750 }), equipment, '2026-01-01').status).toBe('overdue');
+    expect(computeDueStatus(schedule({ lastDoneReading: 775 }), equipment, '2026-01-01').status).toBe('due_soon');
   });
 
-  it('uses the schedule creation date until calendar service is recorded', () => {
+  it('uses the local schedule-creation date until calendar service is recorded', () => {
     const result = computeDueStatus(
       schedule({ intervalValue: undefined, intervalDays: 100 }),
       equipment,
-      new Date('2026-04-01T22:00:00Z'),
+      '2026-04-01',
     );
-    expect(result).toEqual({ status: 'due_soon', remainingReading: undefined, remainingDays: 10 });
+    const created = new Date(schedule().createdAt);
+    const createdDay = Date.UTC(created.getFullYear(), created.getMonth(), created.getDate());
+    const elapsedDays = (Date.UTC(2026, 3, 1) - createdDay) / 86_400_000;
+    expect(result).toEqual({ status: 'due_soon', remainingReading: undefined, remainingDays: 100 - elapsedDays });
+  });
+
+  it('keeps the local calendar date when UTC has already rolled over', () => {
+    expect(computeDueStatus(
+      schedule({ intervalValue: undefined, intervalDays: 1, lastDoneAt: '2026-04-01' }),
+      equipment,
+      '2026-04-01',
+    ).remainingDays).toBe(1);
   });
 
   it('handles year rollover and chooses the worse of both rules', () => {
     const result = computeDueStatus(
       schedule({ intervalValue: 250, lastDoneReading: 900, intervalDays: 30, lastDoneAt: '2025-12-15' }),
       equipment,
-      new Date('2026-01-14T12:00:00Z'),
+      '2026-01-14',
     );
     expect(result.status).toBe('overdue');
     expect(result.remainingDays).toBe(0);
@@ -71,12 +97,12 @@ describe('summarizeEquipmentStatus', () => {
       schedule({ id: 'a', taskName: 'Oil', lastDoneReading: 800 }),
       schedule({ id: 'b', taskName: 'Filter', lastDoneReading: 700 }),
       schedule({ id: 'c', taskName: 'Deleted', lastDoneReading: 0, deleted_at: '2026-01-01' }),
-    ], equipment, new Date('2026-05-01'));
+    ], equipment, '2026-05-01');
     expect(result).toEqual({ status: 'overdue', taskName: 'Filter' });
   });
 
   it('returns ok with no task for an empty list', () => {
-    expect(summarizeEquipmentStatus([], equipment, new Date())).toEqual({ status: 'ok' });
+    expect(summarizeEquipmentStatus([], equipment, '2026-01-01')).toEqual({ status: 'ok' });
   });
 });
 

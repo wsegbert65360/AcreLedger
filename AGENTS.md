@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-02 (password recovery: the web client no longer spends the one-time code before the recovery screen; a link opened in the wrong browser says so).
+> **Last updated:** 2026-10-07 (pilot-gated equipment maintenance uses atomic, offline-replayable RPCs and participates in backup, recovery, and AI registries).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-07** — Added pilot-gated equipment, maintenance schedules, and service/repair logs. Meter updates, unit changes, maintenance logging, and cascade soft-deletes use tenant-checked atomic RPCs and replay as one offline envelope. The three tables are included in customer backup/restore, owner recovery, test-data, and Ask the Book registries.
 - **2026-10-02** — Web password recovery no longer lets the Supabase client auto-exchange `?code=` on `/auth?mode=recovery` before the manual handler. A failed code exchange is rejected even when the browser already has a session, so an expired link cannot open the set-password screen for an ordinary sign-in. A missing PKCE verifier tells the user to open the link in the same browser or app that requested it. Sign-in and sign-up URLs still auto-detect.
 - **2026-10-01** — Password recovery accepts the supported Supabase email `token_hash` recovery link through `verifyOtp`, alongside the PKCE authorization-code exchange, on the exact native scheme and web recovery route. Raw URL session-token fragments remain forbidden and show a re-request message instead. The iPhone/dashboard verification protocol is in `docs/runbooks/ios-password-recovery-device-test.md`.
 - **2026-09-30** — MRMS ingestion reliability: added `public.mrms_ingestion_runs` (service-role-only outcome ledger keyed by target hour) so the nightly backfill's `field_id = null` runs persist `success`/`no_data`/`failed` like the hourly pass; the overnight job now folds recently failed/no-data hours back into its window (bounded and de-duplicated) so an hour that aged out of the ten-hour window is still retried; a chain-trigger failure records the un-run chunk instead of only logging; and a Pass 1 retry no longer downgrades a Pass 2 `finalized` row. Pure scheduling arithmetic lives in `supabase/functions/shared/mrmsSchedule.ts` with Vitest coverage. `mrms_ingestion_runs` is classified in the owner recovery registry.
 - **2026-09-29** — Review-fix pass, rebased onto the 13-commit remote head (`e039a0d`). Billing: `current_period_end` is read from Stripe subscription items (basil API); checkout is refused for live `past_due`/`unpaid` subscriptions, skips the trial when the farm ever had a subscription, and reuses the Stripe customer. Recovery deep link accepts a PKCE `code` only. Sync replay refreshes an expired session once and pauses without spending retries. Verified on the merged tree: lint 0 errors/72 warnings, app and API typechecks, `verify:docs`, `verify:app-store`, `verify:migrations` (75-migration PGlite replay), `test:db-integrity`, 1,285 unit tests in 137 files, 31 owner-backup and 21 recovery tests, and the production bundle build.
-- **2026-09-28** — Consistency pass: fixed the field-delete queueing contradiction (one batched `enqueueMutations`, never a per-record loop) and the optimistic-update step order (capture the snapshot before the optimistic setter); replaced duplicated feature detail with summaries that link to BLUEPRINT; AI model IDs now referenced by code constant; documented `verify:migrations`, `test:db-integrity`, and `install:owner-dr`.
 
 ## Contents
 
@@ -121,6 +121,11 @@ Rules), then open only the files for that area.
 - [@/hooks/useCoachmarks.ts](./src/hooks/useCoachmarks.ts) + [@/components/CoachmarkOverlay.tsx](./src/components/CoachmarkOverlay.tsx) — onboarding coachmark overlay system.
 - [@/context/QuickAddContext.tsx](./src/context/QuickAddContext.tsx) — global Quick Add provider managing modal states, preselected types, and active fields.
 - [@/components/QuickAddDialog.tsx](./src/components/QuickAddDialog.tsx) — global Quick Add dialog providing field selection and GPS-based nearest field detection.
+
+**Equipment & maintenance**
+- [@/types/equipment.ts](./src/types/equipment.ts), [@/store/useEquipment.ts](./src/store/useEquipment.ts), and [@/pages/Equipment.tsx](./src/pages/Equipment.tsx) — non-seasonal equipment state, atomic meter/service mutations, and the pilot UI.
+- [@/lib/equipment](./src/lib/equipment) — due-status, meter conversion, parked-mutation overlay, pilot flag, and CSV export helpers. Details: [BLUEPRINT → Equipment and Maintenance](./BLUEPRINT.md#equipment-and-maintenance).
+- [supabase/migrations/20261006214500_equipment_maintenance.sql](./supabase/migrations/20261006214500_equipment_maintenance.sql) and [20261006233000_equipment_meter_rpcs.sql](./supabase/migrations/20261006233000_equipment_meter_rpcs.sql) — tenant-scoped schema and atomic RPC contracts. Do not replace these RPCs with client-side read/compare/write sequences.
 
 **Offline, native & accounts**
 - [@/lib/native.ts](./src/lib/native.ts) — centralized native capabilities (haptics, status bar, geolocation).
@@ -647,7 +652,7 @@ After editing:
    - `npm run test` — documentation and tracked-asset checks, then app unit and owner-DR package tests. Run `npm run test:unit` for the app suite alone. See [Testing](#testing).
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
    - `npm run verify:migrations` — checks migration filename format, unique timestamps, and disabled seed configuration, then replays every migration in order against a disposable in-memory PostgreSQL (PGlite) with the Supabase platform bootstrap, failing if any migration alters a relation that no migration creates. Run after adding or renaming a migration. It is not part of `npm test`; the GitLab `database` job runs it together with `test:db-integrity`. As of 2026-09-29 it passes: `supabase/migrations/20260316090000_core_harvest_grain_baseline.sql` reconstructs the core schema so the full history replays.
-   - `npm run test:db-integrity` — runs the tenant-scoped harvest/grain foreign-key migration and the harvest/grain baseline checks against in-memory PGlite. Run when changing those migrations or harvest/grain linkage.
+   - `npm run test:db-integrity` — runs the tenant-scoped harvest/grain checks plus equipment migration/RPC checks against in-memory PGlite. Run when changing those migrations, harvest/grain linkage, or equipment meter/service/cascade functions.
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
 3. Mention any unchecked risk clearly.
 

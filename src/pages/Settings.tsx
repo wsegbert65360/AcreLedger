@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Settings as SettingsIcon, Sprout, Database, User, CreditCard, Tractor, ChevronRight } from 'lucide-react';
 import FsaTractManager from '@/components/settings/FsaTractManager';
 import SeedManager from '@/components/settings/SeedManager';
@@ -7,6 +8,7 @@ import DisplayManager from '@/components/settings/DisplayManager';
 import RegionManager from '@/components/settings/RegionManager';
 import BillingManager from '@/components/settings/BillingManager';
 import { isBillingUiAvailable } from '@/lib/billing';
+import { isEquipmentUiEnabled } from '@/lib/equipment/feature';
 import SyncStatus from '@/components/settings/SyncStatus';
 import BackupManager from '@/components/settings/BackupManager';
 import SecurityManager from '@/components/settings/SecurityManager';
@@ -39,11 +41,13 @@ export default function Settings() {
         </div>
       </header>
       <div className="max-w-lg mx-auto p-4 space-y-6 lg:max-w-4xl lg:px-8">
-        <a href="/equipment" className="flex min-h-16 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm transition hover:border-primary/30">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Tractor size={20} /></span>
-          <span className="min-w-0 flex-1"><span className="block font-bold">Equipment</span><span className="block text-xs text-muted-foreground">Machines, meters, maintenance, and repairs</span></span>
-          <ChevronRight size={18} className="text-muted-foreground" />
-        </a>
+        {isEquipmentUiEnabled() && (
+          <Link to="/equipment" className="flex min-h-16 items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm transition hover:border-primary/30">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Tractor size={20} /></span>
+            <span className="min-w-0 flex-1"><span className="block font-bold">Equipment</span><span className="block text-xs text-muted-foreground">Machines, meters, maintenance, and repairs</span></span>
+            <ChevronRight size={18} className="text-muted-foreground" />
+          </Link>
+        )}
         <Accordion type="multiple" defaultValue={['farm-data']} className="space-y-4">
           <AccordionItem value="farm-data" className="border border-border rounded-2xl bg-card px-4">
             <AccordionTrigger className="hover:no-underline py-4">

@@ -134,7 +134,8 @@ BEGIN
                 ELSE greatest(current_reading, p_reading)
             END,
             reading_updated_at = CASE
-                WHEN p_force_lower OR p_reading >= current_reading THEN now()
+                WHEN (p_force_lower AND p_reading IS DISTINCT FROM current_reading)
+                  OR (NOT p_force_lower AND p_reading > current_reading) THEN now()
                 ELSE reading_updated_at
             END
         WHERE id = p_equipment_id AND farm_id = p_farm_id
@@ -220,7 +221,8 @@ BEGIN
             ELSE greatest(current_reading, p_reading)
         END,
         reading_updated_at = CASE
-            WHEN p_force_lower OR p_reading >= current_reading THEN now()
+            WHEN (p_force_lower AND p_reading IS DISTINCT FROM current_reading)
+              OR (NOT p_force_lower AND p_reading > current_reading) THEN now()
             ELSE reading_updated_at
         END
     WHERE id = p_equipment_id AND farm_id = p_farm_id

@@ -341,6 +341,56 @@ const workRequestFieldEntrySchema = z.object({
   }).optional(),
 });
 
+export const equipmentSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  kind: z.enum(['tractor', 'combine', 'sprayer', 'planter', 'tillage', 'truck', 'implement', 'other']),
+  year: z.number().optional(),
+  make: z.string().optional(),
+  model: z.string().optional(),
+  serialNumber: z.string().optional(),
+  meterUnit: z.enum(['hours', 'miles', 'km']),
+  currentReading: z.number(),
+  readingUpdatedAt: z.string().optional(),
+  status: z.enum(['active', 'sold', 'retired']),
+  notes: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
+export const maintenanceScheduleSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  equipmentId: z.string(),
+  taskName: z.string(),
+  intervalValue: z.number().optional(),
+  intervalDays: z.number().optional(),
+  lastDoneReading: z.number().optional(),
+  lastDoneAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
+export const maintenanceLogSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  equipmentId: z.string(),
+  scheduleId: z.string().optional(),
+  kind: z.enum(['service', 'repair']),
+  performedOn: z.string(),
+  readingAtService: z.number().optional(),
+  description: z.string().optional(),
+  performedBy: z.string().optional(),
+  vendor: z.string().optional(),
+  costParts: z.number().optional(),
+  costLabor: z.number().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
 export const workRequestSchema = z.object({
   id: z.string(),
   farm_id: z.string(),
@@ -385,6 +435,9 @@ export const backupSchema = z.object({
   fsaTracts: z.array(fsaTractImportSchema).optional(),
   cluAssignments: z.array(fieldCluAssignmentSchema).optional(),
   workRequests: z.array(workRequestSchema).optional(),
+  equipment: z.array(equipmentSchema).optional(),
+  maintenanceSchedules: z.array(maintenanceScheduleSchema).optional(),
+  maintenanceLogs: z.array(maintenanceLogSchema).optional(),
   activeSeason: z.number().optional(),
   backupDate: z.string().optional(),
   rolloverDate: z.string().optional(),

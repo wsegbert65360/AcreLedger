@@ -15,7 +15,7 @@
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:db-integrity": "node scripts/test-tenant-harvest-grain-migration.mjs && node scripts/test-harvest-grain-baseline.mjs",
+    "test:db-integrity": "node scripts/test-tenant-harvest-grain-migration.mjs && node scripts/test-harvest-grain-baseline.mjs && node scripts/test-equipment-migrations.mjs",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b",
     "typecheck:api": "tsc -p tsconfig.api.json",

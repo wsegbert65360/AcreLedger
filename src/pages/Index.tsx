@@ -23,7 +23,8 @@ import {
 } from '@/lib/fieldSearch';
 import { cn } from '@/lib/utils';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
-import { summarizeEquipmentStatus } from '@/lib/equipment';
+import { isEquipmentUiEnabled } from '@/lib/equipment/feature';
+import { localTodayIso, summarizeEquipmentStatus } from '@/lib/equipment';
 
 const Index = () => {
   const {
@@ -98,8 +99,9 @@ const Index = () => {
   const parsedQuery = useMemo(() => parseSearchQuery(search), [search]);
   const hasSearch = parsedQuery.nameTerms.length > 0 || parsedQuery.statuses.length > 0;
   const dueEquipmentCount = useMemo(() => equipment.filter(machine =>
-    summarizeEquipmentStatus(maintenanceSchedules, machine, new Date()).status !== 'ok'
+    summarizeEquipmentStatus(maintenanceSchedules, machine, localTodayIso()).status !== 'ok'
   ).length, [equipment, maintenanceSchedules]);
+  const showEquipmentCard = isEquipmentUiEnabled() && equipment.length > 0;
 
   const { filteredRowCrops, filteredPastureHay } = useMemo(() => {
     let rc = rowCrops;
@@ -187,7 +189,7 @@ const Index = () => {
         <ErrorBoundary>
           <WeatherBar />
         </ErrorBoundary>
-        {equipment.length > 0 && (
+        {showEquipmentCard && (
           <Link
             to="/equipment"
             className="flex min-h-14 items-center justify-between rounded-2xl border border-border/70 bg-card/75 px-4 py-3 shadow-sm transition hover:border-primary/30"

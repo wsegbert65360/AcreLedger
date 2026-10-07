@@ -15,6 +15,7 @@ import {
   computeDueStatus,
   convertMeterUnit,
   costTotals,
+  localTodayIso,
   resolveBrandColor,
   summarizeEquipmentStatus,
   type DueStatus,
@@ -29,8 +30,7 @@ const UNIT_LABEL: Record<MeterUnit, string> = { hours: 'hrs', miles: 'mi', km: '
 const EMPTY_COLOR = '#888780';
 
 function todayIso() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return localTodayIso();
 }
 
 function machineName(machine: EquipmentRecord) {
@@ -60,7 +60,7 @@ interface EquipmentFormProps {
 }
 
 function EquipmentForm({ open, machine, schedules, onClose }: EquipmentFormProps) {
-  const { addEquipment, updateEquipment, updateMaintenanceSchedule } = useFarm();
+  const { addEquipment, updateEquipment, setEquipmentMeterUnit } = useFarm();
   const [kind, setKind] = useState<EquipmentKind>(machine?.kind ?? 'tractor');
   const [year, setYear] = useState(machine?.year?.toString() ?? '');
   const [make, setMake] = useState(machine?.make ?? '');
@@ -115,23 +115,26 @@ function EquipmentForm({ open, machine, schedules, onClose }: EquipmentFormProps
       }
       const ok = await updateEquipment({
         ...machine, kind, year: parsedYear, make: make.trim() || undefined, model: model.trim() || undefined,
-        serialNumber: serial.trim() || undefined, meterUnit: unit, currentReading,
-        readingUpdatedAt: new Date().toISOString(), notes: notes.trim() || undefined,
+        serialNumber: serial.trim() || undefined, notes: notes.trim() || undefined,
       });
       if (!ok) return;
-      if (currentReading !== machine.currentReading) {
+      if (unitChanged) {
+        const unitOk = await setEquipmentMeterUnit(machine.id, machine.meterUnit, unit, {
+          currentReading,
+          schedules: meterSchedules.map(schedule => ({
+            id: schedule.id,
+            intervalValue: optionalNumber(replacementIntervals[schedule.id] ?? '') ?? schedule.intervalValue!,
+            lastDoneReading: automaticallyConvertible
+              ? (schedule.lastDoneReading == null
+                ? null
+                : convertMeterUnit(schedule.lastDoneReading, machine.meterUnit, unit))
+              : null,
+          })),
+        });
+        if (!unitOk) return;
+      } else if (currentReading !== machine.currentReading) {
         const result = await performMeterUpdate(machine, currentReading);
         if (!result) return;
-      }
-      for (const schedule of meterSchedules) {
-        if (!unitChanged) continue;
-        const intervalValue = optionalNumber(replacementIntervals[schedule.id] ?? '');
-        const lastDoneReading = schedule.lastDoneReading == null
-          ? undefined
-          : automaticallyConvertible
-            ? convertMeterUnit(schedule.lastDoneReading, machine.meterUnit, unit) ?? undefined
-            : undefined;
-        await updateMaintenanceSchedule({ ...schedule, intervalValue, lastDoneReading });
       }
       onClose();
     } finally {
@@ -245,7 +248,7 @@ export default function Equipment() {
   const totals = costTotals(maintenanceLogs);
   const thisYear = new Date().getFullYear();
 
-  const sorted = useMemo(() => equipment.map(machine => ({ machine, due: summarizeEquipmentStatus(maintenanceSchedules, machine, new Date()) })).sort((a, b) => {
+  const sorted = useMemo(() => equipment.map(machine => ({ machine, due: summarizeEquipmentStatus(maintenanceSchedules, machine, todayIso()) })).sort((a, b) => {
     const rank: Record<DueStatus, number> = { overdue: 0, due_soon: 1, ok: 2 };
     return rank[a.due.status] - rank[b.due.status] || machineName(a.machine).localeCompare(machineName(b.machine));
   }), [equipment, maintenanceSchedules]);
@@ -264,7 +267,7 @@ export default function Equipment() {
         {maintenanceLogs.length > 0 && <Button variant="outline" className="h-11 w-full" onClick={() => void exportMaintenanceCsv(maintenanceLogs, equipment, `AcreLedger_Equipment_${todayIso()}.csv`)}><Download className="mr-2 h-4 w-4" />Export all logs</Button>}
       </> : <>
         <section className="rounded-2xl border bg-card p-4 shadow-sm"><div className="flex items-start gap-4"><EquipmentIcon kind={selected.kind} color={resolveBrandColor(selected.make) ?? EMPTY_COLOR} size={72} /><div className="min-w-0 flex-1"><p className="text-sm text-muted-foreground">{selected.serialNumber ? `Serial ${selected.serialNumber}` : 'No serial number'}</p><p className="mt-1 text-2xl font-black">{selected.currentReading.toLocaleString()} <span className="text-sm font-semibold text-muted-foreground">{UNIT_LABEL[selected.meterUnit]}</span></p><p className="text-xs text-muted-foreground">{selected.readingUpdatedAt ? `Updated ${new Date(selected.readingUpdatedAt).toLocaleDateString()}` : 'Reading date not set'}</p></div><Button size="icon" variant="ghost" onClick={() => setEditing(selected)} aria-label="Edit equipment"><Pencil className="h-4 w-4" /></Button></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="outline" className="h-11 px-2" onClick={() => setMeterMachine(selected)}><Gauge className="mr-1 h-4 w-4" />Meter</Button><Button variant="outline" className="h-11 px-2" onClick={() => setLogKind('service')}>Service</Button><Button variant="outline" className="h-11 px-2" onClick={() => setLogKind('repair')}>Repair</Button></div></section>
-        <section className="space-y-2"><div className="flex items-center justify-between"><h2 className="font-bold">Maintenance</h2><Button size="sm" variant="outline" className="h-11" onClick={() => setScheduleEditor('new')}><Plus className="mr-1 h-4 w-4" />Task</Button></div>{selectedSchedules.length === 0 && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">No recurring maintenance tasks.</p>}{selectedSchedules.map(schedule => { const due = computeDueStatus(schedule, selected, new Date()); return <div key={schedule.id} className="flex items-center gap-3 rounded-xl border bg-card p-3"><div className="min-w-0 flex-1"><p className="font-semibold">{schedule.taskName}</p><p className="text-xs text-muted-foreground">{schedule.intervalValue && `Every ${schedule.intervalValue} ${UNIT_LABEL[selected.meterUnit]}`}{schedule.intervalValue && schedule.intervalDays ? ' or ' : ''}{schedule.intervalDays && `every ${schedule.intervalDays} days`}</p></div><StatusBadge status={due.status} /><Button size="icon" variant="ghost" onClick={() => setScheduleEditor(schedule)} aria-label={`Edit ${schedule.taskName}`}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => window.confirm(`Delete ${schedule.taskName}?`) && void deleteMaintenanceSchedule(schedule.id)} aria-label={`Delete ${schedule.taskName}`}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>; })}</section>
+        <section className="space-y-2"><div className="flex items-center justify-between"><h2 className="font-bold">Maintenance</h2><Button size="sm" variant="outline" className="h-11" onClick={() => setScheduleEditor('new')}><Plus className="mr-1 h-4 w-4" />Task</Button></div>{selectedSchedules.length === 0 && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">No recurring maintenance tasks.</p>}{selectedSchedules.map(schedule => { const due = computeDueStatus(schedule, selected, todayIso()); return <div key={schedule.id} className="flex items-center gap-3 rounded-xl border bg-card p-3"><div className="min-w-0 flex-1"><p className="font-semibold">{schedule.taskName}</p><p className="text-xs text-muted-foreground">{schedule.intervalValue && `Every ${schedule.intervalValue} ${UNIT_LABEL[selected.meterUnit]}`}{schedule.intervalValue && schedule.intervalDays ? ' or ' : ''}{schedule.intervalDays && `every ${schedule.intervalDays} days`}</p></div><StatusBadge status={due.status} /><Button size="icon" variant="ghost" onClick={() => setScheduleEditor(schedule)} aria-label={`Edit ${schedule.taskName}`}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => window.confirm(`Delete ${schedule.taskName}?`) && void deleteMaintenanceSchedule(schedule.id)} aria-label={`Delete ${schedule.taskName}`}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>; })}</section>
         <section className="space-y-2"><div className="flex items-center justify-between"><h2 className="font-bold">Service & repairs</h2>{selectedLogs.length > 0 && <Button size="sm" variant="outline" className="h-11" onClick={() => void exportMaintenanceCsv(selectedLogs, [selected], `AcreLedger_${machineName(selected).replace(/\s+/g, '_')}_${todayIso()}.csv`)}><Download className="mr-1 h-4 w-4" />CSV</Button>}</div><div className="grid grid-cols-2 gap-2"><div className="rounded-xl border bg-card p-3"><p className="text-xs text-muted-foreground">All time</p><p className="font-mono text-lg font-bold">${(totals[selected.id]?.allTime.total ?? 0).toFixed(2)}</p></div><div className="rounded-xl border bg-card p-3"><p className="text-xs text-muted-foreground">{thisYear}</p><p className="font-mono text-lg font-bold">${(totals[selected.id]?.byYear[thisYear]?.total ?? 0).toFixed(2)}</p></div></div>{selectedLogs.length === 0 && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">No service or repairs logged.</p>}{selectedLogs.map(log => <div key={log.id} className="rounded-xl border bg-card p-3"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold capitalize">{log.kind}{log.description ? ` · ${log.description}` : ''}</p><p className="text-xs text-muted-foreground">{new Date(`${log.performedOn}T12:00:00`).toLocaleDateString()}{log.vendor ? ` · ${log.vendor}` : ''}{log.readingAtService != null ? ` · ${log.readingAtService} ${UNIT_LABEL[selected.meterUnit]}` : ''}</p></div><span className="font-mono text-sm font-bold">${((log.costParts ?? 0) + (log.costLabor ?? 0)).toFixed(2)}</span></div></div>)}</section>
         <Button variant="destructive" className="h-11 w-full" onClick={() => void removeMachine(selected)}><Trash2 className="mr-2 h-4 w-4" />Delete equipment</Button>
       </>}

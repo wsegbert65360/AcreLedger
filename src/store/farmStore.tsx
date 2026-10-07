@@ -33,6 +33,7 @@ import { useEquipment } from './useEquipment';
 import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
+import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
 import { syncQueue } from '../lib/syncQueue';
 
 /**
@@ -198,6 +199,15 @@ interface FarmState {
   addEquipment: (record: Omit<Equipment, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
   updateEquipment: (record: Equipment) => Promise<boolean>;
   updateEquipmentReading: (id: string, reading: number, force?: boolean) => Promise<'saved' | 'warning' | 'failed'>;
+  setEquipmentMeterUnit: (
+    id: string,
+    fromUnit: Equipment['meterUnit'],
+    toUnit: Equipment['meterUnit'],
+    options?: {
+      currentReading?: number;
+      schedules?: Array<{ id: string; intervalValue: number; lastDoneReading: number | null }>;
+    },
+  ) => Promise<boolean>;
   deleteEquipment: (id: string) => Promise<boolean>;
   addMaintenanceSchedule: (record: Omit<MaintenanceSchedule, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
   updateMaintenanceSchedule: (record: MaintenanceSchedule) => Promise<boolean>;
@@ -570,6 +580,21 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           const maintenanceSchedulesData = maintenanceSchedulesPages.rows;
           const maintenanceLogsData = maintenanceLogsPages.rows;
 
+          let equipmentMapped = equipmentData.map(mapEquipmentFromDb);
+          let schedulesMapped = maintenanceSchedulesData.map(mapMaintenanceScheduleFromDb);
+          let logsMapped = maintenanceLogsData.map(mapMaintenanceLogFromDb);
+          try {
+            const parked = await syncQueue.getFailed(farm_id);
+            if (parked.length > 0) {
+              const merged = applyParkedEquipmentMutations(equipmentMapped, schedulesMapped, logsMapped, parked);
+              equipmentMapped = merged.equipment;
+              schedulesMapped = merged.schedules;
+              logsMapped = merged.logs;
+            }
+          } catch (error) {
+            console.error('Failed to re-apply parked equipment changes:', error);
+          }
+
           setFields(fieldsData.map(mapFieldFromDb));
           setBins(binsData.map(mapBinFromDb));
           setPlantRecords(plantData.map(mapPlantFromDb));
@@ -586,9 +611,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           setFsaTracts(tractsData.map(mapFsaTractFromDb));
           setCluAssignments(assignmentsData.map(mapFieldCluAssignmentFromDb));
           setWorkRequests(workRequestsData.map(mapWorkRequestFromDb));
-          setEquipment(equipmentData.map(mapEquipmentFromDb));
-          setMaintenanceSchedules(maintenanceSchedulesData.map(mapMaintenanceScheduleFromDb));
-          setMaintenanceLogs(maintenanceLogsData.map(mapMaintenanceLogFromDb));
+          setEquipment(equipmentMapped);
+          setMaintenanceSchedules(schedulesMapped);
+          setMaintenanceLogs(logsMapped);
           setStateOwnerKey(requestIdentity);
 
           if (farmData && farmData.name) {
@@ -715,12 +740,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     session, farm_id,
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
-    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests, activeSeason,
+    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
+    equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
     setFsaTracts, setCluAssignments, setWorkRequests,
+    setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
     refetchFarmData: fetchData,
     isOnline,
     initialFetchComplete,

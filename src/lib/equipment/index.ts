@@ -5,6 +5,7 @@ import type {
   MaintenanceSchedule,
   MeterUnit,
 } from '@/types/equipment';
+import { toLocalIsoDate } from '@/utils/dates';
 
 export type DueStatus = 'ok' | 'due_soon' | 'overdue';
 
@@ -20,12 +21,18 @@ const STATUS_RANK: Record<DueStatus, number> = {
   overdue: 2,
 };
 
-function utcDay(value: string | Date): number {
-  if (value instanceof Date) {
-    return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()) / 86_400_000;
-  }
-  const datePart = value.slice(0, 10);
-  const [year, month, day] = datePart.split('-').map(Number);
+export function localTodayIso(now: Date = new Date()): string {
+  return toLocalIsoDate(now.getTime());
+}
+
+function calendarDate(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? toLocalIsoDate(ms) : value.slice(0, 10);
+}
+
+function calendarDay(value: string): number {
+  const [year, month, day] = calendarDate(value).split('-').map(Number);
   return Date.UTC(year, month - 1, day) / 86_400_000;
 }
 
@@ -38,21 +45,22 @@ function ruleStatus(remaining: number, soonThreshold: number): DueStatus {
 export function computeDueStatus(
   schedule: MaintenanceSchedule,
   equipment: Equipment,
-  today: Date,
+  today: string,
 ): EquipmentDueStatus {
   let status: DueStatus = 'ok';
   let remainingReading: number | undefined;
   let remainingDays: number | undefined;
 
   if (schedule.intervalValue != null) {
-    const baseline = schedule.lastDoneReading ?? equipment.currentReading;
-    remainingReading = baseline + schedule.intervalValue - equipment.currentReading;
+    remainingReading = schedule.lastDoneReading == null
+      ? schedule.intervalValue
+      : schedule.lastDoneReading + schedule.intervalValue - equipment.currentReading;
     status = ruleStatus(remainingReading, schedule.intervalValue * 0.1);
   }
 
   if (schedule.intervalDays != null) {
     const baseline = schedule.lastDoneAt ?? schedule.createdAt;
-    remainingDays = utcDay(baseline) + schedule.intervalDays - utcDay(today);
+    remainingDays = calendarDay(baseline) + schedule.intervalDays - calendarDay(today);
     const dayStatus = ruleStatus(remainingDays, Math.min(30, schedule.intervalDays * 0.1));
     if (STATUS_RANK[dayStatus] > STATUS_RANK[status]) status = dayStatus;
   }
@@ -74,7 +82,7 @@ function urgencyScore(result: EquipmentDueStatus, schedule: MaintenanceSchedule)
 export function summarizeEquipmentStatus(
   schedules: MaintenanceSchedule[],
   equipment: Equipment,
-  today: Date,
+  today: string,
 ): { status: DueStatus; taskName?: string } {
   const active = schedules.filter(schedule => !schedule.deleted_at && schedule.equipmentId === equipment.id);
   if (active.length === 0) return { status: 'ok' };

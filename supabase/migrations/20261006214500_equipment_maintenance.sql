@@ -68,13 +68,15 @@ CREATE TABLE public.maintenance_logs (
         REFERENCES public.maintenance_schedules(farm_id, equipment_id, id)
 );
 
-CREATE INDEX idx_equipment_active_farm
-    ON public.equipment(farm_id)
+CREATE INDEX ON public.equipment (farm_id, deleted_at);
+CREATE INDEX ON public.maintenance_schedules (farm_id, deleted_at);
+CREATE INDEX ON public.maintenance_logs (farm_id, deleted_at);
+CREATE INDEX ON public.maintenance_schedules (equipment_id) WHERE deleted_at IS NULL;
+CREATE INDEX ON public.maintenance_logs (equipment_id, performed_on DESC) WHERE deleted_at IS NULL;
+CREATE INDEX ON public.maintenance_logs (schedule_id) WHERE schedule_id IS NOT NULL;
+CREATE UNIQUE INDEX maintenance_schedules_task_name_unique
+    ON public.maintenance_schedules (equipment_id, lower(btrim(task_name)))
     WHERE deleted_at IS NULL;
-CREATE INDEX idx_maintenance_schedules_equipment
-    ON public.maintenance_schedules(equipment_id);
-CREATE INDEX idx_maintenance_logs_equipment_performed
-    ON public.maintenance_logs(equipment_id, performed_on DESC);
 
 CREATE FUNCTION public.set_equipment_updated_at()
 RETURNS trigger
@@ -116,6 +118,8 @@ CREATE POLICY equipment_update ON public.equipment
     ) WITH CHECK (
         farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
     );
+CREATE POLICY "Restrict updates on deleted rows" ON public.equipment
+    AS RESTRICTIVE FOR UPDATE USING (deleted_at IS NULL) WITH CHECK (true);
 
 CREATE POLICY maintenance_schedules_select ON public.maintenance_schedules
     FOR SELECT TO authenticated USING (
@@ -132,6 +136,8 @@ CREATE POLICY maintenance_schedules_update ON public.maintenance_schedules
     ) WITH CHECK (
         farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
     );
+CREATE POLICY "Restrict updates on deleted rows" ON public.maintenance_schedules
+    AS RESTRICTIVE FOR UPDATE USING (deleted_at IS NULL) WITH CHECK (true);
 
 CREATE POLICY maintenance_logs_select ON public.maintenance_logs
     FOR SELECT TO authenticated USING (
@@ -148,6 +154,8 @@ CREATE POLICY maintenance_logs_update ON public.maintenance_logs
     ) WITH CHECK (
         farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid())
     );
+CREATE POLICY "Restrict updates on deleted rows" ON public.maintenance_logs
+    AS RESTRICTIVE FOR UPDATE USING (deleted_at IS NULL) WITH CHECK (true);
 
 REVOKE ALL ON TABLE public.equipment, public.maintenance_schedules, public.maintenance_logs
     FROM anon, authenticated;

@@ -15,9 +15,14 @@ const log: MaintenanceLog = {
 describe('buildMaintenanceCsv', () => {
   it('labels equipment, escapes cells, and totals costs', () => {
     const csv = buildMaintenanceCsv([log], [equipment]);
-    expect(csv).toContain('2020 John Deere 8R');
+    expect(csv).toContain('"2020 John Deere 8R"');
     expect(csv).toContain('"Seal, hose"');
-    expect(csv).toContain(',12.5,5,17.5');
+    expect(csv).toContain(',"12.5","5","17.5"');
+  });
+
+  it('neutralizes spreadsheet formulas in user-entered cells', () => {
+    const csv = buildMaintenanceCsv([{ ...log, description: '=HYPERLINK("bad")' }], [equipment]);
+    expect(csv).toContain('"\'=HYPERLINK(""bad"")"');
   });
 
   it('omits soft-deleted logs', () => {

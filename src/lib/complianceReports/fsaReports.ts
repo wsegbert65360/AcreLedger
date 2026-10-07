@@ -6,16 +6,9 @@ import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/field
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { getWorkDateMs, toLocalIsoDate } from '../../utils/dates';
+import { sanitizeCsvValue } from '../../utils/csv';
 import { roundTo } from '../../utils/numbers';
 import { formatSprayProductTotal } from '../../utils/unitConversion';
-
-function sanitizeCsvValue(val: string | number | null | undefined): string {
-    if (val === null || val === undefined) return '""';
-    const str = String(val).replace(/"/g, '""');
-    // Prefix with ' if it starts with injection characters
-    if (/^[=+\-@\t\r]/.test(str)) return `"'${str}"`;
-    return `"${str}"`;
-}
 
 export interface Fsa578ReportRow {
     id: string;

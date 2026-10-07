@@ -84,17 +84,22 @@ describe('useEquipment', () => {
     }), 'farm-1');
   });
 
-  it('queues child-first soft deletes before equipment', async () => {
+  it('queues one cascade-delete RPC envelope', async () => {
     const { result } = renderEquipmentHook({ equipment: [machine], schedules: [task], logs: [repair] });
     await act(async () => {
       expect(await result.current.ops.deleteEquipment('e1')).toBe(true);
     });
-    expect(enqueueMutations).toHaveBeenCalledWith([
-      expect.objectContaining({ tableName: 'maintenance_logs' }),
-      expect.objectContaining({ tableName: 'maintenance_schedules' }),
-      expect.objectContaining({ tableName: 'equipment' }),
-    ]);
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'equipment',
+      'soft_delete',
+      expect.objectContaining({
+        id: 'e1',
+        __equipment_rpc: expect.objectContaining({ rpc: 'soft_delete_equipment_cascade' }),
+      }),
+      'farm-1',
+    );
     expect(result.current.machines.value[0].deleted_at).toBeTruthy();
+    expect(result.current.schedules.value[0].deleted_at).toBeTruthy();
   });
 
   it('queues one atomic RPC replay record and updates service baselines offline', async () => {
@@ -107,7 +112,12 @@ describe('useEquipment', () => {
     });
     expect(enqueueMutation).toHaveBeenCalledWith(
       'maintenance_logs', 'insert',
-      expect.objectContaining({ __maintenance_rpc: expect.objectContaining({ p_equipment_id: 'e1' }) }),
+      expect.objectContaining({
+        __equipment_rpc: expect.objectContaining({
+          rpc: 'log_maintenance',
+          args: expect.objectContaining({ p_equipment_id: 'e1' }),
+        }),
+      }),
       'farm-1',
     );
     expect(result.current.machines.value[0].currentReading).toBe(1100);
@@ -123,12 +133,82 @@ describe('useEquipment', () => {
     expect(result.current.machines.value[0].currentReading).toBe(1000);
   });
 
-  it('uses a conditional cloud write so the higher reading wins', async () => {
+  it('uses the reading RPC so the higher stored value wins', async () => {
+    supabaseMock.setRpcResult({ data: { current_reading: 1300 }, error: null });
     const { result } = renderEquipmentHook({ online: true, equipment: [machine] });
     await act(async () => {
       expect(await result.current.ops.updateEquipmentReading('e1', 1200)).toBe('saved');
     });
-    expect(supabaseMock.fns.lte).toHaveBeenCalledWith('current_reading', 1200);
-    expect(result.current.machines.value[0].currentReading).toBe(1200);
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith('update_equipment_reading', expect.objectContaining({
+      p_equipment_id: 'e1', p_reading: 1200, p_force_lower: false,
+    }));
+    expect(result.current.machines.value[0].currentReading).toBe(1300);
+  });
+
+  it('snapshots the current meter onto a new reading-based task', async () => {
+    const { result } = renderEquipmentHook({ equipment: [machine] });
+    await act(async () => {
+      expect(await result.current.ops.addMaintenanceSchedule({
+        equipmentId: 'e1', taskName: 'Oil change', intervalValue: 250,
+      })).toBe(true);
+    });
+    expect(result.current.schedules.value[0].lastDoneReading).toBe(1000);
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'maintenance_schedules',
+      'insert',
+      expect.objectContaining({ last_done_reading: 1000 }),
+      'farm-1',
+    );
+  });
+
+  it('sends null when an optional equipment field is cleared', async () => {
+    const { result } = renderEquipmentHook({ online: true, equipment: [{ ...machine, model: '8R' }] });
+    await act(async () => {
+      expect(await result.current.ops.updateEquipment({ ...machine, model: undefined })).toBe(true);
+    });
+    expect(supabaseMock.fns.update).toHaveBeenCalledWith(
+      expect.objectContaining({ model: null }),
+      { count: 'exact' },
+    );
+    expect(supabaseMock.fns.update.mock.calls[0][0]).not.toHaveProperty('farm_id');
+    expect(supabaseMock.fns.update.mock.calls[0][0]).not.toHaveProperty('meter_unit');
+  });
+
+  it('changes miles to kilometres through one RPC', async () => {
+    const truck: Equipment = { ...machine, id: 'e2', kind: 'truck', meterUnit: 'miles', currentReading: 10 };
+    const { result } = renderEquipmentHook({
+      equipment: [truck],
+      schedules: [{ ...task, id: 's2', equipmentId: 'e2', intervalValue: 5000, lastDoneReading: 1000 }],
+    });
+    await act(async () => {
+      expect(await result.current.ops.setEquipmentMeterUnit('e2', 'miles', 'km')).toBe(true);
+    });
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'equipment',
+      'update',
+      expect.objectContaining({
+        __equipment_rpc: expect.objectContaining({
+          rpc: 'set_equipment_meter_unit',
+          args: expect.objectContaining({ p_from_unit: 'miles', p_to_unit: 'km' }),
+        }),
+      }),
+      'farm-1',
+    );
+    expect(result.current.machines.value[0]).toMatchObject({ meterUnit: 'km', currentReading: 16.1 });
+    expect(result.current.schedules.value[0].intervalValue).toBe(8046.7);
+  });
+
+  it('rolls back the equipment and schedules together when unit conversion fails', async () => {
+    const truck: Equipment = { ...machine, id: 'e2', kind: 'truck', meterUnit: 'miles', currentReading: 10 };
+    const truckTask = { ...task, id: 's2', equipmentId: 'e2', intervalValue: 5000, lastDoneReading: 1000 };
+    supabaseMock.setRpcResult({ data: null, error: { code: '23514', message: 'Invalid conversion' } });
+    const { result } = renderEquipmentHook({ online: true, equipment: [truck], schedules: [truckTask] });
+
+    await act(async () => {
+      expect(await result.current.ops.setEquipmentMeterUnit('e2', 'miles', 'km')).toBe(false);
+    });
+
+    expect(result.current.machines.value[0]).toMatchObject({ meterUnit: 'miles', currentReading: 10 });
+    expect(result.current.schedules.value[0]).toMatchObject({ intervalValue: 5000, lastDoneReading: 1000 });
   });
 });

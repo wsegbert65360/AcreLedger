@@ -29,6 +29,7 @@ import { establishWebPasswordRecoverySession, listenForNativePasswordRecovery } 
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { isEquipmentUiEnabled } from "@/lib/equipment/feature";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
@@ -116,7 +117,7 @@ const AnimatedRoutes = () => {
           <Route path="/auth" element={<Navigate to="/" replace />} />
           <Route path="/logistics" element={<ErrorBoundary><Logistics /></ErrorBoundary>} />
           <Route path="/activity" element={<ErrorBoundary><Activity /></ErrorBoundary>} />
-          <Route path="/equipment" element={<ErrorBoundary><Equipment /></ErrorBoundary>} />
+          {isEquipmentUiEnabled() && <Route path="/equipment" element={<ErrorBoundary><Equipment /></ErrorBoundary>} />}
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />

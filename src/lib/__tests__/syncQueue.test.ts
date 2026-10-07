@@ -618,15 +618,37 @@ describe('syncQueue web queue management', () => {
     expect(await syncQueue.getQueue('farm-1')).toEqual([]);
   });
 
-  it('returns false while exhausted work remains parked', async () => {
+  it('lets fetch continue when the only remaining work is parked', async () => {
     await syncQueue.enqueueMutation('equipment', 'insert', { id: 'e1' }, 'farm-1');
     const [queued] = await syncQueue.getQueue('farm-1');
     for (let retry = 0; retry < MAX_SYNC_RETRIES; retry++) {
       await syncQueue.incrementRetry(queued.id, retry);
     }
 
-    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
     expect(await syncQueue.getFailed('farm-1')).toHaveLength(1);
+  });
+
+  it('re-stamps equipment RPCs to the active farm and parks a missing target immediately', async () => {
+    await syncQueue.enqueueMutation('equipment', 'update', {
+      id: 'e1',
+      __equipment_rpc: {
+        rpc: 'update_equipment_reading',
+        args: { p_farm_id: 'stale-farm', p_equipment_id: 'e1', p_reading: 1200, p_force_lower: false },
+      },
+    }, 'farm-1');
+    supabaseControl.rpcResponses.push({
+      data: null,
+      error: { code: 'P0002', message: 'Equipment not found' },
+      status: 404,
+    });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('update_equipment_reading', expect.objectContaining({
+      p_farm_id: 'farm-1',
+    }));
+    const [parked] = await syncQueue.getFailed('farm-1');
+    expect(parked).toMatchObject({ retry_count: MAX_SYNC_RETRIES });
   });
 
   // ─── Persistence Failure Propagation ─────────────────────────────────────

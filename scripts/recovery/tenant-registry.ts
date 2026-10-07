@@ -27,7 +27,7 @@ export interface TenantTable {
   notes: string;
 }
 
-export const TENANT_REGISTRY_VERSION = 1;
+export const TENANT_REGISTRY_VERSION = 2;
 
 export const TENANT_REGISTRY: TenantTable[] = [
   {
@@ -230,6 +230,39 @@ export const TENANT_REGISTRY: TenantTable[] = [
     primaryKeys: ["id"],
     includeInTenantBundle: true,
     notes: "Outbound applicator work requests.",
+  },
+  {
+    schema: "public",
+    table: "equipment",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: true,
+    restoreOrder: 42,
+    primaryKeys: ["id"],
+    includeInTenantBundle: true,
+    notes: "Farm machines. Continuous physical state, not season-scoped.",
+  },
+  {
+    schema: "public",
+    table: "maintenance_schedules",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: true,
+    restoreOrder: 43,
+    primaryKeys: ["id"],
+    includeInTenantBundle: true,
+    notes: "Recurring maintenance tasks. Restore after equipment.",
+  },
+  {
+    schema: "public",
+    table: "maintenance_logs",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: true,
+    restoreOrder: 44,
+    primaryKeys: ["id"],
+    includeInTenantBundle: true,
+    notes: "Service and repair history. Restore after schedules.",
   },
   {
     schema: "public",

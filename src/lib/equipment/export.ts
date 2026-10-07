@@ -1,11 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
 import type { Equipment, MaintenanceLog } from '@/types/equipment';
-
-function csvCell(value: unknown): string {
-  const text = value == null ? '' : String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
+import { sanitizeCsvValue } from '@/utils/csv';
 
 export function buildMaintenanceCsv(logs: MaintenanceLog[], equipment: Equipment[]): string {
   const machineById = new Map(equipment.map(machine => [machine.id, machine]));
@@ -26,7 +22,7 @@ export function buildMaintenanceCsv(logs: MaintenanceLog[], equipment: Equipment
         log.costParts,
         log.costLabor,
         (log.costParts ?? 0) + (log.costLabor ?? 0),
-      ].map(csvCell).join(',');
+      ].map(value => sanitizeCsvValue(value as string | number | null | undefined)).join(',');
     });
   return [
     'Date,Equipment,Type,Meter Reading,Meter Unit,Description,Performed By,Vendor,Parts Cost,Labor Cost,Total Cost',

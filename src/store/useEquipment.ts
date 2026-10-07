@@ -4,12 +4,19 @@ import { supabase } from '@/lib/supabase';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import {
   mapEquipmentToDb,
+  mapEquipmentUpdateToDb,
   mapMaintenanceLogToDb,
+  mapMaintenanceLogUpdateToDb,
   mapMaintenanceScheduleToDb,
+  mapMaintenanceScheduleUpdateToDb,
 } from '@/lib/mappers';
-import { MAINTENANCE_RPC_KEY, READING_FORCE_KEY, syncQueue } from '@/lib/syncQueue';
-import { applyReadingUpdate } from '@/lib/equipment';
-import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
+import {
+  EQUIPMENT_RPC_KEY,
+  type EquipmentRpcName,
+  syncQueue,
+} from '@/lib/syncQueue';
+import { applyReadingUpdate, convertMeterUnit } from '@/lib/equipment';
+import type { Equipment, MaintenanceLog, MaintenanceSchedule, MeterUnit } from '@/types/equipment';
 
 interface UseEquipmentArgs {
   farm_id: string | null;
@@ -26,9 +33,20 @@ interface UseEquipmentArgs {
 type TableName = 'equipment' | 'maintenance_schedules' | 'maintenance_logs';
 type Operation = 'insert' | 'update' | 'soft_delete';
 
+export interface MeterUnitChangeOptions {
+  currentReading?: number;
+  schedules?: Array<{ id: string; intervalValue: number; lastDoneReading: number | null }>;
+}
+
 function stripUpdateIdentity(payload: Record<string, unknown>): Record<string, unknown> {
   const { id: _id, farm_id: _farmId, ...update } = payload;
   return update;
+}
+
+function readingFromRpc(data: unknown): number | null {
+  if (!data || typeof data !== 'object') return null;
+  const value = Number((data as { current_reading?: unknown }).current_reading);
+  return Number.isFinite(value) ? value : null;
 }
 
 export function useEquipment({
@@ -89,6 +107,39 @@ export function useEquipment({
     }
   }, [farm_id, isOnline, onMutation]);
 
+  const persistRpc = useCallback(async (
+    rpc: EquipmentRpcName,
+    args: Record<string, unknown>,
+    queue: { table: TableName; operation: Operation; payload: Record<string, unknown> },
+  ): Promise<{ ok: boolean; data: unknown }> => {
+    if (!farm_id) return { ok: false, data: null };
+    const payload = { ...queue.payload, [EQUIPMENT_RPC_KEY]: { rpc, args } };
+    if (!isOnline) {
+      await syncQueue.enqueueMutation(queue.table, queue.operation, payload, farm_id);
+      if (onMutation) await onMutation();
+      return { ok: true, data: null };
+    }
+    try {
+      const response = await supabase.rpc(rpc, { ...args, p_farm_id: farm_id });
+      if (!response.error) return { ok: true, data: response.data };
+      if (isUnknownMutationOutcome(response.error)) {
+        await syncQueue.enqueueMutation(queue.table, queue.operation, payload, farm_id);
+        if (onMutation) await onMutation();
+        return { ok: true, data: null };
+      }
+      console.error(`Failed equipment RPC ${rpc}:`, response.error);
+      return { ok: false, data: null };
+    } catch (error) {
+      if (isUnknownMutationOutcome(error)) {
+        await syncQueue.enqueueMutation(queue.table, queue.operation, payload, farm_id);
+        if (onMutation) await onMutation();
+        return { ok: true, data: null };
+      }
+      console.error(`Failed equipment RPC ${rpc}:`, error);
+      return { ok: false, data: null };
+    }
+  }, [farm_id, isOnline, onMutation]);
+
   const addEquipment = useCallback(async (
     input: Omit<Equipment, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>,
   ): Promise<boolean> => {
@@ -120,11 +171,7 @@ export function useEquipment({
     }
     const previous = equipment.find(item => item.id === record.id);
     const updated = { ...record, farm_id, updatedAt: new Date().toISOString() };
-    const mapped = mapEquipmentToDb(updated);
-    // Meter writes use updateEquipmentReading so stale edit forms cannot lower
-    // a reading written by another device.
-    delete mapped.current_reading;
-    delete mapped.reading_updated_at;
+    const mapped = mapEquipmentUpdateToDb(updated);
     setEquipment(current => current.map(item => item.id === updated.id ? updated : item));
     const ok = await persist('equipment', 'update', mapped);
     if (!ok && previous) setEquipment(current => current.map(item => item.id === previous.id ? previous : item));
@@ -148,74 +195,109 @@ export function useEquipment({
     if (result.status === 'invalid') return 'failed';
 
     const updated = { ...result.equipment, updatedAt: new Date().toISOString() };
-    const payload = {
-      id,
-      current_reading: updated.currentReading,
-      reading_updated_at: updated.readingUpdatedAt,
-      [READING_FORCE_KEY]: force,
-    };
     setEquipment(current => current.map(item => item.id === id ? updated : item));
-
-    if (!isOnline) {
-      try {
-        await syncQueue.enqueueMutation('equipment', 'update', payload, farm_id);
-        if (onMutation) await onMutation();
-        return 'saved';
-      } catch (error) {
-        console.error('Failed to queue equipment reading:', error);
-        setEquipment(current => current.map(item => item.id === id ? previous : item));
-        return 'failed';
-      }
-    }
-
-    try {
-      let query = supabase.from('equipment')
-        .update({
-          current_reading: updated.currentReading,
-          reading_updated_at: updated.readingUpdatedAt,
-        }, { count: 'exact' })
-        .eq('id', id)
-        .eq('farm_id', farm_id);
-      if (!force) query = query.lte('current_reading', updated.currentReading);
-      const response = await query;
-      if (!response.error && response.count === 1) return 'saved';
-      if (!response.error && response.count === 0 && !force) {
-        const { data } = await supabase.from('equipment')
-          .select('current_reading, reading_updated_at')
-          .eq('id', id)
-          .eq('farm_id', farm_id)
-          .maybeSingle();
-        const cloudReading = Number(data?.current_reading);
-        if (Number.isFinite(cloudReading) && cloudReading >= updated.currentReading) {
-          setEquipment(current => current.map(item => item.id === id ? {
-            ...item,
-            currentReading: cloudReading,
-            readingUpdatedAt: data?.reading_updated_at ?? item.readingUpdatedAt,
-          } : item));
-          return 'saved';
-        }
-      }
-      if (response.error && isUnknownMutationOutcome(response.error)) {
-        await syncQueue.enqueueMutation('equipment', 'update', payload, farm_id);
-        if (onMutation) await onMutation();
-        return 'saved';
-      }
-      setEquipment(current => current.map(item => item.id === id ? previous : item));
-      return 'failed';
-    } catch (error) {
-      if (isUnknownMutationOutcome(error)) {
-        try {
-          await syncQueue.enqueueMutation('equipment', 'update', payload, farm_id);
-          if (onMutation) await onMutation();
-          return 'saved';
-        } catch (queueError) {
-          console.error('Failed to queue uncertain equipment reading:', queueError);
-        }
-      }
+    const { ok, data } = await persistRpc('update_equipment_reading', {
+      p_farm_id: farm_id,
+      p_equipment_id: id,
+      p_reading: updated.currentReading,
+      p_force_lower: force,
+    }, {
+      table: 'equipment',
+      operation: 'update',
+      payload: { id },
+    });
+    if (!ok) {
       setEquipment(current => current.map(item => item.id === id ? previous : item));
       return 'failed';
     }
-  }, [equipment, farm_id, isOnline, onMutation, setEquipment]);
+    const stored = readingFromRpc(data);
+    if (stored != null) {
+      setEquipment(current => current.map(item => item.id === id ? { ...item, currentReading: stored } : item));
+    }
+    return 'saved';
+  }, [equipment, farm_id, persistRpc, setEquipment]);
+
+  const setEquipmentMeterUnit = useCallback(async (
+    id: string,
+    fromUnit: MeterUnit,
+    toUnit: MeterUnit,
+    options: MeterUnitChangeOptions = {},
+  ): Promise<boolean> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+    const previous = equipment.find(item => item.id === id);
+    if (!previous) return false;
+    if (previous.meterUnit === toUnit) return true;
+
+    const previousSchedules = maintenanceSchedules;
+    const now = new Date().toISOString();
+    const hoursInvolved = previous.meterUnit === 'hours' || toUnit === 'hours';
+    const convertedReading = hoursInvolved
+      ? options.currentReading
+      : convertMeterUnit(previous.currentReading, previous.meterUnit, toUnit) ?? options.currentReading;
+    if (convertedReading == null || convertedReading < 0) {
+      toast.error('Enter a meter reading for the new unit.');
+      return false;
+    }
+
+    const nextSchedules = maintenanceSchedules.map(schedule => {
+      if (schedule.equipmentId !== id || schedule.deleted_at || schedule.intervalValue == null) return schedule;
+      const supplied = options.schedules?.find(item => item.id === schedule.id);
+      if (hoursInvolved) {
+        return {
+          ...schedule,
+          intervalValue: supplied?.intervalValue ?? schedule.intervalValue,
+          lastDoneReading: supplied ? supplied.lastDoneReading ?? undefined : undefined,
+          updatedAt: now,
+        };
+      }
+      return {
+        ...schedule,
+        intervalValue: convertMeterUnit(schedule.intervalValue, previous.meterUnit, toUnit) ?? schedule.intervalValue,
+        lastDoneReading: schedule.lastDoneReading == null
+          ? undefined
+          : convertMeterUnit(schedule.lastDoneReading, previous.meterUnit, toUnit) ?? undefined,
+        updatedAt: now,
+      };
+    });
+
+    setEquipment(current => current.map(item => item.id === id
+      ? { ...item, meterUnit: toUnit, currentReading: convertedReading, readingUpdatedAt: now, updatedAt: now }
+      : item));
+    setMaintenanceSchedules(nextSchedules);
+
+    const { ok, data } = await persistRpc('set_equipment_meter_unit', {
+      p_farm_id: farm_id,
+      p_equipment_id: id,
+      p_from_unit: fromUnit,
+      p_to_unit: toUnit,
+      p_current_reading: hoursInvolved ? convertedReading : null,
+      p_schedules: hoursInvolved
+        ? (options.schedules ?? []).map(item => ({
+          id: item.id,
+          interval_value: item.intervalValue,
+          last_done_reading: item.lastDoneReading,
+        }))
+        : null,
+    }, {
+      table: 'equipment',
+      operation: 'update',
+      payload: { id },
+    });
+    if (!ok) {
+      setEquipment(current => current.map(item => item.id === id ? previous : item));
+      setMaintenanceSchedules(previousSchedules);
+      toast.error('Failed to change the meter unit.');
+      return false;
+    }
+    const stored = readingFromRpc(data);
+    if (stored != null) {
+      setEquipment(current => current.map(item => item.id === id ? { ...item, currentReading: stored } : item));
+    }
+    return true;
+  }, [equipment, farm_id, maintenanceSchedules, persistRpc, setEquipment, setMaintenanceSchedules]);
 
   const deleteEquipment = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
@@ -230,62 +312,63 @@ export function useEquipment({
     setMaintenanceSchedules(current => current.map(item => item.equipmentId === id ? { ...item, deleted_at: deletedAt } : item));
     setMaintenanceLogs(current => current.map(item => item.equipmentId === id ? { ...item, deleted_at: deletedAt } : item));
 
-    const items = [
-      ...maintenanceLogs.filter(item => item.equipmentId === id && !item.deleted_at).map(item => ({
-        tableName: 'maintenance_logs', operation: 'soft_delete' as const,
-        payload: { id: item.id, deleted_at: deletedAt }, farmId: farm_id,
-      })),
-      ...maintenanceSchedules.filter(item => item.equipmentId === id && !item.deleted_at).map(item => ({
-        tableName: 'maintenance_schedules', operation: 'soft_delete' as const,
-        payload: { id: item.id, deleted_at: deletedAt }, farmId: farm_id,
-      })),
-      { tableName: 'equipment', operation: 'soft_delete' as const, payload: { id, deleted_at: deletedAt }, farmId: farm_id },
-    ];
-
-    try {
-      if (!isOnline) {
-        await syncQueue.enqueueMutations(items);
-        if (onMutation) await onMutation();
-        return true;
-      }
-      // Child-first soft deletes keep active children from referencing a hidden
-      // parent if a later request fails.
-      for (const item of items) {
-        const response = await supabase.from(item.tableName)
-          .update({ deleted_at: deletedAt }, { count: 'exact' })
-          .eq('id', item.payload.id)
-          .eq('farm_id', farm_id);
-        if (response.error || response.count !== 1) throw response.error ?? new Error('Unexpected row count');
-      }
-      return true;
-    } catch (error) {
-      console.error('Failed to delete equipment:', error);
+    const { ok } = await persistRpc('soft_delete_equipment_cascade', {
+      p_farm_id: farm_id,
+      p_equipment_id: id,
+    }, {
+      table: 'equipment',
+      operation: 'soft_delete',
+      payload: { id, deleted_at: deletedAt },
+    });
+    if (!ok) {
       setEquipment(previousEquipment);
       setMaintenanceSchedules(previousSchedules);
       setMaintenanceLogs(previousLogs);
       return false;
     }
-  }, [equipment, farm_id, isOnline, maintenanceLogs, maintenanceSchedules, onMutation, setEquipment, setMaintenanceLogs, setMaintenanceSchedules]);
+    return true;
+  }, [equipment, farm_id, maintenanceLogs, maintenanceSchedules, persistRpc, setEquipment, setMaintenanceLogs, setMaintenanceSchedules]);
 
   const addMaintenanceSchedule = useCallback(async (
     input: Omit<MaintenanceSchedule, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
+    const machine = equipment.find(item => item.id === input.equipmentId);
+    const duplicate = maintenanceSchedules.some(item =>
+      item.equipmentId === input.equipmentId
+      && !item.deleted_at
+      && item.taskName.trim().toLowerCase() === input.taskName.trim().toLowerCase(),
+    );
+    if (duplicate) {
+      toast.error('That task name is already used on this machine.');
+      return false;
+    }
     const now = new Date().toISOString();
-    const record: MaintenanceSchedule = { ...input, id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null };
+    const lastDoneReading = input.lastDoneReading ?? (
+      input.intervalValue != null && machine ? machine.currentReading : undefined
+    );
+    const record: MaintenanceSchedule = {
+      ...input,
+      lastDoneReading,
+      id: crypto.randomUUID(),
+      farm_id,
+      createdAt: now,
+      updatedAt: now,
+      deleted_at: null,
+    };
     const mapped = mapMaintenanceScheduleToDb(record);
     setMaintenanceSchedules(current => [...current, record]);
     const ok = await persist('maintenance_schedules', 'insert', mapped);
     if (!ok) setMaintenanceSchedules(current => current.filter(item => item.id !== record.id));
     return ok;
-  }, [farm_id, persist, setMaintenanceSchedules]);
+  }, [equipment, farm_id, maintenanceSchedules, persist, setMaintenanceSchedules]);
 
   const updateMaintenanceSchedule = useCallback(async (record: MaintenanceSchedule): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
     const previous = maintenanceSchedules.find(item => item.id === record.id);
     const updated = { ...record, farm_id, updatedAt: new Date().toISOString() };
     setMaintenanceSchedules(current => current.map(item => item.id === record.id ? updated : item));
-    const ok = await persist('maintenance_schedules', 'update', mapMaintenanceScheduleToDb(updated));
+    const ok = await persist('maintenance_schedules', 'update', mapMaintenanceScheduleUpdateToDb(updated));
     if (!ok && previous) setMaintenanceSchedules(current => current.map(item => item.id === record.id ? previous : item));
     return ok;
   }, [farm_id, maintenanceSchedules, persist, setMaintenanceSchedules]);
@@ -325,12 +408,17 @@ export function useEquipment({
       } : item));
     }
     if (input.scheduleId) {
-      setMaintenanceSchedules(current => current.map(item => item.id === input.scheduleId ? {
-        ...item,
-        lastDoneReading: input.readingAtService,
-        lastDoneAt: input.performedOn,
-        updatedAt: now,
-      } : item));
+      setMaintenanceSchedules(current => current.map(item => {
+        if (item.id !== input.scheduleId) return item;
+        const shouldAdvance = !item.lastDoneAt || input.performedOn >= item.lastDoneAt;
+        if (!shouldAdvance) return item;
+        return {
+          ...item,
+          lastDoneReading: input.readingAtService ?? item.lastDoneReading,
+          lastDoneAt: input.performedOn,
+          updatedAt: now,
+        };
+      }));
     }
 
     const rpcArgs = {
@@ -341,35 +429,30 @@ export function useEquipment({
       p_vendor: record.vendor ?? null, p_cost_parts: record.costParts ?? null,
       p_cost_labor: record.costLabor ?? null, p_force_lower: forceLower,
     };
-    try {
-      if (!isOnline) {
-        await syncQueue.enqueueMutation('maintenance_logs', 'insert', { ...mapped, [MAINTENANCE_RPC_KEY]: rpcArgs }, farm_id);
-        if (onMutation) await onMutation();
-        return true;
-      }
-      const { error } = await supabase.rpc('log_maintenance', rpcArgs);
-      if (!error) return true;
-      if (isUnknownMutationOutcome(error)) {
-        await syncQueue.enqueueMutation('maintenance_logs', 'insert', { ...mapped, [MAINTENANCE_RPC_KEY]: rpcArgs }, farm_id);
-        if (onMutation) await onMutation();
-        return true;
-      }
-      throw error;
-    } catch (error) {
-      console.error('Failed to log maintenance:', error);
+    const { ok, data } = await persistRpc('log_maintenance', rpcArgs, {
+      table: 'maintenance_logs',
+      operation: 'insert',
+      payload: mapped,
+    });
+    if (!ok) {
       setMaintenanceLogs(current => current.filter(item => item.id !== record.id));
       setMaintenanceSchedules(priorSchedules);
       setEquipment(priorEquipment);
       return false;
     }
-  }, [equipment, farm_id, isOnline, maintenanceSchedules, onMutation, setEquipment, setMaintenanceLogs, setMaintenanceSchedules]);
+    const stored = readingFromRpc(data);
+    if (stored != null) {
+      setEquipment(current => current.map(item => item.id === input.equipmentId ? { ...item, currentReading: stored } : item));
+    }
+    return true;
+  }, [equipment, farm_id, maintenanceSchedules, persistRpc, setEquipment, setMaintenanceLogs, setMaintenanceSchedules]);
 
   const updateMaintenanceLog = useCallback(async (record: MaintenanceLog): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
     const previous = maintenanceLogs.find(item => item.id === record.id);
     const updated = { ...record, farm_id, updatedAt: new Date().toISOString() };
     setMaintenanceLogs(current => current.map(item => item.id === record.id ? updated : item));
-    const ok = await persist('maintenance_logs', 'update', mapMaintenanceLogToDb(updated));
+    const ok = await persist('maintenance_logs', 'update', mapMaintenanceLogUpdateToDb(updated));
     if (!ok && previous) setMaintenanceLogs(current => current.map(item => item.id === record.id ? previous : item));
     return ok;
   }, [farm_id, maintenanceLogs, persist, setMaintenanceLogs]);
@@ -388,6 +471,7 @@ export function useEquipment({
     addEquipment,
     updateEquipment,
     updateEquipmentReading,
+    setEquipmentMeterUnit,
     deleteEquipment,
     addMaintenanceSchedule,
     updateMaintenanceSchedule,

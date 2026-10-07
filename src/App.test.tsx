@@ -25,6 +25,11 @@ const auth = vi.hoisted(() => ({
 }));
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const equipmentUi = vi.hoisted(() => ({ enabled: false }));
+
+vi.mock('@/lib/equipment/feature', () => ({
+  isEquipmentUiEnabled: () => equipmentUi.enabled,
+}));
 
 vi.mock('@/lib/supabase', () => ({
   isSupabaseConfigured: true,
@@ -401,6 +406,7 @@ describe('signed-out routing (ticket C)', () => {
 describe('signed-in routing (preserved behavior)', () => {
   beforeEach(() => {
     vi.useRealTimers();
+    equipmentUi.enabled = false;
     navigate('/');
     farmState.current = { ...signedInState };
     sessionStorage.clear();
@@ -469,11 +475,20 @@ describe('signed-in routing (preserved behavior)', () => {
     expect(await screen.findByText('AcreLedger Support')).toBeInTheDocument();
   });
 
-  it('renders /equipment inside the authenticated app', async () => {
+  it('renders /equipment inside the authenticated app when the pilot flag is on', async () => {
+    equipmentUi.enabled = true;
     navigate('/equipment');
     renderApp();
     expect(await screen.findByTestId('equipment-page')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Quick add record' })).not.toBeInTheDocument();
+  });
+
+  it('hides /equipment when the pilot flag is off', async () => {
+    equipmentUi.enabled = false;
+    navigate('/equipment');
+    renderApp();
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(screen.queryByTestId('equipment-page')).not.toBeInTheDocument();
   });
 
   it('shows a focused recovery page without Quick Add for an unknown route', async () => {

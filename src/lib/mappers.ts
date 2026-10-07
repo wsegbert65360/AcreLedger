@@ -60,6 +60,14 @@ function includeDefined<T extends Record<string, unknown>>(target: T, key: strin
     return target;
 }
 
+function nullableString(value: string | undefined): string | null {
+    return value == null || value === '' ? null : value;
+}
+
+function nullableNumber(value: number | undefined): number | null {
+    return value == null ? null : value;
+}
+
 export const mapEquipmentFromDb = (db: EquipmentRow): Equipment => ({
     id: db.id,
     farm_id: db.farm_id,
@@ -480,12 +488,53 @@ export const mapEquipmentToDb = (equipment: Equipment): Record<string, unknown> 
 
 /** Descriptive edits. Meter columns change only through the equipment RPCs. */
 export const mapEquipmentUpdateToDb = (equipment: Equipment): Record<string, unknown> => {
-    const row = mapEquipmentToDb(equipment);
-    delete row.farm_id;
-    delete row.current_reading;
-    delete row.reading_updated_at;
-    delete row.meter_unit;
-    return row;
+    validateRequired(equipment, ['id', 'kind', 'status'], 'mapEquipmentUpdateToDb');
+    return {
+        id: equipment.id,
+        kind: equipment.kind,
+        year: nullableNumber(equipment.year),
+        make: nullableString(equipment.make),
+        model: nullableString(equipment.model),
+        serial_number: nullableString(equipment.serialNumber),
+        status: equipment.status,
+        notes: nullableString(equipment.notes),
+        updated_at: equipment.updatedAt,
+        deleted_at: equipment.deleted_at ?? null,
+    };
+};
+
+export const mapMaintenanceScheduleUpdateToDb = (schedule: MaintenanceSchedule): Record<string, unknown> => {
+    validateRequired(schedule, ['id', 'equipmentId', 'taskName'], 'mapMaintenanceScheduleUpdateToDb');
+    return {
+        id: schedule.id,
+        equipment_id: schedule.equipmentId,
+        task_name: schedule.taskName,
+        interval_value: nullableNumber(schedule.intervalValue),
+        interval_days: nullableNumber(schedule.intervalDays),
+        last_done_reading: nullableNumber(schedule.lastDoneReading),
+        last_done_at: nullableString(schedule.lastDoneAt),
+        updated_at: schedule.updatedAt,
+        deleted_at: schedule.deleted_at ?? null,
+    };
+};
+
+export const mapMaintenanceLogUpdateToDb = (log: MaintenanceLog): Record<string, unknown> => {
+    validateRequired(log, ['id', 'equipmentId', 'kind', 'performedOn'], 'mapMaintenanceLogUpdateToDb');
+    return {
+        id: log.id,
+        equipment_id: log.equipmentId,
+        schedule_id: nullableString(log.scheduleId),
+        kind: log.kind,
+        performed_on: log.performedOn,
+        reading_at_service: nullableNumber(log.readingAtService),
+        description: nullableString(log.description),
+        performed_by: nullableString(log.performedBy),
+        vendor: nullableString(log.vendor),
+        cost_parts: nullableNumber(log.costParts),
+        cost_labor: nullableNumber(log.costLabor),
+        updated_at: log.updatedAt,
+        deleted_at: log.deleted_at ?? null,
+    };
 };
 
 export const mapMaintenanceScheduleToDb = (schedule: MaintenanceSchedule): Record<string, unknown> => {
