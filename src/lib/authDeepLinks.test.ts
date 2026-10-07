@@ -164,7 +164,7 @@ describe('listenForNativePasswordRecovery', () => {
     stop();
   });
 
-  it('verifies a recovery token hash from the email callback', async () => {
+  it('rejects a recovery token hash and never calls verifyOtp', async () => {
     const onRecovery = vi.fn();
     const onError = vi.fn();
     const stop = listenForNativePasswordRecovery(onRecovery, onError);
@@ -173,11 +173,13 @@ describe('listenForNativePasswordRecovery', () => {
     capApp.emitUrlOpen(`${RECOVERY}?token_hash=recovery-hash&type=recovery`);
     await flush();
 
-    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'recovery-hash', type: 'recovery' });
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
     expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
     expect(auth.setSession).not.toHaveBeenCalled();
-    expect(onRecovery).toHaveBeenCalledTimes(1);
-    expect(onError).not.toHaveBeenCalled();
+    expect(onRecovery).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'This password-reset link is expired, invalid, or has already been used. Request a new reset email and open the newest link.',
+    }));
     stop();
   });
 
@@ -293,14 +295,17 @@ describe('establishWebPasswordRecoverySession', () => {
     auth.exchangeCodeForSession.mockResolvedValue({ data: { session: {} }, error: null });
     auth.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
     auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
-    window.history.replaceState(null, '', '/auth?mode=recovery&token_hash=web-token&type=recovery');
+    window.history.replaceState(null, '', '/auth?mode=recovery');
   });
 
-  it('explicitly redeems a recovery token hash because detectSessionInUrl does not handle it', async () => {
-    await expect(establishWebPasswordRecoverySession()).resolves.toBe(true);
+  it('rejects a recovery token hash and never calls verifyOtp', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery&token_hash=web-token&type=recovery');
 
-    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: 'web-token', type: 'recovery' });
-    expect(window.location.search).toBe('?mode=recovery');
+    await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');
+
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?mode=recovery&token_hash=web-token&type=recovery');
   });
 
   it('exchanges a web PKCE code and removes it after establishing a session', async () => {
@@ -312,10 +317,13 @@ describe('establishWebPasswordRecoverySession', () => {
     expect(window.location.search).toBe('?mode=recovery');
   });
 
-  it('rejects an expired web callback that does not establish a session', async () => {
-    auth.verifyOtp.mockResolvedValue({ data: { session: null }, error: null });
+  it('rejects a code exchange that does not establish a session', async () => {
+    window.history.replaceState(null, '', '/auth?mode=recovery&code=empty-session');
+    auth.exchangeCodeForSession.mockResolvedValue({ data: { session: null }, error: null });
 
     await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?mode=recovery&code=empty-session');
   });
 
   it('rejects a failed code exchange even when a session already exists', async () => {
@@ -379,7 +387,7 @@ describe('establishWebPasswordRecoverySession', () => {
     expect(auth.getSession).not.toHaveBeenCalled();
   });
 
-  it('rejects a recovery URL that has no code and no token hash', async () => {
+  it('rejects a recovery URL that has no code', async () => {
     window.history.replaceState(null, '', '/auth?mode=recovery');
 
     await expect(establishWebPasswordRecoverySession()).rejects.toThrow('expired, invalid, or has already been used');

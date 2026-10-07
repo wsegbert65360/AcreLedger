@@ -55,13 +55,8 @@ async function establishRecoverySession(value: string): Promise<boolean> {
     return true;
   }
 
-  const tokenHash = url.searchParams.get('token_hash');
-  if (tokenHash && url.searchParams.get('type') === 'recovery') {
-    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
-    if (error || !data?.session) throw new Error(EXPIRED_RECOVERY_LINK_ERROR);
-    return true;
-  }
-
+  // Do not redeem token_hash. Unlike a PKCE code, it is not bound to this
+  // device, so a crafted link could sign the user into another account.
   const fragment = new URLSearchParams(url.hash.slice(1));
   if (fragment.has('access_token') || fragment.has('refresh_token')) {
     throw new Error(LEGACY_RECOVERY_LINK_ERROR);
@@ -81,19 +76,15 @@ export async function establishWebPasswordRecoverySession(value = window.locatio
   handledWebRecoveryUrl = url.href;
   try {
     const code = url.searchParams.get('code');
-    const tokenHash = url.searchParams.get('token_hash');
     if (code) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      // Do not treat an already-signed-in session as this reset. An expired
-      // or already-used code must fail even when getSession() has a session.
+      // The exchange result is the only proof this link established a reset.
+      // A session already in storage is not consulted and must not count.
       if (error || !data?.session) throw recoveryLinkError(error);
       url.searchParams.delete('code');
-    } else if (tokenHash && url.searchParams.get('type') === 'recovery') {
-      const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
-      if (error || !data?.session) throw new Error(EXPIRED_RECOVERY_LINK_ERROR);
-      url.searchParams.delete('token_hash');
-      url.searchParams.delete('type');
     } else {
+      // token_hash is intentionally ignored. It is not device-bound, so
+      // verifyOtp would accept a recovery link opened on any phone.
       const fragment = new URLSearchParams(url.hash.slice(1));
       throw new Error(
         fragment.has('access_token') || fragment.has('refresh_token')

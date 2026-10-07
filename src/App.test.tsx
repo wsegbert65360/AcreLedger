@@ -17,6 +17,7 @@ const auth = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
   resetPasswordForEmail: vi.fn(),
   verifyOtp: vi.fn(),
+  exchangeCodeForSession: vi.fn(),
   updateUser: vi.fn(),
   getSession: vi.fn(),
   signOut: vi.fn(),
@@ -167,6 +168,7 @@ describe('signed-out routing (ticket C)', () => {
     auth.signInWithPassword.mockResolvedValue({ data: null, error: null });
     auth.resetPasswordForEmail.mockResolvedValue({ data: null, error: null });
     auth.verifyOtp.mockResolvedValue({ data: { session: { access_token: 'reset-session' } }, error: null });
+    auth.exchangeCodeForSession.mockResolvedValue({ data: { session: { access_token: 'reset-session' } }, error: null });
     auth.updateUser.mockResolvedValue({ data: null, error: null });
     auth.getSession.mockResolvedValue({ data: { session: { access_token: 'reset-session' } }, error: null });
     auth.signOut.mockResolvedValue({ error: null });
@@ -326,8 +328,20 @@ describe('signed-out routing (ticket C)', () => {
     });
   });
 
-  it('leaves an established legacy recovery route when the session signs out', async () => {
+  it('does not open the new-password screen from a token_hash recovery link', async () => {
     navigate('/auth?mode=recovery&token_hash=signout-test&type=recovery');
+    renderApp();
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'This password-reset link is expired, invalid, or has already been used. Request a new reset email and open the newest link.',
+    ));
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
+  });
+
+  it('leaves an established recovery route when the session signs out', async () => {
+    navigate('/auth?mode=recovery&code=signout-test');
     const view = renderApp();
     await screen.findByRole('heading', { name: 'Choose New Password' });
 
