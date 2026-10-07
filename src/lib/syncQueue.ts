@@ -17,6 +17,46 @@ export const MAX_SYNC_RETRIES = 10;
 export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
 export const MAINTENANCE_RPC_KEY = '__maintenance_rpc';
 export const READING_FORCE_KEY = '__force_lower_reading';
+export const EQUIPMENT_RPC_KEY = '__equipment_rpc';
+export const EQUIPMENT_RPCS = [
+  'log_maintenance',
+  'update_equipment_reading',
+  'soft_delete_equipment_cascade',
+  'set_equipment_meter_unit',
+] as const;
+export type EquipmentRpcName = typeof EQUIPMENT_RPCS[number];
+const EQUIPMENT_RPC_ALLOWLIST = new Set<string>(EQUIPMENT_RPCS);
+const NON_RETRYABLE_EQUIPMENT_SQLSTATE = new Set(['P0002', '23505', '23514']);
+
+export interface EquipmentRpcEnvelope {
+  rpc: string;
+  args: Record<string, unknown>;
+}
+
+/** Queued equipment writes. The legacy maintenance key remains readable so an
+ * already-queued log still replays through log_maintenance. */
+export function readEquipmentRpcEnvelope(payload: unknown): EquipmentRpcEnvelope | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  const envelope = record[EQUIPMENT_RPC_KEY];
+  if (envelope && typeof envelope === 'object') {
+    const rpc = (envelope as { rpc?: unknown }).rpc;
+    const args = (envelope as { args?: unknown }).args;
+    if (typeof rpc === 'string' && args && typeof args === 'object' && !Array.isArray(args)) {
+      return { rpc, args: args as Record<string, unknown> };
+    }
+  }
+  const legacy = record[MAINTENANCE_RPC_KEY];
+  if (legacy && typeof legacy === 'object' && !Array.isArray(legacy)) {
+    return { rpc: 'log_maintenance', args: legacy as Record<string, unknown> };
+  }
+  return null;
+}
+
+function isNonRetryableEquipmentRpcError(error: { code?: string } | null | undefined): boolean {
+  const code = typeof error?.code === 'string' ? error.code.toUpperCase() : '';
+  return NON_RETRYABLE_EQUIPMENT_SQLSTATE.has(code);
+}
 let webQueuePromise: Promise<void> = Promise.resolve();
 // Set after the first corruption toast so repeated getWebQueue calls while the
 // blob is still broken don't re-toast on every enqueue/read.
@@ -260,26 +300,6 @@ async function reconcileZeroRowMutation(mutation: QueuedMutation, farmId: string
   return false;
 }
 
-async function reconcileHigherEquipmentReading(
-  mutation: QueuedMutation,
-  farmId: string,
-): Promise<boolean> {
-  if (
-    mutation.table_name !== 'equipment'
-    || mutation.operation !== 'update'
-    || mutation.payload?.[READING_FORCE_KEY] === true
-    || typeof mutation.payload?.current_reading !== 'number'
-  ) return false;
-  const { data, error } = await supabase
-    .from('equipment')
-    .select('current_reading')
-    .eq('id', mutation.payload.id)
-    .eq('farm_id', farmId)
-    .maybeSingle();
-  if (error || !data) return false;
-  return Number(data.current_reading) >= mutation.payload.current_reading;
-}
-
 export const syncQueue = {
   /** localStorage keys that carry unsynced work (the queue and its quarantine copy). */
   SYNC_QUEUE_KEY: WEB_QUEUE_KEY,
@@ -510,6 +530,31 @@ export const syncQueue = {
   /**
    * Increments the retry count for a queued mutation.
    */
+  /** Stops a permanent equipment-RPC failure from being retried. */
+  parkMutation: async (id: string): Promise<void> => {
+    if (isNative) {
+      try {
+        const db = await getDatabase();
+        if (db) {
+          await db.run('UPDATE sync_queue SET retry_count = ? WHERE id = ?;', [MAX_SYNC_RETRIES, id]);
+        }
+      } catch (err) {
+        console.error('Failed to park native mutation:', err);
+      }
+    } else {
+      await runWebQueue(async () => {
+        const queue = await getWebQueue();
+        const idx = queue.findIndex(item => item.id === id);
+        if (idx !== -1) {
+          queue[idx].retry_count = MAX_SYNC_RETRIES;
+          await saveWebQueue(queue);
+        }
+      }).catch(err => {
+        console.error('Failed to park web sync mutation:', err);
+      });
+    }
+  },
+
   incrementRetry: async (id: string, currentRetries: number): Promise<void> => {
     if (isNative) {
       try {
@@ -635,6 +680,12 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
       }
       
       let response: MutationResponse = { error: null };
+      let usedEquipmentRpc = false;
+      const equipmentRpc = readEquipmentRpcEnvelope(mutation.payload);
+      const legacyEquipmentReading = !equipmentRpc
+        && mutation.table_name === 'equipment'
+        && mutation.operation === 'update'
+        && typeof mutation.payload?.current_reading === 'number';
       const linkedHarvest = getLinkedHarvestReplay(mutation, queue);
       const linkedMutationIds = linkedHarvest?.legacyGrainMutation
         ? [mutation.id, linkedHarvest.legacyGrainMutation.id]
@@ -652,7 +703,24 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
       }
 
       try {
-        if (mutation.operation === 'insert') {
+        if (equipmentRpc || legacyEquipmentReading) {
+          usedEquipmentRpc = true;
+          const rpcName = equipmentRpc?.rpc ?? 'update_equipment_reading';
+          const rpcArgs = equipmentRpc
+            ? { ...equipmentRpc.args, p_farm_id: farmId }
+            : {
+              p_farm_id: farmId,
+              p_equipment_id: mutation.payload.id,
+              p_reading: mutation.payload.current_reading,
+              p_force_lower: mutation.payload[READING_FORCE_KEY] === true,
+            };
+          response = EQUIPMENT_RPC_ALLOWLIST.has(rpcName)
+            ? await supabase.rpc(rpcName, rpcArgs)
+            : {
+              error: { code: '23514', message: `Equipment RPC ${rpcName} is not allowlisted` },
+              status: 400,
+            };
+        } else if (mutation.operation === 'insert') {
           if (linkedHarvest) {
             response = await supabase.rpc('create_harvest_with_grain', {
               p_farm_id: farmId,
@@ -660,8 +728,6 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
               p_harvest: { ...linkedHarvest.harvestPayload, farm_id: farmId },
               p_grain_movement: { ...linkedHarvest.grainPayload, farm_id: farmId },
             });
-          } else if (mutation.table_name === 'maintenance_logs' && mutation.payload?.[MAINTENANCE_RPC_KEY]) {
-            response = await supabase.rpc('log_maintenance', mutation.payload[MAINTENANCE_RPC_KEY]);
           } else {
             const conflictColumns = mutation.table_name === 'fsa_tract_imports'
               ? 'farm_id,tract_key'
@@ -683,7 +749,9 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             id: _i,
             version: _version,
             __expected_version: expectedVersion,
-            [READING_FORCE_KEY]: forceLowerReading,
+            [READING_FORCE_KEY]: _forceLowerReading,
+            [EQUIPMENT_RPC_KEY]: _equipmentRpc,
+            [MAINTENANCE_RPC_KEY]: _maintenanceRpc,
             ...payload
           } = mutation.payload;
           const base = supabase
@@ -693,11 +761,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             .eq('farm_id', farmId);
           response = mutation.table_name === 'grain_movements' && typeof expectedVersion === 'number'
             ? await base.eq('version', expectedVersion)
-            : mutation.table_name === 'equipment'
-              && typeof payload.current_reading === 'number'
-              && forceLowerReading !== true
-              ? await base.lte('current_reading', payload.current_reading)
-              : await base;
+            : await base;
         } else if (mutation.operation === 'soft_delete') {
           // Perform soft delete update
           const base = supabase
@@ -713,15 +777,13 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
 
         if (
           !response.error
+          && !usedEquipmentRpc
           && mutation.operation !== 'insert'
           && response.count !== 1
         ) {
           if (
             response.count === 0
-            && (
-              await reconcileHigherEquipmentReading(mutation, farmId)
-              || await reconcileZeroRowMutation(mutation, farmId)
-            )
+            && await reconcileZeroRowMutation(mutation, farmId)
           ) {
             await syncQueue.dequeueMutation(mutation.id);
             continue;
@@ -737,6 +799,16 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
         }
 
         if (response.error) {
+          if (usedEquipmentRpc && isNonRetryableEquipmentRpcError(response.error)) {
+            await syncQueue.parkMutation(mutation.id);
+            handledMutationIds.add(mutation.id);
+            failedParkedCount++;
+            toast.error('An offline equipment change could not be synced.', {
+              description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
+            });
+            continue;
+          }
+
           if (isAuthExpiredError(response)) {
             // Refresh once per drain, then restart from the (shorter) queue.
             // If refresh fails the session is truly gone: pause without

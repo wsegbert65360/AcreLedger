@@ -478,6 +478,16 @@ export const mapEquipmentToDb = (equipment: Equipment): Record<string, unknown> 
     return row;
 };
 
+/** Descriptive edits. Meter columns change only through the equipment RPCs. */
+export const mapEquipmentUpdateToDb = (equipment: Equipment): Record<string, unknown> => {
+    const row = mapEquipmentToDb(equipment);
+    delete row.farm_id;
+    delete row.current_reading;
+    delete row.reading_updated_at;
+    delete row.meter_unit;
+    return row;
+};
+
 export const mapMaintenanceScheduleToDb = (schedule: MaintenanceSchedule): Record<string, unknown> => {
     validateRequired(schedule, ['id', 'farm_id', 'equipmentId', 'taskName'], 'mapMaintenanceScheduleToDb');
     const row: Record<string, unknown> = {
