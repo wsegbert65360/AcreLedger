@@ -249,7 +249,7 @@ export function useEquipment({
         return {
           ...schedule,
           intervalValue: supplied?.intervalValue ?? schedule.intervalValue,
-          lastDoneReading: supplied ? supplied.lastDoneReading ?? undefined : undefined,
+          lastDoneReading: supplied?.lastDoneReading ?? convertedReading,
           updatedAt: now,
         };
       }
@@ -278,7 +278,7 @@ export function useEquipment({
         ? (options.schedules ?? []).map(item => ({
           id: item.id,
           interval_value: item.intervalValue,
-          last_done_reading: item.lastDoneReading,
+          last_done_reading: item.lastDoneReading ?? convertedReading,
         }))
         : null,
     }, {

@@ -198,6 +198,29 @@ describe('useEquipment', () => {
     expect(result.current.schedules.value[0].intervalValue).toBe(8046.7);
   });
 
+  it('snapshots the replacement reading when an hours unit change has no prior baseline', async () => {
+    const { result } = renderEquipmentHook({ equipment: [machine], schedules: [task] });
+    await act(async () => {
+      expect(await result.current.ops.setEquipmentMeterUnit('e1', 'hours', 'miles', {
+        currentReading: 10,
+        schedules: [{ id: 's1', intervalValue: 50, lastDoneReading: null }],
+      })).toBe(true);
+    });
+    expect(result.current.schedules.value[0].lastDoneReading).toBe(10);
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'equipment',
+      'update',
+      expect.objectContaining({
+        __equipment_rpc: expect.objectContaining({
+          args: expect.objectContaining({
+            p_schedules: [{ id: 's1', interval_value: 50, last_done_reading: 10 }],
+          }),
+        }),
+      }),
+      'farm-1',
+    );
+  });
+
   it('rolls back the equipment and schedules together when unit conversion fails', async () => {
     const truck: Equipment = { ...machine, id: 'e2', kind: 'truck', meterUnit: 'miles', currentReading: 10 };
     const truckTask = { ...task, id: 's2', equipmentId: 'e2', intervalValue: 5000, lastDoneReading: 1000 };

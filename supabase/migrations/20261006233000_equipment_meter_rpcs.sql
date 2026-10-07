@@ -428,7 +428,10 @@ BEGIN
             v_schedule_id := (v_schedule.item->>'id')::uuid;
             v_interval := (v_schedule.item->>'interval_value')::numeric;
             IF v_schedule.item->>'last_done_reading' IS NULL THEN
-                v_last := NULL;
+                -- Hours and distance readings are not convertible. A missing
+                -- prior baseline therefore starts at the replacement meter
+                -- reading instead of drifting with every future reading.
+                v_last := p_current_reading;
             ELSE
                 v_last := (v_schedule.item->>'last_done_reading')::numeric;
             END IF;

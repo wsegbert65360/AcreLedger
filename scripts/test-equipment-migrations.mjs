@@ -11,6 +11,10 @@ const rpcMigration = await readFile(
   new URL('../supabase/migrations/20261006233000_equipment_meter_rpcs.sql', import.meta.url),
   'utf8',
 );
+const restoreMigration = await readFile(
+  new URL('../supabase/migrations/20261007090000_restore_equipment_tables.sql', import.meta.url),
+  'utf8',
+);
 
 const ids = {
   farm: '00000000-0000-4000-8000-000000000001',
@@ -32,7 +36,7 @@ await db.exec(`
   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS
     $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   CREATE TABLE public.farms (id uuid PRIMARY KEY);
-  CREATE TABLE public.profiles (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.profiles (id uuid PRIMARY KEY, farm_id uuid, active_season integer);
   INSERT INTO public.farms (id) VALUES ('${ids.farm}'), ('${ids.otherFarm}');
   INSERT INTO public.profiles (id, farm_id) VALUES ('${ids.user}', '${ids.farm}');
   GRANT USAGE ON SCHEMA auth TO authenticated;
@@ -40,6 +44,60 @@ await db.exec(`
 `);
 await db.exec(schemaMigration);
 await db.exec(rpcMigration);
+await db.exec(`
+  CREATE TABLE public.fields (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.bins (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.plant_records (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.spray_records (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.harvest_records (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.hay_harvest_records (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.custom_spray_records (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.fertilizer_applications (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.tillage_records (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.grain_movements (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.saved_seeds (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.fertilizer_recipes (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.spray_recipes (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.work_requests (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.fsa_tract_imports (id uuid PRIMARY KEY, farm_id uuid);
+  CREATE TABLE public.field_clu_assignments (id uuid PRIMARY KEY, farm_id uuid);
+
+  CREATE FUNCTION public._restore_table_for_farm(
+    p_table regclass,
+    p_rows jsonb,
+    p_farm_id uuid
+  ) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER AS $$
+  DECLARE
+    v_count integer;
+  BEGIN
+    IF p_rows IS NULL OR jsonb_typeof(p_rows) <> 'array' OR jsonb_array_length(p_rows) = 0 THEN
+      RETURN 0;
+    END IF;
+    IF p_table <> 'public.equipment'::regclass THEN
+      RETURN 0;
+    END IF;
+    INSERT INTO public.equipment (id, farm_id, kind, meter_unit, current_reading, status)
+    SELECT populated.id, p_farm_id, populated.kind, populated.meter_unit,
+      populated.current_reading, populated.status
+    FROM jsonb_array_elements(p_rows) AS row_data
+    CROSS JOIN LATERAL jsonb_populate_record(NULL::public.equipment, row_data) AS populated
+    ON CONFLICT (id) DO UPDATE SET
+      meter_unit = EXCLUDED.meter_unit,
+      current_reading = EXCLUDED.current_reading,
+      status = EXCLUDED.status;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+  END;
+  $$;
+
+  CREATE FUNCTION public._restore_table_for_farm_with_conflict(
+    p_table regclass,
+    p_rows jsonb,
+    p_farm_id uuid,
+    p_conflict_columns text[]
+  ) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 0 $$;
+`);
+await db.exec(restoreMigration);
 await db.exec(`SELECT set_config('request.jwt.claim.sub', '${ids.user}', false); SET ROLE authenticated;`);
 
 await db.exec(`
@@ -103,6 +161,41 @@ assert.equal(Number(baseline.last_done_reading), 100, 'a missing reading must no
 
 await db.query(
   'SELECT public.set_equipment_meter_unit($1,$2,$3,$4,$5,$6::jsonb)',
+  [ids.farm, ids.equipment, 'hours', 'miles', 700, JSON.stringify([{
+    id: ids.schedule,
+    interval_value: 50,
+    last_done_reading: null,
+  }])],
+);
+assert.equal(
+  Number((await db.query(`SELECT last_done_reading AS value FROM public.maintenance_schedules WHERE id = '${ids.schedule}'`)).rows[0].value),
+  700,
+  'an hours unit change must snapshot the replacement reading when the prior baseline is null',
+);
+
+const restored = await db.query(
+  'SELECT public.restore_farm_backup($1::jsonb, $2) AS value',
+  [JSON.stringify({ equipment: [{
+    id: ids.equipment,
+    farm_id: ids.farm,
+    kind: 'tractor',
+    meter_unit: 'hours',
+    current_reading: 80,
+    status: 'active',
+  }] }), 2026],
+);
+const restoredEquipment = (
+  await db.query(`SELECT meter_unit, current_reading FROM public.equipment WHERE id = '${ids.equipment}'`)
+).rows[0];
+assert.equal(restored.rows[0].value.equipment, 1);
+assert.deepEqual(
+  [restoredEquipment.meter_unit, Number(restoredEquipment.current_reading)],
+  ['hours', 80],
+  'customer backup restore must replace guarded meter columns with an older snapshot',
+);
+
+await db.query(
+  'SELECT public.set_equipment_meter_unit($1,$2,$3,$4,$5,$6::jsonb)',
   [ids.farm, ids.distanceEquipment, 'miles', 'km', null, null],
 );
 const converted = (
@@ -134,4 +227,4 @@ const deleted = (
 assert.deepEqual(deleted, { equipment: true, schedule: true });
 
 await db.close();
-console.log('Equipment migration checks passed: guards, higher-wins, idempotency, baselines, unit conversion, and cascade delete.');
+console.log('Equipment migration checks passed: guards, restore, higher-wins, idempotency, baselines, unit conversion, and cascade delete.');

@@ -47,6 +47,11 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
+  -- Equipment meter columns are normally writable only through the dedicated
+  -- RPCs. Backup restore is another trusted, transactional path and must be
+  -- able to replace a newer reading/unit with the saved snapshot.
+  PERFORM set_config('acreledger.equipment_rpc', 'on', true);
+
   v_result := jsonb_build_object(
     'fields',                  public._restore_table_for_farm('public.fields'::regclass, p_payload->'fields', v_farm_id),
     'bins',                    public._restore_table_for_farm('public.bins'::regclass, p_payload->'bins', v_farm_id),
