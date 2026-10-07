@@ -12,6 +12,10 @@ import {
     WorkRequestRow, WorkRequestProductEntry, WorkRequestFieldEntryRow
 } from '../types/database';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+import type {
+    Equipment, EquipmentRow, MaintenanceLog, MaintenanceLogRow,
+    MaintenanceSchedule, MaintenanceScheduleRow,
+} from '@/types/equipment';
 import {
     migrateFsaToPropertyIdentifiers,
     getPropertyIdentifier,
@@ -42,6 +46,69 @@ function safeTimestamp(val: any): number {
     const d = new Date(val);
     return isNaN(d.getTime()) ? 0 : d.getTime();
 }
+
+function optionalString(value: unknown): string | undefined {
+    return value == null || value === '' ? undefined : String(value);
+}
+
+function optionalNumber(value: unknown): number | undefined {
+    return value == null || value === '' ? undefined : safeNum(value);
+}
+
+function includeDefined<T extends Record<string, unknown>>(target: T, key: string, value: unknown): T {
+    if (value !== undefined && value !== null && value !== '') target[key as keyof T] = value as T[keyof T];
+    return target;
+}
+
+export const mapEquipmentFromDb = (db: EquipmentRow): Equipment => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    kind: db.kind,
+    year: optionalNumber(db.year),
+    make: optionalString(db.make),
+    model: optionalString(db.model),
+    serialNumber: optionalString(db.serial_number),
+    meterUnit: db.meter_unit,
+    currentReading: safeNum(db.current_reading),
+    readingUpdatedAt: optionalString(db.reading_updated_at),
+    status: db.status,
+    notes: optionalString(db.notes),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
+export const mapMaintenanceScheduleFromDb = (db: MaintenanceScheduleRow): MaintenanceSchedule => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    equipmentId: db.equipment_id,
+    taskName: db.task_name,
+    intervalValue: optionalNumber(db.interval_value),
+    intervalDays: optionalNumber(db.interval_days),
+    lastDoneReading: optionalNumber(db.last_done_reading),
+    lastDoneAt: optionalString(db.last_done_at),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
+export const mapMaintenanceLogFromDb = (db: MaintenanceLogRow): MaintenanceLog => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    equipmentId: db.equipment_id,
+    scheduleId: optionalString(db.schedule_id),
+    kind: db.kind,
+    performedOn: db.performed_on,
+    readingAtService: optionalNumber(db.reading_at_service),
+    description: optionalString(db.description),
+    performedBy: optionalString(db.performed_by),
+    vendor: optionalString(db.vendor),
+    costParts: optionalNumber(db.cost_parts),
+    costLabor: optionalNumber(db.cost_labor),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
 
 export const mapFieldFromDb = (db: FieldRow): Field => ({
     id: db.id,
@@ -388,6 +455,68 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 }
 
 // --- Reverse Mappers (Frontend -> DB) ---
+
+export const mapEquipmentToDb = (equipment: Equipment): Record<string, unknown> => {
+    validateRequired(equipment, ['id', 'farm_id', 'kind', 'meterUnit', 'status'], 'mapEquipmentToDb');
+    const row: Record<string, unknown> = {
+        id: equipment.id,
+        farm_id: equipment.farm_id,
+        kind: equipment.kind,
+        meter_unit: equipment.meterUnit,
+        current_reading: equipment.currentReading,
+        status: equipment.status,
+        created_at: equipment.createdAt,
+        updated_at: equipment.updatedAt,
+    };
+    includeDefined(row, 'year', equipment.year);
+    includeDefined(row, 'make', equipment.make);
+    includeDefined(row, 'model', equipment.model);
+    includeDefined(row, 'serial_number', equipment.serialNumber);
+    includeDefined(row, 'reading_updated_at', equipment.readingUpdatedAt);
+    includeDefined(row, 'notes', equipment.notes);
+    includeDefined(row, 'deleted_at', equipment.deleted_at);
+    return row;
+};
+
+export const mapMaintenanceScheduleToDb = (schedule: MaintenanceSchedule): Record<string, unknown> => {
+    validateRequired(schedule, ['id', 'farm_id', 'equipmentId', 'taskName'], 'mapMaintenanceScheduleToDb');
+    const row: Record<string, unknown> = {
+        id: schedule.id,
+        farm_id: schedule.farm_id,
+        equipment_id: schedule.equipmentId,
+        task_name: schedule.taskName,
+        created_at: schedule.createdAt,
+        updated_at: schedule.updatedAt,
+    };
+    includeDefined(row, 'interval_value', schedule.intervalValue);
+    includeDefined(row, 'interval_days', schedule.intervalDays);
+    includeDefined(row, 'last_done_reading', schedule.lastDoneReading);
+    includeDefined(row, 'last_done_at', schedule.lastDoneAt);
+    includeDefined(row, 'deleted_at', schedule.deleted_at);
+    return row;
+};
+
+export const mapMaintenanceLogToDb = (log: MaintenanceLog): Record<string, unknown> => {
+    validateRequired(log, ['id', 'farm_id', 'equipmentId', 'kind', 'performedOn'], 'mapMaintenanceLogToDb');
+    const row: Record<string, unknown> = {
+        id: log.id,
+        farm_id: log.farm_id,
+        equipment_id: log.equipmentId,
+        kind: log.kind,
+        performed_on: log.performedOn,
+        created_at: log.createdAt,
+        updated_at: log.updatedAt,
+    };
+    includeDefined(row, 'schedule_id', log.scheduleId);
+    includeDefined(row, 'reading_at_service', log.readingAtService);
+    includeDefined(row, 'description', log.description);
+    includeDefined(row, 'performed_by', log.performedBy);
+    includeDefined(row, 'vendor', log.vendor);
+    includeDefined(row, 'cost_parts', log.costParts);
+    includeDefined(row, 'cost_labor', log.costLabor);
+    includeDefined(row, 'deleted_at', log.deleted_at);
+    return row;
+};
 
 export const mapFieldToDb = (f: Field) => {
     validateRequired(f, ['id', 'farm_id', 'name'], 'mapFieldToDb');
