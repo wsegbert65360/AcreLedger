@@ -42,6 +42,7 @@ const FertilizerModal = lazy(() => import("@/components/FertilizerModal"));
 const TillageModal = lazy(() => import("@/components/TillageModal"));
 const CustomSprayModal = lazy(() => import("@/components/CustomSprayModal"));
 const Activity = lazy(() => import("./pages/Activity"));
+const Equipment = lazy(() => import("./pages/Equipment"));
 const FieldDetailScreen = lazy(() => import("./pages/FieldDetailScreen"));
 const Index = lazy(() => import("./pages/Index"));
 const Logistics = lazy(() => import("./pages/Logistics"));
@@ -115,6 +116,7 @@ const AnimatedRoutes = () => {
           <Route path="/auth" element={<Navigate to="/" replace />} />
           <Route path="/logistics" element={<ErrorBoundary><Logistics /></ErrorBoundary>} />
           <Route path="/activity" element={<ErrorBoundary><Activity /></ErrorBoundary>} />
+          <Route path="/equipment" element={<ErrorBoundary><Equipment /></ErrorBoundary>} />
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />

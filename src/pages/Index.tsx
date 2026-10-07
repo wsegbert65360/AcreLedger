@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { MessageCircle, Settings, Tractor, Search, Plus, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import SeasonSelect from '@/components/SeasonSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +23,7 @@ import {
 } from '@/lib/fieldSearch';
 import { cn } from '@/lib/utils';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
+import { summarizeEquipmentStatus } from '@/lib/equipment';
 
 const Index = () => {
   const {
@@ -33,6 +35,8 @@ const Index = () => {
     harvestRecords,
     hayHarvestRecords,
     viewingSeason,
+    equipment,
+    maintenanceSchedules,
   } = useFarm();
   const { openAsk } = useAskAcreLedger();
 
@@ -93,6 +97,9 @@ const Index = () => {
 
   const parsedQuery = useMemo(() => parseSearchQuery(search), [search]);
   const hasSearch = parsedQuery.nameTerms.length > 0 || parsedQuery.statuses.length > 0;
+  const dueEquipmentCount = useMemo(() => equipment.filter(machine =>
+    summarizeEquipmentStatus(maintenanceSchedules, machine, new Date()).status !== 'ok'
+  ).length, [equipment, maintenanceSchedules]);
 
   const { filteredRowCrops, filteredPastureHay } = useMemo(() => {
     let rc = rowCrops;
@@ -180,6 +187,20 @@ const Index = () => {
         <ErrorBoundary>
           <WeatherBar />
         </ErrorBoundary>
+        {equipment.length > 0 && (
+          <Link
+            to="/equipment"
+            className="flex min-h-14 items-center justify-between rounded-2xl border border-border/70 bg-card/75 px-4 py-3 shadow-sm transition hover:border-primary/30"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Tractor size={21} /></span>
+              <span><span className="block text-sm font-bold">Equipment</span><span className="block text-xs text-muted-foreground">{equipment.length} machine{equipment.length === 1 ? '' : 's'}</span></span>
+            </span>
+            <span className={dueEquipmentCount ? 'text-sm font-bold text-amber-700 dark:text-amber-300' : 'text-sm font-semibold text-emerald-700 dark:text-emerald-300'}>
+              {dueEquipmentCount ? `${dueEquipmentCount} due` : 'All current'}
+            </span>
+          </Link>
+        )}
           <>
             {allFields.length > 0 && (
               <section className="rounded-2xl border border-border/70 bg-card/75 p-3.5 shadow-sm backdrop-blur-sm space-y-3">

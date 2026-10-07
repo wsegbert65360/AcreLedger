@@ -118,6 +118,10 @@ vi.mock('@/pages/Index', () => ({
   default: () => <div data-testid="app-dashboard" />,
 }));
 
+vi.mock('./pages/Equipment', () => ({
+  default: () => <div data-testid="equipment-page" />,
+}));
+
 import App from './App';
 
 const signedOutState = {
@@ -385,6 +389,13 @@ describe('signed-out routing (ticket C)', () => {
     renderApp();
     expect(screen.getAllByRole('link', { name: 'Open your farm book' }).length).toBeGreaterThan(0);
   });
+
+  it('keeps /equipment behind sign-in', () => {
+    navigate('/equipment');
+    renderApp();
+    expect(screen.getAllByRole('link', { name: 'Open your farm book' }).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('equipment-page')).not.toBeInTheDocument();
+  });
 });
 
 describe('signed-in routing (preserved behavior)', () => {
@@ -456,6 +467,13 @@ describe('signed-in routing (preserved behavior)', () => {
     navigate('/support');
     renderApp();
     expect(await screen.findByText('AcreLedger Support')).toBeInTheDocument();
+  });
+
+  it('renders /equipment inside the authenticated app', async () => {
+    navigate('/equipment');
+    renderApp();
+    expect(await screen.findByTestId('equipment-page')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quick add record' })).not.toBeInTheDocument();
   });
 
   it('shows a focused recovery page without Quick Add for an unknown route', async () => {
