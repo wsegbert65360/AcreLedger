@@ -6,8 +6,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFarm } from '@/store/farmStore';
@@ -25,48 +30,50 @@ export default function SeedManager() {
 
   return (
     <>
-      <Card className="border-plant/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-plant text-lg">
-            <Sprout size={18} />
-            Seed Varieties
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Label htmlFor="seedVariety" className="sr-only">New Seed Variety</Label>
-          <div className="flex gap-2">
-            <Input
-              id="seedVariety"
-              name="seedVariety"
-              value={newSeed}
-              onChange={e => setNewSeed(e.target.value)}
-              placeholder="e.g. DKC 64-35"
-              className="bg-muted border-border text-foreground"
-              onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            />
-            <Button onClick={handleAdd} disabled={!newSeed.trim()} size="sm" className="bg-plant text-plant-foreground hover:bg-plant/90">
-              <Plus size={16} />
-            </Button>
-          </div>
-          {savedSeeds.length === 0 && (
-            <p className="text-muted-foreground text-sm">No seeds saved yet. Add varieties above.</p>
-          )}
-          <div className="space-y-1">
-            {savedSeeds.map(seed => (
-              <div key={seed.id} className="flex items-center justify-between px-3 py-2 bg-muted rounded-lg">
-                <span className="text-foreground font-mono text-sm">{seed.name}</span>
-                <button
-                  onClick={() => setSeedToDelete({ id: seed.id, name: seed.name })}
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive/80"
-                  aria-label={`Delete ${seed.name}`}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <Accordion type="single" collapsible>
+        <AccordionItem value="seed-varieties" className="rounded-xl border border-plant/30 bg-card px-4">
+          <AccordionTrigger className="py-4 hover:no-underline">
+            <span className="flex items-center gap-2 text-lg font-semibold text-plant">
+              <Sprout size={18} />
+              Seed Varieties
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3">
+            <Label htmlFor="seedVariety" className="sr-only">New Seed Variety</Label>
+            <div className="flex gap-2">
+              <Input
+                id="seedVariety"
+                name="seedVariety"
+                value={newSeed}
+                onChange={e => setNewSeed(e.target.value)}
+                placeholder="e.g. DKC 64-35"
+                className="bg-muted border-border text-foreground"
+                onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              />
+              <Button onClick={handleAdd} disabled={!newSeed.trim()} size="sm" className="bg-plant text-plant-foreground hover:bg-plant/90">
+                <Plus size={16} />
+              </Button>
+            </div>
+            {savedSeeds.length === 0 && (
+              <p className="text-muted-foreground text-sm">No seeds saved yet. Add varieties above.</p>
+            )}
+            <div className="space-y-1">
+              {savedSeeds.map(seed => (
+                <div key={seed.id} className="flex items-center justify-between px-3 py-2 bg-muted rounded-lg">
+                  <span className="text-foreground font-mono text-sm">{seed.name}</span>
+                  <button
+                    onClick={() => setSeedToDelete({ id: seed.id, name: seed.name })}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive/80"
+                    aria-label={`Delete ${seed.name}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <AlertDialog open={!!seedToDelete} onOpenChange={(open) => { if (!open) setSeedToDelete(null); }}>
         <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">

@@ -6,8 +6,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFarm } from '@/store/farmStore';
 import type { SprayRecipe } from '@/types/farm';
 
@@ -22,14 +27,15 @@ export default function RecipeManager() {
 
   return (
     <>
-    <Card className="border-spray/30">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-spray text-lg">
-          <Droplets size={18} />
-          Spray Recipes
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      <Accordion type="single" collapsible>
+        <AccordionItem value="spray-recipes" className="rounded-xl border border-spray/30 bg-card px-4">
+          <AccordionTrigger className="py-4 hover:no-underline">
+            <span className="flex items-center gap-2 text-lg font-semibold text-spray">
+              <Droplets size={18} />
+              Spray Recipes
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3">
         {!adding && (
           <Button onClick={() => setAdding(true)} variant="outline" className="w-full border-spray/30 text-spray hover:bg-spray/10">
             <Plus size={16} className="mr-2" /> New Recipe
@@ -104,8 +110,9 @@ export default function RecipeManager() {
             )
           ))}
         </div>
-      </CardContent>
-    </Card>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <AlertDialog open={!!recipeToDelete} onOpenChange={(open) => { if (!open) setRecipeToDelete(null); }}>
         <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">

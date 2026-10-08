@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import { useFarm } from '@/store/farmStore';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
 import { Sprout, Plus, Trash2, Loader2, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +13,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useFarm } from '@/store/farmStore';
 
 export default function FertilizerRecipeManager() {
   const { fertilizerRecipes, addFertilizerRecipe, updateFertilizerRecipe, deleteFertilizerRecipe } = useFarm();
@@ -84,14 +91,15 @@ export default function FertilizerRecipeManager() {
 
   return (
     <>
-      <Card className="border-lime-500/30">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lime-600 dark:text-lime-400 text-lg">
-          <Sprout size={18} />
-          Fertilizer Recipes
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      <Accordion type="single" collapsible>
+        <AccordionItem value="fertilizer-recipes" className="rounded-xl border border-lime-500/30 bg-card px-4">
+          <AccordionTrigger className="py-4 hover:no-underline">
+            <span className="flex items-center gap-2 text-lg font-semibold text-lime-600 dark:text-lime-400">
+              <Sprout size={18} />
+              Fertilizer Recipes
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3">
         {!adding && editingId === null && (
           <Button 
             onClick={() => setAdding(true)} 
@@ -206,8 +214,9 @@ export default function FertilizerRecipeManager() {
             )
           ))}
         </div>
-      </CardContent>
-    </Card>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
     <AlertDialog open={!!recipeToDelete} onOpenChange={(open) => { if (!open) setRecipeToDelete(null); }}>
       <AlertDialogContent className="bg-card border-destructive/30 max-w-sm">
