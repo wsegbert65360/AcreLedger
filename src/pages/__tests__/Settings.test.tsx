@@ -7,6 +7,7 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/components/settings/FsaTractManager', () => ({ default: () => null }));
@@ -30,6 +31,14 @@ vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
 
 import Settings from '../Settings';
 
+function renderSettings() {
+  return render(
+    <MemoryRouter>
+      <Settings />
+    </MemoryRouter>,
+  );
+}
+
 describe('Settings billing gate', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_BILLING_UI_ENABLED', 'true');
@@ -42,7 +51,7 @@ describe('Settings billing gate', () => {
 
   it('hides the Billing accordion on native platforms', () => {
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
-    render(<Settings />);
+    renderSettings();
 
     expect(screen.queryByRole('button', { name: /billing/i })).not.toBeInTheDocument();
     expect(screen.queryByText('$299/year')).not.toBeInTheDocument();
@@ -52,7 +61,7 @@ describe('Settings billing gate', () => {
 
   it('shows the Billing accordion on web when the UI flag is on', () => {
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
-    render(<Settings />);
+    renderSettings();
 
     fireEvent.click(screen.getByRole('button', { name: /billing/i }));
     expect(screen.getByTestId('billing-manager')).toBeInTheDocument();
