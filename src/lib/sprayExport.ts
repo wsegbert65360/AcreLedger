@@ -11,13 +11,20 @@ import {
   formatTime,
   formatReportDate,
   joinParts,
-  sanitizeFilename
+  sanitizeFilename,
+  normalizeTreatedArea,
+  areaForProductTotal,
+  effectiveTreatedAreaUnit,
+  convertFahrenheitToCelsius,
+  convertMphToKmh
 } from './sprayExportFormatters';
 import { cleanName } from '@/utils/text';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
+import { resolveComplianceProfileId } from '@/lib/compliance/profiles';
+import type { ComplianceProfileId } from '@/lib/compliance/profiles';
 
 interface ExportOptions {
   filename?: string;
@@ -25,6 +32,7 @@ interface ExportOptions {
   endDate?: string;
   fields?: Field[];
   cluAssignments?: FieldCluAssignment[];
+  profile?: ComplianceProfileId;
 }
 
 function splitAttachmentFromNotes(notes?: string): { cleanNotes: string; attachmentDataUri: string | null } {
@@ -39,7 +47,7 @@ function splitAttachmentFromNotes(notes?: string): { cleanNotes: string; attachm
 
 /**
  * Main entry point for generating a Spray Log PDF.
- * Supports both single and multiple records.
+ * Supports both single and multiple records with profile-aware formatting.
  */
 export function generateSprayPDF(
   records: SprayRecord[],
@@ -52,6 +60,8 @@ export function generateSprayPDF(
     format: 'a4'
   });
 
+  const profileId = resolveComplianceProfileId(options.profile);
+  const isAu = profileId === 'au-apvma';
   const isMulti = records.length > 1;
   const now = new Date().toLocaleDateString();
   const displayFarmName = farmName || '-';
@@ -66,7 +76,8 @@ export function generateSprayPDF(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
-    doc.text(`AcreLedger Spray Log - ${displayFarmName}`, 14, 10);
+    const headerTitle = isAu ? 'AcreLedger Spray Record (AU)' : 'AcreLedger Spray Log';
+    doc.text(`${headerTitle} - ${displayFarmName}`, 14, 10);
     if (rangeStart || rangeEnd) {
       doc.text(`${formatReportDate(rangeStart)} to ${formatReportDate(rangeEnd)}`, 196, 10, { align: 'right' });
     }
@@ -84,7 +95,9 @@ export function generateSprayPDF(
   // 1. Report Header
   doc.setFontSize(18);
   doc.setTextColor(0, 0, 0);
-  doc.text(isMulti ? 'AcreLedger Spray Log Export' : 'AcreLedger Spray Record', 14, 20);
+  const titleText = isMulti ? 'AcreLedger Spray Log Export' : 'AcreLedger Spray Record';
+  const displayTitle = isAu ? `${titleText} (AU)` : titleText;
+  doc.text(displayTitle, 14, 20);
 
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
@@ -105,6 +118,7 @@ export function generateSprayPDF(
   chronologicalRecords.forEach((record, index) => {
     const field = options.fields?.find(candidate => candidate.id === record.fieldId);
     const treatedArea = getEffectiveSprayTreatedAcres(record, field, options.cluAssignments);
+    const treatedAreaUnit = effectiveTreatedAreaUnit(record);
     const productRows = Math.max(record.products?.length || 0, 1);
     const estimatedRecordHeight = 60 + productRows * 11 + (record.notes ? 12 : 0);
     if (yPos + estimatedRecordHeight > 275) {
@@ -137,26 +151,59 @@ export function generateSprayPDF(
     doc.setFontSize(9);
     doc.setTextColor(0, 0, 0);
 
-    const detailsLeft = [
-      `Applicator: ${record.applicatorName || '-'}`,
-      `License #: ${record.licenseNumber || '-'}`,
-      `Date: ${formatReportDate(record.sprayDate)}`,
-      `Time: ${formatTime(record.startTime)} to ${formatTime(record.endTime)}`,
-    ];
+    let detailsLeft: string[];
+    let detailsRight: string[];
+    let detailsFarRight: string[];
 
-    const detailsRight = [
-      `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
-      `Target Pest: ${record.targetPest || '-'}`,
-      `Area: ${formatNumber(treatedArea)} ${formatUnit(record.treatedAreaUnit) || 'ac'}`,
-      `Method: ${record.applicationMethod || '-'}`,
-    ];
+    if (isAu) {
+      const areaValue = treatedArea ? normalizeTreatedArea(treatedArea, treatedAreaUnit, 'ha') : undefined;
+      const areaDisplay = areaValue ? `${formatNumber(areaValue)} ha` : '-';
+      const tempDisplay = record.temperature != null ? `${convertFahrenheitToCelsius(record.temperature)} °C` : '-';
+      const windKmh = record.windSpeed != null ? convertMphToKmh(record.windSpeed) : undefined;
+      const windDisplay = joinParts([windKmh, 'km/h', record.windDirection]);
 
-    const detailsFarRight = [
-      `Equipment: ${record.equipmentId || '-'}`,
-      `REI: ${record.rei || '-'}`,
-      `Wind: ${joinParts([record.windSpeed, 'MPH', record.windDirection])}`,
-      `Temp: ${record.temperature != null ? record.temperature + ' F' : '-'} / RH: ${record.relativeHumidity != null ? record.relativeHumidity + '%' : '-'}`,
-    ];
+      detailsLeft = [
+        `Applicator: ${record.applicatorName || '-'}`,
+        `PIC: ${record.pic || '-'}`,
+        `Date: ${formatReportDate(record.sprayDate)}`,
+        `Time: ${formatTime(record.startTime)} to ${formatTime(record.endTime)}`,
+      ];
+
+      detailsRight = [
+        `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
+        `Target Pest: ${record.targetPest || '-'}`,
+        `Area: ${areaDisplay}`,
+        `Method: ${record.applicationMethod || '-'}`,
+      ];
+
+      detailsFarRight = [
+        `Equipment: ${record.equipmentId || '-'}`,
+        `Water Rate: ${record.waterRate ? `${record.waterRate} ${record.waterRateUnit || 'L/ha'}` : '-'}`,
+        `Wind: ${windDisplay}`,
+        `Temp: ${tempDisplay} / RH: ${record.relativeHumidity != null ? record.relativeHumidity + '%' : '-'}`,
+      ];
+    } else {
+      detailsLeft = [
+        `Applicator: ${record.applicatorName || '-'}`,
+        `License #: ${record.licenseNumber || '-'}`,
+        `Date: ${formatReportDate(record.sprayDate)}`,
+        `Time: ${formatTime(record.startTime)} to ${formatTime(record.endTime)}`,
+      ];
+
+      detailsRight = [
+        `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
+        `Target Pest: ${record.targetPest || '-'}`,
+        `Area: ${formatNumber(treatedArea)} ${formatUnit(record.treatedAreaUnit) || 'ac'}`,
+        `Method: ${record.applicationMethod || '-'}`,
+      ];
+
+      detailsFarRight = [
+        `Equipment: ${record.equipmentId || '-'}`,
+        `REI: ${record.rei || '-'}`,
+        `Wind: ${joinParts([record.windSpeed, 'MPH', record.windDirection])}`,
+        `Temp: ${record.temperature != null ? record.temperature + ' F' : '-'} / RH: ${record.relativeHumidity != null ? record.relativeHumidity + '%' : '-'}`,
+      ];
+    }
 
     const detailY = yPos;
     const detailColumns = [
@@ -195,18 +242,21 @@ export function generateSprayPDF(
 
     // 3. Products Table
     if (record.products && record.products.length > 0) {
+      const regNumHeader = isAu ? 'APVMA Permit #' : 'EPA Reg #';
       autoTable(doc, {
         startY: yPos,
-        head: [['Product / Active Ingredients', 'EPA Reg #', 'Rate', 'Total Applied']],
-        body: record.products.map(p => [
-          {
-            content: `${p.product}${p.activeIngredients ? '\n' + p.activeIngredients : ''}`,
-            styles: { fontStyle: p.activeIngredients ? 'normal' : 'bold' }
-          },
-          p.epaRegNumber || '-',
-          `${p.rate || '-'} ${p.rateUnit || ''}`.trim(),
-          formatSprayProductTotal(p, treatedArea)
-        ]),
+        head: [['Product / Active Ingredients', regNumHeader, 'Rate', 'Total Applied']],
+        body: record.products.map(p => {
+          return [
+            {
+              content: `${p.product}${p.activeIngredients ? '\n' + p.activeIngredients : ''}`,
+              styles: { fontStyle: p.activeIngredients ? 'normal' : 'bold' }
+            },
+            p.epaRegNumber || '-',
+            `${p.rate || '-'} ${p.rateUnit || ''}`.trim(),
+            formatSprayProductTotal(p, areaForProductTotal(treatedArea, treatedAreaUnit, p.rateUnit, profileId))
+          ];
+        }),
         theme: 'grid',
         headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
         styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
@@ -263,7 +313,7 @@ export function generateSprayPDF(
     }
 
     // Compliance line
-    const omissions = getRecordOmissions(record, treatedArea ?? undefined);
+    const omissions = getRecordOmissions(record, treatedArea ?? undefined, profileId, treatedAreaUnit);
     const needsReview = Boolean(record.nonCompliant || omissions.length);
     doc.setFont('helvetica', needsReview ? 'bold' : 'normal');
     if (needsReview) {

@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 
 import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
 import { RainService, type RainfallResult } from '@/services/RainService';
 import { getPlantedCropColorStyles } from '@/lib/cropColors';
@@ -67,6 +69,8 @@ export default function FieldDetailScreen() {
     viewingSeason,
     farmName
   } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id);
+  const complianceProfile = defaultProfileForCountry(preferences.country);
   const field = useMemo(() => fields.find(f => f.id === id), [fields, id]);
   const displayFieldAcres = useMemo(
     () => field ? roundTo(getDisplayFieldAcres(field, cluAssignments), 0) : 0,
@@ -506,7 +510,7 @@ export default function FieldDetailScreen() {
                 View Record
               </button>
               <button
-                onClick={() => generateSprayPDF([latestSpray], farmName, { fields: [field], cluAssignments })}
+                onClick={() => generateSprayPDF([latestSpray], farmName, { fields: field ? [field] : [], cluAssignments, profile: complianceProfile })}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-spray/10 text-spray text-sm font-semibold hover:bg-spray/20 transition-colors"
               >
                 <ExternalLink size={14} />
