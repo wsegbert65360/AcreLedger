@@ -16,7 +16,7 @@ const restoreMigration = await readFile(
   'utf8',
 );
 const restoreConflictMigration = await readFile(
-  new URL('../supabase/migrations/20261008210000_restore_equipment_task_name_conflicts.sql', import.meta.url),
+  new URL('../supabase/migrations/20261009024113_restore_equipment_task_name_conflicts.sql', import.meta.url),
   'utf8',
 );
 const restoreHelperMigration = await readFile(
