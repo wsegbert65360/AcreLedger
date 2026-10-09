@@ -210,7 +210,7 @@ interface FarmState {
   ) => Promise<boolean>;
   deleteEquipment: (id: string) => Promise<boolean>;
   addMaintenanceSchedule: (record: Omit<MaintenanceSchedule, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
-  updateMaintenanceSchedule: (record: MaintenanceSchedule) => Promise<boolean>;
+  updateMaintenanceSchedule: (record: MaintenanceSchedule, options?: { baselineEdited?: boolean }) => Promise<boolean>;
   deleteMaintenanceSchedule: (id: string) => Promise<boolean>;
   logMaintenance: (record: Omit<MaintenanceLog, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>, forceLower?: boolean) => Promise<boolean>;
   updateMaintenanceLog: (record: MaintenanceLog) => Promise<boolean>;
@@ -542,12 +542,25 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
       if (!isCurrentRequest()) return false;
 
+      // Equipment is fail-soft: a missing or failing equipment table must not
+      // block every other collection from loading. Its state is only replaced
+      // when all three reads succeed; otherwise the cached copy stays visible.
+      const equipmentLoaded = !equipmentPages.error
+        && !maintenanceSchedulesPages.error
+        && !maintenanceLogsPages.error;
+      if (!equipmentLoaded) {
+        console.warn('Equipment data did not load; keeping cached equipment.', {
+          equipment: equipmentPages.error,
+          maintenanceSchedules: maintenanceSchedulesPages.error,
+          maintenanceLogs: maintenanceLogsPages.error,
+        });
+      }
+
       const pagedErrors = [
         fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
         hayPages, customSprayPages, fertilizerPages, tillagePages, grainPages,
         seedsPages, fertilizerRecipesPages, recipesPages, tractsPages,
-        assignmentsPages, workRequestsPages, equipmentPages,
-        maintenanceSchedulesPages, maintenanceLogsPages,
+        assignmentsPages, workRequestsPages,
       ]
         .map(pages => pages.error)
         .filter(Boolean);
@@ -576,23 +589,24 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           const tractsData = tractsPages.rows;
           const assignmentsData = assignmentsPages.rows;
           const workRequestsData = workRequestsPages.rows;
-          const equipmentData = equipmentPages.rows;
-          const maintenanceSchedulesData = maintenanceSchedulesPages.rows;
-          const maintenanceLogsData = maintenanceLogsPages.rows;
-
-          let equipmentMapped = equipmentData.map(mapEquipmentFromDb);
-          let schedulesMapped = maintenanceSchedulesData.map(mapMaintenanceScheduleFromDb);
-          let logsMapped = maintenanceLogsData.map(mapMaintenanceLogFromDb);
-          try {
-            const parked = await syncQueue.getFailed(farm_id);
-            if (parked.length > 0) {
-              const merged = applyParkedEquipmentMutations(equipmentMapped, schedulesMapped, logsMapped, parked);
-              equipmentMapped = merged.equipment;
-              schedulesMapped = merged.schedules;
-              logsMapped = merged.logs;
+          let equipmentMapped: Equipment[] | null = null;
+          let schedulesMapped: MaintenanceSchedule[] | null = null;
+          let logsMapped: MaintenanceLog[] | null = null;
+          if (equipmentLoaded) {
+            equipmentMapped = equipmentPages.rows.map(mapEquipmentFromDb);
+            schedulesMapped = maintenanceSchedulesPages.rows.map(mapMaintenanceScheduleFromDb);
+            logsMapped = maintenanceLogsPages.rows.map(mapMaintenanceLogFromDb);
+            try {
+              const parked = await syncQueue.getFailed(farm_id);
+              if (parked.length > 0) {
+                const merged = applyParkedEquipmentMutations(equipmentMapped, schedulesMapped, logsMapped, parked);
+                equipmentMapped = merged.equipment;
+                schedulesMapped = merged.schedules;
+                logsMapped = merged.logs;
+              }
+            } catch (error) {
+              console.error('Failed to re-apply parked equipment changes:', error);
             }
-          } catch (error) {
-            console.error('Failed to re-apply parked equipment changes:', error);
           }
 
           setFields(fieldsData.map(mapFieldFromDb));
@@ -611,9 +625,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           setFsaTracts(tractsData.map(mapFsaTractFromDb));
           setCluAssignments(assignmentsData.map(mapFieldCluAssignmentFromDb));
           setWorkRequests(workRequestsData.map(mapWorkRequestFromDb));
-          setEquipment(equipmentMapped);
-          setMaintenanceSchedules(schedulesMapped);
-          setMaintenanceLogs(logsMapped);
+          if (equipmentMapped && schedulesMapped && logsMapped) {
+            setEquipment(equipmentMapped);
+            setMaintenanceSchedules(schedulesMapped);
+            setMaintenanceLogs(logsMapped);
+          }
           setStateOwnerKey(requestIdentity);
 
           if (farmData && farmData.name) {
