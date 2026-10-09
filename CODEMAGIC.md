@@ -2,7 +2,7 @@
 
 This guide covers configuring [CodeMagic](https://codemagic.io) to build, sign, and distribute the AcreLedger iOS app.
 
-The `codemagic.yaml` in the repo root follows the [CodeMagic React Native quick start](https://docs.codemagic.io/yaml-quick-start/building-a-react-native-app/) pattern, adapted for a Capacitor 6 web-to-native build.
+The `codemagic.yaml` in the repo root follows the [CodeMagic React Native quick start](https://docs.codemagic.io/yaml-quick-start/building-a-react-native-app/) pattern, adapted for a Capacitor 8 web-to-native build (Android uses Java 21, Gradle 8.14.3, AGP 8.13.0).
 
 ---
 

@@ -62,6 +62,7 @@ within 30 days.
 
 ## Validation log
 
+- 2026-10-09 — Capacitor 6 → 8.5.3 upgrade implementation in progress on working tree (uncommitted). iOS: CocoaPods pod install, Xcode 26 validation, signing/archive creation, TestFlight upload, and physical-device checklist remain pending macOS/App Store access. Speech-recognition 7.0.1 iOS compilation is unverified. SQLCipher and secure-storage encryption flags confirmed present in generated `ios/App/App/capacitor.config.json`.
 - 2026-09-29 — Windows validation on the reconciled review-fix tree (rebased
   onto the 13-commit remote head `e039a0d`, Node 22.22.3): lint 0 errors and 72
   warnings; app and API typechecks passed; `verify:docs`, `verify:app-store`,
