@@ -54,6 +54,12 @@ function roundTo(value: number, places: number): number {
   return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
+/** Meter columns are NUMERIC(10,1). Rounding before the write keeps the queued
+ * payload equal to the stored row, which offline replay reconciliation compares. */
+function roundReading<T extends number | undefined>(value: T): T {
+  return (value == null ? value : roundTo(value, 1)) as T;
+}
+
 /** Returns null when a reading or cost is not a finite, non-negative number. */
 function normalizeLogAmounts<T extends Pick<MaintenanceLog, 'readingAtService' | 'costParts' | 'costLabor'>>(
   input: T,
@@ -171,6 +177,7 @@ export function useEquipment({
     const now = new Date().toISOString();
     const record: Equipment = {
       ...input,
+      currentReading: roundReading(input.currentReading),
       id: crypto.randomUUID(),
       farm_id,
       createdAt: now,
@@ -255,9 +262,14 @@ export function useEquipment({
     const previousSchedules = maintenanceSchedules;
     const now = new Date().toISOString();
     const hoursInvolved = previous.meterUnit === 'hours' || toUnit === 'hours';
-    const convertedReading = hoursInvolved
+    const convertedReading = roundReading(hoursInvolved
       ? options.currentReading
-      : convertMeterUnit(previous.currentReading, previous.meterUnit, toUnit) ?? options.currentReading;
+      : convertMeterUnit(previous.currentReading, previous.meterUnit, toUnit) ?? options.currentReading);
+    const suppliedSchedules = options.schedules?.map(item => ({
+      ...item,
+      intervalValue: roundReading(item.intervalValue),
+      lastDoneReading: item.lastDoneReading == null ? null : roundReading(item.lastDoneReading),
+    }));
     if (convertedReading == null || convertedReading < 0) {
       toast.error('Enter a meter reading for the new unit.');
       return false;
@@ -265,7 +277,7 @@ export function useEquipment({
 
     const nextSchedules = maintenanceSchedules.map(schedule => {
       if (schedule.equipmentId !== id || schedule.deleted_at || schedule.intervalValue == null) return schedule;
-      const supplied = options.schedules?.find(item => item.id === schedule.id);
+      const supplied = suppliedSchedules?.find(item => item.id === schedule.id);
       if (hoursInvolved) {
         return {
           ...schedule,
@@ -296,7 +308,7 @@ export function useEquipment({
       p_to_unit: toUnit,
       p_current_reading: hoursInvolved ? convertedReading : null,
       p_schedules: hoursInvolved
-        ? (options.schedules ?? []).map(item => ({
+        ? (suppliedSchedules ?? []).map(item => ({
           id: item.id,
           interval_value: item.intervalValue,
           last_done_reading: item.lastDoneReading ?? convertedReading,
@@ -365,11 +377,12 @@ export function useEquipment({
       return false;
     }
     const now = new Date().toISOString();
-    const lastDoneReading = input.lastDoneReading ?? (
+    const lastDoneReading = roundReading(input.lastDoneReading ?? (
       input.intervalValue != null && machine ? machine.currentReading : undefined
-    );
+    ));
     const record: MaintenanceSchedule = {
       ...input,
+      intervalValue: roundReading(input.intervalValue),
       lastDoneReading,
       id: crypto.randomUUID(),
       farm_id,
@@ -397,7 +410,14 @@ export function useEquipment({
     const keepBaseline = !baselineEdited && previous
       ? { lastDoneReading: previous.lastDoneReading, lastDoneAt: previous.lastDoneAt }
       : {};
-    const updated = { ...record, ...keepBaseline, farm_id, updatedAt: new Date().toISOString() };
+    const updated = {
+      ...record,
+      intervalValue: roundReading(record.intervalValue),
+      lastDoneReading: roundReading(record.lastDoneReading),
+      ...keepBaseline,
+      farm_id,
+      updatedAt: new Date().toISOString(),
+    };
     setMaintenanceSchedules(current => current.map(item => item.id === record.id ? updated : item));
     const payload = mapMaintenanceScheduleUpdateToDb(updated);
     if (!baselineEdited) {
@@ -455,16 +475,16 @@ export function useEquipment({
         readingUpdatedAt: now,
       } : item));
     }
-    if (input.scheduleId && priorSchedule) {
-      const shouldAdvance = !priorSchedule.lastDoneAt || input.performedOn >= priorSchedule.lastDoneAt;
-      if (shouldAdvance) {
-        setMaintenanceSchedules(current => current.map(item => item.id === input.scheduleId ? {
-          ...item,
-          lastDoneReading: input.readingAtService ?? item.lastDoneReading,
-          lastDoneAt: input.performedOn,
-          updatedAt: now,
-        } : item));
-      }
+    const scheduleAdvances = Boolean(priorSchedule && (
+      !priorSchedule.lastDoneAt || input.performedOn >= priorSchedule.lastDoneAt
+    ));
+    if (input.scheduleId && scheduleAdvances) {
+      setMaintenanceSchedules(current => current.map(item => item.id === input.scheduleId ? {
+        ...item,
+        lastDoneReading: input.readingAtService ?? item.lastDoneReading,
+        lastDoneAt: input.performedOn,
+        updatedAt: now,
+      } : item));
     }
 
     const rpcArgs = {
@@ -486,7 +506,7 @@ export function useEquipment({
       if (readingMoves) {
         setEquipment(current => current.map(item => item.id === priorMachine.id ? priorMachine : item));
       }
-      if (priorSchedule) {
+      if (scheduleAdvances && priorSchedule) {
         setMaintenanceSchedules(current => current.map(item => item.id === priorSchedule.id ? priorSchedule : item));
       }
       return false;

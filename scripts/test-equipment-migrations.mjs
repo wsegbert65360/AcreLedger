@@ -15,6 +15,14 @@ const restoreMigration = await readFile(
   new URL('../supabase/migrations/20261007090000_restore_equipment_tables.sql', import.meta.url),
   'utf8',
 );
+const restoreConflictMigration = await readFile(
+  new URL('../supabase/migrations/20261008210000_restore_equipment_task_name_conflicts.sql', import.meta.url),
+  'utf8',
+);
+const restoreHelperMigration = await readFile(
+  new URL('../supabase/migrations/20260716015958_preserve_restore_payload_columns.sql', import.meta.url),
+  'utf8',
+);
 
 const ids = {
   farm: '00000000-0000-4000-8000-000000000001',
@@ -98,6 +106,7 @@ await db.exec(`
   ) RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 0 $$;
 `);
 await db.exec(restoreMigration);
+await db.exec(restoreConflictMigration);
 await db.exec(`SELECT set_config('request.jwt.claim.sub', '${ids.user}', false); SET ROLE authenticated;`);
 
 await db.exec(`
@@ -226,5 +235,56 @@ const deleted = (
 ).rows[0];
 assert.deepEqual(deleted, { equipment: true, schedule: true });
 
+// Task-name conflicts on restore, using the real per-row restore helper.
+const realRestoreHelper = restoreHelperMigration.slice(
+  restoreHelperMigration.indexOf('CREATE OR REPLACE FUNCTION public._restore_table_for_farm('),
+  restoreHelperMigration.indexOf('CREATE OR REPLACE FUNCTION public._restore_table_for_farm_with_conflict'),
+);
+await db.exec(`CREATE SCHEMA IF NOT EXISTS extensions; ${realRestoreHelper}`);
+const restoredTask = '00000000-0000-4000-8000-000000000023';
+const greaseTask = '00000000-0000-4000-8000-000000000024';
+await db.exec(`
+  INSERT INTO public.maintenance_schedules (id, farm_id, equipment_id, task_name, interval_value, deleted_at)
+  VALUES ('${restoredTask}', '${ids.farm}', '${ids.equipment}', 'Oil', 250, now());
+`);
+const conflictResult = (
+  await db.query('SELECT public.restore_farm_backup($1::jsonb) AS result', [JSON.stringify({
+    maintenance_schedules: [
+      { id: restoredTask, equipment_id: ids.equipment, task_name: ' oil ', interval_value: 250, deleted_at: null },
+      { id: greaseTask, equipment_id: ids.equipment, task_name: 'Grease', interval_days: 30, deleted_at: null },
+    ],
+  })])
+).rows[0].result;
+assert.equal(conflictResult.maintenance_schedule_name_conflicts, 1, 'restore must report the task-name conflict');
+const afterConflict = Object.fromEntries((
+  await db.query(`
+    SELECT id, deleted_at IS NULL AS live FROM public.maintenance_schedules
+    WHERE id IN ('${ids.schedule}', '${restoredTask}', '${greaseTask}')
+  `)
+).rows.map(row => [row.id, row.live]));
+assert.deepEqual(
+  afterConflict,
+  { [ids.schedule]: true, [restoredTask]: false, [greaseTask]: true },
+  'a live same-name task must win; the conflicting payload task stays deleted and the rest restores',
+);
+
+// A payload that renames the live task frees its old name for a resurrected task.
+const renameResult = (
+  await db.query('SELECT public.restore_farm_backup($1::jsonb) AS result', [JSON.stringify({
+    maintenance_schedules: [
+      { id: restoredTask, equipment_id: ids.equipment, task_name: 'Oil', interval_value: 250, deleted_at: null },
+      { id: ids.schedule, equipment_id: ids.equipment, task_name: 'Engine oil', interval_value: 50, deleted_at: null },
+    ],
+  })])
+).rows[0].result;
+assert.equal(renameResult.maintenance_schedule_name_conflicts, 0, 'a renamed live task is not a conflict');
+const afterRename = Object.fromEntries((
+  await db.query(`
+    SELECT task_name, deleted_at IS NULL AS live FROM public.maintenance_schedules
+    WHERE id IN ('${ids.schedule}', '${restoredTask}')
+  `)
+).rows.map(row => [row.task_name, row.live]));
+assert.deepEqual(afterRename, { Oil: true, 'Engine oil': true }, 'rename and resurrection must both apply');
+
 await db.close();
-console.log('Equipment migration checks passed: guards, restore, higher-wins, idempotency, baselines, unit conversion, and cascade delete.');
+console.log('Equipment migration checks passed: guards, restore, task-name conflicts, higher-wins, idempotency, baselines, unit conversion, and cascade delete.');

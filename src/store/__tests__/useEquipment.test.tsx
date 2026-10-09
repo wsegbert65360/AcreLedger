@@ -301,4 +301,37 @@ describe('useEquipment', () => {
     expect(sent).not.toHaveProperty('last_done_reading');
     expect(sent).not.toHaveProperty('last_done_at');
   });
+
+  it('rounds new machine readings and task intervals to meter precision', async () => {
+    const { result } = renderEquipmentHook({ equipment: [machine] });
+    await act(async () => {
+      expect(await result.current.ops.addEquipment({
+        kind: 'truck', meterUnit: 'miles', currentReading: 1234.56, status: 'active',
+      })).toBe(true);
+      expect(await result.current.ops.addMaintenanceSchedule({
+        equipmentId: 'e1', taskName: 'Grease', intervalValue: 50.25, lastDoneReading: 999.95,
+      })).toBe(true);
+    });
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'equipment', 'insert', expect.objectContaining({ current_reading: 1234.6 }), 'farm-1',
+    );
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'maintenance_schedules', 'insert',
+      expect.objectContaining({ interval_value: 50.3, last_done_reading: 1000 }),
+      'farm-1',
+    );
+  });
+
+  it('leaves an unadvanced task alone when a back-dated log fails', async () => {
+    const stored: MaintenanceSchedule = { ...task, lastDoneReading: 1200, lastDoneAt: '2026-07-01' };
+    supabaseMock.setRpcResult({ data: null, error: { code: '23514', message: 'rejected' } });
+    const { result } = renderEquipmentHook({ online: true, equipment: [machine], schedules: [stored] });
+    await act(async () => {
+      expect(await result.current.ops.logMaintenance({
+        equipmentId: 'e1', scheduleId: 's1', kind: 'service', performedOn: '2026-03-01', readingAtService: 900,
+      })).toBe(false);
+    });
+    expect(result.current.schedules.value[0]).toMatchObject({ lastDoneReading: 1200, lastDoneAt: '2026-07-01' });
+    expect(result.current.logs.value).toHaveLength(0);
+  });
 });

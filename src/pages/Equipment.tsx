@@ -99,7 +99,7 @@ function EquipmentForm({ open, machine, schedules, onClose }: EquipmentFormProps
     const currentReading = Number(reading);
     const parsedYear = optionalNumber(year);
     if (!Number.isFinite(currentReading) || currentReading < 0) return toast.error('Enter a valid meter reading.');
-    if (parsedYear != null && (parsedYear < 1900 || parsedYear > 2100)) return toast.error('Enter a year from 1900 to 2100.');
+    if ((year.trim() && parsedYear == null) || (parsedYear != null && (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > 2100))) return toast.error('Enter a year from 1900 to 2100.');
     if (unitChanged && !automaticallyConvertible && meterSchedules.some(schedule => !optionalNumber(replacementIntervals[schedule.id] ?? ''))) {
       return toast.error('Re-enter every meter-based maintenance interval for the new unit.');
     }
