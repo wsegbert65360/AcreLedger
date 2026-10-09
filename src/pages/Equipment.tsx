@@ -21,6 +21,7 @@ import {
   type DueStatus,
 } from '@/lib/equipment';
 import { exportMaintenanceCsv } from '@/lib/equipment/export';
+import { toLocalIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
 import type { Equipment as EquipmentRecord, EquipmentKind, MaintenanceLogKind, MaintenanceSchedule, MeterUnit } from '@/types/equipment';
 
@@ -204,9 +205,19 @@ function ScheduleDialog({ machine, schedule, onClose }: { machine: EquipmentReco
   const [lastDate, setLastDate] = useState(schedule?.lastDoneAt ?? '');
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!meter && !days) return toast.error('Enter a meter or day interval.');
-    const values = { equipmentId: machine.id, taskName: name.trim(), intervalValue: optionalNumber(meter), intervalDays: optionalNumber(days), lastDoneReading: optionalNumber(lastReading), lastDoneAt: lastDate || undefined };
-    const ok = schedule ? await updateMaintenanceSchedule({ ...schedule, ...values }) : await addMaintenanceSchedule(values);
+    if (!meter.trim() && !days.trim()) return toast.error('Enter a meter or day interval.');
+    const intervalValue = optionalNumber(meter);
+    const intervalDays = optionalNumber(days);
+    if (meter.trim() && (intervalValue == null || intervalValue <= 0)) return toast.error('Meter interval must be greater than zero.');
+    if (days.trim() && (intervalDays == null || intervalDays <= 0 || !Number.isInteger(intervalDays))) return toast.error('Day interval must be a whole number of days.');
+    const lastDoneReading = optionalNumber(lastReading);
+    if (lastReading.trim() && (lastDoneReading == null || lastDoneReading < 0)) return toast.error('Last reading must be zero or greater.');
+    const values = { equipmentId: machine.id, taskName: name.trim(), intervalValue, intervalDays, lastDoneReading, lastDoneAt: lastDate || undefined };
+    // Only a changed baseline may overwrite the stored one (see useEquipment).
+    const baselineEdited = !schedule || lastReading !== (schedule.lastDoneReading?.toString() ?? '') || lastDate !== (schedule.lastDoneAt ?? '');
+    const ok = schedule
+      ? await updateMaintenanceSchedule({ ...schedule, ...values }, { baselineEdited })
+      : await addMaintenanceSchedule(values);
     if (ok) onClose();
   };
   return <Dialog open onOpenChange={value => !value && onClose()}><DialogContent><DialogHeader><DialogTitle>{schedule ? 'Edit maintenance task' : 'Add maintenance task'}</DialogTitle><DialogDescription>Use a meter interval, a calendar interval, or both.</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-3"><label className="block space-y-1"><Label>Task name</Label><Input required value={name} onChange={e => setName(e.target.value)} placeholder="Oil change" /></label><div className="grid grid-cols-2 gap-3"><label className="space-y-1"><Label>Every ({UNIT_LABEL[machine.meterUnit]})</Label><Input inputMode="decimal" value={meter} onChange={e => setMeter(e.target.value)} /></label><label className="space-y-1"><Label>Every (days)</Label><Input inputMode="numeric" value={days} onChange={e => setDays(e.target.value)} /></label><label className="space-y-1"><Label>Last reading</Label><Input inputMode="decimal" value={lastReading} onChange={e => setLastReading(e.target.value)} /></label><label className="space-y-1"><Label>Last done</Label><Input type="date" value={lastDate} onChange={e => setLastDate(e.target.value)} /></label></div><DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button>Save task</Button></DialogFooter></form></DialogContent></Dialog>;
@@ -225,11 +236,23 @@ function LogDialog({ machine, kind, schedules, onClose }: { machine: EquipmentRe
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const meter = optionalNumber(reading);
-    const force = meter != null && meter < machine.currentReading
+    const costParts = optionalNumber(parts);
+    const costLabor = optionalNumber(labor);
+    if (reading.trim() && (meter == null || meter < 0)) return toast.error('Enter a valid meter reading.');
+    if ((parts.trim() && (costParts == null || costParts < 0)) || (labor.trim() && (costLabor == null || costLabor < 0))) {
+      return toast.error('Costs must be zero or greater.');
+    }
+    // A service dated before the meter's last update is historical: it keeps its
+    // own reading but must not move the meter. Only a same-day or newer lower
+    // reading is treated as a meter replacement and needs confirmation.
+    const meterDate = machine.readingUpdatedAt ? toLocalIsoDate(new Date(machine.readingUpdatedAt).getTime()) : null;
+    const backdated = meterDate != null && date < meterDate;
+    const lowersMeter = meter != null && meter < machine.currentReading;
+    const force = lowersMeter && !backdated
       ? window.confirm('This reading is lower than the current meter. Save it as a meter replacement or correction?')
       : false;
-    if (meter != null && meter < machine.currentReading && !force) return;
-    const ok = await logMaintenance({ equipmentId: machine.id, scheduleId: kind === 'service' && scheduleId ? scheduleId : undefined, kind, performedOn: date, readingAtService: meter, description: description.trim() || undefined, performedBy: performedBy.trim() || undefined, vendor: vendor.trim() || undefined, costParts: optionalNumber(parts), costLabor: optionalNumber(labor) }, force);
+    if (lowersMeter && !backdated && !force) return;
+    const ok = await logMaintenance({ equipmentId: machine.id, scheduleId: kind === 'service' && scheduleId ? scheduleId : undefined, kind, performedOn: date, readingAtService: meter, description: description.trim() || undefined, performedBy: performedBy.trim() || undefined, vendor: vendor.trim() || undefined, costParts, costLabor }, force);
     if (ok) onClose(); else toast.error(`Could not save ${kind}.`);
   };
   return <Dialog open onOpenChange={value => !value && onClose()}><DialogContent className="max-h-[92vh] overflow-y-auto"><DialogHeader><DialogTitle>Log {kind}</DialogTitle><DialogDescription>{machineName(machine)}</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-3"><div className="grid grid-cols-2 gap-3"><label className="space-y-1"><Label>Date</Label><Input required type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label className="space-y-1"><Label>Reading ({UNIT_LABEL[machine.meterUnit]})</Label><Input inputMode="decimal" value={reading} onChange={e => setReading(e.target.value)} /></label></div>{kind === 'service' && <label className="block space-y-1"><Label>Maintenance task</Label><select className="h-11 w-full rounded-md border bg-background px-3" value={scheduleId} onChange={e => setScheduleId(e.target.value)}><option value="">None</option>{schedules.map(item => <option key={item.id} value={item.id}>{item.taskName}</option>)}</select></label>}<label className="block space-y-1"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} /></label><div className="grid grid-cols-2 gap-3"><label className="space-y-1"><Label>Performed by</Label><Input value={performedBy} onChange={e => setPerformedBy(e.target.value)} /></label><label className="space-y-1"><Label>Vendor</Label><Input value={vendor} onChange={e => setVendor(e.target.value)} /></label><label className="space-y-1"><Label>Parts cost</Label><Input inputMode="decimal" value={parts} onChange={e => setParts(e.target.value)} /></label><label className="space-y-1"><Label>Labor cost</Label><Input inputMode="decimal" value={labor} onChange={e => setLabor(e.target.value)} /></label></div><DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button>Save {kind}</Button></DialogFooter></form></DialogContent></Dialog>;

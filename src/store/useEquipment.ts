@@ -49,6 +49,27 @@ function readingFromRpc(data: unknown): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+function roundTo(value: number, places: number): number {
+  const factor = 10 ** places;
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
+
+/** Returns null when a reading or cost is not a finite, non-negative number. */
+function normalizeLogAmounts<T extends Pick<MaintenanceLog, 'readingAtService' | 'costParts' | 'costLabor'>>(
+  input: T,
+): T | null {
+  const nonNegative = (value: number | undefined): boolean => value == null || (Number.isFinite(value) && value >= 0);
+  if (!nonNegative(input.readingAtService) || !nonNegative(input.costParts) || !nonNegative(input.costLabor)) {
+    return null;
+  }
+  return {
+    ...input,
+    readingAtService: input.readingAtService == null ? undefined : roundTo(input.readingAtService, 1),
+    costParts: input.costParts == null ? undefined : roundTo(input.costParts, 2),
+    costLabor: input.costLabor == null ? undefined : roundTo(input.costLabor, 2),
+  };
+}
+
 export function useEquipment({
   farm_id,
   equipment,
@@ -363,12 +384,27 @@ export function useEquipment({
     return ok;
   }, [equipment, farm_id, maintenanceSchedules, persist, setMaintenanceSchedules]);
 
-  const updateMaintenanceSchedule = useCallback(async (record: MaintenanceSchedule): Promise<boolean> => {
+  const updateMaintenanceSchedule = useCallback(async (
+    record: MaintenanceSchedule,
+    options: { baselineEdited?: boolean } = {},
+  ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
     const previous = maintenanceSchedules.find(item => item.id === record.id);
-    const updated = { ...record, farm_id, updatedAt: new Date().toISOString() };
+    // The form was opened from a possibly stale copy. Unless the user edited the
+    // last-done baseline, keep the stored baseline so a newer log from another
+    // device or an earlier queued log is not overwritten.
+    const baselineEdited = options.baselineEdited ?? true;
+    const keepBaseline = !baselineEdited && previous
+      ? { lastDoneReading: previous.lastDoneReading, lastDoneAt: previous.lastDoneAt }
+      : {};
+    const updated = { ...record, ...keepBaseline, farm_id, updatedAt: new Date().toISOString() };
     setMaintenanceSchedules(current => current.map(item => item.id === record.id ? updated : item));
-    const ok = await persist('maintenance_schedules', 'update', mapMaintenanceScheduleUpdateToDb(updated));
+    const payload = mapMaintenanceScheduleUpdateToDb(updated);
+    if (!baselineEdited) {
+      delete payload.last_done_reading;
+      delete payload.last_done_at;
+    }
+    const ok = await persist('maintenance_schedules', 'update', payload);
     if (!ok && previous) setMaintenanceSchedules(current => current.map(item => item.id === record.id ? previous : item));
     return ok;
   }, [farm_id, maintenanceSchedules, persist, setMaintenanceSchedules]);
@@ -384,41 +420,51 @@ export function useEquipment({
   }, [farm_id, maintenanceSchedules, persist, setMaintenanceSchedules]);
 
   const logMaintenance = useCallback(async (
-    input: Omit<MaintenanceLog, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>,
+    rawInput: Omit<MaintenanceLog, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>,
     forceLower = false,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
-    const machine = equipment.find(item => item.id === input.equipmentId);
+    const machine = equipment.find(item => item.id === rawInput.equipmentId);
     if (!machine) return false;
-    if (input.readingAtService != null) {
-      const readingResult = applyReadingUpdate(machine, input.readingAtService, { force: forceLower });
-      if (readingResult.status !== 'applied') return false;
+    // Money and meters are stored at 0.01 / 0.1 precision. Normalize before the
+    // optimistic update and the RPC so a replay compares identical values.
+    const input = normalizeLogAmounts(rawInput);
+    if (!input) {
+      toast.error('Enter a valid reading and non-negative costs.');
+      return false;
     }
+    // A back-dated service is a historical fact. It must not move the meter
+    // backwards; the RPC keeps the higher reading unless forceLower is set.
+    const readingMoves = input.readingAtService != null && (
+      forceLower
+        ? input.readingAtService !== machine.currentReading
+        : input.readingAtService > machine.currentReading
+    );
     const now = new Date().toISOString();
     const record: MaintenanceLog = { ...input, id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null };
     const mapped = mapMaintenanceLogToDb(record);
-    const priorSchedules = maintenanceSchedules;
-    const priorEquipment = equipment;
+    const priorMachine = machine;
+    const priorSchedule = input.scheduleId
+      ? maintenanceSchedules.find(item => item.id === input.scheduleId)
+      : undefined;
     setMaintenanceLogs(current => [...current, record]);
-    if (input.readingAtService != null) {
+    if (readingMoves) {
       setEquipment(current => current.map(item => item.id === input.equipmentId ? {
         ...item,
-        currentReading: forceLower ? input.readingAtService! : Math.max(item.currentReading, input.readingAtService!),
+        currentReading: input.readingAtService!,
         readingUpdatedAt: now,
       } : item));
     }
-    if (input.scheduleId) {
-      setMaintenanceSchedules(current => current.map(item => {
-        if (item.id !== input.scheduleId) return item;
-        const shouldAdvance = !item.lastDoneAt || input.performedOn >= item.lastDoneAt;
-        if (!shouldAdvance) return item;
-        return {
+    if (input.scheduleId && priorSchedule) {
+      const shouldAdvance = !priorSchedule.lastDoneAt || input.performedOn >= priorSchedule.lastDoneAt;
+      if (shouldAdvance) {
+        setMaintenanceSchedules(current => current.map(item => item.id === input.scheduleId ? {
           ...item,
           lastDoneReading: input.readingAtService ?? item.lastDoneReading,
           lastDoneAt: input.performedOn,
           updatedAt: now,
-        };
-      }));
+        } : item));
+      }
     }
 
     const rpcArgs = {
@@ -435,9 +481,14 @@ export function useEquipment({
       payload: mapped,
     });
     if (!ok) {
+      // Revert only what this call touched so concurrent edits survive.
       setMaintenanceLogs(current => current.filter(item => item.id !== record.id));
-      setMaintenanceSchedules(priorSchedules);
-      setEquipment(priorEquipment);
+      if (readingMoves) {
+        setEquipment(current => current.map(item => item.id === priorMachine.id ? priorMachine : item));
+      }
+      if (priorSchedule) {
+        setMaintenanceSchedules(current => current.map(item => item.id === priorSchedule.id ? priorSchedule : item));
+      }
       return false;
     }
     const stored = readingFromRpc(data);

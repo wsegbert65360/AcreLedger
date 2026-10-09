@@ -234,4 +234,71 @@ describe('useEquipment', () => {
     expect(result.current.machines.value[0]).toMatchObject({ meterUnit: 'miles', currentReading: 10 });
     expect(result.current.schedules.value[0]).toMatchObject({ intervalValue: 5000, lastDoneReading: 1000 });
   });
+
+  it('records a back-dated service without lowering the meter or forcing a correction', async () => {
+    const current: Equipment = { ...machine, currentReading: 3100, readingUpdatedAt: '2026-09-01T12:00:00Z' };
+    const { result } = renderEquipmentHook({ equipment: [current] });
+    await act(async () => {
+      expect(await result.current.ops.logMaintenance({
+        equipmentId: 'e1', kind: 'service', performedOn: '2026-03-15', readingAtService: 2800,
+      })).toBe(true);
+    });
+    expect(result.current.machines.value[0].currentReading).toBe(3100);
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'maintenance_logs', 'insert',
+      expect.objectContaining({
+        __equipment_rpc: expect.objectContaining({
+          args: expect.objectContaining({ p_reading: 2800, p_force_lower: false }),
+        }),
+      }),
+      'farm-1',
+    );
+  });
+
+  it('rounds readings and costs to storage precision before queueing the replay', async () => {
+    const { result } = renderEquipmentHook({ equipment: [machine] });
+    await act(async () => {
+      expect(await result.current.ops.logMaintenance({
+        equipmentId: 'e1', kind: 'repair', performedOn: '2026-06-01',
+        readingAtService: 1100.46, costParts: 12.345, costLabor: 5.005,
+      })).toBe(true);
+    });
+    expect(enqueueMutation).toHaveBeenCalledWith(
+      'maintenance_logs', 'insert',
+      expect.objectContaining({
+        __equipment_rpc: expect.objectContaining({
+          args: expect.objectContaining({ p_reading: 1100.5, p_cost_parts: 12.35, p_cost_labor: 5.01 }),
+        }),
+      }),
+      'farm-1',
+    );
+  });
+
+  it('rejects a negative cost without queueing anything', async () => {
+    const { result } = renderEquipmentHook({ equipment: [machine] });
+    await act(async () => {
+      expect(await result.current.ops.logMaintenance({
+        equipmentId: 'e1', kind: 'repair', performedOn: '2026-06-01', costParts: -4,
+      })).toBe(false);
+    });
+    expect(enqueueMutation).not.toHaveBeenCalled();
+  });
+
+  it('keeps the stored baseline when a task edit did not change it', async () => {
+    const stored: MaintenanceSchedule = { ...task, lastDoneReading: 1200, lastDoneAt: '2026-07-01' };
+    const { result } = renderEquipmentHook({ online: true, equipment: [machine], schedules: [stored] });
+    await act(async () => {
+      expect(await result.current.ops.updateMaintenanceSchedule(
+        { ...stored, lastDoneReading: 1000, lastDoneAt: '2026-05-01', taskName: 'Oil & filter' },
+        { baselineEdited: false },
+      )).toBe(true);
+    });
+    expect(result.current.schedules.value[0]).toMatchObject({
+      taskName: 'Oil & filter', lastDoneReading: 1200, lastDoneAt: '2026-07-01',
+    });
+    const sent = supabaseMock.fns.update.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+    expect(sent).toMatchObject({ task_name: 'Oil & filter' });
+    expect(sent).not.toHaveProperty('last_done_reading');
+    expect(sent).not.toHaveProperty('last_done_at');
+  });
 });

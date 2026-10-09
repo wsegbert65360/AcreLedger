@@ -22,7 +22,7 @@ describe('equipment mappers', () => {
     };
     const row = mapEquipmentToDb(equipment);
     expect(row).not.toHaveProperty('make');
-    expect(row).not.toHaveProperty('deleted_at');
+    expect(row).toMatchObject({ deleted_at: null });
     expect(mapEquipmentFromDb({ ...row, current_reading: '12.3' } as any)).toEqual(equipment);
   });
 

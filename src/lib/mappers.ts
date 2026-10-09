@@ -482,7 +482,9 @@ export const mapEquipmentToDb = (equipment: Equipment): Record<string, unknown> 
     includeDefined(row, 'serial_number', equipment.serialNumber);
     includeDefined(row, 'reading_updated_at', equipment.readingUpdatedAt);
     includeDefined(row, 'notes', equipment.notes);
-    includeDefined(row, 'deleted_at', equipment.deleted_at);
+    // Always explicit: restore only resurrects a tombstoned row when the
+    // payload carries deleted_at: null.
+    row.deleted_at = equipment.deleted_at ?? null;
     return row;
 };
 
@@ -551,7 +553,7 @@ export const mapMaintenanceScheduleToDb = (schedule: MaintenanceSchedule): Recor
     includeDefined(row, 'interval_days', schedule.intervalDays);
     includeDefined(row, 'last_done_reading', schedule.lastDoneReading);
     includeDefined(row, 'last_done_at', schedule.lastDoneAt);
-    includeDefined(row, 'deleted_at', schedule.deleted_at);
+    row.deleted_at = schedule.deleted_at ?? null;
     return row;
 };
 
@@ -573,7 +575,7 @@ export const mapMaintenanceLogToDb = (log: MaintenanceLog): Record<string, unkno
     includeDefined(row, 'vendor', log.vendor);
     includeDefined(row, 'cost_parts', log.costParts);
     includeDefined(row, 'cost_labor', log.costLabor);
-    includeDefined(row, 'deleted_at', log.deleted_at);
+    row.deleted_at = log.deleted_at ?? null;
     return row;
 };
 
