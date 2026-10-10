@@ -4,13 +4,10 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
 
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
-      cancel_previous_builds: true
+    # No automatic triggers: builds start nightly (2:00 AM America/Chicago)
+    # via the GitLab scheduled job `codemagic_nightly` in .gitlab-ci.yml,
+    # which skips when main has not changed since the last successful build.
+    # Manual starts from the Codemagic UI still work.
 
     environment:
       android_signing:
@@ -152,13 +149,10 @@ workflows:
     integrations:
       app_store_connect: appstore
 
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
-      cancel_previous_builds: true
+    # No automatic triggers: builds start nightly (2:00 AM America/Chicago)
+    # via the GitLab scheduled job `codemagic_nightly` in .gitlab-ci.yml,
+    # which skips when main has not changed since the last successful build.
+    # Manual starts from the Codemagic UI still work.
 
     environment:
       ios_signing:

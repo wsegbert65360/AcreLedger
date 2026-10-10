@@ -4,6 +4,7 @@ stages:
   - validate
   - test
   - build
+  - nightly
 
 cache:
   key:
@@ -18,6 +19,10 @@ default:
 
 quality:
   stage: validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
   script:
     - npm run lint
     - npm run typecheck
@@ -25,6 +30,10 @@ quality:
 
 database:
   stage: validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
   script:
     - npm run test:db-integrity
     # This intentionally blocks RC promotion until an authoritative core-schema
@@ -33,6 +42,10 @@ database:
 
 test_job:
   stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
   script:
     - npm ci --prefix infrastructure/owner-backup
     - npm ci --prefix scripts/recovery
@@ -40,8 +53,26 @@ test_job:
 
 build:
   stage: build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - when: on_success
   script:
     - npm run build
+
+codemagic_nightly:
+  stage: nightly
+  image: alpine:3.20
+  cache: []
+  before_script: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == "main"
+  variables:
+    CODEMAGIC_APP_ID: "6a11efe7ef713f8199f4cf4a"
+  script:
+    - apk add --no-cache curl jq >/dev/null
+    - test -n "$CODEMAGIC_API_TOKEN" || { echo "CODEMAGIC_API_TOKEN not set" >&2; exit 1; }
+    - sh scripts/ci/codemagic-nightly.sh
 
 workflow:
   rules:
