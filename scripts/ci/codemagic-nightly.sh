@@ -7,7 +7,8 @@ API="https://api.codemagic.io"
 AUTH="x-auth-token: ${CODEMAGIC_API_TOKEN}"
 SHA="${CI_COMMIT_SHA}"
 for WF in acreledger-ios acreledger-android; do
-  RESP=$(curl -fsS -H "$AUTH" "$API/builds?appId=${CODEMAGIC_APP_ID}&workflowId=${WF}&branch=main")
+  RESP=$(curl -fsS -H "$AUTH" "$API/builds?appId=${CODEMAGIC_APP_ID}&workflowId=${WF}&branch=main" \
+    | jq --arg wf "$WF" '{builds: [.builds[] | select(.fileWorkflowId==$wf and .branch=="main")]}')
   # Skip too if a build for this exact commit is already queued/running.
   ACTIVE=$(echo "$RESP" | jq -r --arg sha "$SHA" '[.builds[] | select(.status|IN("queued","preparing","fetching","building","publishing","testing")) | select(.commit.hash==$sha)] | length')
   LAST=$(echo "$RESP" | jq -r '[.builds[] | select(.status=="finished")] | sort_by(.startedAt) | last | .commit.hash // ""')
