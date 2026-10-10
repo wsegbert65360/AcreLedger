@@ -45,16 +45,35 @@ export const isSupabaseConfigured = hasValidSupabaseUrl && Boolean(configuredSup
 
 const isNative = Capacitor.isNativePlatform();
 
+// Password-recovery links (/auth?mode=recovery&code=...) are exchanged manually
+// by establishWebPasswordRecoverySession(). If the client also auto-detects the
+// code on init, it burns the one-time PKCE code first and the manual exchange
+// fails with "expired, invalid, or already used". Skip auto-detect on that URL only.
+const isRecoveryUrl =
+    typeof window !== 'undefined' &&
+    window.location.pathname === '/auth' &&
+    new URLSearchParams(window.location.search).get('mode') === 'recovery';
+
 // A network "online" signal only proves a link exists; the request can still
 // hang forever (dead socket, captive portal, dropped LTE). Without a timeout an
 // insert below can block its hook's `isMutating` lock and the caller sees no
 // result. Abort after 15s so the hooks can treat it as an unknown outcome and
 // re-queue instead of hanging or double-counting grain.
 const SUPABASE_FETCH_TIMEOUT_MS = 15000;
+// Reads and auth calls can't create an unknown-outcome write, so on slow rural
+// links they get a longer cap instead of failing a legitimate large response.
+const SUPABASE_READ_TIMEOUT_MS = 60000;
+
+function timeoutFor(input: RequestInfo | URL, init?: RequestInit): number {
+    const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (method === 'GET' || method === 'HEAD' || url.includes('/auth/v1/')) return SUPABASE_READ_TIMEOUT_MS;
+    return SUPABASE_FETCH_TIMEOUT_MS;
+}
 
 function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), SUPABASE_FETCH_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutFor(input, init));
     // Honor a caller-supplied signal without losing the timeout cap: abort our
     // controller when the caller's signal fires.
     const callerSignal = init?.signal;
@@ -88,7 +107,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         storage: isNative ? nativeStorageAdapter : undefined,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: !isRecoveryUrl,
         flowType: 'pkce',
     },
 });

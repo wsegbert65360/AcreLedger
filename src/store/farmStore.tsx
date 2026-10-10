@@ -1,12 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, useRef } from 'react';
 import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord, WorkRequest } from '@/types/farm';
 import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPages } from '@/lib/fetchAllPages';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
   mapHarvestFromDb, mapHayFromDb, mapCustomSprayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
   mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb,
-  mapFsaTractFromDb, mapFieldCluAssignmentFromDb, mapWorkRequestFromDb
+  mapFsaTractFromDb, mapFieldCluAssignmentFromDb, mapWorkRequestFromDb,
+  mapEquipmentFromDb, mapMaintenanceScheduleFromDb, mapMaintenanceLogFromDb
 } from '../lib/mappers';
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
@@ -27,9 +29,11 @@ import { useFieldsAndBins } from './useFieldsAndBins';
 import { useSeasonManagement, type ClearLocalCacheOptions } from './useSeasonManagement';
 import { useTillageRecords } from './useTillageRecords';
 import { useWorkRequests } from './useWorkRequests';
+import { useEquipment } from './useEquipment';
 import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
+import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
 import { syncQueue } from '../lib/syncQueue';
 
 /**
@@ -42,6 +46,10 @@ interface FarmState {
   isOnline: boolean;
   /** Number of pending operations in the sync queue */
   pendingSyncCount: number;
+  /** Queued changes that exhausted their retries and need export or discard. */
+  failedSyncCount: number;
+  getFailedSyncChanges: () => Promise<unknown[]>;
+  discardFailedSyncChanges: () => Promise<number>;
   /** Global loading state for data fetching */
   loading: boolean;
   /** True once the initial data load has settled for the current session (online fetch when online, cache hydration when offline). Gates decisions that must not race with the transient empty-fields render. */
@@ -80,6 +88,10 @@ interface FarmState {
   cluAssignments: FieldCluAssignment[];
   /** Outbound work requests (status-driven, not season-scoped) */
   workRequests: WorkRequest[];
+  /** Farm equipment and its recurring maintenance/service history. */
+  equipment: Equipment[];
+  maintenanceSchedules: MaintenanceSchedule[];
+  maintenanceLogs: MaintenanceLog[];
   /** The current chronological season year */
   activeSeason: number;
   /** The season year currently being viewed/edited */
@@ -131,6 +143,11 @@ interface FarmState {
   /** Operations for managing field definitions */
   addField: (field: Omit<Field, 'id' | 'farm_id'>, requestedId?: string) => Promise<boolean>;
   updateField: (field: Field) => Promise<boolean>;
+  /**
+   * Notes-only unmount flush for FieldNotes. Serializes behind an in-flight
+   * field update so newer keystrokes cannot lose to an older autosave draft.
+   */
+  flushFieldNotes: (field: Field) => Promise<boolean>;
   deleteField: (id: string) => Promise<boolean>;
   /** Operations for managing bin definitions */
   addBin: (bin: Omit<Bin, 'id' | 'farm_id'>) => Promise<boolean>;
@@ -179,6 +196,25 @@ interface FarmState {
   ) => Promise<boolean>;
   updateWorkRequest: (r: WorkRequest) => Promise<boolean>;
   deleteWorkRequests: (ids: string[]) => Promise<boolean>;
+  addEquipment: (record: Omit<Equipment, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
+  updateEquipment: (record: Equipment) => Promise<boolean>;
+  updateEquipmentReading: (id: string, reading: number, force?: boolean) => Promise<'saved' | 'warning' | 'failed'>;
+  setEquipmentMeterUnit: (
+    id: string,
+    fromUnit: Equipment['meterUnit'],
+    toUnit: Equipment['meterUnit'],
+    options?: {
+      currentReading?: number;
+      schedules?: Array<{ id: string; intervalValue: number; lastDoneReading: number | null }>;
+    },
+  ) => Promise<boolean>;
+  deleteEquipment: (id: string) => Promise<boolean>;
+  addMaintenanceSchedule: (record: Omit<MaintenanceSchedule, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
+  updateMaintenanceSchedule: (record: MaintenanceSchedule, options?: { baselineEdited?: boolean }) => Promise<boolean>;
+  deleteMaintenanceSchedule: (id: string) => Promise<boolean>;
+  logMaintenance: (record: Omit<MaintenanceLog, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>, forceLower?: boolean) => Promise<boolean>;
+  updateMaintenanceLog: (record: MaintenanceLog) => Promise<boolean>;
+  deleteMaintenanceLog: (id: string) => Promise<boolean>;
 }
 
 const FarmContext = createContext<FarmState | null>(null);
@@ -217,10 +253,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [fsaTracts, setFsaTracts] = useState<FsaTractImport[]>([]);
   const [cluAssignments, setCluAssignments] = useState<FieldCluAssignment[]>([]);
   const [workRequests, setWorkRequests] = useState<WorkRequest[]>([]);
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [maintenanceSchedules, setMaintenanceSchedules] = useState<MaintenanceSchedule[]>([]);
+  const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
 
   // --- Network & Offline State ---
   const { isOnline } = useNetworkStatus();
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [failedSyncCount, setFailedSyncCount] = useState(0);
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [stateOwnerKey, setStateOwnerKey] = useState<string | null>(null);
   // True once the authoritative initial data load has settled for this session.
@@ -251,6 +291,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setFsaTracts([]);
     setCluAssignments([]);
     setWorkRequests([]);
+    setEquipment([]);
+    setMaintenanceSchedules([]);
+    setMaintenanceLogs([]);
     setFarmName(null);
   }, []);
 
@@ -258,16 +301,36 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     const requestIdentity = identityKey;
     if (farm_id && requestIdentity) {
       try {
-        const count = await syncQueue.getPendingCount(farm_id);
-        if (identityRef.current === requestIdentity) setPendingSyncCount(count);
+        const [count, failed] = await Promise.all([
+          syncQueue.getPendingCount(farm_id),
+          syncQueue.getFailed(farm_id),
+        ]);
+        if (identityRef.current === requestIdentity) {
+          // Exhausted changes stay queued but must not block sign-out or
+          // account deletion forever.
+          setPendingSyncCount(Math.max(0, count - failed.length));
+          setFailedSyncCount(failed.length);
+        }
       } catch (err) {
         console.error('Failed to read pending sync count:', err);
         // Leave the previous count. An unreadable store must not look empty.
       }
     } else {
       setPendingSyncCount(0);
+      setFailedSyncCount(0);
     }
   }, [farm_id, identityKey]);
+
+  const getFailedSyncChanges = useCallback(
+    async () => (farm_id ? syncQueue.getFailed(farm_id) : []),
+    [farm_id],
+  );
+  const discardFailedSyncChanges = useCallback(async () => {
+    if (!farm_id) return 0;
+    const removed = await syncQueue.discardFailed(farm_id);
+    await updatePendingSyncCount();
+    return removed;
+  }, [farm_id, updatePendingSyncCount]);
 
   useEffect(() => {
     updatePendingSyncCount();
@@ -307,7 +370,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         const [
           fieldsData, binsData, plantData, sprayData, harvestData, hayData, customSprayData,
           fertilizerData, tillageData, grainData, seedsData, fertilizerRecipesData, recipesData,
-          tractsData, assignmentsData, workRequestsData
+          tractsData, assignmentsData, workRequestsData, equipmentData,
+          maintenanceSchedulesData, maintenanceLogsData
         ] = await Promise.all([
           offlineStorage.loadCache('fields', userId),
           offlineStorage.loadCache('bins', userId),
@@ -325,6 +389,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           offlineStorage.loadCache('fsa_tract_imports', userId),
           offlineStorage.loadCache('field_clu_assignments', userId),
           offlineStorage.loadCache('work_requests', userId),
+          offlineStorage.loadCache('equipment', userId),
+          offlineStorage.loadCache('maintenance_schedules', userId),
+          offlineStorage.loadCache('maintenance_logs', userId),
         ]);
 
         if (cancelled || identityRef.current !== hydrationIdentity) return;
@@ -350,6 +417,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           })));
         }
         if (workRequestsData) setWorkRequests(workRequestsData);
+        if (equipmentData) setEquipment(equipmentData);
+        if (maintenanceSchedulesData) setMaintenanceSchedules(maintenanceSchedulesData);
+        if (maintenanceLogsData) setMaintenanceLogs(maintenanceLogsData);
         setStateOwnerKey(hydrationIdentity);
       } catch (err) {
         if (!cancelled && identityRef.current === hydrationIdentity) {
@@ -420,7 +490,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
         hayPages, customSprayPages, fertilizerPages, tillagePages, grainPages,
         seedsPages, fertilizerRecipesPages, recipesPages, tractsPages,
-        assignmentsPages, workRequestsPages,
+        assignmentsPages, workRequestsPages, equipmentPages,
+        maintenanceSchedulesPages, maintenanceLogsPages,
         { data: farmData, error: farmErr }
       ] = await Promise.all([
         pagedQuery('fields'),
@@ -455,10 +526,35 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             .order('id', { ascending: true })
             .range(from, to),
         ),
+        pagedQuery('equipment'),
+        pagedQuery('maintenance_schedules'),
+        fetchAllPages((from, to) =>
+          supabase.from('maintenance_logs')
+            .select('*')
+            .eq('farm_id', farm_id)
+            .is('deleted_at', null)
+            .order('performed_on', { ascending: false })
+            .order('id', { ascending: true })
+            .range(from, to),
+        ),
         supabase.from('farms').select('name').eq('id', farm_id).single()
       ]);
 
       if (!isCurrentRequest()) return false;
+
+      // Equipment is fail-soft: a missing or failing equipment table must not
+      // block every other collection from loading. Its state is only replaced
+      // when all three reads succeed; otherwise the cached copy stays visible.
+      const equipmentLoaded = !equipmentPages.error
+        && !maintenanceSchedulesPages.error
+        && !maintenanceLogsPages.error;
+      if (!equipmentLoaded) {
+        console.warn('Equipment data did not load; keeping cached equipment.', {
+          equipment: equipmentPages.error,
+          maintenanceSchedules: maintenanceSchedulesPages.error,
+          maintenanceLogs: maintenanceLogsPages.error,
+        });
+      }
 
       const pagedErrors = [
         fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
@@ -493,6 +589,25 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           const tractsData = tractsPages.rows;
           const assignmentsData = assignmentsPages.rows;
           const workRequestsData = workRequestsPages.rows;
+          let equipmentMapped: Equipment[] | null = null;
+          let schedulesMapped: MaintenanceSchedule[] | null = null;
+          let logsMapped: MaintenanceLog[] | null = null;
+          if (equipmentLoaded) {
+            equipmentMapped = equipmentPages.rows.map(mapEquipmentFromDb);
+            schedulesMapped = maintenanceSchedulesPages.rows.map(mapMaintenanceScheduleFromDb);
+            logsMapped = maintenanceLogsPages.rows.map(mapMaintenanceLogFromDb);
+            try {
+              const parked = await syncQueue.getFailed(farm_id);
+              if (parked.length > 0) {
+                const merged = applyParkedEquipmentMutations(equipmentMapped, schedulesMapped, logsMapped, parked);
+                equipmentMapped = merged.equipment;
+                schedulesMapped = merged.schedules;
+                logsMapped = merged.logs;
+              }
+            } catch (error) {
+              console.error('Failed to re-apply parked equipment changes:', error);
+            }
+          }
 
           setFields(fieldsData.map(mapFieldFromDb));
           setBins(binsData.map(mapBinFromDb));
@@ -510,6 +625,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           setFsaTracts(tractsData.map(mapFsaTractFromDb));
           setCluAssignments(assignmentsData.map(mapFieldCluAssignmentFromDb));
           setWorkRequests(workRequestsData.map(mapWorkRequestFromDb));
+          if (equipmentMapped && schedulesMapped && logsMapped) {
+            setEquipment(equipmentMapped);
+            setMaintenanceSchedules(schedulesMapped);
+            setMaintenanceLogs(logsMapped);
+          }
           setStateOwnerKey(requestIdentity);
 
           if (farmData && farmData.name) {
@@ -590,6 +710,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('fsa_tract_imports', cacheOwnerUserId, fsaTracts); } }, [fsaTracts, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('field_clu_assignments', cacheOwnerUserId, cluAssignments); } }, [cluAssignments, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('work_requests', cacheOwnerUserId, workRequests); } }, [workRequests, cacheOwnerUserId]);
+  useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('equipment', cacheOwnerUserId, equipment); } }, [equipment, cacheOwnerUserId]);
+  useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('maintenance_schedules', cacheOwnerUserId, maintenanceSchedules); } }, [maintenanceSchedules, cacheOwnerUserId]);
+  useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('maintenance_logs', cacheOwnerUserId, maintenanceLogs); } }, [maintenanceLogs, cacheOwnerUserId]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
@@ -607,6 +730,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const tillageOps = useTillageRecords({ farm_id, viewingSeason, tillageRecords, setTillageRecords, isOnline, onMutation: updatePendingSyncCount });
   const grainOps = useGrainMovements({ farm_id, viewingSeason, grainMovements, setGrainMovements, isOnline, onMutation: updatePendingSyncCount });
   const workRequestOps = useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnline, onMutation: updatePendingSyncCount });
+  const equipmentOps = useEquipment({
+    farm_id, equipment, maintenanceSchedules, maintenanceLogs,
+    setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
+    isOnline, onMutation: updatePendingSyncCount,
+  });
 
   const tractOps = useFsaTracts({
     farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments,
@@ -628,12 +756,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     session, farm_id,
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
-    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests, activeSeason,
+    savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
+    equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
     setFsaTracts, setCluAssignments, setWorkRequests,
+    setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
     refetchFarmData: fetchData,
     isOnline,
     initialFetchComplete,
@@ -766,7 +896,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   return (
     <FarmContext.Provider value={{
-      session, isOnline, pendingSyncCount, loading, initialFetchComplete, fetchError,
+      session, isOnline, pendingSyncCount, failedSyncCount, getFailedSyncChanges, discardFailedSyncChanges, loading, initialFetchComplete, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,
@@ -779,6 +909,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       fsaTracts,
       cluAssignments,
       workRequests,
+      equipment: equipment.filter(item => !item.deleted_at),
+      maintenanceSchedules: maintenanceSchedules.filter(item => !item.deleted_at),
+      maintenanceLogs: maintenanceLogs.filter(item => !item.deleted_at),
       activeSeason, viewingSeason, seasonOptions, setViewingSeason: selectViewingSeason,
       rolloverToNewSeason: seasonOps.rolloverToNewSeason,
       ...plantOps,
@@ -790,6 +923,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       ...tillageOps,
       ...grainOps,
       ...workRequestOps,
+      ...equipmentOps,
       getBinTotal,
       ...entityOps,
       signOut,

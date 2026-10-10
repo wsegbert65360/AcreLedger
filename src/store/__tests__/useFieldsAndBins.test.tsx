@@ -192,4 +192,38 @@ describe('useFieldsAndBins safety', () => {
     await act(async () => expect(await result.current.ops.deleteSprayRecipe('r2')).toBe(false));
     expect(result.current.sprayRecipes.value.map(recipe => recipe.id)).toEqual(['r1', 'r2', 'r3']);
   });
+
+  it('flushFieldNotes serializes behind an in-flight autosave and saves the latest notes', async () => {
+    let releaseAutosave!: () => void;
+    const autosaveGate = new Promise<{ count: number; error: null }>(resolve => {
+      releaseAutosave = () => resolve({ count: 1, error: null });
+    });
+    fieldService.updateField.mockReturnValueOnce(autosaveGate);
+
+    const { result } = renderStore();
+
+    let autosaveResult: boolean | undefined;
+    let flushResult: boolean | undefined;
+    await act(async () => {
+      // Autosave for the older draft starts and blocks on the network.
+      const autosave = result.current.ops.updateField(field({ notes: 'older draft' }))
+        .then(r => { autosaveResult = r; });
+      // Unmount flush for the newer keystrokes must wait, not get rejected.
+      const flush = result.current.ops.flushFieldNotes(field({ notes: 'newer keystrokes' }))
+        .then(r => { flushResult = r; });
+      // While the autosave is in flight, no second service call may happen.
+      await Promise.resolve();
+      expect(fieldService.updateField).toHaveBeenCalledTimes(1);
+      releaseAutosave();
+      await autosave;
+      await flush;
+    });
+
+    expect(autosaveResult).toBe(true);
+    expect(flushResult).toBe(true);
+    expect(fieldService.updateField).toHaveBeenCalledTimes(2);
+    // The flush (second call) carries the newest notes, so last-writer-wins is correct.
+    expect(fieldService.updateField.mock.calls[1][0].notes).toBe('newer keystrokes');
+    expect(result.current.fields.value[0].notes).toBe('newer keystrokes');
+  });
 });

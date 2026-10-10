@@ -166,6 +166,10 @@ describe("apply tenant recovery", () => {
       executor,
     });
     expect(executor.sql).toContain("BEGIN");
+    const beginIndex = executor.sql.indexOf("BEGIN");
+    expect(executor.sql[beginIndex + 1]).toBe("SELECT set_config('acreledger.equipment_rpc', 'on', true)");
+    expect(executor.sql.findIndex((item) => item.includes('INSERT INTO "public"."equipment"')))
+      .toBeGreaterThan(executor.sql.indexOf("SELECT set_config('acreledger.equipment_rpc', 'on', true)"));
     expect(executor.sql.at(-1)).toBe("COMMIT");
     expect(executor.sql.some((item) => item.toLowerCase().includes("delete "))).toBe(false);
     expect(executor.sql.some((item) => item.includes("farm_id"))).toBe(true);

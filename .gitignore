@@ -13,12 +13,13 @@ build/
 # expo
 .expo/
 *.jks
+*.keystore
+keystore.properties
 *.p12
 *.key
 *.mobileprovision
 
 # native build folders
-android/
 ios/App/build/
 ios/DerivedData/
 ios/**/xcuserdata/
@@ -36,6 +37,7 @@ vite-dev.log
 vite-dev.err.log
 *.png
 !src/assets/landing/*.png
+!android/app/src/main/res/**/*.png
 SECURITY_AUDIT_*.md
 AcreLedger_UIUX_Recommendations*.md
 

@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-09-29 (review-fix pass: Stripe period end, checkout gate, recovery-link PKCE-only, auth-expiry sync replay).
+> **Last updated:** 2026-10-09 (Capacitor 8 upgrade with Android insets Option A, minSdk 24, androidx updates, and SystemBars insetsHandling: 'native').
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,12 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-09** — Capacitor 6 → 8.5.3 upgrade: bumped core/cli/ios/android to 8.5.3, sqlite to 8.1.1, secure-storage to 0.13.0, speech-recognition to 7.0.1, and all official Capacitor plugins to their 8.x versions. Android: minSdk 24, AGP 8.13.0, Gradle 8.14.3, androidx versions per plan. Android insets use Option A: removed custom MainActivity.java handler, configured SystemBars insetsHandling: ‘native’ with initialViewportFitValueHint: ‘cover’ (the app reads env(safe-area-inset-*), not the vars that ‘css’ injects). Codemagic Java 17 → 21. CapacitorSQLite and secure-storage encryption flags preserved. iOS validation and physical-device tests pending. Speech-recognition 7.0.1 compilation and device test unverified.
+- **2026-10-07** — Added pilot-gated equipment, maintenance schedules, and service/repair logs. Meter updates, unit changes, maintenance logging, and cascade soft-deletes use tenant-checked atomic RPCs and replay as one offline envelope. The three tables are included in customer backup/restore, owner recovery, test-data, and Ask the Book registries.
+- **2026-10-02** — Web password recovery no longer lets the Supabase client auto-exchange `?code=` on `/auth?mode=recovery` before the manual handler. A failed code exchange is rejected even when the browser already has a session, so an expired link cannot open the set-password screen for an ordinary sign-in. A missing PKCE verifier tells the user to open the link in the same browser or app that requested it. Sign-in and sign-up URLs still auto-detect.
+- **2026-10-01** — Password recovery accepts the supported Supabase email `token_hash` recovery link through `verifyOtp`, alongside the PKCE authorization-code exchange, on the exact native scheme and web recovery route. Raw URL session-token fragments remain forbidden and show a re-request message instead. The iPhone/dashboard verification protocol is in `docs/runbooks/ios-password-recovery-device-test.md`.
+- **2026-09-30** — MRMS ingestion reliability: added `public.mrms_ingestion_runs` (service-role-only outcome ledger keyed by target hour) so the nightly backfill's `field_id = null` runs persist `success`/`no_data`/`failed` like the hourly pass; the overnight job now folds recently failed/no-data hours back into its window (bounded and de-duplicated) so an hour that aged out of the ten-hour window is still retried; a chain-trigger failure records the un-run chunk instead of only logging; and a Pass 1 retry no longer downgrades a Pass 2 `finalized` row. Pure scheduling arithmetic lives in `supabase/functions/shared/mrmsSchedule.ts` with Vitest coverage. `mrms_ingestion_runs` is classified in the owner recovery registry.
 - **2026-09-29** — Review-fix pass, rebased onto the 13-commit remote head (`e039a0d`). Billing: `current_period_end` is read from Stripe subscription items (basil API); checkout is refused for live `past_due`/`unpaid` subscriptions, skips the trial when the farm ever had a subscription, and reuses the Stripe customer. Recovery deep link accepts a PKCE `code` only. Sync replay refreshes an expired session once and pauses without spending retries. Verified on the merged tree: lint 0 errors/72 warnings, app and API typechecks, `verify:docs`, `verify:app-store`, `verify:migrations` (75-migration PGlite replay), `test:db-integrity`, 1,285 unit tests in 137 files, 31 owner-backup and 21 recovery tests, and the production bundle build.
-- **2026-09-28** — Consistency pass: fixed the field-delete queueing contradiction (one batched `enqueueMutations`, never a per-record loop) and the optimistic-update step order (capture the snapshot before the optimistic setter); replaced duplicated feature detail with summaries that link to BLUEPRINT; AI model IDs now referenced by code constant; documented `verify:migrations`, `test:db-integrity`, and `install:owner-dr`.
-- **2026-09-27** — Added the App Store submission sources, native purchase-boundary rules, screenshot evidence standard, and `verify:app-store` release gate; reconciled test-command guidance with `package.json` and the iOS runbook, verified against 5cc6503.
-- **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and moved detailed design guidance into BLUEPRINT. Earlier today: added freshness headers and the feature-area file index.
-- **2026-09-20** — Native iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); emergency sign-out documented for an unreadable offline store (592fef7).
 
 ## Contents
 
@@ -54,7 +55,7 @@ Navigation checks and editorial changes do not constitute verification of archit
 
 AcreLedger is a mobile-first, PWA-ready agricultural record keeping and compliance reporting app for row-crop farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports.
 
-The app uses React 18, TypeScript strict mode, Vite 7, React Router 7, Supabase Postgres/Auth/RLS, React Context state, shadcn/ui, Tailwind CSS, Lucide React, Sonner, Zod, Visual Crossing weather, IEM Stage IV rainfall integration, and **Capacitor 6 for native iOS wrapper and device capabilities**.
+The app uses React 18, TypeScript strict mode, Vite 7, React Router 7, Supabase Postgres/Auth/RLS, React Context state, shadcn/ui, Tailwind CSS, Lucide React, Sonner, Zod, Visual Crossing weather, IEM Stage IV rainfall integration, and **Capacitor 8 for native iOS/Android wrapper and device capabilities**.
 
 ## Context Loading Rules
 
@@ -121,6 +122,11 @@ Rules), then open only the files for that area.
 - [@/hooks/useCoachmarks.ts](./src/hooks/useCoachmarks.ts) + [@/components/CoachmarkOverlay.tsx](./src/components/CoachmarkOverlay.tsx) — onboarding coachmark overlay system.
 - [@/context/QuickAddContext.tsx](./src/context/QuickAddContext.tsx) — global Quick Add provider managing modal states, preselected types, and active fields.
 - [@/components/QuickAddDialog.tsx](./src/components/QuickAddDialog.tsx) — global Quick Add dialog providing field selection and GPS-based nearest field detection.
+
+**Equipment & maintenance**
+- [@/types/equipment.ts](./src/types/equipment.ts), [@/store/useEquipment.ts](./src/store/useEquipment.ts), and [@/pages/Equipment.tsx](./src/pages/Equipment.tsx) — non-seasonal equipment state, atomic meter/service mutations, and the pilot UI.
+- [@/lib/equipment](./src/lib/equipment) — due-status, meter conversion, parked-mutation overlay, pilot flag, and CSV export helpers. Details: [BLUEPRINT → Equipment and Maintenance](./BLUEPRINT.md#equipment-and-maintenance).
+- [supabase/migrations/20261006214500_equipment_maintenance.sql](./supabase/migrations/20261006214500_equipment_maintenance.sql) and [20261006233000_equipment_meter_rpcs.sql](./supabase/migrations/20261006233000_equipment_meter_rpcs.sql) — tenant-scoped schema and atomic RPC contracts. Do not replace these RPCs with client-side read/compare/write sequences.
 
 **Offline, native & accounts**
 - [@/lib/native.ts](./src/lib/native.ts) — centralized native capabilities (haptics, status bar, geolocation).
@@ -360,7 +366,8 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 
 - Account deletion is a request (`account_deletion_requests`), never a client-side delete. Never add client update/delete grants or let request input choose another user or farm.
 - Native credentials and encryption material go through `secureStorage` (Keychain/Keystore).
-- Keep the native recovery scheme `com.wsegbert.acreledger://auth/recovery`, the Supabase redirect allowlist, `Info.plist`, the app listener, and recovery tests synchronized. Never accept arbitrary custom-scheme hosts or paths, and never establish a session from raw `access_token`/`refresh_token` values in the URL: the native listener accepts only a PKCE `code` (`exchangeCodeForSession`).
+- Keep the native recovery scheme `com.wsegbert.acreledger://auth/recovery`, the Supabase redirect allowlist, `Info.plist`, the app listener, and recovery tests synchronized. Never accept arbitrary custom-scheme hosts or paths, and never establish a session from raw `access_token`/`refresh_token` values in the URL: the native listener accepts a PKCE `code` (`exchangeCodeForSession`) or a `token_hash` only when `type=recovery` (`verifyOtp`).
+- On `/auth?mode=recovery` the browser client must leave `detectSessionInUrl` off so the one-time PKCE code is exchanged only by `establishWebPasswordRecoverySession`. If that exchange fails or returns no session, reject it — do not treat an existing `getSession()` as this reset. A missing PKCE verifier tells the user to open the link in the same browser or app that requested the reset. Other URLs, including sign-in and sign-up, keep auto-detect.
 
 ### CI/CD (CodeMagic)
 
@@ -374,11 +381,12 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 - `VITE_SUPABASE_URL` must be the raw HTTPS project URL, e.g. `https://<project-ref>.supabase.co`; do not include quotes, `KEY=`, commas, CLI commands, or the Postgres connection string in Codemagic values.
 - Capacitor iOS builds depend on `npm run cap:build` using `vite build --mode capacitor`; keep `base: "./"` for capacitor mode so bundled JS/CSS load from `capacitor://localhost`.
 - Native builds include `capacitor-secure-storage-plugin`; keep the lockfile, CocoaPods resolution, and iOS Keychain-backed credential migration aligned.
+- **Speech-recognition 7.0.1 on Capacitor 8:** no Capacitor 8.x release exists. Version 7.0.1 has peer `@capacitor/core >=7.0.0` (accepts 8) and uses the Objective-C `CAP_PLUGIN` registration and Android `@ActivityCallback`/`startActivityForResult`. iOS compilation and device tests are pending.
 - Preserve the `com.wsegbert.acreledger` recovery URL scheme in `Info.plist` and the privacy manifest declarations in `ios/App/App/PrivacyInfo.xcprivacy`. Use `IOS_RELEASE.md` as the App Store/TestFlight release checklist.
 - Keep iOS free of subscription prices, trial offers, sign-up/purchase calls to action, Stripe checkout, and external purchase links. Web pricing may remain on web, but Capacitor must show the sign-in-only product path guarded by `Capacitor.isNativePlatform()`; preserve the native coverage in `src/pages/__tests__/Landing.test.tsx` and `src/pages/__tests__/Settings.test.tsx`.
 - App Store metadata is sourced from `docs/app-store/metadata.en-US.json` and the matching submission package. Run `npm run verify:app-store` after changing listing copy, URLs, or the marketing version. Keep the privacy manifest, public privacy page, App Store questionnaire answers, and review notes consistent with actual behavior.
 - Final App Store screenshots must come from the exact selected release build using the approved fictional review account/dataset. Simulator or locally staged captures are draft evidence until their build provenance is tied to that release. Required captures must meet Apple's current device-family dimensions and contain no alpha channel. Never commit review-account credentials.
-- Do not add a global `tar` override in `package.json`. Capacitor 6 CLI requires its compatible nested `tar@6` dependency shape; forcing `tar@7` breaks `npx cap sync ios` with `Cannot read properties of undefined (reading 'extract')`.
+- Capacitor 8 CLI uses `require("tar")` with a named `extract` export and depends on `tar ^7.5.3`. Keep the nested `overrides["@capacitor/cli"].tar = "7.5.22"` to override any transitive `tar@6` requirement; do not add a global `tar` override.
 - Do not re-enable automatic external TestFlight submission unless App Store Connect Beta App Information and Beta App Review Information are complete.
 - **Marketing version** is read from `package.json` at build time. **Build number** uses CodeMagic's `$BUILD_NUMBER`.
 - **Do not** add `app_store_connect` publishing blocks without verifying the integration name exists in CodeMagic.
@@ -646,7 +654,7 @@ After editing:
    - `npm run test` — documentation and tracked-asset checks, then app unit and owner-DR package tests. Run `npm run test:unit` for the app suite alone. See [Testing](#testing).
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
    - `npm run verify:migrations` — checks migration filename format, unique timestamps, and disabled seed configuration, then replays every migration in order against a disposable in-memory PostgreSQL (PGlite) with the Supabase platform bootstrap, failing if any migration alters a relation that no migration creates. Run after adding or renaming a migration. It is not part of `npm test`; the GitLab `database` job runs it together with `test:db-integrity`. As of 2026-09-29 it passes: `supabase/migrations/20260316090000_core_harvest_grain_baseline.sql` reconstructs the core schema so the full history replays.
-   - `npm run test:db-integrity` — runs the tenant-scoped harvest/grain foreign-key migration and the harvest/grain baseline checks against in-memory PGlite. Run when changing those migrations or harvest/grain linkage.
+   - `npm run test:db-integrity` — runs the tenant-scoped harvest/grain checks plus equipment migration/RPC checks against in-memory PGlite. Run when changing those migrations, harvest/grain linkage, or equipment meter/service/cascade functions.
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
 3. Mention any unchecked risk clearly.
 

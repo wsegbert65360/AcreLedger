@@ -1,13 +1,13 @@
 # AcreLedger
 
-A mobile-first, PWA-ready farm record-keeping and compliance reporting app for row-crop farmers and small operations. Tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, FSA tracts/CLU assignments, and compliance exports. Wraps the React/Vite PWA in a native iOS shell via Capacitor 6 and ships to TestFlight through CodeMagic.
+A mobile-first, PWA-ready farm record-keeping and compliance reporting app for row-crop farmers and small operations. Tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, FSA tracts/CLU assignments, and compliance exports. Wraps the React/Vite PWA in a native iOS shell via Capacitor 8 and ships to TestFlight through CodeMagic.
 
 For full architecture, data model, and project rules, read **[AGENTS.md](./AGENTS.md)** first, then **[BLUEPRINT.md](./BLUEPRINT.md)** for deep architectural reference.
 
 ## Key Features
 
 - **Mobile-first PWA**: Responsive layout with safe-area insets, bottom navigation, sticky headers, and touch-sized targets. Installable on desktop and Android via the service worker.
-- **Native iOS via Capacitor 6**: Haptics, status bar, geolocation, network, preferences, splash screen, and share sheet — all conditionally gated so the same build runs in any browser.
+- **Native iOS via Capacitor 8**: Haptics, status bar, geolocation, network, preferences, splash screen, and share sheet — all conditionally gated so the same build runs in any browser.
 - **Offline-capable**: Mutations enqueue locally (`@/lib/syncQueue.ts` + `@/lib/offlineStorage.ts`) and replay on reconnect or app foreground. Network status is monitored via `@capacitor/network` with web fallback.
 - **Optimistic UI with rollback**: Every add/update/delete returns `Promise<boolean>`, snapshots state, and rolls back on Supabase errors.
 - **Season scoping**: Users view a `viewingSeason` independent of the farm's `activeSeason`. New records stamp the viewed season, and selectors pull dynamic options from `farmStore.tsx`.
@@ -38,7 +38,7 @@ For full architecture, data model, and project rules, read **[AGENTS.md](./AGENT
 - **Framer Motion** — route transitions and micro-interactions.
 - **Visual Crossing API** — weather.
 - **Rain API (IEM Stage IV + Supabase RPC merge)** — rainfall, hosted at `https://rain-api.vercel.app`.
-- **Capacitor 6** — native iOS wrapper and device plugins (`app`, `core`, `filesystem`, `geolocation`, `haptics`, `ios`, `network`, `preferences`, `share`, `splash-screen`, `status-bar`, `community/sqlite`).
+- **Capacitor 8** — native iOS wrapper and device plugins (`app`, `core`, `filesystem`, `geolocation`, `haptics`, `ios`, `network`, `preferences`, `share`, `splash-screen`, `status-bar`, `community/sqlite`).
 
 ## Scripts
 

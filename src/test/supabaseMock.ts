@@ -41,11 +41,13 @@ export interface SupabaseMock {
     update: SupabaseMockFunction;
     select: SupabaseMockFunction;
     eq: SupabaseMockFunction;
+    lte: SupabaseMockFunction;
     in: SupabaseMockFunction;
     is: SupabaseMockFunction;
     order: SupabaseMockFunction;
     range: SupabaseMockFunction;
     single: SupabaseMockFunction;
+    maybeSingle: SupabaseMockFunction;
   };
   /** Terminal result for the next awaited `from(...)` chain. */
   setResult: (result: Partial<SupabaseResult>) => void;
@@ -110,7 +112,7 @@ export function createSupabaseMock(): SupabaseMock {
     lastRangeByBuilder: new WeakMap(),
   };
 
-  const chainMethods = ['insert', 'upsert', 'update', 'select', 'eq', 'in', 'is', 'order', 'range', 'single'] as const;
+  const chainMethods = ['insert', 'upsert', 'update', 'select', 'eq', 'lte', 'in', 'is', 'order', 'range', 'single', 'maybeSingle'] as const;
   const fns = {
     from: vi.fn(),
     rpc: vi.fn(),
@@ -119,11 +121,13 @@ export function createSupabaseMock(): SupabaseMock {
     update: vi.fn(),
     select: vi.fn(),
     eq: vi.fn(),
+    lte: vi.fn(),
     in: vi.fn(),
     is: vi.fn(),
     order: vi.fn(),
     range: vi.fn(),
     single: vi.fn(),
+    maybeSingle: vi.fn(),
   };
 
   const installChain = () => {

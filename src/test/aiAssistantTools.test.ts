@@ -204,7 +204,8 @@ describe('full farm read catalog', () => {
       'custom_spray_records', 'fertilizer_applications', 'tillage_records',
       'harvest_records', 'hay_harvest_records', 'grain_movements', 'saved_seeds',
       'fertilizer_recipes', 'spray_recipes', 'fsa_tract_imports',
-      'field_clu_assignments', 'work_requests', 'field_rainfall_hourly',
+      'field_clu_assignments', 'work_requests', 'equipment', 'maintenance_schedules',
+      'maintenance_logs', 'field_rainfall_hourly',
       'field_rainfall_coverage', 'farm_rainfall_daily',
     ]);
     const toolNames = TOOL_DEFINITIONS.map(tool => tool.name);
@@ -225,6 +226,7 @@ describe('full farm read catalog', () => {
       'fertilizer_applications', 'tillage_records', 'harvest_records',
       'hay_harvest_records', 'grain_movements', 'saved_seeds', 'fertilizer_recipes',
       'spray_recipes', 'fsa_tract_imports', 'field_clu_assignments', 'work_requests',
+      'equipment', 'maintenance_schedules', 'maintenance_logs',
     ]);
 
     for (const entity of FARM_ENTITY_NAMES) {

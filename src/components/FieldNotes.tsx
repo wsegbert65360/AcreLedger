@@ -10,7 +10,7 @@ interface FieldNotesProps {
 }
 
 export default function FieldNotes({ field }: FieldNotesProps) {
-  const { updateField } = useFarm();
+  const { updateField, flushFieldNotes } = useFarm();
   const [notes, setNotes] = useState(field.notes || '');
   const [status, setStatus] = useState<'saved' | 'syncing' | 'idle'>('idle');
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -19,6 +19,7 @@ export default function FieldNotes({ field }: FieldNotesProps) {
   const fieldRef = useRef(field);
   const notesRef = useRef(notes);
   const updateFieldRef = useRef(updateField);
+  const flushFieldNotesRef = useRef(flushFieldNotes);
   const saveSequenceRef = useRef(0);
   const notesId = `field-notes-${field.id}`;
 
@@ -29,6 +30,10 @@ export default function FieldNotes({ field }: FieldNotesProps) {
   useEffect(() => {
     updateFieldRef.current = updateField;
   }, [updateField]);
+
+  useEffect(() => {
+    flushFieldNotesRef.current = flushFieldNotes;
+  }, [flushFieldNotes]);
 
   useEffect(() => {
     notesRef.current = notes;
@@ -62,8 +67,10 @@ export default function FieldNotes({ field }: FieldNotesProps) {
         clearTimeout(saveTimerRef.current);
         // A field detail navigation must not discard a draft merely because the
         // debounce has not elapsed yet. Use the most recent field snapshot so
-        // this notes-only save cannot overwrite another field edit.
-        void updateFieldRef.current({ ...fieldRef.current, notes: notesRef.current });
+        // this notes-only save cannot overwrite another field edit. The flush
+        // serializes behind an in-flight autosave so newer keystrokes cannot
+        // lose to the older draft the autosave carries.
+        void flushFieldNotesRef.current({ ...fieldRef.current, notes: notesRef.current });
       }
 
       if (confirmationTimerRef.current) {

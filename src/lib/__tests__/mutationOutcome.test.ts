@@ -27,6 +27,12 @@ describe('isUnknownMutationOutcome', () => {
     ).toBe(true);
   });
 
+  it('matches fetch TypeErrors but not ordinary code-bug TypeErrors', () => {
+    expect(isUnknownMutationOutcome(new TypeError('Failed to fetch'))).toBe(true);
+    expect(isUnknownMutationOutcome(new TypeError('Load failed'))).toBe(true);
+    expect(isUnknownMutationOutcome(new TypeError("Cannot read properties of undefined (reading 'id')"))).toBe(false);
+  });
+
   it('does not treat real database errors as unknown outcomes', () => {
     expect(
       isUnknownMutationOutcome({

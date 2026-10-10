@@ -20,6 +20,8 @@ import { useSprayForm } from '@/hooks/useSprayForm';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { WIND_ALERT_MPH } from '@/lib/weatherHelpers';
 import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { type Field, type SprayRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { formatCarryForwardTime } from '@/lib/carryForward';
@@ -33,7 +35,9 @@ interface SprayModalProps {
 
 function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { sprayRecipes, farmName, viewingSeason, cluAssignments } = useFarm();
+  const { sprayRecipes, farmName, viewingSeason, cluAssignments, session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id);
+  const complianceProfile = defaultProfileForCountry(preferences.country);
   const form = useSprayForm({ field, open, onClose, initialData, mode });
 
   const [showMissingChecklist, setShowMissingChecklist] = useState(false);
@@ -71,7 +75,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
     const exportBtn = initialData && (
       <Button
         variant="outline"
-        onClick={() => generateSprayPDF([initialData], farmName, { fields: [field], cluAssignments })}
+        onClick={() => generateSprayPDF([initialData], farmName, { fields: [field], cluAssignments, profile: complianceProfile })}
         className="touch-target w-full border-spray/30 py-6 text-base font-bold text-spray hover:bg-spray/10"
       >
         <FileDown size={20} className="mr-2" />
@@ -100,7 +104,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
     }
 
     return undefined;
-  }, [step, initialData, isDuplicate, isSaving, isMinimumValid, farmName, handleSubmit, form.isQuickMode, field, cluAssignments]);
+  }, [step, initialData, isDuplicate, isSaving, isMinimumValid, farmName, handleSubmit, form.isQuickMode, field, cluAssignments, complianceProfile]);
 
   return (
     <>
@@ -528,6 +532,8 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 totalAmountApplied={form.totalAmountApplied}
                 mixtureRate={form.mixtureRate}
                 totalMixtureVolume={form.totalMixtureVolume}
+                waterRate={form.waterRate}
+                waterRateUnit={form.waterRateUnit}
                 isPremixed={form.isPremixed}
                 showValidation={form.showValidation}
                 onRecoverWeather={form.handleRecoverWeather}
@@ -538,6 +544,8 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 setTotalAmountApplied={form.setTotalAmountApplied}
                 setMixtureRate={form.setMixtureRate}
                 setTotalMixtureVolume={form.setTotalMixtureVolume}
+                setWaterRate={form.setWaterRate}
+                setWaterRateUnit={form.setWaterRateUnit}
                 setIsPremixed={form.setIsPremixed}
               />}
 

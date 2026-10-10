@@ -4,8 +4,10 @@ import {
   buildSeasonOptions,
   clampViewingSeason,
   getMaxViewingSeason,
+  getSeasonPreset,
   isValidActiveSeason,
   isValidViewingSeason,
+  resolveHarvestYear,
   resolveRemoteViewingSeason,
 } from '@/lib/seasonYears';
 
@@ -45,5 +47,41 @@ describe('season year rules', () => {
     ]], 2026);
 
     expect(options).toEqual([2027, 2026, 2025, 2024, 2023]);
+  });
+});
+
+describe('region-aware season presets (AU pilot)', () => {
+  it('leaves the US preset empty (calendar-year seasons, unchanged)', () => {
+    expect(getSeasonPreset('US')).toEqual({});
+  });
+
+  it('defines AU winter-crop windows (Apr–Jun plant, Oct–Dec harvest)', () => {
+    const preset = getSeasonPreset('AU');
+    expect(preset.winterCrop).toEqual({
+      plantStartMonth: 4,
+      plantEndMonth: 6,
+      harvestStartMonth: 10,
+      harvestEndMonth: 12,
+    });
+  });
+
+  it('defines AU summer-crop windows (Sep–Nov plant, Feb–Apr harvest)', () => {
+    const preset = getSeasonPreset('AU');
+    expect(preset.summerCrop).toEqual({
+      plantStartMonth: 9,
+      plantEndMonth: 11,
+      harvestStartMonth: 2,
+      harvestEndMonth: 4,
+    });
+  });
+
+  it('keeps the harvest in the plant year when the window does not cross January', () => {
+    const preset = getSeasonPreset('AU');
+    expect(resolveHarvestYear(2026, preset.winterCrop!)).toBe(2026);
+  });
+
+  it('moves the harvest to the next year when the window crosses January', () => {
+    const preset = getSeasonPreset('AU');
+    expect(resolveHarvestYear(2026, preset.summerCrop!)).toBe(2027);
   });
 });

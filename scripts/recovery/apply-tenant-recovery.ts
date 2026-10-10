@@ -203,6 +203,10 @@ export async function applyTenantRecovery(options: ApplyOptions): Promise<{ writ
   }
   await options.executor.query("BEGIN", []);
   try {
+    // Snapshot upserts may intentionally replace equipment meter values. The
+    // transaction-local flag admits this trusted recovery path through the
+    // same trigger that rejects ordinary client updates.
+    await options.executor.query("SELECT set_config('acreledger.equipment_rpc', 'on', true)", []);
     await options.executor.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [options.farmId]);
     let written = 0;
     for (const statement of plan.statements) {

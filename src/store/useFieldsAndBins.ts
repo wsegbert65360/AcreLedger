@@ -53,6 +53,12 @@ export function useFieldsAndBins({
   const isSeedMutating = useRef(false);
   const isRecipeMutating = useRef(false);
 
+  // Settles when the in-flight field update finishes. The FieldNotes unmount
+  // flush (flushFieldNotes) awaits it so a cleanup save lands strictly after
+  // an in-flight autosave instead of being rejected by the isFieldMutating
+  // guard — that rejection lost newer keystrokes while the older draft persisted.
+  const fieldMutationPromiseRef = useRef<Promise<void> | null>(null);
+
   // --- Fields ---
   const addField = useCallback(async (f: Omit<Field, 'id' | 'farm_id'>, requestedId?: string): Promise<boolean> => {
     if (!farm_id) {
@@ -157,13 +163,28 @@ export function useFieldsAndBins({
     }
     isFieldMutating.current = true;
 
+    // Deferred that settles when this mutation finishes, letting the FieldNotes
+    // unmount flush serialize behind it (see flushFieldNotes).
+    let resolveFieldMutation: () => void = () => {};
+    fieldMutationPromiseRef.current = new Promise<void>(resolve => {
+      resolveFieldMutation = resolve;
+    });
+    // Clears the guard and settles the deferred. State is settled synchronously
+    // before resolving so a chained flush resuming on the resolve sees the
+    // guard already released.
+    const settleFieldMutation = () => {
+      isFieldMutating.current = false;
+      fieldMutationPromiseRef.current = null;
+      resolveFieldMutation();
+    };
+
     let mapped: ReturnType<typeof mapFieldToDb>;
     try {
       mapped = mapFieldToDb({ ...f, farm_id });
     } catch (err) {
       console.error('mapFieldToDb failed:', err);
       toast.error('Failed to prepare field — check inputs.');
-      isFieldMutating.current = false;
+      settleFieldMutation();
       return false;
     }
 
@@ -238,9 +259,29 @@ export function useFieldsAndBins({
         return false;
       }
     } finally {
-      isFieldMutating.current = false;
+      settleFieldMutation();
     }
   }, [farm_id, fields, setFields, isOnline, onMutation]);
+
+  // Notes-only save used by the FieldNotes unmount cleanup. Waits for any
+  // in-flight field update (typically a debounce autosave carrying an older
+  // draft) to settle, then saves through the normal updateField path. This
+  // closes the race where the cleanup flush was rejected by the
+  // isFieldMutating guard and newer keystrokes were lost. Out of scope: a
+  // field add/delete in flight from another screen still holds the guard, in
+  // which case this returns false exactly as the old direct call did.
+  const flushFieldNotes = useCallback(async (f: Field): Promise<boolean> => {
+    const inFlight = fieldMutationPromiseRef.current;
+    if (inFlight) {
+      try {
+        await inFlight;
+      } catch {
+        // A failed autosave must not block the flush; updateField's own
+        // failure paths (rollback, queue, toasts) still apply below.
+      }
+    }
+    return updateField(f);
+  }, [updateField]);
 
   const deleteField = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {
@@ -1384,7 +1425,7 @@ export function useFieldsAndBins({
   }, [farm_id, fertilizerRecipes, setFertilizerRecipes, isOnline, onMutation]);
 
   return {
-    addField, updateField, deleteField,
+    addField, updateField, deleteField, flushFieldNotes,
     addBin, updateBin, deleteBin,
     addSeed, deleteSeed,
     addSprayRecipe, updateSprayRecipe, deleteSprayRecipe,

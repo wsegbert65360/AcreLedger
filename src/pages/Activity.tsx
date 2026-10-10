@@ -14,6 +14,8 @@ import {
 import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
 import { compareWorkDateDesc, getWorkDateMs } from '@/utils/dates';
 import type {
@@ -92,8 +94,12 @@ export default function Activity() {
     deleteTillageRecords,
     viewingSeason,
     deleteGrainMovements,
-    farmName
+    farmName,
+    session
   } = useFarm();
+
+  const { preferences } = useAppPreferences(session?.user?.id);
+  const complianceProfile = defaultProfileForCountry(preferences.country);
 
   const [search, setSearch] = useState('');
   const requestedTab = searchParams.get('tab');
@@ -311,7 +317,7 @@ export default function Activity() {
                     const toExport = selected.size > 0
                       ? filteredSpray.filter(r => selected.has(r.id))
                       : filteredSpray;
-                    generateSprayPDF(toExport, farmName, { fields, cluAssignments });
+                    generateSprayPDF(toExport, farmName, { fields, cluAssignments, profile: complianceProfile });
                   }}
                   className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-spray/10 p-2.5 text-xs font-bold text-spray transition-colors hover:bg-spray/20"
                   title="Export Universal Spray Log PDF"

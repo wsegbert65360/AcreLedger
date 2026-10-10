@@ -50,6 +50,9 @@ export default function BackupManager() {
     fsaTracts,
     cluAssignments,
     workRequests,
+    equipment,
+    maintenanceSchedules,
+    maintenanceLogs,
     activeSeason,
   } = useFarm();
   const [backingUp, setBackingUp] = useState(false);
@@ -71,7 +74,10 @@ export default function BackupManager() {
     (sprayRecipes?.length ?? 0) +
     (fsaTracts?.length ?? 0) +
     (cluAssignments?.length ?? 0) +
-    (workRequests?.length ?? 0);
+    (workRequests?.length ?? 0) +
+    (equipment?.length ?? 0) +
+    (maintenanceSchedules?.length ?? 0) +
+    (maintenanceLogs?.length ?? 0);
 
   const hasData = recordCount > 0;
   const backupIsStale = lastBackup
@@ -104,6 +110,9 @@ export default function BackupManager() {
         fsaTracts,
         cluAssignments,
         workRequests,
+        equipment,
+        maintenanceSchedules,
+        maintenanceLogs,
         activeSeason,
         backupDate: new Date().toISOString(),
       };
@@ -189,6 +198,15 @@ export default function BackupManager() {
             </div>
             <div className="flex justify-between">
               <span>Work Requests</span><span className="text-foreground">{workRequests?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Equipment</span><span className="text-foreground">{equipment?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Maintenance Tasks</span><span className="text-foreground">{maintenanceSchedules?.length ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Service & Repairs</span><span className="text-foreground">{maintenanceLogs?.length ?? 0}</span>
             </div>
             <div className="flex justify-between pt-1 border-t border-border font-bold">
               <span>Total Records</span><span className="text-foreground">{recordCount}</span>

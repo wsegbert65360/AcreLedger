@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 
 import { App as CapApp } from "@capacitor/app";
@@ -18,16 +18,18 @@ import { useCoachmarks } from "@/hooks/useCoachmarks";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { syncQueue } from "@/lib/syncQueue";
+import { supabase } from "@/lib/supabase";
 import { FarmProvider, useFarm } from "@/store/farmStore";
 import { AskAcreLedgerProvider } from "@/context/AskAcreLedgerContext";
 import { QuickAddProvider, useQuickAdd } from "@/context/QuickAddContext";
 import AskAcreLedger from "@/components/AskAcreLedger";
 import QuickAddDialog from "@/components/QuickAddDialog";
 import { native } from "@/lib/native";
-import { listenForNativePasswordRecovery } from "@/lib/authDeepLinks";
+import { establishWebPasswordRecoverySession, listenForNativePasswordRecovery } from "@/lib/authDeepLinks";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { isEquipmentUiEnabled } from "@/lib/equipment/feature";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
@@ -41,6 +43,7 @@ const FertilizerModal = lazy(() => import("@/components/FertilizerModal"));
 const TillageModal = lazy(() => import("@/components/TillageModal"));
 const CustomSprayModal = lazy(() => import("@/components/CustomSprayModal"));
 const Activity = lazy(() => import("./pages/Activity"));
+const Equipment = lazy(() => import("./pages/Equipment"));
 const FieldDetailScreen = lazy(() => import("./pages/FieldDetailScreen"));
 const Index = lazy(() => import("./pages/Index"));
 const Logistics = lazy(() => import("./pages/Logistics"));
@@ -50,6 +53,27 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Weather = lazy(() => import("./pages/Weather"));
 
 const queryClient = new QueryClient();
+const PASSWORD_RECOVERY_PENDING_STORAGE_KEY = 'al_password_recovery_pending';
+
+function getPasswordRecoveryPending(): boolean {
+  try {
+    return sessionStorage.getItem(PASSWORD_RECOVERY_PENDING_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function setStoredPasswordRecoveryPending(pending: boolean): void {
+  try {
+    if (pending) {
+      sessionStorage.setItem(PASSWORD_RECOVERY_PENDING_STORAGE_KEY, 'true');
+    } else {
+      sessionStorage.removeItem(PASSWORD_RECOVERY_PENDING_STORAGE_KEY);
+    }
+  } catch {
+    // Private browsing or a disabled storage surface should not block recovery.
+  }
+}
 
 const pageVariants = {
   initial: { opacity: 0, y: 6 },
@@ -93,6 +117,7 @@ const AnimatedRoutes = () => {
           <Route path="/auth" element={<Navigate to="/" replace />} />
           <Route path="/logistics" element={<ErrorBoundary><Logistics /></ErrorBoundary>} />
           <Route path="/activity" element={<ErrorBoundary><Activity /></ErrorBoundary>} />
+          {isEquipmentUiEnabled() && <Route path="/equipment" element={<ErrorBoundary><Equipment /></ErrorBoundary>} />}
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
@@ -122,8 +147,14 @@ const AppContent = () => {
   const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
   const navigate = useNavigate();
+  const [webRecoveryReady, setWebRecoveryReady] = useState(false);
+  const [passwordRecoveryPending, setPasswordRecoveryPending] = useState(getPasswordRecoveryPending);
   const isPasswordRecovery = location.pathname === '/auth'
     && new URLSearchParams(location.search).get('mode') === 'recovery';
+  const updatePasswordRecoveryPending = (pending: boolean) => {
+    setStoredPasswordRecoveryPending(pending);
+    setPasswordRecoveryPending(pending);
+  };
   const coachmarks = useCoachmarks({
     userId: session?.user?.id,
     enabled: !!session && onboardingComplete && location.pathname === '/'
@@ -154,6 +185,45 @@ const AppContent = () => {
   ), [navigate]);
 
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setStoredPasswordRecoveryPending(true);
+        setPasswordRecoveryPending(true);
+      }
+      if (event === 'SIGNED_OUT') {
+        setStoredPasswordRecoveryPending(false);
+        setPasswordRecoveryPending(false);
+        setWebRecoveryReady(false);
+        if (window.location.pathname === '/auth'
+          && new URLSearchParams(window.location.search).get('mode') === 'recovery') {
+          navigate('/auth?mode=signin', { replace: true });
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform() || !isPasswordRecovery) return;
+    setWebRecoveryReady(false);
+    void establishWebPasswordRecoverySession()
+      .then(established => {
+        if (established) setWebRecoveryReady(true);
+      })
+      .catch(error => {
+        toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.');
+        // A failed fresh link must not tear down an already-pending recovery
+        // session (e.g. from a verified email code): the pending flag keeps
+        // the Auth recovery form rendered, so navigating away would contradict
+        // the visible UI. Only leave when no recovery is pending.
+        if (!passwordRecoveryPending) {
+          navigate('/', { replace: true });
+        }
+      });
+  }, [isPasswordRecovery, navigate, passwordRecoveryPending]);
+
+  useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
     const backListenerPromise = CapApp.addListener('backButton', () => {
@@ -169,8 +239,15 @@ const AppContent = () => {
     };
   }, []);
 
-  if (isPasswordRecovery) {
-    return <ErrorBoundary><Auth /></ErrorBoundary>;
+  if (passwordRecoveryPending || (isPasswordRecovery && (Capacitor.isNativePlatform() || webRecoveryReady))) {
+    return (
+      <ErrorBoundary>
+        <Auth
+          passwordRecoveryPending={passwordRecoveryPending}
+          onPasswordRecoveryPendingChange={updatePasswordRecoveryPending}
+        />
+      </ErrorBoundary>
+    );
   }
 
   if (loading) {
@@ -207,7 +284,17 @@ const AppContent = () => {
     return (
       <Routes>
         <Route path="/" element={<ErrorBoundary><Landing /></ErrorBoundary>} />
-        <Route path="/auth" element={<ErrorBoundary><Auth /></ErrorBoundary>} />
+        <Route
+          path="/auth"
+          element={isPasswordRecovery ? null : (
+            <ErrorBoundary>
+              <Auth
+                passwordRecoveryPending={passwordRecoveryPending}
+                onPasswordRecoveryPendingChange={updatePasswordRecoveryPending}
+              />
+            </ErrorBoundary>
+          )}
+        />
         <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
         <Route path="/support" element={<ErrorBoundary><Support /></ErrorBoundary>} />
         <Route path="*" element={<Navigate to="/" replace />} />

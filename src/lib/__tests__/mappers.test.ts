@@ -106,6 +106,37 @@ describe('Mappers Round-Trip', () => {
         expect(result.products).toEqual(original.products);
     });
 
+    it('should round-trip water rate and PIC for Australia pilot', () => {
+        const original: SprayRecord = {
+            id: 'spray-au-1',
+            fieldId: 'field-1',
+            fieldName: 'Test Field',
+            farm_id: 'farm-1',
+            sprayDate: '2026-10-04',
+            seasonYear: 2026,
+            applicatorName: 'Test Applicator',
+            licenseNumber: 'LIC123',
+            epaRegNumber: '',
+            windSpeed: 0,
+            products: [],
+            timestamp: Date.now(),
+            deleted_at: null,
+            waterRate: '100',
+            waterRateUnit: 'L/ha',
+            pic: 'NA123456',
+        };
+
+        const db = mapSprayToDb(original) as any;
+        expect(db.water_rate).toBe('100');
+        expect(db.water_rate_unit).toBe('L/ha');
+        expect(db.pic).toBe('NA123456');
+
+        const result = mapSprayFromDb(db);
+        expect(result.waterRate).toBe('100');
+        expect(result.waterRateUnit).toBe('L/ha');
+        expect(result.pic).toBe('NA123456');
+    });
+
     it('should maintain zero values for windSpeed, temperature, and relativeHumidity', () => {
         const original: SprayRecord = {
             id: '123',

@@ -12,6 +12,15 @@ import {
     WorkRequestRow, WorkRequestProductEntry, WorkRequestFieldEntryRow
 } from '../types/database';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+import type {
+    Equipment, EquipmentRow, MaintenanceLog, MaintenanceLogRow,
+    MaintenanceSchedule, MaintenanceScheduleRow,
+} from '@/types/equipment';
+import {
+    migrateFsaToPropertyIdentifiers,
+    getPropertyIdentifier,
+    syncFsaLegacyFields,
+} from './propertyIdentifiers';
 import {
     fieldSchema, binSchema, plantRecordSchema, sprayRecordSchema,
     harvestRecordSchema, hayHarvestRecordSchema, customSprayRecordSchema, grainMovementSchema,
@@ -38,6 +47,77 @@ function safeTimestamp(val: any): number {
     return isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
+function optionalString(value: unknown): string | undefined {
+    return value == null || value === '' ? undefined : String(value);
+}
+
+function optionalNumber(value: unknown): number | undefined {
+    return value == null || value === '' ? undefined : safeNum(value);
+}
+
+function includeDefined<T extends Record<string, unknown>>(target: T, key: string, value: unknown): T {
+    if (value !== undefined && value !== null && value !== '') target[key as keyof T] = value as T[keyof T];
+    return target;
+}
+
+function nullableString(value: string | undefined): string | null {
+    return value == null || value === '' ? null : value;
+}
+
+function nullableNumber(value: number | undefined): number | null {
+    return value == null ? null : value;
+}
+
+export const mapEquipmentFromDb = (db: EquipmentRow): Equipment => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    kind: db.kind,
+    year: optionalNumber(db.year),
+    make: optionalString(db.make),
+    model: optionalString(db.model),
+    serialNumber: optionalString(db.serial_number),
+    meterUnit: db.meter_unit,
+    currentReading: safeNum(db.current_reading),
+    readingUpdatedAt: optionalString(db.reading_updated_at),
+    status: db.status,
+    notes: optionalString(db.notes),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
+export const mapMaintenanceScheduleFromDb = (db: MaintenanceScheduleRow): MaintenanceSchedule => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    equipmentId: db.equipment_id,
+    taskName: db.task_name,
+    intervalValue: optionalNumber(db.interval_value),
+    intervalDays: optionalNumber(db.interval_days),
+    lastDoneReading: optionalNumber(db.last_done_reading),
+    lastDoneAt: optionalString(db.last_done_at),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
+export const mapMaintenanceLogFromDb = (db: MaintenanceLogRow): MaintenanceLog => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    equipmentId: db.equipment_id,
+    scheduleId: optionalString(db.schedule_id),
+    kind: db.kind,
+    performedOn: db.performed_on,
+    readingAtService: optionalNumber(db.reading_at_service),
+    description: optionalString(db.description),
+    performedBy: optionalString(db.performed_by),
+    vendor: optionalString(db.vendor),
+    costParts: optionalNumber(db.cost_parts),
+    costLabor: optionalNumber(db.cost_labor),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
 export const mapFieldFromDb = (db: FieldRow): Field => ({
     id: db.id,
     name: safeStr(db.name, 'Unnamed Field'),
@@ -50,6 +130,16 @@ export const mapFieldFromDb = (db: FieldRow): Field => ({
     fsaFarmNumber: safeStr(db.fsa_farm_number),
     fsaTractNumber: safeStr(db.fsa_tract_number),
     fsaFieldNumber: safeStr(db.fsa_field_number),
+    propertyIdentifiers: [
+        ...migrateFsaToPropertyIdentifiers({
+            fsaFarmNumber: safeStr(db.fsa_farm_number),
+            fsaTractNumber: safeStr(db.fsa_tract_number),
+            fsaFieldNumber: safeStr(db.fsa_field_number),
+        }),
+        // Australia pilot: PIC persisted in the pic column (see migration
+        // 20261005013057). Without this, an au-pic identifier was lost on reload.
+        ...(safeStr(db.pic) ? [{ scheme: 'au-pic', kind: 'property', value: safeStr(db.pic) } as const] : []),
+    ],
     producerShare: db.producer_share ?? undefined,
     landlordName: safeStr(db.landlord_name),
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
@@ -72,6 +162,11 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     fsaFarmNumber: safeStr(db.fsa_farm_number),
     fsaTractNumber: safeStr(db.fsa_tract_number),
     fsaFieldNumber: safeStr(db.fsa_field_number),
+    propertyIdentifiers: migrateFsaToPropertyIdentifiers({
+        fsaFarmNumber: safeStr(db.fsa_farm_number),
+        fsaTractNumber: safeStr(db.fsa_tract_number),
+        fsaFieldNumber: safeStr(db.fsa_field_number),
+    }),
     intendedUse: safeStr(db.intended_use),
     producerShare: db.producer_share ?? undefined,
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
@@ -120,6 +215,9 @@ export const mapSprayFromDb = (db: SprayRecordRow): SprayRecord => ({
     complianceProfile: (db.compliance_profile || 'universal') as SprayRecord['complianceProfile'],
     isPremixed: !!db.is_premixed,
     nonCompliant: !!db.non_compliant,
+    waterRate: safeStr(db.water_rate),
+    waterRateUnit: safeStr(db.water_rate_unit),
+    pic: safeStr(db.pic),
     nozzleType: db.nozzle_type ?? undefined,
     nozzleSize: db.nozzle_size ?? undefined,
     pressurePsi: db.pressure_psi ?? undefined,
@@ -366,8 +464,126 @@ function validateRequired(obj: any, fields: string[], mapperName: string) {
 
 // --- Reverse Mappers (Frontend -> DB) ---
 
+export const mapEquipmentToDb = (equipment: Equipment): Record<string, unknown> => {
+    validateRequired(equipment, ['id', 'farm_id', 'kind', 'meterUnit', 'status'], 'mapEquipmentToDb');
+    const row: Record<string, unknown> = {
+        id: equipment.id,
+        farm_id: equipment.farm_id,
+        kind: equipment.kind,
+        meter_unit: equipment.meterUnit,
+        current_reading: equipment.currentReading,
+        status: equipment.status,
+        created_at: equipment.createdAt,
+        updated_at: equipment.updatedAt,
+    };
+    includeDefined(row, 'year', equipment.year);
+    includeDefined(row, 'make', equipment.make);
+    includeDefined(row, 'model', equipment.model);
+    includeDefined(row, 'serial_number', equipment.serialNumber);
+    includeDefined(row, 'reading_updated_at', equipment.readingUpdatedAt);
+    includeDefined(row, 'notes', equipment.notes);
+    // Always explicit: restore only resurrects a tombstoned row when the
+    // payload carries deleted_at: null.
+    row.deleted_at = equipment.deleted_at ?? null;
+    return row;
+};
+
+/** Descriptive edits. Meter columns change only through the equipment RPCs. */
+export const mapEquipmentUpdateToDb = (equipment: Equipment): Record<string, unknown> => {
+    validateRequired(equipment, ['id', 'kind', 'status'], 'mapEquipmentUpdateToDb');
+    return {
+        id: equipment.id,
+        kind: equipment.kind,
+        year: nullableNumber(equipment.year),
+        make: nullableString(equipment.make),
+        model: nullableString(equipment.model),
+        serial_number: nullableString(equipment.serialNumber),
+        status: equipment.status,
+        notes: nullableString(equipment.notes),
+        updated_at: equipment.updatedAt,
+        deleted_at: equipment.deleted_at ?? null,
+    };
+};
+
+export const mapMaintenanceScheduleUpdateToDb = (schedule: MaintenanceSchedule): Record<string, unknown> => {
+    validateRequired(schedule, ['id', 'equipmentId', 'taskName'], 'mapMaintenanceScheduleUpdateToDb');
+    return {
+        id: schedule.id,
+        equipment_id: schedule.equipmentId,
+        task_name: schedule.taskName,
+        interval_value: nullableNumber(schedule.intervalValue),
+        interval_days: nullableNumber(schedule.intervalDays),
+        last_done_reading: nullableNumber(schedule.lastDoneReading),
+        last_done_at: nullableString(schedule.lastDoneAt),
+        updated_at: schedule.updatedAt,
+        deleted_at: schedule.deleted_at ?? null,
+    };
+};
+
+export const mapMaintenanceLogUpdateToDb = (log: MaintenanceLog): Record<string, unknown> => {
+    validateRequired(log, ['id', 'equipmentId', 'kind', 'performedOn'], 'mapMaintenanceLogUpdateToDb');
+    return {
+        id: log.id,
+        equipment_id: log.equipmentId,
+        schedule_id: nullableString(log.scheduleId),
+        kind: log.kind,
+        performed_on: log.performedOn,
+        reading_at_service: nullableNumber(log.readingAtService),
+        description: nullableString(log.description),
+        performed_by: nullableString(log.performedBy),
+        vendor: nullableString(log.vendor),
+        cost_parts: nullableNumber(log.costParts),
+        cost_labor: nullableNumber(log.costLabor),
+        updated_at: log.updatedAt,
+        deleted_at: log.deleted_at ?? null,
+    };
+};
+
+export const mapMaintenanceScheduleToDb = (schedule: MaintenanceSchedule): Record<string, unknown> => {
+    validateRequired(schedule, ['id', 'farm_id', 'equipmentId', 'taskName'], 'mapMaintenanceScheduleToDb');
+    const row: Record<string, unknown> = {
+        id: schedule.id,
+        farm_id: schedule.farm_id,
+        equipment_id: schedule.equipmentId,
+        task_name: schedule.taskName,
+        created_at: schedule.createdAt,
+        updated_at: schedule.updatedAt,
+    };
+    includeDefined(row, 'interval_value', schedule.intervalValue);
+    includeDefined(row, 'interval_days', schedule.intervalDays);
+    includeDefined(row, 'last_done_reading', schedule.lastDoneReading);
+    includeDefined(row, 'last_done_at', schedule.lastDoneAt);
+    row.deleted_at = schedule.deleted_at ?? null;
+    return row;
+};
+
+export const mapMaintenanceLogToDb = (log: MaintenanceLog): Record<string, unknown> => {
+    validateRequired(log, ['id', 'farm_id', 'equipmentId', 'kind', 'performedOn'], 'mapMaintenanceLogToDb');
+    const row: Record<string, unknown> = {
+        id: log.id,
+        farm_id: log.farm_id,
+        equipment_id: log.equipmentId,
+        kind: log.kind,
+        performed_on: log.performedOn,
+        created_at: log.createdAt,
+        updated_at: log.updatedAt,
+    };
+    includeDefined(row, 'schedule_id', log.scheduleId);
+    includeDefined(row, 'reading_at_service', log.readingAtService);
+    includeDefined(row, 'description', log.description);
+    includeDefined(row, 'performed_by', log.performedBy);
+    includeDefined(row, 'vendor', log.vendor);
+    includeDefined(row, 'cost_parts', log.costParts);
+    includeDefined(row, 'cost_labor', log.costLabor);
+    row.deleted_at = log.deleted_at ?? null;
+    return row;
+};
+
 export const mapFieldToDb = (f: Field) => {
     validateRequired(f, ['id', 'farm_id', 'name'], 'mapFieldToDb');
+    // propertyIdentifiers (us-fsa) are canonical; legacy fsa* fields are the
+    // read-compat shim. Either write path persists to the same fsa columns.
+    const fsaIds = syncFsaLegacyFields(f);
     const appShape = {
         id: f.id,
         farm_id: f.farm_id,
@@ -397,9 +613,12 @@ export const mapFieldToDb = (f: Field) => {
         ...(f.boundaryAcreage != null ? { operational_acreage: f.boundaryAcreage } : {}),
         lat: f.lat ?? null,
         lng: f.lng ?? null,
-        fsa_farm_number: f.fsaFarmNumber ?? null,
-        fsa_tract_number: f.fsaTractNumber ?? null,
-        fsa_field_number: f.fsaFieldNumber ?? null,
+        fsa_farm_number: fsaIds.fsaFarmNumber ?? null,
+        fsa_tract_number: fsaIds.fsaTractNumber ?? null,
+        fsa_field_number: fsaIds.fsaFieldNumber ?? null,
+        // Australia pilot: persist the au-pic identifier; without this column
+        // write the PIC survived only in memory and was lost on reload.
+        pic: getPropertyIdentifier(f.propertyIdentifiers, 'au-pic', 'property') ?? null,
         producer_share: f.producerShare ?? null,
         landlord_name: f.landlordName ?? null,
         irrigation_practice: f.irrigationPractice ?? null,
@@ -414,6 +633,7 @@ export const mapFieldToDb = (f: Field) => {
 export const mapPlantToDb = (r: PlantRecord) => {
     validateRequired(r, ['id', 'farm_id', 'fieldId', 'seasonYear'], 'mapPlantToDb');
     plantRecordSchema.parse(r);
+    const fsaIds = syncFsaLegacyFields(r);
     return {
         id: r.id,
         farm_id: r.farm_id,
@@ -423,9 +643,9 @@ export const mapPlantToDb = (r: PlantRecord) => {
         acreage: r.acreage,
         crop: r.crop ?? null,
         plant_date: r.plantDate ?? null,
-        fsa_farm_number: r.fsaFarmNumber ?? null,
-        fsa_tract_number: r.fsaTractNumber ?? null,
-        fsa_field_number: r.fsaFieldNumber ?? null,
+        fsa_farm_number: fsaIds.fsaFarmNumber ?? null,
+        fsa_tract_number: fsaIds.fsaTractNumber ?? null,
+        fsa_field_number: fsaIds.fsaFieldNumber ?? null,
         intended_use: r.intendedUse ?? null,
         producer_share: r.producerShare ?? null,
         irrigation_practice: r.irrigationPractice ?? null,
@@ -476,6 +696,9 @@ export const mapSprayToDb = (r: SprayRecord) => {
         is_premixed: !!r.isPremixed,
         equipment_id: r.equipmentId || null,
         non_compliant: !!r.nonCompliant,
+        water_rate: r.waterRate || null,
+        water_rate_unit: r.waterRateUnit || null,
+        pic: r.pic || null,
         nozzle_type: r.nozzleType || null,
         nozzle_size: r.nozzleSize || null,
         pressure_psi: r.pressurePsi != null ? safeNum(r.pressurePsi) : null,

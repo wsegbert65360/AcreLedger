@@ -25,6 +25,9 @@ const KNOWN_FARM_OWNED = [
   "public.fsa_tract_imports",
   "public.field_clu_assignments",
   "public.work_requests",
+  "public.equipment",
+  "public.maintenance_schedules",
+  "public.maintenance_logs",
   "public.farm_subscriptions",
   "public.farm_rainfall_daily",
   "public.field_rainfall_hourly",
@@ -45,6 +48,9 @@ describe("tenant registry", () => {
     const billing = TENANT_REGISTRY.find((entry) => entry.table === "billing_webhook_events");
     expect(billing?.ownership).toBe("global");
     expect(billing?.includeInTenantBundle).toBe(false);
+    const mrmsRuns = TENANT_REGISTRY.find((entry) => entry.table === "mrms_ingestion_runs");
+    expect(mrmsRuns?.ownership).toBe("global");
+    expect(mrmsRuns?.includeInTenantBundle).toBe(false);
   });
 
   it("extract SQL is always farm or user scoped", () => {

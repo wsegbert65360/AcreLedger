@@ -94,6 +94,15 @@ function makeSprayRecord(overrides: Partial<SprayRecord>): SprayRecord {
     farm_id: 'farm-1',
     deleted_at: null,
     nonCompliant: false,
+    // US EPA required fields (see compliance profile registry).
+    startTime: '06:00',
+    endTime: '08:00',
+    applicatorName: 'Farmer',
+    licenseNumber: '123',
+    windDirection: 'N',
+    cropOrSiteTreated: 'Corn',
+    applicationMethod: 'Ground',
+    equipmentId: 'Sprayer 1',
     ...overrides,
   };
 }

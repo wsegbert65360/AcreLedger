@@ -8,6 +8,7 @@ import type {
   HayHarvestRecord, Bin, GrainMovement, SavedSeed,
   SprayRecipe, FertilizerApplication, SprayRecipeProduct
 } from '@/types/farm';
+import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
 
 // --- Helpers ---
 
@@ -363,6 +364,88 @@ export function generateGrainMovements(bins: Bin[], fields: Field[], count = 100
   });
 }
 
+const EQUIPMENT_KINDS: Equipment['kind'][] = ['tractor', 'combine', 'sprayer', 'planter', 'tillage', 'truck', 'implement', 'other'];
+const EQUIPMENT_UNITS: Equipment['meterUnit'][] = ['hours', 'miles', 'km'];
+const EQUIPMENT_MAKES = ['John Deere', 'Case IH', 'New Holland', 'Kubota', 'Massey Ferguson', 'Claas', 'Ford'];
+
+export function generateEquipment(count = 6): {
+  equipment: Equipment[];
+  schedules: MaintenanceSchedule[];
+  logs: MaintenanceLog[];
+} {
+  const equipment: Equipment[] = Array.from({ length: count }, (_, index) => {
+    const unit = EQUIPMENT_UNITS[index % EQUIPMENT_UNITS.length];
+    const reading = unit === 'hours' ? 1000 + index * 50 : 12000 + index * 100;
+    return {
+      id: uid(),
+      farm_id: 'test-farm',
+      kind: EQUIPMENT_KINDS[index % EQUIPMENT_KINDS.length],
+      year: 2016 + (index % 10),
+      make: EQUIPMENT_MAKES[index % EQUIPMENT_MAKES.length],
+      model: `Model ${index + 1}`,
+      meterUnit: unit,
+      currentReading: reading,
+      readingUpdatedAt: `${isoDate(2026, 3, 1)}T12:00:00.000Z`,
+      status: 'active',
+      createdAt: `${isoDate(2026, 1, 1)}T00:00:00.000Z`,
+      updatedAt: `${isoDate(2026, 3, 1)}T12:00:00.000Z`,
+      deleted_at: null,
+    };
+  });
+
+  const schedules: MaintenanceSchedule[] = equipment.flatMap((machine, index) => {
+    const interval = machine.meterUnit === 'hours' ? 250 : 5000;
+    const statuses = [0, interval * 0.05, interval] as const;
+    const consumed = statuses[index % statuses.length];
+    return [{
+      id: uid(),
+      farm_id: 'test-farm',
+      equipmentId: machine.id,
+      taskName: 'Oil change',
+      intervalValue: interval,
+      lastDoneReading: machine.currentReading - consumed,
+      lastDoneAt: isoDate(2026, 1, 15),
+      createdAt: machine.createdAt,
+      updatedAt: machine.updatedAt,
+      deleted_at: null,
+    }];
+  });
+
+  const logs: MaintenanceLog[] = equipment.flatMap((machine, index) => ([
+    {
+      id: uid(),
+      farm_id: 'test-farm',
+      equipmentId: machine.id,
+      scheduleId: schedules[index]?.id,
+      kind: 'service' as const,
+      performedOn: isoDate(2026, 1, 15),
+      readingAtService: machine.currentReading - 50,
+      description: 'Oil and filter',
+      costParts: 48.5,
+      costLabor: 80,
+      createdAt: machine.createdAt,
+      updatedAt: machine.updatedAt,
+      deleted_at: null,
+    },
+    {
+      id: uid(),
+      farm_id: 'test-farm',
+      equipmentId: machine.id,
+      kind: 'repair' as const,
+      performedOn: isoDate(2026, 2, 20),
+      description: 'Replace hose',
+      vendor: 'Local shop',
+      costParts: 120,
+      costLabor: 90,
+      createdAt: machine.createdAt,
+      updatedAt: machine.updatedAt,
+      deleted_at: null,
+    },
+  ]));
+
+  return { equipment, schedules, logs };
+}
+
 // --- Master Seed Function ---
 
 export interface SeedResult {
@@ -376,6 +459,9 @@ export interface SeedResult {
   hayRecords: Omit<HayHarvestRecord, 'id' | 'timestamp'>[];
   fertilizerRecords: Omit<FertilizerApplication, 'id' | 'created_at' | 'updated_at' | 'fieldName'>[];
   grainMovements: (Omit<GrainMovement, 'id'> & { timestamp?: number })[];
+  equipment: Equipment[];
+  maintenanceSchedules: MaintenanceSchedule[];
+  maintenanceLogs: MaintenanceLog[];
 }
 
 export function generateAllTestData(count = 100): SeedResult {
@@ -389,10 +475,12 @@ export function generateAllTestData(count = 100): SeedResult {
   const hayRecords = generateHayRecords(fields, count);
   const fertilizerRecords = generateFertilizerRecords(fields, count);
   const grainMovements = generateGrainMovements(bins, fields, count);
+  const { equipment, schedules, logs } = generateEquipment(Math.max(3, Math.min(count, 12)));
 
   return {
     fields, bins, seeds, recipes,
     plantRecords, sprayRecords, harvestRecords,
     hayRecords, fertilizerRecords, grainMovements,
+    equipment, maintenanceSchedules: schedules, maintenanceLogs: logs,
   };
 }

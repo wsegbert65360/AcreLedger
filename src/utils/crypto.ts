@@ -58,7 +58,24 @@ export function getLocalEncryptionKey(): Promise<string> {
   return localEncryptionKeyPromise;
 }
 
-export async function generateKey(secret: string): Promise<CryptoKey> {
+// PBKDF2 at 100k iterations is deliberately slow. The secret is stable for the
+// life of the device, so derive once and reuse the (non-extractable) CryptoKey
+// instead of paying the KDF on every queue read/write.
+const derivedKeyCache = new Map<string, Promise<CryptoKey>>();
+
+export function generateKey(secret: string): Promise<CryptoKey> {
+  let cached = derivedKeyCache.get(secret);
+  if (!cached) {
+    cached = deriveKey(secret).catch(error => {
+      derivedKeyCache.delete(secret);
+      throw error;
+    });
+    derivedKeyCache.set(secret, cached);
+  }
+  return cached;
+}
+
+async function deriveKey(secret: string): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw',

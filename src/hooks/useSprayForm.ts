@@ -10,6 +10,10 @@ import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { getLatestForField } from '@/lib/utils';
 import { toLocalIsoDate } from '@/utils/dates';
 import { getCarryForwardSource } from '@/lib/carryForward';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { defaultProfileForCountry, resolveComplianceProfileId, getComplianceProfile } from '@/lib/compliance/profiles';
+import { missingComplianceFields as getMissingComplianceFields } from '@/lib/sprayCompliance';
+import { getPropertyIdentifier } from '@/lib/propertyIdentifiers';
 
 export type SprayWizardStep = 'core' | 'mix' | 'conditions' | 'review';
 
@@ -53,6 +57,9 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const isDuplicate = mode === 'duplicate' && !!initialData;
   const { addSprayRecord, updateSprayRecord, addSprayRecipe, sprayRecipes, sprayRecords, session, viewingSeason, cluAssignments } = useFarm();
   const userPrefix = session?.user?.id?.slice(0, 8) || 'local';
+  const { preferences } = useAppPreferences(session?.user?.id);
+  // New records default to the country profile, not the legacy 'universal' placeholder.
+  const defaultProfile = defaultProfileForCountry(preferences.country);
   const displayFieldAcres = getDisplayFieldAcres(field, cluAssignments);
 
   const initialDataRef = useRef(initialData);
@@ -102,6 +109,8 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [totalAmountApplied, setTotalAmountApplied] = useState(initialData?.totalAmountApplied?.toString() || '');
   const [mixtureRate, setMixtureRate] = useState(initialData?.mixtureRate || '');
   const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
+  const [waterRate, setWaterRate] = useState(initialData?.waterRate || '');
+  const [waterRateUnit, setWaterRateUnit] = useState(initialData?.waterRateUnit || 'L/ha');
   const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
   const [manualWindDirection, setManualWindDirection] = useState<string>(initialData?.windDirection || '');
   const [manualWindSpeed, setManualWindSpeed] = useState<string>(initialData?.windSpeed?.toString() || '');
@@ -114,7 +123,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [photoType, setPhotoType] = useState('');
   const [sensitiveAreaCheck, setSensitiveAreaCheck] = useState(initialData?.sensitiveAreaCheck || false);
   const [sensitiveAreaNotes, setSensitiveAreaNotes] = useState(initialData?.sensitiveAreaNotes || '');
-  const [complianceProfile, setComplianceProfile] = useState(initialData?.complianceProfile || 'universal');
+  const [complianceProfile, setComplianceProfile] = useState(initialData?.complianceProfile || defaultProfile);
   const [nozzleType, setNozzleType] = useState(initialData?.nozzleType || '');
   const [nozzleSize, setNozzleSize] = useState(initialData?.nozzleSize || '');
   const [pressurePsi, setPressurePsi] = useState<number | undefined>(initialData?.pressurePsi);
@@ -179,6 +188,8 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setTreatedAreaUnit(initialData.treatedAreaUnit || 'ac');
       setTotalAmountApplied(initialData.totalAmountApplied?.toString() || '');
       setMixtureRate(initialData.mixtureRate || '');
+      setWaterRate(initialData.waterRate || '');
+      setWaterRateUnit(initialData.waterRateUnit || 'L/ha');
       setTotalMixtureVolume(initialData.totalMixtureVolume || '');
       setInvolvedTechnicians(initialData.involvedTechnicians || '');
       setEquipmentId(initialData.equipmentId || '');
@@ -195,7 +206,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
       setSensitiveAreaCheck(initialData.sensitiveAreaCheck || false);
       setSensitiveAreaNotes(initialData.sensitiveAreaNotes || '');
-      setComplianceProfile(initialData.complianceProfile || 'universal');
+      setComplianceProfile(initialData.complianceProfile || defaultProfile);
       setNozzleType(initialData.nozzleType || '');
       setNozzleSize(initialData.nozzleSize || '');
       setPressurePsi(initialData.pressurePsi);
@@ -232,6 +243,8 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setTreatedAreaUnit('ac');
       setTotalAmountApplied('');
       setMixtureRate('');
+      setWaterRate('');
+      setWaterRateUnit('L/ha');
       setTotalMixtureVolume('');
       setInvolvedTechnicians('');
       setEquipmentId(localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
@@ -244,7 +257,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setNotes('');
       setSensitiveAreaCheck(false);
       setSensitiveAreaNotes('');
-      setComplianceProfile('universal');
+      setComplianceProfile(defaultProfile);
       setNozzleType('');
       setNozzleSize('');
       setPressurePsi(undefined);
@@ -261,7 +274,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     setLicenseNumber(localStorage.getItem(`al_license_number_${userPrefix}`) || '');
     setEquipmentId(localStorage.getItem(`al_equipment_id_${userPrefix}`) || 'Miller Nitro');
     setApplicationMethod('Ground Broadcast');
-    setComplianceProfile('universal');
+    setComplianceProfile(defaultProfile);
     setRei('12h');
     setTargetPest('grass/broadleaves');
     setCropOrSiteTreated('');
@@ -282,7 +295,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     setLicenseNumber(carryForwardSource.licenseNumber || '');
     setEquipmentId(carryForwardSource.equipmentId || '');
     setApplicationMethod(carryForwardSource.applicationMethod || 'Ground Broadcast');
-    setComplianceProfile(carryForwardSource.complianceProfile || 'universal');
+    setComplianceProfile(carryForwardSource.complianceProfile || defaultProfile);
     setRei(carryForwardSource.rei || '12h');
     setTargetPest(carryForwardSource.targetPest || '');
     setCropOrSiteTreated(carryForwardSource.cropOrSiteTreated || '');
@@ -435,44 +448,59 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     products.length > 0 && products.some(p => p.product.trim()) && !!sprayDate,
   [products, sprayDate]);
 
-  const isFullyCompliant = useMemo(() => Boolean(
-    products.every(p => p.product.trim()) &&
-    startTime.trim() &&
-    endTime.trim() &&
-    (!!weather && !weather.isError) &&
-    applicatorName.trim() &&
-    licenseNumber.trim() &&
-    manualWindDirection.trim() &&
-    cropOrSiteTreated.trim() &&
-    applicationMethod.trim() &&
-    equipmentId.trim() &&
-    products.every(p => p.epaRegNumber?.trim()) &&
-    products.every(hasValidSprayRate)),
-  [products, startTime, endTime, weather, applicatorName, licenseNumber, manualWindDirection, cropOrSiteTreated, applicationMethod, equipmentId]);
+  const activeProfileId = resolveComplianceProfileId(complianceProfile);
+
+  // Record view of the form state for profile-aware compliance checks.
+  // Product-level fields are validated by sprayProductsNeedReview; weather is
+  // form-state only and checked separately below.
+  const formRecordForCompliance = useMemo((): SprayRecord => ({
+    id: initialData?.id || 'form',
+    fieldId: field.id,
+    fieldName: field.name,
+    products,
+    sprayDate,
+    startTime,
+    endTime,
+    applicatorName,
+    licenseNumber,
+    cropOrSiteTreated,
+    targetPest,
+    applicationMethod,
+    treatedAreaSize: parseFloat(treatedAreaSize) || 0,
+    windDirection: manualWindDirection,
+    windSpeed: parseFloat(manualWindSpeed) || 0,
+    equipmentId,
+    sensitiveAreaCheck,
+    complianceProfile,
+  } as SprayRecord), [initialData?.id, field.id, field.name, products, sprayDate, startTime, endTime, applicatorName, licenseNumber, cropOrSiteTreated, targetPest, applicationMethod, treatedAreaSize, manualWindDirection, manualWindSpeed, equipmentId, sensitiveAreaCheck, complianceProfile]);
+
+  const isFullyCompliant = useMemo(() => {
+    const missing = getMissingComplianceFields(formRecordForCompliance, activeProfileId);
+    // Weather is form-state only (not stored on the record); both profiles
+    // require conditions data at save time.
+    if (!weather || weather.isError) missing.push('Weather data');
+    return missing.length === 0;
+  }, [formRecordForCompliance, activeProfileId, weather]);
 
   const missingComplianceFields = useMemo(() => {
-    const missing: string[] = [];
-    if (!products.every(p => p.product.trim())) missing.push('Product name(s)');
-    if (!startTime.trim()) missing.push('Start time');
-    if (!endTime.trim()) missing.push('End time');
+    const missing = getMissingComplianceFields(formRecordForCompliance, activeProfileId);
     if (!weather || weather.isError) missing.push('Weather data');
-    if (!applicatorName.trim()) missing.push('Cert. applicator');
-    if (!licenseNumber.trim()) missing.push('License #');
-    if (!manualWindDirection.trim()) missing.push('Wind direction');
-    if (!cropOrSiteTreated.trim()) missing.push('Crop / site treated');
-    if (!applicationMethod.trim()) missing.push('Application method');
-    if (!equipmentId.trim()) missing.push('Equipment ID');
-    if (!products.every(p => p.epaRegNumber?.trim())) missing.push('EPA Reg # (one or more products)');
-    if (!products.every(hasValidSprayRate)) missing.push('Application rate (one or more products)');
     return missing;
-  }, [products, startTime, endTime, weather, applicatorName, licenseNumber, manualWindDirection, cropOrSiteTreated, applicationMethod, equipmentId]);
+  }, [formRecordForCompliance, activeProfileId, weather]);
 
-  const stepValidation = useMemo(() => ({
-    core: Boolean(sprayDate && startTime.trim() && applicatorName.trim() && licenseNumber.trim() && targetPest.trim()),
-    mix: products.some(p => p.product.trim()),
-    conditions: true,
-    review: true
-  }), [sprayDate, startTime, applicatorName, licenseNumber, targetPest, products]);
+  const stepValidation = useMemo(() => {
+    // License is required by us-epa but not au-apvma; gate the core step
+    // on the active profile's field set so AU users aren't blocked.
+    const profile = getComplianceProfile(activeProfileId);
+    const licenseRequired = profile.fields.some(f => f.key === 'licenseNumber' && f.required);
+    const licenseOk = licenseRequired ? licenseNumber.trim() : true;
+    return {
+      core: Boolean(sprayDate && startTime.trim() && applicatorName.trim() && licenseOk && targetPest.trim()),
+      mix: products.some(p => p.product.trim()),
+      conditions: true,
+      review: true
+    };
+  }, [sprayDate, startTime, applicatorName, licenseNumber, targetPest, products, activeProfileId]);
 
   const canGoNext = useMemo(() => {
     if (step === 'core') return stepValidation.core;
@@ -575,6 +603,10 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
         totalAmountApplied: compatibilityTotal,
         mixtureRate: mixtureRate.trim() || undefined,
         totalMixtureVolume: totalMixtureVolume.trim() || undefined,
+        waterRate: waterRate.trim() || undefined,
+        waterRateUnit: waterRateUnit.trim() || undefined,
+        // Australia pilot: denormalize the field's PIC onto the spray record.
+        pic: getPropertyIdentifier(field.propertyIdentifiers, 'au-pic', 'property') || undefined,
         involvedTechnicians: involvedTechnicians.trim() || undefined,
         equipmentId: equipmentId.trim() || undefined,
         rei: rei.trim() || undefined,
@@ -672,7 +704,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     } finally {
       setIsSaving(false);
     }
-  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, nozzleType, nozzleSize, pressurePsi, boomHeight, actualSpeed, isPremixed, field.id, field.name, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose, isDuplicate, sprayRecipes, photoBase64, photoType]);
+  }, [isMinimumValid, isFullyCompliant, applicatorName, licenseNumber, equipmentId, products, manualWindSpeed, weather, targetPest, manualWindDirection, sprayDate, startTime, endTime, siteAddress, cropOrSiteTreated, applicationMethod, treatedAreaSize, treatedAreaUnit, totalAmountApplied, mixtureRate, totalMixtureVolume, waterRate, waterRateUnit, involvedTechnicians, rei, notes, sensitiveAreaCheck, sensitiveAreaNotes, complianceProfile, nozzleType, nozzleSize, pressurePsi, boomHeight, actualSpeed, isPremixed, field.id, field.name, field.propertyIdentifiers, viewingSeason, userPrefix, addSprayRecord, updateSprayRecord, onClose, isDuplicate, sprayRecipes, photoBase64, photoType]);
 
   const confirmSaveRecipe = useCallback(async () => {
     const pending = pendingRecipeRef.current;
@@ -754,6 +786,10 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     totalAmountApplied,
     mixtureRate,
     totalMixtureVolume,
+    waterRate,
+    waterRateUnit,
+    setWaterRate,
+    setWaterRateUnit,
     equipmentId,
     manualWindDirection,
     manualWindSpeed,

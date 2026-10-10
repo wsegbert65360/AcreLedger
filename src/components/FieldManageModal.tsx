@@ -20,6 +20,7 @@ import { Field } from '@/types/farm';
 import { calculateAcreage } from '@/lib/gisService';
 import { getBoundaryFieldAcres } from '@/lib/fieldAcreage';
 import { FsaImportCandidate, parseFsaGeoJson } from '@/lib/fsaImport';
+import { withFsaFields, getPropertyIdentifier, upsertPropertyIdentifier, removePropertyIdentifier, isValidPicFormat } from '@/lib/propertyIdentifiers';
 
 function MapInteraction({ onPointAdd, isCapturing }: { onPointAdd: (latlng: [number, number]) => void; isCapturing: boolean }) {
   useMapEvents({
@@ -58,6 +59,8 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
   const [fsaFarm, setFsaFarm] = useState(editField?.fsaFarmNumber || '');
   const [fsaTract, setFsaTract] = useState(editField?.fsaTractNumber || '');
   const [fsaField, setFsaField] = useState(editField?.fsaFieldNumber || '');
+  const [pic, setPic] = useState(() =>
+    getPropertyIdentifier(editField?.propertyIdentifiers, 'au-pic', 'property') || '');
   const [producerShare, setProducerShare] = useState(editField?.producerShare != null ? editField.producerShare.toString() : '100');
   const [landlord, setLandlord] = useState(editField?.landlordName || '');
   const [irrigation, setIrrigation] = useState<Field['irrigationPractice']>(editField?.irrigationPractice || 'Non-Irrigated');
@@ -84,6 +87,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
       setFsaFarm(editField.fsaFarmNumber || '');
       setFsaTract(editField.fsaTractNumber || '');
       setFsaField(editField.fsaFieldNumber || '');
+      setPic(getPropertyIdentifier(editField?.propertyIdentifiers, 'au-pic', 'property') || '');
       setProducerShare(editField.producerShare != null ? editField.producerShare.toString() : '100');
       setLandlord(editField.landlordName || '');
       setIrrigation(editField.irrigationPractice || 'Non-Irrigated');
@@ -279,17 +283,67 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
     try {
       let success = false;
       if (isEdit) {
-        const updatedField: Field = {
-          ...editField,
-          ...fieldData,
-          farm_id: editField.farm_id,
-          deleted_at: editField.deleted_at ?? null
-        };
+        // withFsaFields keeps propertyIdentifiers in sync with the edited
+        // FSA numbers; without it the stale identifiers would win in
+        // syncFsaLegacyFields and the edit would disappear after reload.
+        let updatedField: Field = withFsaFields(
+          {
+            ...editField,
+            ...fieldData,
+            farm_id: editField.farm_id,
+            deleted_at: editField.deleted_at ?? null,
+          },
+          {
+            fsaFarmNumber: fieldData.fsaFarmNumber,
+            fsaTractNumber: fieldData.fsaTractNumber,
+            fsaFieldNumber: fieldData.fsaFieldNumber,
+          },
+        );
+        // Australia pilot: persist the PIC as an au-pic identifier (validated
+        // loosely; the mapper writes it to the pic column). Clearing the
+        // input removes the identifier.
+        const trimmedPic = pic.trim().toUpperCase();
+        if (trimmedPic) {
+          if (!isValidPicFormat(trimmedPic)) {
+            toast.error('PIC format looks invalid. Expected an 8-character code like NABC1234.');
+            setIsSaving(false);
+            return;
+          }
+          updatedField = {
+            ...updatedField,
+            propertyIdentifiers: upsertPropertyIdentifier(
+              updatedField.propertyIdentifiers,
+              { scheme: 'au-pic', kind: 'property', value: trimmedPic },
+            ),
+          };
+        } else {
+          updatedField = {
+            ...updatedField,
+            propertyIdentifiers: removePropertyIdentifier(
+              updatedField.propertyIdentifiers,
+              'au-pic',
+              'property',
+            ),
+          };
+        }
         success = await updateField(updatedField);
       } else {
         const newField: Omit<Field, 'id' | 'farm_id'> = {
           ...fieldData
         };
+        // Australia pilot: persist the PIC for new fields too.
+        const trimmedPic = pic.trim().toUpperCase();
+        if (trimmedPic) {
+          if (!isValidPicFormat(trimmedPic)) {
+            toast.error('PIC format looks invalid. Expected an 8-character code like NABC1234.');
+            setIsSaving(false);
+            return;
+          }
+          newField.propertyIdentifiers = upsertPropertyIdentifier(
+            newField.propertyIdentifiers,
+            { scheme: 'au-pic', kind: 'property', value: trimmedPic },
+          );
+        }
         success = await addField(newField);
       }
       if (success) {
@@ -508,6 +562,18 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
                   className="mt-1 bg-background border-border text-foreground h-8 text-sm"
                 />
               </div>
+            </div>
+            <div>
+              <Label htmlFor="fieldPic" className="text-muted-foreground font-mono text-xs uppercase">Property PIC (Australia)</Label>
+              <Input
+                id="fieldPic"
+                name="fieldPic"
+                value={pic}
+                onChange={e => setPic(e.target.value.toUpperCase())}
+                placeholder="e.g. NABC1234"
+                maxLength={8}
+                className="mt-1 bg-background border-border text-foreground h-8 text-sm font-mono uppercase"
+              />
             </div>
           </div>
 

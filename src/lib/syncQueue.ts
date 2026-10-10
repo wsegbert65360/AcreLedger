@@ -9,7 +9,54 @@ const WEB_QUEUE_KEY = 'al_sync_queue';
 const CORRUPT_QUEUE_KEY = 'al_sync_queue_corrupt';
 /** Keys that hold unsynced farmer work; never removed by a plain cache clear. */
 export const SYNC_QUEUE_KEYS = [WEB_QUEUE_KEY, CORRUPT_QUEUE_KEY] as const;
+/**
+ * After this many permanent failures a queued change stops being retried and is
+ * surfaced as "couldn't sync" (export / discard). It is never deleted silently.
+ */
+export const MAX_SYNC_RETRIES = 10;
 export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
+export const MAINTENANCE_RPC_KEY = '__maintenance_rpc';
+export const READING_FORCE_KEY = '__force_lower_reading';
+export const EQUIPMENT_RPC_KEY = '__equipment_rpc';
+export const EQUIPMENT_RPCS = [
+  'log_maintenance',
+  'update_equipment_reading',
+  'soft_delete_equipment_cascade',
+  'set_equipment_meter_unit',
+] as const;
+export type EquipmentRpcName = typeof EQUIPMENT_RPCS[number];
+const EQUIPMENT_RPC_ALLOWLIST = new Set<string>(EQUIPMENT_RPCS);
+const NON_RETRYABLE_EQUIPMENT_SQLSTATE = new Set(['P0002', '23505', '23514']);
+
+export interface EquipmentRpcEnvelope {
+  rpc: string;
+  args: Record<string, unknown>;
+}
+
+/** Queued equipment writes. The legacy maintenance key remains readable so an
+ * already-queued log still replays through log_maintenance. */
+export function readEquipmentRpcEnvelope(payload: unknown): EquipmentRpcEnvelope | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  const envelope = record[EQUIPMENT_RPC_KEY];
+  if (envelope && typeof envelope === 'object') {
+    const rpc = (envelope as { rpc?: unknown }).rpc;
+    const args = (envelope as { args?: unknown }).args;
+    if (typeof rpc === 'string' && args && typeof args === 'object' && !Array.isArray(args)) {
+      return { rpc, args: args as Record<string, unknown> };
+    }
+  }
+  const legacy = record[MAINTENANCE_RPC_KEY];
+  if (legacy && typeof legacy === 'object' && !Array.isArray(legacy)) {
+    return { rpc: 'log_maintenance', args: legacy as Record<string, unknown> };
+  }
+  return null;
+}
+
+function isNonRetryableEquipmentRpcError(error: { code?: string } | null | undefined): boolean {
+  const code = typeof error?.code === 'string' ? error.code.toUpperCase() : '';
+  return NON_RETRYABLE_EQUIPMENT_SQLSTATE.has(code);
+}
 let webQueuePromise: Promise<void> = Promise.resolve();
 // Set after the first corruption toast so repeated getWebQueue calls while the
 // blob is still broken don't re-toast on every enqueue/read.
@@ -24,6 +71,7 @@ const ALLOWED_TABLES = new Set([
   'fertilizer_recipes', 'spray_recipes',
   'fsa_tract_imports', 'field_clu_assignments',
   'work_requests',
+  'equipment', 'maintenance_schedules', 'maintenance_logs',
 ]);
 
 export interface QueuedMutation {
@@ -407,7 +455,7 @@ export const syncQueue = {
       if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
       try {
         const res = await db.query(
-          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC;',
+          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC, rowid ASC;',
           [farmId]
         );
         if (res.values) {
@@ -482,6 +530,31 @@ export const syncQueue = {
   /**
    * Increments the retry count for a queued mutation.
    */
+  /** Stops a permanent equipment-RPC failure from being retried. */
+  parkMutation: async (id: string): Promise<void> => {
+    if (isNative) {
+      try {
+        const db = await getDatabase();
+        if (db) {
+          await db.run('UPDATE sync_queue SET retry_count = ? WHERE id = ?;', [MAX_SYNC_RETRIES, id]);
+        }
+      } catch (err) {
+        console.error('Failed to park native mutation:', err);
+      }
+    } else {
+      await runWebQueue(async () => {
+        const queue = await getWebQueue();
+        const idx = queue.findIndex(item => item.id === id);
+        if (idx !== -1) {
+          queue[idx].retry_count = MAX_SYNC_RETRIES;
+          await saveWebQueue(queue);
+        }
+      }).catch(err => {
+        console.error('Failed to park web sync mutation:', err);
+      });
+    }
+  },
+
   incrementRetry: async (id: string, currentRetries: number): Promise<void> => {
     if (isNative) {
       try {
@@ -536,6 +609,19 @@ export const syncQueue = {
     }
   },
 
+  /** Changes that exhausted their retries and need the user's attention. */
+  getFailed: async (farmId: string): Promise<QueuedMutation[]> => {
+    const queue = await syncQueue.getQueue(farmId);
+    return queue.filter(item => item.retry_count >= MAX_SYNC_RETRIES);
+  },
+
+  /** Removes exhausted changes for a farm (only on the user's explicit request). */
+  discardFailed: async (farmId: string): Promise<number> => {
+    const failed = await syncQueue.getFailed(farmId);
+    for (const item of failed) await syncQueue.dequeueMutation(item.id);
+    return failed.length;
+  },
+
   /**
    * Replays the queued mutations to Supabase in FIFO order.
    * Returns true only if the entire queue was processed. A transient pause or
@@ -582,6 +668,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
 
     console.log(`Replaying sync queue: ${queue.length} mutations pending.`);
     let pendingRetryCount = 0;
+    let failedParkedCount = 0;
 
     const handledMutationIds = new Set<string>();
     for (const mutation of queue) {
@@ -593,13 +680,47 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
       }
       
       let response: MutationResponse = { error: null };
+      let usedEquipmentRpc = false;
+      const equipmentRpc = readEquipmentRpcEnvelope(mutation.payload);
+      const legacyEquipmentReading = !equipmentRpc
+        && mutation.table_name === 'equipment'
+        && mutation.operation === 'update'
+        && typeof mutation.payload?.current_reading === 'number';
       const linkedHarvest = getLinkedHarvestReplay(mutation, queue);
       const linkedMutationIds = linkedHarvest?.legacyGrainMutation
         ? [mutation.id, linkedHarvest.legacyGrainMutation.id]
         : [mutation.id];
 
+      // Exhausted changes (and any change linked to one) are parked, not retried:
+      // retrying forever just burns requests and the user's attention.
+      const exhausted = linkedMutationIds.some(
+        id => (queue.find(item => item.id === id)?.retry_count ?? 0) >= MAX_SYNC_RETRIES,
+      );
+      if (exhausted) {
+        for (const id of linkedMutationIds) handledMutationIds.add(id);
+        failedParkedCount++;
+        continue;
+      }
+
       try {
-        if (mutation.operation === 'insert') {
+        if (equipmentRpc || legacyEquipmentReading) {
+          usedEquipmentRpc = true;
+          const rpcName = equipmentRpc?.rpc ?? 'update_equipment_reading';
+          const rpcArgs = equipmentRpc
+            ? { ...equipmentRpc.args, p_farm_id: farmId }
+            : {
+              p_farm_id: farmId,
+              p_equipment_id: mutation.payload.id,
+              p_reading: mutation.payload.current_reading,
+              p_force_lower: mutation.payload[READING_FORCE_KEY] === true,
+            };
+          response = EQUIPMENT_RPC_ALLOWLIST.has(rpcName)
+            ? await supabase.rpc(rpcName, rpcArgs)
+            : {
+              error: { code: '23514', message: `Equipment RPC ${rpcName} is not allowlisted` },
+              status: 400,
+            };
+        } else if (mutation.operation === 'insert') {
           if (linkedHarvest) {
             response = await supabase.rpc('create_harvest_with_grain', {
               p_farm_id: farmId,
@@ -628,6 +749,9 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             id: _i,
             version: _version,
             __expected_version: expectedVersion,
+            [READING_FORCE_KEY]: _forceLowerReading,
+            [EQUIPMENT_RPC_KEY]: _equipmentRpc,
+            [MAINTENANCE_RPC_KEY]: _maintenanceRpc,
             ...payload
           } = mutation.payload;
           const base = supabase
@@ -653,10 +777,14 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
 
         if (
           !response.error
+          && !usedEquipmentRpc
           && mutation.operation !== 'insert'
           && response.count !== 1
         ) {
-          if (response.count === 0 && await reconcileZeroRowMutation(mutation, farmId)) {
+          if (
+            response.count === 0
+            && await reconcileZeroRowMutation(mutation, farmId)
+          ) {
             await syncQueue.dequeueMutation(mutation.id);
             continue;
           }
@@ -671,6 +799,16 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
         }
 
         if (response.error) {
+          if (usedEquipmentRpc && isNonRetryableEquipmentRpcError(response.error)) {
+            await syncQueue.parkMutation(mutation.id);
+            handledMutationIds.add(mutation.id);
+            failedParkedCount++;
+            toast.error('An offline equipment change could not be synced.', {
+              description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
+            });
+            continue;
+          }
+
           if (isAuthExpiredError(response)) {
             // Refresh once per drain, then restart from the (shorter) queue.
             // If refresh fails the session is truly gone: pause without
@@ -717,7 +855,11 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
               handledMutationIds.add(id);
             }
             pendingRetryCount++;
-            if (nextRetries === 3) {
+            if (nextRetries === MAX_SYNC_RETRIES) {
+              toast.error(`An offline change to ${mutation.table_name} could not be synced.`, {
+                description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
+              });
+            } else if (nextRetries === 3) {
               toast.error(`Offline ${mutation.operation} to ${mutation.table_name} still cannot sync.`, {
                 description: 'The change remains safely queued for recovery; it was not discarded.',
               });
@@ -744,8 +886,14 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
       const parts: string[] = [];
       if (pendingRetryCount > 0) parts.push(`${pendingRetryCount} still pending retry`);
       toast.warning('Sync finished with unfinished items.', { description: `${parts.join('; ')}. They will retry on the next sync.` });
+    } else if (failedParkedCount > 0) {
+      toast.warning(`${failedParkedCount} change${failedParkedCount === 1 ? '' : 's'} could not sync.`, {
+        description: 'Open Settings → Cloud Sync to export or discard them.',
+      });
     } else {
       toast.success('Sync complete. All offline changes uploaded.');
     }
+    // Parked items stay in the queue for Settings → Cloud Sync. They must not
+    // freeze fetchData for every other table; equipment fetch re-applies them.
     return pendingRetryCount === 0;
 }

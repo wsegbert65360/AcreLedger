@@ -1,4 +1,149 @@
 workflows:
+  acreledger-android:
+    name: AcreLedger Android
+    max_build_duration: 120
+    instance_type: linux_x2
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+      cancel_previous_builds: true
+
+    environment:
+      android_signing:
+        - acreledger_upload
+
+      node: 22
+      java: 21
+
+      vars:
+        PACKAGE_NAME: "com.wsegbert.acreledger"
+        VITE_AI_ASSISTANT_URL: "https://acreledger.vercel.app"
+
+      groups:
+        # Existing shared web-build variables (VITE_SUPABASE_URL,
+        # VITE_SUPABASE_ANON_KEY, weather, and rain endpoints).
+        - appstore
+        # Google Play service-account credentials used for publishing.
+        - google_play
+
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
+        - node_modules
+        - infrastructure/owner-backup/node_modules
+        - scripts/recovery/node_modules
+
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          npm ci --prefer-offline
+          npm ci --prefer-offline --prefix infrastructure/owner-backup
+          npm ci --prefer-offline --prefix scripts/recovery
+
+      - name: Lint
+        script: |
+          npm run lint
+
+      - name: Typecheck
+        script: |
+          npm run typecheck
+          npm run typecheck:api
+
+      - name: Unit tests
+        script: |
+          npm run test
+
+      - name: Build web bundle and sync to Android
+        script: |
+          case "$VITE_AI_ASSISTANT_URL" in
+            https://*) ;;
+            *) echo "VITE_AI_ASSISTANT_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
+          esac
+          npm run build -- --mode capacitor
+          npx cap sync android
+          if ! grep -Rqs "rtzqswpmhlbrbxjwyywl.supabase.co" dist/assets; then
+            echo "Capacitor bundle is missing the AcreLedger Supabase endpoint" >&2
+            exit 1
+          fi
+          if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
+            echo "Capacitor bundle is missing the Ask the book endpoint" >&2
+            exit 1
+          fi
+          node -e '
+            const config = require("./android/app/src/main/assets/capacitor.config.json");
+            const sqlite = config.plugins?.CapacitorSQLite;
+            if (sqlite?.androidIsEncryption !== true) {
+              throw new Error("Generated Android config must enable CapacitorSQLite encryption");
+            }
+          '
+
+      - name: Run Android unit tests
+        script: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew test
+
+      - name: Validate Android release configuration
+        script: |
+          grep -q 'android:scheme="com.wsegbert.acreledger"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:allowBackup="false"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.ACCESS_COARSE_LOCATION' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.ACCESS_FINE_LOCATION' android/app/src/main/AndroidManifest.xml
+          if grep -q ACCESS_BACKGROUND_LOCATION android/app/src/main/AndroidManifest.xml; then
+            echo "Background location must not be requested" >&2
+            exit 1
+          fi
+          node -e 'const cfg = require("./android/app/src/main/assets/capacitor.config.json"); const sb = cfg.plugins?.SystemBars; if (sb?.insetsHandling !== "native" || sb?.initialViewportFitValueHint !== "cover") { throw new Error("SystemBars must use insetsHandling native and initialViewportFitValueHint cover"); }'
+          TARGET=$(grep -E 'targetSdkVersion *=' android/variables.gradle | grep -oE '[0-9]+')
+          [ "$TARGET" -ge 36 ] || { echo "targetSdkVersion $TARGET is below the Play minimum" >&2; exit 1; }
+
+      - name: Set Android version code
+        script: |
+          LATEST=$(google-play get-latest-build-number \
+            --package-name "$PACKAGE_NAME" \
+            --tracks internal 2>/dev/null || true)
+          if echo "$LATEST" | grep -Eq '^[0-9]+$'; then
+            VERSION_CODE=$((LATEST + 1))
+          else
+            VERSION_CODE=$BUILD_NUMBER
+          fi
+          echo "VERSION_CODE=$VERSION_CODE" >> "$CM_ENV"
+
+      - name: Build signed Android App Bundle
+        script: |
+          test -n "$CM_KEYSTORE_PATH"
+          test -n "$CM_KEYSTORE_PASSWORD"
+          test -n "$CM_KEY_ALIAS"
+          test -n "$CM_KEY_PASSWORD"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version.split('-')[0]")
+          chmod +x android/gradlew
+          cd android
+          ./gradlew bundleRelease \
+            -PversionCode="$VERSION_CODE" \
+            -PversionName="$PACKAGE_VERSION"
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+
+    publishing:
+      google_play:
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+
+      email:
+        recipients:
+          - wsegbert@gmail.com
+        notify:
+          success: true
+          failure: true
+
   acreledger-ios:
     name: AcreLedger iOS
     max_build_duration: 120

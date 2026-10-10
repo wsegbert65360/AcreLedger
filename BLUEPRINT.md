@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-09-29 (Stripe period end and checkout gate, PKCE-only recovery link, auth-expiry sync replay).
+> **Last updated:** 2026-10-07 (pilot-gated equipment maintenance, atomic meter RPCs, offline replay, and companion registries).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,11 +26,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-07** — Added the pilot-gated equipment and maintenance model. Meter writes, unit conversion, maintenance logging, and cascade soft-delete are tenant-checked atomic RPCs with one-envelope offline replay; companion backup, recovery, AI, and test-data registries include all three tables.
+- **2026-10-02** — Web password recovery turns `detectSessionInUrl` off only on `/auth?mode=recovery`, so the one-time PKCE code is exchanged once by the recovery handler. A failed exchange is rejected even when a session already exists. A missing verifier tells the user to use the same browser or app that requested the reset. Sign-in and sign-up keep auto-detect.
 - **2026-09-29** — Billing: period end read from subscription items, live-subscription checkout gate, first-subscription-only trial, customer reuse, request-fingerprinted idempotency key. Recovery deep link is PKCE-code-only. Sync replay handles an expired session. Code and tests changed in the same pass but were not run.
 - **2026-09-28** — Became the canonical home for detail AGENTS now summarizes (FSA-578 row construction, grain versioning, DR archive rules, AI retention); rewrote the new-table template to the strict pattern and corrected which tables hide soft-deleted rows (verified against migrations); tech stack updated to Vite 7 / React Router 7; weather roadmap moved to [ROADMAP.md](./ROADMAP.md).
 - **2026-09-21** — Aligned reading instructions, clarified verification scope, added generated contents and link checks, and consolidated design guidance. Earlier today: corrected FAB visibility and renumbered the tail sections (old 11→7, 12→8).
-- **2026-09-20** — iOS SQLite encryption must stay explicitly on (`CapacitorSQLite.iosIsEncryption: true`); a missing key leaves the offline store unopenable and blocked Sign Out (592fef7).
-- **2026-09-11** — Owner disaster-recovery tooling documented; deployment and live drills still pending (b5cf439).
 
 ---
 
@@ -64,6 +64,7 @@ Navigation checks and editorial changes do not constitute verification of archit
   - [TillageRecord](#tillagerecord)
   - [FertilizerApplication](#fertilizerapplication)
   - [GrainMovement](#grainmovement)
+  - [Equipment and Maintenance](#equipment-and-maintenance)
   - [SavedSeed](#savedseed)
   - [SprayRecipe](#sprayrecipe)
   - [FertilizerRecipe](#fertilizerrecipe)
@@ -403,6 +404,21 @@ To prevent inventory drift if two sessions edit the same bin simultaneously, all
 #### Linked Harvest Lifecycle
 A bin-destination harvest and its incoming grain movement form one logical operation. Online creation uses `create_harvest_with_grain` with retry-stable IDs. Offline creation stores one harvest queue envelope containing the mapped grain payload; replay sends that envelope, and legacy two-row pairs, through the same atomic RPC. Harvest soft deletion uses `soft_delete_harvests_with_grain`, and a database trigger cascades the same `deleted_at` value to the linked active movement so generic offline replay cannot leave inventory behind. Client optimistic updates and rollback always cover both records.
 
+### Equipment and Maintenance
+
+Equipment is continuous physical state and is never season-scoped. `equipment` owns the machine and meter; `maintenance_schedules` owns recurring reading/day intervals; `maintenance_logs` stores service and repair history. Every child has a composite `(farm_id, equipment_id)` relationship so a cross-farm link cannot exist. Active maintenance task names are unique per machine, case-insensitively.
+
+Meter state is concurrency-sensitive and must never use a client read-then-compare write:
+
+- `update_equipment_reading` locks the machine and keeps the higher reading unless the user explicitly confirms a lower replacement reading.
+- `set_equipment_meter_unit` changes the unit, current reading, and every reading-based schedule in one transaction. Miles/kilometres convert together; a change involving hours requires a replacement reading and all affected intervals.
+- `log_maintenance` inserts by a retry-stable log ID, updates the meter by the same higher-wins rule, and advances a schedule baseline only when the service date is not older than the stored baseline. A missing service reading never clears a prior reading baseline.
+- `soft_delete_equipment_cascade` soft-deletes logs, schedules, and the machine atomically.
+
+Offline calls store one allowlisted RPC envelope. Replay re-stamps `p_farm_id` from the active queue scope, parks missing/deleted targets immediately, and preserves failed equipment work over the next cloud snapshot. Parked work from unrelated tables must not freeze all cloud refreshes. New reading-based schedules snapshot the machine's current reading on creation. Due-day calculations use the user's local calendar date, not UTC midnight.
+
+The `/equipment` route, dashboard card, and Settings link remain hidden unless `VITE_EQUIPMENT_UI_ENABLED=true`. The tables still participate in strict customer backup/restore, owner recovery, test data, and the read-only Ask the Book registry while the UI is pilot-gated.
+
 ### SavedSeed
 Seed inventory reference. Not season-scoped.
 ```ts
@@ -536,7 +552,7 @@ Every mutation follows this exact sequence — no exceptions:
 7a. Success (`error` is null and the `{ count: 'exact' }` result matches the expected row count): toast.success, return true
 7b. Error: roll back state to the closure-captured snapshot, toast.error (with detailed Postgres message), return false
 
-Offline bulk/cascade operations use one `syncQueue.enqueueMutations` batch — never a per-record `enqueueMutation` loop. Web persists the whole batch in one encrypted localStorage update; native uses transactional SQLite `executeSet`. This is required for bulk activity deletes and offline field/tract deletion cascades so local rollback cannot disagree with a partially persisted queue. Field-delete batches place assignments before the field, and the `fields_cascade_soft_delete_to_clu_assignments` trigger makes direct field replay transactionally cascade any remaining assignments. Online field deletion uses the `SECURITY INVOKER` `soft_delete_field_with_clu_assignments` RPC. Sign-out fails closed unless cache cleanup removes the current farm's pending queue before ending the auth session. If the native SQLite store cannot be opened, a confirmed emergency sign-out may end the session without clearing that unreadable store; the file remains on the device and is not treated as a successful queue clear. Account deletion stays blocked while the store is unreadable. Native iOS builds must keep `CapacitorSQLite.iosIsEncryption: true` in `capacitor.config.ts` (the plugin treats a missing key as encryption off, which prevents opening the store and previously blocked Sign Out).
+Offline bulk/cascade operations use one `syncQueue.enqueueMutations` batch or one atomic RPC envelope — never a per-record `enqueueMutation` loop. Web persists the whole batch in one encrypted localStorage update; native uses transactional SQLite `executeSet`. This is required for bulk activity deletes and offline field/tract deletion cascades so local rollback cannot disagree with a partially persisted queue. Equipment cascade deletion and meter-unit changes use one RPC envelope because their database functions own the whole transaction. Field-delete batches place assignments before the field, and the `fields_cascade_soft_delete_to_clu_assignments` trigger makes direct field replay transactionally cascade any remaining assignments. Online field deletion uses the `SECURITY INVOKER` `soft_delete_field_with_clu_assignments` RPC. Sign-out fails closed unless cache cleanup removes the current farm's pending queue before ending the auth session. If the native SQLite store cannot be opened, a confirmed emergency sign-out may end the session without clearing that unreadable store; the file remains on the device and is not treated as a successful queue clear. Account deletion stays blocked while the store is unreadable. Native iOS builds must keep `CapacitorSQLite.iosIsEncryption: true` in `capacitor.config.ts` (the plugin treats a missing key as encryption off, which prevents opening the store and previously blocked Sign Out).
 
 Replay reconciliation (all tables, not only grain) compares queued values with the row Postgres
 already stored. ISO timestamps are compared as instants after strict validation, because PostgreSQL
@@ -572,7 +588,7 @@ older exports or pre-fix local cache data. Restore must always treat the current
 - Backup files must preserve CLU setup with `fsaTracts` and `cluAssignments`; the schema also
   accepts the Settings export metadata field `backupDate`. New exports carry `backupVersion`;
   unversioned legacy exports are normalized before strict validation.
-- Settings and pre-rollover exports explicitly include every supported collection, including empty
+- Settings and pre-rollover exports explicitly include every supported collection, including equipment, maintenance schedules, and maintenance logs, and including empty
   arrays, and must pass `backupSchema` before the file is downloaded. A schema-validation failure
   stops season rollover before `profiles.active_season` or local season state changes.
 - The Supabase `restore_farm_backup` RPC payload must send normalized database rows, including
@@ -786,11 +802,21 @@ builds continue to use Preferences because they have no OS keychain surface.
 
 Password recovery uses `src/lib/authDeepLinks.ts`. Web callbacks use `/auth?mode=recovery`; native
 callbacks must match the exact `com.wsegbert.acreledger://auth/recovery` scheme/host/path. The native
-listener accepts only a PKCE authorization `code` and exchanges it with
-`exchangeCodeForSession` (the code is bound to a verifier stored on the device, so a link crafted
-by another app cannot sign the user into a foreign session). Raw `access_token`/`refresh_token`
-values in the URL, including the former legacy fragment, are rejected and surfaced as an
-incomplete-link error. The listener deduplicates repeated launch/open events and only then opens
+listener redeems a PKCE authorization `code` with `exchangeCodeForSession` (the code is bound to a
+verifier stored on the device, so a link crafted by another app cannot sign the user into a foreign
+session) or a recovery-only email `token_hash` with `verifyOtp({ token_hash, type: 'recovery' })`.
+The web recovery route explicitly redeems either the PKCE `code` or recovery token hash: installed
+`gotrue-js` URL detection does not recognize the token hash. The browser client also turns
+`detectSessionInUrl` off when the page is exactly `/auth?mode=recovery`, so client startup does not
+spend that one-time code before `establishWebPasswordRecoverySession` exchanges it. Sign-in, sign-up,
+and every other URL keep auto-detect. If the web code exchange fails or returns no session, the
+handler rejects the link even when `getSession()` already holds a session. An ordinary sign-in must
+not be treated as this reset. Duplicate attempts on the same URL are ignored by the in-memory guard
+instead. A missing PKCE verifier is a different failure: the link was opened in a different browser
+or app than the one that requested the reset, and the message says to open the newest link there or
+request a new email in that same place. Raw `access_token`/`refresh_token` values in the URL, including the former
+legacy fragment, are rejected and tell the user to request a new email. The listener deduplicates
+repeated launch/open events and only then opens
 the reset UI. Keep
 the Supabase redirect allowlist, `Info.plist` URL registration, app listener, and tests synchronized.
 

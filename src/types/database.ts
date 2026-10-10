@@ -17,6 +17,8 @@ export interface FieldRow {
     fsa_farm_number?: string | null;
     fsa_tract_number?: string | null;
     fsa_field_number?: string | null;
+    /** Australia pilot: Property Identification Code (au-pic scheme). */
+    pic?: string | null;
     producer_share?: number | null;
     landlord_name?: string | null;
     irrigation_practice?: string | null;
@@ -114,6 +116,11 @@ export interface SprayRecordRow {
     temp_end?: number | null;
     sensitive_area_check?: boolean | null;
     sensitive_area_notes?: string | null;
+    /** Australia pilot: carrier water rate. */
+    water_rate?: string | null;
+    water_rate_unit?: string | null;
+    /** Australia pilot: Property Identification Code (denormalized from field). */
+    pic?: string | null;
 }
 
 export interface HarvestRecordRow {
