@@ -1,36 +1,40 @@
 PODS:
-  - Capacitor (6.2.1):
+  - Capacitor (8.5.3):
     - CapacitorCordova
-  - CapacitorApp (6.0.3):
+  - CapacitorApp (8.1.2):
     - Capacitor
-  - CapacitorCommunitySpeechRecognition (6.0.1):
+  - CapacitorCommunitySpeechRecognition (7.0.1):
     - Capacitor
-  - CapacitorCommunitySqlite (6.0.2):
+  - CapacitorCommunitySqlite (8.1.1):
     - Capacitor
     - SQLCipher
     - ZIPFoundation
-  - CapacitorCommunityTextToSpeech (5.1.0):
+  - CapacitorCommunityTextToSpeech (8.0.2):
     - Capacitor
-  - CapacitorCordova (6.2.1)
-  - CapacitorFilesystem (6.0.4):
+  - CapacitorCordova (8.5.3)
+  - CapacitorFilesystem (8.1.4):
     - Capacitor
-  - CapacitorGeolocation (6.1.1):
+    - IONFilesystemLib (~> 2.0.0)
+  - CapacitorGeolocation (8.2.3):
     - Capacitor
-  - CapacitorHaptics (6.0.3):
+    - IONGeolocationLib (= 3.0.0)
+  - CapacitorHaptics (8.0.2):
     - Capacitor
-  - CapacitorNetwork (6.0.4):
+  - CapacitorNetwork (8.0.1):
     - Capacitor
-  - CapacitorPreferences (6.0.4):
+  - CapacitorPreferences (8.0.1):
     - Capacitor
-  - CapacitorSecureStoragePlugin (0.10.0):
+  - CapacitorSecureStoragePlugin (0.13.0):
     - Capacitor
     - SwiftKeychainWrapper
-  - CapacitorShare (6.0.4):
+  - CapacitorShare (8.0.3):
     - Capacitor
-  - CapacitorSplashScreen (6.0.4):
+  - CapacitorSplashScreen (8.0.2):
     - Capacitor
-  - CapacitorStatusBar (6.0.3):
+  - CapacitorStatusBar (8.0.4):
     - Capacitor
+  - IONFilesystemLib (2.0.0)
+  - IONGeolocationLib (3.0.0)
   - SQLCipher (4.10.0):
     - SQLCipher/standard (= 4.10.0)
   - SQLCipher/common (4.10.0)
@@ -58,6 +62,8 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - IONFilesystemLib
+    - IONGeolocationLib
     - SQLCipher
     - SwiftKeychainWrapper
     - ZIPFoundation
@@ -95,21 +101,23 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/status-bar"
 
 SPEC CHECKSUMS:
-  Capacitor: c95400d761e376be9da6be5a05f226c0e865cebf
-  CapacitorApp: a19ccb4f5f32d2534be5c6f524d5a9b614a1e8a7
-  CapacitorCommunitySpeechRecognition: 73be1a178a23856d9706886d5f40ef06a6055438
-  CapacitorCommunitySqlite: 0299d20f4b00c2e6aa485a1d8932656753937b9b
-  CapacitorCommunityTextToSpeech: ed295743e9163fd4f8370a48ab4ae144fc7127c3
-  CapacitorCordova: 8d93e14982f440181be7304aa9559ca631d77fff
-  CapacitorFilesystem: 5b9aec35c0212bd0064e26d278c93e925864f212
-  CapacitorGeolocation: ef657a46a125be74010f4ce57caae173c23204d2
-  CapacitorHaptics: 40f83026feeee9cfe36e89e9c98a3baaaf20c450
-  CapacitorNetwork: 093efa3664b692a971bdd01be70523291cd6a87f
-  CapacitorPreferences: 5848e0691b36b4bb4acc98e481ab56d451578d30
-  CapacitorSecureStoragePlugin: 545b51d782d35e61a39231ecf99a966b060a2cbb
-  CapacitorShare: 77ff779e3b7c6ae9fb5461e52cf7ef805d429491
-  CapacitorSplashScreen: ef140a8b1ea7244e0c245ce2dd4ce5251e7ab86a
-  CapacitorStatusBar: 149cde8f1328ec3aa6cbdd872a55137ae3f98b16
+  Capacitor: 2f67eaeb8ed79909cd35b5e7439a5c2a9ca58e0f
+  CapacitorApp: 7b7e43debe505bc61beedb83796aa1368c86078b
+  CapacitorCommunitySpeechRecognition: 3e03566c44c2bb3b52391a33d4518b1adbdeb38f
+  CapacitorCommunitySqlite: 785553c54e52da62d058238d4571db5692c022c4
+  CapacitorCommunityTextToSpeech: a9f7c5bcdc424197d11bb7ae3e9010b415e931b0
+  CapacitorCordova: 0b7326439c7a09fc5d20eced5e0dab986327a493
+  CapacitorFilesystem: 17ee1862a45ef2e5012311a87e18de1d45a6811b
+  CapacitorGeolocation: 0938033d929ff43b11d1783cdbd530e8b3a974d9
+  CapacitorHaptics: 296f771ecd89c7a1bd92a7b6826a7d268e2e70f5
+  CapacitorNetwork: 8812ce60d11fb63d8f2e4ba51a49b2e59892ebe2
+  CapacitorPreferences: cca2021f386efb75947c850334447d9ff22b14f1
+  CapacitorSecureStoragePlugin: d083ff28d9ba5bc74924b9bcf9754ea605016b63
+  CapacitorShare: 5b5e53347556bee89ae6163ed20b5b3c25fe75f1
+  CapacitorSplashScreen: 7bf61c2001557ff9e195e601c6b87344480d3c65
+  CapacitorStatusBar: ff844df1f126da6c4fbc4028272425fa3a91e7e3
+  IONFilesystemLib: 0a001124dedc317c03032d138aaefbf4c18adb09
+  IONGeolocationLib: a125d4f91ea353652026e5da6e5bee0414a57d37
   SQLCipher: eb79c64049cb002b4e9fcb30edb7979bf4706dfc
   SwiftKeychainWrapper: 807ba1d63c33a7d0613288512399cd1eda1e470c
   ZIPFoundation: dfd3d681c4053ff7e2f7350bc4e53b5dba3f5351
