@@ -45,6 +45,7 @@ import FertilizerTab from '@/components/activity/FertilizerTab';
 import TillageTab from '@/components/activity/TillageTab';
 import GrainTab from '@/components/activity/GrainTab';
 import HistoryFeed from '@/components/activity/HistoryFeed';
+import { mirroredGrainIds } from '@/lib/activityDisplay';
 
 type Tab = 'all' | 'plant' | 'spray' | 'fertilizer' | 'tillage' | 'harvest' | 'hay' | 'grain';
 
@@ -85,6 +86,7 @@ export default function Activity() {
     fertilizerApplications,
     tillageRecords,
     grainMovements,
+    bins,
     deletePlantRecords,
     deleteSprayRecords,
     deleteHarvestRecords,
@@ -262,6 +264,15 @@ export default function Activity() {
     [tillageRecords, search, viewingSeason]
   );
 
+  // binId -> name for harvest cards. Movement names fill in bins that are no
+  // longer in the active list; current bin names win.
+  const binNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const m of grainMovements ?? []) if (m.binId && m.binName) names[m.binId] = m.binName;
+    for (const b of bins ?? []) if (b.id && b.name) names[b.id] = b.name;
+    return names;
+  }, [bins, grainMovements]);
+
   const visibleUnifiedRecords = useMemo(() => {
     const all: (ActivityRecord & { timestamp: number })[] = [
       ...filteredPlant.map(r => ({ type: 'plant' as const, data: r, timestamp: r.timestamp })),
@@ -273,7 +284,16 @@ export default function Activity() {
       ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
     ];
-    return all.filter(r => !pendingDeletes.has(r.data.id)).sort((a, b) => compareWorkDateDesc(a.data, b.data));
+    // A harvest into a bin also saves a linked "bin IN" movement. Show that load
+    // once (on the harvest card); the movement stays on the Grain tab.
+    const mirrored = mirroredGrainIds(
+      filteredHarvest.filter(h => !pendingDeletes.has(h.id)),
+      filteredGrain,
+    );
+    return all
+      .filter(r => !pendingDeletes.has(r.data.id))
+      .filter(r => !(r.type === 'grain' && mirrored.has(r.data.id)))
+      .sort((a, b) => compareWorkDateDesc(a.data, b.data));
   }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredCustomSpray, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
 
   const handleDeleteRequest = () => {
@@ -530,7 +550,7 @@ export default function Activity() {
             </>
           ) : (
             <>
-              {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} selected={selected} onToggle={toggle} onEdit={(r) => openModal(r.type, r.data, 'edit')} onDuplicate={(r) => openModal(r.type, r.data, 'duplicate')} />}
+              {tab === 'all' && <HistoryFeed records={visibleUnifiedRecords} binNames={binNames} selected={selected} onToggle={toggle} onEdit={(r) => openModal(r.type, r.data, 'edit')} onDuplicate={(r) => openModal(r.type, r.data, 'duplicate')} />}
               {tab === 'plant' && <PlantTab records={filteredPlant.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('plant', r, 'edit')} onDuplicate={(r) => openModal('plant', r, 'duplicate')} />}
               {tab === 'spray' && (() => {
                 const regular = filteredSpray.filter(r => !pendingDeletes.has(r.id));
@@ -549,7 +569,7 @@ export default function Activity() {
                   </div>
                 );
               })()}
-              {tab === 'harvest' && <HarvestTab records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} />}
+              {tab === 'harvest' && <HarvestTab binNames={binNames} records={filteredHarvest.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('harvest', r, 'edit')} onDuplicate={(r) => openModal('harvest', r, 'duplicate')} />}
               {tab === 'hay' && <HayTab records={filteredHay.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('hay', r, 'edit')} onDuplicate={(r) => openModal('hay', r, 'duplicate')} />}
               {tab === 'fertilizer' && <FertilizerTab records={filteredFertilizer.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('fertilizer', r, 'edit')} onDuplicate={(r) => openModal('fertilizer', r, 'duplicate')} />}
               {tab === 'tillage' && <TillageTab records={filteredTillage.filter(r => !pendingDeletes.has(r.id))} selected={selected} onToggle={toggle} onEdit={(r) => openModal('tillage', r, 'edit')} onDuplicate={(r) => openModal('tillage', r, 'duplicate')} />}

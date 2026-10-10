@@ -1,7 +1,6 @@
 import { HarvestRecord } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
-import { formatIsoDate, formatDate } from '@/utils/dates';
-import { cleanName } from '@/utils/text';
+import { harvestCardText } from '@/lib/activityDisplay';
 
 interface HarvestTabProps {
   records: HarvestRecord[];
@@ -9,22 +8,10 @@ interface HarvestTabProps {
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: HarvestRecord) => void;
   onDuplicate?: (record: HarvestRecord) => void;
+  /** binId -> display name so cards can say which bin. */
+  binNames?: Record<string, string>;
 }
-function buildSubtitle(r: HarvestRecord): string {
-  return `${r.crop || 'UNSPECIFIED'} · ${r.bushels} BU`;
-}
-
-function buildDetails(r: HarvestRecord): string {
-  const parts = [`${r.moisturePercent}% MST`, `BIN ${r.binId ? 'ID:' + r.binId : 'N/A'}`];
-  if (r.scaleTicketNumber) parts.push(`TKT: ${r.scaleTicketNumber}`);
-  return parts.join(' · ');
-}
-
-function buildDate(r: HarvestRecord): string {
-  return formatIsoDate(r.harvestDate) || formatDate(r.timestamp);
-}
-
-export default function HarvestTab({ records, selected, onToggle, onEdit, onDuplicate }: HarvestTabProps) {
+export default function HarvestTab({ records, selected, onToggle, onEdit, onDuplicate, binNames }: HarvestTabProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -35,21 +22,24 @@ export default function HarvestTab({ records, selected, onToggle, onEdit, onDupl
 
   return (
     <div className="space-y-2">
-      {records.map(r => (
-        <RecordListItem
-          key={r.id}
-          id={r.id}
-          type="harvest"
-          title={cleanName(r.fieldName)}
-          subtitle={buildSubtitle(r)}
-          details={buildDetails(r)}
-          date={buildDate(r)}
-          isSelected={selected.has(r.id)}
-          onToggle={onToggle}
-          onEdit={() => onEdit(r)}
-          onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
-        />
-      ))}
+      {records.map(r => {
+        const text = harvestCardText(r, r.binId ? binNames?.[r.binId] : undefined);
+        return (
+          <RecordListItem
+            key={r.id}
+            id={r.id}
+            type="harvest"
+            title={text.title}
+            subtitle={text.subtitle}
+            details={text.details}
+            date={text.date}
+            isSelected={selected.has(r.id)}
+            onToggle={onToggle}
+            onEdit={() => onEdit(r)}
+            onDuplicate={onDuplicate ? () => onDuplicate(r) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }

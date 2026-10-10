@@ -2,6 +2,7 @@ import { ActivityRecord } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
 import { formatIsoDate, formatDate } from '@/utils/dates';
 import { cleanName } from '@/utils/text';
+import { grainCardText, harvestCardText } from '@/lib/activityDisplay';
 
 interface HistoryFeedProps {
   records: ActivityRecord[];
@@ -9,9 +10,11 @@ interface HistoryFeedProps {
   onToggle: (id: string, shift: boolean) => void;
   onEdit: (record: ActivityRecord) => void;
   onDuplicate?: (record: ActivityRecord) => void;
+  /** binId -> display name so harvest cards can say which bin. */
+  binNames?: Record<string, string>;
 }
 
-function getRecordInfo(record: ActivityRecord) {
+function getRecordInfo(record: ActivityRecord, binNames?: Record<string, string>) {
   const { type, data } = record;
   
   switch (type) {
@@ -37,15 +40,8 @@ function getRecordInfo(record: ActivityRecord) {
         date: formatIsoDate(r.sprayDate) || formatDate(r.timestamp)
       };
     }
-    case 'harvest': {
-      const r = data;
-      return {
-        title: cleanName(r.fieldName),
-        subtitle: `${r.crop || 'Grain'} · ${r.bushels} BU`,
-        details: `${r.moisturePercent}% Moisture · ${(r.destination || 'unknown').toUpperCase()}`,
-        date: formatIsoDate(r.harvestDate) || formatDate(r.timestamp)
-      };
-    }
+    case 'harvest':
+      return harvestCardText(data, data.binId ? binNames?.[data.binId] : undefined);
     case 'hay': {
       const r = data;
       return {
@@ -77,18 +73,8 @@ function getRecordInfo(record: ActivityRecord) {
         date: formatIsoDate(r.date) || formatDate(r.timestamp)
       };
     }
-    case 'grain': {
-      const r = data;
-      const typeLabel = r.type === 'in' ? 'IN' : 'OUT';
-      const source = r.sourceFieldName ? ` · FROM ${r.sourceFieldName}` : '';
-      const dest = r.destination ? ` · TO ${r.destination}` : '';
-      return {
-        title: r.binName,
-        subtitle: `${typeLabel}${source}${dest}`,
-        details: `${r.bushels} BU · ${r.moisturePercent}% MOISTURE`,
-        date: formatDate(r.timestamp)
-      };
-    }
+    case 'grain':
+      return grainCardText(data);
     case 'tillage': {
       const r = data;
       return {
@@ -108,7 +94,7 @@ function getRecordInfo(record: ActivityRecord) {
   }
 }
 
-export default function HistoryFeed({ records, selected, onToggle, onEdit, onDuplicate }: HistoryFeedProps) {
+export default function HistoryFeed({ records, selected, onToggle, onEdit, onDuplicate, binNames }: HistoryFeedProps) {
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -120,7 +106,7 @@ export default function HistoryFeed({ records, selected, onToggle, onEdit, onDup
   return (
     <div className="space-y-2">
       {records.map((record, idx) => {
-        const info = getRecordInfo(record);
+        const info = getRecordInfo(record, binNames);
         const id = record.data.id;
         return (
           <RecordListItem
