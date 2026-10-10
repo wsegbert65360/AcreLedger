@@ -56,6 +56,8 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>AcreLedger uses your location to find weather data and set field coordinates.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>AcreLedger uses your location to find weather data and set field coordinates. Location is only used while you are using the app.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>AcreLedger uses the microphone so you can ask the book by voice.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
