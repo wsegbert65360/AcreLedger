@@ -325,7 +325,13 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { createIdsRef.current = null; reset(); onClose(); } }}>
-      <DialogContent className="bg-card border-harvest/30 max-w-sm max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="bg-card border-harvest/30 max-w-sm max-h-[90vh] overflow-y-auto"
+        // A tap that misses the dialog (common when the mobile keyboard shifts
+        // the viewport) must not close it and discard typed values. Back, the
+        // close button and Escape still close.
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center flex-wrap gap-2 text-harvest">
             <div className="flex items-center gap-2">

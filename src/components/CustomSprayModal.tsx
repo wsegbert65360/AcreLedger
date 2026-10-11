@@ -166,7 +166,7 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
 
     return (
         <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="bg-card border-spray/30 max-w-sm max-h-[90vh] overflow-y-auto">
+            <DialogContent onInteractOutside={(e) => e.preventDefault()} className="bg-card border-spray/30 max-w-sm max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center flex-wrap gap-2 text-spray font-bold uppercase tracking-tight">
                         <div className="flex items-center gap-2">

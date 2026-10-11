@@ -245,7 +245,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
 
   return (
     <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="bg-card border-plant/30 max-w-sm max-h-[90vh] overflow-y-auto">
+      <DialogContent onInteractOutside={(e) => e.preventDefault()} className="bg-card border-plant/30 max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center flex-wrap gap-2 text-plant">
             <div className="flex items-center gap-2">

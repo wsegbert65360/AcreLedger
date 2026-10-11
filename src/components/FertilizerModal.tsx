@@ -241,7 +241,7 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
     return (
         <>
             <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="bg-card border-border max-w-sm p-0 overflow-hidden">
+            <DialogContent onInteractOutside={(e) => e.preventDefault()} className="bg-card border-border max-w-sm p-0 overflow-hidden">
                 <DialogHeader className="px-6 py-4 border-b border-border flex flex-row items-center justify-between bg-muted/30 space-y-0">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-lime-500/10 flex items-center justify-center">

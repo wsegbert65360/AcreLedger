@@ -109,7 +109,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
   return (
     <>
     <Dialog open={open} onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent onInteractOutside={(e) => e.preventDefault()} className="bg-card border-spray/30 max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between w-full text-spray font-bold flex-wrap gap-2">
             <div className="flex items-center flex-wrap gap-2">
