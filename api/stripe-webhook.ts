@@ -25,6 +25,8 @@ interface ApiResponse {
   end(): void;
 }
 
+type ProcessingResult = { applied: true } | { applied: false; reason: string };
+
 function getHeader(
   headers: Record<string, string | string[] | undefined>,
   name: string,
@@ -46,7 +48,7 @@ function cleanEnvValue(value: string | undefined): string {
   return trimmed;
 }
 
-async function readRawBody(req: WebhookRequest): Promise<Buffer> {
+export async function readRawBody(req: WebhookRequest): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.from(chunk as Uint8Array));
@@ -66,19 +68,19 @@ export async function upsertFarmSubscriptionEntitlement(
   supabase: SupabaseClient,
   subscription: StripeSubscriptionLike,
   metadata: Record<string, string> | null | undefined,
-  options: { checkoutCompleted?: boolean } = {},
-): Promise<boolean> {
+  options: { checkoutCompleted?: boolean; failureAt?: string | null } = {},
+): Promise<ProcessingResult> {
   const { farmId, userId } = readSubscriptionMetadata(
     metadata ?? subscription.metadata ?? null,
   );
   if (!farmId) {
     console.error('Stripe subscription without farm_id metadata; skipping upsert.');
-    return false;
+    return { applied: false, reason: 'missing_farm_metadata' };
   }
 
   const { data: existing, error: selectError } = await supabase
     .from('farm_subscriptions')
-    .select('id, owner_user_id, stripe_subscription_id, stripe_subscription_created_at, updated_at')
+    .select('id, owner_user_id, status, stripe_subscription_id, stripe_subscription_created_at, past_due_since, updated_at')
     .eq('farm_id', farmId)
     .is('deleted_at', null)
     .maybeSingle();
@@ -93,14 +95,19 @@ export async function upsertFarmSubscriptionEntitlement(
     console.warn(
       `Ignoring Stripe subscription ${subscription.id} for farm ${farmId} without completed Checkout evidence.`,
     );
-    return false;
+    return { applied: false, reason: 'missing_checkout_evidence' };
   }
 
   if (!shouldApplySubscriptionSnapshot(existing, subscription, options.checkoutCompleted === true)) {
     console.warn(
       `Ignoring stale Stripe subscription ${subscription.id} for farm ${farmId}; current subscription is ${existing?.stripe_subscription_id}.`,
     );
-    return false;
+    return {
+      applied: false,
+      reason: existing?.status && ['trialing', 'active', 'past_due', 'unpaid'].includes(existing.status)
+        ? 'parallel_live_subscription'
+        : 'stale_subscription',
+    };
   }
 
   if (userId && options.checkoutCompleted === true) {
@@ -115,23 +122,36 @@ export async function upsertFarmSubscriptionEntitlement(
     }
     if (!member) {
       console.error(`Checkout owner ${userId} is not a member of farm ${farmId}; skipping upsert.`);
-      return false;
+      return { applied: false, reason: 'checkout_owner_not_member' };
     }
   }
 
   const ownerId = existing?.owner_user_id ?? userId ?? null;
   if (!ownerId) {
     console.error(`No owner resolvable for farm ${farmId}; skipping subscription upsert.`);
-    return false;
+    return { applied: false, reason: 'missing_owner' };
   }
 
   const payload = {
     ...buildSubscriptionUpsert(subscription),
+    past_due_since:
+      subscription.status === 'past_due'
+        ? existing?.past_due_since ?? options.failureAt ?? new Date().toISOString()
+        : null,
     updated_at: new Date().toISOString(),
   };
 
   let writeResult;
-  if (existing) {
+  if (existing && isReplacement) {
+    writeResult = await supabase.rpc('replace_farm_subscription', {
+      p_farm_id: farmId,
+      p_current_id: existing.id,
+      p_expected_subscription_id: existing.stripe_subscription_id,
+      p_expected_updated_at: existing.updated_at,
+      p_owner_user_id: ownerId,
+      p_subscription: payload,
+    });
+  } else if (existing) {
     let update = supabase
       .from('farm_subscriptions')
       .update(payload, { count: 'exact' })
@@ -156,10 +176,10 @@ export async function upsertFarmSubscriptionEntitlement(
   if (error) {
     throw new Error(`Failed to upsert farm subscription: ${error.message}`);
   }
-  if (existing && count !== 1) {
+  if (existing && !isReplacement && count !== 1) {
     throw new Error(`Failed to upsert farm subscription: expected 1 row, updated ${count ?? 0}`);
   }
-  return true;
+  return { applied: true };
 }
 
 async function retrieveAndUpsertSubscription(
@@ -167,10 +187,20 @@ async function retrieveAndUpsertSubscription(
   supabase: SupabaseClient,
   subscriptionId: string,
   metadata: Record<string, string> | null | undefined,
-  options: { checkoutCompleted?: boolean } = {},
-): Promise<boolean> {
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  return upsertFarmSubscriptionEntitlement(supabase, subscription, metadata, options);
+  options: { checkoutCompleted?: boolean; failureAt?: string | null } = {},
+): Promise<ProcessingResult> {
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    return upsertFarmSubscriptionEntitlement(supabase, subscription, metadata, options);
+  } catch (error: unknown) {
+    const code = error != null && typeof error === 'object' && 'code' in error
+      ? (error as { code?: unknown }).code
+      : null;
+    if (code === 'resource_missing') {
+      return { applied: false, reason: 'stripe_resource_missing' };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -226,6 +256,10 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
     return res.status(400).json({ error: 'Invalid webhook signature or payload' });
   }
 
+  if (event.livemode === true) {
+    return res.status(403).json({ error: 'Live-mode webhook events are disabled' });
+  }
+
   const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
       autoRefreshToken: false,
@@ -235,14 +269,15 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
   });
 
   // ---------- Idempotency ledger: completed events are skipped; failed claims retry ----------
+  const claimedAt = new Date().toISOString();
   const { error: ledgerError } = await supabase
     .from('billing_webhook_events')
-    .insert({ stripe_event_id: event.id, type: event.type });
+    .insert({ stripe_event_id: event.id, type: event.type, claimed_at: claimedAt });
   if (ledgerError) {
     if (isUniqueViolation(ledgerError)) {
       const { data: ledger, error: readLedgerError } = await supabase
         .from('billing_webhook_events')
-        .select('processed_at')
+        .select('processed_at, claimed_at')
         .eq('stripe_event_id', event.id)
         .maybeSingle();
       if (readLedgerError) {
@@ -252,6 +287,22 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
       if (ledger?.processed_at) {
         return res.status(200).json({ received: true, duplicate: true });
       }
+      const leaseMs = Date.parse(ledger?.claimed_at ?? '');
+      if (Number.isFinite(leaseMs) && Date.now() - leaseMs < 5 * 60 * 1000) {
+        return res.status(409).json({ error: 'Webhook event is already being processed' });
+      }
+      let reclaim = supabase
+        .from('billing_webhook_events')
+        .update({ claimed_at: claimedAt }, { count: 'exact' })
+        .eq('stripe_event_id', event.id)
+        .is('processed_at', null);
+      reclaim = ledger?.claimed_at
+        ? reclaim.eq('claimed_at', ledger.claimed_at)
+        : reclaim.is('claimed_at', null);
+      const { error: reclaimError, count: reclaimCount } = await reclaim;
+      if (reclaimError || reclaimCount !== 1) {
+        return res.status(409).json({ error: 'Webhook event is already being processed' });
+      }
     }
     if (!isUniqueViolation(ledgerError)) {
       console.error('Failed to record billing webhook event:', ledgerError.message);
@@ -259,6 +310,8 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
     }
   }
 
+  let outcome = 'unhandled';
+  let reason: string | null = 'event_type_not_handled';
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -274,15 +327,19 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
         ) {
           // Fetch the full subscription so the entitlement row lands complete
           // even if the paired customer.subscription.created event was missed.
-          await retrieveAndUpsertSubscription(
+          const result = await retrieveAndUpsertSubscription(
             stripe,
             supabase,
             subscriptionId,
             session.metadata ?? null,
             { checkoutCompleted: true },
           );
+          outcome = result.applied ? 'applied' : 'ignored';
+          reason = result.applied ? null : result.reason;
         } else {
           console.warn('Ignoring completed Checkout session without matching AcreLedger farm evidence.');
+          outcome = 'ignored';
+          reason = 'invalid_checkout_evidence';
         }
         break;
       }
@@ -292,12 +349,14 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
         // Deleted subscriptions map to status "canceled"; the row is kept as
         // history (soft state) and access is denied by status, not by deletion.
         const subscription = event.data.object as Stripe.Subscription;
-        await retrieveAndUpsertSubscription(
+        const result = await retrieveAndUpsertSubscription(
           stripe,
           supabase,
           subscription.id,
           subscription.metadata,
         );
+        outcome = result.applied ? 'applied' : 'ignored';
+        reason = result.applied ? null : result.reason;
         break;
       }
       case 'invoice.paid':
@@ -307,7 +366,21 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
         const invoice = event.data.object as Stripe.Invoice;
         const subscriptionId = readInvoiceSubscriptionId(invoice);
         if (subscriptionId) {
-          await retrieveAndUpsertSubscription(stripe, supabase, subscriptionId, null);
+          const failureAt = event.type === 'invoice.payment_failed'
+            ? new Date(event.created * 1000).toISOString()
+            : null;
+          const result = await retrieveAndUpsertSubscription(
+            stripe,
+            supabase,
+            subscriptionId,
+            null,
+            { failureAt },
+          );
+          outcome = result.applied ? 'applied' : 'ignored';
+          reason = result.applied ? null : result.reason;
+        } else {
+          outcome = 'ignored';
+          reason = 'invoice_without_subscription';
         }
         break;
       }
@@ -322,7 +395,7 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
 
   const { error: processedError, count: processedCount } = await supabase
     .from('billing_webhook_events')
-    .update({ processed_at: new Date().toISOString() }, { count: 'exact' })
+    .update({ processed_at: new Date().toISOString(), outcome, reason }, { count: 'exact' })
     .eq('stripe_event_id', event.id);
   if (processedError || processedCount !== 1) {
     console.error(

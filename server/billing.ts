@@ -27,6 +27,18 @@ export interface TestModeBillingConfig {
   priceId: string;
 }
 
+export function cleanEnvValue(value: string | undefined): string {
+  const trimmed = (value ?? '').trim();
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 export type TestModeBillingCheck =
   | { ok: true; config: TestModeBillingConfig }
   | { ok: false; reason: string };
@@ -44,15 +56,15 @@ export function assertTestModeBilling(
     return { ok: false, reason: 'Billing is not enabled: live charges are disallowed.' };
   }
 
-  const secretKey = (env.STRIPE_SECRET_KEY ?? '').trim();
+  const secretKey = cleanEnvValue(env.STRIPE_SECRET_KEY);
   if (!secretKey) {
     return { ok: false, reason: 'Billing is not configured: missing Stripe secret key.' };
   }
-  if (!secretKey.startsWith('sk_test_')) {
+  if (!secretKey.startsWith('sk_test_') && !secretKey.startsWith('rk_test_')) {
     return { ok: false, reason: 'Billing is restricted to Stripe test mode keys.' };
   }
 
-  const priceId = (env.STRIPE_PRICE_ID ?? '').trim();
+  const priceId = cleanEnvValue(env.STRIPE_PRICE_ID);
   if (!priceId.startsWith('price_')) {
     return { ok: false, reason: 'Billing is not configured: missing Stripe price ID.' };
   }
@@ -121,8 +133,14 @@ const LIVE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
 export function canStartCheckout(
   existing: ExistingSubscriptionRow | null | undefined,
   callerUserId: string,
+  ownerIsCurrentMember = true,
 ): CheckoutGate {
-  if (existing && !existing.deleted_at && existing.owner_user_id !== callerUserId) {
+  if (
+    existing &&
+    !existing.deleted_at &&
+    ownerIsCurrentMember &&
+    existing.owner_user_id !== callerUserId
+  ) {
     return { ok: false, reason: 'not_owner' };
   }
   if (
@@ -160,26 +178,12 @@ export function hasLiveStripeSubscription(
 export function buildCheckoutIdempotencyKey(
   farmId: string,
   existing: ExistingSubscriptionRow | null | undefined,
-  requestFingerprint?: string,
 ): string {
-  // Stripe rejects a reused idempotency key whose parameters differ, so
-  // request-dependent inputs (origin, email) must be part of the key.
-  const suffix = requestFingerprint ? `:${fingerprint(requestFingerprint)}` : '';
   if (!existing || existing.deleted_at) {
-    return `acreledger-checkout:${farmId}:initial${suffix}`;
+    return `acreledger-checkout:${farmId}:initial`;
   }
   const subscriptionId = existing.stripe_subscription_id?.trim() || 'untracked';
-  return `acreledger-checkout:${farmId}:${subscriptionId}:${existing.status}${suffix}`;
-}
-
-/** Short, stable, non-cryptographic fingerprint (FNV-1a, base36). */
-function fingerprint(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(36);
+  return `acreledger-checkout:${farmId}:${subscriptionId}:${existing.status}`;
 }
 
 /**
@@ -189,8 +193,9 @@ function fingerprint(value: string): string {
  */
 export function shouldGrantTrial(
   existing: { stripe_subscription_id?: string | null } | null | undefined,
+  hasStripeHistory = false,
 ): boolean {
-  return !existing?.stripe_subscription_id?.trim();
+  return !hasStripeHistory && !existing?.stripe_subscription_id?.trim();
 }
 
 /**
@@ -220,9 +225,12 @@ export type PortalGate =
 export function canOpenPortal(
   row: PortalSubscriptionRow | null | undefined,
   callerUserId: string,
+  ownerIsCurrentMember = true,
 ): PortalGate {
   if (!row || row.deleted_at) return { ok: false, reason: 'no_subscription' };
-  if (row.owner_user_id !== callerUserId) return { ok: false, reason: 'not_owner' };
+  if (ownerIsCurrentMember && row.owner_user_id !== callerUserId) {
+    return { ok: false, reason: 'not_owner' };
+  }
   if (!row.stripe_customer_id) return { ok: false, reason: 'not_configured' };
   return { ok: true };
 }
@@ -254,6 +262,8 @@ export interface StripeSubscriptionLike {
   trial_end?: number | null;
   current_period_end?: number | null;
   cancel_at_period_end?: boolean | null;
+  canceled_at?: number | null;
+  ended_at?: number | null;
   metadata?: Record<string, string> | null;
   items?: {
     data?: Array<
@@ -300,6 +310,7 @@ export function buildSubscriptionUpsert(subscription: StripeSubscriptionLike): {
   stripe_subscription_id: string;
   stripe_subscription_created_at: string | null;
   stripe_price_id: string | null;
+  ended_at: string | null;
 } {
   const customer = subscription.customer;
   return {
@@ -312,12 +323,14 @@ export function buildSubscriptionUpsert(subscription: StripeSubscriptionLike): {
     stripe_subscription_id: subscription.id,
     stripe_subscription_created_at: stripeEpochToIso(subscription.created),
     stripe_price_id: subscription.items?.data?.[0]?.price?.id ?? null,
+    ended_at: stripeEpochToIso(subscription.ended_at ?? subscription.canceled_at),
   };
 }
 
 export interface ExistingEntitlementIdentity {
   stripe_subscription_id: string | null;
   stripe_subscription_created_at: string | null;
+  status?: string | null;
 }
 
 /**
@@ -335,6 +348,7 @@ export function shouldApplySubscriptionSnapshot(
   if (!existing?.stripe_subscription_id || existing.stripe_subscription_id === incoming.id) {
     return true;
   }
+  if (existing.status && LIVE_SUBSCRIPTION_STATUSES.has(existing.status)) return false;
   if (!checkoutCompleted) return false;
 
   const incomingCreatedAt = stripeEpochToIso(incoming.created);
@@ -342,6 +356,32 @@ export function shouldApplySubscriptionSnapshot(
   if (!existing.stripe_subscription_created_at) return true;
 
   return Date.parse(incomingCreatedAt) > Date.parse(existing.stripe_subscription_created_at);
+}
+
+export interface StripePriceLike {
+  currency?: string | null;
+  tax_behavior?: string | null;
+  recurring?: { interval?: string | null } | null;
+}
+
+/** Optional deploy-time assertions; omitted variables intentionally skip that assertion. */
+export function validateConfiguredPrice(
+  price: StripePriceLike,
+  env: Record<string, string | undefined>,
+): string | null {
+  const expectedCurrency = cleanEnvValue(env.BILLING_EXPECTED_CURRENCY).toLowerCase();
+  const expectedInterval = cleanEnvValue(env.BILLING_EXPECTED_INTERVAL).toLowerCase();
+  const expectedTaxBehavior = cleanEnvValue(env.BILLING_EXPECTED_TAX_BEHAVIOR).toLowerCase();
+  if (expectedCurrency && price.currency?.toLowerCase() !== expectedCurrency) {
+    return `Configured Stripe price currency must be ${expectedCurrency}.`;
+  }
+  if (expectedInterval && price.recurring?.interval?.toLowerCase() !== expectedInterval) {
+    return `Configured Stripe price interval must be ${expectedInterval}.`;
+  }
+  if (expectedTaxBehavior && price.tax_behavior?.toLowerCase() !== expectedTaxBehavior) {
+    return `Configured Stripe price tax behavior must be ${expectedTaxBehavior}.`;
+  }
+  return null;
 }
 
 /** Checkout metadata is the only trusted source for the target farm/owner. */

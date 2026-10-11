@@ -53,10 +53,9 @@ export interface FarmBillingAccessOptions {
  * Entitlement rule for a farm's subscription row (source of truth is the
  * `farm_subscriptions` mirror, never client-reported state):
  * - `trialing` / `active`: full access.
- * - `past_due`: full access through a 3-day grace window anchored at
- *   `current_period_end` (falling back to `trial_ends_at`); fails closed when
- *   no anchor exists.
- * - `canceled` / `unpaid`: access continues until `current_period_end`.
+ * - `past_due`: full access through a 3-day grace window anchored at the first
+ *   observed payment failure; fails closed when no anchor exists.
+ * - `canceled` / `unpaid`: access continues only through Stripe `ended_at`.
  * - `incomplete` (checkout abandoned): locked.
  * - Soft-deleted row or missing row: access follows `enforce`.
  */
@@ -82,8 +81,7 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
   }
 
   if (status === 'past_due') {
-    const anchorMs =
-      parseInstantMs(subscription.current_period_end) ?? parseInstantMs(subscription.trial_ends_at);
+    const anchorMs = parseInstantMs(subscription.past_due_since);
     if (anchorMs === null) {
       // Unknown recovery deadline: fail closed rather than grant silently.
       return { hasAccess: false, inGrace: false, phase: 'locked', status };
@@ -96,8 +94,8 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
   }
 
   if (status === 'canceled' || status === 'unpaid') {
-    const periodEndMs = parseInstantMs(subscription.current_period_end);
-    if (periodEndMs !== null && nowMs <= periodEndMs) {
+    const endedAtMs = parseInstantMs(subscription.ended_at);
+    if (endedAtMs !== null && nowMs <= endedAtMs) {
       return { hasAccess: true, inGrace: true, phase: 'grace', status };
     }
     return { hasAccess: false, inGrace: false, phase: 'locked', status };
