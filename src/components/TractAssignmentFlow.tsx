@@ -849,7 +849,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                 <div className="rounded-lg border border-border bg-card p-3.5 text-xs text-muted-foreground flex gap-2 items-center">
                   <Mail size={16} className="text-primary shrink-0" />
                   <div>
-                    Need help? Email <span className="font-semibold text-foreground font-mono">support@acreledger.com</span>.
+                    Need help? Email <span className="font-semibold text-foreground font-mono">support@acreledger.app</span>.
                   </div>
                 </div>
               </TabsContent>

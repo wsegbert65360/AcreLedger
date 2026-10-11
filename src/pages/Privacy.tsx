@@ -233,10 +233,10 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                             <p className="text-sm text-muted-foreground leading-relaxed">
                                 Privacy questions and support requests go to{' '}
                                 <a
-                                    href="mailto:support@acreledger.com"
+                                    href="mailto:support@acreledger.app"
                                     className="break-all font-bold text-foreground underline-offset-4 hover:text-primary hover:underline sm:break-normal"
                                 >
-                                    support@acreledger.com
+                                    support@acreledger.app
                                 </a>
                                 . The public{' '}
                                 <Link

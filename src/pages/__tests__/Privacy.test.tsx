@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * Public privacy policy: App Store privacy URLs can target this page on the
- * live host. It must name support@acreledger.com and stay a presentational
+ * live host. It must name support@acreledger.app and stay a presentational
  * page (no signed-in chrome of its own).
  */
 import { MemoryRouter } from 'react-router-dom';
@@ -24,11 +24,11 @@ describe('Privacy', () => {
     expect(screen.getByText('AcreLedger Privacy Policy')).toBeInTheDocument();
   });
 
-  it('names support@acreledger.com as the contact address', () => {
+  it('names support@acreledger.app as the contact address', () => {
     renderPrivacy();
-    expect(screen.getByRole('link', { name: 'support@acreledger.com' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'support@acreledger.app' })).toHaveAttribute(
       'href',
-      'mailto:support@acreledger.com'
+      'mailto:support@acreledger.app'
     );
   });
 

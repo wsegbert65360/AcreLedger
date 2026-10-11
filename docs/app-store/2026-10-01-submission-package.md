@@ -30,7 +30,7 @@ Enter these values in App Store Connect:
 
 - Contact first name: Will
 - Contact last name: Egbert
-- Contact email: `support@acreledger.com`
+- Contact email: `support@acreledger.app`
 - Contact phone: **OWNER ACTION — enter a monitored phone number**
 - Sign-in required: yes
 - Demo account username: **OWNER ACTION — enter the disposable review account**

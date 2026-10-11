@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-const SUPPORT_EMAIL = 'support@acreledger.com';
+const SUPPORT_EMAIL = 'support@acreledger.app';
 
 /**
  * Public support/contact page for signed-out visitors (Oct 1 launch).

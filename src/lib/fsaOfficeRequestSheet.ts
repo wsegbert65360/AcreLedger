@@ -206,7 +206,7 @@ export function createFsaOfficeRequestSheet({
   doc.setFontSize(8.5);
   doc.text('AcreLedger accepts GeoJSON (.json or .geojson) and ESRI shapefile ZIP files directly.', LEFT, 258);
   doc.text('This is a data request, not an official USDA form.', LEFT, 263);
-  doc.text('Questions or file help: support@acreledger.com', LEFT, 268);
+  doc.text('Questions or file help: support@acreledger.app', LEFT, 268);
 
   if (save) doc.save('AcreLedger_FSA_Field_File_Request.pdf');
   return doc;

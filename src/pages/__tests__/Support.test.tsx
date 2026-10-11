@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * Public support surface: App Store support URLs can target this page on the
- * live host. It must name support@acreledger.com and stay a presentational
+ * live host. It must name support@acreledger.app and stay a presentational
  * page (no signed-in chrome of its own).
  */
 import { MemoryRouter } from 'react-router-dom';
@@ -24,11 +24,11 @@ describe('Support', () => {
     expect(screen.getByText('AcreLedger Support')).toBeInTheDocument();
   });
 
-  it('names support@acreledger.com as a mailto contact', () => {
+  it('names support@acreledger.app as a mailto contact', () => {
     renderSupport();
-    expect(screen.getByRole('link', { name: 'support@acreledger.com' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'support@acreledger.app' })).toHaveAttribute(
       'href',
-      'mailto:support@acreledger.com'
+      'mailto:support@acreledger.app'
     );
   });
 

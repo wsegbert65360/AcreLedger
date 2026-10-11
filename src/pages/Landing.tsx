@@ -444,7 +444,7 @@ const Landing = () => {
           </h2>
           <p className="landing-lede" data-reveal style={revealDelay(80)}>
             Have a question about using AcreLedger on your farm? Email{" "}
-            <a href="mailto:support@acreledger.com">support@acreledger.com</a>.
+            <a href="mailto:support@acreledger.app">support@acreledger.app</a>.
           </p>
           <div className="landing-faq" data-reveal style={revealDelay(120)}>
             {faqs
@@ -490,7 +490,7 @@ const Landing = () => {
       <footer className="landing-footer">
         <div className="landing-footer-inner">
           <span>AcreLedger</span>
-          <a href="mailto:support@acreledger.com">Contact</a>
+          <a href="mailto:support@acreledger.app">Contact</a>
           <Link to="/support">Support</Link>
           <Link to="/privacy">Privacy policy</Link>
           <span>© 2026 AcreLedger</span>
