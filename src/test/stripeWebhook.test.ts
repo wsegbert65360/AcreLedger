@@ -23,7 +23,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: (...args: unknown[]) => mocks.createClient(...args),
 }));
 
-import handler from '../../api/stripe-webhook';
+import handler, { readRawBody } from '../../api/stripe-webhook';
 
 type RequestInput = Parameters<typeof handler>[0];
 type ResponseInput = Parameters<typeof handler>[1];
@@ -45,6 +45,10 @@ function createSupabaseClient() {
   };
 
   const client = {
+    rpc(name: string, payload: unknown) {
+      calls.push({ table: `rpc:${name}`, operation: 'rpc', payload, filters: [] });
+      return next(`rpc:${name}`);
+    },
     from(table: string) {
       let operation = 'query';
       const filters: Array<{ kind: 'eq' | 'is'; column: string; value: unknown }> = [];
@@ -168,6 +172,16 @@ describe('Stripe webhook delivery recovery', () => {
     vi.clearAllMocks();
   });
 
+  it('preserves the exact streamed request bytes used for signature verification', async () => {
+    const request = {
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('{"a":');
+        yield Buffer.from(' 1}\n');
+      },
+    } as RequestInput;
+    await expect(readRawBody(request)).resolves.toEqual(Buffer.from('{"a": 1}\n'));
+  });
+
   it('rejects a missing Stripe signature before creating a database client', async () => {
     const response = await invoke(null);
 
@@ -193,6 +207,25 @@ describe('Stripe webhook delivery recovery', () => {
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
+  it('rejects live-mode events while live charges are disabled', async () => {
+    mocks.constructEvent.mockReturnValueOnce({ ...subscriptionEvent, livemode: true });
+    const response = await invoke();
+    expect(response.status).toBe(403);
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it('returns a retryable conflict while another worker holds a fresh event lease', async () => {
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue(
+      'billing_webhook_events',
+      result({ error: { code: '23505', message: 'duplicate' }, count: null }),
+      result({ data: { processed_at: null, claimed_at: new Date().toISOString() }, count: null }),
+    );
+    expect((await invoke()).status).toBe(409);
+    expect(mocks.retrieveSubscription).not.toHaveBeenCalled();
+  });
+
   it('retries an event whose first processing attempt failed before processed_at was set', async () => {
     const supabase = createSupabaseClient();
     mocks.createClient.mockReturnValue(supabase.client);
@@ -201,6 +234,7 @@ describe('Stripe webhook delivery recovery', () => {
       result(),
       result({ error: { code: '23505', message: 'duplicate' }, count: null }),
       result({ data: { processed_at: null }, count: null }),
+      result(),
       result(),
     );
     supabase.queue('farm_subscriptions', result({ count: null }), result());
@@ -325,6 +359,78 @@ describe('Stripe webhook delivery recovery', () => {
 
     expect((await invoke()).status).toBe(200);
     expect(mocks.retrieveSubscription).toHaveBeenCalledWith('sub_legacy');
+  });
+
+  it('reads the basil invoice shape and anchors past_due at the failure event', async () => {
+    mocks.constructEvent.mockReturnValueOnce({
+      id: 'evt_invoice_failed',
+      type: 'invoice.payment_failed',
+      created: 1790000000,
+      data: { object: { parent: { subscription_details: { subscription: 'sub_current' } } } },
+    });
+    mocks.retrieveSubscription.mockResolvedValueOnce({ ...currentSubscription, status: 'past_due' });
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result(), result());
+    supabase.queue(
+      'farm_subscriptions',
+      result({ data: {
+        id: 'row-1', owner_user_id: 'user-1', status: 'active',
+        stripe_subscription_id: 'sub_current',
+        stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+        past_due_since: null, updated_at: '2026-09-09T12:00:00.000Z',
+      }, count: null }),
+      result(),
+    );
+    expect((await invoke()).status).toBe(200);
+    const update = supabase.calls.find(call =>
+      call.table === 'farm_subscriptions' && call.operation === 'update');
+    expect(update?.payload).toMatchObject({
+      status: 'past_due',
+      past_due_since: '2026-09-21T14:13:20.000Z',
+    });
+  });
+
+  it('acknowledges a permanently missing Stripe resource and records the reason', async () => {
+    mocks.retrieveSubscription.mockRejectedValueOnce({ code: 'resource_missing' });
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result(), result());
+    expect((await invoke()).status).toBe(200);
+    const finalize = supabase.calls.find(call =>
+      call.table === 'billing_webhook_events' && call.operation === 'update');
+    expect(finalize?.payload).toMatchObject({
+      outcome: 'ignored', reason: 'stripe_resource_missing',
+    });
+  });
+
+  it('soft-deletes history and inserts a completed non-live replacement via one RPC', async () => {
+    mocks.constructEvent.mockReturnValueOnce({
+      id: 'evt_checkout_replacement',
+      type: 'checkout.session.completed',
+      data: { object: {
+        subscription: 'sub_new', mode: 'subscription', client_reference_id: 'farm-1',
+        metadata: { farm_id: 'farm-1', user_id: 'user-1' },
+      } },
+    });
+    mocks.retrieveSubscription.mockResolvedValueOnce({
+      ...currentSubscription, id: 'sub_new', created: 1788955300, status: 'active',
+    });
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result(), result());
+    supabase.queue('farm_subscriptions', result({ data: {
+      id: 'row-old', owner_user_id: 'user-1', status: 'canceled',
+      stripe_subscription_id: 'sub_old',
+      stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+      past_due_since: null, updated_at: '2026-09-09T12:01:00.000Z',
+    }, count: null }));
+    supabase.queue('profiles', result({ data: { id: 'user-1' }, count: null }));
+    supabase.queue('rpc:replace_farm_subscription', result());
+    expect((await invoke()).status).toBe(200);
+    expect(supabase.calls).toContainEqual(expect.objectContaining({
+      table: 'rpc:replace_farm_subscription', operation: 'rpc',
+    }));
   });
 
   it('skips only events already marked processed', async () => {

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   createCheckoutSession: vi.fn(),
   searchSubscriptions: vi.fn(),
+  retrievePrice: vi.fn(),
   createClient: vi.fn(),
 }));
 
@@ -10,6 +11,7 @@ vi.mock('stripe', () => ({
   default: class StripeMock {
     checkout = { sessions: { create: mocks.createCheckoutSession } };
     subscriptions = { search: mocks.searchSubscriptions };
+    prices = { retrieve: mocks.retrievePrice };
   },
 }));
 
@@ -50,6 +52,12 @@ describe('create checkout session API', () => {
     process.env.SUPABASE_ANON_KEY = 'anon-key';
     process.env.ALLOWED_ORIGINS = 'https://acreledger.example';
     process.env.BILLING_ALLOWLIST = 'user-1';
+    delete process.env.BILLING_EXPECTED_CURRENCY;
+    delete process.env.BILLING_EXPECTED_INTERVAL;
+    delete process.env.BILLING_EXPECTED_TAX_BEHAVIOR;
+    delete process.env.BILLING_AUTOMATIC_TAX;
+    delete process.env.BILLING_TAX_ID_COLLECTION;
+    delete process.env.BILLING_BILLING_ADDRESS_COLLECTION;
 
     mocks.createClient.mockReturnValue({
       auth: {
@@ -75,6 +83,11 @@ describe('create checkout session API', () => {
     });
     mocks.createCheckoutSession.mockResolvedValue({ url: 'https://checkout.stripe.test/session' });
     mocks.searchSubscriptions.mockResolvedValue({ data: [] });
+    mocks.retrievePrice.mockResolvedValue({
+      currency: 'usd',
+      recurring: { interval: 'year' },
+      tax_behavior: 'unspecified',
+    });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -112,8 +125,43 @@ describe('create checkout session API', () => {
         success_url: 'https://acreledger.example/settings?billing=success',
         cancel_url: 'https://acreledger.example/settings?billing=cancelled',
       }),
-      { idempotencyKey: expect.stringMatching(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/) },
+      { idempotencyKey: 'acreledger-checkout:farm-1:initial' },
     );
+  });
+
+  it('rejects a missing Origin before creating a Stripe session', async () => {
+    const response = createResponse();
+    await handler({
+      method: 'POST',
+      headers: { authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+    expect(response.state.status).toBe(400);
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('enables configured tax collection after validating the configured price', async () => {
+    process.env.BILLING_EXPECTED_CURRENCY = 'aud';
+    process.env.BILLING_EXPECTED_INTERVAL = 'year';
+    process.env.BILLING_EXPECTED_TAX_BEHAVIOR = 'inclusive';
+    process.env.BILLING_AUTOMATIC_TAX = 'true';
+    process.env.BILLING_TAX_ID_COLLECTION = 'true';
+    process.env.BILLING_BILLING_ADDRESS_COLLECTION = 'true';
+    mocks.retrievePrice.mockResolvedValue({
+      currency: 'aud', recurring: { interval: 'year' }, tax_behavior: 'inclusive',
+    });
+    const response = createResponse();
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+    expect(response.state.status).toBe(200);
+    expect(mocks.createCheckoutSession.mock.calls[0][0]).toMatchObject({
+      automatic_tax: { enabled: true },
+      tax_id_collection: { enabled: true },
+      billing_address_collection: 'required',
+    });
   });
 
   it('cleans quoted or padded Supabase env values before creating the client', async () => {

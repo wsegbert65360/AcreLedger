@@ -53,6 +53,8 @@ function makeSubscription(overrides: Partial<FarmSubscription> = {}): FarmSubscr
     status: 'active',
     trial_ends_at: '2027-01-08T00:00:00.000Z',
     current_period_end: '2027-01-08T00:00:00.000Z',
+    past_due_since: null,
+    ended_at: null,
     cancel_at_period_end: false,
     stripe_customer_id: 'cus_test_1',
     stripe_subscription_id: 'sub_stripe_1',
@@ -75,7 +77,8 @@ function renderBilling() {
 
 beforeEach(() => {
   vi.stubEnv('VITE_BILLING_UI_ENABLED', 'true');
-  vi.stubEnv('VITE_BILLING_ALLOWLIST', 'owner@example.com');
+  vi.stubEnv('VITE_BILLING_USER_ID_ALLOWLIST', 'user-1');
+  vi.stubEnv('VITE_BILLING_PRICE_LABEL', 'A$299/year (incl. GST)');
   subscriptionResult = { data: null, error: null };
   refreshSessionMock.mockResolvedValue({ data: { session: farmState.session } });
   fromMock.mockImplementation((table: string) => {
@@ -117,7 +120,7 @@ describe('BillingManager', () => {
   });
 
   it('shows "coming soon" without any checkout action for non-allowlisted users', async () => {
-    vi.stubEnv('VITE_BILLING_ALLOWLIST', 'someoneelse@example.com');
+    vi.stubEnv('VITE_BILLING_USER_ID_ALLOWLIST', 'user-2');
     renderBilling();
 
     expect(await screen.findByText(/Billing is coming soon/i)).toBeInTheDocument();
@@ -129,7 +132,7 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByRole('button', { name: /start 4-month free trial/i })).toBeInTheDocument();
-    expect(screen.getByText(/\$299\/year after the trial/i)).toBeInTheDocument();
+    expect(screen.getByText(/A\$299\/year \(incl\. GST\) after the trial/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
@@ -222,13 +225,12 @@ describe('BillingManager', () => {
     expect(refreshSessionMock).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a read-only status without actions for a non-owner member', async () => {
+  it('keeps the portal action visible so the server can recover a departed owner', async () => {
     subscriptionResult = { data: makeSubscription({ owner_user_id: 'owner-2' }), error: null };
     renderBilling();
 
-    expect(await screen.findByText(/Ask the farm owner to manage billing/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /manage billing/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
   it('shows the portal action for the owner of an active subscription', async () => {
@@ -238,6 +240,20 @@ describe('BillingManager', () => {
     expect(await screen.findByRole('button', { name: /manage billing/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
     expect(screen.getByText(/Active\. Renews yearly/i)).toBeInTheDocument();
+  });
+
+  it('shows Manage billing, not Checkout, for past_due subscriptions', async () => {
+    subscriptionResult = { data: makeSubscription({ status: 'past_due' }), error: null };
+    renderBilling();
+    expect(await screen.findByRole('button', { name: /manage billing/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+  });
+
+  it('shows Reactivate for a canceled subscription', async () => {
+    subscriptionResult = { data: makeSubscription({ status: 'canceled' }), error: null };
+    renderBilling();
+    expect(await screen.findByRole('button', { name: /reactivate subscription/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
   it('surfaces a failed billing request as a toast instead of navigating', async () => {

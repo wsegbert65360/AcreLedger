@@ -749,9 +749,10 @@ The live auth integration suite verifies forbidden operations by asserting Postg
 
 Billing is implemented but intentionally restricted to Stripe test mode. The Settings card is
 web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and remains hidden in Capacitor. Internal
-rollout requires a matching client and server allowlist entry; an empty allowlist means billing is
+rollout requires a client user-ID allowlist (`VITE_BILLING_USER_ID_ALLOWLIST`) and the server
+allowlist; client bundles must never contain tester emails. An empty allowlist means billing is
 unavailable. `BILLING_LIVE_CHARGES` must remain absent or exactly `false`, and the server accepts
-only `sk_test_` keys until the owner explicitly approves a production/legal rollout.
+only `sk_test_` or restricted `rk_test_` keys until the owner explicitly approves a production/legal rollout.
 
 Product access enforcement is off by default. A missing or soft-deleted subscription row is
 `unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
@@ -768,23 +769,32 @@ Checkout rules (`server/billing.ts`, `api/create-checkout-session.ts`): a live s
 (`trialing`, `active`, `past_due`, `unpaid`) returns 409 and the owner manages payment in the
 Customer Portal, because a second Checkout would create a parallel subscription; only a `canceled`
 or `incomplete` row may start a new Checkout. The 122-day trial is a first-subscription offer,
-granted only when the farm's row has never carried a Stripe subscription (`shouldGrantTrial`);
+granted only when neither the mirror nor Stripe search shows subscription history (`shouldGrantTrial`);
 re-subscribing after cancellation bills immediately. An existing `stripe_customer_id` is reused
 (`buildCheckoutCustomerParams`), otherwise the customer is seeded from the caller's email. The
-idempotency key is state-derived and also carries a fingerprint of the request origin and email,
-since Stripe rejects a reused key whose parameters differ. The Settings card offers Checkout only
+idempotency key is farm- and state-scoped so parallel attempts by different members or origins
+collapse instead of creating two subscriptions. The Settings card offers Checkout only
 for no row, `canceled`, or `incomplete`; `past_due`/`unpaid` owners see Manage billing.
 
 Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` is a property of each
 subscription item, not the Subscription. `resolveCurrentPeriodEnd` uses the latest item end and
-falls back to the legacy top-level field. Entitlement grace for `canceled`/`unpaid`/`past_due`
-depends on this value, so webhook tests should use the basil payload shape.
+falls back to the legacy top-level field. The three-day `past_due` grace is anchored at
+`past_due_since` from the first failed invoice, not the already-advanced period end. Immediate
+`canceled`/`unpaid` access ends at Stripe `ended_at`.
 
 `api/stripe-webhook.ts` verifies the Stripe raw-body signature, claims `billing_webhook_events` as
-an idempotency ledger, fetches complete subscription state when needed, ignores stale replacement
-subscriptions, and mirrors handled events into `farm_subscriptions`. `billing_webhook_events` has
+an idempotency ledger with a five-minute worker lease and recorded outcome/reason, fetches complete
+subscription state when needed, refuses a second subscription while the mirror is live, and uses a
+service-role-only RPC to soft-delete history and insert permitted replacements atomically.
+`billing_webhook_events` has
 RLS enabled with no client policies or grants. Billing infrastructure is excluded from the
 customer JSON backup/`restore_farm_backup`, but included and classified in owner disaster recovery.
+
+Checkout optionally validates currency, interval, and tax behavior from `BILLING_EXPECTED_*`
+variables and enables automatic tax, tax-ID collection, and billing-address collection only when
+their explicit flags are true. The UI price copy comes from `VITE_BILLING_PRICE_LABEL`. Customer
+Portal creation fails closed unless `BILLING_PORTAL_CONFIGURATION_ID` names the reviewed Stripe
+configuration; Stripe dashboard defaults are never used implicitly.
 
 ### Account Lifecycle and Native Credential Safety
 

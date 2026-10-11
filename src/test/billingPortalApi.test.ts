@@ -51,6 +51,7 @@ describe('create portal session API', () => {
     process.env.SUPABASE_ANON_KEY = 'anon-key';
     process.env.ALLOWED_ORIGINS = 'https://acreledger.example';
     process.env.BILLING_ALLOWLIST = 'user-1';
+    process.env.BILLING_PORTAL_CONFIGURATION_ID = 'bpc_reviewed';
 
     mocks.createClient.mockReturnValue({
       auth: {
@@ -97,8 +98,20 @@ describe('create portal session API', () => {
     });
     expect(mocks.createPortalSession).toHaveBeenCalledWith({
       customer: 'cus_test_1',
+      configuration: 'bpc_reviewed',
       return_url: 'https://acreledger.example/settings?billing=portal',
     });
+  });
+
+  it('fails safely instead of using Stripe default portal settings when configuration is unset', async () => {
+    delete process.env.BILLING_PORTAL_CONFIGURATION_ID;
+    const response = createResponse();
+    await handler(createRequest(), response.response);
+    expect(response.state).toMatchObject({
+      status: 503,
+      body: { error: 'Billing portal is not configured.' },
+    });
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
   });
 
   it('cleans quoted or padded Supabase env values before creating the client', async () => {

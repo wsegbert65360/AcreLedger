@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PAST_DUE_GRACE_DAYS as CLIENT_PAST_DUE_GRACE_DAYS,
+  TRIAL_PERIOD_DAYS as CLIENT_TRIAL_PERIOD_DAYS,
+} from '@/lib/billing';
+
+import {
   HANDLED_WEBHOOK_EVENT_TYPES,
   PAST_DUE_GRACE_DAYS,
   TRIAL_PERIOD_DAYS,
@@ -18,6 +23,7 @@ import {
   resolveCurrentPeriodEnd,
   shouldApplySubscriptionSnapshot,
   shouldGrantTrial,
+  validateConfiguredPrice,
 } from '../../server/billing';
 
 const TEST_ENV = {
@@ -30,6 +36,11 @@ describe('billing constants', () => {
   it('matches the locked product decisions', () => {
     expect(TRIAL_PERIOD_DAYS).toBe(122);
     expect(PAST_DUE_GRACE_DAYS).toBe(3);
+  });
+
+  it('keeps client and server policy constants in parity', () => {
+    expect(CLIENT_TRIAL_PERIOD_DAYS).toBe(TRIAL_PERIOD_DAYS);
+    expect(CLIENT_PAST_DUE_GRACE_DAYS).toBe(PAST_DUE_GRACE_DAYS);
   });
 });
 
@@ -154,13 +165,13 @@ describe('buildCheckoutIdempotencyKey', () => {
   });
 });
 
-describe('buildCheckoutIdempotencyKey request fingerprint', () => {
-  it('changes when origin or email changes so Stripe never sees mismatched params', () => {
-    const a = buildCheckoutIdempotencyKey('farm-1', null, 'https://a.example|x@y.com');
-    const b = buildCheckoutIdempotencyKey('farm-1', null, 'https://b.example|x@y.com');
-    expect(a).toMatch(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/);
-    expect(a).not.toBe(b);
-    expect(buildCheckoutIdempotencyKey('farm-1', null, 'https://a.example|x@y.com')).toBe(a);
+describe('buildCheckoutIdempotencyKey concurrency', () => {
+  it('uses one farm-scoped key across users and origins', () => {
+    const a = buildCheckoutIdempotencyKey('farm-1', null);
+    const b = buildCheckoutIdempotencyKey('farm-1', null);
+    expect(a).toBe('acreledger-checkout:farm-1:initial');
+    expect(a).toBe(b);
+    expect(buildCheckoutIdempotencyKey('farm-1', null)).toBe(a);
   });
 });
 
@@ -251,6 +262,7 @@ describe('buildSubscriptionUpsert (webhook mapper)', () => {
       stripe_subscription_id: 'sub_stripe_1',
       stripe_subscription_created_at: '2026-09-21T14:13:20.000Z',
       stripe_price_id: 'price_test_1',
+      ended_at: null,
     });
   });
 
@@ -340,6 +352,30 @@ describe('shouldApplySubscriptionSnapshot', () => {
         true,
       ),
     ).toBe(false);
+  });
+
+  it('refuses a checkout replacement while the mirrored subscription is live', () => {
+    expect(
+      shouldApplySubscriptionSnapshot(
+        { ...current, status: 'active' },
+        { id: 'sub_parallel', status: 'trialing', created: 1788955300 },
+        true,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('configurable Stripe price assertions', () => {
+  const price = { currency: 'aud', recurring: { interval: 'year' }, tax_behavior: 'inclusive' };
+
+  it('validates only the assertions configured by the deployment', () => {
+    expect(validateConfiguredPrice(price, {})).toBeNull();
+    expect(validateConfiguredPrice(price, {
+      BILLING_EXPECTED_CURRENCY: 'AUD',
+      BILLING_EXPECTED_INTERVAL: 'year',
+      BILLING_EXPECTED_TAX_BEHAVIOR: 'inclusive',
+    })).toBeNull();
+    expect(validateConfiguredPrice(price, { BILLING_EXPECTED_CURRENCY: 'usd' })).toMatch(/usd/i);
   });
 });
 
