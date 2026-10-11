@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const askState = vi.hoisted(() => ({
   isAskOpen: true,
@@ -112,6 +112,10 @@ vi.mock('sonner', () => ({
 import { toast } from 'sonner';
 import AskAcreLedger from '../AskAcreLedger';
 
+const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+const originalVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+
 describe('AskAcreLedger', () => {
   beforeEach(() => {
     askState.isAskOpen = true;
@@ -140,6 +144,27 @@ describe('AskAcreLedger', () => {
     vi.mocked(toast.error).mockReset();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalInnerHeight) Object.defineProperty(window, 'innerHeight', originalInnerHeight);
+    if (originalScrollIntoView) {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView);
+    } else {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        value: undefined,
+      });
+    }
+    if (originalVisualViewport) {
+      Object.defineProperty(window, 'visualViewport', originalVisualViewport);
+    } else {
+      Object.defineProperty(window, 'visualViewport', {
+        configurable: true,
+        value: undefined,
+      });
+    }
+  });
+
   it('disables send offline and shows the connection message', () => {
     askState.isOnline = false;
     render(<AskAcreLedger />);
@@ -147,6 +172,121 @@ describe('AskAcreLedger', () => {
     expect(screen.getByLabelText('Send question')).toHaveProperty('disabled', true);
     expect(screen.queryByText('Try a question from this farm’s book')).toBeNull();
     expect(screen.queryByRole('button', { name: 'How much grain is still in my bins?' })).toBeNull();
+  });
+
+  it('scrolls the composer into view when the question input receives focus', async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    render(<AskAcreLedger />);
+    fireEvent.focus(screen.getByLabelText('Question'));
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end', inline: 'nearest' });
+    });
+  });
+
+  it('lifts and re-scrolls the focused composer when the visual viewport shrinks', async () => {
+    let resizeListener: (() => void) | undefined;
+    let scrollListener: (() => void) | undefined;
+    const viewport = {
+      height: 800,
+      offsetTop: 0,
+      addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+        if (type === 'resize') resizeListener = listener as () => void;
+        if (type === 'scroll') scrollListener = listener as () => void;
+      }),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: viewport,
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const animationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      callback(0);
+      return 0;
+    });
+
+    render(<AskAcreLedger />);
+    const input = screen.getByLabelText('Question');
+    act(() => input.focus());
+    scrollIntoView.mockClear();
+    animationFrame.mockClear();
+
+    viewport.height = 500;
+    act(() => {
+      resizeListener?.();
+    });
+
+    await waitFor(() => {
+      expect(input.closest('form')?.parentElement).toHaveStyle({
+        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px) + 300px)',
+      });
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end', inline: 'nearest' });
+    });
+
+    animationFrame.mockClear();
+    viewport.offsetTop = 25;
+    act(() => {
+      scrollListener?.();
+      expect(animationFrame).not.toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(animationFrame).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'end', inline: 'nearest' });
+    });
+  });
+
+  it('re-scrolls without adding keyboard padding when Android resizes both viewports', async () => {
+    let resizeListener: (() => void) | undefined;
+    const viewport = {
+      height: 800,
+      offsetTop: 0,
+      addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+        if (type === 'resize') resizeListener = listener as () => void;
+      }),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800, writable: true });
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: viewport,
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      callback(0);
+      return 0;
+    });
+
+    render(<AskAcreLedger />);
+    const input = screen.getByLabelText('Question');
+    act(() => input.focus());
+    scrollIntoView.mockClear();
+
+    window.innerHeight = 500;
+    viewport.height = 500;
+    act(() => resizeListener?.());
+
+    await waitFor(() => {
+      expect(input.closest('form')?.parentElement).toHaveStyle({
+        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px) + 0px)',
+      });
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end', inline: 'nearest' });
+    });
   });
 
   it('sends a suggestion chip immediately', async () => {

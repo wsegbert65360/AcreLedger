@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Send, Square, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -43,6 +43,7 @@ export default function AskAcreLedger() {
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
 
   const suggestions = getSeasonalAskSuggestions(viewingSeason);
 
@@ -55,6 +56,12 @@ export default function AskAcreLedger() {
       toast.error('The book needs microphone permission to ask by voice. Typing still works.');
     },
   });
+
+  const scrollComposerIntoView = useCallback(() => {
+    requestAnimationFrame(() => {
+      composerRef.current?.scrollIntoView({ block: 'end', inline: 'nearest' });
+    });
+  }, []);
 
   // iOS keeps the layout viewport full-height behind the software keyboard, so
   // the fixed-bottom drawer input ends up covered. The visual viewport does
@@ -72,14 +79,26 @@ export default function AskAcreLedger() {
       const covered = Math.round(window.innerHeight - viewport.height - viewport.offsetTop);
       setKeyboardPadding(Math.max(0, covered));
     };
+    const handleResize = () => {
+      update();
+      if (composerRef.current?.contains(document.activeElement)) {
+        scrollComposerIntoView();
+      }
+    };
     update();
-    viewport.addEventListener('resize', update);
+    viewport.addEventListener('resize', handleResize);
     viewport.addEventListener('scroll', update);
     return () => {
-      viewport.removeEventListener('resize', update);
+      viewport.removeEventListener('resize', handleResize);
       viewport.removeEventListener('scroll', update);
     };
-  }, [isAskOpen]);
+  }, [isAskOpen, scrollComposerIntoView]);
+
+  useEffect(() => {
+    if (keyboardPadding > 0 && composerRef.current?.contains(document.activeElement)) {
+      scrollComposerIntoView();
+    }
+  }, [keyboardPadding, scrollComposerIntoView]);
 
   const resetConversation = () => {
     requestIdRef.current += 1;
@@ -297,7 +316,12 @@ export default function AskAcreLedger() {
             <p className="mt-3 text-sm text-destructive">I didn’t catch that. Try again.</p>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-3 flex items-end gap-2">
+          <form
+            ref={composerRef}
+            onSubmit={handleSubmit}
+            onFocus={scrollComposerIntoView}
+            className="mt-3 flex items-end gap-2"
+          >
             <div className="min-w-0 flex-1">
               <Label htmlFor="ask-the-book-question" className="sr-only">Question</Label>
               <Input
