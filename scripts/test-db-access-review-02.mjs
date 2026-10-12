@@ -500,7 +500,200 @@ try {
   assert.equal(replayed.email, 'replay@example.com');
   assert.equal(replayed.farm_id, null, 're-applied handle_new_user still ignores signup metadata');
 
-  console.log('Review-02 access checks passed: signup metadata ignored, legacy policy and view absent, client execute revoked, service_role retains rollup.');
+  const laterFiles = files.filter((file) => file > target);
+  assert.ok(
+    laterFiles.includes('20261012020000_db_access_review_02_m3_m4.sql'),
+    'review-02 M3/M4 migration must exist after the access-hardening file',
+  );
+  for (const file of laterFiles) await apply(file);
+
+  const m3Refs = [
+    ['plant_records', 'field_id', 'fields'],
+    ['spray_records', 'field_id', 'fields'],
+    ['harvest_records', 'field_id', 'fields'],
+    ['harvest_records', 'bin_id', 'bins'],
+    ['grain_movements', 'bin_id', 'bins'],
+    ['hay_harvest_records', 'field_id', 'fields'],
+    ['fertilizer_applications', 'field_id', 'fields'],
+    ['tillage_records', 'field_id', 'fields'],
+    ['custom_spray_records', 'field_id', 'fields'],
+    ['field_clu_assignments', 'field_id', 'fields'],
+  ];
+
+  async function compositeFk(child, column, parent) {
+    return (await db.query(`
+      SELECT c.conname,
+             c.convalidated,
+             c.confdeltype,
+             pg_get_constraintdef(c.oid) AS definition
+      FROM pg_constraint c
+      JOIN pg_attribute child_col
+        ON child_col.attrelid = c.conrelid AND child_col.attnum = c.conkey[2]
+      WHERE c.contype = 'f'
+        AND c.conrelid = ('public.' || $1)::regclass
+        AND c.confrelid = ('public.' || $3)::regclass
+        AND c.conkey[1] = (
+          SELECT attnum FROM pg_attribute
+          WHERE attrelid = c.conrelid AND attname = 'farm_id' AND NOT attisdropped
+        )
+        AND child_col.attname = $2
+        AND NOT child_col.attisdropped
+    `, [child, column, parent])).rows;
+  }
+
+  for (const [child, column, parent] of m3Refs) {
+    const rows = await compositeFk(child, column, parent);
+    assert.equal(rows.length, 1, `${child}.${column} must have one same-farm composite FK`);
+    assert.equal(rows[0].convalidated, true, `${child}.${column} composite FK must be validated`);
+    assert.ok(['a', 'r'].includes(rows[0].confdeltype), `${child}.${column} must not CASCADE`);
+    assert.match(
+      rows[0].definition,
+      new RegExp(`FOREIGN KEY \\(farm_id, ${column}\\)`),
+      `${child}.${column} must reference (farm_id, id)`,
+    );
+  }
+
+  const sprayEquipmentFks = await db.query(`
+    SELECT pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint
+    WHERE contype = 'f'
+      AND conrelid = 'public.spray_records'::regclass
+      AND pg_get_constraintdef(oid) ILIKE '%equipment_id%'
+  `);
+  assert.equal(sprayEquipmentFks.rows.length, 0, 'spray_records.equipment_id is text and must not gain an equipment FK');
+
+  const leftoverCascade = await db.query(`
+    SELECT conrelid::regclass::text AS child, conname
+    FROM pg_constraint
+    WHERE contype = 'f'
+      AND confdeltype = 'c'
+      AND conrelid IN (
+        'public.custom_spray_records'::regclass,
+        'public.field_clu_assignments'::regclass,
+        'public.tillage_records'::regclass,
+        'public.fertilizer_applications'::regclass
+      )
+      AND confrelid = 'public.fields'::regclass
+  `);
+  assert.deepEqual(leftoverCascade.rows, [], 'cross-table field refs must not keep ON DELETE CASCADE');
+
+  const m3 = {
+    farmB: '00000000-0000-4000-8000-0000000000e1',
+    fieldA: '00000000-0000-4000-8000-0000000000e2',
+    fieldB: '00000000-0000-4000-8000-0000000000e3',
+    binA: '00000000-0000-4000-8000-0000000000e4',
+    binB: '00000000-0000-4000-8000-0000000000e5',
+    plantOk: '00000000-0000-4000-8000-0000000000e6',
+    plantBad: '00000000-0000-4000-8000-0000000000e7',
+    grainOk: '00000000-0000-4000-8000-0000000000e8',
+    grainBad: '00000000-0000-4000-8000-0000000000e9',
+  };
+
+  await db.query(`INSERT INTO public.farms (id, name) VALUES ($1::uuid, 'Review Farm B')`, [m3.farmB]);
+  await db.query(
+    `INSERT INTO public.fields (id, farm_id, name, acreage) VALUES
+       ($1::uuid, $2::uuid, 'Field A', 40),
+       ($3::uuid, $4::uuid, 'Field B', 80)`,
+    [m3.fieldA, ids.realFarm, m3.fieldB, m3.farmB],
+  );
+  await db.query(
+    `INSERT INTO public.bins (id, farm_id, name, capacity) VALUES
+       ($1::uuid, $2::uuid, 'Bin A', 10000),
+       ($3::uuid, $4::uuid, 'Bin B', 20000)`,
+    [m3.binA, ids.realFarm, m3.binB, m3.farmB],
+  );
+
+  await db.query(
+    `INSERT INTO public.plant_records
+       (id, farm_id, field_id, field_name, seed_variety, acreage, season_year)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, 'Field A', 'P1197', 40, 2026)`,
+    [m3.plantOk, ids.realFarm, m3.fieldA],
+  );
+  await assert.rejects(
+    db.query(
+      `INSERT INTO public.plant_records
+         (id, farm_id, field_id, field_name, seed_variety, acreage, season_year)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, 'Field B', 'P1197', 80, 2026)`,
+      [m3.plantBad, ids.realFarm, m3.fieldB],
+    ),
+    { code: '23503' },
+    'cross-farm plant_records.field_id must fail',
+  );
+
+  await db.query(
+    `INSERT INTO public.grain_movements
+       (id, farm_id, bin_id, bin_name, type, bushels, moisture_percent, season_year)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, 'Bin A', 'in', 100, 15, 2026)`,
+    [m3.grainOk, ids.realFarm, m3.binA],
+  );
+  await assert.rejects(
+    db.query(
+      `INSERT INTO public.grain_movements
+         (id, farm_id, bin_id, bin_name, type, bushels, moisture_percent, season_year)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, 'Bin B', 'in', 100, 15, 2026)`,
+      [m3.grainBad, ids.realFarm, m3.binB],
+    ),
+    { code: '23503' },
+    'cross-farm grain_movements.bin_id must fail',
+  );
+
+  async function hasTablePriv(role, table, privilege) {
+    return (await db.query(
+      `SELECT has_table_privilege($1, $2, $3) AS ok`,
+      [role, table, privilege],
+    )).rows[0].ok;
+  }
+
+  for (const role of ['anon', 'authenticated']) {
+    for (const table of ['public.farms', 'public.fields']) {
+      for (const privilege of ['TRUNCATE', 'REFERENCES', 'TRIGGER']) {
+        assert.equal(
+          await hasTablePriv(role, table, privilege),
+          false,
+          `${role} must not have ${privilege} on ${table}`,
+        );
+      }
+    }
+  }
+
+  const anonRevokeTables = [
+    'farms',
+    'profiles',
+    'fsa_tract_imports',
+    'field_clu_assignments',
+    'field_rainfall_hourly',
+    'field_rainfall_coverage',
+    'farm_rainfall_daily',
+  ];
+  for (const table of anonRevokeTables) {
+    const rel = (await db.query(`SELECT to_regclass('public.' || $1) AS rel`, [table])).rows[0].rel;
+    if (rel == null) continue;
+    for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) {
+      assert.equal(
+        await hasTablePriv('anon', `public.${table}`, privilege),
+        false,
+        `anon must not have ${privilege} on public.${table}`,
+      );
+    }
+  }
+
+  const defaultAcl = await db.query(`
+    SELECT pg_get_userbyid(d.defaclrole) AS role_name,
+           n.nspname,
+           d.defaclobjtype,
+           d.defaclacl::text AS acl
+    FROM pg_default_acl d
+    JOIN pg_namespace n ON n.oid = d.defaclnamespace
+    WHERE n.nspname = 'public'
+      AND pg_get_userbyid(d.defaclrole) = 'postgres'
+  `);
+  for (const row of defaultAcl.rows) {
+    const acl = String(row.acl ?? '');
+    assert.doesNotMatch(acl, /\banon=/, `postgres default ACL for ${row.defaclobjtype} must not grant to anon: ${acl}`);
+    assert.doesNotMatch(acl, /\bauthenticated=/, `postgres default ACL for ${row.defaclobjtype} must not grant to authenticated: ${acl}`);
+  }
+
+  console.log('Review-02 access checks passed: signup metadata ignored, legacy policy and view absent, client execute revoked, service_role retains rollup, M3 same-farm FKs, M4 client table privileges revoked.');
 } finally {
   await db.close();
 }
