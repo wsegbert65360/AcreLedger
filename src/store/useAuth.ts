@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase';
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [deletionStatus, setDeletionStatus] = useState<'checking' | 'clear' | 'pending' | 'error'>('checking');
+  const [deletionStatus, setDeletionStatus] = useState<'clear' | 'pending'>('clear');
   const [loading, setLoading] = useState(true);
   const [farm_id, setFarmId] = useState<string | null>(null);
   const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
@@ -30,7 +30,7 @@ export function useAuth() {
       refreshAttemptedRef.current = null;
       const year = new Date().getFullYear();
       activeSeasonRef.current = year;
-      setDeletionStatus(userId ? 'checking' : 'clear');
+      setDeletionStatus('clear');
       setFarmId(null);
       setOnboardingComplete(false);
       setActiveSeason(year);
@@ -159,21 +159,23 @@ export function useAuth() {
     const identity = identityRef.current;
     const userId = session.user.id;
     let cancelled = false;
-    const isCurrent = () => !cancelled && identityRef.current === identity;
+    let checkGeneration = 0;
 
     const syncAuth = async () => {
-      let deletionChecked = false;
+      const generation = ++checkGeneration;
+      const isCurrent = () => !cancelled && identityRef.current === identity && generation === checkGeneration;
       try {
         const { data: deletion, error: deletionError } = await supabase
           .from('account_deletion_requests').select('status').eq('user_id', userId).maybeSingle();
         if (!isCurrent()) return;
-        if (deletionError) { setDeletionStatus('error'); return; }
+        if (deletionError) {
+          console.error('Could not check account deletion status:', deletionError);
+          return; // Unknown status must not prevent cached offline access.
+        }
         if (deletion?.status === 'pending') {
           setDeletionStatus('pending');
-          setFarmId(null);
           return;
         }
-        deletionChecked = true;
         setDeletionStatus('clear');
         const { data: profileData } = await supabase
           .from('profiles')
@@ -254,14 +256,24 @@ export function useAuth() {
         }
       } catch (err) {
         if (isCurrent()) {
-          if (!deletionChecked) setDeletionStatus('error');
           console.error('Sync error:', err);
         }
       }
     };
 
     void syncAuth();
-    return () => { cancelled = true; };
+    const retryWhenActive = () => {
+      if (document.visibilityState === 'visible') void syncAuth();
+    };
+    window.addEventListener('online', retryWhenActive);
+    window.addEventListener('focus', retryWhenActive);
+    document.addEventListener('visibilitychange', retryWhenActive);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', retryWhenActive);
+      window.removeEventListener('focus', retryWhenActive);
+      document.removeEventListener('visibilitychange', retryWhenActive);
+    };
   }, [ensureFarm, session]); // Also refreshes profile state when Supabase refreshes the session.
 
   // Keep the active season synchronized across devices. Realtime handles the

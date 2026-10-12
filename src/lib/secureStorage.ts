@@ -33,6 +33,24 @@ export function prepareNativeInstall(): Promise<void> {
     installCheck = (async () => {
       const { value } = await Preferences.get({ key: FRESH_INSTALL_FLAG });
       if (value) return;
+      // Upgrades predate the flag. Only a reinstall removes container data
+      // while leaving Keychain values behind. Any detection failure aborts
+      // this check rather than risking an existing database's encryption key.
+      const { CapacitorSQLite } = await import('@capacitor-community/sqlite');
+      const { result: hasDatabase } = await CapacitorSQLite.isDatabase({ database: 'acreledger_db' });
+      const { keys } = await Preferences.keys();
+      const isAppKey = (key: string) => key.includes('_al_') || key.startsWith('al_')
+        || key === 'db_enc_key' || /^sb-.+-auth-token/.test(key);
+      let hasLocalData = false;
+      if (typeof localStorage !== 'undefined') {
+        for (let index = 0; index < localStorage.length; index++) {
+          if (isAppKey(localStorage.key(index) ?? '')) { hasLocalData = true; break; }
+        }
+      }
+      if (hasDatabase || keys.some(isAppKey) || hasLocalData) {
+        await Preferences.set({ key: FRESH_INSTALL_FLAG, value: '1' });
+        return;
+      }
       const raw = String(import.meta.env.VITE_SUPABASE_URL ?? '').trim().replace(/^['"]|['"]$/g, '');
       let ref = 'placeholder-url';
       try { ref = new URL(raw).hostname.split('.')[0]; } catch { /* Client fallback. */ }
@@ -42,7 +60,6 @@ export function prepareNativeInstall(): Promise<void> {
         await Preferences.remove({ key });
       }
       // SQLite keeps a second copy of its passphrase in its own Keychain service.
-      const { CapacitorSQLite } = await import('@capacitor-community/sqlite');
       if ((await CapacitorSQLite.isSecretStored()).result) await CapacitorSQLite.clearEncryptionSecret();
       // Set only after all removals succeed. Preferences is removed on uninstall.
       await Preferences.set({ key: FRESH_INSTALL_FLAG, value: '1' });

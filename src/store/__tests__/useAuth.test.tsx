@@ -231,12 +231,45 @@ describe('useAuth session and active-season synchronization', () => {
     expect(cloud.fns.rpc).not.toHaveBeenCalled();
   });
 
-  it('keeps the account blocked when deletion status cannot be checked', async () => {
+  it('preserves cached offline access when deletion status cannot be checked and retries online', async () => {
+    auth.getSession.mockResolvedValue({ data: { session: { user: { ...session.user, app_metadata: {} } } } });
+    localStorage.setItem('user-1_al_farm_id', 'cached-farm');
     cloud.setTableHandler('account_deletion_requests', { error: { message: 'offline' } });
     const { result } = renderHook(() => useAuth());
-    await waitFor(() => expect(result.current.deletionStatus).toBe('error'));
-    expect(result.current.farm_id).toBeNull();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.deletionStatus).toBe('clear');
+    expect(result.current.farm_id).toBe('cached-farm');
     expect(cloud.fns.from).not.toHaveBeenCalledWith('profiles');
+    cloud.setTableHandler('account_deletion_requests', { data: { status: 'pending' } });
+    act(() => window.dispatchEvent(new Event('online')));
+    await waitFor(() => expect(result.current.deletionStatus).toBe('pending'));
+    expect(result.current.farm_id).toBeNull();
+  });
+
+  it('keeps cached access during an unresolved deletion check and after a thrown error', async () => {
+    let reject!: (error: Error) => void;
+    cloud.setTablePages('account_deletion_requests', [new Promise((_resolve, fail) => { reject = fail; })]);
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.farm_id).toBe('farm-1');
+    expect(result.current.deletionStatus).toBe('clear');
+    await act(async () => reject(new Error('timeout')));
+    expect(result.current.farm_id).toBe('farm-1');
+    expect(result.current.deletionStatus).toBe('clear');
+  });
+
+  it('retains positive pending status on a failed foreground retry and clears it after cancellation', async () => {
+    cloud.setTableHandler('account_deletion_requests', { data: { status: 'pending' } });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.deletionStatus).toBe('pending'));
+    cloud.setTableHandler('account_deletion_requests', { error: { message: 'offline' } });
+    await act(async () => window.dispatchEvent(new Event('focus')));
+    expect(result.current.deletionStatus).toBe('pending');
+    expect(result.current.farm_id).toBeNull();
+    cloud.setTableHandler('account_deletion_requests', { data: { status: 'cancelled' } });
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    await waitFor(() => expect(result.current.deletionStatus).toBe('clear'));
+    await waitFor(() => expect(result.current.farm_id).toBe('farm-1'));
   });
 
   it('permits a later refresh retry after a failed one-shot refresh', async () => {

@@ -270,6 +270,16 @@ describe('farmStore composed behaviors', () => {
   });
 
   describe('signOut composition', () => {
+    it('preserves local records and queued work for deletion-pending sign-out', async () => {
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut({ preserveLocalData: true })).toEqual({
+        signedOut: true, serverPending: false, cacheCleared: false,
+      }));
+      expect(authSignOut).toHaveBeenCalledWith('local');
+      expect(clearLocalCacheMock).not.toHaveBeenCalled();
+    });
+
     it('preserves the signed-out result when later cache cleanup throws', async () => {
       clearLocalCacheMock.mockRejectedValue(new Error('storage unavailable'));
       const { result } = renderHook(() => useFarm(), { wrapper });

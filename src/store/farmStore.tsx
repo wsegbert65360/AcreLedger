@@ -167,7 +167,7 @@ interface FarmState {
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
   /** This-device sign out and cache clearing; deletion can request global scope. */
   deletionStatus: 'checking' | 'clear' | 'pending' | 'error';
-  signOut: (options?: ClearLocalCacheOptions & { scope?: SignOutScope }) => Promise<SignOutResult>;
+  signOut: (options?: ClearLocalCacheOptions & { scope?: SignOutScope; preserveLocalData?: boolean }) => Promise<SignOutResult>;
   /** Clears all local application storage */
   clearLocalCache: (options?: ClearLocalCacheOptions) => Promise<boolean>;
   /** Unique ID for the current farm */
@@ -779,7 +779,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const clearLocalCache = seasonOps.clearLocalCache;
   const authSignOut = auth.signOut;
   const [signingOut, setSigningOut] = useState(false);
-  const signOut = useCallback(async (options?: ClearLocalCacheOptions & { scope?: SignOutScope }): Promise<SignOutResult> => {
+  const signOut = useCallback(async (options?: ClearLocalCacheOptions & { scope?: SignOutScope; preserveLocalData?: boolean }): Promise<SignOutResult> => {
     setSigningOut(true);
     try {
       let result: SignOutResult;
@@ -790,6 +790,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         toast.error('Could not sign out on this device. Please try again.');
         return { signedOut: false, serverPending: true };
       }
+      // Deletion-pending users cannot sync or inspect their queue. Leave it
+      // scoped to its owner instead of discarding work from that screen.
+      if (options?.preserveLocalData) return { ...result, cacheCleared: false };
       let cacheCleared = false;
       try {
         cacheCleared = await clearLocalCache(options);

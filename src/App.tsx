@@ -248,7 +248,7 @@ const AppContent = () => {
     };
   }, []);
 
-  if (session && deletionStatus && deletionStatus !== 'clear') {
+  if (session && deletionStatus === 'pending') {
     return <DeletionPending status={deletionStatus} signOut={signOut} />;
   }
 

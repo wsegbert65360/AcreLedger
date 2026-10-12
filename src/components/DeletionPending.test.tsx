@@ -15,6 +15,7 @@ describe('deletion-pending screen', () => {
     expect(screen.queryByRole('button', { name: /cancel/i })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+    expect(signOut).toHaveBeenCalledWith({ preserveLocalData: true });
     expect(toast.warning).toHaveBeenCalledWith('Signed out on this device; server sign-out pending');
   });
 });

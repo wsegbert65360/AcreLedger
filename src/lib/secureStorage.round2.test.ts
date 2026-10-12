@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sqlite = { isSecretStored: vi.fn(), clearEncryptionSecret: vi.fn() };
+const sqlite = { isDatabase: vi.fn(), isSecretStored: vi.fn(), clearEncryptionSecret: vi.fn() };
 vi.doMock('@capacitor-community/sqlite', () => ({ CapacitorSQLite: sqlite }));
 const plugin = { get: vi.fn(), set: vi.fn(), remove: vi.fn() };
-const prefs = { get: vi.fn(), set: vi.fn(), remove: vi.fn() };
+const prefs = { keys: vi.fn(), get: vi.fn(), set: vi.fn(), remove: vi.fn() };
 let platform = 'ios';
 vi.doMock('@capacitor/core', () => ({
   Capacitor: { isNativePlatform: () => platform !== 'web', getPlatform: () => platform },
@@ -15,6 +15,8 @@ beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
   platform = 'ios';
+  sqlite.isDatabase.mockResolvedValue({ result: false });
+  prefs.keys.mockResolvedValue({ keys: [] });
   sqlite.isSecretStored.mockResolvedValue({ result: true });
   sqlite.clearEncryptionSecret.mockResolvedValue(undefined);
   plugin.remove.mockResolvedValue(undefined);
@@ -67,6 +69,48 @@ describe('native credential retention and install boundary', () => {
     await prepareNativeInstall();
     expect(plugin.remove).not.toHaveBeenCalled();
     expect(prefs.set).not.toHaveBeenCalled();
+  });
+
+  it('does not purge an unflagged install with an existing DB', async () => {
+    sqlite.isDatabase.mockResolvedValue({ result: true });
+    const { prepareNativeInstall, FRESH_INSTALL_FLAG } = await import('./secureStorage');
+    await prepareNativeInstall();
+    expect(sqlite.isDatabase).toHaveBeenCalledWith({ database: 'acreledger_db' });
+    expect(plugin.remove).not.toHaveBeenCalled();
+    expect(prefs.remove).not.toHaveBeenCalled();
+    expect(sqlite.clearEncryptionSecret).not.toHaveBeenCalled();
+    expect(prefs.set).toHaveBeenCalledWith({ key: FRESH_INSTALL_FLAG, value: '1' });
+  });
+
+  it.each(['db_enc_key', 'user-1_al_farm_id', 'al_local_encryption_key', 'sb-project-auth-token'])(
+    'preserves unflagged container Preferences data: %s', async key => {
+      prefs.keys.mockResolvedValue({ keys: [key] });
+      const { prepareNativeInstall } = await import('./secureStorage');
+      await prepareNativeInstall();
+      expect(plugin.remove).not.toHaveBeenCalled();
+      expect(sqlite.clearEncryptionSecret).not.toHaveBeenCalled();
+      expect(prefs.set).toHaveBeenCalledTimes(1);
+    });
+
+  it('preserves an unflagged install with localStorage farm data', async () => {
+    localStorage.setItem('user-1_al_farm_id', 'farm-1');
+    try {
+      const { prepareNativeInstall } = await import('./secureStorage');
+      await prepareNativeInstall();
+      expect(plugin.remove).not.toHaveBeenCalled();
+      expect(sqlite.clearEncryptionSecret).not.toHaveBeenCalled();
+      expect(prefs.set).toHaveBeenCalledTimes(1);
+    } finally { localStorage.removeItem('user-1_al_farm_id'); }
+  });
+
+  it('does not purge when database detection fails', async () => {
+    sqlite.isDatabase.mockRejectedValueOnce(new Error('database unavailable'));
+    const { prepareNativeInstall } = await import('./secureStorage');
+    await expect(prepareNativeInstall()).rejects.toThrow('database unavailable');
+    expect(plugin.remove).not.toHaveBeenCalled();
+    expect(prefs.set).not.toHaveBeenCalled();
+    await prepareNativeInstall();
+    expect(plugin.remove).toHaveBeenCalledTimes(3);
   });
 
   it('leaves the flag unset when purge fails and retries later', async () => {

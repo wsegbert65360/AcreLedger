@@ -7,13 +7,13 @@ import type { SignOutResult } from '@/lib/authSignOut';
 
 export default function DeletionPending({ status, signOut }: {
   status: 'checking' | 'pending' | 'error';
-  signOut: () => Promise<SignOutResult>;
+  signOut: (options: { preserveLocalData: true }) => Promise<SignOutResult>;
 }) {
   const [busy, setBusy] = useState(false);
   const handleSignOut = async () => {
     setBusy(true);
     try {
-      const result = await signOut();
+      const result = await signOut({ preserveLocalData: true });
       if (result.serverPending && result.signedOut) toast.warning('Signed out on this device; server sign-out pending');
     } catch {
       toast.error('Could not sign out on this device. Please try again.');
