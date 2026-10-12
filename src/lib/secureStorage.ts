@@ -26,7 +26,18 @@ export const secureStorage = {
       const result = await SecureStoragePlugin.get({ key });
       return result.value;
     } catch (error) {
-      if (!isSecureValueMissing(error)) throw error;
+      if (!isSecureValueMissing(error)) {
+        // Supabase's session item only; never discard encryption keys or PKCE verifiers.
+        if (!/^sb-.+-auth-token$/.test(key)) throw error;
+        console.error('Unreadable auth session; clearing stored credentials:', error);
+        await SecureStoragePlugin.remove({ key }).catch(removeError => {
+          console.error('Failed to remove unreadable auth session:', removeError);
+        });
+        await Preferences.remove({ key }).catch(removeError => {
+          console.error('Failed to remove legacy auth session:', removeError);
+        });
+        return null;
+      }
 
       const legacy = await Preferences.get({ key });
       if (!legacy.value) return null;

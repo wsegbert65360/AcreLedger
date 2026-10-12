@@ -36,6 +36,7 @@ const farmState: {
   updateFarmName: ReturnType<typeof vi.fn>;
   signOut: ReturnType<typeof vi.fn>;
   pendingSyncCount: number;
+  failedSyncCount: number;
 } = {
   session: { user: { id: 'user-1', email: 'farmer@example.com' } },
   farm_id: 'farm-1',
@@ -43,6 +44,7 @@ const farmState: {
   updateFarmName: vi.fn(),
   signOut: vi.fn(),
   pendingSyncCount: 0,
+  failedSyncCount: 0,
 };
 
 vi.mock('@/store/farmStore', () => ({
@@ -58,6 +60,7 @@ function renderAccount() {
 describe('AccountManager deletion request', () => {
   beforeEach(() => {
     farmState.pendingSyncCount = 0;
+    farmState.failedSyncCount = 0;
     farmState.signOut.mockReset().mockResolvedValue(undefined);
     requestAccountDeletion.mockReset().mockResolvedValue('requested');
     toastMocks.error.mockReset();
@@ -150,5 +153,28 @@ describe('AccountManager deletion request', () => {
     expect(toastMocks.error).toHaveBeenCalledWith(
       'This phone cannot open its offline records. Stay signed in so unsynced work is not lost.',
     );
+  });
+
+  it('warns about failed-only changes and lets the user cancel sign-out', () => {
+    farmState.failedSyncCount = 2;
+    renderAccount();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
+    expect(screen.getByText('Discard unsynced changes?')).toBeInTheDocument();
+    expect(screen.getByText(/You have 2 unsynced offline changes/)).toBeInTheDocument();
+    expect(screen.getByText(/Settings → Sync to export/)).toBeInTheDocument();
+    expect(farmState.signOut).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Stay signed in' }));
+    expect(farmState.signOut).not.toHaveBeenCalled();
+  });
+
+  it('counts both pending and failed changes before confirmed sign-out', () => {
+    farmState.pendingSyncCount = 1;
+    farmState.failedSyncCount = 2;
+    renderAccount();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
+    expect(screen.getByText(/You have 3 unsynced offline changes/)).toBeInTheDocument();
+    expect(farmState.signOut).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out and discard' }));
+    expect(farmState.signOut).toHaveBeenCalledTimes(1);
   });
 });

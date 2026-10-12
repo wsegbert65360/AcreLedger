@@ -29,7 +29,7 @@ describe('secureStorage', () => {
     expect(legacyRemove).toHaveBeenCalledWith({ key: 'session' });
   });
 
-  it('does not treat a real Keychain read failure as a missing key', async () => {
+  it('preserves the explicit failure path for the database encryption key', async () => {
     const legacyGet = vi.fn();
     vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
     vi.doMock('@capacitor/preferences', () => ({
@@ -44,8 +44,38 @@ describe('secureStorage', () => {
     }));
 
     const { secureStorage } = await import('./secureStorage');
-    await expect(secureStorage.getItem('session')).rejects.toThrow('error');
+    await expect(secureStorage.getItem('db_enc_key')).rejects.toThrow('error');
     expect(legacyGet).not.toHaveBeenCalled();
+  });
+
+  it('clears an unreadable auth session and returns signed out without migrating plaintext', async () => {
+    const legacyGet = vi.fn();
+    const legacyRemove = vi.fn().mockResolvedValue(undefined);
+    const secureRemove = vi.fn().mockResolvedValue(undefined);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
+    vi.doMock('@capacitor/preferences', () => ({
+      Preferences: { get: legacyGet, remove: legacyRemove },
+    }));
+    vi.doMock('capacitor-secure-storage-plugin', () => ({
+      SecureStoragePlugin: {
+        get: vi.fn().mockRejectedValue(new Error('Key invalidated')),
+        remove: secureRemove,
+      },
+    }));
+    try {
+      const { secureStorage } = await import('./secureStorage');
+      const key = 'sb-project-auth-token';
+      await expect(secureStorage.getItem(key)).resolves.toBeNull();
+      expect(secureRemove).toHaveBeenCalledWith({ key });
+      expect(legacyRemove).toHaveBeenCalledWith({ key });
+      expect(legacyGet).not.toHaveBeenCalled();
+      expect(log).toHaveBeenCalled();
+      await expect(secureStorage.getItem(`${key}-code-verifier`)).rejects.toThrow('Key invalidated');
+      expect(secureRemove).toHaveBeenCalledTimes(1);
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('does not fall back to plaintext when a native secure write fails', async () => {

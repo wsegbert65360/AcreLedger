@@ -107,12 +107,14 @@ vi.mock('@/lib/native', () => ({
   },
 }));
 
+const platform = vi.hoisted(() => ({ native: false }));
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => false },
+  Capacitor: { isNativePlatform: () => platform.native },
 }));
 
 vi.mock('@capacitor/app', () => ({
   App: {
+    getLaunchUrl: vi.fn().mockResolvedValue(undefined),
     addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
     minimizeApp: vi.fn(),
   },
@@ -126,6 +128,8 @@ vi.mock('@/pages/Index', () => ({
 vi.mock('./pages/Equipment', () => ({
   default: () => <div data-testid="equipment-page" />,
 }));
+
+import { App as CapApp } from '@capacitor/app';
 
 import App from './App';
 
@@ -169,6 +173,7 @@ const startPasswordReset = async () => {
 describe('signed-out routing (ticket C)', () => {
   beforeEach(() => {
     vi.useRealTimers();
+    platform.native = false;
     navigate('/');
     farmState.current = { ...signedOutState };
     sessionStorage.clear();
@@ -228,6 +233,40 @@ describe('signed-out routing (ticket C)', () => {
     navigate('/auth?mode=recovery');
     renderApp();
     expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
+  });
+
+  it('requires verified recovery on native before showing a new-password form', async () => {
+    platform.native = true;
+    navigate('/auth?mode=recovery');
+    renderApp();
+    expect(await screen.findByRole('heading', { name: 'Welcome Back' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
+  });
+
+  it('sends native signup confirmation to the return-to-app page', async () => {
+    platform.native = true;
+    navigate('/auth?mode=signup');
+    renderApp();
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'farmer@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenough1' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'longenough1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Up' }));
+    await vi.waitFor(() => expect(auth.signUp).toHaveBeenCalledWith({
+      email: 'farmer@example.com', password: 'longenough1',
+      options: { emailRedirectTo: 'https://acreledger.app/email-confirmed.html' },
+    }));
+  });
+
+  it('keeps a verified native PKCE recovery on the password form', async () => {
+    platform.native = true;
+    vi.mocked(CapApp.getLaunchUrl).mockResolvedValueOnce({
+      url: 'com.wsegbert.acreledger://auth/recovery?code=native-valid',
+    });
+    navigate('/auth');
+    renderApp();
+    expect(await screen.findByRole('heading', { name: 'Choose New Password' })).toBeInTheDocument();
+    expect(auth.exchangeCodeForSession).toHaveBeenCalledWith('native-valid');
+    expect(sessionStorage.getItem('al_password_recovery_pending')).toBe('true');
   });
 
   it('links the auth screen to the privacy policy and support page', () => {
@@ -406,6 +445,7 @@ describe('signed-out routing (ticket C)', () => {
 describe('signed-in routing (preserved behavior)', () => {
   beforeEach(() => {
     vi.useRealTimers();
+    platform.native = false;
     equipmentUi.enabled = false;
     navigate('/');
     farmState.current = { ...signedInState };
@@ -456,7 +496,7 @@ describe('signed-in routing (preserved behavior)', () => {
     renderApp();
 
     const onAuthStateChange = auth.onAuthStateChange.mock.calls.at(-1)?.[0];
-    onAuthStateChange?.('SIGNED_OUT', null);
+    act(() => onAuthStateChange?.('SIGNED_OUT', null));
 
     await vi.waitFor(() => expect(sessionStorage.getItem('al_password_recovery_pending')).toBeNull());
     expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();

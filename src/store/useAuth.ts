@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+
 import {
   isValidActiveSeason,
   isValidViewingSeason,
   resolveRemoteViewingSeason,
 } from '@/lib/seasonYears';
+import { supabase } from '@/lib/supabase';
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -16,6 +18,44 @@ export function useAuth() {
   const [viewingSeason, setViewingSeason] = useState<number>(new Date().getFullYear());
   const [onboardingComplete, setOnboardingComplete] = useState<boolean>(false);
   const activeSeasonRef = useRef(activeSeason);
+  const identityRef = useRef<{ userId: string | null; generation: number }>({ userId: null, generation: 0 });
+  const refreshAttemptedRef = useRef<string | null>(null);
+
+  const acceptSession = useCallback((nextSession: Session | null, signedOut = false) => {
+    const userId = signedOut ? null : nextSession?.user?.id ?? null;
+    if (signedOut || identityRef.current.userId !== userId) {
+      identityRef.current = { userId, generation: identityRef.current.generation + 1 };
+      refreshAttemptedRef.current = null;
+      const year = new Date().getFullYear();
+      activeSeasonRef.current = year;
+      setFarmId(null);
+      setOnboardingComplete(false);
+      setActiveSeason(year);
+      setViewingSeason(year);
+    }
+    setSession(signedOut ? null : nextSession);
+    const jwtFarmId = !signedOut && nextSession?.user.app_metadata?.farm_id;
+    if (typeof jwtFarmId === 'string' && jwtFarmId) setFarmId(jwtFarmId);
+  }, []);
+
+  const ensureFarm = useCallback(async (): Promise<string | null> => {
+    const identity = identityRef.current;
+    if (!identity.userId) return null;
+    try {
+      const { data, error } = await supabase.rpc('ensure_user_farm');
+      if (identityRef.current !== identity) return null;
+      if (error) throw error;
+      if (typeof data !== 'string' || !data) throw new Error('Farm initialization returned no farm.');
+      setFarmId(data);
+      return data;
+    } catch (error) {
+      if (identityRef.current === identity) {
+        console.error('Error ensuring user farm:', error);
+        toast.error('Failed to initialize farm for this account. Please try again.');
+      }
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     activeSeasonRef.current = activeSeason;
@@ -39,10 +79,13 @@ export function useAuth() {
 
   // Initialize Supabase session & handle Auth Changes
   useEffect(() => {
+    let active = true;
+    let authEventCount = 0;
     const initSession = async () => {
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        setSession(initialSession);
+        if (!active || authEventCount > 0) return;
+        acceptSession(initialSession);
 
         if (initialSession?.user) {
           // Priority 1: Storage (Fastest persistent path)
@@ -65,6 +108,7 @@ export function useAuth() {
           if (storedSeason) {
             const active = parseInt(storedSeason, 10);
             if (isValidActiveSeason(active)) {
+              activeSeasonRef.current = active;
               setActiveSeason(active);
               let viewing = active;
               if (storedViewingSeason) {
@@ -78,63 +122,69 @@ export function useAuth() {
           }
 
           // Priority 2: JWT (Authoritative cloud path)
-          const jwtFarmId = initialSession.user.app_metadata?.farm_id || initialSession.user.user_metadata?.farm_id;
-          if (jwtFarmId) setFarmId(jwtFarmId);
+          const jwtFarmId = initialSession.user.app_metadata?.farm_id;
+          if (typeof jwtFarmId === 'string' && jwtFarmId) setFarmId(jwtFarmId);
         }
       } catch (err) {
+        if (!active || authEventCount > 0) return;
+        acceptSession(null);
         console.error('Session initialization failed:', err);
         toast.error('Could not connect to authentication service. Check your connection.');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      if (newSession?.user) {
-        const jwtFarmId = newSession.user.app_metadata?.farm_id || newSession.user.user_metadata?.farm_id;
-        if (jwtFarmId) setFarmId(jwtFarmId);
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      authEventCount += 1;
+      acceptSession(newSession, event === 'SIGNED_OUT');
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [acceptSession]);
 
   // Sync farm_id from Profile to JWT (One-way stabilization)
   useEffect(() => {
     if (!session || !session.user) return;
+
+    const identity = identityRef.current;
+    const userId = session.user.id;
+    let cancelled = false;
+    const isCurrent = () => !cancelled && identityRef.current === identity;
 
     const syncAuth = async () => {
       try {
         const { data: profileData } = await supabase
           .from('profiles')
           .select('farm_id, active_season, onboarding_complete')
-          .eq('id', session.user.id)
+          .eq('id', userId)
           .single();
 
+        if (!isCurrent()) return;
         if (profileData) {
+          setOnboardingComplete(Boolean(profileData.onboarding_complete));
+          try {
+            const key = `${userId}_al_onboarding_complete`;
+            if (profileData.onboarding_complete) localStorage.setItem(key, '1');
+            else localStorage.removeItem(key);
+          } catch (storageError) {
+            console.error('Failed to cache profile onboarding progress:', storageError);
+          }
           let currentFarmId = profileData.farm_id;
 
           // Auto-create + link farm through transactional RPC if missing.
           if (!currentFarmId) {
-            const { data: ensuredFarmId, error: ensureError } = await supabase.rpc('ensure_user_farm');
-            if (ensureError) {
-              console.error('Error ensuring user farm:', ensureError);
-              toast.error('Failed to initialize farm for this account');
-            } else if (ensuredFarmId) {
-              currentFarmId = ensuredFarmId;
-            }
+            currentFarmId = await ensureFarm();
+            if (!isCurrent()) return;
           }
 
           if (currentFarmId) {
             setFarmId(currentFarmId);
-            // ONLY refresh if the JWT is actually missing the ID
-            const jwtId = session.user.app_metadata?.farm_id || session.user.user_metadata?.farm_id;
-            if (currentFarmId !== jwtId) {
-              await supabase.auth.refreshSession();
-            }
             let active = profileData.active_season;
             if (!isValidActiveSeason(active)) {
               active = new Date().getFullYear();
@@ -152,9 +202,10 @@ export function useAuth() {
                 });
             }
 
+            activeSeasonRef.current = active;
             setActiveSeason(active);
 
-            const prefix = session.user.id;
+            const prefix = userId;
             let storedViewingSeason: string | null = null;
             try {
               storedViewingSeason = localStorage.getItem(`${prefix}_al_viewing_season`);
@@ -171,18 +222,22 @@ export function useAuth() {
             }
             setViewingSeason(viewing);
 
-            if (profileData.onboarding_complete) {
-              setOnboardingComplete(true);
+            const jwtId = session.user.app_metadata?.farm_id;
+            if (currentFarmId !== jwtId && refreshAttemptedRef.current !== userId) {
+              // Set before awaiting: TOKEN_REFRESHED can immediately rerun this effect.
+              refreshAttemptedRef.current = userId;
+              await supabase.auth.refreshSession();
             }
           }
         }
       } catch (err) {
-        console.error('Sync error:', err);
+        if (isCurrent()) console.error('Sync error:', err);
       }
     };
 
-    syncAuth();
-  }, [session]); // Also refreshes profile state when Supabase refreshes the session.
+    void syncAuth();
+    return () => { cancelled = true; };
+  }, [ensureFarm, session]); // Also refreshes profile state when Supabase refreshes the session.
 
   // Keep the active season synchronized across devices. Realtime handles the
   // normal case; foreground/online refreshes recover from suspended sockets.
@@ -190,7 +245,9 @@ export function useAuth() {
     const userId = session?.user?.id;
     if (!userId) return;
 
+    const identity = identityRef.current;
     let cancelled = false;
+    const isCurrent = () => !cancelled && identityRef.current === identity;
     const refreshActiveSeason = async () => {
       try {
         const { data, error } = await supabase
@@ -203,7 +260,7 @@ export function useAuth() {
           console.error('Failed to refresh active season:', error);
           return;
         }
-        if (!cancelled) applyRemoteActiveSeason(data?.active_season);
+        if (isCurrent()) applyRemoteActiveSeason(data?.active_season);
       } catch (err) {
         console.error('Unexpected active season refresh failure:', err);
       }
@@ -219,7 +276,7 @@ export function useAuth() {
           table: 'profiles',
           filter: `id=eq.${userId}`,
         },
-        payload => applyRemoteActiveSeason(payload.new?.active_season),
+        payload => { if (isCurrent()) applyRemoteActiveSeason(payload.new?.active_season); },
       )
       .subscribe();
 
@@ -256,5 +313,6 @@ export function useAuth() {
     onboardingComplete,
     setOnboardingComplete,
     signOut,
+    ensureFarm,
   };
 }

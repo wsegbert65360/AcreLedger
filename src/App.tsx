@@ -180,7 +180,11 @@ const AppContent = () => {
   }, [isOnline, farm_id]);
 
   useEffect(() => listenForNativePasswordRecovery(
-    () => navigate('/auth?mode=recovery', { replace: true }),
+    () => {
+      setStoredPasswordRecoveryPending(true);
+      setPasswordRecoveryPending(true);
+      navigate('/auth?mode=recovery', { replace: true });
+    },
     error => toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.'),
   ), [navigate]);
 
@@ -205,7 +209,11 @@ const AppContent = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (Capacitor.isNativePlatform() || !isPasswordRecovery) return;
+    if (!isPasswordRecovery) return;
+    if (Capacitor.isNativePlatform()) {
+      if (!passwordRecoveryPending) navigate('/auth?mode=signin', { replace: true });
+      return;
+    }
     setWebRecoveryReady(false);
     void establishWebPasswordRecoverySession()
       .then(established => {
@@ -239,7 +247,7 @@ const AppContent = () => {
     };
   }, []);
 
-  if (passwordRecoveryPending || (isPasswordRecovery && (Capacitor.isNativePlatform() || webRecoveryReady))) {
+  if (passwordRecoveryPending || (isPasswordRecovery && !Capacitor.isNativePlatform() && webRecoveryReady)) {
     return (
       <ErrorBoundary>
         <Auth

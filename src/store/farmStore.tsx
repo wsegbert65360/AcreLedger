@@ -228,10 +228,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     farm_id, setFarmId,
     activeSeason, setActiveSeason,
     viewingSeason, setViewingSeason,
-    onboardingComplete, setOnboardingComplete,
+    onboardingComplete, setOnboardingComplete, ensureFarm,
   } = auth;
   const sessionResolved = session !== undefined;
   const sessionUserId = session?.user?.id ?? null;
+  const sessionUserIdRef = useRef(sessionUserId);
+  sessionUserIdRef.current = sessionUserId;
   const identityKey = sessionUserId && farm_id ? `${sessionUserId}:${farm_id}` : null;
 
   const [farmName, setFarmName] = useState<string | null>(null);
@@ -846,18 +848,18 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [binTotals]);
 
   const updateFarmName = useCallback(async (newName: string): Promise<boolean> => {
-    if (!farm_id) {
-      toast.error('No farm selected.');
-      return false;
-    }
+    const userId = session?.user?.id;
     if (!newName.trim()) {
       toast.error('Farm name cannot be empty.');
       return false;
     }
 
     try {
+      if (!farm_id && !await ensureFarm()) return false;
+      if (!userId || sessionUserIdRef.current !== userId) return false;
       const { error } = await supabase.rpc('update_farm_name', { p_name: newName.trim() });
       if (error) throw error;
+      if (sessionUserIdRef.current !== userId) return false;
 
       setFarmName(newName.trim());
       toast.success('Farm name updated successfully.');
@@ -867,7 +869,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.error(err.message || 'Failed to update farm name.');
       return false;
     }
-  }, [farm_id]);
+  }, [ensureFarm, farm_id, session]);
 
   const completeOnboarding = useCallback(async (): Promise<boolean> => {
     const userId = session?.user?.id;
@@ -877,22 +879,28 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      localStorage.setItem(`${userId}_al_onboarding_complete`, '1');
-      setOnboardingComplete(true);
-
+      if (!farm_id && !await ensureFarm()) return false;
+      if (sessionUserIdRef.current !== userId) return false;
       const { error } = await supabase
         .from('profiles')
         .update({ onboarding_complete: true })
         .eq('id', userId);
       if (error) throw error;
 
+      if (sessionUserIdRef.current !== userId) return false;
+      setOnboardingComplete(true);
+      try {
+        localStorage.setItem(`${userId}_al_onboarding_complete`, '1');
+      } catch (storageError) {
+        console.error('Failed to cache onboarding progress:', storageError);
+      }
       return true;
     } catch (err: any) {
       console.error('Error completing onboarding:', err);
       toast.error(err.message || 'Failed to save onboarding progress. Please try again.');
       return false;
     }
-  }, [session, setOnboardingComplete]);
+  }, [ensureFarm, farm_id, session, setOnboardingComplete]);
 
   return (
     <FarmContext.Provider value={{

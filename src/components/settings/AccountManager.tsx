@@ -14,7 +14,7 @@ import { isNativeOfflineStoreUnavailable, OFFLINE_STORE_UNAVAILABLE_MESSAGE } fr
 import { useFarm } from '@/store/farmStore';
 
 export default function AccountManager() {
-  const { session, farm_id, farmName, updateFarmName, signOut, pendingSyncCount } = useFarm();
+  const { session, farm_id, farmName, updateFarmName, signOut, pendingSyncCount, failedSyncCount = 0 } = useFarm();
   const [name, setName] = useState(farmName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
@@ -38,6 +38,7 @@ export default function AccountManager() {
     setIsSaving(false);
   };
 
+  const unsyncedCount = pendingSyncCount + failedSyncCount;
   const hasChanges = name.trim() !== '' && name.trim() !== farmName;
 
   const handleSignOutClick = () => {
@@ -47,7 +48,7 @@ export default function AccountManager() {
       setConfirmUnavailableSignOut(true);
       return;
     }
-    if (pendingSyncCount > 0) {
+    if (unsyncedCount > 0) {
       setConfirmSignOut(true);
       return;
     }
@@ -159,9 +160,9 @@ export default function AccountManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Discard unsynced changes?</AlertDialogTitle>
             <AlertDialogDescription>
-              You have {pendingSyncCount} offline change{pendingSyncCount !== 1 ? 's' : ''} still waiting to sync.
-              Signing out now permanently deletes {pendingSyncCount !== 1 ? 'them' : 'it'} from this device.
-              Reconnect and let the app sync first to keep {pendingSyncCount !== 1 ? 'them' : 'it'}.
+              You have {unsyncedCount} unsynced offline change{unsyncedCount !== 1 ? 's' : ''}.
+              Signing out now permanently deletes {unsyncedCount !== 1 ? 'them' : 'it'} from this device.
+              Reconnect and let the app sync first. For changes that could not sync, go to Settings → Sync to export them before signing out.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
