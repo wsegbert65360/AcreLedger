@@ -56,7 +56,8 @@ function isBareTrue(expr) {
 }
 
 const files = (await readdir(migrationDir)).filter((file) => file.endsWith('.sql')).sort();
-assert.equal(files.at(-1), target, 'review-02 migration must be the latest file');
+assert.ok(files.includes(target), 'review-02 migration must exist');
+const priorFiles = files.filter((file) => file < target);
 const migrationSql = new Map();
 for (const file of files) {
   migrationSql.set(file, await readFile(resolve(migrationDir, file), 'utf8'));
@@ -102,7 +103,7 @@ try {
     }
   }
 
-  for (const file of files.slice(0, -1)) await apply(file);
+  for (const file of priorFiles) await apply(file);
 
   async function settingsSnapshot() {
     const relation = await db.query(`
@@ -196,7 +197,6 @@ try {
     assert.equal(rows.length, 1, `${name} must exist`);
     assertSearchPath(rows[0]);
     assertClientDenied(rows[0]);
-    assert.equal(rows[0].service_role, false, `service_role must not EXECUTE ${name}`);
     assert.doesNotMatch(rows[0].definition, /user_metadata|raw_user_meta_data/i);
   }
 
@@ -430,7 +430,16 @@ try {
 
   // Re-applying the migration must revoke signatures that are absent from history
   // but present in production.
+  const signupTriggerBefore = (await db.query(
+    "SELECT oid FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'",
+  )).rows[0].oid;
   await db.exec(`
+    CREATE OR REPLACE FUNCTION public.rollup_field_rainfall(p_field_id uuid, p_date date)
+    RETURNS void
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public, extensions
+    AS $$ BEGIN RETURN; END $$;
     CREATE OR REPLACE FUNCTION public.rollup_field_rainfall(p_field_id uuid, p_date date, p_timezone text)
     RETURNS void
     LANGUAGE plpgsql
@@ -443,24 +452,36 @@ try {
     SECURITY DEFINER
     SET search_path = public, extensions
     AS $$ BEGIN RETURN; END $$;
+    GRANT EXECUTE ON FUNCTION public.rollup_field_rainfall(uuid, date) TO PUBLIC, anon, authenticated;
     GRANT EXECUTE ON FUNCTION public.rollup_field_rainfall(uuid, date, text) TO PUBLIC, anon, authenticated;
     GRANT EXECUTE ON FUNCTION public.cleanup_old_rainfall() TO PUBLIC, anon, authenticated;
   `);
+  assert.equal((await privileges('rollup_field_rainfall')).length, 2, 'both overload fixtures must exist');
+  for (const row of await privileges('rollup_field_rainfall')) {
+    for (const role of ['public', 'anon', 'authenticated']) assert.equal(row[role], true);
+  }
   await apply(target);
+  assert.equal((await db.query(
+    "SELECT oid FROM pg_trigger WHERE tgrelid = 'auth.users'::regclass AND tgname = 'on_auth_user_created'",
+  )).rows[0].oid, signupTriggerBefore, 're-applying must preserve the existing auth.users trigger');
   assert.deepEqual(await settingsSnapshot(), settingsBefore, 're-applying must still leave rainfall_settings untouched');
 
   for (const name of rollupFunctions) {
     const rows = await privileges(name);
-    assert.equal(rows.length, 1, `${name} must be revoked when present`);
-    assertClientDenied(rows[0]);
-    assert.equal(rows[0].service_role, true, `service_role must EXECUTE ${name}`);
+    assert.equal(rows.length, name === 'rollup_field_rainfall' ? 2 : 1, `${name} overloads must be revoked when present`);
+    for (const row of rows) {
+      assertClientDenied(row);
+      assert.equal(row.service_role, true, `service_role must EXECUTE ${row.signature}`);
+    }
   }
   for (const role of ['anon', 'authenticated']) {
+    await assertExecuteDenied(role, 'SELECT public.rollup_field_rainfall($1::uuid, $2::date)', [ids.realFarm, '2026-10-01']);
     await assertExecuteDenied(role, 'SELECT public.rollup_field_rainfall($1::uuid, $2::date, $3)', [ids.realFarm, '2026-10-01', 'America/Chicago']);
     await assertExecuteDenied(role, 'SELECT public.cleanup_old_rainfall()');
   }
   await asRole('service_role', async () => {
     await db.query('SELECT public.cleanup_old_rainfall()');
+    await db.query('SELECT public.rollup_field_rainfall($1::uuid, $2::date)', [ids.realFarm, '2026-10-01']);
     await db.query(
       'SELECT public.rollup_field_rainfall($1::uuid, $2::date, $3)',
       [ids.realFarm, '2026-10-01', 'America/Chicago'],

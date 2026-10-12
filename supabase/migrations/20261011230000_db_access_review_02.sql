@@ -98,11 +98,22 @@ BEGIN
 END;
 $fn$;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW
-  EXECUTE FUNCTION public.handle_new_user();
+-- Supabase may restrict dropping triggers on auth.users. Preserve the existing
+-- signup trigger; CREATE OR REPLACE above updates its function in place.
+DO $do$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'auth.users'::regclass
+      AND tgname = 'on_auth_user_created'
+  ) THEN
+    CREATE TRIGGER on_auth_user_created
+      AFTER INSERT ON auth.users
+      FOR EACH ROW
+      EXECUTE FUNCTION public.handle_new_user();
+  END IF;
+END
+$do$;
 
 DROP TRIGGER IF EXISTS tr_sync_farm_id_to_auth ON public.profiles;
 CREATE TRIGGER tr_sync_farm_id_to_auth
@@ -139,28 +150,33 @@ REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authentic
 REVOKE EXECUTE ON FUNCTION public.assign_tenant_id() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.sync_farm_id_to_auth() FROM PUBLIC, anon, authenticated;
 
--- rollup_field_rainfall(uuid, date, text) and cleanup_old_rainfall() exist in
--- production and not in this replay history. Skip a signature that is absent.
+-- Production may contain overloads absent from replay history. Revoke every
+-- public overload of these rollup and cleanup functions.
 DO $do$
 DECLARE
-  fn regprocedure;
-  sig text;
+  fn record;
 BEGIN
-  FOREACH sig IN ARRAY ARRAY[
-    'public.rollup_farm_rainfall(uuid,date)',
-    'public.rollup_all_farms_daily(date)',
-    'public.rollup_field_rainfall(uuid,date,text)',
-    'public.cleanup_old_rainfall()'
-  ]
+  FOR fn IN
+    SELECT n.nspname AS schema_name, p.proname AS function_name,
+           pg_get_function_identity_arguments(p.oid) AS args
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = ANY(ARRAY[
+        'rollup_farm_rainfall',
+        'rollup_all_farms_daily',
+        'rollup_field_rainfall',
+        'cleanup_old_rainfall'
+      ])
   LOOP
-    fn := to_regprocedure(sig);
-    IF fn IS NOT NULL THEN
-      EXECUTE format(
-        'REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated',
-        fn
-      );
-      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', fn);
-    END IF;
+    EXECUTE format(
+      'REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC, anon, authenticated',
+      fn.schema_name, fn.function_name, fn.args
+    );
+    EXECUTE format(
+      'GRANT EXECUTE ON FUNCTION %I.%I(%s) TO service_role',
+      fn.schema_name, fn.function_name, fn.args
+    );
   END LOOP;
 END
 $do$;
