@@ -121,7 +121,7 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
 
     let mapped: ReturnType<typeof mapPlantToDb>;
     try {
-      mapped = mapPlantToDb(r);
+      mapped = mapPlantToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapPlantToDb failed:', err);
       isMutating.current = false;

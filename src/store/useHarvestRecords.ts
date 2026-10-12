@@ -255,7 +255,7 @@ export function useHarvestRecords({
 
     let mapped: ReturnType<typeof mapHarvestToDb>;
     try {
-      mapped = mapHarvestToDb(r);
+      mapped = mapHarvestToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapHarvestToDb failed:', err);
       isMutating.current = false;

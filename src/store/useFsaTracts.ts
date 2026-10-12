@@ -141,9 +141,9 @@ export function useFsaTracts({
         return false;
       }
 
-      const removedAssignments = cluAssignments.filter(a => a.tractKey === tract.tractKey);
+      const removedAssignments = cluAssignments.filter(a => a.tractKey === tract.tractKey && !a.deletedAt);
       setFsaTracts(prev => prev.filter(t => t.id !== id));
-      setCluAssignments(prev => prev.filter(a => a.tractKey !== tract.tractKey));
+      setCluAssignments(prev => prev.filter(a => a.tractKey !== tract.tractKey || a.deletedAt));
       const rollbackTractDelete = () => {
         setFsaTracts(prev => (prev.some(t => t.id === id) ? prev : [...prev, tract]));
         setCluAssignments(prev => {

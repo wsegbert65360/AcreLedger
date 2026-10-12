@@ -121,7 +121,7 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
 
     let mapped: ReturnType<typeof mapCustomSprayToDb>;
     try {
-      mapped = mapCustomSprayToDb(r);
+      mapped = mapCustomSprayToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapCustomSprayToDb failed:', err);
       isMutating.current = false;

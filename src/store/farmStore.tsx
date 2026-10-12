@@ -741,8 +741,29 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     isOnline, onMutation: updatePendingSyncCount,
   });
 
+  const binTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    grainMovements.filter(m => !m.deleted_at).forEach(m => {
+      const delta = getSignedBushels(m);
+      const sKey = `${m.binId}-${m.seasonYear}`;
+      totals[sKey] = (totals[sKey] || 0) + delta;
+
+      const aKey = `${m.binId}-all`;
+      totals[aKey] = (totals[aKey] || 0) + delta;
+    });
+    // Raw float sums drift (0.1 + 0.2 = 0.30000000000000004), so a bin showing
+    // "3,000" could reject a 3,000 sale. Round to the 3 decimals the UI displays.
+    for (const key of Object.keys(totals)) totals[key] = roundTo(totals[key], 3);
+    return totals;
+  }, [grainMovements]);
+
+  const getBinTotal = useCallback((binId: string, season?: number) => {
+    const key = season ? `${binId}-${season}` : `${binId}-all`;
+    return binTotals[key] || 0;
+  }, [binTotals]);
+
   const entityOps = useFieldsAndBins({
-    farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes, cluAssignments,
+    farm_id, fields, bins, getBinTotal, savedSeeds, sprayRecipes, fertilizerRecipes, cluAssignments,
     setFields, setBins,
     setSavedSeeds,
     setFertilizerRecipes,
@@ -823,27 +844,6 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     bins.filter(b => !b.deleted_at),
     [bins]
   );
-
-  const binTotals = useMemo(() => {
-    const totals: Record<string, number> = {};
-    grainMovements.filter(m => !m.deleted_at).forEach(m => {
-      const delta = getSignedBushels(m);
-      const sKey = `${m.binId}-${m.seasonYear}`;
-      totals[sKey] = (totals[sKey] || 0) + delta;
-
-      const aKey = `${m.binId}-all`;
-      totals[aKey] = (totals[aKey] || 0) + delta;
-    });
-    // Raw float sums drift (0.1 + 0.2 = 0.30000000000000004), so a bin showing
-    // "3,000" could reject a 3,000 sale. Round to the 3 decimals the UI displays.
-    for (const key of Object.keys(totals)) totals[key] = roundTo(totals[key], 3);
-    return totals;
-  }, [grainMovements]);
-
-  const getBinTotal = useCallback((binId: string, season?: number) => {
-    const key = season ? `${binId}-${season}` : `${binId}-all`;
-    return binTotals[key] || 0;
-  }, [binTotals]);
 
   const updateFarmName = useCallback(async (newName: string): Promise<boolean> => {
     if (!farm_id) {
