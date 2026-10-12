@@ -31,6 +31,15 @@ interface SendQuestionOptions {
   speakAnswer?: boolean;
 }
 
+interface KeyboardViewport {
+  bottom: number;
+  height: number;
+  layoutHeight: number;
+}
+
+// Share of the layout viewport the drawer takes when the keyboard is closed.
+const DRAWER_HEIGHT_RATIO = 0.85;
+
 export default function AskAcreLedger() {
   const { isAskOpen, closeAsk } = useAskAcreLedger();
   const { isOnline, viewingSeason } = useFarm();
@@ -39,11 +48,14 @@ export default function AskAcreLedger() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookupsOpen, setLookupsOpen] = useState<Record<number, boolean>>({});
-  const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const [keyboardViewport, setKeyboardViewport] = useState<KeyboardViewport>(() => {
+    const layoutHeight = typeof window === 'undefined' ? 0 : window.innerHeight;
+    return { bottom: 0, height: layoutHeight, layoutHeight };
+  });
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  const composerRef = useRef<HTMLFormElement>(null);
+  const focusResampleTimeoutRef = useRef<number | null>(null);
 
   const suggestions = getSeasonalAskSuggestions(viewingSeason);
 
@@ -57,48 +69,60 @@ export default function AskAcreLedger() {
     },
   });
 
-  const scrollComposerIntoView = useCallback(() => {
-    requestAnimationFrame(() => {
-      composerRef.current?.scrollIntoView({ block: 'end', inline: 'nearest' });
-    });
+  const syncKeyboardViewport = useCallback(() => {
+    const viewport = window.visualViewport;
+    const layoutHeight = Math.max(0, Math.round(window.innerHeight));
+    const height = Math.max(0, Math.round(viewport?.height ?? layoutHeight));
+    const offsetTop = Math.round(viewport?.offsetTop ?? 0);
+    const bottom = Math.max(0, Math.round(layoutHeight - height - offsetTop));
+    setKeyboardViewport(current => (
+      current.bottom === bottom && current.height === height && current.layoutHeight === layoutHeight
+        ? current
+        : { bottom, height, layoutHeight }
+    ));
   }, []);
 
-  // iOS keeps the layout viewport full-height behind the software keyboard, so
-  // the fixed-bottom drawer input ends up covered. The visual viewport does
-  // shrink, so lift the composer by however much of the layout viewport the
-  // keyboard currently covers. Keep the home-indicator inset in the same calc
-  // so browser chrome cannot replace it.
+  const clearFocusResample = useCallback(() => {
+    if (focusResampleTimeoutRef.current !== null) {
+      window.clearTimeout(focusResampleTimeoutRef.current);
+      focusResampleTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleComposerFocus = useCallback(() => {
+    syncKeyboardViewport();
+    requestAnimationFrame(syncKeyboardViewport);
+    // Mobile keyboards animate after focus. Resample once the animation is
+    // underway in case the browser delayed its viewport events.
+    clearFocusResample();
+    focusResampleTimeoutRef.current = window.setTimeout(() => {
+      focusResampleTimeoutRef.current = null;
+      syncKeyboardViewport();
+    }, 150);
+  }, [clearFocusResample, syncKeyboardViewport]);
+
+  useEffect(() => clearFocusResample, [clearFocusResample]);
+
+  // Vaul also has input repositioning, but combining it with app-level viewport
+  // padding lets two handlers race during the iOS keyboard animation. This
+  // drawer opts out of Vaul's handler below and owns one layout rule instead:
+  // keep the entire drawer inside the visual viewport and above its lower edge.
   useEffect(() => {
     if (!isAskOpen) {
-      setKeyboardPadding(0);
+      setKeyboardViewport({ bottom: 0, height: window.innerHeight, layoutHeight: window.innerHeight });
       return;
     }
     const viewport = window.visualViewport;
-    if (!viewport) return;
-    const update = () => {
-      const covered = Math.round(window.innerHeight - viewport.height - viewport.offsetTop);
-      setKeyboardPadding(Math.max(0, covered));
-    };
-    const handleResize = () => {
-      update();
-      if (composerRef.current?.contains(document.activeElement)) {
-        scrollComposerIntoView();
-      }
-    };
-    update();
-    viewport.addEventListener('resize', handleResize);
-    viewport.addEventListener('scroll', update);
+    syncKeyboardViewport();
+    window.addEventListener('resize', syncKeyboardViewport);
+    viewport?.addEventListener('resize', syncKeyboardViewport);
+    viewport?.addEventListener('scroll', syncKeyboardViewport);
     return () => {
-      viewport.removeEventListener('resize', handleResize);
-      viewport.removeEventListener('scroll', update);
+      window.removeEventListener('resize', syncKeyboardViewport);
+      viewport?.removeEventListener('resize', syncKeyboardViewport);
+      viewport?.removeEventListener('scroll', syncKeyboardViewport);
     };
-  }, [isAskOpen, scrollComposerIntoView]);
-
-  useEffect(() => {
-    if (keyboardPadding > 0 && composerRef.current?.contains(document.activeElement)) {
-      scrollComposerIntoView();
-    }
-  }, [keyboardPadding, scrollComposerIntoView]);
+  }, [isAskOpen, syncKeyboardViewport]);
 
   const resetConversation = () => {
     requestIdRef.current += 1;
@@ -213,10 +237,22 @@ export default function AskAcreLedger() {
   };
 
   const listening = voice.status === 'listening' || voice.status === 'stopping';
+  // iOS keeps the layout viewport full-height behind the keyboard, so a fixed
+  // 85vh drawer would extend past the visible area. Use whichever is smaller.
+  const drawerHeight = Math.min(
+    Math.round(keyboardViewport.layoutHeight * DRAWER_HEIGHT_RATIO),
+    keyboardViewport.height,
+  );
 
   return (
-    <Drawer open={isAskOpen} onOpenChange={handleOpenChange}>
-      <DrawerContent className="h-[85vh] max-h-[85vh]">
+    <Drawer open={isAskOpen} onOpenChange={handleOpenChange} repositionInputs={false}>
+      <DrawerContent
+        style={{
+          bottom: `${keyboardViewport.bottom}px`,
+          height: `${drawerHeight}px`,
+          maxHeight: `${keyboardViewport.height}px`,
+        }}
+      >
         <DrawerHeader className="text-left">
           <DrawerTitle>Ask the book</DrawerTitle>
           <DrawerDescription className="sr-only">
@@ -227,7 +263,7 @@ export default function AskAcreLedger() {
         <div
           className="flex min-h-0 flex-1 flex-col px-4"
           style={{
-            paddingBottom: `calc(1rem + env(safe-area-inset-bottom, 0px) + ${keyboardPadding}px)`,
+            paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
           }}
         >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
@@ -317,9 +353,9 @@ export default function AskAcreLedger() {
           )}
 
           <form
-            ref={composerRef}
             onSubmit={handleSubmit}
-            onFocus={scrollComposerIntoView}
+            onFocus={handleComposerFocus}
+            onBlur={clearFocusResample}
             className="mt-3 flex items-end gap-2"
           >
             <div className="min-w-0 flex-1">

@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { CSSProperties } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const askState = vi.hoisted(() => ({
@@ -63,17 +64,19 @@ vi.mock('@/lib/askSuggestions', () => ({
 }));
 
 vi.mock('@/components/ui/drawer', () => ({
-  Drawer: ({ children, open, onOpenChange }: { children: unknown; open: boolean; onOpenChange: (open: boolean) => void }) => (
+  Drawer: ({ children, open, onOpenChange, repositionInputs }: { children: unknown; open: boolean; onOpenChange: (open: boolean) => void; repositionInputs?: boolean }) => (
     open
       ? (
-        <div data-testid="drawer-root">
+        <div data-testid="drawer-root" data-reposition-inputs={String(repositionInputs)}>
           <button type="button" onClick={() => onOpenChange(false)}>Close drawer</button>
           {children as never}
         </div>
       )
       : null
   ),
-  DrawerContent: ({ children }: { children: unknown }) => <div>{children as never}</div>,
+  DrawerContent: ({ children, style }: { children: unknown; style?: CSSProperties }) => (
+    <div data-testid="drawer-content" style={style}>{children as never}</div>
+  ),
   DrawerHeader: ({ children }: { children: unknown }) => <div>{children as never}</div>,
   DrawerTitle: ({ children }: { children: unknown }) => <h2>{children as never}</h2>,
   DrawerDescription: ({ children }: { children: unknown }) => <p>{children as never}</p>,
@@ -113,7 +116,6 @@ import { toast } from 'sonner';
 import AskAcreLedger from '../AskAcreLedger';
 
 const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
-const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
 const originalVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
 
 describe('AskAcreLedger', () => {
@@ -147,14 +149,6 @@ describe('AskAcreLedger', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     if (originalInnerHeight) Object.defineProperty(window, 'innerHeight', originalInnerHeight);
-    if (originalScrollIntoView) {
-      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView);
-    } else {
-      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-        configurable: true,
-        value: undefined,
-      });
-    }
     if (originalVisualViewport) {
       Object.defineProperty(window, 'visualViewport', originalVisualViewport);
     } else {
@@ -174,22 +168,61 @@ describe('AskAcreLedger', () => {
     expect(screen.queryByRole('button', { name: 'How much grain is still in my bins?' })).toBeNull();
   });
 
-  it('scrolls the composer into view when the question input receives focus', async () => {
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  it('resamples the visual viewport when the question input receives focus', async () => {
+    const viewport = {
+      height: 800,
+      offsetTop: 0,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    Object.defineProperty(window, 'visualViewport', {
       configurable: true,
-      value: scrollIntoView,
+      value: viewport,
+    });
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      callback(0);
+      return 0;
     });
 
     render(<AskAcreLedger />);
+    viewport.height = 500;
     fireEvent.focus(screen.getByLabelText('Question'));
 
     await waitFor(() => {
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end', inline: 'nearest' });
+      expect(screen.getByTestId('drawer-content')).toHaveStyle({
+        bottom: '300px',
+        height: '500px',
+        maxHeight: '500px',
+      });
     });
   });
 
-  it('lifts and re-scrolls the focused composer when the visual viewport shrinks', async () => {
+  it('clears the delayed focus resample on blur and unmount', () => {
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: { height: 800, offsetTop: 0, addEventListener: vi.fn(), removeEventListener: vi.fn() },
+    });
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+
+    const { unmount } = render(<AskAcreLedger />);
+    const input = screen.getByLabelText('Question');
+
+    fireEvent.focus(input);
+    const blurTimer = setTimeoutSpy.mock.results.at(-1)?.value;
+    fireEvent.blur(input);
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(blurTimer);
+
+    fireEvent.focus(input);
+    const unmountTimer = setTimeoutSpy.mock.results.at(-1)?.value;
+    clearTimeoutSpy.mockClear();
+    unmount();
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(unmountTimer);
+  });
+
+  it('keeps the drawer inside the visual viewport as it resizes and scrolls', async () => {
     let resizeListener: (() => void) | undefined;
     let scrollListener: (() => void) | undefined;
     const viewport = {
@@ -206,21 +239,14 @@ describe('AskAcreLedger', () => {
       configurable: true,
       value: viewport,
     });
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    });
-    const animationFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
-      callback(0);
-      return 0;
-    });
-
     render(<AskAcreLedger />);
-    const input = screen.getByLabelText('Question');
-    act(() => input.focus());
-    scrollIntoView.mockClear();
-    animationFrame.mockClear();
+
+    // Keyboard closed: 85% of the layout viewport.
+    expect(screen.getByTestId('drawer-content')).toHaveStyle({
+      bottom: '0px',
+      height: '680px',
+      maxHeight: '800px',
+    });
 
     viewport.height = 500;
     act(() => {
@@ -228,26 +254,28 @@ describe('AskAcreLedger', () => {
     });
 
     await waitFor(() => {
-      expect(input.closest('form')?.parentElement).toHaveStyle({
-        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px) + 300px)',
+      expect(screen.getByTestId('drawer-root')).toHaveAttribute('data-reposition-inputs', 'false');
+      expect(screen.getByTestId('drawer-content')).toHaveStyle({
+        bottom: '300px',
+        height: '500px',
+        maxHeight: '500px',
       });
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end', inline: 'nearest' });
+      expect(screen.getByLabelText('Question').closest('form')?.parentElement).toHaveStyle({
+        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+      });
     });
 
-    animationFrame.mockClear();
     viewport.offsetTop = 25;
     act(() => {
       scrollListener?.();
-      expect(animationFrame).not.toHaveBeenCalled();
     });
 
     await waitFor(() => {
-      expect(animationFrame).toHaveBeenCalledTimes(1);
-      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'end', inline: 'nearest' });
+      expect(screen.getByTestId('drawer-content')).toHaveStyle({ bottom: '275px', height: '500px' });
     });
   });
 
-  it('re-scrolls without adding keyboard padding when Android resizes both viewports', async () => {
+  it('caps the drawer to the resized Android viewport without adding a bottom offset', async () => {
     let resizeListener: (() => void) | undefined;
     const viewport = {
       height: 800,
@@ -262,30 +290,21 @@ describe('AskAcreLedger', () => {
       configurable: true,
       value: viewport,
     });
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    });
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
-      callback(0);
-      return 0;
-    });
-
     render(<AskAcreLedger />);
-    const input = screen.getByLabelText('Question');
-    act(() => input.focus());
-    scrollIntoView.mockClear();
 
     window.innerHeight = 500;
     viewport.height = 500;
     act(() => resizeListener?.());
 
     await waitFor(() => {
-      expect(input.closest('form')?.parentElement).toHaveStyle({
-        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px) + 0px)',
+      expect(screen.getByTestId('drawer-content')).toHaveStyle({
+        bottom: '0px',
+        height: '425px',
+        maxHeight: '500px',
       });
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'end', inline: 'nearest' });
+      expect(screen.getByLabelText('Question').closest('form')?.parentElement).toHaveStyle({
+        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+      });
     });
   });
 
