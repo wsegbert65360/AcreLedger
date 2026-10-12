@@ -65,8 +65,10 @@ BEGIN
         USING ERRCODE = '42703';
     END IF;
 
-    -- Skip type-mismatched field/bin refs.
+    -- Skip type-mismatched field/bin refs (e.g. text vs uuid).
     IF v_child_type IS DISTINCT FROM v_parent_type THEN
+      RAISE NOTICE 'Skipping farm-scope %.%: type mismatch % vs %',
+        v_child, v_ref.ref_column, v_child_type::regtype, v_parent_type::regtype;
       CONTINUE;
     END IF;
 
@@ -174,6 +176,11 @@ END $$;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+-- Postgres grants EXECUTE on new functions to PUBLIC. Revoking from anon and
+-- authenticated does not remove that grant. Per-schema default ACLs can only
+-- add privileges, so REVOKE EXECUTE FROM PUBLIC must be global.
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
@@ -181,13 +188,34 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUEN
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_admin') THEN
-    ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
-      REVOKE ALL ON TABLES FROM anon, authenticated;
-    ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
-      REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
-    ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
-      REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+      REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+    ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+      REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+  END IF;
+END $$;
+
+-- Hosted migrations run as postgres, which is not a member of supabase_admin.
+-- Changing that role's default privileges would raise 42501 and roll back M3.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_admin') THEN
+    RAISE NOTICE 'Skipped ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin: role does not exist';
+  ELSIF NOT pg_has_role(current_user, 'supabase_admin', 'MEMBER') THEN
+    RAISE NOTICE 'Skipped ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin: current_user is not a member';
+  ELSE
+    BEGIN
+      ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
+        REVOKE ALL ON TABLES FROM anon, authenticated;
+      ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
+        REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
+      ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public
+        REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+    EXCEPTION
+      WHEN insufficient_privilege THEN
+        RAISE NOTICE 'Skipped ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin: insufficient_privilege';
+    END;
   END IF;
 END $$;
 
@@ -210,6 +238,77 @@ BEGIN
   LOOP
     IF to_regclass(format('public.%I', v_table)) IS NOT NULL THEN
       EXECUTE format('REVOKE ALL ON TABLE public.%I FROM anon', v_table);
+    END IF;
+  END LOOP;
+END $$;
+
+-- Existing SECURITY DEFINER functions keep PUBLIC execute unless revoked.
+-- Strip PUBLIC/anon; re-grant authenticated/service_role only for RPCs the
+-- app calls (src/ stores and services, api/weather-proxy, api/ai-assistant).
+-- get_rainfall_stats keeps its earlier GRANT to authenticated; no src/api caller.
+DO $$
+DECLARE
+  fn record;
+  v_authenticated text[] := ARRAY[
+    'ensure_user_farm',
+    'update_farm_name',
+    'restore_farm_backup',
+    'consume_weather_proxy_request',
+    'consume_ai_assistant_request',
+    'finalize_ai_assistant_turn',
+    'get_offline_sync_row_state',
+    'create_harvest_with_grain',
+    'soft_delete_harvests_with_grain',
+    'soft_delete_grain_movements_versioned',
+    'soft_delete_fsa_tract',
+    'soft_delete_field_with_clu_assignments',
+    'log_maintenance',
+    'update_equipment_reading',
+    'soft_delete_equipment_cascade',
+    'set_equipment_meter_unit'
+  ];
+  v_service_role text[] := ARRAY[
+    'consume_weather_proxy_request',
+    'consume_ai_assistant_request',
+    'finalize_ai_assistant_turn',
+    'get_offline_sync_row_state',
+    'soft_delete_harvests_with_grain',
+    'soft_delete_fsa_tract',
+    'soft_delete_field_with_clu_assignments',
+    'log_maintenance',
+    'update_equipment_reading',
+    'soft_delete_equipment_cascade',
+    'set_equipment_meter_unit',
+    'rollup_farm_rainfall',
+    'rollup_all_farms_daily',
+    'rollup_field_rainfall',
+    'cleanup_old_rainfall'
+  ];
+BEGIN
+  FOR fn IN
+    SELECT n.nspname AS schema_name,
+           p.proname AS function_name,
+           pg_get_function_identity_arguments(p.oid) AS args
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.prosecdef
+  LOOP
+    EXECUTE format(
+      'REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC, anon',
+      fn.schema_name, fn.function_name, fn.args
+    );
+    IF fn.function_name = ANY (v_authenticated) THEN
+      EXECUTE format(
+        'GRANT EXECUTE ON FUNCTION %I.%I(%s) TO authenticated',
+        fn.schema_name, fn.function_name, fn.args
+      );
+    END IF;
+    IF fn.function_name = ANY (v_service_role) THEN
+      EXECUTE format(
+        'GRANT EXECUTE ON FUNCTION %I.%I(%s) TO service_role',
+        fn.schema_name, fn.function_name, fn.args
+      );
     END IF;
   END LOOP;
 END $$;

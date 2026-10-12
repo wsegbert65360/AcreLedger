@@ -679,21 +679,96 @@ try {
 
   const defaultAcl = await db.query(`
     SELECT pg_get_userbyid(d.defaclrole) AS role_name,
-           n.nspname,
+           COALESCE(n.nspname, '') AS nspname,
+           d.defaclnamespace,
            d.defaclobjtype,
            d.defaclacl::text AS acl
     FROM pg_default_acl d
-    JOIN pg_namespace n ON n.oid = d.defaclnamespace
-    WHERE n.nspname = 'public'
-      AND pg_get_userbyid(d.defaclrole) = 'postgres'
+    LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
+    WHERE (n.nspname = 'public' OR d.defaclnamespace = 0)
+      AND pg_get_userbyid(d.defaclrole) IN ('postgres', current_user)
   `);
+  const globalFunctionAcl = defaultAcl.rows.filter((row) => row.defaclobjtype === 'f' && Number(row.defaclnamespace) === 0);
+  assert.ok(globalFunctionAcl.length > 0, 'postgres must record a global default function ACL');
   for (const row of defaultAcl.rows) {
     const acl = String(row.acl ?? '');
-    assert.doesNotMatch(acl, /\banon=/, `postgres default ACL for ${row.defaclobjtype} must not grant to anon: ${acl}`);
-    assert.doesNotMatch(acl, /\bauthenticated=/, `postgres default ACL for ${row.defaclobjtype} must not grant to authenticated: ${acl}`);
+    assert.doesNotMatch(acl, /\banon=/, `${row.role_name} default ACL for ${row.defaclobjtype} must not grant to anon: ${acl}`);
+    assert.doesNotMatch(acl, /\bauthenticated=/, `${row.role_name} default ACL for ${row.defaclobjtype} must not grant to authenticated: ${acl}`);
+    if (row.defaclobjtype === 'f') {
+      assert.doesNotMatch(
+        acl,
+        /(^|{|,)=[^=]*X/,
+        `${row.role_name} default function ACL must not grant EXECUTE to PUBLIC: ${acl}`,
+      );
+    }
   }
 
-  console.log('Review-02 access checks passed: signup metadata ignored, legacy policy and view absent, client execute revoked, service_role retains rollup, M3 same-farm FKs, M4 client table privileges revoked.');
+  const creator = (await db.query('SELECT current_user AS u')).rows[0].u;
+  if ((await db.query(`SELECT 1 FROM pg_roles WHERE rolname = 'postgres'`)).rows.length > 0) {
+    await db.exec('SET ROLE postgres');
+  }
+  try {
+    await db.exec(`
+      CREATE OR REPLACE FUNCTION public.review_02_m4_definer_probe()
+      RETURNS void
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public
+      AS $$ BEGIN RETURN; END $$;
+    `);
+    const probeAnon = (await db.query(`
+      SELECT has_function_privilege('anon', 'public.review_02_m4_definer_probe()', 'EXECUTE') AS ok
+    `)).rows[0].ok;
+    assert.equal(
+      probeAnon,
+      false,
+      `anon must not EXECUTE a new SECURITY DEFINER function created by ${creator}`,
+    );
+  } finally {
+    await db.exec('RESET ROLE');
+  }
+
+  const anonDefiner = await db.query(`
+    SELECT p.oid::regprocedure::text AS signature
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.prosecdef
+      AND has_function_privilege('anon', p.oid, 'EXECUTE')
+    ORDER BY 1
+  `);
+  assert.deepEqual(
+    anonDefiner.rows.map((row) => row.signature),
+    [],
+    'no public SECURITY DEFINER function may be executable by anon',
+  );
+
+  const appRpcs = [
+    ['ensure_user_farm', true],
+    ['update_farm_name', true],
+    ['restore_farm_backup', true],
+    ['create_harvest_with_grain', true],
+    ['get_rainfall_stats', true],
+    ['handle_new_user', false],
+    ['assign_tenant_id', false],
+    ['sync_farm_id_to_auth', false],
+  ];
+  for (const [name, authenticatedOk] of appRpcs) {
+    const rows = await privileges(name);
+    assert.ok(rows.length >= 1, `${name} must exist`);
+    for (const row of rows) {
+      assert.equal(row.anon, false, `anon must not EXECUTE ${row.signature}`);
+      assert.equal(
+        row.authenticated,
+        authenticatedOk,
+        `authenticated EXECUTE ${row.signature} expected ${authenticatedOk}`,
+      );
+    }
+  }
+
+  await db.exec('DROP FUNCTION IF EXISTS public.review_02_m4_definer_probe()');
+
+  console.log('Review-02 access checks passed: signup metadata ignored, legacy policy and view absent, client execute revoked, service_role retains rollup, M3 same-farm FKs, M4 client table privileges revoked, new DEFINER functions deny anon EXECUTE.');
 } finally {
   await db.close();
 }
