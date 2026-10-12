@@ -17,7 +17,6 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { useCoachmarks } from "@/hooks/useCoachmarks";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { syncQueue } from "@/lib/syncQueue";
 import { supabase } from "@/lib/supabase";
 import { FarmProvider, useFarm } from "@/store/farmStore";
 import { AskAcreLedgerProvider } from "@/context/AskAcreLedgerContext";
@@ -143,7 +142,7 @@ const ModalMap = {
 };
 
 const AppContent = () => {
-  const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
+  const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError, refresh } = useFarm();
   const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
   const navigate = useNavigate();
@@ -169,7 +168,7 @@ const AppContent = () => {
       if (import.meta.env.DEV) console.log('App state changed:', state.isActive ? 'active' : 'inactive');
       if (state.isActive && isOnline && farm_id) {
         if (import.meta.env.DEV) console.log('App active, triggering sync queue replay.');
-        syncQueue.replayQueue(farm_id).catch(err => console.error('Sync queue replay failed:', err));
+        refresh().catch(err => console.error('Sync and refresh failed:', err));
       }
     });
 
@@ -177,7 +176,7 @@ const AppContent = () => {
       active = false;
       listenerPromise.then((handle) => handle.remove());
     };
-  }, [isOnline, farm_id]);
+  }, [isOnline, farm_id, refresh]);
 
   useEffect(() => listenForNativePasswordRecovery(
     () => navigate('/auth?mode=recovery', { replace: true }),

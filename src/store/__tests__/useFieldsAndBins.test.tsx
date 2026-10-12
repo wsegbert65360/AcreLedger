@@ -16,7 +16,7 @@ const enqueueMutations = vi.fn();
 
 vi.doMock('@/services/fieldService', () => ({ fieldService }));
 vi.doMock('@/services/binService', () => ({ binService }));
-vi.doMock('@/lib/syncQueue', () => ({ syncQueue: { enqueueMutation, enqueueMutations } }));
+vi.doMock('@/lib/syncQueue', () => ({ syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() } }));
 vi.doMock('@/lib/supabase', () => ({ supabase: { from: vi.fn() } }));
 vi.doMock('@/lib/mappers', () => ({
   mapFieldToDb: vi.fn((value: Field) => ({ ...value })),

@@ -23,6 +23,21 @@ function parked(overrides: Partial<QueuedMutation>): QueuedMutation {
 }
 
 describe('applyParkedEquipmentMutations', () => {
+  it('preserves pending maintenance RPC meter side effects over a cloud refresh', () => {
+    const result = applyParkedEquipmentMutations([machine], [], [], [
+      parked({ table_name: 'maintenance_logs', operation: 'insert', retry_count: 0,
+        payload: { id: 'log-1', equipment_id: machine.id, farm_id: 'farm-1',
+          kind: 'service', performed_on: '2026-10-12',
+          __equipment_rpc: { rpc: 'log_maintenance', args: {
+            p_log_id: 'log-1', p_equipment_id: machine.id, p_reading: 1200, p_performed_on: '2026-10-12',
+          } },
+        },
+      }),
+    ], true);
+    expect(result.equipment[0].currentReading).toBe(1200);
+    expect(result.logs[0].id).toBe('log-1');
+  });
+
   it('keeps a parked equipment insert that the cloud snapshot omitted', () => {
     const result = applyParkedEquipmentMutations([machine], [], [], [
       parked({

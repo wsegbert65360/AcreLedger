@@ -12,7 +12,7 @@ const enqueueMutations = vi.fn();
 vi.doMock('@/lib/supabase', () => ({ supabase: cloud.client }));
 vi.doMock('@/lib/syncQueue', () => ({
   LINKED_GRAIN_MUTATION_KEY: '__linked_grain_movement',
-  syncQueue: { enqueueMutation, enqueueMutations },
+  syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() },
 }));
 vi.doMock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 

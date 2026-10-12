@@ -83,21 +83,21 @@ function markDeleted<T extends { id: string; deleted_at: string | null }>(
 }
 
 /**
- * Re-apply parked equipment queue items onto a cloud snapshot so a failed
- * local insert/update stays visible after fetchData(). Other tables keep the
- * existing cloud-snapshot behavior.
+ * Re-apply equipment queue items, including atomic RPC side effects, onto a
+ * cloud snapshot. The store includes pending work as well as parked work.
  */
 export function applyParkedEquipmentMutations(
   equipment: Equipment[],
   schedules: MaintenanceSchedule[],
   logs: MaintenanceLog[],
   parked: QueuedMutation[],
+  includePending = false,
 ): { equipment: Equipment[]; schedules: MaintenanceSchedule[]; logs: MaintenanceLog[] } {
   let nextEquipment = equipment;
   let nextSchedules = schedules;
   let nextLogs = logs;
   const relevant = parked.filter(item =>
-    item.retry_count >= MAX_SYNC_RETRIES && EQUIPMENT_TABLES.has(item.table_name),
+    (includePending || item.retry_count >= MAX_SYNC_RETRIES) && EQUIPMENT_TABLES.has(item.table_name),
   );
 
   for (const mutation of relevant) {
@@ -145,6 +145,19 @@ export function applyParkedEquipmentMutations(
 
     if (rpc?.rpc === 'log_maintenance') {
       nextLogs = overlayLog(nextLogs, { ...payload, id: rpc.args.p_log_id ?? payload.id });
+      const reading = rpc.args.p_reading == null ? null : Number(rpc.args.p_reading);
+      if (reading != null && Number.isFinite(reading)) {
+        nextEquipment = nextEquipment.map(item => item.id === rpc.args.p_equipment_id
+          ? { ...item, currentReading: rpc.args.p_force_lower === true ? reading : Math.max(item.currentReading, reading) }
+          : item);
+      }
+      const performedOn = rpc.args.p_performed_on;
+      if (typeof performedOn === 'string') {
+        nextSchedules = nextSchedules.map(item => item.id === rpc.args.p_schedule_id
+          && (!item.lastDoneAt || performedOn >= item.lastDoneAt)
+          ? { ...item, lastDoneAt: performedOn, lastDoneReading: reading ?? item.lastDoneReading }
+          : item);
+      }
       continue;
     }
 

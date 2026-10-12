@@ -6,6 +6,7 @@ import {
 } from '@capacitor-community/sqlite';
 import { Preferences } from '@capacitor/preferences';
 import { toast } from 'sonner';
+import { SYNC_QUEUE_KEYS } from '@/lib/syncQueueKeys';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 
 const isNative = Capacitor.isNativePlatform();
@@ -228,7 +229,8 @@ export const offlineStorage = {
    * Clears all cache data associated with a specific user ID.
    */
   clearCache: async (userId: string | null): Promise<void> => {
-    const prefix = userId ? `${userId}_al_` : 'al_';
+    if (!userId) throw new Error('A user ID is required to clear offline cache.');
+    const prefix = `${userId}_al_`;
     
     if (isNative) {
       try {
@@ -244,7 +246,7 @@ export const offlineStorage = {
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && key.startsWith(prefix)) {
+          if (key && key.startsWith(prefix) && !SYNC_QUEUE_KEYS.some(queueKey => key === queueKey)) {
             keysToRemove.push(key);
           }
         }

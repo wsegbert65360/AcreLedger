@@ -15,7 +15,7 @@ vi.doMock('@/lib/syncQueue', async importOriginal => {
   const original = await importOriginal<typeof import('@/lib/syncQueue')>();
   return {
     ...original,
-    syncQueue: { enqueueMutation, enqueueMutations },
+    syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() },
   };
 });
 vi.doMock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));

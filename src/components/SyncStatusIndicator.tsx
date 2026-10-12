@@ -2,7 +2,17 @@ import { Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { useFarm } from '@/store/farmStore';
 
 export default function SyncStatusIndicator() {
-  const { isOnline, pendingSyncCount } = useFarm();
+  const { isOnline, pendingSyncCount, failedSyncCount = 0, syncQueueLocked } = useFarm();
+
+  if (syncQueueLocked || failedSyncCount > 0) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20"
+        aria-label={syncQueueLocked ? 'Offline changes locked — sync status unknown' : `${failedSyncCount} changes need attention`}>
+        <CloudOff size={14} />
+        <span>{syncQueueLocked ? '?' : failedSyncCount}</span>
+      </div>
+    );
+  }
 
   if (!isOnline) {
     return (
@@ -20,9 +30,9 @@ export default function SyncStatusIndicator() {
     return (
       <div
         className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-spray/10 text-spray text-xs font-bold border border-spray/20"
-        aria-label={`Syncing ${pendingSyncCount} record${pendingSyncCount !== 1 ? 's' : ''}`}
+        aria-label={`${pendingSyncCount} record${pendingSyncCount !== 1 ? 's' : ''} pending sync`}
       >
-        <RefreshCw size={12} className="animate-spin" />
+        <RefreshCw size={12} />
         <span>{pendingSyncCount}</span>
       </div>
     );
