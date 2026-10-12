@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
+import { endAuthSession, type SignOutScope } from '@/lib/authSignOut';
 import {
   isValidActiveSeason,
   isValidViewingSeason,
@@ -12,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [deletionStatus, setDeletionStatus] = useState<'checking' | 'clear' | 'pending' | 'error'>('checking');
   const [loading, setLoading] = useState(true);
   const [farm_id, setFarmId] = useState<string | null>(null);
   const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
@@ -28,6 +30,7 @@ export function useAuth() {
       refreshAttemptedRef.current = null;
       const year = new Date().getFullYear();
       activeSeasonRef.current = year;
+      setDeletionStatus(userId ? 'checking' : 'clear');
       setFarmId(null);
       setOnboardingComplete(false);
       setActiveSeason(year);
@@ -82,9 +85,10 @@ export function useAuth() {
     let active = true;
     let authEventCount = 0;
     const initSession = async () => {
+      const initialIdentity = identityRef.current;
       try {
         const { data: { session: initialSession } } = await supabase.auth.getSession();
-        if (!active || authEventCount > 0) return;
+        if (!active || authEventCount > 0 || identityRef.current !== initialIdentity) return;
         acceptSession(initialSession);
 
         if (initialSession?.user) {
@@ -158,7 +162,19 @@ export function useAuth() {
     const isCurrent = () => !cancelled && identityRef.current === identity;
 
     const syncAuth = async () => {
+      let deletionChecked = false;
       try {
+        const { data: deletion, error: deletionError } = await supabase
+          .from('account_deletion_requests').select('status').eq('user_id', userId).maybeSingle();
+        if (!isCurrent()) return;
+        if (deletionError) { setDeletionStatus('error'); return; }
+        if (deletion?.status === 'pending') {
+          setDeletionStatus('pending');
+          setFarmId(null);
+          return;
+        }
+        deletionChecked = true;
+        setDeletionStatus('clear');
         const { data: profileData } = await supabase
           .from('profiles')
           .select('farm_id, active_season, onboarding_complete')
@@ -226,12 +242,21 @@ export function useAuth() {
             if (currentFarmId !== jwtId && refreshAttemptedRef.current !== userId) {
               // Set before awaiting: TOKEN_REFRESHED can immediately rerun this effect.
               refreshAttemptedRef.current = userId;
-              await supabase.auth.refreshSession();
+              try {
+                const { error } = await supabase.auth.refreshSession();
+                if (error && identityRef.current === identity) refreshAttemptedRef.current = null;
+              } catch (error) {
+                if (identityRef.current === identity) refreshAttemptedRef.current = null;
+                throw error;
+              }
             }
           }
         }
       } catch (err) {
-        if (isCurrent()) console.error('Sync error:', err);
+        if (isCurrent()) {
+          if (!deletionChecked) setDeletionStatus('error');
+          console.error('Sync error:', err);
+        }
       }
     };
 
@@ -296,15 +321,18 @@ export function useAuth() {
     };
   }, [applyRemoteActiveSeason, session?.user?.id]);
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-  }, []);
+  const signOut = useCallback(async (scope: SignOutScope = 'local') => {
+    const result = await endAuthSession(session, scope);
+    acceptSession(null, true);
+    return result;
+  }, [acceptSession, session]);
 
   return {
     session,
     loading,
     setLoading,
-    farm_id,
+    farm_id: deletionStatus === 'clear' ? farm_id : null,
+    deletionStatus,
     setFarmId,
     activeSeason,
     setActiveSeason,

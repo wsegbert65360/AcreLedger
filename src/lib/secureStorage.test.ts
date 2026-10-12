@@ -12,7 +12,7 @@ describe('secureStorage', () => {
     const secureGet = vi.fn().mockRejectedValue(new Error('Item with given key does not exist'));
     const secureSet = vi.fn().mockResolvedValue(undefined);
     const legacyRemove = vi.fn().mockResolvedValue(undefined);
-    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
     vi.doMock('@capacitor/preferences', () => ({
       Preferences: {
         get: vi.fn().mockResolvedValue({ value: 'legacy-token' }),
@@ -31,7 +31,7 @@ describe('secureStorage', () => {
 
   it('preserves the explicit failure path for the database encryption key', async () => {
     const legacyGet = vi.fn();
-    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
     vi.doMock('@capacitor/preferences', () => ({
       Preferences: { get: legacyGet, remove: vi.fn() },
     }));
@@ -53,7 +53,7 @@ describe('secureStorage', () => {
     const legacyRemove = vi.fn().mockResolvedValue(undefined);
     const secureRemove = vi.fn().mockResolvedValue(undefined);
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
     vi.doMock('@capacitor/preferences', () => ({
       Preferences: { get: legacyGet, remove: legacyRemove },
     }));
@@ -80,7 +80,7 @@ describe('secureStorage', () => {
 
   it('does not fall back to plaintext when a native secure write fails', async () => {
     const legacySet = vi.fn();
-    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
     vi.doMock('@capacitor/preferences', () => ({
       Preferences: { set: legacySet, remove: vi.fn() },
     }));
@@ -99,7 +99,7 @@ describe('secureStorage', () => {
 
   it('clears the plaintext copy after a missing Keychain value is removed', async () => {
     const legacyRemove = vi.fn().mockResolvedValue(undefined);
-    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
     vi.doMock('@capacitor/preferences', () => ({
       Preferences: { remove: legacyRemove },
     }));
@@ -118,7 +118,7 @@ describe('secureStorage', () => {
 
   it('keeps the plaintext copy when a Keychain remove actually fails', async () => {
     const legacyRemove = vi.fn();
-    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true } }));
+    vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' } }));
     vi.doMock('@capacitor/preferences', () => ({
       Preferences: { remove: legacyRemove },
     }));

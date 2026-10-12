@@ -13,6 +13,7 @@ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import type { SignOutResult, SignOutScope } from '@/lib/authSignOut';
 import { buildSeasonOptions, getMaxViewingSeason, isValidViewingSeason } from '@/lib/seasonYears';
 
 import { getSignedBushels, roundTo } from '@/utils/numbers';
@@ -164,8 +165,9 @@ interface FarmState {
   addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id' | 'farm_id'>) => Promise<boolean>;
   updateFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'farm_id'>) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
-  /** Global sign out and cache clearing */
-  signOut: (options?: ClearLocalCacheOptions) => Promise<void>;
+  /** This-device sign out and cache clearing; deletion can request global scope. */
+  deletionStatus: 'checking' | 'clear' | 'pending' | 'error';
+  signOut: (options?: ClearLocalCacheOptions & { scope?: SignOutScope }) => Promise<SignOutResult>;
   /** Clears all local application storage */
   clearLocalCache: (options?: ClearLocalCacheOptions) => Promise<boolean>;
   /** Unique ID for the current farm */
@@ -776,10 +778,29 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Composed signOut (auth + cache clear) ---
   const clearLocalCache = seasonOps.clearLocalCache;
   const authSignOut = auth.signOut;
-  const signOut = useCallback(async (options?: ClearLocalCacheOptions) => {
-    const cacheCleared = await clearLocalCache(options);
-    if (!cacheCleared) return;
-    await authSignOut();
+  const [signingOut, setSigningOut] = useState(false);
+  const signOut = useCallback(async (options?: ClearLocalCacheOptions & { scope?: SignOutScope }): Promise<SignOutResult> => {
+    setSigningOut(true);
+    try {
+      let result: SignOutResult;
+      try {
+        result = await authSignOut(options?.scope ?? 'local');
+      } catch (error) {
+        console.error('Could not end local session:', error);
+        toast.error('Could not sign out on this device. Please try again.');
+        return { signedOut: false, serverPending: true };
+      }
+      let cacheCleared = false;
+      try {
+        cacheCleared = await clearLocalCache(options);
+      } catch (error) {
+        console.error('Could not clear local records after sign-out:', error);
+        toast.error('Signed out on this device; some local records could not be cleared.');
+      }
+      return { ...result, cacheCleared };
+    } finally {
+      setSigningOut(false);
+    }
   }, [authSignOut, clearLocalCache]);
 
   // --- Derived data ---
@@ -904,7 +925,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   return (
     <FarmContext.Provider value={{
-      session, isOnline, pendingSyncCount, failedSyncCount, getFailedSyncChanges, discardFailedSyncChanges, loading, initialFetchComplete, fetchError,
+      deletionStatus: auth.deletionStatus,
+      session, isOnline, pendingSyncCount, failedSyncCount, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,

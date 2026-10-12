@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
   success: vi.fn(),
+  warning: vi.fn(),
 }));
 
 vi.mock('sonner', () => ({
@@ -58,13 +59,21 @@ function renderAccount() {
 }
 
 describe('AccountManager deletion request', () => {
+  it('warns the user after local sign-out when server revoke is pending', async () => {
+    farmState.signOut.mockResolvedValue({ signedOut: true, serverPending: true });
+    renderAccount();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Out' }));
+    await waitFor(() => expect(toastMocks.warning).toHaveBeenCalledWith('Signed out on this device; server sign-out pending'));
+  });
+
   beforeEach(() => {
     farmState.pendingSyncCount = 0;
     farmState.failedSyncCount = 0;
-    farmState.signOut.mockReset().mockResolvedValue(undefined);
+    farmState.signOut.mockReset().mockResolvedValue({ signedOut: true, serverPending: false });
     requestAccountDeletion.mockReset().mockResolvedValue('requested');
     toastMocks.error.mockReset();
     toastMocks.success.mockReset();
+    toastMocks.warning.mockReset();
     offlineStore.unavailable = false;
   });
 
@@ -91,6 +100,7 @@ describe('AccountManager deletion request', () => {
       expect(requestAccountDeletion).toHaveBeenCalledWith('user-1', 'farm-1');
     });
     expect(farmState.signOut).toHaveBeenCalledTimes(1);
+    expect(farmState.signOut).toHaveBeenCalledWith({ scope: 'global' });
   });
 
   it('blocks deletion while offline mutations are pending', async () => {

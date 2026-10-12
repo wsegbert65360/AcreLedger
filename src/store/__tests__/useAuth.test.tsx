@@ -5,7 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSupabaseMock, type SupabaseResult } from '@/test/supabaseMock';
 
 const auth = {
-  getSession: vi.fn(), onAuthStateChange: vi.fn(), refreshSession: vi.fn(), signOut: vi.fn(),
+  getSession: vi.fn(), onAuthStateChange: vi.fn(), refreshSession: vi.fn(), signOut: vi.fn(), stopAutoRefresh: vi.fn(), admin: { signOut: vi.fn() },
 };
 const state = {
   profile: { farm_id: 'farm-1', active_season: 2025, onboarding_complete: true },
@@ -41,6 +41,7 @@ describe('useAuth session and active-season synchronization', () => {
     localStorage.clear();
     state.profile = { farm_id: 'farm-1', active_season: 2025, onboarding_complete: true };
     cloud.setResult({ data: state.profile });
+    cloud.setTableHandler('account_deletion_requests', { data: null });
     state.realtime = null;
     auth.getSession.mockResolvedValue({ data: { session } });
     auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
@@ -53,6 +54,7 @@ describe('useAuth session and active-season synchronization', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     await act(async () => { await result.current.signOut(); });
     expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
   });
 
   it('advances a current viewing season on a remote rollover', async () => {
@@ -201,5 +203,50 @@ describe('useAuth session and active-season synchronization', () => {
     cloud.setRpcResult({ data: 'farm-retried', error: null });
     await act(async () => expect(await result.current.ensureFarm()).toBe('farm-retried'));
     expect(result.current.farm_id).toBe('farm-retried');
+  });
+
+  it('ends local state on network sign-out failure and returns pending status', async () => {
+    const { authStorageKey } = await import('@/lib/authStorage');
+    localStorage.setItem(authStorageKey(), 'persisted-session');
+    auth.signOut.mockResolvedValue({ error: { message: 'network unavailable' } });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.onboardingComplete).toBe(true));
+    await act(async () => {
+      expect(await result.current.signOut()).toEqual({ signedOut: true, serverPending: true });
+    });
+    expect(localStorage.getItem(authStorageKey())).toBeNull();
+    expect(result.current.session).toBeNull();
+    expect(result.current.farm_id).toBeNull();
+    expect(result.current.onboardingComplete).toBe(false);
+  });
+
+  it('does not initialize a farm for an account with deletion pending', async () => {
+    cloud.setTableHandler('account_deletion_requests', { data: { status: 'pending' } });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.deletionStatus).toBe('pending'));
+    expect(result.current.farm_id).toBeNull();
+    expect(cloud.fns.from).toHaveBeenCalledWith('account_deletion_requests');
+    expect(cloud.fns.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(cloud.fns.from).not.toHaveBeenCalledWith('profiles');
+    expect(cloud.fns.rpc).not.toHaveBeenCalled();
+  });
+
+  it('keeps the account blocked when deletion status cannot be checked', async () => {
+    cloud.setTableHandler('account_deletion_requests', { error: { message: 'offline' } });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.deletionStatus).toBe('error'));
+    expect(result.current.farm_id).toBeNull();
+    expect(cloud.fns.from).not.toHaveBeenCalledWith('profiles');
+  });
+
+  it('permits a later refresh retry after a failed one-shot refresh', async () => {
+    const withoutClaim = { user: { ...session.user, app_metadata: {} } };
+    auth.getSession.mockResolvedValue({ data: { session: withoutClaim } });
+    auth.refreshSession.mockResolvedValueOnce({ error: { message: 'offline' } });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(1));
+    await act(async () => auth.onAuthStateChange.mock.calls[0][0]('TOKEN_REFRESHED', { ...withoutClaim }));
+    await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(2));
+    expect(result.current.deletionStatus).toBe('clear');
   });
 });

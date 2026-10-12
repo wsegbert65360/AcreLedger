@@ -24,7 +24,7 @@ const auth = vi.hoisted(() => ({
   onAuthStateChange: vi.fn(),
 }));
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 const equipmentUi = vi.hoisted(() => ({ enabled: false }));
 
 vi.mock('@/lib/equipment/feature', () => ({
@@ -187,6 +187,16 @@ describe('signed-out routing (ticket C)', () => {
     auth.getSession.mockResolvedValue({ data: { session: { access_token: 'reset-session' } }, error: null });
     auth.signOut.mockResolvedValue({ error: null });
     auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+  });
+
+
+  it('blocks the signed-in routes when deletion is pending', async () => {
+    farmState.current = { ...signedInState, deletionStatus: 'pending', signOut: vi.fn() };
+    window.history.pushState({}, '', '/');
+    render(<App />);
+    expect(screen.getByRole('heading', { name: 'Account deletion pending' })).toBeTruthy();
+    expect(screen.queryByTestId('app-dashboard')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sign Out' })).toBeTruthy();
   });
 
   it('shows the landing, not the auth screen, at /', () => {

@@ -146,7 +146,7 @@ describe('farmStore composed behaviors', () => {
     cacheControl.load = null;
     toastError.mockReset();
     toastSuccess.mockReset();
-    authSignOut.mockReset().mockResolvedValue(undefined);
+    authSignOut.mockReset().mockResolvedValue({ signedOut: true, serverPending: false });
     authSetLoading.mockReset();
     clearLocalCacheMock.mockReset();
     getPendingCountMock.mockReset().mockResolvedValue(0);
@@ -270,18 +270,45 @@ describe('farmStore composed behaviors', () => {
   });
 
   describe('signOut composition', () => {
-    it('does not end the auth session when the local cache cannot be cleared', async () => {
+    it('preserves the signed-out result when later cache cleanup throws', async () => {
+      clearLocalCacheMock.mockRejectedValue(new Error('storage unavailable'));
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut()).toEqual({
+        signedOut: true, serverPending: false, cacheCleared: false,
+      }));
+      expect(toastError).toHaveBeenCalledWith('Signed out on this device; some local records could not be cleared.');
+    });
+
+    it('preserves the queue when persisted credentials cannot be removed', async () => {
+      authSignOut.mockRejectedValue(new Error('secure storage unavailable'));
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut()).toEqual({ signedOut: false, serverPending: true }));
+      expect(clearLocalCacheMock).not.toHaveBeenCalled();
+    });
+
+    it('returns server pending status to the settings caller', async () => {
+      authSignOut.mockResolvedValue({ signedOut: true, serverPending: true });
+      clearLocalCacheMock.mockResolvedValue(true);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut()).toEqual({
+        signedOut: true, serverPending: true, cacheCleared: true,
+      }));
+    });
+
+    it('reports remaining cache after ending the auth session', async () => {
       clearLocalCacheMock.mockResolvedValue(false);
       const { result } = renderHook(() => useFarm(), { wrapper });
       await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
 
       await act(async () => { await result.current.signOut(); });
 
-      // Fail closed: pending offline work might survive, so the session stays.
-      expect(authSignOut).not.toHaveBeenCalled();
+      expect(authSignOut).toHaveBeenCalledWith('local');
     });
 
-    it('ends the auth session after the cache clears successfully', async () => {
+    it('ends auth before clearing the irreversible queue', async () => {
       clearLocalCacheMock.mockResolvedValue(true);
       const { result } = renderHook(() => useFarm(), { wrapper });
       await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
@@ -290,6 +317,7 @@ describe('farmStore composed behaviors', () => {
 
       expect(clearLocalCacheMock).toHaveBeenCalled();
       expect(authSignOut).toHaveBeenCalledTimes(1);
+      expect(authSignOut.mock.invocationCallOrder[0]).toBeLessThan(clearLocalCacheMock.mock.invocationCallOrder[0]);
     });
 
     it('forwards emergency sign-out so the session can end without a readable store', async () => {
