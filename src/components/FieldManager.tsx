@@ -71,21 +71,24 @@ function FieldCard({
 }
 
 export default function FieldManager() {
-  const { fields: allFields, cluAssignments, deleteField, fetchError, session } = useFarm();
+  const { fields: allFields, cluAssignments, deleteField, fetchError, farm_id, session } = useFarm();
 
   const { preferences } = useAppPreferences(session?.user?.id ?? null);
 
   const [editField, setEditField] = useState<Field | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  const commitDelete = useCallback(async (ids: string[]) => {
-    const results = await Promise.all(ids.map(id => deleteField(id)));
+  const commitDelete = useCallback(async (ids: string[], _context: string, requestedFarmId?: string | null) => {
+    if (!farm_id || requestedFarmId !== farm_id) return false;
+    const results: boolean[] = [];
+    for (const id of ids) results.push(await deleteField(id));
     if (results.some(r => !r)) {
       throw new Error('One or more field deletions failed');
     }
-  }, [deleteField]);
+  }, [deleteField, farm_id]);
 
   const { pending: pendingDeletes, requestDelete } = useUndoDelete<string>({
+    farm_id,
     onCommit: commitDelete,
     onError: () => toast.error('Failed to delete field. It remains visible.'),
   });

@@ -87,6 +87,18 @@ export function useEquipment({
   isOnline,
   onMutation,
 }: UseEquipmentArgs) {
+  const enqueue = useCallback(async (table: TableName, operation: Operation, payload: Record<string, unknown>): Promise<boolean> => {
+    if (!farm_id) return false;
+    try {
+      await syncQueue.enqueueMutation(table, operation, payload, farm_id);
+      if (onMutation) await onMutation();
+      return true;
+    } catch (error) {
+      console.error('Failed to queue equipment change:', error);
+      return false;
+    }
+  }, [farm_id, onMutation]);
+
   const persist = useCallback(async (
     table: TableName,
     operation: Operation,
@@ -123,22 +135,18 @@ export function useEquipment({
 
       if (!response.error && (operation === 'insert' || response.count === 1)) return true;
       if (response.error && isUnknownMutationOutcome(response.error)) {
-        await syncQueue.enqueueMutation(table, operation, payload, farm_id);
-        if (onMutation) await onMutation();
-        return true;
+        return enqueue(table, operation, payload);
       }
       console.error(`Failed to ${operation} ${table}:`, response.error ?? 'unexpected row count');
       return false;
     } catch (error) {
       if (isUnknownMutationOutcome(error)) {
-        await syncQueue.enqueueMutation(table, operation, payload, farm_id);
-        if (onMutation) await onMutation();
-        return true;
+        return enqueue(table, operation, payload);
       }
       console.error(`Failed to ${operation} ${table}:`, error);
       return false;
     }
-  }, [farm_id, isOnline, onMutation]);
+  }, [farm_id, isOnline, onMutation, enqueue]);
 
   const persistRpc = useCallback(async (
     rpc: EquipmentRpcName,
@@ -162,22 +170,18 @@ export function useEquipment({
       const response = await supabase.rpc(rpc, { ...args, p_farm_id: farm_id });
       if (!response.error) return { ok: true, data: response.data };
       if (isUnknownMutationOutcome(response.error)) {
-        await syncQueue.enqueueMutation(queue.table, queue.operation, payload, farm_id);
-        if (onMutation) await onMutation();
-        return { ok: true, data: null };
+        return { ok: await enqueue(queue.table, queue.operation, payload), data: null };
       }
       console.error(`Failed equipment RPC ${rpc}:`, response.error);
       return { ok: false, data: null };
     } catch (error) {
       if (isUnknownMutationOutcome(error)) {
-        await syncQueue.enqueueMutation(queue.table, queue.operation, payload, farm_id);
-        if (onMutation) await onMutation();
-        return { ok: true, data: null };
+        return { ok: await enqueue(queue.table, queue.operation, payload), data: null };
       }
       console.error(`Failed equipment RPC ${rpc}:`, error);
       return { ok: false, data: null };
     }
-  }, [farm_id, isOnline, onMutation]);
+  }, [farm_id, isOnline, onMutation, enqueue]);
 
   const addEquipment = useCallback(async (
     input: Omit<Equipment, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>,
@@ -350,12 +354,12 @@ export function useEquipment({
       return false;
     }
     const deletedAt = new Date().toISOString();
-    const previousEquipment = equipment;
-    const previousSchedules = maintenanceSchedules;
-    const previousLogs = maintenanceLogs;
-    setEquipment(current => current.map(item => item.id === id ? { ...item, deleted_at: deletedAt } : item));
-    setMaintenanceSchedules(current => current.map(item => item.equipmentId === id ? { ...item, deleted_at: deletedAt } : item));
-    setMaintenanceLogs(current => current.map(item => item.equipmentId === id ? { ...item, deleted_at: deletedAt } : item));
+    const previousEquipment = equipment.find(item => item.id === id && !item.deleted_at);
+    const previousSchedules = new Map(maintenanceSchedules.filter(item => item.equipmentId === id && !item.deleted_at).map(item => [item.id, item]));
+    const previousLogs = new Map(maintenanceLogs.filter(item => item.equipmentId === id && !item.deleted_at).map(item => [item.id, item]));
+    setEquipment(current => current.map(item => item.id === id && !item.deleted_at ? { ...item, deleted_at: deletedAt } : item));
+    setMaintenanceSchedules(current => current.map(item => item.equipmentId === id && !item.deleted_at ? { ...item, deleted_at: deletedAt } : item));
+    setMaintenanceLogs(current => current.map(item => item.equipmentId === id && !item.deleted_at ? { ...item, deleted_at: deletedAt } : item));
 
     const { ok } = await persistRpc('soft_delete_equipment_cascade', {
       p_farm_id: farm_id,
@@ -366,9 +370,9 @@ export function useEquipment({
       payload: { id, deleted_at: deletedAt },
     });
     if (!ok) {
-      setEquipment(previousEquipment);
-      setMaintenanceSchedules(previousSchedules);
-      setMaintenanceLogs(previousLogs);
+      if (previousEquipment) setEquipment(current => current.map(item => item.id === id ? previousEquipment : item));
+      setMaintenanceSchedules(current => current.map(item => previousSchedules.get(item.id) ?? item));
+      setMaintenanceLogs(current => current.map(item => previousLogs.get(item.id) ?? item));
       return false;
     }
     return true;

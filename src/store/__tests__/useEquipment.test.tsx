@@ -71,6 +71,51 @@ beforeEach(() => {
 });
 
 describe('useEquipment', () => {
+  it.each(['deleteEquipment', 'deleteMaintenanceSchedule', 'deleteMaintenanceLog'] as const)(
+    '%s resolves false and restores rows when offline enqueue rejects', async (operation) => {
+      enqueueMutation.mockRejectedValue(new Error('offline storage locked'));
+      const { result } = renderEquipmentHook({ equipment: [machine], schedules: [task], logs: [repair] });
+      const id = operation === 'deleteEquipment' ? 'e1' : operation === 'deleteMaintenanceSchedule' ? 's1' : 'l1';
+      await act(async () => { expect(await result.current.ops[operation](id)).toBe(false); });
+      expect(result.current.machines.value).toEqual([machine]);
+      expect(result.current.schedules.value).toEqual([task]);
+      expect(result.current.logs.value).toEqual([repair]);
+    },
+  );
+
+  it('retains concurrent changes to unrelated rows when a cascade enqueue fails', async () => {
+    let reject!: (error: Error) => void;
+    enqueueMutation.mockReturnValue(new Promise<void>((_resolve, fail) => { reject = fail; }));
+    const other = { ...machine, id: 'e2' };
+    const otherTask = { ...task, id: 's2', equipmentId: 'e2' };
+    const otherLog = { ...repair, id: 'l2', equipmentId: 'e2' };
+    const { result } = renderEquipmentHook({ equipment: [machine, other], schedules: [task, otherTask], logs: [repair, otherLog] });
+    let deletion!: Promise<boolean>;
+    act(() => { deletion = result.current.ops.deleteEquipment('e1'); });
+    act(() => {
+      result.current.machines.setValue(rows => rows.map(row => row.id === 'e2' ? { ...row, make: 'Edited' } : row));
+      result.current.schedules.setValue(rows => rows.map(row => row.id === 's2' ? { ...row, taskName: 'Edited' } : row));
+      result.current.logs.setValue(rows => rows.map(row => row.id === 'l2' ? { ...row, description: 'Edited' } : row));
+    });
+    await act(async () => { reject(new Error('queue failed')); expect(await deletion).toBe(false); });
+    expect(result.current.machines.value[0]).toEqual(machine);
+    expect(result.current.machines.value[1].make).toBe('Edited');
+    expect(result.current.schedules.value[0]).toEqual(task);
+    expect(result.current.schedules.value[1].taskName).toBe('Edited');
+    expect(result.current.logs.value[0]).toEqual(repair);
+    expect(result.current.logs.value[1].description).toBe('Edited');
+  });
+
+  it('returns false when enqueue after an unknown network outcome rejects', async () => {
+    supabaseMock.setRpcThrow(new TypeError('Failed to fetch'));
+    enqueueMutation.mockRejectedValue(new Error('queue locked'));
+    const { result } = renderEquipmentHook({ online: true, equipment: [machine], schedules: [task], logs: [repair] });
+    await act(async () => { expect(await result.current.ops.deleteEquipment('e1')).toBe(false); });
+    expect(result.current.machines.value).toEqual([machine]);
+    expect(result.current.schedules.value).toEqual([task]);
+    expect(result.current.logs.value).toEqual([repair]);
+  });
+
   it('optimistically creates equipment and queues the mapped insert offline', async () => {
     const { result } = renderEquipmentHook();
     await act(async () => {

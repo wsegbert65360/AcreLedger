@@ -145,13 +145,57 @@ describe('useUndoDelete', () => {
     expect(ids).toEqual(['b', 'a']);
   });
 
-  it('flushes pending commits on unmount', () => {
+  it('flushes pending commits on unmount', async () => {
     const onCommit = vi.fn().mockResolvedValue(undefined);
     const { result, unmount } = renderHook(() => useUndoDelete({ onCommit }));
 
     act(() => result.current.requestDelete(['a'], 'Record deleted', null));
     act(() => unmount());
 
-    expect(onCommit).toHaveBeenCalledWith(['a'], null);
+    await waitFor(() => expect(onCommit).toHaveBeenCalledWith(['a'], null));
   });
+  it.each(['timer', 'unmount'])('serializes same-hook batches on %s even when the first fails', async (path) => {
+    let release!: () => void;
+    let busy = false;
+    const onCommit = vi.fn(async (ids: string[]) => {
+      if (busy) return false;
+      busy = true;
+      if (ids[0] === 'a') {
+        await new Promise<void>(resolve => { release = resolve; });
+        busy = false;
+        throw new Error('first batch failed');
+      }
+      busy = false;
+      return true;
+    });
+    const onError = vi.fn();
+    const { result, unmount } = renderHook(() => useUndoDelete({ onCommit, onError }));
+    act(() => {
+      result.current.requestDelete(['a'], 'A', null);
+      result.current.requestDelete(['b'], 'B', null);
+    });
+    if (path === 'unmount') unmount();
+    else act(() => vi.advanceTimersByTime(10000));
+    await act(async () => { await Promise.resolve(); });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    await act(async () => { release(); });
+    expect(onCommit).toHaveBeenCalledTimes(2);
+    expect(onCommit.mock.calls.map(call => call[0])).toEqual([['a'], ['b']]);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the requesting farm to the freshest callback after a farm switch', async () => {
+    const onCommit = vi.fn().mockResolvedValue(false);
+    const onError = vi.fn();
+    const { result, rerender } = renderHook(({ farm }) => useUndoDelete({ farm_id: farm, onCommit, onError }), {
+      initialProps: { farm: 'farm-1' },
+    });
+    act(() => result.current.requestDelete(['a'], 'A', null));
+    rerender({ farm: 'farm-2' });
+    await act(async () => { vi.advanceTimersByTime(10000); });
+    expect(onCommit).toHaveBeenCalledWith(['a'], null, 'farm-1');
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(result.current.pending.size).toBe(0);
+  });
+
 });

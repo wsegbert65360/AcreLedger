@@ -148,6 +148,17 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
+describe('tract deletion tombstones', () => {
+  it('queues only active CLU assignments and retains existing tombstones', async () => {
+    const old = makeAssignment({ id: 'old', deletedAt: '2025-01-01T00:00:00.000Z' });
+    const { result } = renderFsaHook({ tracts: [makeTract()], assignments: [makeAssignment(), old], isOnline: false });
+    await act(async () => { expect(await result.current.ops.deleteTract('tract-1')).toBe(true); });
+    const batch = enqueueMutations.mock.calls[0][0];
+    expect(batch.map((item: { payload: { id: string } }) => item.payload.id)).toEqual(['tract-1', 'a1']);
+    expect(result.current.assignState.value).toEqual([old]);
+  });
+});
+
 describe('useFsaTracts — assignClu', () => {
   it('rejects when farm_id is null', async () => {
     const { result } = renderFsaHook({ farm_id: null });

@@ -122,7 +122,7 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
 
     let mapped: ReturnType<typeof mapTillageToDb>;
     try {
-      mapped = mapTillageToDb(r);
+      mapped = mapTillageToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapTillageToDb failed:', err);
       isMutating.current = false;

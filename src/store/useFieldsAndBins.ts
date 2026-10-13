@@ -7,6 +7,7 @@ import { binService } from '@/services/binService';
 import { mapFieldToDb, mapBinToDb, mapSeedToDb, mapRecipeToDb, mapFertilizerRecipeToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
+import { formatMeasurement } from '@/utils/numbers';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 
 function restoreAtIndex<T>(
@@ -26,6 +27,7 @@ interface UseFieldsAndBinsArgs {
   farm_id: string | null;
   fields: Field[];
   bins: Bin[];
+  getBinTotal: (binId: string) => number;
   savedSeeds: SavedSeed[];
   sprayRecipes: SprayRecipe[];
   fertilizerRecipes: FertilizerRecipe[];
@@ -41,7 +43,7 @@ interface UseFieldsAndBinsArgs {
 }
 
 export function useFieldsAndBins({
-  farm_id, fields, bins, savedSeeds, sprayRecipes, fertilizerRecipes, cluAssignments,
+  farm_id, fields, bins, getBinTotal, savedSeeds, sprayRecipes, fertilizerRecipes, cluAssignments,
   setFields, setBins,
   setSavedSeeds, setSprayRecipes,
   setFertilizerRecipes, setCluAssignments,
@@ -620,6 +622,11 @@ export function useFieldsAndBins({
       toast.error('Bin operation in progress. Please try again.');
       return false;
     }
+    const remainingBushels = getBinTotal(id);
+    if (remainingBushels !== 0) {
+      toast.error(`This bin still holds ${formatMeasurement(remainingBushels, 'bu', 3)}. Empty it before deleting it.`);
+      return false;
+    }
     isBinMutating.current = true;
 
     // Capture the prior record from the closure (see updateField note).
@@ -694,7 +701,7 @@ export function useFieldsAndBins({
     } finally {
       isBinMutating.current = false;
     }
-  }, [farm_id, bins, setBins, isOnline, onMutation]);
+  }, [farm_id, bins, getBinTotal, setBins, isOnline, onMutation]);
 
   // --- Seeds ---
   const addSeed = useCallback(async (name: string): Promise<boolean> => {

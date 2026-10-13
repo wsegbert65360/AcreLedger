@@ -9,7 +9,19 @@
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Field, PlantRecord, SprayRecord } from '@/types/farm';
+import { toast } from 'sonner';
+import type { Field, PlantRecord, SprayRecord, ActivityRecord } from '@/types/farm';
+
+const undoMock = vi.hoisted(() => ({ requestDelete: vi.fn(), options: null as null | {
+  onCommit: (ids: string[], records: ActivityRecord[], farmId: string | null) => Promise<void | boolean>;
+} }));
+vi.mock('@/hooks/useUndoDelete', () => ({
+  useUndoDelete: (options: typeof undoMock.options) => {
+    undoMock.options = options;
+    return { pending: new Set<string>(), requestDelete: undoMock.requestDelete };
+  },
+}));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 // --- Shared mock plumbing ---
 const farmMock: { current: Record<string, unknown> } = { current: {} };
@@ -66,7 +78,7 @@ vi.mock('@/components/activity/HayTab', () => ({ default: ({ records }: any) => 
 vi.mock('@/components/activity/CustomSprayTab', () => ({ default: ({ records }: any) => <div data-testid="custom-spray-tab" data-count={records.length} /> }));
 vi.mock('@/components/activity/FertilizerTab', () => ({ default: ({ records }: any) => <div data-testid="fertilizer-tab" data-count={records.length} /> }));
 vi.mock('@/components/activity/TillageTab', () => ({ default: ({ records }: any) => <div data-testid="tillage-tab" data-count={records.length} /> }));
-vi.mock('@/components/activity/GrainTab', () => ({ default: ({ records }: any) => <div data-testid="grain-tab" data-count={records.length} /> }));
+vi.mock('@/components/activity/GrainTab', () => ({ default: ({ records, onToggle }: any) => <div data-testid="grain-tab" data-count={records.length}>{records.map((record: any) => <button key={record.id} onClick={() => onToggle(record.id)}>Select {record.id}</button>)}<button onClick={() => onToggle('missing')}>Select missing</button></div> }));
 vi.mock('@/components/activity/HistoryFeed', () => ({ default: ({ records }: any) => <div data-testid="history-feed" data-count={records.length} /> }));
 
 import Activity from '../Activity';
@@ -142,6 +154,7 @@ function installFarmMock(overrides: Record<string, unknown> = {}) {
     deleteGrainMovements: vi.fn(),
     viewingSeason: 2026,
     farmName: 'Test Farm',
+    farm_id: 'farm-1',
     ...overrides,
   };
 }
@@ -246,5 +259,68 @@ describe('Activity spray review queue', () => {
 
     const reviewButton = screen.getByTitle('Show only incomplete spray records needing review');
     await waitFor(() => expect(within(reviewButton).queryByText('1')).not.toBeInTheDocument());
+  });
+});
+
+
+describe('Activity deletion safety', () => {
+  const harvest = { id: 'h1', fieldId: field.id, fieldName: field.name, bushels: 10,
+    destination: 'bin' as const, binId: 'b1', moisturePercent: 11, landlordSplitPercent: 0,
+    timestamp: 1000, seasonYear: 2026, farm_id: 'farm-1', deleted_at: null };
+  const grain = { id: 'g1', binId: 'b1', binName: 'Bin', type: 'in' as const, harvestRecordId: 'h1',
+    bushels: 10, moisturePercent: 11, timestamp: 1000, seasonYear: 2026, farm_id: 'farm-1', deleted_at: null };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    installFarmMock({ harvestRecords: [harvest], grainMovements: [grain] });
+  });
+  it('refuses a mirrored harvest-linked Grain-tab selection without adding pending deletes', () => {
+    renderActivity('/activity?tab=grain');
+    fireEvent.click(screen.getByText('Select g1'));
+    fireEvent.click(screen.getByText('Delete 1 Record'));
+    expect(toast.error).toHaveBeenCalledWith('This load came from a harvest record. Delete the harvest to remove it.');
+    expect(undoMock.requestDelete).not.toHaveBeenCalled();
+  });
+  it('refuses an incomplete selection rather than hiding records it cannot delete', () => {
+    renderActivity('/activity?tab=grain');
+    fireEvent.click(screen.getByText('Select missing'));
+    fireEvent.click(screen.getByText('Delete 1 Record'));
+    expect(toast.error).toHaveBeenCalledWith('Some selected records are no longer available. Select them again.');
+    expect(undoMock.requestDelete).not.toHaveBeenCalled();
+  });
+  it('queues a fully resolved unlinked Grain-tab record', () => {
+    const unlinked = { ...grain, harvestRecordId: undefined };
+    installFarmMock({ grainMovements: [unlinked] });
+    renderActivity('/activity?tab=grain');
+    fireEvent.click(screen.getByText('Select g1'));
+    fireEvent.click(screen.getByText('Delete 1 Record'));
+    expect(undoMock.requestDelete).toHaveBeenCalledWith(['g1'], '1 record deleted', [expect.objectContaining({ type: 'grain', data: unlinked })]);
+  });
+  it('uses one harvest cascade without separately deleting its linked movement', async () => {
+    const harvestDelete = vi.fn().mockResolvedValue(true);
+    const grainDelete = vi.fn().mockResolvedValue(true);
+    installFarmMock({ deleteHarvestRecords: harvestDelete, deleteGrainMovements: grainDelete });
+    renderActivity('/activity');
+    await undoMock.options!.onCommit(['h1', 'g1'], [{ type: 'harvest', data: harvest }, { type: 'grain', data: grain }], 'farm-1');
+    expect(harvestDelete).toHaveBeenCalledWith(['h1']);
+    expect(grainDelete).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+  it('finishes harvest deletion before starting unrelated grain deletion', async () => {
+    let release!: () => void;
+    const harvestDelete = vi.fn(() => new Promise<boolean>(resolve => { release = () => resolve(true); }));
+    const grainDelete = vi.fn().mockResolvedValue(true);
+    installFarmMock({ deleteHarvestRecords: harvestDelete, deleteGrainMovements: grainDelete });
+    renderActivity('/activity');
+    const pending = undoMock.options!.onCommit(['h1', 'g1'], [{ type: 'harvest', data: harvest }, { type: 'grain', data: { ...grain, harvestRecordId: undefined } }], 'farm-1');
+    expect(grainDelete).not.toHaveBeenCalled();
+    release(); await pending;
+    expect(grainDelete).toHaveBeenCalledWith(['g1']);
+  });
+  it.each(['farm-2', null])('refuses queued deletes when the current farm is %s', async (farmId) => {
+    const grainDelete = vi.fn().mockResolvedValue(true);
+    installFarmMock({ farm_id: farmId, deleteGrainMovements: grainDelete });
+    renderActivity('/activity');
+    expect(await undoMock.options!.onCommit(['g1'], [{ type: 'grain', data: grain }], 'farm-1')).toBe(false);
+    expect(grainDelete).not.toHaveBeenCalled();
   });
 });

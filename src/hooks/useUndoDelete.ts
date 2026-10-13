@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 const UNDO_DELAY_MS = 10000;
 
 interface UseUndoDeleteOptions<TContext = unknown> {
-  onCommit: (ids: string[], context: TContext) => Promise<void> | void;
+  farm_id?: string | null;
+  onCommit: (ids: string[], context: TContext, farmId?: string | null) => Promise<void | boolean> | void | boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -16,9 +17,11 @@ interface UseUndoDeleteOptions<TContext = unknown> {
  * soft-delete) is delayed by 10 seconds so the user can undo from the Sonner
  * toast. Multiple delete batches are tracked independently.
  */
-export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndoDeleteOptions<TContext>) {
+export function useUndoDelete<TContext = unknown>({ onCommit, onError, farm_id }: UseUndoDeleteOptions<TContext>) {
   const [pending, setPending] = useState<Set<string>>(new Set());
-  const pendingCommitsRef = useRef<Map<string, { timer: ReturnType<typeof setTimeout>, ids: string[], context: TContext }>>(new Map());
+  const pendingCommitsRef = useRef<Map<string, { timer: ReturnType<typeof setTimeout>, ids: string[], context: TContext, farmId?: string | null }>>(new Map());
+  const commitChainRef = useRef<Promise<void>>(Promise.resolve());
+  const mountedRef = useRef(true);
   const counterRef = useRef(0);
 
   // Timers and the unmount flush must fire with the freshest callback closure,
@@ -32,6 +35,28 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
     onCommitRef.current = onCommit;
     onErrorRef.current = onError;
   });
+
+  const queueCommit = useCallback((ids: string[], context: TContext, farmId?: string | null) => {
+    commitChainRef.current = commitChainRef.current.then(async () => {
+      try {
+        const ok = farmId === undefined
+          ? await onCommitRef.current(ids, context)
+          : await onCommitRef.current(ids, context, farmId);
+        if (ok === false) throw new Error('Delete refused because its farm changed or the write failed.');
+      } catch (err) {
+        console.error('Undo delete commit failed:', err);
+        onErrorRef.current?.(err);
+      } finally {
+        if (mountedRef.current) {
+          setPending(prev => {
+            const next = new Set(prev);
+            ids.forEach(id => next.delete(id));
+            return next;
+          });
+        }
+      }
+    });
+  }, []);
 
   const clearBatch = useCallback((key: string, ids: string[]) => {
     const entry = pendingCommitsRef.current.get(key);
@@ -59,24 +84,12 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
         return next;
       });
 
-      const timer = setTimeout(async () => {
+      const timer = setTimeout(() => {
         pendingCommitsRef.current.delete(key);
-        try {
-          await onCommitRef.current(ids, context);
-        } catch (err) {
-          console.error('Undo delete commit failed:', err);
-          onErrorRef.current?.(err);
-        } finally {
-          setPending(prev => {
-            if (prev.size === 0) return prev;
-            const next = new Set(prev);
-            ids.forEach(id => next.delete(id));
-            return next;
-          });
-        }
+        queueCommit(ids, context, farm_id);
       }, UNDO_DELAY_MS);
 
-      pendingCommitsRef.current.set(key, { timer, ids, context });
+      pendingCommitsRef.current.set(key, { timer, ids, context, farmId: farm_id });
 
       toast(displayName, {
         description:
@@ -90,27 +103,22 @@ export function useUndoDelete<TContext = unknown>({ onCommit, onError }: UseUndo
         duration: UNDO_DELAY_MS,
       });
     },
-    [clearBatch]
+    [clearBatch, farm_id, queueCommit]
   );
 
-  // Flush pending commits only on real unmount. Intentionally keyed on nothing:
-  // see the onCommitRef note above.
+  // Flush pending commits on unmount through the same stable serial queue.
   useEffect(() => {
+    mountedRef.current = true;
     const pendingCommits = pendingCommitsRef.current;
     return () => {
-      pendingCommits.forEach(({ timer, ids, context }) => {
+      mountedRef.current = false;
+      pendingCommits.forEach(({ timer, ids, context, farmId }) => {
         clearTimeout(timer);
-        // Flush on unmount
-        const promise = onCommitRef.current(ids, context);
-        if (promise) {
-          promise.catch((err: any) => {
-            console.error('Undo delete unmount commit failed:', err);
-          });
-        }
+        queueCommit(ids, context, farmId);
       });
       pendingCommits.clear();
     };
-  }, []);
+  }, [queueCommit]);
 
   return { pending, requestDelete };
 }

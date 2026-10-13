@@ -122,7 +122,7 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
 
     let mapped: ReturnType<typeof mapHayToDb>;
     try {
-      mapped = mapHayToDb(r);
+      mapped = mapHayToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapHayToDb failed:', err);
       isMutating.current = false;

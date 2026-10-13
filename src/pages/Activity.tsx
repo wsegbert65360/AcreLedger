@@ -97,6 +97,7 @@ export default function Activity() {
     viewingSeason,
     deleteGrainMovements,
     farmName,
+    farm_id,
     session
   } = useFarm();
 
@@ -165,22 +166,30 @@ export default function Activity() {
   ]);
 
   const { pending: pendingDeletes, requestDelete } = useUndoDelete<ActivityRecord[]>({
-    onCommit: async (_ids, toDelete) => {
+    farm_id,
+    onCommit: async (_ids, toDelete, requestedFarmId) => {
+      if (!farm_id || requestedFarmId !== farm_id) return false;
       const byType = toDelete.reduce((acc, r) => {
         acc[r.type] = acc[r.type] || [];
         acc[r.type].push(r.data.id);
         return acc;
       }, {} as Record<string, string[]>);
 
+      const harvestIds = new Set(byType.harvest ?? []);
+      byType.grain = toDelete
+        .filter((r): r is Extract<ActivityRecord, { type: 'grain' }> => r.type === 'grain')
+        .filter(r => !r.data.harvestRecordId || !harvestIds.has(r.data.harvestRecordId))
+        .map(r => r.data.id);
+      // The harvest cascade owns its linked movements; never race their versioned delete.
+      if (byType.harvest && !await deleteHarvestRecords(byType.harvest)) return false;
       const results = await Promise.all([
         byType.plant ? deletePlantRecords(byType.plant) : Promise.resolve(true),
         byType.spray ? deleteSprayRecords(byType.spray) : Promise.resolve(true),
-        byType.harvest ? deleteHarvestRecords(byType.harvest) : Promise.resolve(true),
         byType.hay ? deleteHayHarvestRecords(byType.hay) : Promise.resolve(true),
         byType.customSpray ? deleteCustomSprayRecords(byType.customSpray) : Promise.resolve(true),
         byType.fertilizer ? deleteFertilizerApplications(byType.fertilizer) : Promise.resolve(true),
         byType.tillage ? deleteTillageRecords(byType.tillage) : Promise.resolve(true),
-        byType.grain ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
+        byType.grain?.length ? deleteGrainMovements(byType.grain) : Promise.resolve(true),
       ]);
 
       if (results.some(r => !r)) {
@@ -273,7 +282,7 @@ export default function Activity() {
     return names;
   }, [bins, grainMovements]);
 
-  const visibleUnifiedRecords = useMemo(() => {
+  const fullUnifiedRecords = useMemo(() => {
     const all: (ActivityRecord & { timestamp: number })[] = [
       ...filteredPlant.map(r => ({ type: 'plant' as const, data: r, timestamp: r.timestamp })),
       ...filteredSpray.map(r => ({ type: 'spray' as const, data: r, timestamp: r.timestamp })),
@@ -284,23 +293,36 @@ export default function Activity() {
       ...filteredTillage.map(r => ({ type: 'tillage' as const, data: r, timestamp: r.timestamp })),
       ...filteredGrain.map(r => ({ type: 'grain' as const, data: r, timestamp: r.timestamp })),
     ];
-    // A harvest into a bin also saves a linked "bin IN" movement. Show that load
-    // once (on the harvest card); the movement stays on the Grain tab.
-    const mirrored = mirroredGrainIds(
-      filteredHarvest.filter(h => !pendingDeletes.has(h.id)),
-      filteredGrain,
-    );
-    return all
-      .filter(r => !pendingDeletes.has(r.data.id))
-      .filter(r => !(r.type === 'grain' && mirrored.has(r.data.id)))
+    return all.filter(r => !pendingDeletes.has(r.data.id))
       .sort((a, b) => compareWorkDateDesc(a.data, b.data));
   }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredCustomSpray, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
+
+  const visibleUnifiedRecords = useMemo(() => {
+    const mirrored = mirroredGrainIds(
+      filteredHarvest.filter(h => !pendingDeletes.has(h.id)), filteredGrain,
+    );
+    return fullUnifiedRecords.filter(r => !(r.type === 'grain' && mirrored.has(r.data.id)));
+  }, [fullUnifiedRecords, filteredHarvest, filteredGrain, pendingDeletes]);
 
   const handleDeleteRequest = () => {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
 
-    const toDelete = visibleUnifiedRecords.filter(r => ids.includes(r.data.id));
+    const recordsById = new Map(fullUnifiedRecords.map(r => [r.data.id, r]));
+    const toDelete = ids.flatMap(id => {
+      const record = recordsById.get(id);
+      return record ? [record] : [];
+    });
+    if (toDelete.length !== ids.length) {
+      toast.error('Some selected records are no longer available. Select them again.');
+      return;
+    }
+    const harvestIds = new Set(toDelete.filter(r => r.type === 'harvest').map(r => r.data.id));
+    if (toDelete.some(r => r.type === 'grain' && r.data.type === 'in'
+      && r.data.harvestRecordId && !harvestIds.has(r.data.harvestRecordId))) {
+      toast.error('This load came from a harvest record. Delete the harvest to remove it.');
+      return;
+    }
     requestDelete(
       ids,
       `${ids.length} record${ids.length !== 1 ? 's' : ''} deleted`,

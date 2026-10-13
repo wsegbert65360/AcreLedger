@@ -146,7 +146,7 @@ function useUpdateFertilizerRecord({ farm_id, fields, fertilizerApplications, se
 
     let mapped: ReturnType<typeof mapFertilizerToDb>;
     try {
-      mapped = mapFertilizerToDb(r);
+      mapped = mapFertilizerToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapFertilizerToDb failed:', err);
       isMutating.current = false;
