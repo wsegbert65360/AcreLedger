@@ -982,8 +982,10 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
             && response.error.code === '23505'
             && await reconcileLinkedHarvestInsert(linkedHarvest, farmId)
           ) {
+            // The drain already holds the queue lock. Dequeue must reuse that
+            // token; a fresh runWebQueue wait deadlocks the in-flight replay.
             for (const id of linkedMutationIds) {
-              await syncQueue.dequeueMutation(id);
+              await syncQueue.dequeueMutation(id, token);
               handledMutationIds.add(id);
             }
             continue;
