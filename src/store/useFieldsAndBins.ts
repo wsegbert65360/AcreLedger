@@ -87,9 +87,10 @@ export function useFieldsAndBins({
     setFields(prev => [...prev, newField]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fields', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('fields', 'insert', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Field created offline!');
           return true;
@@ -198,9 +199,10 @@ export function useFieldsAndBins({
     setFields(prev => prev.map(existing => existing.id === f.id ? f : existing));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fields', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('fields', 'update', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Field updated offline');
           return true;
@@ -313,7 +315,7 @@ export function useFieldsAndBins({
     }));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fields', id }, ...assignmentsToDelete.map(a => ({ tableName: 'field_clu_assignments', id: a.id }))])) {
         try {
           await syncQueue.enqueueMutations([
             ...assignmentsToDelete.map(a => ({
@@ -329,6 +331,7 @@ export function useFieldsAndBins({
               farmId: farm_id,
             },
           ]);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Field deleted offline');
           return true;
@@ -451,9 +454,10 @@ export function useFieldsAndBins({
     setBins(prev => [...prev, newBin]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'bins', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('bins', 'insert', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Bin created offline!');
           return true;
@@ -541,9 +545,10 @@ export function useFieldsAndBins({
     setBins(prev => prev.map(existing => existing.id === b.id ? b : existing));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'bins', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('bins', 'update', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Bin updated offline');
           return true;
@@ -625,9 +630,10 @@ export function useFieldsAndBins({
     ));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'bins', id: id }])) {
         try {
           await syncQueue.enqueueMutation('bins', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Bin deleted offline');
           return true;
@@ -722,9 +728,10 @@ export function useFieldsAndBins({
     setSavedSeeds(prev => [...prev, newSeed]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'saved_seeds', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('saved_seeds', 'insert', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Seed variety added offline!');
           return true;
@@ -804,9 +811,10 @@ export function useFieldsAndBins({
     setSavedSeeds(prev => prev.filter(s => s.id !== id));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'saved_seeds', id: id }])) {
         try {
           await syncQueue.enqueueMutation('saved_seeds', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Seed variety removed offline');
           return true;
@@ -901,9 +909,10 @@ export function useFieldsAndBins({
     setSprayRecipes(prev => [...prev, newRecipe]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'spray_recipes', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('spray_recipes', 'insert', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Spray recipe created offline!');
           return true;
@@ -991,9 +1000,10 @@ export function useFieldsAndBins({
     setSprayRecipes(prev => prev.map(existing => existing.id === r.id ? r : existing));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'spray_recipes', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('spray_recipes', 'update', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Spray recipe updated offline');
           return true;
@@ -1079,9 +1089,10 @@ export function useFieldsAndBins({
     setSprayRecipes(prev => prev.filter(r => r.id !== id));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'spray_recipes', id: id }])) {
         try {
           await syncQueue.enqueueMutation('spray_recipes', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Recipe removed offline');
           return true;
@@ -1176,9 +1187,10 @@ export function useFieldsAndBins({
     setFertilizerRecipes(prev => [...prev, newRecipe]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fertilizer_recipes', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('fertilizer_recipes', 'insert', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Fertilizer recipe created offline!');
           return true;
@@ -1267,9 +1279,10 @@ export function useFieldsAndBins({
     setFertilizerRecipes(prev => prev.map(existing => existing.id === r.id ? updatedRecipe : existing));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fertilizer_recipes', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('fertilizer_recipes', 'update', mapped, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Fertilizer recipe updated offline');
           return true;
@@ -1355,9 +1368,10 @@ export function useFieldsAndBins({
     setFertilizerRecipes(prev => prev.filter(r => r.id !== id));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fertilizer_recipes', id: id }])) {
         try {
           await syncQueue.enqueueMutation('fertilizer_recipes', 'soft_delete', { id, deleted_at: deletedAt }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Recipe removed offline');
           return true;

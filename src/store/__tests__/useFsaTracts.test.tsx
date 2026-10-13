@@ -40,7 +40,7 @@ const mapFsaTractFromDb = vi.fn((row: unknown) => row as FsaTractImport);
 vi.doMock('@/services/cluAssignmentService', () => ({ cluAssignmentService }));
 vi.doMock('@/services/fsaTractService', () => ({ fsaTractService }));
 vi.doMock('@/lib/syncQueue', () => ({
-  syncQueue: { enqueueMutation, enqueueMutations },
+  syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() },
 }));
 vi.doMock('@/lib/mappers', () => ({
   mapFsaTractToDb,
@@ -283,6 +283,7 @@ describe('useFsaTracts — deleteTract (corrected cascade)', () => {
 
     let okPromise!: Promise<boolean>;
     act(() => { okPromise = result.current.ops.deleteTract(tract.id); });
+    await waitFor(() => expect(fsaTractService.deleteTract).toHaveBeenCalled());
     // A concurrent flow (e.g. useFsaTracts on another screen) persists an
     // unrelated assignment while the delete RPC is still awaiting.
     act(() => result.current.assignState.setValue(prev => [...prev, unrelated]));

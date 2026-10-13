@@ -95,6 +95,100 @@ describe('syncQueue web queue management', () => {
     localStorage.clear();
   });
 
+  it('defers an online write behind pending and parked changes for the same farm/table/id', async () => {
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Older' }, 'farm-1');
+    const [older] = await syncQueue.getQueue('farm-1');
+    await syncQueue.parkMutation(older.id);
+    expect(await syncQueue.shouldQueueWrite(true, 'farm-1', [{ tableName: 'fields', id: 'f1' }])).toBe(true);
+    expect(await syncQueue.shouldQueueWrite(true, 'farm-2', [{ tableName: 'fields', id: 'f1' }])).toBe(false);
+    expect(await syncQueue.shouldQueueWrite(true, 'farm-1', [{ tableName: 'bins', id: 'f1' }])).toBe(false);
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Newer' }, 'farm-1');
+    expect(await syncQueue.replayQueue('farm-1')).toBe(false);
+    expect(supabaseControl.update).not.toHaveBeenCalled();
+    await syncQueue.retryFailed('farm-1');
+    expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+    expect(supabaseControl.update.mock.calls.map(call => call[0])).toEqual([{ name: 'Older' }, { name: 'Newer' }]);
+  });
+
+  it('keeps younger edits behind a failed edit while allowing unrelated records to drain', async () => {
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Older' }, 'farm-1');
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Newer' }, 'farm-1');
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f2', name: 'Unrelated' }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: { code: '23514' }, count: null });
+    expect(await syncQueue.replayQueue('farm-1')).toBe(false);
+    expect(supabaseControl.update.mock.calls.map(call => call[0])).toEqual([{ name: 'Older' }, { name: 'Unrelated' }]);
+    expect((await syncQueue.getQueue('farm-1')).map(item => item.retry_count)).toEqual([1, 0]);
+  });
+
+  it.each(['PGRST204', '42703', '42501'])('pauses %s without spending retries', async code => {
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Local' }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: { code }, count: null });
+    expect(await syncQueue.replayQueue('farm-1')).toBe(false);
+    expect((await syncQueue.getQueue('farm-1'))[0].retry_count).toBe(0);
+  });
+
+  it('throws on failed dequeue and halts the drain before a younger edit', async () => {
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Older' }, 'farm-1');
+    await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Newer' }, 'farm-1');
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    });
+    try {
+      expect(await syncQueue.replayQueue('farm-1')).toBe(false);
+      expect(supabaseControl.update).toHaveBeenCalledTimes(1);
+      expect(await syncQueue.getQueue('farm-1')).toHaveLength(2);
+      await expect(syncQueue.discardFailed('farm-1')).resolves.toBe(0);
+    } finally { setItem.mockRestore(); }
+  });
+
+  it('holds the cross-tab queue lock throughout replay without requesting it recursively', async () => {
+    const locks = { request: vi.fn(async (_name: string, body: () => Promise<unknown>) => body()) };
+    const previous = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
+    try {
+      await syncQueue.enqueueMutation('fields', 'insert', { id: 'f1' }, 'farm-1');
+      locks.request.mockClear();
+      expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+      expect(locks.request).toHaveBeenCalledTimes(1);
+      expect(locks.request).toHaveBeenCalledWith('acreledger-sync-queue', expect.any(Function));
+    } finally {
+      if (previous) Object.defineProperty(navigator, 'locks', previous);
+      else Reflect.deleteProperty(navigator, 'locks');
+    }
+  });
+
+  it('serializes two tab contexts so replay cannot erase another tab enqueue', async () => {
+    let tail: Promise<unknown> = Promise.resolve();
+    const locks = { request: vi.fn((_name: string, body: () => Promise<unknown>) => {
+      const next = tail.then(body);
+      tail = next.catch(() => {});
+      return next;
+    }) };
+    const previous = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
+    try {
+      // Separate module instances model per-tab chains and in-flight drains;
+      // the Web Lock and storage remain shared across both contexts.
+      vi.resetModules();
+      const tabA = (await import('../syncQueue')).syncQueue;
+      vi.resetModules();
+      const tabB = (await import('../syncQueue')).syncQueue;
+      await Promise.all([
+        tabA.enqueueMutation('fields', 'insert', { id: 'a' }, 'farm-1'),
+        tabB.enqueueMutation('fields', 'insert', { id: 'b' }, 'farm-1'),
+      ]);
+      expect(await tabA.getQueue('farm-1')).toHaveLength(2);
+      await Promise.all([
+        tabA.replayQueue('farm-1'),
+        tabB.enqueueMutation('fields', 'insert', { id: 'c' }, 'farm-1'),
+      ]);
+      expect((await tabB.getQueue('farm-1')).map(item => item.payload.id)).toEqual(['c']);
+    } finally {
+      if (previous) Object.defineProperty(navigator, 'locks', previous);
+      else Reflect.deleteProperty(navigator, 'locks');
+    }
+  });
+
   // ─── Enqueue + Persistence ───────────────────────────────────────────────
 
   it('enqueues and persists a mutation', async () => {
@@ -283,7 +377,7 @@ describe('syncQueue web queue management', () => {
     await syncQueue.enqueueMutation('fields', 'insert', { id: 'bad' }, 'farm-1');
     for (let attempt = 0; attempt < 3; attempt += 1) {
       supabaseControl.insertResponses.push({
-        error: { code: '42501', message: 'permission denied' },
+        error: { code: '23514', message: 'permission denied' },
         status: 403,
       });
       await syncQueue.replayQueue('farm-1');
@@ -618,14 +712,14 @@ describe('syncQueue web queue management', () => {
     expect(await syncQueue.getQueue('farm-1')).toEqual([]);
   });
 
-  it('lets fetch continue when the only remaining work is parked', async () => {
+  it('reports an unfinished drain when the only remaining work is parked', async () => {
     await syncQueue.enqueueMutation('equipment', 'insert', { id: 'e1' }, 'farm-1');
     const [queued] = await syncQueue.getQueue('farm-1');
     for (let retry = 0; retry < MAX_SYNC_RETRIES; retry++) {
       await syncQueue.incrementRetry(queued.id, retry);
     }
 
-    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
     expect(await syncQueue.getFailed('farm-1')).toHaveLength(1);
   });
 
@@ -643,7 +737,7 @@ describe('syncQueue web queue management', () => {
       status: 404,
     });
 
-    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
     expect(supabaseControl.rpc).toHaveBeenCalledWith('update_equipment_reading', expect.objectContaining({
       p_farm_id: 'farm-1',
     }));

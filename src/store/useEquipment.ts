@@ -93,10 +93,16 @@ export function useEquipment({
     payload: Record<string, unknown>,
   ): Promise<boolean> => {
     if (!farm_id) return false;
-    if (!isOnline) {
-      await syncQueue.enqueueMutation(table, operation, payload, farm_id);
-      if (onMutation) await onMutation();
-      return true;
+    if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: table, id: payload.id }])) {
+      try {
+        await syncQueue.enqueueMutation(table, operation, payload, farm_id);
+        if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
+        if (onMutation) await onMutation();
+        return true;
+      } catch (error) {
+        console.error('Failed to queue equipment change:', error);
+        return false;
+      }
     }
 
     try {
@@ -140,11 +146,17 @@ export function useEquipment({
     queue: { table: TableName; operation: Operation; payload: Record<string, unknown> },
   ): Promise<{ ok: boolean; data: unknown }> => {
     if (!farm_id) return { ok: false, data: null };
-    const payload = { ...queue.payload, [EQUIPMENT_RPC_KEY]: { rpc, args } };
-    if (!isOnline) {
-      await syncQueue.enqueueMutation(queue.table, queue.operation, payload, farm_id);
-      if (onMutation) await onMutation();
-      return { ok: true, data: null };
+    const payload: Record<string, unknown> = { ...queue.payload, [EQUIPMENT_RPC_KEY]: { rpc, args } };
+    if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: queue.table, id: payload.id }, ...(typeof args.p_equipment_id === 'string' ? [{ tableName: 'equipment', id: args.p_equipment_id }] : []), ...(typeof args.p_schedule_id === 'string' ? [{ tableName: 'maintenance_schedules', id: args.p_schedule_id }] : [])])) {
+      try {
+        await syncQueue.enqueueMutation(queue.table, queue.operation, payload, farm_id);
+        if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
+        if (onMutation) await onMutation();
+        return { ok: true, data: null };
+      } catch (error) {
+        console.error('Failed to queue equipment RPC:', error);
+        return { ok: false, data: null };
+      }
     }
     try {
       const response = await supabase.rpc(rpc, { ...args, p_farm_id: farm_id });

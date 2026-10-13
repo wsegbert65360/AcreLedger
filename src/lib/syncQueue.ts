@@ -3,12 +3,12 @@ import { supabase } from '@/lib/supabase';
 import { getDatabase, OFFLINE_DATABASE_UNAVAILABLE } from './offlineStorage';
 import { toast } from 'sonner';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
+import { SYNC_QUEUE_KEYS } from './syncQueueKeys';
+
+export { SYNC_QUEUE_KEYS } from './syncQueueKeys';
 
 const isNative = Capacitor.isNativePlatform();
-const WEB_QUEUE_KEY = 'al_sync_queue';
-const CORRUPT_QUEUE_KEY = 'al_sync_queue_corrupt';
-/** Keys that hold unsynced farmer work; never removed by a plain cache clear. */
-export const SYNC_QUEUE_KEYS = [WEB_QUEUE_KEY, CORRUPT_QUEUE_KEY] as const;
+const [WEB_QUEUE_KEY, CORRUPT_QUEUE_KEY] = SYNC_QUEUE_KEYS;
 /**
  * After this many permanent failures a queued change stops being retried and is
  * surfaced as "couldn't sync" (export / discard). It is never deleted silently.
@@ -149,8 +149,17 @@ async function saveWebQueue(queue: QueuedMutation[]) {
  * incrementRetry silently no-op. The caller still receives its own error via
  * the returned promise.
  */
-function runWebQueue<T>(fn: () => Promise<T>): Promise<T> {
-  const result = webQueuePromise.catch(() => {}).then(fn);
+const QUEUE_LOCK_TOKEN = Symbol('queue lock held');
+type QueueLockToken = typeof QUEUE_LOCK_TOKEN;
+
+function runWebQueue<T>(fn: () => Promise<T>, token?: QueueLockToken): Promise<T> {
+  // Only the drain passes this private token. Other callers always wait for
+  // the chain and the cross-tab lock, even while a drain is in progress.
+  if (token === QUEUE_LOCK_TOKEN) return fn();
+  const result = webQueuePromise.catch(() => {}).then(async () =>
+    typeof navigator !== 'undefined' && navigator.locks?.request
+      ? await navigator.locks.request('acreledger-sync-queue', fn)
+      : await fn());
   webQueuePromise = result.then(() => {}, () => {});
   return result;
 }
@@ -211,6 +220,17 @@ function expectedValueMatches(actual: unknown, expected: unknown): boolean {
       value === undefined || expectedValueMatches((actual as Record<string, unknown>)[key], value));
   }
   return Object.is(actual, expected) || equivalentTimestampStrings(actual, expected);
+}
+
+/** Atomic envelopes own every record they modify, not just their root row. */
+function mutationRecordKeys(mutation: QueuedMutation): string[] {
+  const keys = [`${mutation.table_name}:${String(mutation.payload?.id ?? mutation.id)}`];
+  const grain = mutation.payload?.[LINKED_GRAIN_MUTATION_KEY];
+  if (grain?.id) keys.push(`grain_movements:${grain.id}`);
+  const rpc = readEquipmentRpcEnvelope(mutation.payload);
+  if (rpc?.args.p_equipment_id) keys.push(`equipment:${rpc.args.p_equipment_id}`);
+  if (rpc?.args.p_schedule_id) keys.push(`maintenance_schedules:${rpc.args.p_schedule_id}`);
+  return keys;
 }
 
 interface LinkedHarvestReplay {
@@ -322,8 +342,7 @@ export const syncQueue = {
       const secret = await getEncryptionSecret();
       const recovered = JSON.parse(await decryptData(raw, secret));
       if (!Array.isArray(recovered)) throw new Error('Recovered queue is not an array');
-      await saveWebQueue(recovered as QueuedMutation[]);
-      webQueuePromise = Promise.resolve();
+      await runWebQueue(() => saveWebQueue(recovered as QueuedMutation[]));
       corruptQueueToastShown = false;
       toast.success('Offline changes recovered. They are ready to sync.');
       return true;
@@ -449,7 +468,7 @@ export const syncQueue = {
   /**
    * Retrieves all pending mutations for a specific farm.
    */
-  getQueue: async (farmId: string): Promise<QueuedMutation[]> => {
+  getQueue: async (farmId: string, token?: QueueLockToken): Promise<QueuedMutation[]> => {
     if (isNative) {
       const db = await getDatabase();
       if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
@@ -459,10 +478,20 @@ export const syncQueue = {
           [farmId]
         );
         if (res.values) {
-          return res.values.map((v: any) => ({
-            ...v,
-            payload: JSON.parse(v.payload)
-          }));
+          const rows: QueuedMutation[] = [];
+          for (const v of res.values) {
+            try {
+              rows.push({ ...v, payload: JSON.parse(v.payload) });
+            } catch (error) {
+              // Quarantine only this row in place. Preserve its original bytes
+              // for export; unrelated valid rows can still drain.
+              console.error('Quarantined corrupt native sync row:', v.id, error);
+              await db.run('UPDATE sync_queue SET retry_count = ? WHERE id = ?;', [MAX_SYNC_RETRIES, v.id]);
+              rows.push({ ...v, retry_count: MAX_SYNC_RETRIES,
+                payload: { __corrupt_native_payload: v.payload } });
+            }
+          }
+          return rows;
         }
       } catch (err) {
         console.error('Failed to fetch native sync queue:', err);
@@ -474,9 +503,9 @@ export const syncQueue = {
       await runWebQueue(async () => {
         const queue = await getWebQueue();
         result = queue.filter(item => item.farm_id === farmId);
-      }).catch(err => {
+      }, token).catch(err => {
         console.error('Failed to serialize web sync queue getQueue:', err);
-        if (err instanceof WebSyncQueueUnreadableError) throw err;
+        throw err;
       });
       return result;
     }
@@ -506,23 +535,24 @@ export const syncQueue = {
   /**
    * Removes a mutation from the queue.
    */
-  dequeueMutation: async (id: string): Promise<void> => {
+  dequeueMutation: async (id: string, token?: QueueLockToken): Promise<void> => {
     if (isNative) {
       try {
         const db = await getDatabase();
-        if (db) {
-          await db.run('DELETE FROM sync_queue WHERE id = ?;', [id]);
-        }
+        if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
+        await db.run('DELETE FROM sync_queue WHERE id = ?;', [id]);
       } catch (err) {
         console.error('Failed to dequeue native mutation:', err);
+        throw err;
       }
     } else {
       await runWebQueue(async () => {
         const queue = await getWebQueue();
         const updated = queue.filter(item => item.id !== id);
         await saveWebQueue(updated);
-      }).catch(err => {
+      }, token).catch(err => {
         console.error('Failed to serialize web sync queue dequeue:', err);
+        throw err;
       });
     }
   },
@@ -531,7 +561,7 @@ export const syncQueue = {
    * Increments the retry count for a queued mutation.
    */
   /** Stops a permanent equipment-RPC failure from being retried. */
-  parkMutation: async (id: string): Promise<void> => {
+  parkMutation: async (id: string, token?: QueueLockToken): Promise<void> => {
     if (isNative) {
       try {
         const db = await getDatabase();
@@ -549,13 +579,13 @@ export const syncQueue = {
           queue[idx].retry_count = MAX_SYNC_RETRIES;
           await saveWebQueue(queue);
         }
-      }).catch(err => {
+      }, token).catch(err => {
         console.error('Failed to park web sync mutation:', err);
       });
     }
   },
 
-  incrementRetry: async (id: string, currentRetries: number): Promise<void> => {
+  incrementRetry: async (id: string, currentRetries: number, token?: QueueLockToken): Promise<void> => {
     if (isNative) {
       try {
         const db = await getDatabase();
@@ -573,7 +603,7 @@ export const syncQueue = {
           queue[idx].retry_count += 1;
           await saveWebQueue(queue);
         }
-      }).catch(err => {
+      }, token).catch(err => {
         console.error('Failed to serialize web sync queue increment retry:', err);
       });
     }
@@ -603,7 +633,7 @@ export const syncQueue = {
         result = queue.filter(item => item.farm_id === farmId).length;
       }).catch(err => {
         console.error('Failed to serialize web sync queue getPendingCount:', err);
-        if (err instanceof WebSyncQueueUnreadableError) throw err;
+        throw err;
       });
       return result;
     }
@@ -622,11 +652,51 @@ export const syncQueue = {
     return failed.length;
   },
 
+  /** Use the existing enqueue/rollback path when an older write owns a row.
+   * A locked queue fails closed: enqueue will surface the storage error. */
+  shouldQueueWrite: async (
+    online: boolean,
+    farmId: string,
+    records: { tableName: string; id: unknown }[],
+  ): Promise<boolean> => {
+    if (!online) return true;
+    try {
+      const queue = await syncQueue.getQueue(farmId);
+      return records.some(record => queue.some(item =>
+        mutationRecordKeys(item).includes(`${record.tableName}:${String(record.id)}`)));
+    } catch {
+      return true;
+    }
+  },
+
+  /** Called after an online write was deferred behind older queued work. */
+  kickReplay: (farmId: string, onMutation?: () => void | Promise<void>): void => {
+    void syncQueue.replayQueue(farmId).catch(error => {
+      console.error('Deferred sync replay failed:', error);
+    }).then(() => onMutation?.()).catch(error => console.error('Failed to refresh sync status:', error));
+  },
+
+  retryFailed: async (farmId: string): Promise<void> => {
+    if (isNative) {
+      const db = await getDatabase();
+      if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
+      await db.run('UPDATE sync_queue SET retry_count = 0 WHERE farm_id = ? AND retry_count >= ?;', [farmId, MAX_SYNC_RETRIES]);
+    } else {
+      await runWebQueue(async () => {
+        const queue = await getWebQueue();
+        for (const item of queue) {
+          if (item.farm_id === farmId && item.retry_count >= MAX_SYNC_RETRIES) item.retry_count = 0;
+        }
+        await saveWebQueue(queue);
+      });
+    }
+  },
+
   /**
    * Replays the queued mutations to Supabase in FIFO order.
-   * Returns true only if the entire queue was processed. A transient pause or
-   * a permanent rejection that remains queued returns false so callers do not
-   * replace optimistic local records with a cloud snapshot that lacks them.
+   * Returns true only if no queued work remains, including parked work.
+   * Callers may still fetch cloud data, but must overlay the remaining queue
+   * before replacing local state or persisting the refreshed cache.
    *
    * Overlapping replays (reconnect during a long drain, farm switch) would
    * otherwise double-apply inserts. A concurrent caller records its farmId
@@ -645,7 +715,18 @@ export const syncQueue = {
         let result = true;
         while (currentFarmId) {
           trailingReplayFarmId = null;
-          result = await replayQueueOnce(currentFarmId, false);
+          const drainFarmId = currentFarmId;
+          let drained = false;
+          try {
+            result = isNative
+              ? await replayQueueOnce(drainFarmId, false)
+              : await runWebQueue(() => replayQueueOnce(drainFarmId, false, QUEUE_LOCK_TOKEN));
+            drained = result;
+          } finally {
+            window.dispatchEvent(new CustomEvent('acreledger:sync-replayed', {
+              detail: { farmId: drainFarmId, drained },
+            }));
+          }
           currentFarmId = trailingReplayFarmId;
         }
         return result;
@@ -662,20 +743,31 @@ export const syncQueue = {
 let inFlightReplay: Promise<boolean> | null = null;
 let trailingReplayFarmId: string | null = null;
 
-async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<boolean> {
-    const queue = await syncQueue.getQueue(farmId);
+async function replayQueueOnce(farmId: string, authRetried: boolean, token?: QueueLockToken): Promise<boolean> {
+    const queue = await syncQueue.getQueue(farmId, token);
     if (queue.length === 0) return true;
 
     console.log(`Replaying sync queue: ${queue.length} mutations pending.`);
     let pendingRetryCount = 0;
     let failedParkedCount = 0;
 
+    const blockedRecords = new Set<string>();
+    const blockRecord = (item: QueuedMutation) => {
+      for (const key of mutationRecordKeys(item)) blockedRecords.add(key);
+    };
     const handledMutationIds = new Set<string>();
     for (const mutation of queue) {
       if (handledMutationIds.has(mutation.id)) continue;
+      if (mutationRecordKeys(mutation).some(key => blockedRecords.has(key))) {
+        blockRecord(mutation);
+        pendingRetryCount++;
+        continue;
+      }
       if (!ALLOWED_TABLES.has(mutation.table_name)) {
         console.warn(`Discarding sync mutation: invalid table name ${mutation.table_name}`);
-        await syncQueue.dequeueMutation(mutation.id);
+        try {
+          await syncQueue.dequeueMutation(mutation.id, token);
+        } catch { return false; }
         continue;
       }
       
@@ -697,6 +789,8 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
         id => (queue.find(item => item.id === id)?.retry_count ?? 0) >= MAX_SYNC_RETRIES,
       );
       if (exhausted) {
+        blockRecord(mutation);
+        if (linkedHarvest?.legacyGrainMutation) blockRecord(linkedHarvest.legacyGrainMutation);
         for (const id of linkedMutationIds) handledMutationIds.add(id);
         failedParkedCount++;
         continue;
@@ -785,7 +879,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             response.count === 0
             && await reconcileZeroRowMutation(mutation, farmId)
           ) {
-            await syncQueue.dequeueMutation(mutation.id);
+            await syncQueue.dequeueMutation(mutation.id, token);
             continue;
           }
           response = {
@@ -799,8 +893,17 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
         }
 
         if (response.error) {
+          if (['PGRST204', '42703', '42501'].includes(response.error.code?.toUpperCase())) {
+            blockRecord(mutation);
+            pendingRetryCount++;
+            toast.warning('Sync paused: an app or server fix is needed.', {
+              description: 'Your changes remain on this device. Retry after the fix is available.',
+            });
+            continue;
+          }
           if (usedEquipmentRpc && isNonRetryableEquipmentRpcError(response.error)) {
-            await syncQueue.parkMutation(mutation.id);
+            blockRecord(mutation);
+            await syncQueue.parkMutation(mutation.id, token);
             handledMutationIds.add(mutation.id);
             failedParkedCount++;
             toast.error('An offline equipment change could not be synced.', {
@@ -817,7 +920,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
               try {
                 const { data, error: refreshError } = await supabase.auth.refreshSession();
                 if (!refreshError && data?.session) {
-                  return replayQueueOnce(farmId, true);
+                  return replayQueueOnce(farmId, true, token);
                 }
               } catch (refreshErr) {
                 console.warn('Session refresh failed during sync replay:', refreshErr);
@@ -836,7 +939,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             && response.error.code === '23505'
             && await reconcileDuplicateInsert(mutation, farmId)
           ) {
-            await syncQueue.dequeueMutation(mutation.id);
+            await syncQueue.dequeueMutation(mutation.id, token);
             continue;
           }
 
@@ -848,13 +951,16 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             // Permanent error (e.g. RLS failure, constraint error)
             console.error(`Sync queue permanent mutation failure for ${mutation.table_name}:`, response.error);
 
+            blockRecord(mutation);
+            if (linkedHarvest?.legacyGrainMutation) blockRecord(linkedHarvest.legacyGrainMutation);
             const nextRetries = mutation.retry_count + 1;
             for (const id of linkedMutationIds) {
               const queued = queue.find(item => item.id === id);
-              if (queued) await syncQueue.incrementRetry(id, queued.retry_count);
+              if (queued) await syncQueue.incrementRetry(id, queued.retry_count, token);
               handledMutationIds.add(id);
             }
-            pendingRetryCount++;
+            if (nextRetries >= MAX_SYNC_RETRIES) failedParkedCount++;
+            else pendingRetryCount++;
             if (nextRetries === MAX_SYNC_RETRIES) {
               toast.error(`An offline change to ${mutation.table_name} could not be synced.`, {
                 description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
@@ -870,7 +976,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
         } else {
           // Success: remove mutation from queue
           for (const id of linkedMutationIds) {
-            await syncQueue.dequeueMutation(id);
+            await syncQueue.dequeueMutation(id, token);
             handledMutationIds.add(id);
           }
         }
@@ -882,18 +988,14 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
 
     // The completion toast must not claim everything uploaded when items were
     // skipped or discarded mid-drain.
-    if (pendingRetryCount > 0) {
+    if (pendingRetryCount > 0 || failedParkedCount > 0) {
       const parts: string[] = [];
       if (pendingRetryCount > 0) parts.push(`${pendingRetryCount} still pending retry`);
-      toast.warning('Sync finished with unfinished items.', { description: `${parts.join('; ')}. They will retry on the next sync.` });
-    } else if (failedParkedCount > 0) {
-      toast.warning(`${failedParkedCount} change${failedParkedCount === 1 ? '' : 's'} could not sync.`, {
-        description: 'Open Settings → Cloud Sync to export or discard them.',
-      });
+      if (failedParkedCount > 0) parts.push(`${failedParkedCount} parked, needs attention`);
+      toast.warning('Sync finished with unfinished items.', { description: `${parts.join('; ')}. Open Settings → Cloud Sync for retry or recovery.` });
     } else {
       toast.success('Sync complete. All offline changes uploaded.');
     }
-    // Parked items stay in the queue for Settings → Cloud Sync. They must not
-    // freeze fetchData for every other table; equipment fetch re-applies them.
-    return pendingRetryCount === 0;
+    // Parked items remain visible via the store's queue overlay and Settings.
+    return (await syncQueue.getQueue(farmId, token)).length === 0;
 }

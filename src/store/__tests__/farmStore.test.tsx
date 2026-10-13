@@ -26,6 +26,9 @@ const ensureFarmMock = vi.fn();
 const authSetLoading = vi.fn();
 const clearLocalCacheMock = vi.fn();
 const getPendingCountMock = vi.fn().mockResolvedValue(0);
+const getQueueMock = vi.fn().mockResolvedValue([]);
+const getFailedMock = vi.fn().mockResolvedValue([]);
+const retryFailedMock = vi.fn().mockResolvedValue(undefined);
 const replayQueueMock = vi.fn().mockResolvedValue(true);
 const loadCacheMock = vi.fn();
 const saveCacheMock = vi.fn();
@@ -92,7 +95,14 @@ vi.doMock('@/store/useSeasonManagement', () => ({
 }));
 
 vi.doMock('@/lib/syncQueue', () => ({
+  WebSyncQueueUnreadableError: class WebSyncQueueUnreadableError extends Error {},
+  MAX_SYNC_RETRIES: 10,
+  LINKED_GRAIN_MUTATION_KEY: '__linked_grain_movement',
+  readEquipmentRpcEnvelope: () => null,
   syncQueue: {
+    getQueue: getQueueMock,
+    getFailed: getFailedMock,
+    retryFailed: retryFailedMock,
     getPendingCount: getPendingCountMock,
     replayQueue: replayQueueMock,
   },
@@ -151,6 +161,9 @@ describe('farmStore composed behaviors', () => {
     clearLocalCacheMock.mockReset();
     getPendingCountMock.mockReset().mockResolvedValue(0);
     replayQueueMock.mockReset().mockResolvedValue(true);
+    getQueueMock.mockReset().mockResolvedValue([]);
+    getFailedMock.mockReset().mockResolvedValue([]);
+    retryFailedMock.mockReset().mockResolvedValue(undefined);
     loadCacheMock.mockReset().mockImplementation((table: string, userId: string | null) =>
       Promise.resolve(cacheControl.load
         ? cacheControl.load(table, userId)
@@ -367,6 +380,63 @@ describe('farmStore composed behaviors', () => {
   });
 
   describe('fetchData', () => {
+    it('refresh replays then fetches even with pending work and caches the queued overlay', async () => {
+      control.isOnline = true;
+      replayQueueMock.mockResolvedValue(false);
+      getPendingCountMock.mockResolvedValue(1);
+      getQueueMock.mockResolvedValue([{
+        id: 'q1', table_name: 'fields', operation: 'insert', farm_id: 'farm-1', retry_count: 0,
+        payload: { id: 'local-field', farm_id: 'farm-1', name: 'Local field', acreage: 40, deleted_at: null },
+      }]);
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm' }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.fields[0].name).toBe('Local field');
+      expect(result.current.farmName).toBe('Cloud Farm');
+      expect(result.current.lastSync).toBeNull();
+      replayQueueMock.mockClear();
+      cloud.fns.from.mockClear();
+      await act(async () => { expect(await result.current.refresh()).toBe(true); });
+      expect(replayQueueMock).toHaveBeenCalledWith('farm-1');
+      expect(replayQueueMock.mock.invocationCallOrder[0]).toBeLessThan(cloud.fns.from.mock.invocationCallOrder[0]);
+      await waitFor(() => expect(saveCacheMock).toHaveBeenCalledWith('fields', 'user-1', expect.arrayContaining([expect.objectContaining({ id: 'local-field', name: 'Local field' })])));
+    });
+
+    it('loads cloud on an unreadable web queue while reporting status unknown', async () => {
+      control.isOnline = true;
+      const { WebSyncQueueUnreadableError } = await import('@/lib/syncQueue');
+      const error = new WebSyncQueueUnreadableError();
+      replayQueueMock.mockRejectedValue(error);
+      getQueueMock.mockRejectedValue(error);
+      getPendingCountMock.mockRejectedValue(error);
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm' }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.syncQueueLocked).toBe(true);
+      expect(result.current.farmName).toBe('Cloud Farm');
+      expect(result.current.lastSync).toBeNull();
+    });
+
+    it('refreshes parked counts after background replay and timestamps only an empty drain', async () => {
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      getPendingCountMock.mockResolvedValue(2);
+      getFailedMock.mockResolvedValue([{ id: 'parked' }]);
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('acreledger:sync-replayed', { detail: { farmId: 'farm-1', drained: false } }));
+      });
+      await waitFor(() => expect(result.current.failedSyncCount).toBe(1));
+      expect(result.current.pendingSyncCount).toBe(1);
+      expect(result.current.lastSync).toBeNull();
+      getPendingCountMock.mockResolvedValue(0);
+      getFailedMock.mockResolvedValue([]);
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('acreledger:sync-replayed', { detail: { farmId: 'farm-1', drained: true } }));
+      });
+      await waitFor(() => expect(result.current.pendingSyncCount).toBe(0));
+      expect(result.current.lastSync).toBeInstanceOf(Date);
+    });
+
     it('short-circuits offline without touching Supabase', async () => {
       const { result } = renderHook(() => useFarm(), { wrapper });
 
