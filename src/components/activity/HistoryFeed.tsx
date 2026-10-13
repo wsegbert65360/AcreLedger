@@ -1,8 +1,11 @@
-import { ActivityRecord } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
+import { grainCardText, harvestCardText } from '@/lib/activityDisplay';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences, type LocaleCode } from '@/store/useAppPreferences';
+import { ActivityRecord } from '@/types/farm';
 import { formatIsoDate, formatDate } from '@/utils/dates';
 import { cleanName } from '@/utils/text';
-import { grainCardText, harvestCardText } from '@/lib/activityDisplay';
+
 
 interface HistoryFeedProps {
   records: ActivityRecord[];
@@ -14,7 +17,7 @@ interface HistoryFeedProps {
   binNames?: Record<string, string>;
 }
 
-function getRecordInfo(record: ActivityRecord, binNames?: Record<string, string>) {
+function getRecordInfo(record: ActivityRecord, binNames: Record<string, string> | undefined, locale: LocaleCode) {
   const { type, data } = record;
   
   switch (type) {
@@ -41,7 +44,7 @@ function getRecordInfo(record: ActivityRecord, binNames?: Record<string, string>
       };
     }
     case 'harvest':
-      return harvestCardText(data, data.binId ? binNames?.[data.binId] : undefined);
+      return harvestCardText(data, data.binId ? binNames?.[data.binId] : undefined, locale);
     case 'hay': {
       const r = data;
       return {
@@ -74,7 +77,7 @@ function getRecordInfo(record: ActivityRecord, binNames?: Record<string, string>
       };
     }
     case 'grain':
-      return grainCardText(data);
+      return grainCardText(data, locale);
     case 'tillage': {
       const r = data;
       return {
@@ -95,6 +98,9 @@ function getRecordInfo(record: ActivityRecord, binNames?: Record<string, string>
 }
 
 export default function HistoryFeed({ records, selected, onToggle, onEdit, onDuplicate, binNames }: HistoryFeedProps) {
+  const { session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
+
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -106,7 +112,7 @@ export default function HistoryFeed({ records, selected, onToggle, onEdit, onDup
   return (
     <div className="space-y-2">
       {records.map((record, idx) => {
-        const info = getRecordInfo(record, binNames);
+        const info = getRecordInfo(record, binNames, preferences.locale);
         const id = record.data.id;
         return (
           <RecordListItem

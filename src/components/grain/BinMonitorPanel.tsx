@@ -1,6 +1,8 @@
 import { AlertTriangle, CalendarClock, Database, Hash, type LucideIcon, TrendingUp, Warehouse } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
 import type { Bin, GrainMovement } from '@/types/farm';
 import { formatDate } from '@/utils/dates';
 import { CAPACITY_LEVEL_STYLES, type CapacityLevel, formatMeasurement, getCapacityLevel, roundTo } from '@/utils/numbers';
@@ -87,6 +89,8 @@ function MetaCard({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
 }
 
 export default function BinMonitorPanel({ bin }: { bin: BinMonitorPanelData }) {
+  const { session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const level = getCapacityLevel(bin.pct);
   const status = CAPACITY_LEVEL_STYLES[level];
   const safeCurrentBushels = roundTo(bin.total, 1);
@@ -128,7 +132,7 @@ export default function BinMonitorPanel({ bin }: { bin: BinMonitorPanelData }) {
                   <TrendingUp size={14} className="text-harvest dark:text-amber-300" />
                   <span>Fill trend, last 7 days</span>
                 </div>
-                <span className="font-mono text-foreground dark:text-slate-200">{formatMeasurement(safeCurrentBushels, 'bu', 1)}</span>
+                <span className="font-mono text-foreground dark:text-slate-200">{formatMeasurement(safeCurrentBushels, 'bu', 1, preferences.locale)}</span>
               </div>
               <svg className="h-28 w-full overflow-visible" viewBox={`0 0 ${TREND_WIDTH} ${TREND_VIEWBOX_HEIGHT}`} role="img" aria-label="Seven day bin fill trend">
                 <defs>
@@ -166,8 +170,8 @@ export default function BinMonitorPanel({ bin }: { bin: BinMonitorPanelData }) {
             <div className="grid gap-2 sm:grid-cols-2">
               <MetaCard icon={Hash} label="Bin ID" value={bin.id.slice(0, 8)} />
               <MetaCard icon={CalendarClock} label="Last fill" value={lastFillLabel} />
-              <MetaCard icon={Database} label="Capacity" value={formatMeasurement(safeCapacity, 'bu', 1)} />
-              <MetaCard icon={Warehouse} label="Current level" value={formatMeasurement(safeCurrentBushels, 'bu', 1)} />
+              <MetaCard icon={Database} label="Capacity" value={formatMeasurement(safeCapacity, 'bu', 1, preferences.locale)} />
+              <MetaCard icon={Warehouse} label="Current level" value={formatMeasurement(safeCurrentBushels, 'bu', 1, preferences.locale)} />
             </div>
           </div>
         </div>

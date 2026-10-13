@@ -64,9 +64,10 @@ function useAddFertilizerRecord({ farm_id, viewingSeason, fields, setFertilizerA
     setFertilizerApplications(prev => [...prev, newRecord]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fertilizer_applications', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('fertilizer_applications', 'insert', { ...mapped, farm_id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Fertilizer application recorded offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -166,9 +167,10 @@ function useUpdateFertilizerRecord({ farm_id, fields, fertilizerApplications, se
     setFertilizerApplications(prev => prev.map(item => item.id === r.id ? updatedRecord : item));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fertilizer_applications', id: r.id }])) {
         try {
           await syncQueue.enqueueMutation('fertilizer_applications', 'update', { ...mapped, id: r.id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Fertilizer application updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -265,13 +267,14 @@ function useDeleteFertilizerRecord({ farm_id, fertilizerApplications, setFertili
     setFertilizerApplications(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, ids.map(id => ({ tableName: 'fertilizer_applications', id })))) {
         try {
           const deletedAt = new Date().toISOString();
           await syncQueue.enqueueMutations(ids.map(id => ({
             tableName: 'fertilizer_applications', operation: 'soft_delete' as const,
             payload: { id, deleted_at: deletedAt }, farmId: farm_id,
           })));
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

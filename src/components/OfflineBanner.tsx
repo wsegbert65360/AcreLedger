@@ -5,13 +5,15 @@ import { WifiOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { useFarm } from '@/store/farmStore';
 
 export default function OfflineBanner() {
-  const { isOnline, pendingSyncCount } = useFarm();
+  const { isOnline, pendingSyncCount, failedSyncCount = 0, syncQueueLocked } = useFarm();
   const [showStatus, setShowStatus] = useState<'offline' | 'syncing' | 'synced' | 'hidden'>('hidden');
   const prevIsOnline = useRef(isOnline);
   const prevCount = useRef(pendingSyncCount);
 
   useEffect(() => {
-    if (!isOnline) {
+    if (syncQueueLocked || failedSyncCount > 0) {
+      setShowStatus('hidden');
+    } else if (!isOnline) {
       setShowStatus('offline');
     } else {
       // We are online
@@ -31,7 +33,16 @@ export default function OfflineBanner() {
 
     prevIsOnline.current = isOnline;
     prevCount.current = pendingSyncCount;
-  }, [isOnline, pendingSyncCount]);
+  }, [isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked]);
+
+  if (syncQueueLocked || failedSyncCount > 0) {
+    return (
+      <div role="status" aria-live="polite" className="relative z-[100] bg-amber-500 text-amber-950 flex items-center justify-center gap-2 py-2 px-4 text-xs font-bold lg:pl-60 print:hidden">
+        <WifiOff size={14} />
+        <span>{syncQueueLocked ? 'Offline changes locked — sync status unknown' : `${failedSyncCount} change${failedSyncCount === 1 ? ' needs' : 's need'} attention. Open Settings → Cloud Sync.`}</span>
+      </div>
+    );
+  }
 
   if (showStatus === 'hidden') return null;
 
@@ -47,8 +58,8 @@ export default function OfflineBanner() {
       : 'You are offline — changes will sync when reconnected';
   } else if (showStatus === 'syncing') {
     bgClass = 'bg-primary text-primary-foreground';
-    icon = <Loader2 size={14} className="animate-spin" />;
-    text = `Syncing changes (${pendingSyncCount} remaining)...`;
+    icon = <Loader2 size={14} />;
+    text = `${pendingSyncCount} changes pending sync`;
   } else if (showStatus === 'synced') {
     bgClass = 'bg-emerald-600 text-white';
     icon = <CheckCircle2 size={14} />;

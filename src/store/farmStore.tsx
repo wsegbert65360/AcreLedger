@@ -13,6 +13,7 @@ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import type { SignOutResult, SignOutScope } from '@/lib/authSignOut';
 import { buildSeasonOptions, getMaxViewingSeason, isValidViewingSeason } from '@/lib/seasonYears';
 
 import { getSignedBushels, roundTo } from '@/utils/numbers';
@@ -34,7 +35,8 @@ import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
-import { syncQueue } from '../lib/syncQueue';
+import { syncQueue, WebSyncQueueUnreadableError, type QueuedMutation } from '../lib/syncQueue';
+import { overlayQueuedRows } from '@/lib/queuedSnapshot';
 
 /**
  * Represents the global state and operations for the AcreLedger application.
@@ -48,6 +50,9 @@ interface FarmState {
   pendingSyncCount: number;
   /** Queued changes that exhausted their retries and need export or discard. */
   failedSyncCount: number;
+  syncQueueLocked: boolean;
+  lastSync: Date | null;
+  retryFailedSyncChanges: () => Promise<void>;
   getFailedSyncChanges: () => Promise<unknown[]>;
   discardFailedSyncChanges: () => Promise<number>;
   /** Global loading state for data fetching */
@@ -164,8 +169,9 @@ interface FarmState {
   addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id' | 'farm_id'>) => Promise<boolean>;
   updateFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'farm_id'>) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
-  /** Global sign out and cache clearing */
-  signOut: (options?: ClearLocalCacheOptions) => Promise<void>;
+  /** This-device sign out and cache clearing; deletion can request global scope. */
+  deletionStatus: 'checking' | 'clear' | 'pending' | 'error';
+  signOut: (options?: ClearLocalCacheOptions & { scope?: SignOutScope; preserveLocalData?: boolean }) => Promise<SignOutResult>;
   /** Clears all local application storage */
   clearLocalCache: (options?: ClearLocalCacheOptions) => Promise<boolean>;
   /** Unique ID for the current farm */
@@ -228,10 +234,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     farm_id, setFarmId,
     activeSeason, setActiveSeason,
     viewingSeason, setViewingSeason,
-    onboardingComplete, setOnboardingComplete,
+    onboardingComplete, setOnboardingComplete, ensureFarm,
   } = auth;
   const sessionResolved = session !== undefined;
   const sessionUserId = session?.user?.id ?? null;
+  const sessionUserIdRef = useRef(sessionUserId);
+  sessionUserIdRef.current = sessionUserId;
   const identityKey = sessionUserId && farm_id ? `${sessionUserId}:${farm_id}` : null;
 
   const [farmName, setFarmName] = useState<string | null>(null);
@@ -261,6 +269,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const { isOnline } = useNetworkStatus();
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [failedSyncCount, setFailedSyncCount] = useState(0);
+  const [syncQueueLocked, setSyncQueueLocked] = useState(true);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [stateOwnerKey, setStateOwnerKey] = useState<string | null>(null);
   // True once the authoritative initial data load has settled for this session.
@@ -310,14 +320,16 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           // account deletion forever.
           setPendingSyncCount(Math.max(0, count - failed.length));
           setFailedSyncCount(failed.length);
+          setSyncQueueLocked(false);
         }
       } catch (err) {
         console.error('Failed to read pending sync count:', err);
-        // Leave the previous count. An unreadable store must not look empty.
+        if (identityRef.current === requestIdentity) setSyncQueueLocked(true);
       }
     } else {
       setPendingSyncCount(0);
       setFailedSyncCount(0);
+      setSyncQueueLocked(false);
     }
   }, [farm_id, identityKey]);
 
@@ -354,6 +366,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setStateOwnerKey(null);
     setFetchError(false);
     setPendingSyncCount(0);
+    setFailedSyncCount(0);
+    setSyncQueueLocked(!!identityKey);
+    setLastSync(null);
     clearFarmData();
 
     if (!identityKey || !sessionUserId) {
@@ -573,40 +588,42 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             return false;
           }
 
-          const fieldsData = fieldsPages.rows;
-          const binsData = binsPages.rows;
-          const plantData = plantPages.rows;
-          const sprayData = sprayPages.rows;
-          const harvestData = harvestPages.rows;
-          const hayData = hayPages.rows;
-          const customSprayData = customSprayPages.rows;
-          const fertilizerData = fertilizerPages.rows;
-          const tillageData = tillagePages.rows;
-          const grainData = grainPages.rows;
-          const seedsData = seedsPages.rows;
-          const fertilizerRecipesData = fertilizerRecipesPages.rows;
-          const recipesData = recipesPages.rows;
-          const tractsData = tractsPages.rows;
-          const assignmentsData = assignmentsPages.rows;
-          const workRequestsData = workRequestsPages.rows;
+          let queued: QueuedMutation[] = [];
+          try {
+            queued = await syncQueue.getQueue(farm_id);
+          } catch (error) {
+            if (!isOfflineDatabaseUnavailableError(error) && !(error instanceof WebSyncQueueUnreadableError)) throw error;
+            console.error('Offline changes remain locked; loading cloud snapshot:', error);
+            if (isCurrentRequest()) setSyncQueueLocked(true);
+          }
+          if (!isCurrentRequest()) return false;
+          const fieldsData = overlayQueuedRows('fields', fieldsPages.rows, queued, farm_id);
+          const binsData = overlayQueuedRows('bins', binsPages.rows, queued, farm_id);
+          const plantData = overlayQueuedRows('plant_records', plantPages.rows, queued, farm_id);
+          const sprayData = overlayQueuedRows('spray_records', sprayPages.rows, queued, farm_id);
+          const harvestData = overlayQueuedRows('harvest_records', harvestPages.rows, queued, farm_id);
+          const hayData = overlayQueuedRows('hay_harvest_records', hayPages.rows, queued, farm_id);
+          const customSprayData = overlayQueuedRows('custom_spray_records', customSprayPages.rows, queued, farm_id);
+          const fertilizerData = overlayQueuedRows('fertilizer_applications', fertilizerPages.rows, queued, farm_id);
+          const tillageData = overlayQueuedRows('tillage_records', tillagePages.rows, queued, farm_id);
+          const grainData = overlayQueuedRows('grain_movements', grainPages.rows, queued, farm_id);
+          const seedsData = overlayQueuedRows('saved_seeds', seedsPages.rows, queued, farm_id);
+          const fertilizerRecipesData = overlayQueuedRows('fertilizer_recipes', fertilizerRecipesPages.rows, queued, farm_id);
+          const recipesData = overlayQueuedRows('spray_recipes', recipesPages.rows, queued, farm_id);
+          const tractsData = overlayQueuedRows('fsa_tract_imports', tractsPages.rows, queued, farm_id);
+          const assignmentsData = overlayQueuedRows('field_clu_assignments', assignmentsPages.rows, queued, farm_id);
+          const workRequestsData = overlayQueuedRows('work_requests', workRequestsPages.rows, queued, farm_id);
           let equipmentMapped: Equipment[] | null = null;
           let schedulesMapped: MaintenanceSchedule[] | null = null;
           let logsMapped: MaintenanceLog[] | null = null;
           if (equipmentLoaded) {
-            equipmentMapped = equipmentPages.rows.map(mapEquipmentFromDb);
-            schedulesMapped = maintenanceSchedulesPages.rows.map(mapMaintenanceScheduleFromDb);
-            logsMapped = maintenanceLogsPages.rows.map(mapMaintenanceLogFromDb);
-            try {
-              const parked = await syncQueue.getFailed(farm_id);
-              if (parked.length > 0) {
-                const merged = applyParkedEquipmentMutations(equipmentMapped, schedulesMapped, logsMapped, parked);
-                equipmentMapped = merged.equipment;
-                schedulesMapped = merged.schedules;
-                logsMapped = merged.logs;
-              }
-            } catch (error) {
-              console.error('Failed to re-apply parked equipment changes:', error);
-            }
+            equipmentMapped = overlayQueuedRows('equipment', equipmentPages.rows, queued, farm_id).map(mapEquipmentFromDb);
+            schedulesMapped = overlayQueuedRows('maintenance_schedules', maintenanceSchedulesPages.rows, queued, farm_id).map(mapMaintenanceScheduleFromDb);
+            logsMapped = overlayQueuedRows('maintenance_logs', maintenanceLogsPages.rows, queued, farm_id).map(mapMaintenanceLogFromDb);
+            const merged = applyParkedEquipmentMutations(equipmentMapped, schedulesMapped, logsMapped, queued, true);
+            equipmentMapped = merged.equipment;
+            schedulesMapped = merged.schedules;
+            logsMapped = merged.logs;
           }
 
           setFields(fieldsData.map(mapFieldFromDb));
@@ -656,41 +673,52 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     fetchDataRef.current = fetchData;
   });
 
-  // Initial/reconnect ordering is deliberate: cache hydration settles first,
-  // then queued local writes replay, then the complete cloud snapshot becomes
-  // authoritative. This prevents a slow cache from overwriting newer results.
+  const refresh = useCallback(async (): Promise<boolean> => {
+    if (!farm_id || !identityKey || !cacheHydrated) return false;
+    const refreshIdentity = identityKey;
+    if (isOnline) {
+      try {
+        const drained = await syncQueue.replayQueue(farm_id);
+        if (drained && identityRef.current === refreshIdentity) setLastSync(new Date());
+      } catch (error) {
+        if (!isOfflineDatabaseUnavailableError(error) && !(error instanceof WebSyncQueueUnreadableError)) {
+          console.error('Sync replay failed; loading with queued changes preserved:', error);
+        }
+      } finally {
+        await updatePendingSyncCount();
+      }
+    }
+    if (identityRef.current !== refreshIdentity) return false;
+    return fetchDataRef.current();
+  }, [cacheHydrated, farm_id, identityKey, isOnline, updatePendingSyncCount]);
+
+  const retryFailedSyncChanges = useCallback(async () => {
+    if (!farm_id) return;
+    await syncQueue.retryFailed(farm_id);
+    await refresh();
+  }, [farm_id, refresh]);
+
   useEffect(() => {
     if (!cacheHydrated || !identityKey || !farm_id) return;
     if (!isOnline) {
       setInitialFetchComplete(true);
       return;
     }
+    void refresh().catch(error => console.error('Initial sync and load failed:', error));
+  }, [cacheHydrated, farm_id, identityKey, isOnline, refresh]);
 
-    const loadIdentity = identityKey;
-    let cancelled = false;
-    const loadAuthoritativeState = async () => {
-      let replayed = false;
-      try {
-        replayed = await syncQueue.replayQueue(farm_id);
-      } catch (err) {
-        if (!isOfflineDatabaseUnavailableError(err)) throw err;
-        // Sealed phone store: keep the queue untouched and still load cloud records.
-        console.error('Offline store unavailable; loading cloud records without replay:', err);
-        replayed = true;
-      }
-      if (cancelled || identityRef.current !== loadIdentity) return;
-      await updatePendingSyncCount();
-      if (replayed && !cancelled && identityRef.current === loadIdentity) {
-        await fetchDataRef.current();
-      }
+  // Every drain (including hook-triggered replay) refreshes status. Only an
+  // empty remaining queue advances lastSync; realtime subscription does not.
+  useEffect(() => {
+    const onReplay = (event: Event) => {
+      const detail = (event as CustomEvent<{ farmId: string; drained: boolean }>).detail;
+      if (detail.farmId !== farm_id) return;
+      if (detail.drained) setLastSync(new Date());
+      void updatePendingSyncCount();
     };
-    loadAuthoritativeState().catch(err => {
-      if (!cancelled && identityRef.current === loadIdentity) {
-        console.error('Initial sync and load failed:', err);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [cacheHydrated, farm_id, identityKey, isOnline, updatePendingSyncCount]);
+    window.addEventListener('acreledger:sync-replayed', onReplay);
+    return () => window.removeEventListener('acreledger:sync-replayed', onReplay);
+  }, [farm_id, updatePendingSyncCount]);
 
   // --- Local storage persistence ---
   const cacheOwnerUserId = cacheHydrated && stateOwnerKey === identityKey ? sessionUserId : null;
@@ -795,10 +823,32 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Composed signOut (auth + cache clear) ---
   const clearLocalCache = seasonOps.clearLocalCache;
   const authSignOut = auth.signOut;
-  const signOut = useCallback(async (options?: ClearLocalCacheOptions) => {
-    const cacheCleared = await clearLocalCache(options);
-    if (!cacheCleared) return;
-    await authSignOut();
+  const [signingOut, setSigningOut] = useState(false);
+  const signOut = useCallback(async (options?: ClearLocalCacheOptions & { scope?: SignOutScope; preserveLocalData?: boolean }): Promise<SignOutResult> => {
+    setSigningOut(true);
+    try {
+      let result: SignOutResult;
+      try {
+        result = await authSignOut(options?.scope ?? 'local');
+      } catch (error) {
+        console.error('Could not end local session:', error);
+        toast.error('Could not sign out on this device. Please try again.');
+        return { signedOut: false, serverPending: true };
+      }
+      // Deletion-pending users cannot sync or inspect their queue. Leave it
+      // scoped to its owner instead of discarding work from that screen.
+      if (options?.preserveLocalData) return { ...result, cacheCleared: false };
+      let cacheCleared = false;
+      try {
+        cacheCleared = await clearLocalCache(options);
+      } catch (error) {
+        console.error('Could not clear local records after sign-out:', error);
+        toast.error('Signed out on this device; some local records could not be cleared.');
+      }
+      return { ...result, cacheCleared };
+    } finally {
+      setSigningOut(false);
+    }
   }, [authSignOut, clearLocalCache]);
 
   // --- Derived data ---
@@ -846,18 +896,18 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateFarmName = useCallback(async (newName: string): Promise<boolean> => {
-    if (!farm_id) {
-      toast.error('No farm selected.');
-      return false;
-    }
+    const userId = session?.user?.id;
     if (!newName.trim()) {
       toast.error('Farm name cannot be empty.');
       return false;
     }
 
     try {
+      if (!farm_id && !await ensureFarm()) return false;
+      if (!userId || sessionUserIdRef.current !== userId) return false;
       const { error } = await supabase.rpc('update_farm_name', { p_name: newName.trim() });
       if (error) throw error;
+      if (sessionUserIdRef.current !== userId) return false;
 
       setFarmName(newName.trim());
       toast.success('Farm name updated successfully.');
@@ -867,7 +917,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.error(err.message || 'Failed to update farm name.');
       return false;
     }
-  }, [farm_id]);
+  }, [ensureFarm, farm_id, session]);
 
   const completeOnboarding = useCallback(async (): Promise<boolean> => {
     const userId = session?.user?.id;
@@ -877,26 +927,33 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      localStorage.setItem(`${userId}_al_onboarding_complete`, '1');
-      setOnboardingComplete(true);
-
+      if (!farm_id && !await ensureFarm()) return false;
+      if (sessionUserIdRef.current !== userId) return false;
       const { error } = await supabase
         .from('profiles')
         .update({ onboarding_complete: true })
         .eq('id', userId);
       if (error) throw error;
 
+      if (sessionUserIdRef.current !== userId) return false;
+      setOnboardingComplete(true);
+      try {
+        localStorage.setItem(`${userId}_al_onboarding_complete`, '1');
+      } catch (storageError) {
+        console.error('Failed to cache onboarding progress:', storageError);
+      }
       return true;
     } catch (err: any) {
       console.error('Error completing onboarding:', err);
       toast.error(err.message || 'Failed to save onboarding progress. Please try again.');
       return false;
     }
-  }, [session, setOnboardingComplete]);
+  }, [ensureFarm, farm_id, session, setOnboardingComplete]);
 
   return (
     <FarmContext.Provider value={{
-      session, isOnline, pendingSyncCount, failedSyncCount, getFailedSyncChanges, discardFailedSyncChanges, loading, initialFetchComplete, fetchError,
+      deletionStatus: auth.deletionStatus,
+      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,
@@ -934,7 +991,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       onboardingComplete,
       completeOnboarding,
       restoreFromBackup: seasonOps.restoreFromBackup,
-      refresh: fetchData,
+      refresh,
       importTract: tractOps.importTract,
       deleteTract: tractOps.deleteTract,
       assignClu: tractOps.assignClu,

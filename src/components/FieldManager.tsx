@@ -1,11 +1,15 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useFarm } from '@/store/farmStore';
-import { Field } from '@/types/farm';
+
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+
 import { useUndoDelete } from '@/hooks/useUndoDelete';
 import { buildDisplayFieldAcreMap, getBoundaryFieldAcres } from '@/lib/fieldAcreage';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences, type LocaleCode } from '@/store/useAppPreferences';
+import { Field } from '@/types/farm';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
+
 import FieldManageModal from './FieldManageModal';
 
 // ✅ Fix: Extracted shared card component — eliminates duplication
@@ -13,12 +17,14 @@ function FieldCard({
   field,
   displayAcreage,
   boundaryAcreage,
+  locale,
   onEdit,
   onDelete,
 }: {
   field: Field;
   displayAcreage: number;
   boundaryAcreage: number | null;
+  locale: LocaleCode;
   onEdit: (field: Field) => void;
   onDelete: (id: string) => void;
 }) {
@@ -36,11 +42,11 @@ function FieldCard({
       <div>
         <span className="font-bold text-foreground text-sm">{field.name}</span>
         <div className="text-xs font-mono text-muted-foreground mt-0.5">
-          {formatMeasurement(roundedDisplayAcreage, 'ac', 2)} FSA crop · {coords}
+          {formatMeasurement(roundedDisplayAcreage, 'ac', 2, locale)} FSA crop · {coords}
         </div>
         {hasDifferentBoundary && roundedBoundaryAcreage != null && (
           <div className="mt-0.5 text-xs font-mono text-muted-foreground">
-            Boundary: {formatMeasurement(roundedBoundaryAcreage, 'ac', 2)}
+            Boundary: {formatMeasurement(roundedBoundaryAcreage, 'ac', 2, locale)}
           </div>
         )}
       </div>
@@ -65,7 +71,9 @@ function FieldCard({
 }
 
 export default function FieldManager() {
-  const { fields: allFields, cluAssignments, deleteField, fetchError, farm_id } = useFarm();
+  const { fields: allFields, cluAssignments, deleteField, fetchError, farm_id, session } = useFarm();
+
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
 
   const [editField, setEditField] = useState<Field | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -161,6 +169,7 @@ export default function FieldManager() {
                 )}
                 {rowCrops.map((field: Field) => (
                   <FieldCard
+                    locale={preferences.locale}
                     key={field.id}
                     field={field}
                     displayAcreage={displayAcreMap.get(field.id) ?? field.acreage}
@@ -181,6 +190,7 @@ export default function FieldManager() {
                 )}
                 {pastureHay.map((field: Field) => (
                   <FieldCard
+                    locale={preferences.locale}
                     key={field.id}
                     field={field}
                     displayAcreage={displayAcreMap.get(field.id) ?? field.acreage}

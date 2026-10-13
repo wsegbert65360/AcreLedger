@@ -18,6 +18,16 @@ const move = (over: Partial<GrainMovement> = {}): GrainMovement => ({
 });
 
 describe('activityDisplay', () => {
+  it.each(['en-US', 'en-AU'] as const)('preserves grouped bushels and precision in %s', (locale) => {
+    for (const bushels of [0, -0, -1234.5678, 1234567.89, 1.2345]) {
+      const expected = bushels.toLocaleString('en-US');
+      expect(harvestCardText(harvest({ bushels }), undefined, locale).subtitle).toBe(`Soybean · ${expected} BU`);
+      expect(grainCardText(move({ bushels }), locale).subtitle).toBe(`In · ${expected} BU`);
+    }
+    expect(harvestCardText(harvest({ bushels: NaN }), undefined, locale).subtitle).toBe('Soybean · — BU');
+    expect(grainCardText(move({ bushels: Infinity }), locale).subtitle).toBe('In · — BU');
+  });
+
   it('harvest and its bin movement read the same way', () => {
     const h = harvestCardText(harvest(), 'Bin 1');
     const g = grainCardText(move());

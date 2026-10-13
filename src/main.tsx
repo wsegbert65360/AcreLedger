@@ -72,6 +72,13 @@ if (import.meta.env.DEV) {
     window.location.reload();
   };
 
+  window.addEventListener('vite:preloadError', (event) => {
+    // Keep the active overlay mounted until the existing safe reload guard
+    // allows navigation, rather than throwing the chunk error into the boundary.
+    event.preventDefault();
+    reloadOnce();
+  });
+
   registerSW({
     onNeedRefresh() {
       // A new service worker is waiting to activate — reload to apply it.

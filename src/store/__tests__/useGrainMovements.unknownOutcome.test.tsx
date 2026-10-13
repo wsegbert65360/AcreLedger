@@ -26,7 +26,7 @@ vi.doMock('@/lib/mappers', async (importOriginal) => {
   return { ...actual, mapGrainToDb };
 });
 vi.doMock('@/lib/syncQueue', () => ({
-  syncQueue: { enqueueMutation, enqueueMutations },
+  syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() },
 }));
 vi.doMock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 

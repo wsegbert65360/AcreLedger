@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { formatNumber, parseLocalizedNumber } from './numbers';
 
 describe('formatNumber', () => {
+  it.each(['en-US', 'en-AU'] as const)('supports legacy maximum precision without padding in %s', (locale) => {
+    expect(formatNumber(1234.5678, locale, { maximumFractionDigits: 3 })).toBe('1,234.568');
+    expect(formatNumber(1234.5, locale, { maximumFractionDigits: 3 })).toBe('1,234.5');
+    expect(formatNumber(1234.5678, locale)).toBe('1,234.57');
+  });
+
   it('groups thousands identically for en-US and en-AU', () => {
     expect(formatNumber(1234.5, 'en-US')).toBe('1,234.5');
     expect(formatNumber(1234.5, 'en-AU')).toBe('1,234.5');

@@ -1,15 +1,18 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { useFarm } from '@/store/farmStore';
-import { useQuickAdd, QuickAddActivityType } from '@/context/QuickAddContext';
-import { native } from '@/lib/native';
-import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS, ACTIVITY_BG_COLORS } from '@/lib/activityIcons';
+
 import { Loader2, Navigation, ClipboardList } from 'lucide-react';
+
 import SprayTypeChooser from '@/components/SprayTypeChooser';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useQuickAdd, QuickAddActivityType } from '@/context/QuickAddContext';
+import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS, ACTIVITY_BG_COLORS } from '@/lib/activityIcons';
 import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
+import { native } from '@/lib/native';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
 import { formatMeasurement } from '@/utils/numbers';
 
 // Using squared Euclidean distance as a fast, monotonic metric for local field comparison (farm scale only).
@@ -40,6 +43,8 @@ export default function QuickAddDialog() {
     fertilizerApplications,
     tillageRecords
   } = useFarm();
+
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
 
   const [step, setStep] = useState<'activity' | 'field'>('activity');
   const [selectedType, setSelectedType] = useState<QuickAddActivityType | null>(null);
@@ -283,7 +288,7 @@ export default function QuickAddDialog() {
                     return (
                       <SelectItem key={f.id} value={f.id} className="text-sm">
                         <div className="flex items-center justify-between w-full gap-2">
-                          <span>{f.name} <span className="text-xs text-muted-foreground font-mono">({formatMeasurement(displayAcreMap.get(f.id) ?? 0, 'ac')} FSA crop)</span></span>
+                          <span>{f.name} <span className="text-xs text-muted-foreground font-mono">({formatMeasurement(displayAcreMap.get(f.id) ?? 0, 'ac', 2, preferences.locale)} FSA crop)</span></span>
                           {isGpsNearest && (
                             <span className="ml-2 bg-plant/10 text-plant border border-plant/20 text-xs px-1.5 py-0.5 rounded-full font-bold">NEAREST</span>
                           )}

@@ -7,6 +7,8 @@ import { useStatefulArray } from '@/test/hookTestHarness';
 const cloud = createSupabaseMock();
 const enqueueMutation = vi.fn();
 const enqueueMutations = vi.fn();
+const shouldQueueWrite = vi.fn(async (online: boolean) => !online);
+const kickReplay = vi.fn();
 const toastError = vi.fn();
 
 // Mapper handles are module-level so the mapper/season seam can be asserted:
@@ -23,7 +25,7 @@ const mapperMocks = {
 };
 
 vi.doMock('@/lib/supabase', () => ({ supabase: cloud.client }));
-vi.doMock('@/lib/syncQueue', () => ({ syncQueue: { enqueueMutation, enqueueMutations } }));
+vi.doMock('@/lib/syncQueue', () => ({ syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite, kickReplay } }));
 vi.doMock('@/lib/mappers', () => ({
   mapPlantToDb: mapperMocks.plant,
   mapSprayToDb: mapperMocks.spray,
@@ -86,6 +88,8 @@ function renderConfigured(config: Config, online: boolean, farmId: string | null
 describe('activity hook rollback conformance', () => {
   beforeEach(() => {
     cloud.reset();
+    shouldQueueWrite.mockReset().mockImplementation(async (online: boolean) => !online);
+    kickReplay.mockReset();
     Object.values(mapperMocks).forEach(m => { m.mockReset(); m.mockImplementation((v: unknown) => v); });
     enqueueMutation.mockReset().mockResolvedValue(undefined);
     enqueueMutations.mockReset().mockResolvedValue(undefined);
@@ -106,6 +110,19 @@ describe('activity hook rollback conformance', () => {
   });
 
   for (const index of Array.from({ length: 7 }, (_, i) => i)) {
+    it(`hook ${index + 1} queues an online edit behind an older queued edit`, async () => {
+      const config = configs[index];
+      shouldQueueWrite.mockResolvedValue(true);
+      const { result } = renderConfigured(config, true);
+      const changed = { ...result.current.original, fieldName: 'Newer' };
+      await act(async () => expect(await result.current.ops[config.updateKey](changed)).toBe(true));
+      expect(shouldQueueWrite).toHaveBeenCalledWith(true, 'farm-1', [{ tableName: config.table, id: 'record-1' }]);
+      expect(enqueueMutation).toHaveBeenCalledWith(config.table, 'update', expect.objectContaining({ id: 'record-1' }), 'farm-1');
+      expect(kickReplay).toHaveBeenCalled();
+      expect(cloud.fns.from).not.toHaveBeenCalled();
+      expect(result.current.state.value[0].fieldName).toBe(config.name === 'fertilizer' ? 'North 40' : 'Newer');
+    });
+
     it(`hook ${index + 1} restores its render-closure snapshot on update failure`, async () => {
       const config = configs[index];
       cloud.setResult({ count: 0, error: null });

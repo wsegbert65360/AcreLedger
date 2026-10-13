@@ -1,6 +1,8 @@
-import { GrainMovement } from '@/types/farm';
 import RecordListItem from '@/components/RecordListItem';
 import { grainCardText } from '@/lib/activityDisplay';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { GrainMovement } from '@/types/farm';
 
 interface GrainTabProps {
   records: GrainMovement[];
@@ -11,6 +13,9 @@ interface GrainTabProps {
 }
 
 export default function GrainTab({ records, selected, onToggle, onEdit, onDuplicate }: GrainTabProps) {
+  const { session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
+
   if (records.length === 0) {
     return (
       <p className="text-center text-muted-foreground text-sm py-8">
@@ -22,7 +27,7 @@ export default function GrainTab({ records, selected, onToggle, onEdit, onDuplic
   return (
     <div className="space-y-2">
       {records.map(m => {
-        const text = grainCardText(m);
+        const text = grainCardText(m, preferences.locale);
         return (
           <RecordListItem
             key={m.id}

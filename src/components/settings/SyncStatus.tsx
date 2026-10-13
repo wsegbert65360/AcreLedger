@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SyncState = 'connecting' | 'connected' | 'pending' | 'disconnected' | 'offline';
+type SyncState = 'attention' | 'locked' | 'connecting' | 'connected' | 'pending' | 'disconnected' | 'offline';
 
 interface StatusConfig {
   dot: string;
@@ -18,21 +18,6 @@ interface StatusConfig {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const LAST_SYNC_KEY = 'acreledger_last_sync';
-
-function loadLastSync(): Date | null {
-  try {
-    const raw = localStorage.getItem(LAST_SYNC_KEY);
-    return raw ? new Date(raw) : null;
-  } catch { return null; }
-}
-
-function saveLastSync(): void {
-  try {
-    localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
-  } catch { /* ignore */ }
-}
 
 function formatLastSync(date: Date): string {
   const diffMs = Date.now() - date.getTime();
@@ -45,6 +30,16 @@ function formatLastSync(date: Date): string {
 }
 
 const STATUS_CONFIG: Record<SyncState, StatusConfig> = {
+  attention: {
+    dot: 'bg-amber-400', label: 'Needs attention',
+    icon: <CloudOff size={18} className="text-amber-400" />,
+    description: 'Some changes have not uploaded. Retry after correcting the problem, or export them for recovery.', pulse: false,
+  },
+  locked: {
+    dot: 'bg-amber-400', label: 'Offline changes locked',
+    icon: <CloudOff size={18} className="text-amber-400" />,
+    description: 'Sync status is unknown. Preserved offline changes could not be read.', pulse: false,
+  },
   connecting: {
     dot: 'bg-amber-400',
     label: 'Connecting...',
@@ -85,11 +80,13 @@ const STATUS_CONFIG: Record<SyncState, StatusConfig> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SyncStatus() {
-  const { session, pendingSyncCount, failedSyncCount = 0, getFailedSyncChanges, discardFailedSyncChanges } = useFarm();
+  const { session, pendingSyncCount, failedSyncCount = 0, getFailedSyncChanges, discardFailedSyncChanges, retryFailedSyncChanges, syncQueueLocked, lastSync } = useFarm();
+  const sessionUserId = session?.user.id;
   const [syncState, setSyncState] = useState<SyncState>(
     navigator.onLine ? 'connecting' : 'offline'
   );
-  const [lastSync, setLastSync] = useState<Date | null>(loadLastSync);
+  const [retrying, setRetrying] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [, forceRender] = useState(0);
 
   const exportFailed = async () => {
@@ -128,21 +125,14 @@ export default function SyncStatus() {
 
   // Supabase realtime channel for true connection health
   useEffect(() => {
-    if (!session) return;
+    if (!sessionUserId) return;
 
     const channel = supabase.channel('sync-status-probe');
 
     channel
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          if (pendingSyncCount > 0) {
-            setSyncState('pending');
-          } else {
-            setSyncState('connected');
-            const now = new Date();
-            saveLastSync();
-            setLastSync(now);
-          }
+          setSyncState('connected');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           setSyncState(navigator.onLine ? 'disconnected' : 'offline');
         } else if (status === 'CLOSED') {
@@ -153,7 +143,7 @@ export default function SyncStatus() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [session, pendingSyncCount]);
+  }, [sessionUserId]);
 
   // Don't render until we know if there's a session
   if (session === undefined) {
@@ -168,7 +158,8 @@ export default function SyncStatus() {
 
   if (!session) return null;
 
-  const config = STATUS_CONFIG[syncState];
+  const visibleState = syncQueueLocked ? 'locked' : failedSyncCount > 0 ? 'attention' : pendingSyncCount > 0 && navigator.onLine ? 'pending' : syncState;
+  const config = STATUS_CONFIG[visibleState];
 
   return (
     <Card className="border-border/30">
@@ -204,6 +195,7 @@ export default function SyncStatus() {
           {config.description}
         </p>
 
+        {actionError && <p role="alert" className="text-xs text-destructive">{actionError}</p>}
         {failedSyncCount > 0 && (
           <div className="p-3 rounded-lg border border-destructive/30 space-y-2">
             <p className="text-xs font-mono text-destructive">
@@ -211,6 +203,13 @@ export default function SyncStatus() {
               They are still saved on this device.
             </p>
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={retrying || !navigator.onLine} onClick={() => {
+                setRetrying(true);
+                setActionError(null);
+                void retryFailedSyncChanges().catch(error => {
+                  setActionError(error instanceof Error ? error.message : 'Could not retry offline changes.');
+                }).finally(() => setRetrying(false));
+              }}>{retrying ? 'Retrying…' : 'Retry'}</Button>
               <Button size="sm" variant="outline" onClick={() => void exportFailed()}>Export</Button>
               <Button size="sm" variant="outline" className="text-destructive" onClick={() => void discardFailed()}>Discard</Button>
             </div>
