@@ -8,7 +8,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const root = resolve(import.meta.dirname, '..');
 const migrationDir = resolve(root, 'supabase/migrations');
-const target = '20261011230000_db_access_review_02.sql';
+const target = '20261013035848_db_access_review_02.sql';
 
 const ids = {
   spoofFarm: '00000000-0000-4000-8000-0000000000b1',
@@ -502,7 +502,7 @@ try {
 
   const laterFiles = files.filter((file) => file > target);
   assert.ok(
-    laterFiles.includes('20261012020000_db_access_review_02_m3_m4.sql'),
+    laterFiles.includes('20261013035852_db_access_review_02_m3_m4.sql'),
     'review-02 M3/M4 migration must exist after the access-hardening file',
   );
   for (const file of laterFiles) await apply(file);

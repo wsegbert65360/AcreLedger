@@ -287,7 +287,7 @@ const afterRename = Object.fromEntries((
 assert.deepEqual(afterRename, { Oil: true, 'Engine oil': true }, 'rename and resurrection must both apply');
 
 // Offline reconciliation can see own-farm tombstones for all equipment tables.
-await db.exec(await readFile(new URL('../supabase/migrations/20261012215043_reconcile_equipment_offline_sync.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261013041046_reconcile_equipment_offline_sync.sql', import.meta.url), 'utf8'));
 for (const [table, id] of [['equipment', ids.equipment], ['maintenance_schedules', ids.schedule], ['maintenance_logs', ids.log]]) {
   await db.query(`UPDATE public.${table} SET deleted_at = now() WHERE id = $1::uuid`, [id]);
 }
