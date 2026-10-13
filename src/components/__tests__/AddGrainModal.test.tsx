@@ -6,17 +6,31 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { Bin, Field, HarvestRecord } from '@/types/farm';
 
+import { toast } from 'sonner';
+
 import AddGrainModal from '../AddGrainModal';
 
 const state = vi.hoisted(() => ({
   addHarvestWithGrain: vi.fn().mockResolvedValue(true),
   addGrainMovement: vi.fn().mockResolvedValue(true),
+  getBinTotal: vi.fn(() => 1000),
+  locale: 'en-US' as 'en-US' | 'en-AU',
+}));
+
+vi.mock('sonner', () => ({
+  toast: { warning: vi.fn(), error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock('@/store/useAppPreferences', () => ({
+  useAppPreferences: () => ({ preferences: { country: 'US', locale: state.locale, unitSystem: 'imperial' } }),
 }));
 
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     addHarvestWithGrain: state.addHarvestWithGrain,
     addGrainMovement: state.addGrainMovement,
+    getBinTotal: state.getBinTotal,
+    session: { user: { id: 'user-1' } },
     fields: [
       {
         id: 'field-1', name: 'Harry Middle', acreage: 40, lat: null, lng: null,
@@ -99,6 +113,8 @@ describe('AddGrainModal harvest path', () => {
     vi.clearAllMocks();
     state.addHarvestWithGrain.mockResolvedValue(true);
     state.addGrainMovement.mockResolvedValue(true);
+    state.getBinTotal.mockReturnValue(1000);
+    state.locale = 'en-US';
   });
 
   it('offers the harvest chooser before any form', () => {
@@ -125,7 +141,7 @@ describe('AddGrainModal harvest path', () => {
     fireEvent.change(screen.getByTestId('select'), { target: { value: 'field-1' } });
 
     await waitFor(() => expect(screen.getByLabelText(/crop type/i)).toHaveValue('Corn'));
-    expect(screen.getByLabelText(/landlord %/i)).toHaveValue(25);
+    expect(screen.getByLabelText(/landlord %/i)).toHaveValue('25');
   });
 
   it('falls back to intended use and preserves a valid zero producer share', async () => {
@@ -134,7 +150,7 @@ describe('AddGrainModal harvest path', () => {
     fireEvent.change(screen.getByTestId('select'), { target: { value: 'field-2' } });
 
     await waitFor(() => expect(screen.getByLabelText(/crop type/i)).toHaveValue('Timber'));
-    expect(screen.getByLabelText(/landlord %/i)).toHaveValue(100);
+    expect(screen.getByLabelText(/landlord %/i)).toHaveValue('100');
     expect(screen.getByLabelText(/landlord name/i)).toHaveValue('Dad');
   });
 
@@ -238,6 +254,8 @@ describe('AddGrainModal adjustment path', () => {
     vi.clearAllMocks();
     state.addHarvestWithGrain.mockResolvedValue(true);
     state.addGrainMovement.mockResolvedValue(true);
+    state.getBinTotal.mockReturnValue(1000);
+    state.locale = 'en-US';
   });
 
   it('keeps the plain inventory movement behavior without creating a harvest', async () => {
@@ -258,5 +276,39 @@ describe('AddGrainModal adjustment path', () => {
       sourceFieldName: 'Home Place',
     }));
     expect(state.addHarvestWithGrain).not.toHaveBeenCalled();
+  });
+
+  it('parses grouped bushels with the app locale and warns without blocking an over-capacity inbound', async () => {
+    state.locale = 'en-AU';
+    state.getBinTotal.mockReturnValue(59000);
+    render(<AddGrainModal bin={bin} open onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /other \/ inventory adjustment/i }));
+
+    fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '1,500.5' } });
+
+    expect(screen.getByText(/this change would exceed bin capacity/i)).toBeInTheDocument();
+    const save = screen.getByRole('button', { name: /save inventory/i });
+    expect(save).toBeEnabled();
+
+    fireEvent.click(save);
+
+    await waitFor(() => expect(state.addGrainMovement).toHaveBeenCalledTimes(1));
+    expect(state.getBinTotal).toHaveBeenCalledWith('bin-1');
+    expect(state.addGrainMovement).toHaveBeenCalledWith(expect.objectContaining({ bushels: 1500.5 }));
+    expect(toast.warning).toHaveBeenCalledWith('This change would exceed bin capacity.');
+  });
+
+  it('warns when an inbound load would leave the bin negative, and still saves', async () => {
+    state.getBinTotal.mockReturnValue(-50);
+    render(<AddGrainModal bin={bin} open onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /other \/ inventory adjustment/i }));
+
+    fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '10' } });
+
+    expect(screen.getByText(/negative bin inventory/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /save inventory/i }));
+
+    await waitFor(() => expect(state.addGrainMovement).toHaveBeenCalledTimes(1));
+    expect(toast.warning).toHaveBeenCalledWith('This change would leave negative bin inventory.');
   });
 });

@@ -1,16 +1,20 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+
+import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useFarm } from '@/store/farmStore';
-import { Field, GrainMovement, HarvestRecord } from '@/types/farm';
+import { parseLocalizedNumber } from '@/lib/locale/numbers';
 import { native } from '@/lib/native';
-import { toast } from 'sonner';
-import { Wheat, Warehouse, Truck, Loader2 } from 'lucide-react';
-import { localDateTimeMs, toLocalIsoDate, toLocalTime } from '@/utils/dates';
 import { getLatestForField } from '@/lib/utils';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { Field, GrainMovement, HarvestRecord } from '@/types/farm';
+import { localDateTimeMs, toLocalIsoDate, toLocalTime } from '@/utils/dates';
 
 function isUnlinkedHarvestLeftover(
   gm: GrainMovement,
@@ -56,7 +60,8 @@ interface HarvestModalProps {
 
 export default function HarvestModal({ field, open, onClose, initialData, mode = 'edit' }: HarvestModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { addHarvestRecord, addHarvestWithGrain, updateHarvestRecord, addGrainMovement, updateGrainMovement, deleteGrainMovements, grainMovements, harvestRecords, bins, viewingSeason } = useFarm();
+  const { addHarvestRecord, addHarvestWithGrain, updateHarvestRecord, addGrainMovement, updateGrainMovementWithVersion, deleteGrainMovements, grainMovements, harvestRecords, bins, getBinTotal, session, viewingSeason } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -125,9 +130,9 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
   };
 
   const handleSubmit = async (keepOpen = false) => {
-    const m = parseFloat(moisture);
-    const ls = parseFloat(landlordSplit);
-    const bu = parseFloat(bushels);
+    const m = parseLocalizedNumber(moisture, preferences.locale) ?? NaN;
+    const ls = parseLocalizedNumber(landlordSplit, preferences.locale) ?? NaN;
+    const bu = parseLocalizedNumber(bushels, preferences.locale) ?? NaN;
     if (
       isNaN(m) || isNaN(ls) || isNaN(bu) ||
       !Number.isFinite(m) || !Number.isFinite(ls) || !Number.isFinite(bu) ||
@@ -151,6 +156,29 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       harvestDate === (initialData.harvestDate || toLocalIsoDate(initialData.timestamp)) &&
       harvestTime === toLocalTime(initialData.timestamp)
       ? initialData.timestamp : selectedTimestamp;
+
+    if (destination === 'bin') {
+      const bin = bins.find(b => b.id === binId);
+      if (!bin) {
+        toast.error('Selected bin no longer exists. Please choose another.');
+        return;
+      }
+      const previous = initialData && !isDuplicate
+        ? findLinkedHarvestMovement(grainMovements, initialData, field.name) : undefined;
+      const leftoverIds = initialData && !isDuplicate
+        ? findUnlinkedHarvestLeftoverIds(grainMovements, initialData, field.name, previous?.id) : [];
+      const leftovers = grainMovements.filter(movement => leftoverIds.includes(movement.id));
+      const affectedBins = new Set([binId, ...(previous ? [previous.binId] : []), ...leftovers.map(movement => movement.binId)]);
+      for (const affectedId of affectedBins) {
+        const affectedBin = bins.find(b => b.id === affectedId);
+        const projected = getBinTotal(affectedId)
+          - (previous?.binId === affectedId ? previous.bushels : 0)
+          - leftovers.filter(movement => movement.binId === affectedId).reduce((total, movement) => total + movement.bushels, 0)
+          + (binId === affectedId ? bu : 0);
+        if (projected < 0) toast.warning('This change would leave negative bin inventory.', { description: affectedBin?.name });
+        else if (affectedBin && projected > affectedBin.capacity) toast.warning('This change would exceed bin capacity.', { description: affectedBin.name });
+      }
+    }
 
     setIsSaving(true);
     try {
@@ -191,7 +219,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
           if (leftoverIds.length === 0) return true;
           const cleaned = await deleteGrainMovements(leftoverIds);
           if (cleaned) return true;
-          toast.error('Harvest saved, but leftover grain could not be removed from the bin.');
+          toast.error('Leftover grain could not be removed from the bin. Please review the harvest before retrying.');
           native.haptic.error();
           return false;
         };
@@ -218,7 +246,10 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
           }
         } else if (linkedMovement) {
           const bin = bins.find(b => b.id === binId);
-          const gmSuccess = await updateGrainMovement({
+          // TODO: Prefer a future update_harvest_with_grain RPC for atomic edits,
+          // including unknown-outcome retries where client compensation cannot
+          // confirm whether the preceding grain update committed.
+          const updatedMovement = await updateGrainMovementWithVersion({
             ...linkedMovement,
             binId: binId,
             binName: bin?.name || 'Unknown',
@@ -227,18 +258,22 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             timestamp: harvestTimestamp,
             harvestRecordId: initialData.id,
           });
-          if (!gmSuccess) {
+          if (!updatedMovement) {
             toast.error('Could not update the linked grain movement.');
             native.haptic.error();
             return;
           }
           if (!(await removeLeftovers())) {
-            await updateGrainMovement(linkedMovement);
+            const restored = await updateGrainMovementWithVersion(linkedMovement, updatedMovement);
+            if (!restored) {
+              toast.error('The harvest was not saved and its grain movement could not be restored. Refresh and review both records.');
+              native.haptic.error();
+            }
             return;
           }
           success = await updateHarvestRecord({ ...initialData, ...harvestData });
           if (!success) {
-            const restored = await updateGrainMovement(linkedMovement);
+            const restored = await updateGrainMovementWithVersion(linkedMovement, updatedMovement);
             toast.error(restored
               ? 'Failed to update harvest record. The grain movement was restored.'
               : 'Failed to update harvest record and restore its grain movement. Retry the save.');
@@ -456,7 +491,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
               <Input
                 id="bushels"
                 name="bushels"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={bushels}
                 onChange={e => setBushels(e.target.value)}
                 placeholder="0"
@@ -469,7 +505,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
                 <Input
                   id="moisture"
                   name="moisture"
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={moisture}
                   onChange={e => setMoisture(e.target.value)}
                   placeholder="0.0"
@@ -481,7 +518,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
                 <Input
                   id="landlordSplit"
                   name="landlordSplit"
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={landlordSplit}
                   onChange={e => setLandlordSplit(e.target.value)}
                   placeholder="0"

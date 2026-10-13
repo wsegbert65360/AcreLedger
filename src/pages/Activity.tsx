@@ -116,6 +116,10 @@ export default function Activity() {
   const openedRecordRef = useRef<string | null>(null);
 
   const openModal = (type: ActivityRecord['type'], record: EditableRecord, mode: 'edit' | 'duplicate') => {
+    if (type === 'grain' && (record as GrainMovement).harvestRecordId && mode === 'duplicate') {
+      toast.error('This load came from a harvest record. Edit or delete the harvest instead.');
+      return;
+    }
     setEditingRecord(record);
     setEditingRecordType(type);
     setEditingMode(mode);
@@ -166,6 +170,9 @@ export default function Activity() {
 
   const { pending: pendingDeletes, requestDelete } = useUndoDelete<ActivityRecord[]>({
     onCommit: async (_ids, toDelete) => {
+      if (toDelete.some(r => r.type === 'grain' && r.data.harvestRecordId)) {
+        throw new Error('Linked grain must be deleted through its harvest.');
+      }
       const byType = toDelete.reduce((acc, r) => {
         acc[r.type] = acc[r.type] || [];
         acc[r.type].push(r.data.id);
@@ -297,10 +304,17 @@ export default function Activity() {
   }, [filteredPlant, filteredSpray, filteredHarvest, filteredHay, filteredCustomSpray, filteredFertilizer, filteredTillage, filteredGrain, pendingDeletes]);
 
   const handleDeleteRequest = () => {
+    const linkedIds = new Set(grainMovements.filter(r => !!r.harvestRecordId).map(r => r.id));
+    if (Array.from(selected).some(id => linkedIds.has(id))) {
+      toast.error('This load came from a harvest record. Edit or delete the harvest instead.');
+      return;
+    }
     const ids = Array.from(selected);
     if (ids.length === 0) return;
 
-    const toDelete = visibleUnifiedRecords.filter(r => ids.includes(r.data.id));
+    const toDelete: ActivityRecord[] = tab === 'grain'
+      ? filteredGrain.filter(r => ids.includes(r.id)).map(data => ({ type: 'grain' as const, data }))
+      : visibleUnifiedRecords.filter(r => ids.includes(r.data.id));
     requestDelete(
       ids,
       `${ids.length} record${ids.length !== 1 ? 's' : ''} deleted`,

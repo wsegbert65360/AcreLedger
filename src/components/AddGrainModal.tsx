@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { ArrowLeftRight, Calendar, Hash, Plus, Warehouse, Wheat } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useFarm } from '@/store/farmStore';
-import { Bin } from '@/types/farm';
+import { parseLocalizedNumber } from '@/lib/locale/numbers';
 import { native } from '@/lib/native';
 import { getLatestForField } from '@/lib/utils';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { Bin } from '@/types/farm';
 import { localDateTimeMs, toLocalIsoDate, toLocalTime } from '@/utils/dates';
-import { ArrowLeftRight, Calendar, Hash, Plus, Warehouse, Wheat } from 'lucide-react';
 
 interface AddGrainModalProps {
     bin: Bin;
@@ -21,7 +25,8 @@ interface AddGrainModalProps {
 type AddPath = 'harvest' | 'adjust';
 
 export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps) {
-    const { addGrainMovement, addHarvestWithGrain, fields, harvestRecords, viewingSeason } = useFarm();
+    const { addGrainMovement, addHarvestWithGrain, fields, harvestRecords, viewingSeason, getBinTotal, session } = useFarm();
+    const { preferences } = useAppPreferences(session?.user?.id ?? null);
     const [path, setPath] = useState<AddPath | null>(null);
     const [bushels, setBushels] = useState('');
     const [moisture, setMoisture] = useState('15.0');
@@ -111,33 +116,46 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
 
     const [isSaving, setIsSaving] = useState(false);
 
-    const sharedNumbersValid = (() => {
-        const amount = parseFloat(bushels);
-        const m = parseFloat(moisture);
-        return Number.isFinite(amount) && amount > 0 && Number.isFinite(m) && Number.isFinite(localDateTimeMs(date, time));
-    })();
+    const parsedBushels = parseLocalizedNumber(bushels, preferences.locale);
+    const parsedMoisture = parseLocalizedNumber(moisture, preferences.locale);
+    const parsedLandlordSplit = parseLocalizedNumber(landlordSplit, preferences.locale);
+    // All-season total: an inbound load is checked against physical bin contents.
+    const projectedTotal = parsedBushels == null ? null : getBinTotal(bin.id) + parsedBushels;
+    const inventoryWarning =
+        projectedTotal == null || parsedBushels == null || !(parsedBushels > 0)
+            ? null
+            : projectedTotal < 0
+                ? 'This change would leave negative bin inventory.'
+                : projectedTotal > bin.capacity
+                    ? 'This change would exceed bin capacity.'
+                    : null;
+
+    const sharedNumbersValid = parsedBushels != null
+        && parsedBushels > 0
+        && parsedMoisture != null
+        && Number.isFinite(localDateTimeMs(date, time));
 
     const harvestValid = sharedNumbersValid
         && !!fieldId
         && !!crop.trim()
-        && landlordSplit !== ''
-        && Number.isFinite(parseFloat(landlordSplit));
+        && parsedLandlordSplit != null;
 
     const adjustValid = sharedNumbersValid;
 
     const handleSave = async () => {
-        const amount = parseFloat(bushels);
-        const m = parseFloat(moisture);
+        const amount = parsedBushels;
+        const m = parsedMoisture;
         const ts = localDateTimeMs(date, time);
-        if (!sharedNumbersValid || !Number.isFinite(ts)) {
+        if (amount == null || m == null || !sharedNumbersValid || !Number.isFinite(ts)) {
             native.haptic.error();
             return;
         }
+        if (inventoryWarning) toast.warning(inventoryWarning);
 
         if (path === 'harvest') {
-            const ls = parseFloat(landlordSplit);
+            const ls = parsedLandlordSplit;
             const field = activeFields.find(f => f.id === fieldId);
-            if (!field || isNaN(ls) || !crop.trim()) {
+            if (!field || ls == null || !crop.trim()) {
                 native.haptic.error();
                 return;
             }
@@ -292,25 +310,29 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                             <Input
                                 id="addBushels"
                                 name="addBushels"
-                                type="number"
+                                inputMode="decimal"
                                 value={bushels}
                                 onChange={e => setBushels(e.target.value)}
                                 placeholder="e.g. 1000"
                                 className="mt-1 bg-muted border-border font-mono focus:ring-harvest"
                                 autoFocus={path === 'adjust' || (path === 'harvest' && !!fieldId)}
                             />
+                            {inventoryWarning && (
+                                <p className="text-xs text-destructive mt-1 font-mono font-bold" role="status">
+                                    {inventoryWarning}
+                                </p>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <Label htmlFor="addMoisture" className="text-muted-foreground font-mono text-xs font-bold">MOISTURE % *</Label>
-                                <Input
-                                    id="addMoisture"
-                                    name="addMoisture"
-                                    type="number"
-                                    step="0.1"
-                                    value={moisture}
-                                    onChange={e => setMoisture(e.target.value)}
+                                    <Input
+                                        id="addMoisture"
+                                        name="addMoisture"
+                                        inputMode="decimal"
+                                        value={moisture}
+                                        onChange={e => setMoisture(e.target.value)}
                                     className="mt-1 bg-muted border-border font-mono"
                                 />
                             </div>
@@ -352,7 +374,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                                     <Input
                                         id="addHarvestLandlordSplit"
                                         name="addHarvestLandlordSplit"
-                                        type="number"
+                                        inputMode="decimal"
                                         value={landlordSplit}
                                         onChange={e => { landlordSplitEditedRef.current = true; setLandlordSplit(e.target.value); }}
                                         placeholder="0"

@@ -1,10 +1,12 @@
 import { useCallback, useRef } from 'react';
-import { GrainMovement } from '@/types/farm';
-import { supabase } from '@/lib/supabase';
+
 import { toast } from 'sonner';
+
 import { mapGrainFromDb, mapGrainToDb } from '@/lib/mappers';
-import { syncQueue } from '@/lib/syncQueue';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
+import { supabase } from '@/lib/supabase';
+import { syncQueue } from '@/lib/syncQueue';
+import { GrainMovement } from '@/types/farm';
 
 interface UseGrainMovementsArgs {
   farm_id: string | null;
@@ -87,12 +89,15 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
   const applyGrainUpdate = useCallback(async (
     r: GrainMovement,
     previous: GrainMovement,
-  ): Promise<OpResult> => {
+  ): Promise<GrainMovement | false> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
     }
-    if (isMutating.current) return false;
+    if (isMutating.current) {
+      toast.error('Another change is still saving. Please wait a moment and try again.');
+      return false;
+    }
     isMutating.current = true;
 
     const previousVersion = Number.isInteger(previous.version) && (previous.version ?? 0) > 0
@@ -141,7 +146,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           toast.success('Grain movement record updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
           });
-          return true;
+          return nextRecord;
         } catch (err) {
           console.error('Failed to enqueue grain movement record update offline:', err);
           rollback();
@@ -182,7 +187,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
               toast.success('Grain movement saved locally.', {
                 description: 'The connection dropped before confirmation — it will reconcile automatically.',
               });
-              return true;
+              return nextRecord;
             } catch (enqueueErr) {
               console.error('Failed to queue grain update after unknown outcome:', enqueueErr);
               rollback();
@@ -205,7 +210,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
       }
 
       toast.success('Record updated.');
-      return true;
+      return nextRecord;
     } finally {
       isMutating.current = false;
     }
@@ -486,14 +491,23 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
   }, [viewingSeason, farm_id, grainMovements, setGrainMovements, isOnline, onMutation, applyGrainUpdate, deleteGrainMovements]);
 
   // ─── Update ───────────────────────────────────────────────────────────────
-  const updateGrainMovement = useCallback(async (r: GrainMovement): Promise<OpResult> => {
+  const updateGrainMovementWithVersion = useCallback(async (
+    r: GrainMovement,
+    previousOverride?: GrainMovement,
+  ): Promise<GrainMovement | false> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
     // Capture the prior row from the current render's state. The hook serializes
     // mutations (isMutating), so this is the true last-known row at edit time.
     // Reading it from the closure — instead of mutating a ref inside the state
     // setter — avoids depending on React's eager-update timing for correctness.
-    const previous = grainMovements.find(item => item.id === r.id) ?? null;
+    // Compensation must use the row returned by the preceding successful update,
+    // rather than a stale render closure. Ordinary edits still use the closure.
+    const previous = previousOverride ?? grainMovements.find(item => item.id === r.id) ?? null;
 
-    if (!previous) {
+    if (!previous || previous.id !== r.id || (previous.farm_id && previous.farm_id !== farm_id)) {
       // Record isn't in local state — can't optimistically update, lock, or roll
       // back safely. Abort rather than fabricate state.
       console.warn('Grain update aborted: record not present in local snapshot.', { id: r.id });
@@ -502,7 +516,11 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     }
 
     return applyGrainUpdate(r, previous);
-  }, [grainMovements, applyGrainUpdate]);
+  }, [farm_id, grainMovements, applyGrainUpdate]);
 
-  return { addGrainMovement, updateGrainMovement, deleteGrainMovements };
+  const updateGrainMovement = useCallback(async (r: GrainMovement): Promise<OpResult> => {
+    return !!(await updateGrainMovementWithVersion(r));
+  }, [updateGrainMovementWithVersion]);
+
+  return { addGrainMovement, updateGrainMovement, updateGrainMovementWithVersion, deleteGrainMovements };
 }

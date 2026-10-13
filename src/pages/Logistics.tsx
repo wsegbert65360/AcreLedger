@@ -18,6 +18,7 @@ import { CAPACITY_LEVEL_STYLES, formatMeasurement, getCapacityLevel, getSignedBu
 
 interface BinDetailView extends BinMonitorPanelData {
   recentMovements: GrainMovement[];
+  inventoryLabel: string | null;
 }
 
 function buildBinTrend(movementsForBin: GrainMovement[]): BinTrendPoint[] {
@@ -133,10 +134,18 @@ export default function Logistics() {
     const overview = bins.map((bin) => {
       // All-season total (binId-all) — bin contents are physical and span seasons.
       const total = roundTo(getBinTotal(bin.id), 1);
-      const pct = bin.capacity > 0 ? Math.min(Math.max((total / bin.capacity) * 100, 0), 100) : 0;
+      // Bar width stays 0–100. The label below names over-capacity or negative inventory
+      // so a clamped bar does not look like a merely full or empty bin.
+      const rawPct = bin.capacity > 0 ? (total / bin.capacity) * 100 : 0;
+      const pct = Math.min(Math.max(rawPct, 0), 100);
+      const inventoryLabel = total < 0
+        ? 'Negative inventory'
+        : total > bin.capacity
+          ? 'Over capacity'
+          : null;
       stored += total;
       capacity += bin.capacity;
-      return { ...bin, total, pct, movementCount: counts.get(bin.id) ?? 0 };
+      return { ...bin, total, pct, inventoryLabel, movementCount: counts.get(bin.id) ?? 0 };
     });
     return {
       binOverview: overview,
@@ -267,6 +276,9 @@ export default function Logistics() {
                   <span className={cn('mt-1 inline-block font-mono text-sm font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(selectedBinDetail.pct)].tone)}>
                     {roundTo(selectedBinDetail.pct, 0)}%
                   </span>
+                  {selectedBinDetail.inventoryLabel && (
+                    <span className="mt-1 block text-xs font-semibold text-destructive">{selectedBinDetail.inventoryLabel}</span>
+                  )}
                 </div>
               </div>
             </section>
@@ -320,7 +332,7 @@ export default function Logistics() {
                   key={bin.id}
                   type="button"
                   onClick={() => setSelectedBinId(bin.id)}
-                  aria-label={`${bin.name}, ${roundTo(bin.pct, 0)} percent full, ${formatMeasurement(bin.total, 'bu', 1, preferences.locale)} of ${formatMeasurement(bin.capacity, 'bu', 1, preferences.locale)}, ${status.statusLabel}`}
+                  aria-label={`${bin.name}, ${roundTo(bin.pct, 0)} percent full, ${formatMeasurement(bin.total, 'bu', 1, preferences.locale)} of ${formatMeasurement(bin.capacity, 'bu', 1, preferences.locale)}, ${bin.inventoryLabel ?? status.statusLabel}`}
                   className="group relative overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-harvest/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div
@@ -339,8 +351,8 @@ export default function Logistics() {
                       <p className="mt-1 font-mono text-sm text-muted-foreground">
                         {formatMeasurement(bin.total, 'bu', 1, preferences.locale)} of {formatMeasurement(bin.capacity, 'bu', 1, preferences.locale)}
                       </p>
-                      <span className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', status.statusClassName)}>
-                        {status.statusLabel}
+                      <span className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', bin.inventoryLabel ? 'border-destructive/30 bg-destructive/10 text-destructive' : status.statusClassName)}>
+                        {bin.inventoryLabel ?? status.statusLabel}
                       </span>
                     </div>
                   </div>

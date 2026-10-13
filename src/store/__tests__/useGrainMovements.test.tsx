@@ -542,3 +542,40 @@ describe('useGrainMovements — deleteGrainMovements', () => {
     });
   });
 });
+
+
+describe('versioned grain compensation', () => {
+  it('returns the saved row and lets a stale render restore with the successful version', async () => {
+    supabaseMock.setResult({ count: 1, data: null, error: null });
+    const original = existingMovement({ version: 7 });
+    const { result } = renderGrainHook({ initial: [original] });
+    const staleOps = result.current.ops;
+    await act(async () => {
+      const saved = await staleOps.updateGrainMovementWithVersion({ ...original, bushels: 800 });
+      expect(saved).toMatchObject({ bushels: 800, version: 8 });
+      if (!saved) throw new Error('Expected successful update');
+      const restored = await staleOps.updateGrainMovementWithVersion(original, saved);
+      expect(restored).toMatchObject({ bushels: 1000, version: 9 });
+    });
+    expect(supabaseMock.fns.eq.mock.calls.filter(([key]) => key === 'version').map(([, value]) => value)).toEqual([7, 8]);
+    expect(result.current.grains.value[0]).toMatchObject({ bushels: 1000, version: 9 });
+  });
+
+  it('shows feedback when an update is refused during an in-flight save', async () => {
+    const { toast } = await import('sonner');
+    let finish!: (value: { count: number; error: null; data: null }) => void;
+    supabaseMock.setTablePages('grain_movements', [
+      new Promise(resolve => { finish = resolve; }),
+    ]);
+    const original = existingMovement();
+    const { result } = renderGrainHook({ initial: [original] });
+    const ops = result.current.ops;
+    await act(async () => {
+      const saving = ops.updateGrainMovement({ ...original, bushels: 900 });
+      expect(await ops.updateGrainMovement(original)).toBe(false);
+      expect(toast.error).toHaveBeenCalledWith('Another change is still saving. Please wait a moment and try again.');
+      finish({ count: 1, error: null, data: null });
+      expect(await saving).toBe(true);
+    });
+  });
+});

@@ -261,6 +261,40 @@ async function reconcileDuplicateInsert(mutation: QueuedMutation, farmId: string
   return expectedValueMatches(data, { ...mutation.payload, farm_id: farmId });
 }
 
+/**
+ * A lost create_harvest_with_grain response can leave the pair committed while
+ * the insert stays queued, and by the retry the pair may have been edited or
+ * soft-deleted. Verify identity only (stable IDs, own farm, harvest link),
+ * never the full row; the row-state RPC also sees tombstones that RLS hides.
+ */
+async function reconcileLinkedHarvestInsert(
+  linkedHarvest: LinkedHarvestReplay,
+  farmId: string,
+): Promise<boolean> {
+  const harvestId = linkedHarvest.harvestPayload.id;
+  const grainId = linkedHarvest.grainPayload.id;
+  if (typeof harvestId !== 'string' || !harvestId) return false;
+  if (typeof grainId !== 'string' || !grainId) return false;
+  const queuedLink = linkedHarvest.grainPayload.harvest_record_id;
+  if (queuedLink != null && queuedLink !== harvestId) return false;
+
+  const readRow = async (tableName: string, rowId: string) => {
+    const { data, error } = await supabase.rpc('get_offline_sync_row_state', {
+      p_table_name: tableName,
+      p_row_id: rowId,
+      p_farm_id: farmId,
+    });
+    return error || !data || typeof data !== 'object' ? null : data as Record<string, unknown>;
+  };
+  const harvest = await readRow('harvest_records', harvestId);
+  if (!harvest || harvest.id !== harvestId || harvest.farm_id !== farmId) return false;
+  const grain = await readRow('grain_movements', grainId);
+  return !!grain
+    && grain.id === grainId
+    && grain.farm_id === farmId
+    && grain.harvest_record_id === harvestId;
+}
+
 async function reconcileZeroRowMutation(mutation: QueuedMutation, farmId: string): Promise<boolean> {
   const stableId = mutation.payload?.id;
   if (typeof stableId !== 'string' || !stableId) return false;
@@ -837,6 +871,18 @@ async function replayQueueOnce(farmId: string, authRetried: boolean): Promise<bo
             && await reconcileDuplicateInsert(mutation, farmId)
           ) {
             await syncQueue.dequeueMutation(mutation.id);
+            continue;
+          }
+
+          if (
+            linkedHarvest
+            && response.error.code === '23505'
+            && await reconcileLinkedHarvestInsert(linkedHarvest, farmId)
+          ) {
+            for (const id of linkedMutationIds) {
+              await syncQueue.dequeueMutation(id);
+              handledMutationIds.add(id);
+            }
             continue;
           }
 

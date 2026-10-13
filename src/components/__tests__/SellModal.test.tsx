@@ -2,19 +2,32 @@
  * @vitest-environment jsdom
  */
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { toast } from 'sonner';
+
 import SellModal from '../SellModal';
 import { Bin } from '@/types/farm';
+import { toLocalIsoDate } from '@/utils/dates';
 
 // --- Mocks (canonical shape per SprayModal.test.tsx) ---
 const addGrainMovementMock = vi.fn().mockResolvedValue(true);
 const getBinTotalMock = vi.fn();
+const prefs = vi.hoisted(() => ({ locale: 'en-US' as 'en-US' | 'en-AU' }));
+
+vi.mock('sonner', () => ({
+  toast: { warning: vi.fn(), error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock('@/store/useAppPreferences', () => ({
+  useAppPreferences: () => ({ preferences: { country: 'US', locale: prefs.locale, unitSystem: 'imperial' } }),
+}));
 
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     addGrainMovement: addGrainMovementMock,
     getBinTotal: getBinTotalMock,
     viewingSeason: 2026,
+    session: { user: { id: 'user-1' } },
   })
 }));
 
@@ -48,8 +61,13 @@ describe('SellModal inventory validation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    prefs.locale = 'en-US';
     // All-season total: 1,000 prior-season carryover + 300 current-season.
     getBinTotalMock.mockReturnValue(1300);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('checks inventory with the all-season total (no season argument)', () => {
@@ -61,22 +79,45 @@ describe('SellModal inventory validation', () => {
     for (const call of getBinTotalMock.mock.calls) {
       expect(call).toHaveLength(1);
     }
-    expect(screen.getByText(/1,300 bu|1300 bu/)).toBeInTheDocument();
+    expect(screen.getByText(/1,300 bu/)).toBeInTheDocument();
   });
 
-  it('blocks a sale that exceeds the bin inventory', async () => {
+  it('warns without blocking a sale that would leave negative inventory', async () => {
     render(<SellModal bin={bin} open={true} onClose={vi.fn()} />);
 
     const bushelsInput = screen.getByLabelText(/bushels sold/i);
     fireEvent.change(bushelsInput, { target: { value: '2000' } });
 
-    expect(screen.getByText(/EXCEEDS BIN INVENTORY/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /confirm sale/i })).toBeDisabled();
+    expect(screen.getByText(/negative bin inventory/i)).toBeInTheDocument();
+    const confirm = screen.getByRole('button', { name: /confirm sale/i });
+    expect(confirm).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+    await waitFor(() => expect(addGrainMovementMock).toHaveBeenCalledTimes(1));
+    expect(addGrainMovementMock).toHaveBeenCalledWith(expect.objectContaining({ bushels: 2000 }));
+    expect(toast.warning).toHaveBeenCalledWith('This sale would leave negative bin inventory.');
+  });
+
+  it('parses grouped bushels with the app locale and keeps an explicit 0% moisture', async () => {
+    prefs.locale = 'en-AU';
+    render(<SellModal bin={bin} open={true} onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/bushels sold/i), { target: { value: '1,000.5' } });
+    fireEvent.change(screen.getByLabelText(/price \/ bu/i), { target: { value: '4.50' } });
+    fireEvent.change(screen.getByLabelText(/moisture/i), { target: { value: '0' } });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /confirm sale/i }));
     });
-    expect(addGrainMovementMock).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(addGrainMovementMock).toHaveBeenCalledTimes(1));
+    expect(addGrainMovementMock).toHaveBeenCalledWith(expect.objectContaining({
+      bushels: 1000.5,
+      price: 4.5,
+      moisturePercent: 0,
+    }));
   });
 
   it('allows a sale covered by prior-season carryover grain', async () => {
@@ -99,7 +140,19 @@ describe('SellModal inventory validation', () => {
         binName: 'Bin 1',
         type: 'out',
         bushels: 1000,
+        moisturePercent: 15,
       })
     );
+  });
+
+  it('resets the sale date to today when opened after the page was left overnight', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 11, 22, 0, 0));
+    const { rerender } = render(<SellModal bin={bin} open={false} onClose={vi.fn()} />);
+
+    vi.setSystemTime(new Date(2026, 9, 12, 8, 0, 0));
+    rerender(<SellModal bin={bin} open={true} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText(/date/i)).toHaveValue(toLocalIsoDate(new Date(2026, 9, 12, 8, 0, 0).getTime()));
   });
 });

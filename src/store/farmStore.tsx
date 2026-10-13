@@ -137,6 +137,7 @@ interface FarmState {
   /** Operations for managing grain inventory */
   addGrainMovement: (r: Omit<GrainMovement, 'id' | 'deleted_at' | 'seasonYear' | 'farm_id'> & { timestamp?: number }) => Promise<boolean>;
   updateGrainMovement: (r: GrainMovement) => Promise<boolean>;
+  updateGrainMovementWithVersion: (r: GrainMovement, previous?: GrainMovement) => Promise<GrainMovement | false>;
   deleteGrainMovements: (ids: string[]) => Promise<boolean>;
   /** Calculation utility for bin inventory levels */
   getBinTotal: (binId: string, season?: number) => number;

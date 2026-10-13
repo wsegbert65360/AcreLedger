@@ -33,6 +33,6 @@ describe('HarvestModal outside taps', () => {
     fireEvent.focusIn(document.body);
 
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByLabelText(/bushels/i)).toHaveValue(1200);
+    expect(screen.getByLabelText(/bushels/i)).toHaveValue('1200');
   });
 });
