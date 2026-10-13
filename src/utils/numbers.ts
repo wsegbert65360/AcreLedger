@@ -1,3 +1,6 @@
+import { formatNumber } from '@/lib/locale/numbers';
+import type { LocaleCode } from '@/store/useAppPreferences';
+
 /**
  * Round a number to a given number of decimal places.
  * Avoids floating-point precision errors.
@@ -11,8 +14,8 @@ export function roundTo(val: number, decimals: number = 2): number {
 /**
  * Format a measurement for display (e.g., acreage, yield).
  */
-export function formatMeasurement(value: number, unit: string, decimals = 2): string {
-    return `${roundTo(value, decimals).toLocaleString()} ${unit}`;
+export function formatMeasurement(value: number, unit: string, decimals = 2, locale: LocaleCode = 'en-US'): string {
+    return `${formatNumber(roundTo(value, decimals), locale, { maximumFractionDigits: 3 })} ${unit}`;
 }
 
 export type CapacityLevel = 'ok' | 'warning' | 'critical';

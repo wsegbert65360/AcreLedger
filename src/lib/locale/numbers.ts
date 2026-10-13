@@ -21,14 +21,14 @@ const DECIMAL_SEPARATORS: Record<LocaleCode, string> = {
 export function formatNumber(
   value: number,
   locale: LocaleCode,
-  options?: { decimals?: number },
+  options?: { decimals?: number; maximumFractionDigits?: number },
 ): string {
   if (!Number.isFinite(value)) return '';
   const formatter = new Intl.NumberFormat(
     locale,
     options?.decimals !== undefined
       ? { minimumFractionDigits: options.decimals, maximumFractionDigits: options.decimals }
-      : { maximumFractionDigits: 2 },
+      : { maximumFractionDigits: options?.maximumFractionDigits ?? 2 },
   );
   return formatter.format(value);
 }

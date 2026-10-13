@@ -13,6 +13,7 @@ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import type { SignOutResult, SignOutScope } from '@/lib/authSignOut';
 import { buildSeasonOptions, getMaxViewingSeason, isValidViewingSeason } from '@/lib/seasonYears';
 
 import { getSignedBushels, roundTo } from '@/utils/numbers';
@@ -168,8 +169,9 @@ interface FarmState {
   addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id' | 'farm_id'>) => Promise<boolean>;
   updateFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'farm_id'>) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
-  /** Global sign out and cache clearing */
-  signOut: (options?: ClearLocalCacheOptions) => Promise<void>;
+  /** This-device sign out and cache clearing; deletion can request global scope. */
+  deletionStatus: 'checking' | 'clear' | 'pending' | 'error';
+  signOut: (options?: ClearLocalCacheOptions & { scope?: SignOutScope; preserveLocalData?: boolean }) => Promise<SignOutResult>;
   /** Clears all local application storage */
   clearLocalCache: (options?: ClearLocalCacheOptions) => Promise<boolean>;
   /** Unique ID for the current farm */
@@ -232,10 +234,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     farm_id, setFarmId,
     activeSeason, setActiveSeason,
     viewingSeason, setViewingSeason,
-    onboardingComplete, setOnboardingComplete,
+    onboardingComplete, setOnboardingComplete, ensureFarm,
   } = auth;
   const sessionResolved = session !== undefined;
   const sessionUserId = session?.user?.id ?? null;
+  const sessionUserIdRef = useRef(sessionUserId);
+  sessionUserIdRef.current = sessionUserId;
   const identityKey = sessionUserId && farm_id ? `${sessionUserId}:${farm_id}` : null;
 
   const [farmName, setFarmName] = useState<string | null>(null);
@@ -798,10 +802,32 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Composed signOut (auth + cache clear) ---
   const clearLocalCache = seasonOps.clearLocalCache;
   const authSignOut = auth.signOut;
-  const signOut = useCallback(async (options?: ClearLocalCacheOptions) => {
-    const cacheCleared = await clearLocalCache(options);
-    if (!cacheCleared) return;
-    await authSignOut();
+  const [signingOut, setSigningOut] = useState(false);
+  const signOut = useCallback(async (options?: ClearLocalCacheOptions & { scope?: SignOutScope; preserveLocalData?: boolean }): Promise<SignOutResult> => {
+    setSigningOut(true);
+    try {
+      let result: SignOutResult;
+      try {
+        result = await authSignOut(options?.scope ?? 'local');
+      } catch (error) {
+        console.error('Could not end local session:', error);
+        toast.error('Could not sign out on this device. Please try again.');
+        return { signedOut: false, serverPending: true };
+      }
+      // Deletion-pending users cannot sync or inspect their queue. Leave it
+      // scoped to its owner instead of discarding work from that screen.
+      if (options?.preserveLocalData) return { ...result, cacheCleared: false };
+      let cacheCleared = false;
+      try {
+        cacheCleared = await clearLocalCache(options);
+      } catch (error) {
+        console.error('Could not clear local records after sign-out:', error);
+        toast.error('Signed out on this device; some local records could not be cleared.');
+      }
+      return { ...result, cacheCleared };
+    } finally {
+      setSigningOut(false);
+    }
   }, [authSignOut, clearLocalCache]);
 
   // --- Derived data ---
@@ -870,18 +896,18 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   }, [binTotals]);
 
   const updateFarmName = useCallback(async (newName: string): Promise<boolean> => {
-    if (!farm_id) {
-      toast.error('No farm selected.');
-      return false;
-    }
+    const userId = session?.user?.id;
     if (!newName.trim()) {
       toast.error('Farm name cannot be empty.');
       return false;
     }
 
     try {
+      if (!farm_id && !await ensureFarm()) return false;
+      if (!userId || sessionUserIdRef.current !== userId) return false;
       const { error } = await supabase.rpc('update_farm_name', { p_name: newName.trim() });
       if (error) throw error;
+      if (sessionUserIdRef.current !== userId) return false;
 
       setFarmName(newName.trim());
       toast.success('Farm name updated successfully.');
@@ -891,7 +917,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       toast.error(err.message || 'Failed to update farm name.');
       return false;
     }
-  }, [farm_id]);
+  }, [ensureFarm, farm_id, session]);
 
   const completeOnboarding = useCallback(async (): Promise<boolean> => {
     const userId = session?.user?.id;
@@ -901,26 +927,33 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      localStorage.setItem(`${userId}_al_onboarding_complete`, '1');
-      setOnboardingComplete(true);
-
+      if (!farm_id && !await ensureFarm()) return false;
+      if (sessionUserIdRef.current !== userId) return false;
       const { error } = await supabase
         .from('profiles')
         .update({ onboarding_complete: true })
         .eq('id', userId);
       if (error) throw error;
 
+      if (sessionUserIdRef.current !== userId) return false;
+      setOnboardingComplete(true);
+      try {
+        localStorage.setItem(`${userId}_al_onboarding_complete`, '1');
+      } catch (storageError) {
+        console.error('Failed to cache onboarding progress:', storageError);
+      }
       return true;
     } catch (err: any) {
       console.error('Error completing onboarding:', err);
       toast.error(err.message || 'Failed to save onboarding progress. Please try again.');
       return false;
     }
-  }, [session, setOnboardingComplete]);
+  }, [ensureFarm, farm_id, session, setOnboardingComplete]);
 
   return (
     <FarmContext.Provider value={{
-      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading, initialFetchComplete, fetchError,
+      deletionStatus: auth.deletionStatus,
+      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,

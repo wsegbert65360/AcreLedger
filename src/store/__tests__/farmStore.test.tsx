@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createSupabaseMock } from '@/test/supabaseMock';
+import { createSupabaseMock, type SupabaseResult } from '@/test/supabaseMock';
 import type { GrainMovement } from '@/types/farm';
 
 /**
@@ -19,6 +19,7 @@ const cloud = createSupabaseMock();
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
 const authSignOut = vi.fn();
+const ensureFarmMock = vi.fn();
 // farmStore's fetch effect depends on setLoading; production passes a stable
 // useState setter, so the mock must too or every re-render re-triggers
 // fetchData (which corrupts stateful page queues set up by pagination tests).
@@ -37,6 +38,7 @@ const control = {
   farm_id: 'farm-1' as string | null,
   user_id: 'user-1' as string | null,
   isOnline: false,
+  onboardingComplete: true,
 };
 const cacheControl: {
   data: Record<string, unknown>;
@@ -51,7 +53,7 @@ vi.doMock('@/store/useAuth', () => ({
     const session = control.user_id ? { user: { id: control.user_id } } : null;
     const [activeSeason, setActiveSeason] = useState(2026);
     const [viewingSeason, setViewingSeason] = useState(2026);
-    const [onboardingComplete, setOnboardingComplete] = useState(true);
+    const [onboardingComplete, setOnboardingComplete] = useState(control.onboardingComplete);
     return {
       session,
       loading: false,
@@ -65,6 +67,7 @@ vi.doMock('@/store/useAuth', () => ({
       onboardingComplete,
       setOnboardingComplete,
       signOut: authSignOut,
+      ensureFarm: ensureFarmMock,
     };
   },
 }));
@@ -146,11 +149,14 @@ describe('farmStore composed behaviors', () => {
     control.farm_id = 'farm-1';
     control.user_id = 'user-1';
     control.isOnline = false;
+    control.onboardingComplete = true;
+    ensureFarmMock.mockReset().mockResolvedValue('farm-1');
+    localStorage.clear();
     cacheControl.data = {};
     cacheControl.load = null;
     toastError.mockReset();
     toastSuccess.mockReset();
-    authSignOut.mockReset().mockResolvedValue(undefined);
+    authSignOut.mockReset().mockResolvedValue({ signedOut: true, serverPending: false });
     authSetLoading.mockReset();
     clearLocalCacheMock.mockReset();
     getPendingCountMock.mockReset().mockResolvedValue(0);
@@ -164,6 +170,72 @@ describe('farmStore composed behaviors', () => {
         : cacheControl.data[table] ?? null));
     saveCacheMock.mockReset();
     vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  describe('onboarding persistence', () => {
+    it('keeps local onboarding incomplete when the profile write fails', async () => {
+      control.onboardingComplete = false;
+      cloud.setResult({ error: { message: 'offline' } });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await act(async () => expect(await result.current.completeOnboarding()).toBe(false));
+      expect(result.current.onboardingComplete).toBe(false);
+      expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
+    });
+
+    it('waits for a successful profile write before updating local onboarding', async () => {
+      control.onboardingComplete = false;
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      let finish!: (value: Partial<SupabaseResult>) => void;
+      cloud.setTablePages('profiles', [new Promise(resolve => { finish = resolve; })]);
+      let completion!: Promise<boolean>;
+      act(() => { completion = result.current.completeOnboarding(); });
+      await waitFor(() => expect(cloud.fns.update).toHaveBeenCalledWith({ onboarding_complete: true }));
+      expect(result.current.onboardingComplete).toBe(false);
+      expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
+      await act(async () => {
+        finish({ error: null });
+        expect(await completion).toBe(true);
+      });
+      expect(result.current.onboardingComplete).toBe(true);
+      expect(localStorage.getItem('user-1_al_onboarding_complete')).toBe('1');
+    });
+
+    it('retries a missing farm before renaming during onboarding', async () => {
+      control.farm_id = null;
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await act(async () => expect(await result.current.updateFarmName('Oak Creek')).toBe(true));
+      expect(ensureFarmMock).toHaveBeenCalledTimes(1);
+      expect(cloud.fns.rpc).toHaveBeenCalledWith('update_farm_name', { p_name: 'Oak Creek' });
+    });
+
+    it('keeps onboarding incomplete if farm initialization still fails', async () => {
+      control.farm_id = null;
+      control.onboardingComplete = false;
+      ensureFarmMock.mockResolvedValue(null);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await act(async () => expect(await result.current.completeOnboarding()).toBe(false));
+      expect(cloud.fns.update).not.toHaveBeenCalled();
+      expect(result.current.onboardingComplete).toBe(false);
+    });
+
+    it('discards an onboarding result when the current user changes', async () => {
+      control.onboardingComplete = false;
+      const { result, rerender } = renderHook(() => useFarm(), { wrapper });
+      let finish!: (value: Partial<SupabaseResult>) => void;
+      cloud.setTablePages('profiles', [new Promise(resolve => { finish = resolve; })]);
+      let completion!: Promise<boolean>;
+      act(() => { completion = result.current.completeOnboarding(); });
+      await waitFor(() => expect(cloud.fns.update).toHaveBeenCalled());
+      control.user_id = 'user-2';
+      rerender();
+      await act(async () => {
+        finish({ error: null });
+        expect(await completion).toBe(false);
+      });
+      expect(result.current.onboardingComplete).toBe(false);
+      expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
+      expect(localStorage.getItem('user-2_al_onboarding_complete')).toBeNull();
+    });
   });
 
   describe('getBinTotal', () => {
@@ -211,18 +283,55 @@ describe('farmStore composed behaviors', () => {
   });
 
   describe('signOut composition', () => {
-    it('does not end the auth session when the local cache cannot be cleared', async () => {
+    it('preserves local records and queued work for deletion-pending sign-out', async () => {
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut({ preserveLocalData: true })).toEqual({
+        signedOut: true, serverPending: false, cacheCleared: false,
+      }));
+      expect(authSignOut).toHaveBeenCalledWith('local');
+      expect(clearLocalCacheMock).not.toHaveBeenCalled();
+    });
+
+    it('preserves the signed-out result when later cache cleanup throws', async () => {
+      clearLocalCacheMock.mockRejectedValue(new Error('storage unavailable'));
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut()).toEqual({
+        signedOut: true, serverPending: false, cacheCleared: false,
+      }));
+      expect(toastError).toHaveBeenCalledWith('Signed out on this device; some local records could not be cleared.');
+    });
+
+    it('preserves the queue when persisted credentials cannot be removed', async () => {
+      authSignOut.mockRejectedValue(new Error('secure storage unavailable'));
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut()).toEqual({ signedOut: false, serverPending: true }));
+      expect(clearLocalCacheMock).not.toHaveBeenCalled();
+    });
+
+    it('returns server pending status to the settings caller', async () => {
+      authSignOut.mockResolvedValue({ signedOut: true, serverPending: true });
+      clearLocalCacheMock.mockResolvedValue(true);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.signOut()).toEqual({
+        signedOut: true, serverPending: true, cacheCleared: true,
+      }));
+    });
+
+    it('reports remaining cache after ending the auth session', async () => {
       clearLocalCacheMock.mockResolvedValue(false);
       const { result } = renderHook(() => useFarm(), { wrapper });
       await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
 
       await act(async () => { await result.current.signOut(); });
 
-      // Fail closed: pending offline work might survive, so the session stays.
-      expect(authSignOut).not.toHaveBeenCalled();
+      expect(authSignOut).toHaveBeenCalledWith('local');
     });
 
-    it('ends the auth session after the cache clears successfully', async () => {
+    it('ends auth before clearing the irreversible queue', async () => {
       clearLocalCacheMock.mockResolvedValue(true);
       const { result } = renderHook(() => useFarm(), { wrapper });
       await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
@@ -231,6 +340,7 @@ describe('farmStore composed behaviors', () => {
 
       expect(clearLocalCacheMock).toHaveBeenCalled();
       expect(authSignOut).toHaveBeenCalledTimes(1);
+      expect(authSignOut.mock.invocationCallOrder[0]).toBeLessThan(clearLocalCacheMock.mock.invocationCallOrder[0]);
     });
 
     it('forwards emergency sign-out so the session can end without a readable store', async () => {

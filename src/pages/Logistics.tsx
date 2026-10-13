@@ -11,6 +11,7 @@ import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
 import type { Bin, GrainMovement } from '@/types/farm';
 import { formatShortDate } from '@/utils/dates';
 import { CAPACITY_LEVEL_STYLES, formatMeasurement, getCapacityLevel, getSignedBushels, roundTo } from '@/utils/numbers';
@@ -107,7 +108,8 @@ function BinQuickActions({ bin, variant, onAdd, onSell }: BinQuickActionsProps) 
 }
 
 export default function Logistics() {
-  const { bins, getBinTotal, grainMovements } = useFarm();
+  const { bins, getBinTotal, grainMovements, session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const [managing, setManaging] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
   const [addingBin, setAddingBin] = useState<Bin | null>(null);
@@ -243,7 +245,7 @@ export default function Logistics() {
                         <div className="flex shrink-0 items-center gap-1">
                           {movement.bushels < 0 && <AlertTriangle size={14} className="text-amber-600" />}
                           <span className={cn('font-mono text-sm font-bold', amountClass)}>
-                            {signedBushels > 0 ? '+' : ''}{formatMeasurement(signedBushels, 'bu', 1)}
+                            {signedBushels > 0 ? '+' : ''}{formatMeasurement(signedBushels, 'bu', 1, preferences.locale)}
                           </span>
                         </div>
                       </div>
@@ -261,7 +263,7 @@ export default function Logistics() {
                 <BinSiloThumb id={`selected-${selectedBinDetail.id}`} percentFull={selectedBinDetail.pct} className="h-20 w-14" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-foreground">{selectedBinDetail.name}</p>
-                  <p className="font-mono text-xs text-muted-foreground">{formatMeasurement(selectedBinDetail.total, 'bu', 1)}</p>
+                  <p className="font-mono text-xs text-muted-foreground">{formatMeasurement(selectedBinDetail.total, 'bu', 1, preferences.locale)}</p>
                   <span className={cn('mt-1 inline-block font-mono text-sm font-bold', CAPACITY_LEVEL_STYLES[getCapacityLevel(selectedBinDetail.pct)].tone)}>
                     {roundTo(selectedBinDetail.pct, 0)}%
                   </span>
@@ -287,11 +289,11 @@ export default function Logistics() {
         <section className="grid grid-cols-3 gap-2 sm:gap-3">
           <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
             <p className="text-xs font-semibold text-muted-foreground sm:text-sm">Stored</p>
-            <p className="mt-1 whitespace-nowrap font-mono text-lg font-bold text-foreground lg:text-2xl">{formatMeasurement(totals.stored, 'bu', 1)}</p>
+            <p className="mt-1 whitespace-nowrap font-mono text-lg font-bold text-foreground lg:text-2xl">{formatMeasurement(totals.stored, 'bu', 1, preferences.locale)}</p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
             <p className="text-xs font-semibold text-muted-foreground sm:text-sm">Capacity</p>
-            <p className="mt-1 whitespace-nowrap font-mono text-lg font-bold text-foreground lg:text-2xl">{formatMeasurement(totals.capacity, 'bu', 1)}</p>
+            <p className="mt-1 whitespace-nowrap font-mono text-lg font-bold text-foreground lg:text-2xl">{formatMeasurement(totals.capacity, 'bu', 1, preferences.locale)}</p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4">
             <p className="text-xs font-semibold text-muted-foreground sm:text-sm">Overall fill</p>
@@ -318,7 +320,7 @@ export default function Logistics() {
                   key={bin.id}
                   type="button"
                   onClick={() => setSelectedBinId(bin.id)}
-                  aria-label={`${bin.name}, ${roundTo(bin.pct, 0)} percent full, ${formatMeasurement(bin.total, 'bu', 1)} of ${formatMeasurement(bin.capacity, 'bu', 1)}, ${status.statusLabel}`}
+                  aria-label={`${bin.name}, ${roundTo(bin.pct, 0)} percent full, ${formatMeasurement(bin.total, 'bu', 1, preferences.locale)} of ${formatMeasurement(bin.capacity, 'bu', 1, preferences.locale)}, ${status.statusLabel}`}
                   className="group relative overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-harvest/45 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div
@@ -335,7 +337,7 @@ export default function Logistics() {
                         </span>
                       </div>
                       <p className="mt-1 font-mono text-sm text-muted-foreground">
-                        {formatMeasurement(bin.total, 'bu', 1)} of {formatMeasurement(bin.capacity, 'bu', 1)}
+                        {formatMeasurement(bin.total, 'bu', 1, preferences.locale)} of {formatMeasurement(bin.capacity, 'bu', 1, preferences.locale)}
                       </p>
                       <span className={cn('mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold', status.statusClassName)}>
                         {status.statusLabel}

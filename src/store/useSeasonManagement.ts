@@ -508,7 +508,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       void refetchFarmData();
     }
 
-    if (!skipUnreadableStore) {
+    if (!skipUnreadableStore && !isSignOut) {
       toast.success(`Local cache cleared (${keysToRemove.length} item${keysToRemove.length !== 1 ? 's' : ''} removed).`);
     }
     return true;
