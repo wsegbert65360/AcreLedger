@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   assertTestModeBilling,
   canOpenPortal,
+  cleanEnvValue,
   isBillingAllowlisted,
 } from '../server/billing.js';
 
@@ -31,23 +32,6 @@ function getAllowedOrigins(): Set<string> {
   const raw = process.env.ALLOWED_ORIGINS;
   if (!raw) return new Set();
   return new Set(raw.split(',').map(s => s.trim()).filter(Boolean));
-}
-
-/**
- * Mirror of the client's cleanEnvValue (src/lib/supabase.ts): Vercel env
- * values pasted with surrounding quotes or whitespace otherwise break the
- * Supabase client bootstrap (a quoted anon key fails every getUser call).
- */
-function cleanEnvValue(value: string | undefined): string {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1).trim();
-  }
-  return trimmed;
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -149,7 +133,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(500).json({ error: 'Could not verify billing status' });
     }
 
-    const portalGate = canOpenPortal(existing, user.id);
+    let ownerIsCurrentMember = true;
+    if (existing && existing.owner_user_id !== user.id) {
+      const { data: ownerProfile, error: ownerError } = await supabase
+        .from('profiles')
+        .select('id, farm_id')
+        .eq('id', existing.owner_user_id)
+        .maybeSingle();
+      if (ownerError) {
+        console.error('Failed to verify billing owner membership:', ownerError.message);
+        return res.status(500).json({ error: 'Could not verify billing status' });
+      }
+      ownerIsCurrentMember = ownerProfile?.farm_id === farmId;
+    }
+
+    const portalGate = canOpenPortal(existing, user.id, ownerIsCurrentMember);
     if (!portalGate.ok) {
       if (portalGate.reason === 'no_subscription') {
         return res.status(400).json({ error: 'No billing subscription found for this farm.' });
@@ -165,10 +163,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     // ---------- Hosted Customer Portal ----------
+    const portalConfigurationId = cleanEnvValue(process.env.BILLING_PORTAL_CONFIGURATION_ID);
+    if (!portalConfigurationId.startsWith('bpc_')) {
+      return res.status(503).json({ error: 'Billing portal is not configured.' });
+    }
     const stripe = new Stripe(billing.config.secretKey);
     try {
       const portal = await stripe.billingPortal.sessions.create({
         customer: existing!.stripe_customer_id!,
+        configuration: portalConfigurationId,
         return_url: `${origin}/settings?billing=portal`,
       });
       if (!portal.url) {

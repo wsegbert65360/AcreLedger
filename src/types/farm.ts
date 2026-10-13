@@ -428,6 +428,8 @@ export interface FarmSubscription {
   status: FarmSubscriptionStatus;
   trial_ends_at: string | null;
   current_period_end: string | null;
+  past_due_since: string | null;
+  ended_at: string | null;
   cancel_at_period_end: boolean;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;

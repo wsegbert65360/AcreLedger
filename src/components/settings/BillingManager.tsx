@@ -34,13 +34,13 @@ function getStatusBadge(subscription: FarmSubscription | null): { label: string;
   }
 }
 
-function getStatusLine(subscription: FarmSubscription | null): string {
+function getStatusLine(subscription: FarmSubscription | null, priceLabel: string): string {
   if (!subscription || subscription.deleted_at) {
     return 'No billing subscription for this farm yet.';
   }
   switch (subscription.status) {
     case 'trialing':
-      return `Full access on your free trial through ${formatIsoDate(subscription.trial_ends_at) || 'your trial end date'}. $299/year starts after the trial.`;
+      return `Full access on your free trial through ${formatIsoDate(subscription.trial_ends_at) || 'your trial end date'}. ${priceLabel} starts after the trial.`;
     case 'active':
       return subscription.cancel_at_period_end
         ? `Active through ${formatIsoDate(subscription.current_period_end) || 'your period end date'}, then cancels.`
@@ -63,32 +63,28 @@ export default function BillingManager() {
   const [isBusy, setIsBusy] = useState(false);
 
   const userId = session?.user?.id ?? null;
-  const userEmail = session?.user?.email ?? null;
-
-  useEffect(() => {
+  const loadSubscription = useCallback(async () => {
     if (!farm_id || !userId) {
       setSubscription(null);
       return;
     }
-    let cancelled = false;
-    supabase
+    const { data, error } = await supabase
       .from('farm_subscriptions')
-      .select('*')
+      .select('id, farm_id, owner_user_id, status, trial_ends_at, current_period_end, past_due_since, ended_at, cancel_at_period_end, stripe_customer_id, stripe_subscription_id, stripe_subscription_created_at, stripe_price_id, created_at, updated_at, deleted_at')
       .eq('farm_id', farm_id)
       .is('deleted_at', null)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          toast.error('Could not load billing status.');
-          return;
-        }
-        setSubscription((data as FarmSubscription | null) ?? null);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .maybeSingle();
+    if (error) throw error;
+    setSubscription((data as FarmSubscription | null) ?? null);
   }, [farm_id, userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadSubscription().catch(() => {
+      if (!cancelled) toast.error('Could not load billing status.');
+    });
+    return () => { cancelled = true; };
+  }, [loadSubscription]);
 
   // One-shot notices when Stripe redirects back to Settings.
   useEffect(() => {
@@ -104,10 +100,17 @@ export default function BillingManager() {
     );
     if (billing === 'success') {
       toast.success('Thanks! Your subscription is being finalized.');
+      let attempts = 0;
+      const timer = window.setInterval(() => {
+        attempts += 1;
+        void loadSubscription().catch(() => undefined);
+        if (attempts >= 6) window.clearInterval(timer);
+      }, 5_000);
+      return () => window.clearInterval(timer);
     } else if (billing === 'cancelled') {
       toast.info('Checkout cancelled — no changes were made.');
     }
-  }, []);
+  }, [loadSubscription]);
 
   const openBillingSession = useCallback(
     async (kind: 'checkout' | 'portal') => {
@@ -137,11 +140,13 @@ export default function BillingManager() {
   if (!billingUiEnabled || !session || !farm_id) return null;
 
   const allowlisted = isBillingAllowlisted(
-    { email: userEmail, userId },
-    import.meta.env.VITE_BILLING_ALLOWLIST as string | undefined,
+    { userId },
+    import.meta.env.VITE_BILLING_USER_ID_ALLOWLIST as string | undefined,
   );
   const hasActiveRow = subscription != null && subscription.deleted_at == null;
-  const isOwner = hasActiveRow && subscription.owner_user_id === userId;
+  // The server re-checks whether the recorded owner still belongs to this farm.
+  // Keep actions visible to farm members so a departed owner cannot strand billing.
+  const isOwner = hasActiveRow;
   // No row yet: the first allowlisted member to check out becomes the owner.
   const canManage = !hasActiveRow || isOwner;
   const badge = getStatusBadge(subscription);
@@ -153,7 +158,11 @@ export default function BillingManager() {
     subscription.status === 'canceled' ||
     subscription.status === 'incomplete';
   const hadPriorSubscription = subscription?.stripe_subscription_id != null;
-  const canOpenPortal = hasActiveRow && isOwner && subscription.stripe_customer_id != null;
+  const canOpenPortal =
+    hasActiveRow && isOwner && !needsCheckout && subscription.stripe_customer_id != null;
+  const priceLabel =
+    (import.meta.env.VITE_BILLING_PRICE_LABEL as string | undefined)?.trim() ||
+    'Annual subscription';
 
   return (
     <Card className="border-border/30">
@@ -175,7 +184,7 @@ export default function BillingManager() {
           </p>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">{getStatusLine(subscription)}</p>
+            <p className="text-sm text-muted-foreground">{getStatusLine(subscription, priceLabel)}</p>
             {hasActiveRow && !isOwner && (
               <p className="text-sm text-muted-foreground">
                 Ask the farm owner to manage billing for this farm.
@@ -208,7 +217,7 @@ export default function BillingManager() {
             )}
             {canManage && subscription == null && (
               <p className="text-xs text-muted-foreground">
-                $299/year after the trial. Your payment method is collected at checkout; the first
+                {priceLabel} after the trial. Your payment method is collected at checkout; the first
                 charge happens when the trial ends.
               </p>
             )}

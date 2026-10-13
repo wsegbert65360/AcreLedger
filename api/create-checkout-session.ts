@@ -6,9 +6,11 @@ import {
   buildCheckoutCustomerParams,
   buildCheckoutIdempotencyKey,
   canStartCheckout,
+  cleanEnvValue,
   hasLiveStripeSubscription,
   isBillingAllowlisted,
   shouldGrantTrial,
+  validateConfiguredPrice,
 } from '../server/billing.js';
 
 type QueryValue = string | string[] | undefined;
@@ -36,23 +38,6 @@ function getAllowedOrigins(): Set<string> {
   const raw = process.env.ALLOWED_ORIGINS;
   if (!raw) return new Set();
   return new Set(raw.split(',').map(s => s.trim()).filter(Boolean));
-}
-
-/**
- * Mirror of the client's cleanEnvValue (src/lib/supabase.ts): Vercel env
- * values pasted with surrounding quotes or whitespace otherwise break the
- * Supabase client bootstrap (a quoted anon key fails every getUser call).
- */
-function cleanEnvValue(value: string | undefined): string {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1).trim();
-  }
-  return trimmed;
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -154,7 +139,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(500).json({ error: 'Could not verify billing status' });
     }
 
-    const checkoutGate = canStartCheckout(existing, user.id);
+    let ownerIsCurrentMember = true;
+    if (existing && existing.owner_user_id !== user.id) {
+      const { data: ownerProfile, error: ownerError } = await supabase
+        .from('profiles')
+        .select('id, farm_id')
+        .eq('id', existing.owner_user_id)
+        .maybeSingle();
+      if (ownerError) {
+        console.error('Failed to verify billing owner membership:', ownerError.message);
+        return res.status(500).json({ error: 'Could not verify billing status' });
+      }
+      ownerIsCurrentMember = ownerProfile?.farm_id === farmId;
+    }
+
+    const checkoutGate = canStartCheckout(existing, user.id, ownerIsCurrentMember);
     if (!checkoutGate.ok) {
       if (checkoutGate.reason === 'not_owner') {
         return res.status(403).json({ error: 'Only the farm owner can start billing.' });
@@ -178,11 +177,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (!/^[A-Za-z0-9_-]+$/.test(farmId)) {
       return res.status(400).json({ error: 'No farm selected.' });
     }
+    let stripeHistory: Array<{ status?: string | null }> = [];
     try {
       const found = await stripe.subscriptions.search({
         query: `metadata['farm_id']:'${farmId}'`,
         limit: 10,
       });
+      stripeHistory = found.data;
       if (hasLiveStripeSubscription(found.data)) {
         return res.status(409).json({
           error: 'This farm already has a subscription. Use Manage billing to update payment or renew.',
@@ -194,6 +195,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     try {
+      const price = await stripe.prices.retrieve(billing.config.priceId);
+      const priceError = validateConfiguredPrice(price, process.env);
+      if (priceError) return res.status(503).json({ error: priceError });
+    } catch (err: unknown) {
+      console.error('Stripe price validation error:', err);
+      return res.status(502).json({ error: 'Could not verify billing price' });
+    }
+
+    try {
+      const customerParams = buildCheckoutCustomerParams(existing, email);
+      const automaticTax = cleanEnvValue(process.env.BILLING_AUTOMATIC_TAX) === 'true';
+      const collectTaxId = cleanEnvValue(process.env.BILLING_TAX_ID_COLLECTION) === 'true';
+      const collectBillingAddress =
+        cleanEnvValue(process.env.BILLING_BILLING_ADDRESS_COLLECTION) === 'true';
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'subscription',
@@ -204,17 +219,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           subscription_data: {
             // Trial is a first-subscription offer; re-checkout after a
             // cancellation starts billing immediately.
-            ...(shouldGrantTrial(existing) ? { trial_period_days: TRIAL_PERIOD_DAYS } : {}),
+            ...(shouldGrantTrial(existing, stripeHistory.length > 0)
+              ? { trial_period_days: TRIAL_PERIOD_DAYS }
+              : {}),
             metadata: { farm_id: farmId, user_id: user.id },
           },
           metadata: { farm_id: farmId, user_id: user.id },
           client_reference_id: farmId,
-          ...buildCheckoutCustomerParams(existing, email),
+          ...customerParams,
+          ...(automaticTax ? { automatic_tax: { enabled: true } } : {}),
+          ...(collectTaxId ? { tax_id_collection: { enabled: true } } : {}),
+          ...(collectBillingAddress ? { billing_address_collection: 'required' as const } : {}),
+          ...(collectBillingAddress && 'customer' in customerParams
+            ? { customer_update: { address: 'auto' as const, name: 'auto' as const } }
+            : {}),
           consent_collection: { terms_of_service: 'none' },
           success_url: `${origin}/settings?billing=success`,
           cancel_url: `${origin}/settings?billing=cancelled`,
         },
-        { idempotencyKey: buildCheckoutIdempotencyKey(farmId, existing, `${origin}|${email ?? ''}`) },
+        { idempotencyKey: buildCheckoutIdempotencyKey(farmId, existing) },
       );
       if (!session.url) {
         return res.status(502).json({ error: 'Stripe did not return a checkout URL' });

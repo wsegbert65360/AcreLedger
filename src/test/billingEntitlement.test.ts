@@ -19,6 +19,8 @@ function makeSubscription(overrides: Partial<FarmSubscription> = {}): FarmSubscr
     status: 'trialing',
     trial_ends_at: '2027-01-08T00:00:00.000Z',
     current_period_end: '2027-01-08T00:00:00.000Z',
+    past_due_since: null,
+    ended_at: null,
     cancel_at_period_end: false,
     stripe_customer_id: 'cus_test_1',
     stripe_subscription_id: 'sub_stripe_1',
@@ -76,7 +78,7 @@ describe('getFarmBillingAccess', () => {
     // Period ends 2027-01-08; 2027-01-11T00:00:00Z is exactly +3 days.
     const nowMs = Date.parse('2027-01-11T00:00:00.000Z');
     const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due' }),
+      subscription: makeSubscription({ status: 'past_due', past_due_since: '2027-01-08T00:00:00.000Z' }),
       nowMs,
     });
     expect(access).toEqual({ hasAccess: true, inGrace: true, phase: 'grace', status: 'past_due' });
@@ -85,7 +87,7 @@ describe('getFarmBillingAccess', () => {
   it('locks past_due after the grace window expires', () => {
     const nowMs = Date.parse('2027-01-11T00:00:00.001Z');
     const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due' }),
+      subscription: makeSubscription({ status: 'past_due', past_due_since: '2027-01-08T00:00:00.000Z' }),
       nowMs,
     });
     expect(access.hasAccess).toBe(false);
@@ -95,17 +97,21 @@ describe('getFarmBillingAccess', () => {
   it('honors a custom grace window for past_due', () => {
     const nowMs = Date.parse('2027-01-13T00:00:00.000Z'); // +5 days past period end
     const options = {
-      subscription: makeSubscription({ status: 'past_due' }),
+      subscription: makeSubscription({ status: 'past_due', past_due_since: '2027-01-08T00:00:00.000Z' }),
       nowMs,
     };
     expect(getFarmBillingAccess({ ...options, graceDays: 7 }).hasAccess).toBe(true);
     expect(getFarmBillingAccess({ ...options, graceDays: 3 }).hasAccess).toBe(false);
   });
 
-  it('anchors past_due grace on trial_ends_at when current_period_end is missing', () => {
-    const nowMs = Date.parse('2027-01-08T00:00:00.000Z'); // exactly trial end
+  it('anchors past_due grace on the failure date even after the renewal period advances', () => {
+    const nowMs = Date.parse('2027-01-11T00:00:00.000Z');
     const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due', current_period_end: null }),
+      subscription: makeSubscription({
+        status: 'past_due',
+        current_period_end: '2028-01-08T00:00:00.000Z',
+        past_due_since: '2027-01-08T00:00:00.000Z',
+      }),
       nowMs,
     });
     expect(access.hasAccess).toBe(true);
@@ -113,23 +119,23 @@ describe('getFarmBillingAccess', () => {
 
   it('fails closed for past_due with no recoverable time anchor', () => {
     const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due', current_period_end: null, trial_ends_at: null }),
+      subscription: makeSubscription({ status: 'past_due', past_due_since: null }),
       nowMs: Date.now(),
     });
     expect(access.hasAccess).toBe(false);
     expect(access.phase).toBe('locked');
   });
 
-  it('keeps canceled and unpaid access until the paid period ends', () => {
+  it('keeps canceled and unpaid access only until ended_at', () => {
     for (const status of ['canceled', 'unpaid'] as const) {
       const within = getFarmBillingAccess({
-        subscription: makeSubscription({ status }),
+        subscription: makeSubscription({ status, ended_at: '2027-01-08T00:00:00.000Z' }),
         nowMs: Date.parse(BEFORE_PERIOD_END),
       });
       expect(within).toEqual({ hasAccess: true, inGrace: true, phase: 'grace', status });
 
       const after = getFarmBillingAccess({
-        subscription: makeSubscription({ status }),
+        subscription: makeSubscription({ status, ended_at: '2027-01-08T00:00:00.000Z' }),
         nowMs: Date.parse(AFTER_PERIOD_END),
       });
       expect(after.hasAccess).toBe(false);
@@ -152,8 +158,7 @@ describe('getFarmBillingAccess', () => {
     const access = getFarmBillingAccess({
       subscription: makeSubscription({
         status: 'past_due',
-        current_period_end: 'not-a-date',
-        trial_ends_at: null,
+        past_due_since: 'not-a-date',
       }),
       nowMs: Date.now(),
     });
