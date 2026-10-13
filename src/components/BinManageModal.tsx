@@ -11,8 +11,10 @@ import {
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+import { parseLocalizedNumber } from '@/lib/locale/numbers';
 import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
 import { Bin } from '@/types/farm';
 import { formatMeasurement } from '@/utils/numbers';
 
@@ -23,7 +25,8 @@ interface BinManageModalProps {
 }
 
 export default function BinManageModal({ open, onClose, editBin }: BinManageModalProps) {
-    const { addBin, updateBin } = useFarm();
+    const { addBin, updateBin, session } = useFarm();
+    const { preferences } = useAppPreferences(session?.user?.id ?? null);
     const [name, setName] = useState(editBin?.name || '');
     const [capacity, setCapacity] = useState(editBin?.capacity?.toString() || '');
     const [isSaving, setIsSaving] = useState(false);
@@ -42,8 +45,8 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
     const isEdit = !!editBin;
 
     const handleSubmit = async () => {
-        const cap = parseInt(capacity, 10);
-        if (!name.trim() || isNaN(cap)) {
+        const cap = parseLocalizedNumber(capacity, preferences.locale);
+        if (!name.trim() || cap == null || !Number.isFinite(cap) || cap <= 0) {
             native.haptic.error();
             return;
         }
@@ -69,7 +72,8 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
         }
     };
 
-    const valid = name.trim() && capacity;
+    const parsedCapacity = parseLocalizedNumber(capacity, preferences.locale);
+    const valid = !!name.trim() && parsedCapacity != null && Number.isFinite(parsedCapacity) && parsedCapacity > 0;
 
     return (
         <Dialog open={open} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -101,7 +105,7 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
                         <Input
                             id="binCapacity"
                             name="binCapacity"
-                            type="number"
+                            inputMode="decimal"
                             value={capacity}
                             onChange={e => setCapacity(e.target.value)}
                             placeholder="10000"

@@ -4,6 +4,8 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+import { toast } from 'sonner';
+
 import { Field, HarvestRecord, GrainMovement } from '@/types/farm';
 
 import HarvestModal from '../HarvestModal';
@@ -13,7 +15,8 @@ const state = vi.hoisted(() => ({
   updateHarvestRecord: vi.fn().mockResolvedValue(true),
   addHarvestWithGrain: vi.fn().mockResolvedValue(true),
   addGrainMovement: vi.fn().mockResolvedValue(true),
-  updateGrainMovement: vi.fn().mockResolvedValue(true),
+  updateGrainMovementWithVersion: vi.fn(),
+  getBinTotal: vi.fn(() => 0),
   deleteGrainMovements: vi.fn().mockResolvedValue(true),
 }));
 
@@ -23,9 +26,10 @@ vi.mock('@/store/farmStore', () => ({
     addHarvestWithGrain: state.addHarvestWithGrain,
     updateHarvestRecord: state.updateHarvestRecord,
     addGrainMovement: state.addGrainMovement,
-    updateGrainMovement: state.updateGrainMovement,
+    updateGrainMovementWithVersion: state.updateGrainMovementWithVersion,
     deleteGrainMovements: state.deleteGrainMovements,
     grainMovements: state.grainMovements,
+    getBinTotal: state.getBinTotal,
     harvestRecords: [] as import('@/types/farm').HarvestRecord[],
     bins: [{ id: 'bin-1', farm_id: 'farm-1', name: 'Big Bin', capacity: 50000, deleted_at: null }],
     viewingSeason: 2026,
@@ -33,6 +37,8 @@ vi.mock('@/store/farmStore', () => ({
     farmName: 'Test Farm',
   }),
 }));
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 
 vi.mock('@/lib/native', () => ({
   native: {
@@ -132,7 +138,8 @@ describe('HarvestModal linked grain movement', () => {
     state.updateHarvestRecord.mockResolvedValue(true);
     state.addHarvestWithGrain.mockResolvedValue(true);
     state.addGrainMovement.mockResolvedValue(true);
-    state.updateGrainMovement.mockResolvedValue(true);
+    state.updateGrainMovementWithVersion.mockImplementation(async (r, previous) => ({ ...r, version: (previous?.version ?? r.version ?? 1) + 1 }));
+    state.getBinTotal.mockReturnValue(0);
     state.deleteGrainMovements.mockResolvedValue(true);
   });
 
@@ -162,7 +169,7 @@ describe('HarvestModal linked grain movement', () => {
         bushels: 5000,
       });
       expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-1']);
-      expect(state.updateGrainMovement).not.toHaveBeenCalled();
+      expect(state.updateGrainMovementWithVersion).not.toHaveBeenCalled();
       expect(state.addGrainMovement).not.toHaveBeenCalled();
     });
   });
@@ -183,8 +190,8 @@ describe('HarvestModal linked grain movement', () => {
     fireEvent.click(screen.getByRole('button', { name: /update record/i }));
 
     return waitFor(() => {
-      expect(state.updateGrainMovement).toHaveBeenCalledTimes(1);
-      expect(state.updateGrainMovement.mock.calls[0][0]).toMatchObject({
+      expect(state.updateGrainMovementWithVersion).toHaveBeenCalledTimes(1);
+      expect(state.updateGrainMovementWithVersion.mock.calls[0][0]).toMatchObject({
         id: 'gm-1',
         binId: 'bin-1',
         bushels: 4200,
@@ -212,8 +219,8 @@ describe('HarvestModal linked grain movement', () => {
     fireEvent.click(screen.getByRole('button', { name: /update record/i }));
 
     return waitFor(() => {
-      expect(state.updateGrainMovement).toHaveBeenCalledTimes(1);
-      expect(state.updateGrainMovement.mock.calls[0][0]).toMatchObject({
+      expect(state.updateGrainMovementWithVersion).toHaveBeenCalledTimes(1);
+      expect(state.updateGrainMovementWithVersion.mock.calls[0][0]).toMatchObject({
         id: 'gm-1',
         binId: 'bin-1',
         bushels: 5000,
@@ -243,8 +250,8 @@ describe('HarvestModal linked grain movement', () => {
     fireEvent.click(screen.getByRole('button', { name: /update record/i }));
 
     return waitFor(() => {
-      expect(state.updateGrainMovement).toHaveBeenCalledTimes(1);
-      expect(state.updateGrainMovement.mock.calls[0][0]).toMatchObject({
+      expect(state.updateGrainMovementWithVersion).toHaveBeenCalledTimes(1);
+      expect(state.updateGrainMovementWithVersion.mock.calls[0][0]).toMatchObject({
         id: 'gm-1',
         harvestRecordId: 'harvest-1',
       });
@@ -272,7 +279,7 @@ describe('HarvestModal linked grain movement', () => {
 
     return waitFor(() => {
       expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-1', 'gm-legacy']);
-      expect(state.updateGrainMovement).not.toHaveBeenCalled();
+      expect(state.updateGrainMovementWithVersion).not.toHaveBeenCalled();
       expect(state.addGrainMovement).not.toHaveBeenCalled();
     });
   });
@@ -295,7 +302,7 @@ describe('HarvestModal linked grain movement', () => {
     fireEvent.click(screen.getByRole('button', { name: /update record/i }));
 
     return waitFor(() => {
-      expect(state.updateGrainMovement).toHaveBeenCalledTimes(2);
+      expect(state.updateGrainMovementWithVersion).toHaveBeenCalledTimes(2);
       expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-legacy']);
       expect(state.updateHarvestRecord).not.toHaveBeenCalled();
     });
@@ -327,7 +334,7 @@ describe('HarvestModal linked grain movement', () => {
         type: 'in',
         harvestRecordId: 'harvest-1',
       });
-      expect(state.updateGrainMovement).not.toHaveBeenCalled();
+      expect(state.updateGrainMovementWithVersion).not.toHaveBeenCalled();
     });
   });
 
@@ -349,7 +356,7 @@ describe('HarvestModal linked grain movement', () => {
     return waitFor(() => {
       expect(state.deleteGrainMovements).toHaveBeenCalledWith(['gm-1']);
       expect(state.addGrainMovement).not.toHaveBeenCalled();
-      expect(state.updateGrainMovement).not.toHaveBeenCalled();
+      expect(state.updateGrainMovementWithVersion).not.toHaveBeenCalled();
     });
   });
 
@@ -391,11 +398,12 @@ describe('HarvestModal linked grain movement', () => {
     fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '4200' } });
     fireEvent.click(screen.getByRole('button', { name: /update record/i }));
 
-    await waitFor(() => expect(state.updateGrainMovement).toHaveBeenCalledTimes(2));
-    expect(state.updateGrainMovement.mock.calls[0][0]).toMatchObject({ bushels: 4200 });
+    await waitFor(() => expect(state.updateGrainMovementWithVersion).toHaveBeenCalledTimes(2));
+    expect(state.updateGrainMovementWithVersion.mock.calls[0][0]).toMatchObject({ bushels: 4200 });
     expect(state.updateHarvestRecord).toHaveBeenCalledTimes(1);
-    expect(state.updateGrainMovement.mock.calls[1][0]).toEqual(originalMovement);
-    expect(state.updateGrainMovement.mock.invocationCallOrder[0])
+    expect(state.updateGrainMovementWithVersion.mock.calls[1][0]).toEqual(originalMovement);
+    expect(state.updateGrainMovementWithVersion.mock.calls[1][1]).toMatchObject({ bushels: 4200, version: 2 });
+    expect(state.updateGrainMovementWithVersion.mock.invocationCallOrder[0])
       .toBeLessThan(state.updateHarvestRecord.mock.invocationCallOrder[0]);
   });
 });
@@ -454,13 +462,13 @@ it('saves a selected local harvest time to the harvest and linked bin movement',
   vi.clearAllMocks();
   state.grainMovements = [linkedMovement()];
   state.updateHarvestRecord.mockResolvedValue(true);
-  state.updateGrainMovement.mockResolvedValue(true);
+  state.updateGrainMovementWithVersion.mockResolvedValue(true);
   render(<HarvestModal field={field} open onClose={() => {}} initialData={binHarvest()} />);
   fireEvent.change(screen.getByLabelText('HARVEST DATE'), { target: { value: '2026-09-03' } });
   fireEvent.change(screen.getByLabelText('HARVEST TIME'), { target: { value: '19:45' } });
   fireEvent.click(screen.getByRole('button', { name: /update record/i }));
   const timestamp = new Date(2026, 8, 3, 19, 45).getTime();
-  await waitFor(() => expect(state.updateGrainMovement).toHaveBeenCalledWith(expect.objectContaining({ timestamp })));
+  await waitFor(() => expect(state.updateGrainMovementWithVersion).toHaveBeenCalledWith(expect.objectContaining({ timestamp })));
   expect(state.updateHarvestRecord).toHaveBeenCalledWith(expect.objectContaining({ harvestDate: '2026-09-03', timestamp }));
 });
 
@@ -486,4 +494,68 @@ describe('HarvestModal landlord split defaults', () => {
     fireEvent.click(screen.getByRole('button', { name: /bin/i }));
     expect((screen.getByLabelText(/landlord %/i) as HTMLInputElement).value).toBe('25');
   });
+});
+
+
+it('reports failed leftover compensation without claiming the harvest was saved', async () => {
+  vi.clearAllMocks();
+  state.grainMovements = [
+    linkedMovement({ version: 3 }),
+    linkedMovement({ id: 'legacy', harvestRecordId: undefined }),
+  ];
+  state.deleteGrainMovements.mockResolvedValue(false);
+  state.updateGrainMovementWithVersion
+    .mockResolvedValueOnce({ ...linkedMovement(), bushels: 4200, version: 4 })
+    .mockResolvedValueOnce(false);
+  const onClose = vi.fn();
+  render(<HarvestModal field={field} open onClose={onClose} initialData={binHarvest()} />);
+  fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '4200' } });
+  fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+  await waitFor(() => expect(state.updateGrainMovementWithVersion).toHaveBeenCalledTimes(2));
+  expect(state.updateGrainMovementWithVersion.mock.calls[1][1]).toMatchObject({ version: 4 });
+  expect(state.updateHarvestRecord).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith('The harvest was not saved and its grain movement could not be restored. Refresh and review both records.');
+  expect(vi.mocked(toast.error).mock.calls.some(([message]) => String(message).includes('Harvest saved'))).toBe(false);
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+it.each([
+  [49900, 200, 'This change would exceed bin capacity.'],
+  [-500, 200, 'This change would leave negative bin inventory.'],
+])('warns for projected bin inventory %s + %s without blocking creation', async (total, bushelValue, warning) => {
+  vi.clearAllMocks();
+  state.getBinTotal.mockReturnValue(total);
+  state.addHarvestWithGrain.mockResolvedValue(true);
+  const onClose = vi.fn();
+  render(<HarvestModal field={field} open onClose={onClose} />);
+  fireEvent.click(screen.getByRole('button', { name: /^bin$/i }));
+  fireEvent.change(screen.getByTestId('select'), { target: { value: 'bin-1' } });
+  fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: String(bushelValue) } });
+  fireEvent.change(screen.getByLabelText(/moisture/i), { target: { value: '15' } });
+  fireEvent.change(screen.getByLabelText(/landlord %/i), { target: { value: '0' } });
+  fireEvent.click(screen.getByRole('button', { name: /log harvest/i }));
+  await waitFor(() => expect(state.addHarvestWithGrain).toHaveBeenCalled());
+  expect(toast.warning).toHaveBeenCalledWith(warning, expect.anything());
+  expect(onClose).toHaveBeenCalled();
+  state.getBinTotal.mockReturnValue(0);
+});
+
+
+it('subtracts stale leftovers before warning about a harvest edit projection', async () => {
+  vi.clearAllMocks();
+  state.grainMovements = [
+    linkedMovement({ bushels: 1000, version: 1 }),
+    linkedMovement({ id: 'legacy', harvestRecordId: undefined, bushels: 1000 }),
+  ];
+  state.getBinTotal.mockReturnValue(50000);
+  state.deleteGrainMovements.mockResolvedValue(true);
+  state.updateHarvestRecord.mockResolvedValue(true);
+  state.updateGrainMovementWithVersion.mockImplementation(async r => ({ ...r, version: 2 }));
+  render(<HarvestModal field={field} open onClose={vi.fn()} initialData={binHarvest({ bushels: 1000 })} />);
+  fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '1500' } });
+  fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+  await waitFor(() => expect(state.updateHarvestRecord).toHaveBeenCalled());
+  expect(toast.warning).not.toHaveBeenCalled();
+  expect(state.deleteGrainMovements).toHaveBeenCalledWith(['legacy']);
+  state.getBinTotal.mockReturnValue(0);
 });

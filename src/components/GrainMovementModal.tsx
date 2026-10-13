@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+
+import { Warehouse, ArrowUpRight, ArrowDownLeft, Calendar, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useFarm } from '@/store/farmStore';
-import { GrainMovement } from '@/types/farm';
+import { parseLocalizedNumber } from '@/lib/locale/numbers';
 import { native } from '@/lib/native';
-import { Warehouse, ArrowUpRight, ArrowDownLeft, Calendar, AlertTriangle } from 'lucide-react';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
+import { GrainMovement } from '@/types/farm';
+import { getSignedBushels } from '@/utils/numbers';
 
 interface GrainMovementModalProps {
   open: boolean;
@@ -19,7 +25,9 @@ interface GrainMovementModalProps {
 
 export default function GrainMovementModal({ open, onClose, initialData, mode = 'edit' }: GrainMovementModalProps) {
   const isDuplicate = mode === 'duplicate' && !!initialData;
-  const { addGrainMovement, updateGrainMovement, bins, fields, viewingSeason } = useFarm();
+  const { addGrainMovement, updateGrainMovement, bins, fields, getBinTotal, session, viewingSeason } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
+  const isLinkedHarvest = !!initialData.harvestRecordId;
   const [binId, setBinId] = useState(initialData.binId);
   const [bushels, setBushels] = useState(initialData.bushels.toString());
   const [moisture, setMoisture] = useState(initialData.moisturePercent.toString());
@@ -42,23 +50,27 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
     }
   }, [open, initialData]);
 
-  const bu = parseFloat(bushels);
-  const m = parseFloat(moisture);
+  const bu = (parseLocalizedNumber(bushels, preferences.locale) ?? NaN);
+  const m = (parseLocalizedNumber(moisture, preferences.locale) ?? NaN);
   const isNegativeBushels = !isNaN(bu) && bu < 0;
 
   const validate = (): boolean => {
     const next: Record<string, string> = {};
 
     if (!binId) next.binId = 'Select a storage bin.';
-    if (isNaN(bu)) next.bushels = 'Enter a valid number.';
-    if (isNaN(m) || m < 0 || m > 100) next.moisture = 'Enter a value between 0 and 100.';
-    if (price && isNaN(parseFloat(price))) next.price = 'Enter a valid price.';
+    if (!Number.isFinite(bu)) next.bushels = 'Enter a valid number.';
+    if (!Number.isFinite(m) || m < 0 || m > 100) next.moisture = 'Enter a value between 0 and 100.';
+    if (price && !Number.isFinite(parseLocalizedNumber(price, preferences.locale) ?? NaN)) next.price = 'Enter a valid price.';
 
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async () => {
+    if (isLinkedHarvest) {
+      toast.error('This load came from a harvest record. Edit or delete the harvest instead.');
+      return;
+    }
     if (!validate()) {
       native.haptic.error();
       return;
@@ -71,6 +83,16 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
       return;
     }
 
+    const affectedBins = new Set([binId, ...(!isDuplicate ? [initialData.binId] : [])]);
+    for (const affectedId of affectedBins) {
+      const affectedBin = bins.find(b => b.id === affectedId);
+      const projected = getBinTotal(affectedId)
+        - (!isDuplicate && initialData.binId === affectedId ? getSignedBushels(initialData) : 0)
+        + (binId === affectedId ? getSignedBushels({ type: initialData.type, bushels: bu }) : 0);
+      if (projected < 0) toast.warning('This change would leave negative bin inventory.', { description: affectedBin?.name });
+      else if (affectedBin && projected > affectedBin.capacity) toast.warning('This change would exceed bin capacity.', { description: affectedBin.name });
+    }
+
     setIsSaving(true);
     try {
       const data = {
@@ -79,7 +101,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
         binName: bin.name,
         bushels: bu,
         moisturePercent: m,
-        price: price ? parseFloat(price) : undefined,
+        price: price ? (parseLocalizedNumber(price, preferences.locale) ?? NaN) : undefined,
         destination: destination || undefined,
         sourceFieldName: sourceField || undefined,
       };
@@ -137,6 +159,11 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {isLinkedHarvest && (
+            <p role="status" className="text-sm text-amber-700 dark:text-amber-300">
+              This load came from a harvest record. Edit or delete the harvest instead.
+            </p>
+          )}
           {/* Type Indicator */}
           <div className={`p-3 rounded-lg border flex items-center justify-between ${
             initialData.type === 'in'
@@ -157,7 +184,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
           {/* Storage Bin */}
           <div>
             <Label htmlFor="grainStorageBinSelect" className="text-muted-foreground font-mono text-xs font-bold">STORAGE BIN *</Label>
-            <Select value={binId} onValueChange={(val) => { setBinId(val); setErrors(e => ({ ...e, binId: '' })); }}>
+            <Select disabled={isLinkedHarvest} value={binId} onValueChange={(val) => { setBinId(val); setErrors(e => ({ ...e, binId: '' })); }}>
               <SelectTrigger id="grainStorageBinSelect" className={`mt-1 bg-muted border-border font-mono text-xs ${errors.binId ? 'border-destructive' : ''}`}>
                 <SelectValue placeholder="Choose bin..." />
               </SelectTrigger>
@@ -179,8 +206,10 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
               <Label htmlFor="bushels" className="text-muted-foreground font-mono text-xs font-bold">BUSHELS *</Label>
               <Input
                 id="bushels"
-                type="number"
-                step="0.1"
+                name="bushels"
+                readOnly={isLinkedHarvest}
+                type="text"
+                inputMode="decimal"
                 value={bushels}
                 onChange={e => { setBushels(e.target.value); setErrors(ex => ({ ...ex, bushels: '' })); }}
                 className={fieldClass('bushels')}
@@ -198,10 +227,10 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
               <Label htmlFor="moisture" className="text-muted-foreground font-mono text-xs font-bold">MOISTURE % *</Label>
               <Input
                 id="moisture"
-                type="number"
-                step="0.1"
-                min="0"
-                max="100"
+                name="moisture"
+                readOnly={isLinkedHarvest}
+                type="text"
+                inputMode="decimal"
                 value={moisture}
                 onChange={e => { setMoisture(e.target.value); setErrors(ex => ({ ...ex, moisture: '' })); }}
                 className={fieldClass('moisture')}
@@ -250,9 +279,9 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
                 </Label>
                 <Input
                   id="price"
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  name="price"
+                  type="text"
+                  inputMode="decimal"
                   value={price}
                   onChange={e => { setPrice(e.target.value); setErrors(ex => ({ ...ex, price: '' })); }}
                   placeholder="0.00"
@@ -279,7 +308,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
         <DialogFooter className="pt-2">
           <Button
             onClick={handleSubmit}
-            disabled={isSaving || bins.length === 0}
+            disabled={isLinkedHarvest || isSaving || bins.length === 0}
             className="w-full bg-harvest text-white hover:bg-harvest/90 font-bold glow-harvest"
           >
             {isSaving ? 'Updating...' : (isDuplicate ? 'Log Duplicate' : 'Update Movement Record')}

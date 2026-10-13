@@ -356,6 +356,132 @@ describe('syncQueue web queue management', () => {
     expect(supabaseControl.insert).not.toHaveBeenCalled();
   });
 
+  it('removes a linked harvest pair the RPC reports as already applied', async () => {
+    await syncQueue.enqueueMutations([
+      { tableName: 'harvest_records', operation: 'insert', payload: { id: 'h1' }, farmId: 'farm-1' },
+      { tableName: 'grain_movements', operation: 'insert', payload: { id: 'g1', harvest_record_id: 'h1' }, farmId: 'farm-1' },
+    ]);
+    supabaseControl.rpcResponses.push({
+      data: { harvest_id: 'h1', grain_movement_id: 'g1', already_applied: true },
+      error: null,
+      status: 200,
+    });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+
+    expect(supabaseControl.rpc).toHaveBeenCalledTimes(1);
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('reconciles a linked harvest retry by identity after the pair was edited and deleted', async () => {
+    await syncQueue.enqueueMutation('harvest_records', 'insert', {
+      id: 'h1',
+      bushels: 1200,
+      __linked_grain_movement: { id: 'g1', harvest_record_id: 'h1', bushels: 1200, version: 1 },
+    }, 'farm-1');
+    supabaseControl.rpcResponses.push(
+      { data: null, error: { code: '23505', message: 'duplicate key' }, status: 409 },
+      {
+        data: { id: 'h1', farm_id: 'farm-1', bushels: 900, deleted_at: '2026-10-10T00:00:00+00:00' },
+        error: null,
+        status: 200,
+      },
+      {
+        data: {
+          id: 'g1', farm_id: 'farm-1', harvest_record_id: 'h1', bushels: 900,
+          version: 3, deleted_at: '2026-10-10T00:00:00+00:00',
+        },
+        error: null,
+        status: 200,
+      },
+    );
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('get_offline_sync_row_state', {
+      p_table_name: 'harvest_records',
+      p_row_id: 'h1',
+      p_farm_id: 'farm-1',
+    });
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('get_offline_sync_row_state', {
+      p_table_name: 'grain_movements',
+      p_row_id: 'g1',
+      p_farm_id: 'farm-1',
+    });
+    expect(supabaseControl.insert).not.toHaveBeenCalled();
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it('removes both legacy linked rows when the duplicate pair is verified', async () => {
+    await syncQueue.enqueueMutations([
+      { tableName: 'harvest_records', operation: 'insert', payload: { id: 'h1' }, farmId: 'farm-1' },
+      { tableName: 'grain_movements', operation: 'insert', payload: { id: 'g1', harvest_record_id: 'h1' }, farmId: 'farm-1' },
+    ]);
+    supabaseControl.rpcResponses.push(
+      { data: null, error: { code: '23505', message: 'duplicate key' }, status: 409 },
+      { data: { id: 'h1', farm_id: 'farm-1' }, error: null, status: 200 },
+      { data: { id: 'g1', farm_id: 'farm-1', harvest_record_id: 'h1' }, error: null, status: 200 },
+    );
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    expect(await syncQueue.getQueue('farm-1')).toEqual([]);
+  });
+
+  it.each([
+    ['the harvest is missing', null, { id: 'g1', farm_id: 'farm-1', harvest_record_id: 'h1' }],
+    ['the grain movement is missing', { id: 'h1', farm_id: 'farm-1' }, null],
+    ['the grain links to another harvest', { id: 'h1', farm_id: 'farm-1' }, { id: 'g1', farm_id: 'farm-1', harvest_record_id: 'h2' }],
+    ['the harvest belongs to another farm', { id: 'h1', farm_id: 'farm-2' }, { id: 'g1', farm_id: 'farm-1', harvest_record_id: 'h1' }],
+    ['the grain belongs to another farm', { id: 'h1', farm_id: 'farm-1' }, { id: 'g1', farm_id: 'farm-2', harvest_record_id: 'h1' }],
+    ['the grain ID differs', { id: 'h1', farm_id: 'farm-1' }, { id: 'g9', farm_id: 'farm-1', harvest_record_id: 'h1' }],
+  ])('retains a duplicate linked harvest when %s', async (_case, harvestRow, grainRow) => {
+    await syncQueue.enqueueMutation('harvest_records', 'insert', {
+      id: 'h1',
+      __linked_grain_movement: { id: 'g1', harvest_record_id: 'h1' },
+    }, 'farm-1');
+    supabaseControl.rpcResponses.push(
+      { data: null, error: { code: '23505', message: 'duplicate key' }, status: 409 },
+      { data: harvestRow, error: null, status: 200 },
+      { data: grainRow, error: null, status: 200 },
+    );
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue).toHaveLength(1);
+    expect(queue[0].retry_count).toBe(1);
+  });
+
+  it('does not reconcile a linked harvest whose queued grain links elsewhere', async () => {
+    await syncQueue.enqueueMutation('harvest_records', 'insert', {
+      id: 'h1',
+      __linked_grain_movement: { id: 'g1', harvest_record_id: 'h2' },
+    }, 'farm-1');
+    supabaseControl.rpcResponses.push(
+      { data: null, error: { code: '23505', message: 'duplicate key' }, status: 409 },
+    );
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+
+    expect(supabaseControl.rpc).toHaveBeenCalledTimes(1);
+    expect(await syncQueue.getQueue('farm-1')).toHaveLength(1);
+  });
+
+  it('does not reconcile a linked harvest on a non-duplicate RPC failure', async () => {
+    await syncQueue.enqueueMutation('harvest_records', 'insert', {
+      id: 'h1',
+      __linked_grain_movement: { id: 'g1', harvest_record_id: 'h1' },
+    }, 'farm-1');
+    supabaseControl.rpcResponses.push(
+      { data: null, error: { code: '23503', message: 'grain without harvest' }, status: 409 },
+    );
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+
+    expect(supabaseControl.rpc).toHaveBeenCalledTimes(1);
+    expect(await syncQueue.getQueue('farm-1')).toHaveLength(1);
+  });
+
   it('continues past a permanent PostgREST error without discarding the failed mutation', async () => {
     await syncQueue.enqueueMutation('fields', 'insert', { id: 'bad' }, 'farm-1');
     await syncQueue.enqueueMutation('bins', 'insert', { id: 'good' }, 'farm-1');

@@ -1,3 +1,5 @@
+import { toast } from 'sonner';
+
 import RecordListItem from '@/components/RecordListItem';
 import { grainCardText } from '@/lib/activityDisplay';
 import { useFarm } from '@/store/farmStore';
@@ -38,9 +40,21 @@ export default function GrainTab({ records, selected, onToggle, onEdit, onDuplic
             details={text.details}
             date={text.date}
             isSelected={selected.has(m.id)}
-            onToggle={onToggle}
+            onToggle={(id, shift) => {
+              if (m.harvestRecordId) {
+                toast.error('This load came from a harvest record. Edit or delete the harvest instead.');
+                return;
+              }
+              onToggle(id, shift);
+            }}
             onEdit={() => onEdit(m)}
-            onDuplicate={onDuplicate ? () => onDuplicate(m) : undefined}
+            onDuplicate={onDuplicate ? () => {
+              if (m.harvestRecordId) {
+                toast.error('This load came from a harvest record. Edit or delete the harvest instead.');
+                return;
+              }
+              onDuplicate(m);
+            } : undefined}
             warning={m.bushels < 0}
           />
         );

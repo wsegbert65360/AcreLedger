@@ -253,6 +253,7 @@ describe('GrainMovementModal duplicate mode', () => {
     vi.clearAllMocks();
     farmMock.current = {
       addGrainMovement, updateGrainMovement,
+      getBinTotal: vi.fn(() => 2000),
       bins: [{ id: 'bin-1', name: 'Bin 1', capacity: 5000, farm_id: 'farm-1', deleted_at: null }],
       fields: [], viewingSeason: 2026,
     };

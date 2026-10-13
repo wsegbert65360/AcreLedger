@@ -117,6 +117,10 @@ export default function Activity() {
   const openedRecordRef = useRef<string | null>(null);
 
   const openModal = (type: ActivityRecord['type'], record: EditableRecord, mode: 'edit' | 'duplicate') => {
+    if (type === 'grain' && (record as GrainMovement).harvestRecordId && mode === 'duplicate') {
+      toast.error('This load came from a harvest record. Edit or delete the harvest instead.');
+      return;
+    }
     setEditingRecord(record);
     setEditingRecordType(type);
     setEditingMode(mode);
