@@ -38,6 +38,7 @@ vite-dev.err.log
 *.png
 !src/assets/landing/*.png
 !android/app/src/main/res/**/*.png
+!android/play-store-icon.png
 SECURITY_AUDIT_*.md
 AcreLedger_UIUX_Recommendations*.md
 
