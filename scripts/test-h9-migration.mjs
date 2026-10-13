@@ -12,7 +12,7 @@ const readMigration = name => readFile(new URL(`../supabase/migrations/${name}`,
 const migrations = await Promise.all([
   readMigration('20260906012508_reconcile_offline_sync_zero_row.sql'),
   readMigration('20260906013728_create_harvest_with_grain.sql'),
-  readMigration('20261013022119_harvest_grain_retry_by_identity.sql'),
+  readMigration('20261013034639_harvest_grain_retry_by_identity.sql'),
 ]);
 
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
