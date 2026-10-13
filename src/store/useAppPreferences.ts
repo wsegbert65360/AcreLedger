@@ -66,7 +66,9 @@ export function useAppPreferences(userId?: string | null) {
 
   // Reload preferences when the signed-in user changes.
   useEffect(() => {
-    const loaded = parseAppPreferences(loadFromStorage<AppPreferences>(STORAGE_KEY, DEFAULT_APP_PREFERENCES, userId));
+    const loaded = userId === null
+      ? { ...DEFAULT_APP_PREFERENCES }
+      : parseAppPreferences(loadFromStorage<AppPreferences>(STORAGE_KEY, DEFAULT_APP_PREFERENCES, userId));
     preferencesRef.current = loaded;
     setPreferencesState(loaded);
   }, [userId]);

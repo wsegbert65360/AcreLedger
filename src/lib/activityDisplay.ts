@@ -1,3 +1,5 @@
+import { formatNumber } from '@/lib/locale/numbers';
+import type { LocaleCode } from '@/store/useAppPreferences';
 import type { GrainMovement, HarvestRecord } from '@/types/farm';
 import { formatDate, formatShortDate, parseLocalDate, toLocalIsoDate } from '@/utils/dates';
 import { cleanName } from '@/utils/text';
@@ -14,8 +16,8 @@ export interface RecordCardText {
   date: string;
 }
 
-const formatBushels = (bu: number) =>
-  `${Number.isFinite(bu) ? bu.toLocaleString('en-US') : '—'} BU`;
+const formatBushels = (bu: number, locale: LocaleCode) =>
+  `${Number.isFinite(bu) ? formatNumber(bu, locale, { maximumFractionDigits: 3 }) : '—'} BU`;
 
 const formatMoisture = (m: number) =>
   Number.isFinite(m) ? `${m}% moisture` : 'Moisture not recorded';
@@ -34,7 +36,7 @@ export function formatWorkDateTime(isoDate: string | undefined | null, ts: numbe
 }
 
 /** Harvest card: field · crop + bushels · moisture + where it went · date/time. */
-export function harvestCardText(r: HarvestRecord, binName?: string): RecordCardText {
+export function harvestCardText(r: HarvestRecord, binName?: string, locale: LocaleCode = 'en-US'): RecordCardText {
   const where = r.destination === 'town'
     ? 'to town'
     : `to ${binName ? cleanName(binName) : 'bin'}`;
@@ -42,21 +44,21 @@ export function harvestCardText(r: HarvestRecord, binName?: string): RecordCardT
   if (r.scaleTicketNumber) details.push(`Ticket ${r.scaleTicketNumber}`);
   return {
     title: cleanName(r.fieldName),
-    subtitle: `${r.crop || 'Crop not set'} · ${formatBushels(r.bushels)}`,
+    subtitle: `${r.crop || 'Crop not set'} · ${formatBushels(r.bushels, locale)}`,
     details: details.join(' · '),
     date: formatWorkDateTime(r.harvestDate, r.timestamp),
   };
 }
 
 /** Grain movement card: bin · in/out + bushels · moisture + from/to · date/time. */
-export function grainCardText(m: GrainMovement): RecordCardText {
+export function grainCardText(m: GrainMovement, locale: LocaleCode = 'en-US'): RecordCardText {
   const direction = m.type === 'in' ? 'In' : 'Out';
   const route = m.type === 'in'
     ? (m.sourceFieldName ? `from ${cleanName(m.sourceFieldName)}` : null)
     : (m.destination ? `to ${cleanName(m.destination)}` : null);
   return {
     title: cleanName(m.binName),
-    subtitle: `${direction} · ${formatBushels(m.bushels)}`,
+    subtitle: `${direction} · ${formatBushels(m.bushels, locale)}`,
     details: [formatMoisture(m.moisturePercent), route].filter(Boolean).join(' · '),
     date: formatWorkDateTime(undefined, m.timestamp),
   };

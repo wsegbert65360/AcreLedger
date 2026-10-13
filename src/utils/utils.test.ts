@@ -142,6 +142,15 @@ describe('numbers utility', () => {
     });
 
     describe('formatMeasurement', () => {
+        it.each(['en-US', 'en-AU'] as const)('preserves US measurement output in %s', (locale) => {
+            for (const value of [0, -0, -1234.5678, 1234567.89, 1.2345]) {
+                for (const decimals of [0, 1, 2, 3, 4]) {
+                    expect(formatMeasurement(value, 'bu', decimals, locale))
+                        .toBe(`${roundTo(value, decimals).toLocaleString('en-US')} bu`);
+                }
+            }
+        });
+
         it('should format simple measurements with default decimals', () => {
             expect(formatMeasurement(80.123, 'ac')).toBe('80.12 ac');
             expect(formatMeasurement(10, 'lbs')).toBe('10 lbs');

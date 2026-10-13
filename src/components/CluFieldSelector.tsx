@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
+
 import { Plus, Check } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useFarm } from '@/store/farmStore';
 import { buildDisplayFieldAcreMap } from '@/lib/fieldAcreage';
-import { formatMeasurement } from '@/utils/numbers';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
 import type { CluLandUse, FieldCluAssignment } from '@/types/fsaTract';
+import { formatMeasurement } from '@/utils/numbers';
 
 interface CluFieldSelectorProps {
   selectedFieldId: string | null;
@@ -25,7 +27,8 @@ export default function CluFieldSelector({
   onCreateField,
   assignments,
 }: CluFieldSelectorProps) {
-  const { fields } = useFarm();
+  const { fields, session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -132,7 +135,7 @@ export default function CluFieldSelector({
               const cluLabel = cluCount > 0 ? ` · ${cluCount} CLU${cluCount !== 1 ? 's' : ''}` : ' · No CLUs';
               return (
                 <option key={f.id} value={f.id}>
-                  {f.name} ({formatMeasurement(displayAcreMap.get(f.id) ?? 0, 'ac')} FSA crop{cluLabel})
+                  {f.name} ({formatMeasurement(displayAcreMap.get(f.id) ?? 0, 'ac', 2, preferences.locale)} FSA crop{cluLabel})
                 </option>
               );
             })}
