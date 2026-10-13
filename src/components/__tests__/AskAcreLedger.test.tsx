@@ -12,6 +12,7 @@ const askState = vi.hoisted(() => ({
   isOnline: true,
   viewingSeason: 2026,
   askAcreLedger: vi.fn(),
+  getSession: vi.fn(),
   refreshSession: vi.fn(),
 }));
 
@@ -37,6 +38,7 @@ vi.mock('@/services/aiAssistantService', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: {
+      getSession: (...args: unknown[]) => askState.getSession(...args),
       refreshSession: (...args: unknown[]) => askState.refreshSession(...args),
     },
   },
@@ -125,8 +127,16 @@ describe('AskAcreLedger', () => {
     askState.viewingSeason = 2026;
     askState.closeAsk.mockReset();
     askState.askAcreLedger.mockReset();
+    askState.getSession.mockReset();
     askState.refreshSession.mockReset();
-    askState.refreshSession.mockResolvedValue({ data: { session: { access_token: 'token-refreshed' } } });
+    askState.getSession.mockResolvedValue({
+      data: { session: { access_token: 'token-current', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
+      error: null,
+    });
+    askState.refreshSession.mockResolvedValue({
+      data: { session: { access_token: 'token-refreshed', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
+      error: null,
+    });
     askState.askAcreLedger.mockResolvedValue({
       answer: 'April 12 on Home Place.',
       lookups: ['Earliest dated corn plantings in 2026'],
@@ -319,7 +329,24 @@ describe('AskAcreLedger', () => {
     expect(screen.queryByText('Try a question from this farm’s book')).toBeNull();
   });
 
-  it('refreshes the session before sending and posts the refreshed token', async () => {
+  it('reuses a session that is not near expiry', async () => {
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'When was corn planted?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+
+    await waitFor(() => expect(askState.askAcreLedger).toHaveBeenCalledTimes(1));
+    expect(askState.getSession).toHaveBeenCalledTimes(1);
+    expect(askState.refreshSession).not.toHaveBeenCalled();
+    expect(askState.askAcreLedger.mock.calls[0][1]).toBe('token-current');
+  });
+
+  it('refreshes only when the session expires within a minute and posts that token', async () => {
+    askState.getSession.mockResolvedValue({
+      data: { session: { access_token: 'token-current', expires_at: Math.floor(Date.now() / 1000) + 30 } },
+      error: null,
+    });
     render(<AskAcreLedger />);
     fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: 'When was corn planted?' },
@@ -331,7 +358,24 @@ describe('AskAcreLedger', () => {
     expect(askState.askAcreLedger.mock.calls[0][1]).toBe('token-refreshed');
   });
 
-  it('fails closed with the unavailable message when the refresh errors', async () => {
+  it('refreshes once after a 401 and does not send another request if that refresh fails', async () => {
+    askState.askAcreLedger.mockRejectedValueOnce(Object.assign(new Error('Invalid or expired token'), { status: 401 }));
+    askState.refreshSession.mockResolvedValue({ data: { session: null }, error: { message: 'Invalid Refresh Token' } });
+    render(<AskAcreLedger />);
+    fireEvent.change(screen.getByLabelText('Question'), {
+      target: { value: 'When was corn planted?' },
+    });
+    fireEvent.click(screen.getByLabelText('Send question'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Sign in again.')).toBeTruthy();
+    });
+    expect(askState.askAcreLedger).toHaveBeenCalledTimes(1);
+    expect(askState.refreshSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed with sign-in-again when the refresh errors', async () => {
+    askState.getSession.mockResolvedValue({ data: { session: null }, error: null });
     askState.refreshSession.mockResolvedValue({
       data: { session: null },
       error: { message: 'Invalid Refresh Token' },
@@ -343,13 +387,14 @@ describe('AskAcreLedger', () => {
     fireEvent.click(screen.getByLabelText('Send question'));
 
     await waitFor(() => {
-      expect(screen.getByText('The assistant is unavailable right now.')).toBeTruthy();
+      expect(screen.getByText('Sign in again.')).toBeTruthy();
       expect(screen.getByLabelText('Question')).toHaveProperty('value', 'When was corn planted?');
     });
     expect(askState.askAcreLedger).not.toHaveBeenCalled();
   });
 
-  it('fails closed with the unavailable message when the refresh yields no session', async () => {
+  it('fails closed with sign-in-again when the refresh yields no session', async () => {
+    askState.getSession.mockResolvedValue({ data: { session: null }, error: null });
     askState.refreshSession.mockResolvedValue({ data: { session: null }, error: null });
     render(<AskAcreLedger />);
     fireEvent.change(screen.getByLabelText('Question'), {
@@ -358,7 +403,7 @@ describe('AskAcreLedger', () => {
     fireEvent.click(screen.getByLabelText('Send question'));
 
     await waitFor(() => {
-      expect(screen.getByText('The assistant is unavailable right now.')).toBeTruthy();
+      expect(screen.getByText('Sign in again.')).toBeTruthy();
     });
     expect(askState.askAcreLedger).not.toHaveBeenCalled();
   });

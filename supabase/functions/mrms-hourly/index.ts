@@ -1,10 +1,9 @@
 /// <reference path="../deno.d.ts" />
 import { withSupabase } from "npm:@supabase/server@1.4.0"
 import { downloadAndDecompress, MRMS_CONFIG, extractRainfall, validateGridConfig } from '../shared/mrms.ts'
+import { collectPagedFieldIds, FIELD_PAGE_SIZE } from '../shared/mrmsFieldPage.ts'
 
 interface FieldCoord { lat: number; lng: number; id: string }
-
-const FIELD_PAGE_SIZE = 1000
 
 type RunStatus = 'success' | 'no_data' | 'failed'
 
@@ -115,24 +114,31 @@ export default {
       // 3. Extract logic
       const rainfallValues = extractRainfall(gribData, fields.map((f) => ({ lat: f.lat, lng: f.lng })))
 
-      let records = fields.map((f, i: number) => ({
-        field_id: f.id,
-        timestamp_utc: targetTs.toISOString(),
-        rainfall_in: rainfallValues[i],
-        source: source,
-        finalized: source === 'Pass 2' // Pass 2 is considered finalized
-      }))
+      let records = fields.flatMap((f, i: number) => {
+        const rainfall = rainfallValues[i]
+        if (rainfall == null) return []
+        return [{
+          field_id: f.id,
+          timestamp_utc: targetTs.toISOString(),
+          rainfall_in: rainfall,
+          source: source,
+          finalized: source === 'Pass 2', // Pass 2 is considered finalized
+        }]
+      })
 
       // A Pass 1 retry must not downgrade a row Pass 2 already finalized with a
-      // more accurate QPE value.
+      // more accurate QPE value. Page the id list: one select stops at 1,000.
       if (source === 'Pass 1') {
-        const { data: finalizedRows, error: finalizedError } = await supabaseClient
-          .from('field_rainfall_hourly')
-          .select('field_id')
-          .eq('timestamp_utc', targetTs.toISOString())
-          .eq('finalized', true)
-        if (finalizedError) throw finalizedError
-        const finalizedIds = new Set((finalizedRows ?? []).map((row: { field_id: string }) => row.field_id))
+        const hourIso = targetTs.toISOString()
+        const finalizedIds = await collectPagedFieldIds((from, to) =>
+          supabaseClient
+            .from('field_rainfall_hourly')
+            .select('field_id')
+            .eq('timestamp_utc', hourIso)
+            .eq('finalized', true)
+            .order('field_id', { ascending: true })
+            .range(from, to)
+        )
         if (finalizedIds.size) {
           records = records.filter((record) => !finalizedIds.has(record.field_id))
         }

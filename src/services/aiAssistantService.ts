@@ -63,7 +63,9 @@ export async function askAcreLedger(
       && typeof (payload as { error: unknown }).error === 'string'
       ? (payload as { error: string }).error
       : 'The assistant is unavailable right now.';
-    throw new Error(message);
+    const error = new Error(message) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
   }
 
   if (

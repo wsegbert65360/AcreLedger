@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildWorkRequestMailto, buildMailtoUrl, workTypeLabel, farmNamesForRequest } from './workRequestEmail';
+import { buildWorkRequestMailto, buildMailtoUrl, workTypeLabel, farmNamesForRequest, providerEmailForSave, MAX_WORK_REQUEST_EMAIL_BODY } from './workRequestEmail';
 import type { WorkRequest } from '@/types/farm';
 
 function makeRequest(overrides: Partial<WorkRequest> = {}): WorkRequest {
@@ -140,6 +140,23 @@ describe('buildWorkRequestMailto', () => {
   it('targets the provider email', () => {
     const { to } = buildWorkRequestMailto(makeRequest());
     expect(to).toBe('applicator@acme.com');
+  });
+
+  it('joins the body with CRLF and caps a long note', () => {
+    const { body } = buildWorkRequestMailto(makeRequest({ notes: 'Spray '.repeat(800) }));
+    expect(body).toContain('\r\n');
+    expect(body.split('\r\n').every((line) => !line.includes('\n'))).toBe(true);
+    expect(body.length).toBeLessThanOrEqual(MAX_WORK_REQUEST_EMAIL_BODY);
+    expect(body).not.toMatch(/[ \t]$/);
+  });
+});
+
+describe('providerEmailForSave', () => {
+  it('trims a real address and rejects a malformed one', () => {
+    expect(providerEmailForSave('  applicator@acme.com ')).toEqual({ ok: true, email: 'applicator@acme.com' });
+    expect(providerEmailForSave('')).toEqual({ ok: true, email: undefined });
+    expect(providerEmailForSave('not-an-email').ok).toBe(false);
+    expect(providerEmailForSave('a@b').ok).toBe(false);
   });
 });
 

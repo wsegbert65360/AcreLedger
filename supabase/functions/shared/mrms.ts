@@ -1,7 +1,8 @@
 /**
  * Shared logic for MRMS GRIB2 processing in Supabase Edge Functions (Deno).
  */
-import { decode } from "https://esm.sh/fast-png@6.1.0";
+import { decode } from "npm:fast-png@6.1.0";
+import { gridCell, inchesFromPacked } from "./mrmsGrid.ts";
 
 export interface Coordinate {
   lat: number;
@@ -61,7 +62,7 @@ export async function downloadAndDecompress(url: string): Promise<Uint8Array | n
  * Pipeline: raw GRIB2 → locate Section 5 (DRS) + Section 7 (data) →
  * decode embedded PNG → map lat/lng to pixel index → apply DRS formula.
  */
-export function extractRainfall(data: Uint8Array, coords: Coordinate[]): number[] {
+export function extractRainfall(data: Uint8Array, coords: Coordinate[]): Array<number | null> {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     
     // Find Section 5 (Data Representation) and Section 7 (Data)
@@ -98,8 +99,10 @@ export function extractRainfall(data: Uint8Array, coords: Coordinate[]): number[
     
     // fast-png@6.x: depth===16 produces Uint16Array, lower depths produce Uint8Array
     let pixels: Uint16Array | Uint8Array;
+    let depth = 16;
     try {
         const decoded = decode(pngData);
+        depth = decoded.depth;
         if (decoded.depth !== 16) {
             console.warn(`[MRMS] PNG depth=${decoded.depth}, expected 16-bit grayscale`);
         }
@@ -114,27 +117,22 @@ export function extractRainfall(data: Uint8Array, coords: Coordinate[]): number[
         throw new Error(`MRMS PNG decode failed: ${msg}`);
     }
 
-    const values: number[] = [];
-    const multiplier = (Math.pow(2, exp) / Math.pow(10, decimal)) * 0.0393701; // mm to inches
+    const values: Array<number | null> = [];
 
     for (const coord of coords) {
-        const row = Math.round((MRMS_CONFIG.grid.latStart - coord.lat) / Math.abs(MRMS_CONFIG.grid.latStep));
-        const col = Math.round((coord.lng - MRMS_CONFIG.grid.lonStart) / MRMS_CONFIG.grid.lonStep);
-
-        if (row < 0 || row >= MRMS_CONFIG.grid.rows || col < 0 || col >= MRMS_CONFIG.grid.cols) {
-            values.push(0);
+        const cell = gridCell(coord, MRMS_CONFIG.grid);
+        if (!cell) {
+            values.push(null);
             continue;
         }
 
-        const index = row * MRMS_CONFIG.grid.cols + col;
+        const index = cell.row * MRMS_CONFIG.grid.cols + cell.col;
         if (index >= pixels.length) {
-            values.push(0);
+            values.push(null);
             continue;
         }
 
-        const raw = pixels[index];
-        const val = (ref + raw) * multiplier;
-        values.push(Math.max(0, val));
+        values.push(inchesFromPacked(pixels[index], ref, exp, decimal, depth));
     }
 
     return values;

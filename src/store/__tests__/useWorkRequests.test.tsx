@@ -87,6 +87,23 @@ describe('useWorkRequests', () => {
     });
   });
 
+  it('rejects a malformed provider email before writing', async () => {
+    const { id: _id, farm_id: _farmId, timestamp: _timestamp, deleted_at: _deletedAt, ...draft } = makeRequest({
+      providerEmail: 'not-an-email',
+    });
+    const { result } = renderWorkRequestHook();
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.ops.addWorkRequest(draft);
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.requests.value).toEqual([]);
+    expect(supabaseMock.fns.insert).not.toHaveBeenCalled();
+    expect(mapWorkRequestToDb).not.toHaveBeenCalled();
+  });
+
   it('restores deleted records at their original positions when the cloud delete fails', async () => {
     const initial = [
       makeRequest({ id: 'request-1' }),

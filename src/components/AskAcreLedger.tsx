@@ -6,7 +6,7 @@ import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
 import { useAskVoice } from '@/hooks/useAskVoice';
 import { getSeasonalAskSuggestions } from '@/lib/askSuggestions';
 import { native } from '@/lib/native';
-import { supabase } from '@/lib/supabase';
+import { freshAccessToken, SignInAgainError } from '@/lib/freshAccessToken';
 import { askAcreLedger, type AiHistoryTurn } from '@/services/aiAssistantService';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
@@ -167,15 +167,26 @@ export default function AskAcreLedger() {
     setLoading(true);
 
     try {
-      // Rotate the token immediately before posting the bearer so the
-      // assistant request can never carry a stale access token.
-      const { data: { session: refreshed }, error: refreshError } = await supabase.auth.refreshSession();
+      const token = await freshAccessToken();
       if (requestId !== requestIdRef.current) return;
-      const token = refreshed?.access_token;
-      if (refreshError || !token) {
-        throw new Error('The assistant is unavailable right now.');
+      let result;
+      try {
+        result = await askAcreLedger(trimmed, token, viewingSeason, history, abort.signal);
+      } catch (error: unknown) {
+        const status = typeof error === 'object' && error !== null ? (error as { status?: number }).status : undefined;
+        if (status !== 401) throw error;
+        const refreshed = await freshAccessToken({ forceRefresh: true });
+        if (requestId !== requestIdRef.current) return;
+        try {
+          result = await askAcreLedger(trimmed, refreshed, viewingSeason, history, abort.signal);
+        } catch (retryError: unknown) {
+          const retryStatus = typeof retryError === 'object' && retryError !== null
+            ? (retryError as { status?: number }).status
+            : undefined;
+          if (retryStatus === 401) throw new SignInAgainError();
+          throw retryError;
+        }
       }
-      const result = await askAcreLedger(trimmed, token, viewingSeason, history, abort.signal);
       if (requestId !== requestIdRef.current) return;
       setMessages(prev => [
         ...prev,

@@ -1,6 +1,7 @@
 /// <reference path="../deno.d.ts" />
 import { withSupabase } from "npm:@supabase/server@1.4.0"
 import { downloadAndDecompress, MRMS_CONFIG, extractRainfall } from '../shared/mrms.ts'
+import { collectPagedFieldIds, FIELD_PAGE_SIZE } from '../shared/mrmsFieldPage.ts'
 import {
   completedHours,
   floorToHour,
@@ -20,7 +21,6 @@ type FieldCoord = { id: string; lat: number; lng: number }
 type RunType = 'hourly' | 'overnight' | 'backfill'
 type RunStatus = 'success' | 'no_data' | 'failed'
 
-const FIELD_PAGE_SIZE = 1000
 // One invocation is chained per hour, so an unbounded range is an unbounded
 // fan-out. 31 days of hours is more than any legitimate backfill needs.
 const MAX_BACKFILL_HOURS = 24 * 31
@@ -40,7 +40,18 @@ export default {
     const supabaseClient = ctx.supabaseAdmin
     let fieldId: string | null = null
     let currentHourIso: string | null = null
+    let rangeStartUtc: string | null = null
     let runType: RunType = 'backfill'
+
+    const markFieldCoverage = async (status: 'failed' | 'complete') => {
+      if (!fieldId || !rangeStartUtc) return null
+      const { error } = await supabaseClient
+        .from('field_rainfall_coverage')
+        .update({ status, last_checked_at: new Date().toISOString() })
+        .eq('field_id', fieldId)
+        .eq('range_start_utc', rangeStartUtc)
+      return error
+    }
 
     // Persist every processed hour's outcome, including the scheduled
     // (field_id = null) runs that previously recorded nothing.
@@ -133,6 +144,8 @@ export default {
       const currentHour = hours[0]
       const remainingHours = hours.slice(1)
       currentHourIso = currentHour.toISOString()
+      rangeStartUtc = hours[hours.length - 1].toISOString()
+      const rangeEndUtc = hours[0].toISOString()
 
       const fields: FieldCoord[] = []
       for (let from = 0; ; from += FIELD_PAGE_SIZE) {
@@ -169,8 +182,8 @@ export default {
           .from('field_rainfall_coverage')
           .upsert({
             field_id: fieldId,
-            range_start_utc: hours[hours.length - 1].toISOString(),
-            range_end_utc: hours[0].toISOString(),
+            range_start_utc: rangeStartUtc,
+            range_end_utc: rangeEndUtc,
             status: 'processing',
             last_checked_at: new Date().toISOString(),
           }, { onConflict: 'field_id, range_start_utc' })
@@ -198,10 +211,7 @@ export default {
         console.warn(`[MRMS-Backfill] No MRMS data for ${currentHour.toISOString()}; recorded for retry`)
         await recordRun(currentHourIso, { status: 'no_data' })
         if (fieldId) {
-          const { error: coverageError } = await supabaseClient
-            .from('field_rainfall_coverage')
-            .update({ status: 'failed', last_checked_at: new Date().toISOString() })
-            .eq('field_id', fieldId)
+          const coverageError = await markFieldCoverage('failed')
           if (coverageError) {
             console.error(`[MRMS-Backfill] Failed to save coverage no-data state: ${coverageError.message}`)
           }
@@ -212,23 +222,30 @@ export default {
           gribData,
           typedFields.map((field) => ({ lat: field.lat, lng: field.lng })),
         )
-        let records = typedFields.map((field, index) => ({
-          field_id: field.id,
-          timestamp_utc: currentHourIso,
-          rainfall_in: rainfallValues[index],
-          source,
-          finalized: source === 'Pass 2',
-        }))
+        let records = typedFields.flatMap((field, index) => {
+          const rainfall = rainfallValues[index]
+          if (rainfall == null) return []
+          return [{
+            field_id: field.id,
+            timestamp_utc: currentHourIso,
+            rainfall_in: rainfall,
+            source,
+            finalized: source === 'Pass 2',
+          }]
+        })
 
         // Never downgrade a Pass 2 result with a later Pass 1 retry.
+        // Page field ids so a farm past 1,000 finalized rows is not rewritten.
         if (source === 'Pass 1') {
-          const { data: finalizedRows, error: finalizedError } = await supabaseClient
-            .from('field_rainfall_hourly')
-            .select('field_id')
-            .eq('timestamp_utc', currentHourIso)
-            .eq('finalized', true)
-          if (finalizedError) throw finalizedError
-          const finalizedIds = new Set((finalizedRows ?? []).map((row: { field_id: string }) => row.field_id))
+          const finalizedIds = await collectPagedFieldIds((from, to) =>
+            supabaseClient
+              .from('field_rainfall_hourly')
+              .select('field_id')
+              .eq('timestamp_utc', currentHourIso)
+              .eq('finalized', true)
+              .order('field_id', { ascending: true })
+              .range(from, to)
+          )
           if (finalizedIds.size) {
             records = records.filter((record) => !finalizedIds.has(record.field_id))
           }
@@ -277,10 +294,7 @@ export default {
           // and don't leave a field's coverage stuck at 'processing'.
           await recordRun(nextHourIso, { status: 'failed', errorMessage: `Chain trigger failed: ${message}` })
           if (fieldId) {
-            const { error: chainFailureError } = await supabaseClient
-              .from('field_rainfall_coverage')
-              .update({ status: 'failed', last_checked_at: new Date().toISOString() })
-              .eq('field_id', fieldId)
+            const chainFailureError = await markFieldCoverage('failed')
             if (chainFailureError) {
               console.error(`[MRMS-Backfill] Failed to save chain failure state: ${chainFailureError.message}`)
             }
@@ -289,10 +303,7 @@ export default {
 
         EdgeRuntime.waitUntil(nextRequest)
       } else if (fieldId) {
-        const { error: completionError } = await supabaseClient
-          .from('field_rainfall_coverage')
-          .update({ status: 'complete', last_checked_at: new Date().toISOString() })
-          .eq('field_id', fieldId)
+        const completionError = await markFieldCoverage('complete')
         if (completionError) throw completionError
       }
 
@@ -309,10 +320,7 @@ export default {
         await recordRun(currentHourIso, { status: 'failed', errorMessage: message })
       }
       if (fieldId) {
-        const { error: failureStateError } = await ctx.supabaseAdmin
-          .from('field_rainfall_coverage')
-          .update({ status: 'failed', last_checked_at: new Date().toISOString() })
-          .eq('field_id', fieldId)
+        const failureStateError = await markFieldCoverage('failed')
         if (failureStateError) {
           console.error(`[MRMS-Backfill] Failed to save failure state: ${failureStateError.message}`)
         }

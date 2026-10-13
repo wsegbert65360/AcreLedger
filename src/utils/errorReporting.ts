@@ -45,11 +45,14 @@ function clip(value: string, max: number): string {
 
 function redact(value: string): string {
   return value
-    // Auth material in URLs.
+    // Auth material and other secrets in query strings or header-like pairs.
     .replace(
-      /([?&#](?:code|access_token|refresh_token|token|apikey|api_key)=)[^&\s#]+/gi,
+      /([?&#](?:code|access_token|refresh_token|token|apikey|api_key|key|password|secret|authorization)=)[^&\s#]+/gi,
       '$1[redacted]',
     )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted-email]')
+    .replace(/(?<!\d)(?:\+?1[-.\s])?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g, '[redacted-phone]')
     // Inline attachments (data URIs, e.g. spray-note photos) and any long
     // base64-looking run must never leave the device.
     .replace(/data:[a-z0-9.+-]+\/[a-z0-9.+-]+(?:;[^,\s]*)?,[A-Za-z0-9+/=%_-]+/gi, '[redacted-data]')

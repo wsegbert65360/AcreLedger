@@ -63,6 +63,7 @@ describe('weather proxy', () => {
     consumeRateLimit.mockResolvedValue({ data: true, error: null });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
       status: 200,
       json: vi.fn().mockResolvedValue({ days: [] }),
     }));
@@ -155,14 +156,61 @@ describe('weather proxy', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('preserves upstream status and JSON', async () => {
+  it('maps an upstream non-2xx to 502 without forwarding the provider body', async () => {
     vi.mocked(fetch).mockResolvedValue({
+      ok: false,
       status: 429,
       json: vi.fn().mockResolvedValue({ message: 'upstream quota' }),
     } as unknown as Response);
     const { state } = await invoke();
-    expect(state.status).toBe(429);
-    expect(state.body).toEqual({ message: 'upstream quota' });
+    expect(state.status).toBe(502);
+    expect(state.body).toEqual({ error: 'Weather provider request failed' });
+    expect(JSON.stringify(state.body)).not.toContain('upstream quota');
+  });
+
+  it('checks the server Visual Crossing key before consuming quota', async () => {
+    delete process.env.VISUALCROSSING_API_KEY;
+    const { state } = await invoke();
+    expect(state.status).toBe(500);
+    expect(consumeRateLimit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('accepts lat,lng, ZIP, and a short address, and rejects dot paths', async () => {
+    for (const location of ['40,-90', '40.12, -93.5', '72301', '72301-1234', 'New York']) {
+      const { state } = await invoke({ query: { location } });
+      expect(state.status, location).toBe(200);
+    }
+    for (const location of ['.', '..', '../secret', 'a/b', 'x'.repeat(81)]) {
+      const rejected = await invoke({ query: { location } });
+      expect(rejected.state.status, location).toBe(400);
+    }
+    expect(consumeRateLimit).toHaveBeenCalledTimes(5);
+  });
+
+  it('allowlists the include and elements values the app sends', async () => {
+    const current = await invoke({
+      query: {
+        location: '72301',
+        include: 'current,days',
+        elements: 'datetime,temp,humidity,windspeed,winddir,precip,precipprob',
+      },
+    });
+    expect(current.state.status).toBe(200);
+
+    const historical = await invoke({
+      query: {
+        location: '38.465385,-93.544197',
+        include: 'hours,current',
+        elements: 'temp,humidity,windspeed,winddir',
+      },
+    });
+    expect(historical.state.status).toBe(200);
+
+    const badInclude = await invoke({ query: { location: '72301', include: 'hours,alerts' } });
+    expect(badInclude.state.status).toBe(400);
+    const badElements = await invoke({ query: { location: '72301', elements: 'temp,alerts' } });
+    expect(badElements.state.status).toBe(400);
   });
 
   it('returns 504 when the upstream request times out', async () => {

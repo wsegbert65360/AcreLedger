@@ -1,21 +1,21 @@
+import { toast } from 'sonner';
+
+import { freshAccessToken, SignInAgainError } from '@/lib/freshAccessToken';
+import { bundledVisualCrossingKey, cleanEnvValue } from '@/lib/weatherBuildConfig';
 import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
-import { supabase } from '@/lib/supabase';
 
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 const PROXY_PATH = '/api/weather-proxy';
-
-function cleanEnvValue(value?: string): string {
-    return (value ?? '').trim().replace(/^['"]|['"]$/g, '');
-}
+const SIGN_IN_AGAIN = 'Sign in again to load weather.';
 
 const IS_CAPACITOR_BUILD = import.meta.env.MODE === 'capacitor';
 
 function readBundledVisualCrossingKey(): string {
-    // Production web requests must use the authenticated proxy. Keeping the
-    // VITE_ value behind a compile-time-false branch lets Vite remove the key
-    // from production bundles even if the deployment environment defines it.
-    if (!import.meta.env.DEV && !IS_CAPACITOR_BUILD) return '';
-    return cleanEnvValue(import.meta.env.VITE_VISUALCROSSING_KEY);
+    // Production web and Capacitor must not reference VITE_VISUALCROSSING_KEY.
+    // The value sits in a branch Vite constant-folds away, so the vendor key
+    // is not inlined into App Store or other native bundles.
+    if (!import.meta.env.DEV) return '';
+    return bundledVisualCrossingKey(true, import.meta.env.VITE_VISUALCROSSING_KEY);
 }
 
 const VISUAL_CROSSING_KEY = readBundledVisualCrossingKey();
@@ -49,10 +49,10 @@ function encodeEndpoint(endpoint: string): string {
 }
 
 function resolveWeatherProxyUrl(): string {
+    if (IS_CAPACITOR_BUILD && !WEATHER_PROXY_URL) {
+        throw new Error('Capacitor weather requires VITE_WEATHER_PROXY_URL.');
+    }
     if (!WEATHER_PROXY_URL) {
-        if (IS_CAPACITOR_BUILD && !VISUAL_CROSSING_KEY) {
-            throw new Error('Capacitor weather requires VITE_VISUALCROSSING_KEY or VITE_WEATHER_PROXY_URL.');
-        }
         return PROXY_PATH;
     }
 
@@ -72,7 +72,7 @@ function isWeatherProxyUrl(url: string): boolean {
 function buildWeatherUrl(location: string, endpoint: string, query: Record<string, string>): string {
     const params = new URLSearchParams(query);
 
-    const canUseDirectApi = VISUAL_CROSSING_KEY && (import.meta.env.DEV || (IS_CAPACITOR_BUILD && !WEATHER_PROXY_URL));
+    const canUseDirectApi = Boolean(VISUAL_CROSSING_KEY) && import.meta.env.DEV;
     if (canUseDirectApi) {
         params.set('key', VISUAL_CROSSING_KEY);
         const pathLocation = encodeURIComponent(location);
@@ -86,19 +86,32 @@ function buildWeatherUrl(location: string, endpoint: string, query: Record<strin
     return `${resolveWeatherProxyUrl()}?${params.toString()}`;
 }
 
+async function proxyAccessToken(forceRefresh: boolean): Promise<string> {
+    try {
+        return await freshAccessToken({ forceRefresh, message: SIGN_IN_AGAIN });
+    } catch (error) {
+        if (error instanceof SignInAgainError) toast.error(SIGN_IN_AGAIN);
+        throw error;
+    }
+}
+
 async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> {
     const headers: HeadersInit = {};
+    const proxied = isWeatherProxyUrl(url);
 
-    if (isWeatherProxyUrl(url)) {
-        // Rotate the token immediately before posting the bearer so proxy
-        // requests can never carry a stale access token.
-        const { data: { session: refreshed } } = await supabase.auth.refreshSession();
-        if (refreshed?.access_token) {
-            headers.Authorization = `Bearer ${refreshed.access_token}`;
-        }
+    if (proxied) {
+        headers.Authorization = `Bearer ${await proxyAccessToken(false)}`;
     }
 
-    const res = await fetch(url, { signal, headers });
+    let res = await fetch(url, { signal, headers });
+    if (res.status === 401 && proxied) {
+        headers.Authorization = `Bearer ${await proxyAccessToken(true)}`;
+        res = await fetch(url, { signal, headers });
+        if (res.status === 401) {
+            toast.error(SIGN_IN_AGAIN);
+            throw new SignInAgainError(SIGN_IN_AGAIN);
+        }
+    }
     if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
     return res.json();
 }

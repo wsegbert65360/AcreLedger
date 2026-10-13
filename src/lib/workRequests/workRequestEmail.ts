@@ -14,6 +14,22 @@ export function workTypeLabel(workType: WorkType): string {
   return WORK_TYPE_LABELS[workType] ?? 'Work';
 }
 
+/** Mailto bodies stay short enough for a URL and use CRLF line breaks. */
+export const MAX_WORK_REQUEST_EMAIL_BODY = 1800;
+
+const PROVIDER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Empty is allowed. A present address must be a single trimmed email. */
+export function providerEmailForSave(
+  value: string | null | undefined,
+): { ok: true; email: string | undefined } | { ok: false } {
+  if (value == null) return { ok: true, email: undefined };
+  const trimmed = value.trim();
+  if (!trimmed) return { ok: true, email: undefined };
+  if (trimmed.length > 254 || !PROVIDER_EMAIL_RE.test(trimmed)) return { ok: false };
+  return { ok: true, email: trimmed };
+}
+
 /** Sorted, de-duplicated list of farm names referenced by the request's fields. */
 export function farmNamesForRequest(request: WorkRequest): string[] {
   const names = new Set(request.fields.map(f => f.farmName).filter(Boolean));
@@ -85,10 +101,18 @@ export function buildWorkRequestMailto(request: WorkRequest): WorkRequestMailto 
   lines.push('');
   lines.push('Field boundaries, locations, maps, roads, and acreages should be verified before application.');
 
+  const body = lines
+    .join('\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n/g, '\r\n')
+    .trim()
+    .slice(0, MAX_WORK_REQUEST_EMAIL_BODY)
+    .trimEnd();
+
   return {
-    to: request.providerEmail || '',
+    to: request.providerEmail?.trim() || '',
     subject,
-    body: lines.join('\n'),
+    body,
   };
 }
 

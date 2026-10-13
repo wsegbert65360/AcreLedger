@@ -1,12 +1,27 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Duplicated from src/lib/weatherBuildConfig.ts. tsconfig.node.json includes
+// only this file, so the capacitor gate cannot import the tested helper.
+function assertCapacitorWeatherProxy(mode: string, proxyUrl: string | undefined): void {
+  if (mode !== "capacitor") return;
+  const cleaned = (proxyUrl ?? "").trim().replace(/^['"]|['"]$/g, "");
+  if (!cleaned) {
+    throw new Error(
+      "Capacitor build requires VITE_WEATHER_PROXY_URL. Do not ship VITE_VISUALCROSSING_KEY in an App Store or native bundle.",
+    );
+  }
+}
+
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  assertCapacitorWeatherProxy(mode, env.VITE_WEATHER_PROXY_URL);
+  return ({
   base: mode === "capacitor" ? "./" : "/",
   server: {
     host: "::",
@@ -197,4 +212,5 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-}));
+});
+});

@@ -20,10 +20,39 @@ const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebService
 // Only these query parameters are forwarded to Visual Crossing (location/endpoint are path-based).
 const ALLOWED_QUERY_PARAMS = new Set(['unitGroup', 'contentType', 'include', 'elements']);
 
-const MAX_LOCATION_LENGTH = 1000;
+const ALLOWED_INCLUDE = new Set(['current,days', 'hours,current']);
+const ALLOWED_ELEMENTS = new Set([
+  'datetime,temp,humidity,windspeed,winddir,precip,precipprob',
+  'datetime,tempmax,tempmin,temp,feelslike,humidity,dew,windspeed,windgust,winddir,precip,precipprob,cloudcover,conditions,icon,sunrise,sunset',
+  'temp,humidity,windspeed,winddir',
+]);
+
+const MAX_LOCATION_LENGTH = 80;
 const MAX_ENDPOINT_LENGTH = 200;
 const VC_TIMEOUT_MS = 10_000;
 const RELATIVE_ENDPOINTS = new Set(['today', 'last3days/today', 'last7days/next10days']);
+
+function isLatLng(location: string): boolean {
+  const match = location.match(/^(-?\d{1,3}(?:\.\d{1,6})?),\s*(-?\d{1,3}(?:\.\d{1,6})?)$/);
+  if (!match) return false;
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
+function isShortAddress(location: string): boolean {
+  if (location === '.' || location === '..' || location.includes('..')) return false;
+  if (location.includes('/') || location.includes('\\')) return false;
+  return /^[A-Za-z0-9][A-Za-z0-9 .,'#-]{0,79}$/.test(location);
+}
+
+function isValidLocation(location: string): boolean {
+  if (location === '.' || location === '..') return false;
+  if (location.length > MAX_LOCATION_LENGTH) return false;
+  if (/^\d{5}(?:-\d{4})?$/.test(location)) return true;
+  if (isLatLng(location)) return true;
+  return isShortAddress(location);
+}
 
 function isValidEndpoint(endpoint: string): boolean {
   if (RELATIVE_ENDPOINTS.has(endpoint)) return true;
@@ -106,11 +135,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   // ---------- Validate query params ----------
   const { location, endpoint, ...restParams } = req.query;
 
-  if (typeof location !== 'string' || location.length === 0) {
+  if (typeof location !== 'string' || !isValidLocation(location)) {
     return res.status(400).json({ error: 'Missing or invalid location parameter' });
-  }
-  if (location.length > MAX_LOCATION_LENGTH) {
-    return res.status(400).json({ error: 'Location parameter too long' });
   }
 
   if (endpoint !== undefined) {
@@ -137,6 +163,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(400).json({ error: `Invalid query parameters: ${invalidParams.join(', ')}` });
   }
 
+  const include = restParams.include;
+  if (typeof include === 'string' && !ALLOWED_INCLUDE.has(include)) {
+    return res.status(400).json({ error: 'Invalid include parameter' });
+  }
+  const elements = restParams.elements;
+  if (typeof elements === 'string' && !ALLOWED_ELEMENTS.has(elements)) {
+    return res.status(400).json({ error: 'Invalid elements parameter' });
+  }
+
+  // Check the server key before the quota RPC so a misconfigured deploy
+  // does not burn the caller's 500-request daily allowance.
+  const VC_KEY = process.env.VISUALCROSSING_API_KEY;
+  if (!VC_KEY) {
+    return res.status(500).json({ error: 'Server configuration error: missing Visual Crossing API key' });
+  }
+
   // ---------- Durable per-user quota ----------
   const { data: rateLimitAllowed, error: rateLimitError } = await supabase
     .rpc('consume_weather_proxy_request');
@@ -150,11 +192,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   // ---------- Build target URL ----------
-  const VC_KEY = process.env.VISUALCROSSING_API_KEY;
-  if (!VC_KEY) {
-    return res.status(500).json({ error: 'Server configuration error: missing Visual Crossing API key' });
-  }
-
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(restParams)) {
     if (typeof value === 'string') {
@@ -176,6 +213,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const fetchRes = await fetch(targetUrl, { signal: controller.signal });
+    if (!fetchRes.ok) {
+      return res.status(502).json({ error: 'Weather provider request failed' });
+    }
     const data = await fetchRes.json();
     return res.status(fetchRes.status).json(data);
   } catch (err: unknown) {
