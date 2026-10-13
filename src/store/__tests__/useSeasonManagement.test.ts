@@ -110,8 +110,10 @@ describe('Backup restore validation (fix #4)', () => {
   });
 
   it('accepts the current versioned backup envelope', () => {
-    const result = backupSchema.parse({ ...makeValidBackup(), backupVersion: 2 });
-    expect(result.backupVersion).toBe(2);
+    const result = backupSchema.parse({ ...makeValidBackup(), backupVersion: 3, source: 'cloud', loadedAt: '2026-10-13T00:00:00.000Z' });
+    expect(result.backupVersion).toBe(3);
+    expect(result.source).toBe('cloud');
+    expect(result.loadedAt).toBe('2026-10-13T00:00:00.000Z');
   });
 
   it('rejects non-positive activity and CLU acreage', () => {

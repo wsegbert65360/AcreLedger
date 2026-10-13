@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyTenantRecovery, buildApplyPlan, type ApplyExecutor } from "./apply-tenant-recovery.js";
-import { tenantBundleTables } from "./tenant-registry.js";
+import { TENANT_REGISTRY_VERSION, tenantBundleTables } from "./tenant-registry.js";
 import { tenantBundleChecksum, type TenantBundle } from "./extract-tenant.js";
 
 const FARM = "11111111-1111-4111-8111-111111111111";
@@ -19,6 +19,8 @@ function bundle(farmId = FARM): TenantBundle {
   }
   const result: TenantBundle = {
     bundleVersion: 1,
+    registryVersion: TENANT_REGISTRY_VERSION,
+    extractedTables: tenantBundleTables().map((entry) => `${entry.schema}.${entry.table}`),
     sourceBackupId: "backup-1",
     sourceRecoveredAt: "2026-09-10T07:00:00.000Z",
     farmId,
@@ -198,5 +200,114 @@ describe("apply tenant recovery", () => {
       }),
     ).rejects.toThrow(/constraint/);
     expect(sql.at(-1)).toBe("ROLLBACK");
+  });
+
+  it("refuses a bundle missing an includeInTenantBundle table key", () => {
+    const value = bundle();
+    delete value.tables["public.fields"];
+    value.checksums["bundle.json"] = tenantBundleChecksum(value);
+    expect(() => buildApplyPlan({
+      bundle: value,
+      mode: "merge",
+      dryRun: true,
+      farmId: FARM,
+      confirm: "MERGE-MISSING-DATA",
+      preBackupVerified: false,
+      executor: recordingExecutor(),
+    })).toThrow(/missing required table public\.fields/);
+  });
+
+  it("accepts an empty array for a required table key", () => {
+    const value = bundle();
+    value.tables["public.fields"] = [];
+    value.checksums["bundle.json"] = tenantBundleChecksum(value);
+    expect(() => buildApplyPlan({
+      bundle: value,
+      mode: "merge",
+      dryRun: true,
+      farmId: FARM,
+      confirm: "MERGE-MISSING-DATA",
+      preBackupVerified: false,
+      executor: recordingExecutor(),
+    })).not.toThrow();
+  });
+
+  it("refuses a registry version mismatch", () => {
+    const value = bundle();
+    value.registryVersion = TENANT_REGISTRY_VERSION + 1;
+    value.checksums["bundle.json"] = tenantBundleChecksum(value);
+    expect(() => buildApplyPlan({
+      bundle: value,
+      mode: "merge",
+      dryRun: true,
+      farmId: FARM,
+      confirm: "MERGE-MISSING-DATA",
+      preBackupVerified: false,
+      executor: recordingExecutor(),
+    })).toThrow(/registry version mismatch/);
+  });
+
+  it("never tombstones the root farms row in snapshot mode", () => {
+    const plan = buildApplyPlan({
+      bundle: bundle(),
+      mode: "snapshot",
+      dryRun: true,
+      farmId: FARM,
+      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      preBackupVerified: false,
+      executor: recordingExecutor(),
+    });
+    expect(plan.statements.some((statement) => (
+      statement.table === "public.farms" && statement.sql.startsWith("UPDATE")
+    ))).toBe(false);
+  });
+
+  it("does not plan billing tables and reports Stripe reconcile in skipped", () => {
+    const plan = buildApplyPlan({
+      bundle: bundle(),
+      mode: "snapshot",
+      dryRun: true,
+      farmId: FARM,
+      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      preBackupVerified: false,
+      executor: recordingExecutor(),
+    });
+    expect(plan.statements.some((statement) => statement.table.includes("billing") || statement.table === "public.farm_subscriptions")).toBe(false);
+    expect(plan.skipped.some((item) => item.table === "public.farm_subscriptions" && /billing/i.test(item.reason))).toBe(true);
+    expect(plan.skipped.some((item) => item.table === "public.account_deletion_requests")).toBe(true);
+  });
+
+  it("scopes snapshot DO UPDATE to EXCLUDED.farm_id", () => {
+    const plan = buildApplyPlan({
+      bundle: bundle(),
+      mode: "snapshot",
+      dryRun: true,
+      farmId: FARM,
+      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      preBackupVerified: false,
+      executor: recordingExecutor(),
+    });
+    const fieldUpsert = plan.statements.find((statement) => statement.table === "public.fields" && statement.sql.includes("DO UPDATE"));
+    expect(fieldUpsert?.sql).toContain('WHERE "fields".farm_id = EXCLUDED.farm_id');
+  });
+
+  it("runs the conflict scan after the advisory lock inside the write transaction", async () => {
+    const executor = recordingExecutor();
+    await applyTenantRecovery({
+      bundle: bundle(),
+      mode: "merge",
+      dryRun: false,
+      farmId: FARM,
+      confirm: "MERGE-MISSING-DATA",
+      preBackupVerified: true,
+      executor,
+    });
+    const begin = executor.sql.indexOf("BEGIN");
+    const lock = executor.sql.findIndex((item) => item.includes("pg_advisory_xact_lock"));
+    const conflict = executor.sql.findIndex((item) => item.includes("jsonb_array_elements"));
+    const insert = executor.sql.findIndex((item) => item.startsWith("INSERT"));
+    expect(lock).toBeGreaterThan(begin);
+    expect(conflict).toBeGreaterThan(lock);
+    expect(insert).toBeGreaterThan(conflict);
   });
 });

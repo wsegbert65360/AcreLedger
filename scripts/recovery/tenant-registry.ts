@@ -12,6 +12,8 @@ export interface TenantTable {
   ownership: OwnershipKind;
   farmColumn?: string;
   userColumn?: string;
+  /** Additional user-referencing columns remapped during Auth-user recovery. */
+  userColumns?: string[];
   via?: {
     schema: string;
     table: string;
@@ -24,10 +26,18 @@ export interface TenantTable {
   primaryKeys: string[];
   conflictKeys?: string[];
   includeInTenantBundle: boolean;
+  /** Skip during apply-tenant-recovery even if the bundle still contains the table. */
+  excludeFromApply?: boolean;
+  excludeFromApplyReason?: string;
   notes: string;
 }
 
-export const TENANT_REGISTRY_VERSION = 2;
+export const TENANT_REGISTRY_VERSION = 3;
+
+export function userIdColumns(entry: TenantTable): string[] {
+  if (entry.userColumns && entry.userColumns.length > 0) return entry.userColumns;
+  return entry.userColumn ? [entry.userColumn] : [];
+}
 
 export const TENANT_REGISTRY: TenantTable[] = [
   {
@@ -128,8 +138,10 @@ export const TENANT_REGISTRY: TenantTable[] = [
     hasDeletedAt: true,
     restoreOrder: 30,
     primaryKeys: ["id"],
-    includeInTenantBundle: true,
-    notes: "Stripe entitlement mirror. Recreate billing in Stripe separately; do not copy live webhook secrets.",
+    includeInTenantBundle: false,
+    excludeFromApply: true,
+    excludeFromApplyReason: "billing — reconcile from Stripe",
+    notes: "Stripe entitlement mirror. Never apply from a tenant bundle; recreate billing in Stripe separately.",
   },
   {
     schema: "public",
@@ -343,11 +355,14 @@ export const TENANT_REGISTRY: TenantTable[] = [
     ownership: "user",
     farmColumn: "farm_id",
     userColumn: "user_id",
+    userColumns: ["user_id", "requested_by"],
     hasDeletedAt: false,
     restoreOrder: 60,
     primaryKeys: ["id"],
     includeInTenantBundle: true,
-    notes: "Owned by the farm user. Do not restore another user's deletion request.",
+    excludeFromApply: true,
+    excludeFromApplyReason: "account deletion requests — do not restore; never restore status 'pending'",
+    notes: "Owned by the farm user. Extracted for inventory; excluded from apply by default. Never restore status 'pending'.",
   },
   {
     schema: "ai_assistant_private",
@@ -495,6 +510,15 @@ export function tenantBundleTables(): TenantTable[] {
   return TENANT_REGISTRY.filter((entry) => entry.includeInTenantBundle)
     .slice()
     .sort((a, b) => a.restoreOrder - b.restoreOrder || registryKey(a).localeCompare(registryKey(b)));
+}
+
+export function applySkipNotes(): Array<{ table: string; reason: string }> {
+  return TENANT_REGISTRY
+    .filter((entry) => entry.excludeFromApply)
+    .map((entry) => ({
+      table: registryKey(entry),
+      reason: entry.excludeFromApplyReason ?? "excluded from apply",
+    }));
 }
 
 export function extractSql(entry: TenantTable): { sql: string; params: "farm" | "farm+users" | "users" } {

@@ -12,22 +12,21 @@ const geoJsonMultiPolygonSchema = z.object({
 
 const geoJsonGeometrySchema = z.union([geoJsonPolygonSchema, geoJsonMultiPolygonSchema]);
 
-// Note: We deliberately omit .strict() from tractFeatureSchema and tractFeatureCollectionSchema
-// because imported GeoJSON features from the FSA may contain additional vendor/custom properties
-// that must be retained and not rejected during validation.
+// Zod strips unknown keys by default. Use .passthrough() so FSA GeoJSON vendor
+// properties on features and feature collections are retained, not dropped.
 const tractFeatureSchema = z.object({
   type: z.literal('Feature'),
   geometry: geoJsonGeometrySchema,
   properties: z.object({
     cluNumber: z.string(),
     acres: z.number().positive(),
-  }),
-});
+  }).passthrough(),
+}).passthrough();
 
 const tractFeatureCollectionSchema = z.object({
   type: z.literal('FeatureCollection'),
   features: z.array(tractFeatureSchema),
-});
+}).passthrough();
 
 const sprayProductSchema = z.object({
   id: z.string().optional(),
@@ -417,6 +416,28 @@ export const workRequestSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
+export const BACKUP_COLLECTION_LABELS = [
+  ['fields', 'Fields'],
+  ['bins', 'Bins'],
+  ['plantRecords', 'Plant records'],
+  ['sprayRecords', 'Spray records'],
+  ['harvestRecords', 'Harvest records'],
+  ['hayHarvestRecords', 'Hay records'],
+  ['customSprayRecords', 'Custom spray records'],
+  ['fertilizerApplications', 'Fertilizer applications'],
+  ['tillageRecords', 'Tillage records'],
+  ['grainMovements', 'Grain movements'],
+  ['savedSeeds', 'Saved seeds'],
+  ['fertilizerRecipes', 'Fertilizer recipes'],
+  ['sprayRecipes', 'Spray recipes'],
+  ['fsaTracts', 'FSA tracts'],
+  ['cluAssignments', 'CLU assignments'],
+  ['workRequests', 'Work requests'],
+  ['equipment', 'Equipment'],
+  ['maintenanceSchedules', 'Maintenance tasks'],
+  ['maintenanceLogs', 'Service & repairs'],
+] as const;
+
 export const backupSchema = z.object({
   backupVersion: z.number().int().positive().optional(),
   fields: z.array(fieldSchema).optional(),
@@ -441,6 +462,18 @@ export const backupSchema = z.object({
   activeSeason: z.number().optional(),
   backupDate: z.string().optional(),
   rolloverDate: z.string().optional(),
+  source: z.enum(['cloud', 'cache']).optional(),
+  loadedAt: z.string().optional(),
 }).strict();
+
+export type BackupCollectionKey = (typeof BACKUP_COLLECTION_LABELS)[number][0];
+
+export function backupCollectionCounts(data: BackupData): Array<{ key: BackupCollectionKey; label: string; count: number }> {
+  return BACKUP_COLLECTION_LABELS.map(([key, label]) => ({
+    key,
+    label,
+    count: Array.isArray(data[key]) ? data[key]!.length : 0,
+  }));
+}
 
 export type BackupData = z.infer<typeof backupSchema>;

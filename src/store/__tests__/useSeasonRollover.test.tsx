@@ -3,9 +3,12 @@ import { renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSupabaseMock } from '@/test/supabaseMock';
 let useSeasonManagement: typeof import('../useSeasonManagement')['useSeasonManagement'];
+let formatRestoreFailure: typeof import('../useSeasonManagement')['formatRestoreFailure'];
 const supabaseMock = createSupabaseMock();
 vi.doMock('@/lib/supabase', () => ({ supabase: supabaseMock.client }));
-beforeAll(async () => { ({ useSeasonManagement } = await import('../useSeasonManagement')); });
+beforeAll(async () => {
+  ({ useSeasonManagement, formatRestoreFailure } = await import('../useSeasonManagement'));
+});
 import { exportDataAsJson } from '@/utils/backup';
 
 const clearQueue = vi.hoisted(() => vi.fn());
@@ -135,7 +138,7 @@ describe('season rollover safety', () => {
 
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(true);
     expect(exportDataAsJson).toHaveBeenCalledWith(
-      expect.objectContaining({ backupVersion: 2, activeSeason: 2025 }),
+      expect.objectContaining({ backupVersion: 3, activeSeason: 2025 }),
       expect.any(String),
     );
     expect(args.setActiveSeason).toHaveBeenCalledWith(2026);
@@ -219,5 +222,103 @@ describe('season rollover safety', () => {
 
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
     expect(exportDataAsJson).not.toHaveBeenCalled();
+  });
+});
+
+const restoreBackup = {
+  backupVersion: 2,
+  fields: [{ id: 'f1', name: 'North', farm_id: 'farm-1', acreage: 80, deleted_at: null }],
+  sprayRecords: [{ id: 's1', fieldId: 'f1', fieldName: 'North', seasonYear: 2024, farm_id: 'farm-1', deleted_at: null }],
+  activeSeason: 2024,
+  backupDate: '2026-01-02T00:00:00.000Z',
+};
+
+describe('restore from backup gates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    supabaseMock.reset();
+    supabaseMock.setTableHandler('fields', { data: [], error: null });
+    supabaseMock.setRpcResult({ data: { grain_harvest_link_conflicts: 0 }, error: null });
+  });
+
+  it('blocks restore until cloud data has finished loading', async () => {
+    const { toast } = await import('sonner');
+    const args = makeArgs({ initialFetchComplete: false });
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.restoreFromBackup(restoreBackup)).resolves.toBe(false);
+    expect(supabaseMock.fns.rpc).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'Wait for cloud data and pending changes to finish syncing before restore.',
+    );
+  });
+
+  it('blocks restore when fetch failed or pending sync remains', async () => {
+    const fetchFailed = makeArgs({ fetchError: true });
+    await expect(renderHook(() => useSeasonManagement(fetchFailed)).result.current.restoreFromBackup(restoreBackup))
+      .resolves.toBe(false);
+    const pending = makeArgs({ pendingSyncCount: 2 });
+    await expect(renderHook(() => useSeasonManagement(pending)).result.current.restoreFromBackup(restoreBackup))
+      .resolves.toBe(false);
+    expect(supabaseMock.fns.rpc).not.toHaveBeenCalled();
+  });
+
+  it('does not switch active season unless the user confirms', async () => {
+    const args = makeArgs({ activeSeason: 2025 });
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.restoreFromBackup(restoreBackup)).resolves.toBe(true);
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith('restore_farm_backup', expect.objectContaining({
+      p_active_season: null,
+    }));
+    const payload = supabaseMock.fns.rpc.mock.calls[0][1].p_payload as Record<string, unknown>;
+    expect(payload._expected_active_season).toBeUndefined();
+    expect(args.setActiveSeason).not.toHaveBeenCalled();
+  });
+
+  it('compare-and-sets the backup season only after explicit confirmation', async () => {
+    const args = makeArgs({ activeSeason: 2025 });
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.restoreFromBackup(restoreBackup, { switchActiveSeason: true })).resolves.toBe(true);
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith('restore_farm_backup', expect.objectContaining({
+      p_active_season: 2024,
+    }));
+    const payload = supabaseMock.fns.rpc.mock.calls[0][1].p_payload as Record<string, unknown>;
+    expect(payload._expected_active_season).toBe(2025);
+    expect(args.setActiveSeason).toHaveBeenCalledWith(2024);
+  });
+
+  it('surfaces the first Zod path and a generic message for other restore failures', async () => {
+    const { ZodError } = await import('zod');
+    const zod = formatRestoreFailure(new ZodError([{
+      code: 'custom',
+      path: ['sprayRecords', 0, 'waterRate'],
+      message: 'Required',
+    }]));
+    expect(zod).toBe('sprayRecords.0.waterRate: Required');
+    expect(formatRestoreFailure(new Error('cloud down'))).toBe('cloud down');
+    expect(formatRestoreFailure('nope')).toBe('Unknown error during restore.');
+  });
+
+  it('rejects a backup made by a newer AcreLedger', async () => {
+    const { toast } = await import('sonner');
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.restoreFromBackup({ ...restoreBackup, backupVersion: 99 })).resolves.toBe(false);
+    expect(supabaseMock.fns.rpc).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'Restore failed: This backup was made by a newer AcreLedger. Update the app before restoring it.',
+    );
+  });
+
+  it('includes grain conflict counts in the success toast', async () => {
+    const { toast } = await import('sonner');
+    supabaseMock.setRpcResult({
+      data: { grain_harvest_link_conflicts: 2, work_request_number_conflicts: 1 },
+      error: null,
+    });
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.restoreFromBackup(restoreBackup)).resolves.toBe(true);
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('2 grain movements kept deleted'));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('1 work request kept deleted'));
   });
 });

@@ -23,10 +23,10 @@ Do not point production at the new project until the owner accepts the drill.
 7. Set `RECOVERY_DATABASE_URL` to the replacement project's TLS database URL, then run the checked-in restore command from the repository root:
 
    ```bash
-   npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory>
+   npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory> --confirm-isolated-ref <isolated-project-ref>
    ```
 
-   `scripts/recovery/restore-isolated.ts` is the authority for the complete file order. It includes `auth-schema.sql`, `storage-schema.sql`, and migration schema/data files when present; fails if a required artifact is missing; runs `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after schema loading; and only then enables replica mode and loads data. Do not replace it with a hand-written `psql` sequence.
+   `scripts/recovery/restore-isolated.ts` is the authority for the complete file order. It includes `auth-schema.sql`, `storage-schema.sql`, and migration schema/data files when present; fails if a required artifact is missing; runs `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after schema loading; and only then enables replica mode and loads data. It requires `--confirm-isolated-ref` for the replacement project, refuses production ref `rtzqswpmhlbrbxjwyywl`, and compares restored table counts with `manifest.json`. Do not replace it with a hand-written `psql` sequence.
 8. Restore Storage objects into the exact bucket names and keys recorded beside each `archivePath` in `storage/objects-manifest.json`; verify each listed SHA-256 while streaming it.
 9. Recreate configuration that is not in the database: Auth URLs, API keys, Edge Functions (`mrms-hourly`, `mrms-backfill`), Realtime publication on `profiles`, Cron jobs, custom domains.
 10. Recreate Vault secrets **by name** (`mrms_automation_api_key`, `mrms_project_url`). Do not copy old API keys blindly — rotate them.

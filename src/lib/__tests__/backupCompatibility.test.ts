@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupCompatibility';
+import { assertSupportedBackupVersion, CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupCompatibility';
 import { backupSchema } from '@/lib/backupSchema';
 
 describe('normalizeBackupForRestore', () => {
@@ -54,6 +54,33 @@ describe('normalizeBackupForRestore', () => {
   });
 
   it('accepts the current backup version', () => {
-    expect(backupSchema.parse({ backupVersion: CURRENT_BACKUP_VERSION }).backupVersion).toBe(2);
+    expect(backupSchema.parse({ backupVersion: CURRENT_BACKUP_VERSION }).backupVersion).toBe(3);
+  });
+
+  it('rejects a backup made by a newer AcreLedger', () => {
+    expect(() => assertSupportedBackupVersion(CURRENT_BACKUP_VERSION + 1)).toThrow(
+      'This backup was made by a newer AcreLedger. Update the app before restoring it.',
+    );
+  });
+
+  it('retains extra GeoJSON feature properties through restore normalization', () => {
+    const normalized = normalizeBackupForRestore({
+      fsaTracts: [{
+        id: 'tract-1', farmId: 'farm-1', tractKey: '1-1', filename: 'tract.json', featureCount: 1,
+        importedAt: '2026-01-01T00:00:00.000Z', deletedAt: null,
+        geojson: {
+          type: 'FeatureCollection',
+          vendor: 'fsa-shapefile',
+          features: [{
+            type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [[[-93, 41], [-92.99, 41], [-92.99, 41.01], [-93, 41]]] },
+            properties: { cluNumber: '10', acres: 12.75, cluClass: '2' },
+          }],
+        },
+      }],
+    }) as any;
+    const parsed = backupSchema.parse(normalized);
+    expect((parsed.fsaTracts![0].geojson as { vendor?: string }).vendor).toBe('fsa-shapefile');
+    expect((parsed.fsaTracts![0].geojson.features[0].properties as { cluClass?: string }).cluClass).toBe('2');
   });
 });
