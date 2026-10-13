@@ -51,9 +51,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
     setHayHarvestRecords(prev => [...prev, newRecord]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'hay_harvest_records', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('hay_harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Hay harvest recorded offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -121,7 +122,7 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
 
     let mapped: ReturnType<typeof mapHayToDb>;
     try {
-      mapped = mapHayToDb(r);
+      mapped = mapHayToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapHayToDb failed:', err);
       isMutating.current = false;
@@ -138,9 +139,10 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
     setHayHarvestRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'hay_harvest_records', id: r.id }])) {
         try {
           await syncQueue.enqueueMutation('hay_harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Hay harvest record updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -226,13 +228,14 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
     setHayHarvestRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, ids.map(id => ({ tableName: 'hay_harvest_records', id })))) {
         try {
           const deletedAt = new Date().toISOString();
           await syncQueue.enqueueMutations(ids.map(id => ({
             tableName: 'hay_harvest_records', operation: 'soft_delete' as const,
             payload: { id, deleted_at: deletedAt }, farmId: farm_id,
           })));
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

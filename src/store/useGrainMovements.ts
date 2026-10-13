@@ -135,13 +135,14 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     };
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'grain_movements', id: r.id }])) {
         try {
           await syncQueue.enqueueMutation('grain_movements', 'update', {
             ...mapped,
             id: r.id,
             __expected_version: previousVersion,
           }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Grain movement record updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -235,7 +236,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     setGrainMovements(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, ids.map(id => ({ tableName: 'grain_movements', id })))) {
         try {
           const deletedAt = new Date().toISOString();
           // Atomic batch: a partial enqueue must not leave some deletions
@@ -254,6 +255,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
               farmId: farm_id,
             }))
           );
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {
@@ -428,9 +430,10 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     setGrainMovements(prev => [...prev, newRecord]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'grain_movements', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('grain_movements', 'insert', { ...mapped, farm_id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Grain movement recorded offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',

@@ -51,9 +51,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
     setCustomSprayRecords(prev => [...prev, newRecord]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'custom_spray_records', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('custom_spray_records', 'insert', { ...mapped, farm_id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Custom spray recorded offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -121,7 +122,7 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
 
     let mapped: ReturnType<typeof mapCustomSprayToDb>;
     try {
-      mapped = mapCustomSprayToDb(r);
+      mapped = mapCustomSprayToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapCustomSprayToDb failed:', err);
       isMutating.current = false;
@@ -138,9 +139,10 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
     setCustomSprayRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'custom_spray_records', id: r.id }])) {
         try {
           await syncQueue.enqueueMutation('custom_spray_records', 'update', { ...mapped, id: r.id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Custom spray record updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -226,13 +228,14 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
     setCustomSprayRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, ids.map(id => ({ tableName: 'custom_spray_records', id })))) {
         try {
           const deletedAt = new Date().toISOString();
           await syncQueue.enqueueMutations(ids.map(id => ({
             tableName: 'custom_spray_records', operation: 'soft_delete' as const,
             payload: { id, deleted_at: deletedAt }, farmId: farm_id,
           })));
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

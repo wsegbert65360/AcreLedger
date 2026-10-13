@@ -57,4 +57,21 @@ describe('syncQueue native persistence', () => {
     await expect(syncQueue.getQueue('farm-1')).rejects.toThrow('Offline database unavailable');
     await expect(syncQueue.getPendingCount('farm-1')).rejects.toThrow('Offline database unavailable');
   });
+
+  it('throws a native dequeue error instead of reporting it removed', async () => {
+    db.run.mockRejectedValueOnce(new Error('locked'));
+    await expect(syncQueue.dequeueMutation('q1')).rejects.toThrow('locked');
+  });
+
+  it('quarantines one corrupt native payload in place and preserves other queued rows', async () => {
+    db.query.mockResolvedValue({ values: [
+      { id: 'bad', table_name: 'fields', payload: '{broken', farm_id: 'farm-1', retry_count: 0 },
+      { id: 'good', table_name: 'fields', payload: '{"id":"f1"}', farm_id: 'farm-1', retry_count: 0 },
+    ] });
+    const queue = await syncQueue.getQueue('farm-1');
+    expect(queue[0]).toMatchObject({ id: 'bad', retry_count: 10, payload: { __corrupt_native_payload: '{broken' } });
+    expect(queue[1].payload).toEqual({ id: 'f1' });
+    expect(db.run).toHaveBeenCalledWith('UPDATE sync_queue SET retry_count = ? WHERE id = ?;', [10, 'bad']);
+    expect(db.run.mock.calls.some(call => String(call[0]).includes('DELETE'))).toBe(false);
+  });
 });

@@ -16,7 +16,7 @@ const enqueueMutations = vi.fn();
 
 vi.doMock('@/services/fieldService', () => ({ fieldService }));
 vi.doMock('@/services/binService', () => ({ binService }));
-vi.doMock('@/lib/syncQueue', () => ({ syncQueue: { enqueueMutation, enqueueMutations } }));
+vi.doMock('@/lib/syncQueue', () => ({ syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() } }));
 vi.doMock('@/lib/supabase', () => ({ supabase: { from: vi.fn() } }));
 vi.doMock('@/lib/mappers', () => ({
   mapFieldToDb: vi.fn((value: Field) => ({ ...value })),
@@ -56,6 +56,7 @@ const sprayRecipe = (overrides: Partial<SprayRecipe> = {}): SprayRecipe => ({
 
 function renderStore(options: {
   online?: boolean;
+  total?: number;
   fields?: Field[];
   bins?: Bin[];
   assignments?: FieldCluAssignment[];
@@ -70,6 +71,7 @@ function renderStore(options: {
     const sprayRecipes = useStatefulArray<SprayRecipe>(options.sprayRecipes ?? []);
     const fertilizerRecipes = useStatefulArray<FertilizerRecipe>([]);
     const ops = useFieldsAndBins({
+      getBinTotal: () => options.total ?? 0,
       farm_id: 'farm-1', fields: fields.value, bins: bins.value,
       savedSeeds: seeds.value, sprayRecipes: sprayRecipes.value,
       fertilizerRecipes: fertilizerRecipes.value, cluAssignments: assignments.value,
@@ -82,6 +84,16 @@ function renderStore(options: {
     return { ops, fields, bins, assignments, seeds, sprayRecipes };
   });
 }
+
+describe('bin inventory guard', () => {
+  it.each([1250.125, -2])('blocks deletion for nonzero inventory %s before optimistic changes or persistence', async (total) => {
+    const { result } = renderStore({ total });
+    await act(async () => { expect(await result.current.ops.deleteBin('bin-1')).toBe(false); });
+    expect(result.current.bins.value[0].deleted_at).toBeNull();
+    expect(binService.softDeleteBin).not.toHaveBeenCalled();
+    expect(enqueueMutation).not.toHaveBeenCalled();
+  });
+});
 
 describe('useFieldsAndBins safety', () => {
   beforeEach(() => {

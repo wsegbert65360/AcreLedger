@@ -31,7 +31,13 @@ const harvest: HarvestRecord = {
 };
 
 vi.doMock('@/lib/supabase', () => ({ supabase: mock.client }));
-vi.doMock('@/lib/syncQueue', () => ({ syncQueue: { enqueueMutation } }));
+vi.doMock('@/lib/syncQueue', () => ({
+  syncQueue: {
+    enqueueMutation,
+    shouldQueueWrite: vi.fn(async (online: boolean) => !online),
+    kickReplay: vi.fn(),
+  },
+}));
 vi.doMock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 vi.doMock('@/lib/native', () => ({ native: { haptic: { error: vi.fn(), success: vi.fn() } } }));
 vi.doMock('@/store/farmStore', () => ({

@@ -51,9 +51,10 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
     setSprayRecords(prev => [...prev, newRecord]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'spray_records', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('spray_records', 'insert', { ...mapped, farm_id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Spray application recorded offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -138,9 +139,10 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
     setSprayRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'spray_records', id: r.id }])) {
         try {
           await syncQueue.enqueueMutation('spray_records', 'update', { ...mapped, id: r.id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Spray record updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -226,13 +228,14 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
     setSprayRecords(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, ids.map(id => ({ tableName: 'spray_records', id })))) {
         try {
           const deletedAt = new Date().toISOString();
           await syncQueue.enqueueMutations(ids.map(id => ({
             tableName: 'spray_records', operation: 'soft_delete' as const,
             payload: { id, deleted_at: deletedAt }, farmId: farm_id,
           })));
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

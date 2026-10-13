@@ -81,12 +81,13 @@ export function useFsaTracts({
         return existingTract ? [...withoutNew, existingTract] : withoutNew;
       });
 
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fsa_tract_imports', id: id }])) {
         try {
           await syncQueue.enqueueMutation('fsa_tract_imports', 'insert', {
             ...dbPayload,
             geojson,
           }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success(`Tract ${tractKey} imported (${featureCount} CLUs)`);
           return true;
@@ -141,9 +142,9 @@ export function useFsaTracts({
         return false;
       }
 
-      const removedAssignments = cluAssignments.filter(a => a.tractKey === tract.tractKey);
+      const removedAssignments = cluAssignments.filter(a => a.tractKey === tract.tractKey && !a.deletedAt);
       setFsaTracts(prev => prev.filter(t => t.id !== id));
-      setCluAssignments(prev => prev.filter(a => a.tractKey !== tract.tractKey));
+      setCluAssignments(prev => prev.filter(a => a.tractKey !== tract.tractKey || a.deletedAt));
       const rollbackTractDelete = () => {
         setFsaTracts(prev => (prev.some(t => t.id === id) ? prev : [...prev, tract]));
         setCluAssignments(prev => {
@@ -152,7 +153,7 @@ export function useFsaTracts({
         });
       };
 
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'fsa_tract_imports', id }, ...removedAssignments.map(a => ({ tableName: 'field_clu_assignments', id: a.id }))])) {
         try {
           const deletedAt = new Date().toISOString();
           // Atomic batch: the tract soft-delete plus all of its CLU assignment
@@ -173,6 +174,7 @@ export function useFsaTracts({
             })),
           ];
           await syncQueue.enqueueMutations(batch);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Tract deleted offline');
           return true;
@@ -249,9 +251,10 @@ export function useFsaTracts({
         return existingAssignment ? [...withoutNew, existingAssignment] : withoutNew;
       });
 
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'field_clu_assignments', id: dbPayload.id }])) {
         try {
           await syncQueue.enqueueMutation('field_clu_assignments', 'insert', dbPayload, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           return true;
         } catch (err) {
@@ -326,9 +329,10 @@ export function useFsaTracts({
         prev.map(a => (a.id === assignmentId ? assignment : a))
       );
 
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'field_clu_assignments', id: assignmentId }])) {
         try {
           await syncQueue.enqueueMutation('field_clu_assignments', 'update', dbPayload, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           return true;
         } catch (err) {
@@ -402,12 +406,13 @@ export function useFsaTracts({
         prev.some(a => a.id === assignment.id) ? prev : [...prev, assignment]
       );
 
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'field_clu_assignments', id: assignment.id }])) {
         try {
           await syncQueue.enqueueMutation('field_clu_assignments', 'soft_delete', {
             id: assignment.id,
             deleted_at: deletedAt,
           }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           return true;
         } catch (err) {

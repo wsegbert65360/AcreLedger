@@ -1,40 +1,18 @@
 /** @vitest-environment jsdom */
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSeasonManagement } from '@/store/useSeasonManagement';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSupabaseMock } from '@/test/supabaseMock';
+let useSeasonManagement: typeof import('../useSeasonManagement')['useSeasonManagement'];
+const supabaseMock = createSupabaseMock();
+vi.doMock('@/lib/supabase', () => ({ supabase: supabaseMock.client }));
+beforeAll(async () => { ({ useSeasonManagement } = await import('../useSeasonManagement')); });
 import { exportDataAsJson } from '@/utils/backup';
 
 const clearQueue = vi.hoisted(() => vi.fn());
 const offlineStore = vi.hoisted(() => ({ unavailable: false }));
 
-const cloud = vi.hoisted(() => ({
-  result: { error: null as { message: string } | null, count: 1 as number | null },
-  failure: null as Error | null,
-}));
-
-vi.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: vi.fn((table: string) => {
-      if (table === 'profiles') {
-        return {
-          update: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              eq: vi.fn(async () => {
-                if (cloud.failure) throw cloud.failure;
-                return cloud.result;
-              }),
-            })),
-          })),
-        };
-      }
-      return { select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [], error: null }) })) };
-    }),
-    rpc: vi.fn(),
-  },
-}));
-
 vi.mock('@/utils/backup', () => ({ exportDataAsJson: vi.fn().mockResolvedValue(true) }));
-vi.mock('@/lib/syncQueue', () => ({ syncQueue: { clearQueue } }));
+vi.mock('@/lib/syncQueue', () => ({ syncQueue: { clearQueue, getPendingCount: vi.fn().mockResolvedValue(0), replayQueue: vi.fn() } }));
 vi.mock('@/lib/offlineStorage', () => ({
   offlineStorage: { clearCache: vi.fn().mockResolvedValue(undefined) },
   isNativeOfflineStoreUnavailable: () => offlineStore.unavailable,
@@ -73,10 +51,50 @@ function makeArgs(overrides: Record<string, unknown> = {}) {
 describe('season rollover safety', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    cloud.result = { error: null, count: 1 };
-    cloud.failure = null;
+    supabaseMock.reset();
     clearQueue.mockResolvedValue(undefined);
     offlineStore.unavailable = false;
+  });
+
+  it('requires exactly the next season before creating a backup', async () => {
+    const args = makeArgs({ activeSeason: 2024 });
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(exportDataAsJson).not.toHaveBeenCalled();
+    expect(supabaseMock.fns.update).not.toHaveBeenCalled();
+  });
+
+  it('uses season CAS and refreshes a competing rollover without applying its target', async () => {
+    const { toast } = await import('sonner');
+    supabaseMock.setTablePages('profiles', [
+      { error: null, count: 0 }, { data: { active_season: 2027 }, error: null },
+    ]);
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('active_season', 2025);
+    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('farm_id', 'farm-1');
+    expect(args.setActiveSeason).toHaveBeenCalledWith(2027);
+    expect(args.setActiveSeason).not.toHaveBeenCalledWith(2026);
+    expect(args.setViewingSeason.mock.calls[0][0](2025)).toBe(2027);
+    expect(toast.error).toHaveBeenCalledWith('Season changed elsewhere');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it.each([2025, 2027])('plain cache clear reloads active season %s and retains valid viewing/storage', async (season) => {
+    supabaseMock.setResult({ data: { active_season: season } });
+    localStorage.setItem('user-1_al_viewing_season', '2024');
+    localStorage.setItem('user-1_al_active_season', String(season));
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+    await expect(result.current.clearLocalCache({ keepPendingSync: true })).resolves.toBe(true);
+    expect(args.setActiveSeason).toHaveBeenCalledWith(season);
+    expect(args.setViewingSeason.mock.calls[0][0](2024)).toBe(2024);
+    expect(args.setViewingSeason.mock.calls[0][0](2000)).toBe(season);
+    expect(localStorage.getItem('user-1_al_viewing_season')).toBe('2024');
+    expect(clearQueue).not.toHaveBeenCalled();
+    expect(args.refetchFarmData).toHaveBeenCalled();
+    expect(args.setFarmId).not.toHaveBeenCalled();
   });
 
   it('clears the farm offline queue as part of local sign-out cleanup', async () => {
@@ -125,7 +143,7 @@ describe('season rollover safety', () => {
   });
 
   it('does not change local seasons when the cloud update affects zero rows', async () => {
-    cloud.result = { error: null, count: 0 };
+    supabaseMock.setResult({ error: null, count: 0 });
     const args = makeArgs();
     const { result } = renderHook(() => useSeasonManagement(args));
 
@@ -135,7 +153,7 @@ describe('season rollover safety', () => {
   });
 
   it('returns false instead of throwing on an unexpected network failure', async () => {
-    cloud.failure = new Error('network');
+    supabaseMock.setThrow(new Error('network'));
     const args = makeArgs();
     const { result } = renderHook(() => useSeasonManagement(args));
 

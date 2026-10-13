@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { Map as MapIcon, Sprout, ArrowRight } from 'lucide-react';
 
+import TractAssignmentFlow from '@/components/TractAssignmentFlow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFarm } from '@/store/farmStore';
-import TractAssignmentFlow from '@/components/TractAssignmentFlow';
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -20,14 +21,14 @@ export default function Onboarding() {
     }
   }, [farmName]);
 
-  const handleSkip = async () => {
-    await completeOnboarding();
-    navigate('/');
-  };
-
   const handleDone = async () => {
-    await completeOnboarding();
-    navigate('/');
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      if (await completeOnboarding()) navigate('/');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveName = async (e: React.FormEvent) => {
@@ -65,7 +66,7 @@ export default function Onboarding() {
               </p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleSkip} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={handleDone} disabled={isSaving} className="text-muted-foreground">
             Skip setup
           </Button>
         </div>

@@ -15,7 +15,7 @@ const enqueueMutations = vi.fn();
 vi.doMock('@/lib/supabase', () => ({ supabase: supabaseMock.client }));
 vi.doMock('@/lib/mappers', () => ({ mapWorkRequestToDb }));
 vi.doMock('@/lib/syncQueue', () => ({
-  syncQueue: { enqueueMutation, enqueueMutations },
+  syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() },
 }));
 vi.doMock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 

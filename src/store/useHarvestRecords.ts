@@ -85,7 +85,7 @@ export function useHarvestRecords({
     };
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'harvest_records', id: mappedHarvest.id }, { tableName: 'grain_movements', id: mappedGrain.id }])) {
         try {
           await syncQueue.enqueueMutations([{
             tableName: 'harvest_records',
@@ -93,6 +93,7 @@ export function useHarvestRecords({
             payload: { ...mappedHarvest, [LINKED_GRAIN_MUTATION_KEY]: mappedGrain },
             farmId: farm_id,
           }]);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           await onMutation();
           toast.success('Harvest and grain movement recorded offline.', {
             description: 'Queued together — they will sync automatically when connection is restored.',
@@ -185,9 +186,10 @@ export function useHarvestRecords({
     setHarvestRecords(prev => [...prev, newRecord]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'harvest_records', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('harvest_records', 'insert', { ...mapped, farm_id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Harvest recorded offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -255,7 +257,7 @@ export function useHarvestRecords({
 
     let mapped: ReturnType<typeof mapHarvestToDb>;
     try {
-      mapped = mapHarvestToDb(r);
+      mapped = mapHarvestToDb({ ...r, farm_id });
     } catch (err) {
       console.error('mapHarvestToDb failed:', err);
       isMutating.current = false;
@@ -272,9 +274,10 @@ export function useHarvestRecords({
     setHarvestRecords(prev => prev.map(item => item.id === r.id ? r : item));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'harvest_records', id: r.id }])) {
         try {
           await syncQueue.enqueueMutation('harvest_records', 'update', { ...mapped, id: r.id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Harvest record updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -387,7 +390,7 @@ export function useHarvestRecords({
     };
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [...ids.map(id => ({ tableName: 'harvest_records', id })), ...grainSnapshot.map(({ record }) => ({ tableName: 'grain_movements', id: record.id }))])) {
         try {
           const deletedAt = new Date().toISOString();
           await syncQueue.enqueueMutations([
@@ -405,6 +408,7 @@ export function useHarvestRecords({
               farmId: farm_id,
             })),
           ]);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} record${count !== 1 ? 's' : ''} deleted offline.`, {

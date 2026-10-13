@@ -63,9 +63,11 @@ try {
     CREATE ROLE authenticated;
     CREATE ROLE service_role;
     CREATE SCHEMA auth;
-    CREATE TABLE auth.users (id uuid PRIMARY KEY);
+    CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
       'SELECT NULL::uuid';
+    CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS
+      $jwt$ SELECT '{}'::jsonb $jwt$;
     CREATE SCHEMA cron;
     CREATE TABLE cron.job (jobid bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, jobname text);
     CREATE FUNCTION cron.schedule(text, text, text) RETURNS bigint LANGUAGE sql AS

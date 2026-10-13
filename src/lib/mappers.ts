@@ -873,12 +873,12 @@ export const mapBinToDb = (b: Bin) => {
         farm_id: b.farm_id,
         name: b.name,
         capacity: b.capacity,
-        deleted_at: b.deleted_at
+        deleted_at: b.deleted_at ?? null
     };
 };
 
 export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
-    validateRequired(s, ['farm_id', 'name'], 'mapSeedToDb');
+    validateRequired(s, ['id', 'farm_id', 'name'], 'mapSeedToDb');
     savedSeedSchema.parse(s);
     return {
         id: s.id,
@@ -907,7 +907,7 @@ export const mapRecipeToDb = (r: SprayRecipe) => {
         target_pest: r.targetPest,
         epa_reg_number: r.epaRegNumber,
         crop_or_site_treated: r.cropOrSiteTreated ?? null,
-        deleted_at: r.deleted_at
+        deleted_at: r.deleted_at ?? null
     };
 };
 
@@ -919,7 +919,7 @@ export const mapFertilizerRecipeToDb = (r: FertilizerRecipe) => {
         farm_id: r.farm_id,
         name: r.name,
         npk_ratio: r.npkRatio,
-        deleted_at: r.deleted_at
+        deleted_at: r.deleted_at ?? null
     };
 };
 
@@ -938,7 +938,7 @@ export const mapFertilizerToDb = (r: FertilizerApplication) => {
         ...(Number.isFinite(r.timestamp) && r.timestamp > 0
             ? { created_at: new Date(r.timestamp).toISOString() }
             : {}),
-        deleted_at: r.deleted_at
+        deleted_at: r.deleted_at ?? null
     };
 };
 
@@ -955,7 +955,7 @@ export const mapTillageToDb = (r: TillageRecord) => {
         notes: r.notes,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
-        deleted_at: r.deleted_at
+        deleted_at: r.deleted_at ?? null
     };
 };
 

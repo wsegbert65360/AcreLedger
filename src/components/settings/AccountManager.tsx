@@ -14,7 +14,7 @@ import { isNativeOfflineStoreUnavailable, OFFLINE_STORE_UNAVAILABLE_MESSAGE } fr
 import { useFarm } from '@/store/farmStore';
 
 export default function AccountManager() {
-  const { session, farm_id, farmName, updateFarmName, signOut, pendingSyncCount } = useFarm();
+  const { session, farm_id, farmName, updateFarmName, signOut, pendingSyncCount, failedSyncCount = 0 } = useFarm();
   const [name, setName] = useState(farmName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
@@ -38,7 +38,13 @@ export default function AccountManager() {
     setIsSaving(false);
   };
 
+  const unsyncedCount = pendingSyncCount + failedSyncCount;
   const hasChanges = name.trim() !== '' && name.trim() !== farmName;
+
+  const performSignOut = async (options?: Parameters<typeof signOut>[0]) => {
+    const result = await signOut(options);
+    if (result?.signedOut && result.serverPending) toast.warning('Signed out on this device; server sign-out pending');
+  };
 
   const handleSignOutClick = () => {
     // Signing out clears the local sync queue; queued offline changes that
@@ -47,11 +53,11 @@ export default function AccountManager() {
       setConfirmUnavailableSignOut(true);
       return;
     }
-    if (pendingSyncCount > 0) {
+    if (unsyncedCount > 0) {
       setConfirmSignOut(true);
       return;
     }
-    signOut();
+    void performSignOut();
   };
 
   const handleDeletionRequest = async () => {
@@ -75,7 +81,7 @@ export default function AccountManager() {
       );
       setConfirmDeletion(false);
       setDeletionConfirmation('');
-      await signOut();
+      await performSignOut({ scope: 'global' });
     } catch (error) {
       console.error('Failed to request account deletion:', error);
       toast.error('Could not request account deletion. Please try again.');
@@ -159,14 +165,14 @@ export default function AccountManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Discard unsynced changes?</AlertDialogTitle>
             <AlertDialogDescription>
-              You have {pendingSyncCount} offline change{pendingSyncCount !== 1 ? 's' : ''} still waiting to sync.
-              Signing out now permanently deletes {pendingSyncCount !== 1 ? 'them' : 'it'} from this device.
-              Reconnect and let the app sync first to keep {pendingSyncCount !== 1 ? 'them' : 'it'}.
+              You have {unsyncedCount} unsynced offline change{unsyncedCount !== 1 ? 's' : ''}.
+              Signing out now permanently deletes {unsyncedCount !== 1 ? 'them' : 'it'} from this device.
+              Reconnect and let the app sync first. For changes that could not sync, go to Settings → Sync to export them before signing out.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Stay signed in</AlertDialogCancel>
-            <AlertDialogAction onClick={() => signOut()}>
+            <AlertDialogAction onClick={() => void performSignOut()}>
               Sign out and discard
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -184,7 +190,7 @@ export default function AccountManager() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Stay signed in</AlertDialogCancel>
-            <AlertDialogAction onClick={() => signOut({ skipUnreadableOfflineStore: true })}>
+            <AlertDialogAction onClick={() => void performSignOut({ skipUnreadableOfflineStore: true })}>
               Sign out anyway
             </AlertDialogAction>
           </AlertDialogFooter>

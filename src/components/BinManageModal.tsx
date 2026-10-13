@@ -16,6 +16,7 @@ import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
 import { useAppPreferences } from '@/store/useAppPreferences';
 import { Bin } from '@/types/farm';
+import { formatMeasurement } from '@/utils/numbers';
 
 interface BinManageModalProps {
     open: boolean;
@@ -127,10 +128,12 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
 }
 
 export function BinManager() {
-    const { bins, deleteBin } = useFarm();
+    const { bins, deleteBin, getBinTotal } = useFarm();
     const [editBin, setEditBin] = useState<Bin | null>(null);
     const [addOpen, setAddOpen] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+    const remainingBushels = deleteConfirm ? getBinTotal(deleteConfirm) : 0;
 
     return (
         <>
@@ -183,12 +186,15 @@ export function BinManager() {
                     <AlertDialogHeader>
                         <AlertDialogTitle className="text-foreground">Delete Bin</AlertDialogTitle>
                         <AlertDialogDescription className="text-muted-foreground">
-                            This will remove this bin from active tracking. Grain movement records associated with this bin ID will remain in your records.
+                            {remainingBushels !== 0
+                                ? `This bin still holds ${formatMeasurement(remainingBushels, 'bu', 3)}. Empty it before deleting it.`
+                                : 'This empty bin will be removed from active tracking. Its historical grain movement records will remain.'}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel className="touch-target border-border text-muted-foreground">Cancel</AlertDialogCancel>
                         <AlertDialogAction
+                            disabled={remainingBushels !== 0}
                             onClick={async () => {
                                 if (deleteConfirm) {
                                     const success = await deleteBin(deleteConfirm);

@@ -64,9 +64,10 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
     setWorkRequests(prev => [...prev, newRecord]);
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'work_requests', id: mapped.id }])) {
         try {
           await syncQueue.enqueueMutation('work_requests', 'insert', { ...mapped, farm_id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Work request saved offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -185,9 +186,10 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
     setWorkRequests(prev => prev.map(item => item.id === r.id ? stamped : item));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'work_requests', id: r.id }])) {
         try {
           await syncQueue.enqueueMutation('work_requests', 'update', { ...mapped, id: r.id }, farm_id);
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           toast.success('Work request updated offline.', {
             description: 'Queued locally — will sync automatically when connection is restored.',
@@ -265,13 +267,14 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
     setWorkRequests(prev => prev.filter(r => !ids.includes(r.id)));
 
     try {
-      if (!isOnline) {
+      if (await syncQueue.shouldQueueWrite(isOnline, farm_id, ids.map(id => ({ tableName: 'work_requests', id })))) {
         try {
           const deletedAt = new Date().toISOString();
           await syncQueue.enqueueMutations(ids.map(id => ({
             tableName: 'work_requests', operation: 'soft_delete' as const,
             payload: { id, deleted_at: deletedAt }, farmId: farm_id,
           })));
+          if (isOnline) syncQueue.kickReplay(farm_id, onMutation);
           if (onMutation) await onMutation();
           const count = ids.length;
           toast.success(`${count} work request${count !== 1 ? 's' : ''} deleted offline.`, {

@@ -23,10 +23,10 @@ describe('SyncStatusIndicator', () => {
     expect(screen.getByLabelText('All changes synced')).toBeInTheDocument();
   });
 
-  it('shows syncing state with pending count', () => {
+  it('shows pending state with pending count', () => {
     mockedUseFarm.mockReturnValue({ isOnline: true, pendingSyncCount: 3 } as any);
     render(<SyncStatusIndicator />);
-    expect(screen.getByLabelText('Syncing 3 records')).toBeInTheDocument();
+    expect(screen.getByLabelText('3 records pending sync')).toBeInTheDocument();
   });
 
   it('shows offline state with pending count', () => {

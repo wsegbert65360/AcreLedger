@@ -26,7 +26,7 @@ import {
   OFFLINE_STORE_UNAVAILABLE_MESSAGE,
   offlineStorage,
 } from '@/lib/offlineStorage';
-import { getMaxActiveSeason, isValidActiveSeason, MIN_SEASON_YEAR } from '@/lib/seasonYears';
+import { clampViewingSeason, getMaxActiveSeason, isValidActiveSeason, MIN_SEASON_YEAR, resolveRemoteViewingSeason } from '@/lib/seasonYears';
 import { syncQueue } from '@/lib/syncQueue';
 import { setStorageLock } from './storageUtils';
 
@@ -164,6 +164,26 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
   // ─── Rollover ───────────────────────────────────────────────────────────────
 
+  const refreshActiveSeason = useCallback(async (preserveViewing = false): Promise<boolean> => {
+    if (!session?.user?.id || !farm_id) return false;
+    try {
+      const { data, error } = await supabase.from('profiles')
+        .select('active_season').eq('id', session.user.id).eq('farm_id', farm_id).single();
+      if (error || !data || !isValidActiveSeason(data.active_season)) {
+        console.error('Failed to refresh active season:', error ?? 'Invalid profile season');
+        return false;
+      }
+      setActiveSeason(data.active_season);
+      setViewingSeason(current => preserveViewing
+        ? clampViewingSeason(current, data.active_season)
+        : resolveRemoteViewingSeason(current, activeSeason, data.active_season));
+      return true;
+    } catch (error) {
+      console.error('Failed to refresh active season:', error);
+      return false;
+    }
+  }, [session, farm_id, activeSeason, setActiveSeason, setViewingSeason]);
+
   const rolloverToNewSeason = useCallback(async (year: number): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected.');
@@ -196,8 +216,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
-    if (year <= activeSeason) {
-      toast.error(`The new season must be later than the active ${activeSeason} season.`);
+    if (year !== activeSeason + 1) {
+      toast.error(`The new season must be exactly ${activeSeason + 1}.`);
       return false;
     }
 
@@ -227,8 +247,14 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         .from('profiles')
         .update({ active_season: year }, { count: 'exact' })
         .eq('id', session.user.id)
-        .eq('farm_id', farm_id);
+        .eq('farm_id', farm_id)
+        .eq('active_season', activeSeason);
 
+      if (!error && count === 0) {
+        await refreshActiveSeason();
+        toast.error('Season changed elsewhere');
+        return false;
+      }
       if (error || count !== 1) {
         console.error('Error updating active season:', error ?? `Expected 1 profile, updated ${count ?? 0}`);
         toast.error('Failed to save new season to cloud. Season was NOT changed; your backup was downloaded.');
@@ -253,7 +279,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
     equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
     isOnline, farm_id, initialFetchComplete, fetchError, pendingSyncCount,
-    setActiveSeason, setViewingSeason, setLoading,
+    setActiveSeason, setViewingSeason, setLoading, refreshActiveSeason,
   ]);
 
   // ─── Restore ────────────────────────────────────────────────────────────────
@@ -454,7 +480,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       console.error('Failed to clear SQLite cache:', err);
     }
 
-    const keysToRemove = selectCacheKeysToRemove(listLocalStorageKeys(), userId ?? null);
+    const keysToRemove = selectCacheKeysToRemove(listLocalStorageKeys(), userId ?? null)
+      .filter(key => isSignOut || !['al_active_season', 'al_viewing_season'].some(
+        suffix => key === suffix || key === `${userId}_${suffix}`,
+      ));
 
     await new Promise<void>(resolve => {
       const batchRemove = (startIndex: number) => {
@@ -495,8 +524,13 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setEquipment([]);
     setMaintenanceSchedules([]);
     setMaintenanceLogs([]);
-    setActiveSeason(getCurrentYear());
-    setViewingSeason(getCurrentYear());
+    if (isSignOut) {
+      setActiveSeason(getCurrentYear());
+      setViewingSeason(getCurrentYear());
+    } else {
+      // Retain the current selection if refresh fails; never invent a season.
+      await refreshActiveSeason(true);
+    }
 
     // Sign-out clears the farm scope (the session is ending). A plain cache
     // clear must NOT unset farm_id on a still-authenticated session — doing so
@@ -508,7 +542,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       void refetchFarmData();
     }
 
-    if (!skipUnreadableStore) {
+    if (!skipUnreadableStore && !isSignOut) {
       toast.success(`Local cache cleared (${keysToRemove.length} item${keysToRemove.length !== 1 ? 's' : ''} removed).`);
     }
     return true;
@@ -520,7 +554,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setFsaTracts, setCluAssignments, setWorkRequests,
     setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
     setFarmId, setActiveSeason, setViewingSeason,
-    refetchFarmData,
+    refetchFarmData, refreshActiveSeason,
   ]);
 
   return useMemo(() => ({

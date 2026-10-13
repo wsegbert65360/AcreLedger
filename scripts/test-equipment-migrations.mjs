@@ -286,5 +286,19 @@ const afterRename = Object.fromEntries((
 ).rows.map(row => [row.task_name, row.live]));
 assert.deepEqual(afterRename, { Oil: true, 'Engine oil': true }, 'rename and resurrection must both apply');
 
+// Offline reconciliation can see own-farm tombstones for all equipment tables.
+await db.exec(await readFile(new URL('../supabase/migrations/20261012215043_reconcile_equipment_offline_sync.sql', import.meta.url), 'utf8'));
+for (const [table, id] of [['equipment', ids.equipment], ['maintenance_schedules', ids.schedule], ['maintenance_logs', ids.log]]) {
+  await db.query(`UPDATE public.${table} SET deleted_at = now() WHERE id = $1::uuid`, [id]);
+}
+await db.exec('SET ROLE authenticated');
+for (const [table, id] of [['equipment', ids.equipment], ['maintenance_schedules', ids.schedule], ['maintenance_logs', ids.log]]) {
+  const result = await db.query('SELECT public.get_offline_sync_row_state($1, $2::uuid, $3::uuid) AS row', [table, id, ids.farm]);
+  assert.equal(result.rows[0].row.id, id, `${table} must be accepted for reconciliation`);
+  assert.equal(result.rows[0].row.farm_id, ids.farm);
+  assert.ok(result.rows[0].row.deleted_at, `${table} reconciliation must include the hidden tombstone`);
+  await assert.rejects(db.query('SELECT public.get_offline_sync_row_state($1, $2::uuid, $3::uuid)', [table, id, ids.otherFarm]), error => error.code === '42501');
+}
+
 await db.close();
 console.log('Equipment migration checks passed: guards, restore, task-name conflicts, higher-wins, idempotency, baselines, unit conversion, and cascade delete.');
