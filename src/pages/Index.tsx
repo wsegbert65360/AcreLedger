@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle, Settings, Tractor, Search, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SeasonSelect from '@/components/SeasonSelect';
@@ -80,6 +80,49 @@ const Index = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollSearchIntoView = useCallback(() => {
+    requestAnimationFrame(() => {
+      searchContainerRef.current?.scrollIntoView({ block: 'end', inline: 'nearest' });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setKeyboardPadding(0);
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const update = () => {
+      const covered = Math.round(window.innerHeight - viewport.height - viewport.offsetTop);
+      setKeyboardPadding(Math.max(0, covered));
+    };
+    const handleResize = () => {
+      update();
+      if (searchContainerRef.current?.contains(document.activeElement)) {
+        scrollSearchIntoView();
+      }
+    };
+
+    update();
+    viewport.addEventListener('resize', handleResize);
+    viewport.addEventListener('scroll', update);
+    return () => {
+      viewport.removeEventListener('resize', handleResize);
+      viewport.removeEventListener('scroll', update);
+    };
+  }, [searchOpen, scrollSearchIntoView]);
+
+  useEffect(() => {
+    if (keyboardPadding > 0 && searchContainerRef.current?.contains(document.activeElement)) {
+      scrollSearchIntoView();
+    }
+  }, [keyboardPadding, scrollSearchIntoView]);
 
   const activityMap = useMemo(
     () => buildFieldActivityStatusMap(
@@ -185,7 +228,10 @@ const Index = () => {
         </div>
 
       </header>
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8 lg:py-6">
+      <main
+        className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8 lg:py-6"
+        style={keyboardPadding > 0 ? { paddingBottom: keyboardPadding } : undefined}
+      >
         <ErrorBoundary>
           <WeatherBar />
         </ErrorBoundary>
@@ -261,7 +307,7 @@ const Index = () => {
                   </button>
                 </div>
                 {searchOpen && (
-                  <div className="relative mt-1">
+                  <div ref={searchContainerRef} className="relative mt-1">
                     <Label htmlFor="field-search" className="sr-only">Search fields</Label>
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                     <Input
@@ -273,6 +319,7 @@ const Index = () => {
                       placeholder="field name, planted, not sprayed, fertilized…"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
+                      onFocus={scrollSearchIntoView}
                       className="h-11 pl-9 pr-9"
                       autoFocus
                     />
