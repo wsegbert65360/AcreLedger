@@ -193,7 +193,7 @@ export function generateSprayPDF(
       detailsRight = [
         `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
         `Target Pest: ${record.targetPest || '-'}`,
-        `Area: ${formatNumber(treatedArea)} ${formatUnit(record.treatedAreaUnit) || 'ac'}`,
+        `Area: ${formatNumber(treatedArea)} ${formatUnit(treatedAreaUnit) || 'ac'}`,
         `Method: ${record.applicationMethod || '-'}`,
       ];
 

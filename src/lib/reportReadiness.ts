@@ -60,6 +60,7 @@ interface SprayReadinessRecord {
   equipmentId?: string;
   windDirection?: string;
   sensitiveAreaCheck?: boolean;
+  applicationMethod?: string;
 }
 
 const NSW_PIC_LABEL = 'Property / PIC';
@@ -312,11 +313,10 @@ export function buildSprayReadiness(
       });
     }
 
-    if (isAu) {
-      // NSW EPA required-field list from the au-apvma profile. US license /
-      // EPA / treated-area-fallback checks do not apply to these records.
+    {
+      // Required compliance details apply to every profile.
       for (const label of missingComplianceFields(asComplianceRecord(record))) {
-        if (label === NSW_PIC_LABEL) {
+        if (isAu && label === NSW_PIC_LABEL) {
           // PIC is copied from the paddock at save time; the spray form
           // cannot type it. Open the field so the operator can set it there.
           issues.push({
@@ -334,11 +334,12 @@ export function buildSprayReadiness(
           ...baseIssue,
           id: `spray-${record.id}-nsw-${nswIssueKey(label)}`,
           severity: 'error',
-          category: NSW_DETAILS_CATEGORY,
+          category: isAu ? NSW_DETAILS_CATEGORY : 'Compliance details',
           message: `${record.fieldName} is missing ${label}.`,
         });
       }
-    } else {
+    }
+    if (!isAu) {
       // Exports resolve the treated area through the same effective-acreage
       // fallback the spray log uses (stored value, then CLU cropland, boundary,
       // raw acreage), so a missing stored value is advisory: only flag it when

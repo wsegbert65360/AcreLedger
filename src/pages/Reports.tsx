@@ -21,7 +21,7 @@ import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
-import { formatIsoDate, getWorkDateMs } from '@/utils/dates';
+import { formatIsoDate, getWorkDateMs, toLocalIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
@@ -389,7 +389,7 @@ export default function Reports() {
         },
         rows: reportRows,
         issues,
-        fileName: `FSA_578_Worksheet_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        fileName: `FSA_578_Worksheet_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
       });
     }, 'FSA planting PDF');
   };
@@ -412,7 +412,7 @@ export default function Reports() {
           r.fertilizer_formula,
           r.acres
         ]),
-        fileName: `Fertilizer_Summary_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        fileName: `Fertilizer_Summary_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
         summaryText: 'Grand Total Applied',
         summaryValue: `${totalFertAcres} AC`
       });
@@ -437,7 +437,7 @@ export default function Reports() {
           row.farmNumber || '—',
           row.tractNumber || '—',
         ]),
-        fileName: `FSA_Fall_Production_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        fileName: `FSA_Fall_Production_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
         summaryText: totalFallHayBales > 0 ? 'Total Production' : 'Total Grain Production',
         summaryValue: totalFallHayBales > 0
           ? `${totalHarvestBu.toLocaleString()} BU / ${totalFallHayBales.toLocaleString()} BALES`
@@ -473,7 +473,7 @@ export default function Reports() {
         subtitle: `Total bale production across all cuttings. Generated ${reportDate}.`,
         headers: ['FIELD', 'CUTTING #1', 'CUTTING #2', 'CUTTING #3+', 'TOTAL'],
         rows: records,
-        fileName: `Hay_Summary_${viewingSeason}_${new Date().toISOString().split('T')[0]}.pdf`,
+        fileName: `Hay_Summary_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
         summaryText: 'Season Grand Total',
         summaryValue: `${totalHayBales.toLocaleString()} BALES`
       });
@@ -595,7 +595,7 @@ export default function Reports() {
             onExportCsv={() => runTrackedExport('fsa-plant', async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
               farmName: farmName || 'AcreLedger Farm',
               cropYear: viewingSeason,
-              reportDate: new Date().toISOString().split('T')[0],
+              reportDate: toLocalIsoDate(Date.now()),
             }), 'FSA-578 worksheet data')}
             onExportPdf={handleExportFsaPlantPdf}
             onIssueAction={handleIssueAction}
@@ -651,7 +651,7 @@ export default function Reports() {
               metadata: {
                 farmName: farmName || 'AcreLedger Farm',
                 cropYear: viewingSeason,
-                reportDate: new Date().toISOString().split('T')[0],
+                reportDate: toLocalIsoDate(Date.now()),
               },
             }), 'fall production data')}
             onExportPdf={handleExportHarvestPdf}
