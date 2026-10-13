@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+
+import { Capacitor } from '@capacitor/core';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
+import { Sprout, Mail, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { REGEXP_ONLY_DIGITS } from 'input-otp';
-import { toast } from 'sonner';
-import { Sprout, Mail, ArrowLeft } from 'lucide-react';
-import { getAuthErrorMessage, getPasswordResetErrorMessage } from '@/lib/authErrors';
 import { getPasswordRecoveryRedirectUrl } from '@/lib/authDeepLinks';
+import { getAuthErrorMessage, getPasswordResetErrorMessage } from '@/lib/authErrors';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'verify_code' | 'recovery' | 'verification_sent';
 
@@ -137,6 +140,9 @@ export function Auth({
                     const { error } = await supabase.auth.signUp({
                         email,
                         password,
+                        ...(Capacitor.isNativePlatform() ? {
+                            options: { emailRedirectTo: 'https://acreledger.app/email-confirmed.html' },
+                        } : {}),
                     });
                     if (error) throw error;
                     handleModeChange('verification_sent');

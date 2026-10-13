@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Auth } from "@/components/Auth";
 import BottomNav from "@/components/BottomNav";
 import CoachmarkOverlay from "@/components/CoachmarkOverlay";
+import DeletionPending from "@/components/DeletionPending";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import OfflineBanner from "@/components/OfflineBanner";
 import SeasonRolloverModal from "@/components/SeasonRolloverModal";
@@ -143,7 +144,7 @@ const ModalMap = {
 };
 
 const AppContent = () => {
-  const { session, loading, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
+  const { session, loading, deletionStatus, signOut, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError } = useFarm();
   const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
   const navigate = useNavigate();
@@ -180,7 +181,11 @@ const AppContent = () => {
   }, [isOnline, farm_id]);
 
   useEffect(() => listenForNativePasswordRecovery(
-    () => navigate('/auth?mode=recovery', { replace: true }),
+    () => {
+      setStoredPasswordRecoveryPending(true);
+      setPasswordRecoveryPending(true);
+      navigate('/auth?mode=recovery', { replace: true });
+    },
     error => toast.error(error instanceof Error ? error.message : 'Could not open password recovery link.'),
   ), [navigate]);
 
@@ -205,7 +210,11 @@ const AppContent = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (Capacitor.isNativePlatform() || !isPasswordRecovery) return;
+    if (!isPasswordRecovery) return;
+    if (Capacitor.isNativePlatform()) {
+      if (!passwordRecoveryPending) navigate('/auth?mode=signin', { replace: true });
+      return;
+    }
     setWebRecoveryReady(false);
     void establishWebPasswordRecoverySession()
       .then(established => {
@@ -239,7 +248,11 @@ const AppContent = () => {
     };
   }, []);
 
-  if (passwordRecoveryPending || (isPasswordRecovery && (Capacitor.isNativePlatform() || webRecoveryReady))) {
+  if (session && deletionStatus === 'pending') {
+    return <DeletionPending status={deletionStatus} signOut={signOut} />;
+  }
+
+  if (passwordRecoveryPending || (isPasswordRecovery && !Capacitor.isNativePlatform() && webRecoveryReady)) {
     return (
       <ErrorBoundary>
         <Auth
