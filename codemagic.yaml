@@ -37,6 +37,13 @@ workflows:
         - scripts/recovery/node_modules
 
     scripts:
+      - name: Verify requested nightly commit
+        script: |
+          if [ -n "${EXPECTED_BUILD_SHA:-}" ] && [ "$(git rev-parse HEAD)" != "$EXPECTED_BUILD_SHA" ]; then
+            echo "GitHub main moved since the nightly request; refusing to build a different commit" >&2
+            exit 1
+          fi
+
       - name: Install npm dependencies
         script: |
           npm ci --prefer-offline
@@ -55,6 +62,7 @@ workflows:
       - name: Unit tests
         script: |
           npm run test
+          npm run test:db-integrity
 
       - name: Build web bundle and sync to Android
         script: |
@@ -66,6 +74,10 @@ workflows:
           npx cap sync android
           if ! grep -Rqs "rtzqswpmhlbrbxjwyywl.supabase.co" dist/assets; then
             echo "Capacitor bundle is missing the AcreLedger Supabase endpoint" >&2
+            exit 1
+          fi
+          if grep -Rqs "placeholder-url.supabase.co" dist/assets; then
+            echo "Capacitor bundle contains the placeholder Supabase endpoint" >&2
             exit 1
           fi
           if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
@@ -102,14 +114,17 @@ workflows:
 
       - name: Set Android version code
         script: |
-          LATEST=$(google-play get-latest-build-number \
-            --package-name "$PACKAGE_NAME" \
-            --tracks internal 2>/dev/null || true)
-          if echo "$LATEST" | grep -Eq '^[0-9]+$'; then
-            VERSION_CODE=$((LATEST + 1))
-          else
-            VERSION_CODE=$BUILD_NUMBER
+          # No --tracks filter: inspect the highest code across all Play tracks.
+          # A lookup error cannot establish whether this is the first upload.
+          if ! LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME"); then
+            echo "Google Play version lookup failed; refusing an unsafe versionCode fallback" >&2
+            exit 1
           fi
+          if ! echo "$LATEST" | grep -Eq '^[0-9]+$'; then
+            echo "Google Play did not return a numeric build number; first uploads need a manual versionCode" >&2
+            exit 1
+          fi
+          VERSION_CODE=$((LATEST + 1))
           echo "VERSION_CODE=$VERSION_CODE" >> "$CM_ENV"
 
       - name: Build signed Android App Bundle
@@ -183,6 +198,13 @@ workflows:
         - ios/App/Pods
 
     scripts:
+      - name: Verify requested nightly commit
+        script: |
+          if [ -n "${EXPECTED_BUILD_SHA:-}" ] && [ "$(git rev-parse HEAD)" != "$EXPECTED_BUILD_SHA" ]; then
+            echo "GitHub main moved since the nightly request; refusing to build a different commit" >&2
+            exit 1
+          fi
+
       - name: Install npm dependencies
         script: |
           npm ci --prefer-offline
@@ -206,6 +228,7 @@ workflows:
       - name: Unit tests
         script: |
           npm run test
+          npm run test:db-integrity
 
       - name: Build web bundle and sync to iOS
         script: |
@@ -214,6 +237,14 @@ workflows:
             *) echo "VITE_AI_ASSISTANT_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
           esac
           npm run cap:build
+          if ! grep -Rqs "rtzqswpmhlbrbxjwyywl.supabase.co" dist/assets; then
+            echo "Capacitor bundle is missing the AcreLedger Supabase endpoint" >&2
+            exit 1
+          fi
+          if grep -Rqs "placeholder-url.supabase.co" dist/assets; then
+            echo "Capacitor bundle contains the placeholder Supabase endpoint" >&2
+            exit 1
+          fi
           if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
             echo "Capacitor bundle is missing the Ask the book endpoint" >&2
             exit 1

@@ -81,9 +81,8 @@ The Phase 2 safety suites include:
 ## Coverage Baseline
 
 Updated 2026-07-19 after the Phase 2 hook safety suites via `npm run test:coverage` (V8 provider). Scope is production
-sources only — see the `coverage` block in `vite.config.ts`. No thresholds are set
-yet (Phase 0 records the baseline; a conservative global floor is added after the
-hook/service tests land).
+sources only — see the `coverage` block in `vite.config.ts`. Global thresholds are statements 37 / branches 66 / functions 57 / lines 37.
+They are enforced by `test:coverage`, which is not currently a CI job.
 
 | Metric      | Covered | Total | %     |
 |-------------|---------|-------|-------|
