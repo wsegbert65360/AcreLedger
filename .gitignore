@@ -73,3 +73,6 @@ acreledger_fields*.csv
 *.codex-tmp
 *.tmp
 .tmp*
+
+# Local secrets (never commit)
+Codemagic secret.txt
