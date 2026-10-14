@@ -20,7 +20,7 @@ architecture, design values, and examples; link to those details instead of copy
 
 ## Recent Changes
 
-Keep the five most recent substantive entries, newest first; Git holds the full history.
+Keep substantive entries, newest first; Git holds the full history.
 Update **Last updated** when editing guidance. Update a section’s **Verified against code** note
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
@@ -30,6 +30,7 @@ Navigation checks and editorial changes do not constitute verification of archit
 - **2026-10-09** — Capacitor 6 → 8.5.3 upgrade: bumped core/cli/ios/android to 8.5.3, sqlite to 8.1.1, secure-storage to 0.13.0, speech-recognition to 7.0.1, and all official Capacitor plugins to their 8.x versions. Android: minSdk 24, AGP 8.13.0, Gradle 8.14.3, androidx versions per plan. Android insets use Option A: removed custom MainActivity.java handler, configured SystemBars insetsHandling: ‘native’ with initialViewportFitValueHint: ‘cover’ (the app reads env(safe-area-inset-*), not the vars that ‘css’ injects). Codemagic Java 17 → 21. CapacitorSQLite and secure-storage encryption flags preserved. iOS validation and physical-device tests pending. Speech-recognition 7.0.1 compilation and device test unverified.
 - **2026-10-07** — Added pilot-gated equipment, maintenance schedules, and service/repair logs. Meter updates, unit changes, maintenance logging, and cascade soft-deletes use tenant-checked atomic RPCs and replay as one offline envelope. The three tables are included in customer backup/restore, owner recovery, test-data, and Ask the Book registries.
 - **2026-10-02** — Web password recovery no longer lets the Supabase client auto-exchange `?code=` on `/auth?mode=recovery` before the manual handler. A failed code exchange is rejected even when the browser already has a session, so an expired link cannot open the set-password screen for an ordinary sign-in. A missing PKCE verifier tells the user to open the link in the same browser or app that requested it. Sign-in and sign-up URLs still auto-detect.
+- **2026-10-01** — Password recovery accepts the supported Supabase email `token_hash` recovery link through `verifyOtp`, alongside the PKCE authorization-code exchange, on the exact native scheme and web recovery route. Raw URL session-token fragments remain forbidden and show a re-request message instead. The iPhone/dashboard verification protocol is in `docs/runbooks/ios-password-recovery-device-test.md`.
 
 ## Contents
 

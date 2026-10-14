@@ -117,7 +117,11 @@ export function isBillingUiEnabled(env: Record<string, string | undefined> | und
  * under Capacitor, so no Capacitor plugin or Stripe surface is ever reached
  * from a native build.
  */
-export function isBillingUiAvailable(env: Record<string, string | undefined> = import.meta.env): boolean {
+export function isBillingUiAvailable(
+  env: { VITE_BILLING_UI_ENABLED?: string } = {
+    VITE_BILLING_UI_ENABLED: import.meta.env.VITE_BILLING_UI_ENABLED,
+  },
+): boolean {
   return isBillingUiEnabled(env) && !Capacitor.isNativePlatform();
 }
 

@@ -2,6 +2,7 @@ import { toast } from 'sonner';
 
 import { freshAccessToken, SignInAgainError } from '@/lib/freshAccessToken';
 import { bundledVisualCrossingKey, cleanEnvValue } from '@/lib/weatherBuildConfig';
+import { formatWeatherLatLng, normalizeWeatherLocation } from '@/lib/weatherCoords';
 import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
 
 const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
@@ -71,16 +72,17 @@ function isWeatherProxyUrl(url: string): boolean {
 
 function buildWeatherUrl(location: string, endpoint: string, query: Record<string, string>): string {
     const params = new URLSearchParams(query);
+    const resolvedLocation = normalizeWeatherLocation(location);
 
     const canUseDirectApi = Boolean(VISUAL_CROSSING_KEY) && import.meta.env.DEV;
     if (canUseDirectApi) {
         params.set('key', VISUAL_CROSSING_KEY);
-        const pathLocation = encodeURIComponent(location);
+        const pathLocation = encodeURIComponent(resolvedLocation);
         const pathEndpoint = encodeEndpoint(endpoint);
         return `${VC_BASE_URL}/${pathLocation}${pathEndpoint ? `/${pathEndpoint}` : ''}?${params.toString()}`;
     }
 
-    params.set('location', location);
+    params.set('location', resolvedLocation);
     if (endpoint) params.set('endpoint', endpoint);
 
     return `${resolveWeatherProxyUrl()}?${params.toString()}`;
@@ -416,7 +418,7 @@ export const WeatherService = {
         try {
             // Format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
             const dateTime = timeStr ? `${dateStr}T${timeStr}:00` : dateStr;
-            const location = `${lat},${lng}`;
+            const location = formatWeatherLatLng(lat, lng);
             const url = buildWeatherUrl(location, dateTime, {
                 unitGroup: 'us',
                 contentType: 'json',

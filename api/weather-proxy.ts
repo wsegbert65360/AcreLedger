@@ -33,7 +33,7 @@ const VC_TIMEOUT_MS = 10_000;
 const RELATIVE_ENDPOINTS = new Set(['today', 'last3days/today', 'last7days/next10days']);
 
 function isLatLng(location: string): boolean {
-  const match = location.match(/^(-?\d{1,3}(?:\.\d{1,6})?),\s*(-?\d{1,3}(?:\.\d{1,6})?)$/);
+  const match = location.match(/^(-?\d{1,3}(?:\.\d{1,15})?),\s*(-?\d{1,3}(?:\.\d{1,15})?)$/);
   if (!match) return false;
   const lat = Number(match[1]);
   const lng = Number(match[2]);

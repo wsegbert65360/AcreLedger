@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { calculateSprayProductFields, hasValidSprayRate } from '@/utils/unitConversion';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { getLatestForField } from '@/lib/utils';
+import { formatWeatherLatLng, roundWeatherLatLng } from '@/lib/weatherCoords';
 import { toLocalIsoDate } from '@/utils/dates';
 import { getCarryForwardSource } from '@/lib/carryForward';
 import { useAppPreferences } from '@/store/useAppPreferences';
@@ -327,7 +328,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     const controller = new AbortController();
     if (open && (!initialData || isDuplicate) && field.lat != null && field.lng != null) {
       setLoading(true);
-      WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`, controller.signal).then(w => {
+      WeatherService.fetchCurrentWeather(formatWeatherLatLng(field.lat, field.lng), controller.signal).then(w => {
         if (controller.signal.aborted) return;
         if (!w || w.isError) {
           setLoading(false);
@@ -422,9 +423,10 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
     setIsRecovering(true);
     try {
+      const { lat, lng } = roundWeatherLatLng(field.lat, field.lng);
       const hist = await WeatherService.fetchHistoricalConditions(
-        field.lat,
-        field.lng,
+        lat,
+        lng,
         sprayDate,
         startTime || undefined
       );

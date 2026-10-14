@@ -188,6 +188,29 @@ describe('weather proxy', () => {
     expect(consumeRateLimit).toHaveBeenCalledTimes(5);
   });
 
+  it('accepts southern-hemisphere high-precision coords up to 15 decimals', async () => {
+    const accepted = [
+      '-33.12345678,151.1',
+      '-33.123456789012345,151.1',
+      '-90,180',
+      '0,-180',
+    ];
+    for (const location of accepted) {
+      const { state } = await invoke({ query: { location } });
+      expect(state.status, location).toBe(200);
+    }
+    const rejected = [
+      '-33.1234567890123456,151.1',
+      '-90.0000001,0',
+      '-91,0',
+    ];
+    for (const location of rejected) {
+      const { state } = await invoke({ query: { location } });
+      expect(state.status, location).toBe(400);
+    }
+    expect(consumeRateLimit).toHaveBeenCalledTimes(accepted.length);
+  });
+
   it('allowlists the include and elements values the app sends', async () => {
     const current = await invoke({
       query: {

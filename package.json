@@ -19,7 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b",
     "typecheck:api": "tsc -p tsconfig.api.json",
-    "ci:vercel-gate": "npm run lint && npm run test:unit:gate && npm run typecheck && npm run typecheck:api",
+    "ci:vercel-gate": "npm run lint && npm run test:unit:gate && npm run typecheck && npm run typecheck:api && npm run verify:no-secret-in-bundle",
     "test:unit:gate": "NODE_ENV=test vitest run",
     "install:owner-dr": "npm ci --prefix infrastructure/owner-backup && npm ci --prefix scripts/recovery",
     "test:owner-backup": "npm test --prefix infrastructure/owner-backup",
@@ -36,6 +36,7 @@
     "cap:open:android": "npx cap open android",
     "cap:build:android": "vite build --mode capacitor && npx cap sync android",
     "verify:docs": "node scripts/verify-docs.mjs",
+    "verify:no-secret-in-bundle": "node scripts/verify-no-secret-in-bundle.mjs",
     "verify:migrations": "node scripts/verify-supabase-migrations.mjs",
     "docs:toc": "node scripts/verify-docs.mjs --write"
   },

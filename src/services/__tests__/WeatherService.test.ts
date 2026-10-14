@@ -507,6 +507,27 @@ describe('WeatherService', () => {
                 '17:17',
             )).resolves.toBeNull();
         });
+
+        it('rounds high-precision southern coords to 4 decimals on the request', async () => {
+            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
+            vi.resetModules();
+            const { WeatherService } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    currentConditions: {
+                        temp: 64,
+                        humidity: 50,
+                        windspeed: 8,
+                        winddir: 180,
+                    },
+                }),
+            });
+
+            await WeatherService.fetchHistoricalConditions(-33.12345678, 151.1, '2026-06-15', '09:00');
+            const [fetchUrl] = (global.fetch as any).mock.calls[0];
+            expect(fetchUrl).toContain(`location=${encodeURIComponent('-33.1235,151.1000')}`);
+        });
     });
 
     it('labels completed calendar totals and excludes today and forecast rain', async () => {

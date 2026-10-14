@@ -56,6 +56,10 @@ workflows:
         script: |
           npm run test
 
+      - name: Verify Visual Crossing key is not bundled
+        script: |
+          npm run verify:no-secret-in-bundle
+
       - name: Build web bundle and sync to Android
         script: |
           case "$VITE_AI_ASSISTANT_URL" in
@@ -214,6 +218,10 @@ workflows:
       - name: Unit tests
         script: |
           npm run test
+
+      - name: Verify Visual Crossing key is not bundled
+        script: |
+          npm run verify:no-secret-in-bundle
 
       - name: Build web bundle and sync to iOS
         script: |
