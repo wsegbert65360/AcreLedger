@@ -1,11 +1,13 @@
 // Isolated PostgreSQL regression test; no network or farm data is used.
-// Install @electric-sql/pglite in a temporary directory, then run:
-// node scripts/test-h1-migration.mjs <absolute path to pglite/dist/index.js>
+// Uses the project PGlite install; optional argv[2] overrides its module path.
+// node scripts/test-h1-migration.mjs [absolute path to pglite/dist/index.js]
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-const { PGlite } = await import(pathToFileURL(process.argv[2]).href);
+const { PGlite } = await import(process.argv[2]
+  ? pathToFileURL(process.argv[2]).href
+  : '@electric-sql/pglite');
 const db = new PGlite();
 const migration = name => readFile(new URL(`../supabase/migrations/${name}.sql`, import.meta.url), 'utf8');
 const apply = async name => db.exec(await migration(name));

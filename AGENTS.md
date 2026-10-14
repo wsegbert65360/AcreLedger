@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-12 (Review-02 M4: new public tables/functions need explicit GRANTs).
+> **Last updated:** 2026-10-14 (Review-10: native privacy, CI gates, CSP and Android back behavior).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-14** — Review-10 adds camera/photo-library usage strings, CSP fetch-origin checks, overlay-aware Android back handling, GitHub quality checks and all eleven database-integrity suites. Nightly native builds verify the requested SHA; both platforms reject placeholder Supabase bundles.
 - **2026-10-12** — After `20261012020000_db_access_review_02_m3_m4.sql`, new `public` tables, functions, and sequences inherit no client grants (including no PUBLIC `EXECUTE` on functions). Every new table or function needs an explicit `GRANT` to `authenticated` and/or `service_role`.
 - **2026-10-09** — Capacitor 6 → 8.5.3 upgrade: bumped core/cli/ios/android to 8.5.3, sqlite to 8.1.1, secure-storage to 0.13.0, speech-recognition to 7.0.1, and all official Capacitor plugins to their 8.x versions. Android: minSdk 24, AGP 8.13.0, Gradle 8.14.3, androidx versions per plan. Android insets use Option A: removed custom MainActivity.java handler, configured SystemBars insetsHandling: ‘native’ with initialViewportFitValueHint: ‘cover’ (the app reads env(safe-area-inset-*), not the vars that ‘css’ injects). Codemagic Java 17 → 21. CapacitorSQLite and secure-storage encryption flags preserved. iOS validation and physical-device tests pending. Speech-recognition 7.0.1 compilation and device test unverified.
 - **2026-10-07** — Added pilot-gated equipment, maintenance schedules, and service/repair logs. Meter updates, unit changes, maintenance logging, and cascade soft-deletes use tenant-checked atomic RPCs and replay as one offline envelope. The three tables are included in customer backup/restore, owner recovery, test-data, and Ask the Book registries.
 - **2026-10-02** — Web password recovery no longer lets the Supabase client auto-exchange `?code=` on `/auth?mode=recovery` before the manual handler. A failed code exchange is rejected even when the browser already has a session, so an expired link cannot open the set-password screen for an ordinary sign-in. A missing PKCE verifier tells the user to open the link in the same browser or app that requested it. Sign-in and sign-up URLs still auto-detect.
-- **2026-10-01** — Password recovery accepts the supported Supabase email `token_hash` recovery link through `verifyOtp`, alongside the PKCE authorization-code exchange, on the exact native scheme and web recovery route. Raw URL session-token fragments remain forbidden and show a re-request message instead. The iPhone/dashboard verification protocol is in `docs/runbooks/ios-password-recovery-device-test.md`.
 
 ## Contents
 
@@ -371,8 +371,12 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 
 ### CI/CD (CodeMagic)
 
-- `codemagic.yaml` defines the iOS build workflow for CodeMagic.
-- The workflow triggers on push to `main` and builds an IPA for App Store distribution.
+- `codemagic.yaml` defines `acreledger-ios` (IPA/TestFlight) and `acreledger-android` (AAB/Play internal) workflows.
+- There is no push-to-main trigger. The GitLab nightly schedule requests both workflows when the scheduled main commit matches GitHub main; unchanged successful builds are skipped. Manual starts remain available.
+- Nightly requests pass `EXPECTED_BUILD_SHA`; both workflows reject a checkout at a different commit before installing dependencies.
+- Android uses the shared `appstore` variables plus the `google_play` group containing `GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS`, and the uploaded `acreledger_upload` keystore. Keep credentials in Codemagic, never in the repository.
+- Android version codes use the latest build number across all Play tracks plus one; lookup failures stop the build. Initial uploads require a valid lookup or manual versioning.
+- GitHub Actions gates pull requests and main pushes with lint, app/API type checks, unit tests, and disposable PGlite database-integrity tests. Codemagic also runs database-integrity tests.
 - Code signing uses uploaded certificates and provisioning profiles via `ios_signing`.
 - TestFlight publishing uses `auth: integration` with the `appstore` integration.
 - Environment variable group `appstore` contains `VITE_*` build secrets and ASC API credentials.
@@ -397,7 +401,7 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 
 - Remote topology: `origin` fetches from GitLab and carries **three push URLs** (GitLab, Codeberg, GitHub). A single `git push origin main` fans out to all three remotes at once — do not push each remote separately. The dedicated `github` and `codeberg` remotes exist for fetching and verifying individual hosts.
 - Before pushing: `git fetch --all` and compare heads. `main` legitimately gains commits from other machines, GitHub PR merges (which land on GitHub first), and agent sessions. If a remote is ahead, fast-forward, or rebuild on the remote head and cherry-pick only the novel commits; never force-push `main`.
-- After pushing: verify every remote head (`git ls-remote <remote> main` for each of `github`, `codeberg`, `origin`) reports the same hash. All three must match before the push is done — mandatory for CI/CD changes, because CodeMagic triggers on push to `main`.
+- After pushing: verify every remote head (`git ls-remote <remote> main` for each of `github`, `codeberg`, `origin`) reports the same hash. All three must match before the push is done — mandatory for CI/CD changes, because the nightly GitLab job requires its main commit to match GitHub before requesting CodeMagic builds.
 - Codeberg intermittently rejects the fan-out push with `cannot lock ref 'refs/heads/main': is at <new> but expected <old>` **after** the update has already landed. The error text itself names the target hash, which proves success — read it, confirm with `ls-remote`, and never respond with a force-push. Observed with identical behavior on 2026-09-06 and 2026-09-08.
 
 ### Native & Offline Capability
@@ -654,7 +658,7 @@ After editing:
    - `npm run test` — documentation and tracked-asset checks, then app unit and owner-DR package tests. Run `npm run test:unit` for the app suite alone. See [Testing](#testing).
    - `npm run build` — `vite build` (the **bundle gate**, not the type gate).
    - `npm run verify:migrations` — checks migration filename format, unique timestamps, and disabled seed configuration, then replays every migration in order against a disposable in-memory PostgreSQL (PGlite) with the Supabase platform bootstrap, failing if any migration alters a relation that no migration creates. Run after adding or renaming a migration. It is not part of `npm test`; the GitLab `database` job runs it together with `test:db-integrity`. As of 2026-09-29 it passes: `supabase/migrations/20260316090000_core_harvest_grain_baseline.sql` reconstructs the core schema so the full history replays.
-   - `npm run test:db-integrity` — runs the tenant-scoped harvest/grain checks plus equipment migration/RPC checks against in-memory PGlite. Run when changing those migrations, harvest/grain linkage, or equipment meter/service/cascade functions.
+   - `npm run test:db-integrity` — runs eleven disposable in-memory PGlite suites: tenant harvest/grain, H9, baseline, equipment, database access, H1/FSA restore, H6/tombstones, H8/versioning, H10/cascade, account deletion and harvest backfill. GitHub, GitLab, Codemagic and the Vercel gate run this command. It never contacts a live database.
 2. Summarize changed files, behavior changes, and verification results, including which of the above commands you ran and their outcome.
 3. Mention any unchecked risk clearly.
 

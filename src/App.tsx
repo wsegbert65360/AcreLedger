@@ -234,11 +234,17 @@ const AppContent = () => {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    const backListenerPromise = CapApp.addListener('backButton', () => {
-      if (window.location.pathname === '/') {
-        CapApp.minimizeApp();
-      } else {
+    const backListenerPromise = CapApp.addListener('backButton', ({ canGoBack }) => {
+      const dialog = document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]');
+      if (dialog) {
+        // Radix handles Escape on document; close the overlay before navigating.
+        dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        return;
+      }
+      if (canGoBack) {
         window.history.back();
+      } else {
+        void CapApp.minimizeApp();
       }
     });
 

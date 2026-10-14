@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'AcreLedger',
   webDir: 'dist',
   server: {
-    iosScheme: 'https',       // required for Supabase auth cookies
+    iosScheme: 'capacitor',   // iOS WKWebView runs at capacitor://localhost
     androidScheme: 'https',   // keep the native auth/storage origin stable
   },
   plugins: {

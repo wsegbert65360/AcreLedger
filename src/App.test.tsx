@@ -131,6 +131,8 @@ vi.mock('./pages/Equipment', () => ({
 
 import { App as CapApp } from '@capacitor/app';
 
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+
 import App from './App';
 
 const signedOutState = {
@@ -162,6 +164,103 @@ const navigate = (path: string) => {
 const renderApp = () => render(<App />);
 
 Object.defineProperty(window, 'scrollTo', { value: vi.fn(), writable: true });
+
+describe('native hardware back button', () => {
+  beforeEach(() => {
+    platform.native = true;
+    navigate('/');
+    farmState.current = { ...signedOutState, loading: true };
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+  });
+
+  function backListener() {
+    const call = vi.mocked(CapApp.addListener).mock.calls.find(([event]) => String(event) === 'backButton');
+    expect(call).toBeDefined();
+    return call![1] as unknown as (event: { canGoBack: boolean }) => void;
+  }
+
+  it('closes a real Radix dialog before navigating or minimizing', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const view = render(
+      <>
+        <App />
+        <Dialog defaultOpen>
+          <DialogContent>
+            <DialogTitle>Unsaved spray</DialogTitle>
+            <DialogDescription>Keep the current route while dismissing this entry.</DialogDescription>
+          </DialogContent>
+        </Dialog>
+      </>,
+    );
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-state', 'open');
+    act(() => backListener()({ canGoBack: true }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(back).not.toHaveBeenCalled();
+    expect(CapApp.minimizeApp).not.toHaveBeenCalled();
+    view.unmount();
+    back.mockRestore();
+  });
+
+  it('consumes back for an open alert dialog even when history is empty', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const view = renderApp();
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'alertdialog');
+    dialog.setAttribute('data-state', 'open');
+    const escape = vi.fn();
+    dialog.addEventListener('keydown', escape);
+    document.body.append(dialog);
+    try {
+      act(() => backListener()({ canGoBack: false }));
+      expect(escape).toHaveBeenCalledWith(expect.objectContaining({ key: 'Escape', bubbles: true }));
+      expect(back).not.toHaveBeenCalled();
+      expect(CapApp.minimizeApp).not.toHaveBeenCalled();
+    } finally {
+      dialog.remove();
+      view.unmount();
+      back.mockRestore();
+    }
+  });
+
+  it('goes back when native history exists, including at the root route', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const view = renderApp();
+    act(() => backListener()({ canGoBack: true }));
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(CapApp.minimizeApp).not.toHaveBeenCalled();
+    view.unmount();
+    back.mockRestore();
+  });
+
+  it('minimizes without native history, including a cold-start deep route', () => {
+    navigate('/auth?mode=signin');
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const view = renderApp();
+    act(() => backListener()({ canGoBack: false }));
+    expect(back).not.toHaveBeenCalled();
+    expect(CapApp.minimizeApp).toHaveBeenCalledTimes(1);
+    view.unmount();
+    back.mockRestore();
+  });
+
+  it('removes the native back listener on unmount', async () => {
+    const view = renderApp();
+    backListener();
+    const index = vi.mocked(CapApp.addListener).mock.calls.findIndex(([event]) => String(event) === 'backButton');
+    const handle = await vi.mocked(CapApp.addListener).mock.results[index].value;
+    view.unmount();
+    await vi.waitFor(() => expect(handle.remove).toHaveBeenCalled());
+  });
+
+  it('does not register a native back listener on web', () => {
+    platform.native = false;
+    const view = renderApp();
+    expect(vi.mocked(CapApp.addListener).mock.calls.some(([event]) => String(event) === 'backButton')).toBe(false);
+    view.unmount();
+  });
+});
 
 const startPasswordReset = async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Forgot your password?' }));
