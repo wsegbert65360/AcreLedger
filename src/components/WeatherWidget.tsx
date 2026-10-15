@@ -38,7 +38,10 @@ export default function WeatherBar() {
   // True once the first valid weather result has arrived. Keeps placeholders
   // from flashing on the initial load or a retry.
   const [hasData, setHasData] = useState(false);
+  // No saved zip, field, or GPS fix after location resolution. Show the zip prompt.
+  const [needsLocation, setNeedsLocation] = useState(false);
   const hasDataRef = useRef(false);
+  const zipInputRef = useRef<HTMLInputElement>(null);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
@@ -50,6 +53,7 @@ export default function WeatherBar() {
   useEffect(() => {
     const saved = loadZip(userId);
     if (saved) {
+      setNeedsLocation(false);
       setZip(saved);
       setInputZip(saved);
       return;
@@ -57,6 +61,7 @@ export default function WeatherBar() {
 
     const fieldWithCoords = fieldsRef.current.find(f => f.lat != null && f.lng != null);
     if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
+      setNeedsLocation(false);
       setZip(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
       setInputZip('');
       setUsingCoords(true);
@@ -65,6 +70,7 @@ export default function WeatherBar() {
 
     const cached = loadCachedWeatherCoords();
     if (cached) {
+      setNeedsLocation(false);
       setZip(`${cached.lat},${cached.lon}`);
       setInputZip('');
       setUsingCoords(true);
@@ -72,15 +78,28 @@ export default function WeatherBar() {
 
     // Wait for fields to hydrate before a live GPS read so Safari is not
     // prompted on every launch while `fields` is still the empty first paint.
-    if (!initialFetchComplete) return;
+    if (!initialFetchComplete) {
+      // Field coordinates may still arrive. Keep Loading rather than the zip prompt.
+      if (!cached) setNeedsLocation(false);
+      return;
+    }
 
     // Native geolocation stays on the weather page's existing Capacitor call.
-    // The dashboard card must not start a second fix on every launch.
-    if (isNativePlatform()) return;
+    // The dashboard card must not start a second fix on every launch. With
+    // nothing saved after fields hydrate, ask for a zip instead of spinning.
+    if (isNativePlatform()) {
+      if (!cached) setNeedsLocation(true);
+      return;
+    }
 
     let cancelled = false;
     resolveCoords(fieldsRef.current, saved).then(({ lat, lng, locationString }) => {
-      if (cancelled || !locationString) return;
+      if (cancelled) return;
+      if (!locationString) {
+        if (!cached) setNeedsLocation(true);
+        return;
+      }
+      setNeedsLocation(false);
       setZip(locationString);
       if (lat !== 0 && lng !== 0) {
         setInputZip('');
@@ -88,6 +107,8 @@ export default function WeatherBar() {
       }
     }).catch((error: unknown) => {
       console.error('[WeatherWidget] Failed to resolve location:', error);
+      if (cancelled || cached) return;
+      setNeedsLocation(true);
     });
     return () => { cancelled = true; };
   }, [userId, fieldCoordsKey, initialFetchComplete]);
@@ -190,12 +211,14 @@ export default function WeatherBar() {
     setWeather(initialWeather());
     setHasData(false);
     hasDataRef.current = false;
+    setNeedsLocation(false);
     setZip(z);
     setUsingCoords(!!coordsMatch);
     saveZip(z, userId);
   };
 
   const weatherUnavailable = Boolean(weather.isError && !hasData);
+  const showSetZipPrompt = needsLocation && !zip.trim() && !hasData && !weather.isError;
 
   const handleBarActivate = () => {
     if (weatherUnavailable) {
@@ -235,7 +258,19 @@ export default function WeatherBar() {
                 Weather unavailable · tap to retry
               </span>
             )}
-            {!hasData && !weather.isError && (
+            {showSetZipPrompt && (
+              <label
+                htmlFor="weatherZip"
+                className="text-xs font-semibold leading-snug text-muted-foreground"
+                onClick={e => {
+                  e.stopPropagation();
+                  zipInputRef.current?.focus();
+                }}
+              >
+                Set your zip code to see weather
+              </label>
+            )}
+            {!hasData && !weather.isError && !showSetZipPrompt && (
               <span className="text-xs text-muted-foreground font-semibold">Loading…</span>
             )}
           </div>
@@ -245,6 +280,7 @@ export default function WeatherBar() {
           <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className="flex min-w-0 items-center">
             <label htmlFor="weatherZip" className="sr-only">Zip code or coordinates</label>
             <input
+              ref={zipInputRef}
               id="weatherZip"
               name="weatherZip"
               value={usingCoords ? (locationName || zip) : inputZip}
