@@ -53,12 +53,16 @@ export default function Weather() {
   const [usingGps, setUsingGps] = useState(false);
   const [inputLoc, setInputLoc] = useState('');
   const [searchError, setSearchError] = useState('');
+  // No saved zip, field, or GPS fix after location resolution. Show the zip prompt.
+  const [needsLocation, setNeedsLocation] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const locationInputRef = useRef<HTMLInputElement>(null);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
   const loadWeather = useCallback(async (loc: string) => {
     if (!loc.trim()) return;
+    setNeedsLocation(false);
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -137,19 +141,39 @@ export default function Weather() {
     const saved = loadZip(userId);
     const hasSavedOrFields = saved.trim() !== '' || Boolean(fieldCoordsKey);
 
+    if (hasSavedOrFields) setNeedsLocation(false);
+
     // Empty fields on first paint must not trigger a Safari location prompt.
     // Serve a cached GPS fix immediately; wait for the store before a live read.
     if (!hasSavedOrFields && !initialFetchComplete) {
       const cached = loadCachedWeatherCoords();
       if (cached) {
+        setNeedsLocation(false);
         setCoords({ lat: cached.lat, lng: cached.lon });
         setUsingGps(false);
         loadWeather(`${cached.lat},${cached.lon}`);
       } else {
+        // Field coordinates may still arrive. Keep loading rather than the zip prompt.
+        setNeedsLocation(false);
         setLoading(true);
         setUsingGps(false);
       }
       return;
+    }
+
+    // Native geolocation stays on the explicit current-location button.
+    // With nothing saved after fields hydrate, ask for a zip instead of
+    // starting another fix that ends on "No location".
+    if (!hasSavedOrFields && isNativePlatform()) {
+      const cached = loadCachedWeatherCoords();
+      if (!cached) {
+        setNeedsLocation(true);
+        setLoading(false);
+        setUsingGps(false);
+        setCoords(null);
+        return;
+      }
+      setNeedsLocation(false);
     }
 
     setLoading(true);
@@ -161,14 +185,20 @@ export default function Weather() {
         const hasCoords = lat !== 0 && lng !== 0;
         setCoords(hasCoords ? { lat, lng } : null);
         setUsingGps(false);
-        if (locationString) loadWeather(locationString);
-        else setLoading(false);
+        if (locationString) {
+          setNeedsLocation(false);
+          loadWeather(locationString);
+        } else {
+          setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
+          setLoading(false);
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         console.error('[Weather] Failed to resolve the initial location:', error);
         setUsingGps(false);
         setLoading(false);
+        setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
       });
 
     return () => { cancelled = true; };
@@ -289,13 +319,19 @@ export default function Weather() {
         const gotGps = lat !== 0 && lng !== 0;
         setCoords(gotGps ? { lat, lng } : null);
         setUsingGps(false);
-        if (locationString) loadWeather(locationString);
-        else setLoading(false);
+        if (locationString) {
+          setNeedsLocation(false);
+          loadWeather(locationString);
+        } else {
+          setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
+          setLoading(false);
+        }
       })
       .catch((error: unknown) => {
         console.error('[Weather] Failed to resolve refresh location:', error);
         setUsingGps(false);
         setLoading(false);
+        setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
       });
   }, [userId, fields, loadWeather]);
 
@@ -303,6 +339,11 @@ export default function Weather() {
   const bgGradient = weather
     ? getConditionGradient(weather.icon, weather.isRainingNow)
     : '';
+  const showSetZipPrompt = needsLocation && !loading && !weather;
+
+  const focusLocationInput = () => {
+    locationInputRef.current?.focus();
+  };
 
   return (
     <div className={`min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8 ${bgGradient ? `bg-gradient-to-b ${bgGradient}` : ''}`}>
@@ -320,8 +361,16 @@ export default function Weather() {
             <div className="flex flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight">Weather</h1>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <MapPin size={10} className="text-emerald-500/60" />
-                {weather?.locationName || (loading ? 'Locating…' : 'No location')}
+                <MapPin size={10} className="text-emerald-500/60 shrink-0" />
+                {weather?.locationName ? weather.locationName : showSetZipPrompt ? (
+                  <button
+                    type="button"
+                    onClick={focusLocationInput}
+                    className="text-left font-semibold leading-snug"
+                  >
+                    Set your zip code to see weather
+                  </button>
+                ) : (loading ? 'Locating…' : 'No location')}
               </p>
             </div>
           </div>
@@ -346,7 +395,11 @@ export default function Weather() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                <label htmlFor="weatherLocation" className="sr-only">Zip code or coordinates</label>
                 <input
+                  ref={locationInputRef}
+                  id="weatherLocation"
+                  name="weatherLocation"
                   type="text"
                   placeholder="Enter zip code (e.g. 72301) or lat,lng..."
                   value={inputLoc}
@@ -397,9 +450,13 @@ export default function Weather() {
         {!loading && !weather && (
           <div className="text-center py-16 px-4 border-2 border-dashed border-border rounded-2xl bg-muted/20">
             <MapPin size={40} className="mx-auto text-muted-foreground/20 mb-3" />
-            <h3 className="text-sm font-bold text-foreground mb-1">No Location</h3>
+            <h3 className="text-sm font-bold text-foreground mb-1">
+              {showSetZipPrompt ? 'Set your zip code' : 'No Location'}
+            </h3>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-[260px] mx-auto">
-              Enter a zip code or coordinates in the search bar above, allow location access, or add field coordinates.
+              {showSetZipPrompt
+                ? 'Enter a zip code in the search field above to see weather.'
+                : 'Enter a zip code or coordinates in the search bar above, allow location access, or add field coordinates.'}
             </p>
           </div>
         )}
