@@ -77,8 +77,16 @@ for WF in acreledger-ios acreledger-android; do
     continue
   }
   # Skip too if a build for this exact commit is already queued/running.
-  ACTIVE=$(echo "$RESP" | jq -r --arg sha "$SHA" '[.builds[] | select(.status|IN("queued","preparing","fetching","building","publishing","testing")) | select(.commit.hash==$sha)] | length')
-  LAST=$(echo "$RESP" | jq -r '[.builds[] | select(.status=="finished")] | sort_by(.startedAt) | last | .commit.hash // ""')
+  ACTIVE=$(echo "$RESP" | jq -r --arg sha "$SHA" '[.builds[] | select(.status|IN("queued","preparing","fetching","building","publishing","testing")) | select(.commit.hash==$sha)] | length') || {
+    echo "NIGHTLY FAILED: $WF cannot read active builds" >&2
+    FAILED=1
+    continue
+  }
+  LAST=$(echo "$RESP" | jq -r '[.builds[] | select(.status=="finished")] | sort_by(.startedAt) | last | .commit.hash // ""') || {
+    echo "NIGHTLY FAILED: $WF cannot read last build" >&2
+    FAILED=1
+    continue
+  }
   if [ "$ACTIVE" != "0" ]; then
     echo "$WF: build for $SHA already in progress - skip"; continue
   fi

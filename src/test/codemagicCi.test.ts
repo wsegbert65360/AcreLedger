@@ -168,6 +168,8 @@ git() {
     expect(loop).toContain('echo "$WF: started build $BUILD_ID"');
     expect(loop).toContain('NIGHTLY FAILED: $WF cannot list builds');
     expect(loop).toContain('NIGHTLY FAILED: $WF cannot parse builds');
+    expect(loop).toContain('NIGHTLY FAILED: $WF cannot read active builds');
+    expect(loop).toContain('NIGHTLY FAILED: $WF cannot read last build');
     expect(loop).toContain('NIGHTLY FAILED: $WF cannot start build');
     expect(loop).toContain('NIGHTLY FAILED: $WF response missing buildId');
     expect(loop).toContain('already in progress - skip');
@@ -267,6 +269,43 @@ git() { echo "git should not run" >&2; return 97; }
     expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-android ' + reason);
     expect(result.stdout).not.toContain('starting build');
     expect(result.stdout).not.toContain('started build');
+    expectNoBuildSecrets(result);
+  });
+
+  it.each([
+    ['building', 'cannot read active builds'],
+    ['finished', 'cannot read last build'],
+  ])('exits 1 when the iOS %s record cannot be read and still attempts Android', (status, reason) => {
+    // Objects pass the workflow filter. A non-object commit fails the later jq.
+    const otherSha = 'b'.repeat(40);
+    const body = JSON.stringify({
+      builds: [
+        {
+          fileWorkflowId: 'acreledger-ios',
+          branch: 'main',
+          status,
+          startedAt: '2026-10-01T00:00:00.000Z',
+          commit: 'not-an-object',
+        },
+        {
+          fileWorkflowId: 'acreledger-android',
+          branch: 'main',
+          status: 'finished',
+          startedAt: '2026-10-01T00:00:00.000Z',
+          commit: { hash: otherSha },
+        },
+      ],
+    });
+    const result = buildRun({ GET_BODY: body });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios ' + reason);
+    expect(result.stderr).not.toContain('NIGHTLY FAILED: acreledger-android');
+    expect(result.stderr).not.toContain('cannot parse builds');
+    expect(result.stdout).toContain(
+      'acreledger-android: last successful=' + otherSha + ', main=' + buildSha + ' - starting build',
+    );
+    expect(result.stdout).toContain('acreledger-android: started build build-123');
+    expect(result.stdout).not.toContain('acreledger-ios:');
     expectNoBuildSecrets(result);
   });
 
