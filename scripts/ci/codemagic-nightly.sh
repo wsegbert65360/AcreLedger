@@ -63,15 +63,18 @@ if [ "$GITLAB_SHA" != "$GITHUB_SHA" ]; then
   echo "Nightly main synchronized at $SHA"
 fi
 
+FAILED=0
 for WF in acreledger-ios acreledger-android; do
   # Capture curl before jq. A failed curl piped into jq would still look successful.
   BUILDS_JSON=$(curl -fsS -H "$AUTH" "$API/builds?appId=${CODEMAGIC_APP_ID}&workflowId=${WF}&branch=main") || {
     echo "NIGHTLY FAILED: $WF cannot list builds" >&2
-    exit 1
+    FAILED=1
+    continue
   }
   RESP=$(printf '%s\n' "$BUILDS_JSON" | jq --arg wf "$WF" '{builds: [.builds[] | select(.fileWorkflowId==$wf and .branch=="main")]}') || {
     echo "NIGHTLY FAILED: $WF cannot parse builds" >&2
-    exit 1
+    FAILED=1
+    continue
   }
   # Skip too if a build for this exact commit is already queued/running.
   ACTIVE=$(echo "$RESP" | jq -r --arg sha "$SHA" '[.builds[] | select(.status|IN("queued","preparing","fetching","building","publishing","testing")) | select(.commit.hash==$sha)] | length')
@@ -87,12 +90,15 @@ for WF in acreledger-ios acreledger-android; do
     -d "{\"appId\":\"${CODEMAGIC_APP_ID}\",\"workflowId\":\"${WF}\",\"branch\":\"main\"}" \
     "$API/builds") || {
     echo "NIGHTLY FAILED: $WF cannot start build" >&2
-    exit 1
+    FAILED=1
+    continue
   }
   # jq -er treats "" as success; accept only a non-empty string.
   BUILD_ID=$(printf '%s\n' "$TRIGGER_JSON" | jq -er '.buildId | select(type == "string" and length > 0)') || {
     echo "NIGHTLY FAILED: $WF response missing buildId" >&2
-    exit 1
+    FAILED=1
+    continue
   }
   echo "$WF: started build $BUILD_ID"
 done
+[ "$FAILED" = 0 ] || exit 1

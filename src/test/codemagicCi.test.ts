@@ -237,8 +237,8 @@ git() { echo "git should not run" >&2; return 97; }
     const result = buildRun({ POST_FAIL: '1' });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios cannot start build');
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-android cannot start build');
     expect(result.stderr).toContain('curl: (7) Failed to connect to api.codemagic.io');
-    expect(result.stderr).not.toContain('acreledger-android');
     expect(result.stdout).not.toContain('started build');
     expectNoBuildSecrets(result);
   });
@@ -252,7 +252,7 @@ git() { echo "git should not run" >&2; return 97; }
     const result = buildRun({ POST_BODY: body });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios response missing buildId');
-    expect(result.stderr).not.toContain('acreledger-android');
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-android response missing buildId');
     expect(result.stdout).not.toContain('started build');
     expectNoBuildSecrets(result);
   });
@@ -264,9 +264,60 @@ git() { echo "git should not run" >&2; return 97; }
     const result = buildRun(env);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios ' + reason);
-    expect(result.stderr).not.toContain('acreledger-android');
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-android ' + reason);
     expect(result.stdout).not.toContain('starting build');
     expect(result.stdout).not.toContain('started build');
+    expectNoBuildSecrets(result);
+  });
+
+  it('attempts Android when the iOS start POST fails and still exits nonzero', () => {
+    const recordingCurl = `
+curl() {
+  method=GET
+  url=
+  prev=
+  data=
+  for arg in "$@"; do
+    if [ "$prev" = "-X" ]; then method=$arg; fi
+    if [ "$prev" = "-d" ]; then data=$arg; fi
+    case "$arg" in
+      https://*|http://*) url=$arg ;;
+    esac
+    prev=$arg
+  done
+  echo "curl-call $method $url $data" >&2
+  case "$url" in
+    *api.github.com*)
+      printf '%s\\n' '{"sha":"'"$CI_COMMIT_SHA"'"}' ;;
+    *api.codemagic.io/builds*)
+      if [ "$method" = POST ]; then
+        case "$data" in
+          *acreledger-ios*)
+            echo "curl: (7) Failed to connect to api.codemagic.io" >&2
+            return 7
+            ;;
+        esac
+        printf '%s\\n' '{"buildId":"build-android"}'
+        return 0
+      fi
+      printf '%s\\n' '{"builds":[]}' ;;
+    *)
+      echo "unexpected curl" >&2
+      return 98 ;;
+  esac
+}
+git() { echo "git should not run" >&2; return 97; }
+`;
+    const result = run(recordingCurl + nightly, {
+      CI_COMMIT_SHA: buildSha,
+      CODEMAGIC_API_TOKEN: buildToken,
+      CODEMAGIC_APP_ID: 'app-test',
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios cannot start build');
+    expect(result.stdout).toContain('acreledger-android: started build build-android');
+    expect(result.stderr).toMatch(/curl-call POST \S+ .*acreledger-ios/);
+    expect(result.stderr).toMatch(/curl-call POST \S+ .*acreledger-android/);
     expectNoBuildSecrets(result);
   });
 
