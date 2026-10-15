@@ -24,8 +24,6 @@ workflows:
         # Existing shared web-build variables (VITE_SUPABASE_URL,
         # VITE_SUPABASE_ANON_KEY, weather, and rain endpoints).
         - appstore
-        # Google Play service-account credentials used for publishing.
-        - google_play
 
     cache:
       cache_paths:
@@ -37,6 +35,13 @@ workflows:
         - scripts/recovery/node_modules
 
     scripts:
+      - name: Verify requested nightly commit
+        script: |
+          if [ -n "${EXPECTED_BUILD_SHA:-}" ] && [ "$(git rev-parse HEAD)" != "$EXPECTED_BUILD_SHA" ]; then
+            echo "GitHub main moved since the nightly request; refusing to build a different commit" >&2
+            exit 1
+          fi
+
       - name: Install npm dependencies
         script: |
           npm ci --prefer-offline
@@ -55,6 +60,7 @@ workflows:
       - name: Unit tests
         script: |
           npm run test
+          npm run test:db-integrity
 
       - name: Verify Visual Crossing key is not bundled
         script: |
@@ -74,6 +80,10 @@ workflows:
           npx cap sync android
           if ! grep -Rqs "rtzqswpmhlbrbxjwyywl.supabase.co" dist/assets; then
             echo "Capacitor bundle is missing the AcreLedger Supabase endpoint" >&2
+            exit 1
+          fi
+          if grep -Rqs "placeholder-url.supabase.co" dist/assets; then
+            echo "Capacitor bundle contains the placeholder Supabase endpoint" >&2
             exit 1
           fi
           if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
@@ -114,12 +124,22 @@ workflows:
 
       - name: Set Android version code
         script: |
-          LATEST=$(google-play get-latest-build-number \
-            --package-name "$PACKAGE_NAME" \
-            --tracks internal 2>/dev/null || true)
-          if echo "$LATEST" | grep -Eq '^[0-9]+$'; then
+          if [ -n "${ANDROID_VERSION_CODE_OVERRIDE:-}" ]; then
+            VERSION_CODE=$ANDROID_VERSION_CODE_OVERRIDE
+          elif [ -n "${GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS:-}" ]; then
+            # No --tracks filter: inspect the highest code across all Play tracks.
+            # A lookup error cannot establish whether this is the first upload.
+            if ! LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME"); then
+              echo "Google Play version lookup failed; refusing an unsafe versionCode fallback" >&2
+              exit 1
+            fi
+            if ! echo "$LATEST" | grep -Eq '^[0-9]+$'; then
+              echo "Google Play did not return a numeric build number; set ANDROID_VERSION_CODE_OVERRIDE" >&2
+              exit 1
+            fi
             VERSION_CODE=$((LATEST + 1))
           else
+            # Play listing is a draft with no upload key: Codemagic build number.
             VERSION_CODE=$BUILD_NUMBER
           fi
           echo "VERSION_CODE=$VERSION_CODE" >> "$CM_ENV"
@@ -142,10 +162,8 @@ workflows:
       - android/app/build/outputs/**/mapping.txt
 
     publishing:
-      google_play:
-        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-
+      # Play upload disabled until a service account key exists; Play listing
+      # still a draft; re-add group+publishing then.
       email:
         recipients:
           - wsegbert@gmail.com
@@ -195,6 +213,13 @@ workflows:
         - ios/App/Pods
 
     scripts:
+      - name: Verify requested nightly commit
+        script: |
+          if [ -n "${EXPECTED_BUILD_SHA:-}" ] && [ "$(git rev-parse HEAD)" != "$EXPECTED_BUILD_SHA" ]; then
+            echo "GitHub main moved since the nightly request; refusing to build a different commit" >&2
+            exit 1
+          fi
+
       - name: Install npm dependencies
         script: |
           npm ci --prefer-offline
@@ -218,6 +243,7 @@ workflows:
       - name: Unit tests
         script: |
           npm run test
+          npm run test:db-integrity
 
       - name: Verify Visual Crossing key is not bundled
         script: |
@@ -234,6 +260,14 @@ workflows:
             *) echo "VITE_WEATHER_PROXY_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
           esac
           npm run cap:build
+          if ! grep -Rqs "rtzqswpmhlbrbxjwyywl.supabase.co" dist/assets; then
+            echo "Capacitor bundle is missing the AcreLedger Supabase endpoint" >&2
+            exit 1
+          fi
+          if grep -Rqs "placeholder-url.supabase.co" dist/assets; then
+            echo "Capacitor bundle contains the placeholder Supabase endpoint" >&2
+            exit 1
+          fi
           if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
             echo "Capacitor bundle is missing the Ask the book endpoint" >&2
             exit 1

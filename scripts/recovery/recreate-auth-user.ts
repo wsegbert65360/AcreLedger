@@ -1,10 +1,17 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client } from "pg";
 import { assertTlsDatabaseUrl } from "../../infrastructure/owner-backup/src/config.js";
+import { createRecoveryClient } from "./pg-types.js";
 import { assertTenantBundleChecksum, tenantBundleChecksum, type TenantBundle } from "./extract-tenant.js";
-import { tenantBundleTables } from "./tenant-registry.js";
+import { tenantBundleTables, userIdColumns } from "./tenant-registry.js";
+
+export interface AuthRecoveryClient {
+  query<T extends Record<string, unknown> = Record<string, unknown>>(
+    sql: string,
+    params?: unknown[],
+  ): Promise<{ rowCount: number | null; rows: T[] }>;
+}
 
 export function remapBundleUser(bundle: TenantBundle, oldUserId: string, newUserId: string): TenantBundle {
   assertTenantBundleChecksum(bundle);
@@ -12,11 +19,14 @@ export function remapBundleUser(bundle: TenantBundle, oldUserId: string, newUser
   const remapped: TenantBundle = structuredClone(bundle);
   remapped.profileIds = remapped.profileIds.map((id) => id === oldUserId ? newUserId : id);
   for (const entry of tenantBundleTables()) {
-    if (!entry.userColumn) continue;
+    const columns = userIdColumns(entry);
+    if (columns.length === 0) continue;
     const key = `${entry.schema}.${entry.table}`;
     remapped.tables[key] = (remapped.tables[key] ?? []).map((value) => {
       const row = { ...(value as Record<string, unknown>) };
-      if (row[entry.userColumn as string] === oldUserId) row[entry.userColumn as string] = newUserId;
+      for (const column of columns) {
+        if (row[column] === oldUserId) row[column] = newUserId;
+      }
       return row;
     });
   }
@@ -58,7 +68,7 @@ async function deleteInvitedUser(projectUrl: string, serviceRoleKey: string, use
   }
 }
 
-async function assertGeneratedFarmEmpty(client: Client, generatedFarmId: string): Promise<void> {
+async function assertGeneratedFarmEmpty(client: AuthRecoveryClient, generatedFarmId: string): Promise<void> {
   for (const entry of tenantBundleTables()) {
     if (entry.farmColumn !== "farm_id" || entry.table === "profiles") continue;
     const count = await client.query<{ count: string }>(
@@ -72,7 +82,7 @@ async function assertGeneratedFarmEmpty(client: Client, generatedFarmId: string)
 }
 
 export async function attachInvitedProfile(
-  client: Client,
+  client: AuthRecoveryClient,
   oldUserId: string,
   newUserId: string,
   farmId: string,
@@ -135,6 +145,34 @@ export async function attachInvitedProfile(
   }
 }
 
+export async function validateAuthRecoveryPreconditions(options: {
+  bundle: TenantBundle;
+  farmId: string;
+  oldUserId: string;
+  email: string;
+  client: AuthRecoveryClient;
+}): Promise<{ farmId: string; oldUserId: string; email: string }> {
+  assertTenantBundleChecksum(options.bundle);
+  if (options.bundle.farmId !== options.farmId) throw new Error("Bundle farm does not match the requested farm.");
+  if (!options.bundle.profileIds.includes(options.oldUserId)) throw new Error("Old user ID is not part of this farm bundle.");
+  if (!options.email.includes("@")) throw new Error("A valid email is required.");
+  const farm = await options.client.query("SELECT id FROM public.farms WHERE id = $1", [options.farmId]);
+  if (farm.rowCount !== 1) throw new Error("Farm not found.");
+  const profile = await options.client.query(
+    "SELECT id, farm_id FROM public.profiles WHERE id = $1",
+    [options.oldUserId],
+  );
+  if (profile.rowCount === 1 && String(profile.rows[0]?.farm_id) !== options.farmId) {
+    throw new Error("The surviving old profile belongs to a different farm.");
+  }
+  const existing = await options.client.query(
+    "SELECT id FROM auth.users WHERE email = $1",
+    [options.email],
+  );
+  if ((existing.rowCount ?? 0) > 0) throw new Error("That email is already in use.");
+  return { farmId: options.farmId, oldUserId: options.oldUserId, email: options.email };
+}
+
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : undefined;
@@ -150,42 +188,55 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const farmId = arg("--farm-id") ?? "";
     const oldUserId = arg("--old-user-id") ?? "";
     const email = arg("--email") ?? "";
+    const execute = process.argv.includes("--execute");
     if (arg("--confirm") !== `RECREATE-DELETED-USER:${farmId}:${oldUserId}`) throw new Error("Typed Auth recovery confirmation does not match.");
     if (!process.argv.includes("--pre-backup-verified")) throw new Error("A verified pre-recovery backup is required.");
-    if (!projectUrl.startsWith("https://") || !serviceRoleKey || !outputPath) throw new Error("HTTPS project URL, service-role key, and output path are required.");
     assertTlsDatabaseUrl(databaseUrl);
     const bundle = JSON.parse(await fs.readFile(bundlePath, "utf8")) as TenantBundle;
-    if (bundle.farmId !== farmId) throw new Error("Bundle farm does not match the requested farm.");
-    let newUserId: string | undefined;
-    let wroteOutput = false;
-    let attached = false;
+    const client = createRecoveryClient(databaseUrl);
+    await client.connect();
     try {
-      newUserId = await inviteUser(projectUrl, serviceRoleKey, email);
-      const remapped = remapBundleUser(bundle, oldUserId, newUserId);
-      await fs.writeFile(outputPath, `${JSON.stringify(remapped, null, 2)}\n`, { flag: "wx" });
-      wroteOutput = true;
-
-      const client = new Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: true } });
-      await client.connect();
+      await validateAuthRecoveryPreconditions({ bundle, farmId, oldUserId, email, client });
+      if (!execute) {
+        console.log(JSON.stringify({
+          status: "dry-run",
+          farmId,
+          oldUserId,
+          email,
+          invited: false,
+          detail: "Preconditions passed. Re-run with --execute to invite the Auth user.",
+        }));
+        return;
+      }
+      if (!projectUrl.startsWith("https://") || !serviceRoleKey || !outputPath) {
+        throw new Error("HTTPS project URL, service-role key, and output path are required.");
+      }
+      let newUserId: string | undefined;
+      let wroteOutput = false;
+      let attached = false;
       try {
+        newUserId = await inviteUser(projectUrl, serviceRoleKey, email);
+        const remapped = remapBundleUser(bundle, oldUserId, newUserId);
+        await fs.writeFile(outputPath, `${JSON.stringify(remapped, null, 2)}\n`, { flag: "wx" });
+        wroteOutput = true;
         await attachInvitedProfile(client, oldUserId, newUserId, farmId);
         attached = true;
-      } finally {
-        await client.end();
-      }
-      console.log(JSON.stringify({ status: "ok", farmId, oldUserId, newUserId, outputPath }));
-    } catch (error) {
-      if (!attached && newUserId) {
-        let cleanupError: unknown;
-        try {
-          await deleteInvitedUser(projectUrl, serviceRoleKey, newUserId);
-        } catch (caught) {
-          cleanupError = caught;
+        console.log(JSON.stringify({ status: "ok", farmId, oldUserId, newUserId, outputPath }));
+      } catch (error) {
+        if (!attached && newUserId) {
+          let cleanupError: unknown;
+          try {
+            await deleteInvitedUser(projectUrl, serviceRoleKey, newUserId);
+          } catch (caught) {
+            cleanupError = caught;
+          }
+          if (wroteOutput) await fs.rm(outputPath, { force: true });
+          if (cleanupError) throw new Error(`${String(error)} ${String(cleanupError)}`);
         }
-        if (wroteOutput) await fs.rm(outputPath, { force: true });
-        if (cleanupError) throw new Error(`${String(error)} ${String(cleanupError)}`);
+        throw error;
       }
-      throw error;
+    } finally {
+      await client.end();
     }
   })().catch((error) => {
     console.error(JSON.stringify({ status: "failed", detail: String(error) }));

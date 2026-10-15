@@ -14,8 +14,24 @@
 --   - field missing/deleted       -> leave NULL (nothing to derive from)
 --
 -- Scoped to active records (deleted_at IS NULL); soft-deleted rows are left alone.
--- Deterministic and safe to re-run. Overwrites all prior treated_area_size values
+-- Historical one-shot; NOT safe to re-run without the guard below. Overwrites all prior treated_area_size values
 -- on active records, including deliberate partial-field spot-spray entries.
+
+-- Historical SQL is preserved below for migration-history reproducibility.
+-- Skip replay after this migration is recorded or the retirement guard exists.
+-- Never use this backfill to repair or restore partial application acreage.
+DO $historical_backfill$
+DECLARE
+    already_applied boolean := false;
+BEGIN
+    IF to_regprocedure('acreage_backfill_private.historical_backfills_retired()') IS NOT NULL THEN
+        RETURN;
+    END IF;
+    IF to_regclass('supabase_migrations.schema_migrations') IS NOT NULL THEN
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = $1)'
+            INTO already_applied USING '20260713120000';
+        IF already_applied THEN RETURN; END IF;
+    END IF;
 
 UPDATE public.spray_records AS s
 SET treated_area_size = (
@@ -44,3 +60,6 @@ SET treated_area_size = (
 )
 WHERE s.deleted_at IS NULL
   AND s.field_id IS NOT NULL;
+
+END;
+$historical_backfill$;

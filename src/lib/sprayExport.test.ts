@@ -138,10 +138,10 @@ describe('sprayExportFormatters', () => {
       expect(normalizeTreatedArea(43560, 'sqft', 'ac')).toBe(1);
     });
 
-    it('converts product-total area only for the AU profile', () => {
-      expect(areaForProductTotal(20, 'ha', 'oz/ac', 'us-epa')).toBe(20);
-      expect(areaForProductTotal(20, 'ha', 'oz/ac', undefined)).toBe(20);
-      expect(areaForProductTotal(50, 'ac', 'L/ha', 'us-epa')).toBe(50);
+    it('converts product-total area for every profile', () => {
+      expect(areaForProductTotal(20, 'ha', 'oz/ac', 'us-epa')).toBeCloseTo(49.4210326);
+      expect(areaForProductTotal(20, 'ha', 'oz/ac', undefined)).toBeCloseTo(49.4210326);
+      expect(areaForProductTotal(50, 'ac', 'L/ha', 'us-epa')).toBeCloseTo(20.2343);
       expect(areaForProductTotal(20.2343, 'ha', 'oz/ac', 'au-apvma')).toBeCloseTo(50, 3);
       expect(areaForProductTotal(20, 'ha', 'L/ha', 'au-apvma')).toBe(20);
       expect(areaForProductTotal(50, 'ac', 'oz/ac', 'au-apvma')).toBe(50);

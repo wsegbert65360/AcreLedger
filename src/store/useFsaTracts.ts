@@ -73,6 +73,55 @@ export function useFsaTracts({
       };
       const dbPayload = mapFsaTractToDb(newTract);
 
+      const affected = cluAssignments.filter(a => !a.deletedAt && a.tractKey === tractKey);
+      const featureAcres = new Map(newTract.geojson.features.map(f => [f.properties.cluNumber, f.properties.acres]));
+      const removed = affected.filter(a => !featureAcres.has(a.cluNumber));
+      if (removed.length > 0 && !window.confirm(
+        `The new file removes CLUs ${removed.map(a => a.cluNumber).join(', ')} from tract ${tractKey}. Reimport and remove these assignments? Their assignment records will be soft-deleted.`,
+      )) return false;
+      const reconciled = affected.map(a => featureAcres.has(a.cluNumber)
+        ? { ...a, farmId: farm_id, acres: featureAcres.get(a.cluNumber)! }
+        : { ...a, deletedAt: newTract.importedAt });
+      if (reconciled.some(a => !a.deletedAt && (!Number.isFinite(a.acres) || a.acres <= 0))) {
+        toast.error('CLU acreage must be greater than zero');
+        return false;
+      }
+
+      // Persist the replacement and reconciliation as one durable enqueue,
+      // including online reimports. Replay uses the sanctioned upsert keys;
+      // failures remain queued instead of abandoning half a reconciliation.
+      if (affected.length > 0) {
+        try {
+          await syncQueue.enqueueMutations([
+            { tableName: 'fsa_tract_imports', operation: 'insert', payload: dbPayload, farmId: farm_id },
+            ...reconciled.map(a => a.deletedAt
+              ? { tableName: 'field_clu_assignments', operation: 'soft_delete' as const,
+                payload: { id: a.id, deleted_at: a.deletedAt }, farmId: farm_id }
+              : { tableName: 'field_clu_assignments', operation: 'insert' as const,
+                payload: mapFieldCluAssignmentToDb(a), farmId: farm_id }),
+          ]);
+        } catch (error) {
+          console.error('Failed to enqueue tract reconciliation:', error);
+          toast.error('Failed to save tract reconciliation');
+          return false;
+        }
+        setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), newTract]);
+        const byId = new Map(reconciled.map(a => [a.id, a]));
+        setCluAssignments(prev => prev.map(a => byId.get(a.id) ?? a));
+        if (isOnline) {
+          try {
+            await syncQueue.replayQueue(farm_id);
+          } catch (error) {
+            // The whole reconciliation is already durable. Preserve the local
+            // result and let reconnect retry any remaining queued changes.
+            console.error('Tract reconciliation remains queued for sync:', error);
+          }
+        }
+        await onMutation();
+        toast.success(`Tract ${tractKey} reimported; CLU changes queued for sync`);
+        return true;
+      }
+
       setFsaTracts(prev => [...prev.filter(t => t.tractKey !== tractKey), newTract]);
       // Restore only the row this mutation touched; a whole-array snapshot
       // would also revert unrelated changes made while the await was in flight.
@@ -123,7 +172,7 @@ export function useFsaTracts({
     } finally {
       isMutating.current = false;
     }
-  }, [farm_id, fsaTracts, setFsaTracts, isOnline, onMutation]);
+  }, [farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments, isOnline, onMutation]);
 
   const deleteTract = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) {

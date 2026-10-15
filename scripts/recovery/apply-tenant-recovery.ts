@@ -1,9 +1,16 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client } from "pg";
 import { assertTlsDatabaseUrl } from "../../infrastructure/owner-backup/src/config.js";
-import { assertFarmScopedWrite, tenantBundleTables, type TenantTable } from "./tenant-registry.js";
+import { createRecoveryClient } from "./pg-types.js";
+import {
+  applySkipNotes,
+  assertFarmScopedWrite,
+  registryKey,
+  TENANT_REGISTRY_VERSION,
+  tenantBundleTables,
+  type TenantTable,
+} from "./tenant-registry.js";
 import { assertTenantBundleChecksum, type TenantBundle } from "./extract-tenant.js";
 
 export type ApplyMode = "merge" | "snapshot";
@@ -14,6 +21,7 @@ export interface ApplyPlan {
   dryRun: boolean;
   statements: Array<{ sql: string; params: unknown[]; table: string }>;
   conflicts: Array<{ table: string; id: string }>;
+  skipped: Array<{ table: string; reason: string }>;
   skippedAuth: true;
 }
 
@@ -28,7 +36,6 @@ export interface ApplyOptions {
   farmId: string;
   confirm: string;
   preBackupVerified: boolean;
-  restoreTombstones?: boolean;
   executor: ApplyExecutor;
 }
 
@@ -74,8 +81,17 @@ function rowIdentity(row: Record<string, unknown>, entry: TenantTable): string {
   return entry.primaryKeys.map((key) => `${key}=${String(row[key])}`).join(",");
 }
 
+function filterApplyRows(entry: TenantTable, rows: unknown[]): unknown[] {
+  if (entry.table !== "account_deletion_requests") return rows;
+  return rows.filter((row) => {
+    const record = row as Record<string, unknown>;
+    return record.status !== "pending";
+  });
+}
+
 async function populateConflicts(plan: ApplyPlan, bundle: TenantBundle, executor: ApplyExecutor): Promise<void> {
   for (const entry of tenantBundleTables()) {
+    if (entry.excludeFromApply) continue;
     const table = `${entry.schema}.${entry.table}`;
     const rows = bundle.tables[table] ?? [];
     if (rows.length === 0) continue;
@@ -105,6 +121,11 @@ async function populateConflicts(plan: ApplyPlan, bundle: TenantBundle, executor
 
 export function buildApplyPlan(options: ApplyOptions): ApplyPlan {
   assertTenantBundleChecksum(options.bundle);
+  if (options.bundle.registryVersion !== TENANT_REGISTRY_VERSION) {
+    throw new Error(
+      `Tenant registry version mismatch: bundle ${String(options.bundle.registryVersion)} !== ${TENANT_REGISTRY_VERSION}.`,
+    );
+  }
   if (options.farmId !== options.bundle.farmId) {
     throw new Error("Target farm_id does not match the bundle.");
   }
@@ -120,10 +141,15 @@ export function buildApplyPlan(options: ApplyOptions): ApplyPlan {
 
   const statements: ApplyPlan["statements"] = [];
   const conflicts: ApplyPlan["conflicts"] = [];
+  const skipped = applySkipNotes();
 
   for (const entry of tenantBundleTables()) {
-    const key = `${entry.schema}.${entry.table}`;
-    const rows = options.bundle.tables[key] ?? [];
+    const key = registryKey(entry);
+    if (!Object.prototype.hasOwnProperty.call(options.bundle.tables, key)) {
+      throw new Error(`Tenant bundle is missing required table ${key}. An empty array means empty at snapshot; a missing key is refused.`);
+    }
+    if (entry.excludeFromApply) continue;
+    const rows = filterApplyRows(entry, options.bundle.tables[key] ?? []);
     const extraFarm = rows.filter((row) => {
       const record = row as Record<string, unknown>;
       if (entry.ownership === "root") {
@@ -149,7 +175,7 @@ export function buildApplyPlan(options: ApplyOptions): ApplyPlan {
             : `(row_data->>'${entry.via?.localColumn}')::uuid IN (SELECT id FROM public.fields WHERE farm_id = $2)`;
     const keys = conflictColumns(entry);
     const conflictTarget = keys.map(quoteIdentifier).join(", ");
-    if (options.mode === "snapshot" && entry.hasDeletedAt && entry.farmColumn) {
+    if (options.mode === "snapshot" && entry.hasDeletedAt && entry.farmColumn && entry.ownership !== "root") {
       const tombstone = `UPDATE ${qualified} SET deleted_at = coalesce(deleted_at, now()) WHERE "${entry.farmColumn}" = $1 AND deleted_at IS NULL AND id NOT IN (SELECT (row_data->>'id')::uuid FROM jsonb_array_elements($2::jsonb) AS row_data)`;
       assertFarmScopedWrite(tombstone);
       statements.push({ sql: tombstone, params: [options.farmId, JSON.stringify(rows)], table: key });
@@ -179,7 +205,10 @@ export function buildApplyPlan(options: ApplyOptions): ApplyPlan {
       const updates = group.columns
         .filter((column) => !immutable.has(column))
         .map((column) => `${quoteIdentifier(column)} = EXCLUDED.${quoteIdentifier(column)}`);
-      const upsert = `${insert} ON CONFLICT (${conflictTarget}) ${updates.length > 0 ? `DO UPDATE SET ${updates.join(", ")}` : "DO NOTHING"}`;
+      const farmGuard = entry.farmColumn === "farm_id"
+        ? ` WHERE ${quoteIdentifier(entry.table)}.farm_id = EXCLUDED.farm_id`
+        : "";
+      const upsert = `${insert} ON CONFLICT (${conflictTarget}) ${updates.length > 0 ? `DO UPDATE SET ${updates.join(", ")}${farmGuard}` : "DO NOTHING"}`;
       assertFarmScopedWrite(upsert);
       statements.push({ sql: upsert, params, table: key });
     }
@@ -191,14 +220,15 @@ export function buildApplyPlan(options: ApplyOptions): ApplyPlan {
     dryRun: options.dryRun,
     statements,
     conflicts,
+    skipped,
     skippedAuth: true,
   };
 }
 
 export async function applyTenantRecovery(options: ApplyOptions): Promise<{ written: number; plan: ApplyPlan }> {
   const plan = buildApplyPlan(options);
-  await populateConflicts(plan, options.bundle, options.executor);
   if (options.dryRun) {
+    await populateConflicts(plan, options.bundle, options.executor);
     return { written: 0, plan };
   }
   await options.executor.query("BEGIN", []);
@@ -208,6 +238,7 @@ export async function applyTenantRecovery(options: ApplyOptions): Promise<{ writ
     // same trigger that rejects ordinary client updates.
     await options.executor.query("SELECT set_config('acreledger.equipment_rpc', 'on', true)", []);
     await options.executor.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [options.farmId]);
+    await populateConflicts(plan, options.bundle, options.executor);
     let written = 0;
     for (const statement of plan.statements) {
       assertFarmScopedWrite(statement.sql);
@@ -232,10 +263,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const bundlePath = arg("--bundle") ?? "";
   const databaseUrl = process.env.RECOVERY_DATABASE_URL ?? "";
   assertTlsDatabaseUrl(databaseUrl);
-  const client = new Client({
-    connectionString: databaseUrl,
-    ssl: { rejectUnauthorized: true },
-  });
+  const client = createRecoveryClient(databaseUrl);
   const executor: ApplyExecutor = {
     async query(sql, params) {
       const result = await client.query(sql, params);
@@ -260,6 +288,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         dryRun: result.plan.dryRun,
         statementCount: result.plan.statements.length,
         conflicts: result.plan.conflicts,
+        skipped: result.plan.skipped,
         skippedAuth: result.plan.skippedAuth,
       }));
     } finally {

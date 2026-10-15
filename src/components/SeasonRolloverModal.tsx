@@ -17,6 +17,8 @@ import {
 import { Button } from '@/components/ui/button';
 
 import { native } from '@/lib/native';
+import { assertSupportedBackupVersion, normalizeBackupForRestore } from '@/lib/backupCompatibility';
+import { backupCollectionCounts, backupSchema, type BackupData } from '@/lib/backupSchema';
 import { useFarm } from '@/store/farmStore';
 import {
   clearRolloverDismiss,
@@ -26,12 +28,17 @@ import {
 } from '@/utils/seasonRollover';
 
 export default function SeasonRolloverModal() {
-  const { session, activeSeason, rolloverToNewSeason, restoreFromBackup, loading } = useFarm();
+  const {
+    session, activeSeason, rolloverToNewSeason, restoreFromBackup, loading,
+    initialFetchComplete, fetchError, pendingSyncCount,
+  } = useFarm();
   const [open, setOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreSuccess, setRestoreSuccess] = useState(false);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<BackupData | null>(null);
+  const [switchActiveSeason, setSwitchActiveSeason] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentYear = new Date().getFullYear();
   const targetSeason = getNextRolloverSeason(activeSeason, currentYear);
@@ -73,27 +80,57 @@ export default function SeasonRolloverModal() {
     }
   };
 
-  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const restoreBlocked = !initialFetchComplete || fetchError || pendingSyncCount > 0;
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPendingRestoreFile(file);
-    setRestoreConfirmOpen(true);
+    if (restoreBlocked) {
+      toast.error('Wait for cloud data and pending changes to finish syncing before restore.');
+      resetFileInput();
+      return;
+    }
+    const MAX_BACKUP_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_BACKUP_SIZE) {
+      toast.error('Backup file is too large. Maximum size is 50 MB.');
+      resetFileInput();
+      return;
+    }
+    try {
+      const data = JSON.parse(await file.text());
+      assertSupportedBackupVersion(data?.backupVersion);
+      const backup = backupSchema.parse(normalizeBackupForRestore(data));
+      setPendingRestoreFile(file);
+      setPendingBackup(backup);
+      setSwitchActiveSeason(false);
+      setRestoreConfirmOpen(true);
+    } catch (err) {
+      console.error('Failed to read backup:', err);
+      if (err instanceof SyntaxError) {
+        toast.error('Invalid backup file — could not parse JSON.');
+      } else if (err instanceof Error) {
+        toast.error(err.message.startsWith('This backup was made by a newer')
+          ? err.message
+          : 'Could not read this backup file.');
+      } else {
+        toast.error('Could not read this backup file.');
+      }
+      resetFileInput();
+    }
   };
 
   const runRestore = async () => {
-    if (!pendingRestoreFile) return;
+    if (!pendingRestoreFile || !pendingBackup) return;
 
     setRestoring(true);
     try {
-      const MAX_BACKUP_SIZE = 50 * 1024 * 1024; // 50 MB
-      if (pendingRestoreFile.size > MAX_BACKUP_SIZE) {
-        toast.error('Backup file is too large. Maximum size is 50 MB.');
-        return;
-      }
-
       const text = await pendingRestoreFile.text();
       const data = JSON.parse(text);
-      const success = await restoreFromBackup(data);
+      const seasonDiffers = pendingBackup.activeSeason !== undefined
+        && pendingBackup.activeSeason !== activeSeason;
+      const success = await restoreFromBackup(data, {
+        switchActiveSeason: seasonDiffers && switchActiveSeason,
+      });
       if (success) {
         native.haptic.success();
         setRestoreSuccess(true);
@@ -109,10 +146,14 @@ export default function SeasonRolloverModal() {
       console.error('Failed to restore:', err);
       if (err instanceof SyntaxError) {
         toast.error('Invalid backup file — could not parse JSON.');
+      } else {
+        toast.error('Restore failed. Please try again.');
       }
     } finally {
       setRestoring(false);
       setPendingRestoreFile(null);
+      setPendingBackup(null);
+      setSwitchActiveSeason(false);
       setRestoreConfirmOpen(false);
       resetFileInput();
     }
@@ -121,6 +162,8 @@ export default function SeasonRolloverModal() {
   const handleRestoreCancel = () => {
     setRestoreConfirmOpen(false);
     setPendingRestoreFile(null);
+    setPendingBackup(null);
+    setSwitchActiveSeason(false);
     resetFileInput();
   };
 
@@ -179,7 +222,9 @@ export default function SeasonRolloverModal() {
                 <div className="space-y-0.5 min-w-0">
                   <h4 className="text-xs font-semibold font-mono text-muted-foreground">Restore from backup</h4>
                   <p className="text-xs font-mono text-muted-foreground/70">
-                    Merges backup rows into your cloud farm, then reloads from the cloud.
+                    {restoreBlocked
+                      ? 'Wait for cloud data and pending changes to finish syncing before restore.'
+                      : 'Merges backup rows into your cloud farm, then reloads from the cloud.'}
                   </p>
                 </div>
                 <div className="relative shrink-0">
@@ -191,14 +236,14 @@ export default function SeasonRolloverModal() {
                     accept=".json"
                     onChange={handleFileSelected}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    disabled={busy}
+                    disabled={busy || restoreBlocked}
                     aria-label="Upload backup JSON file"
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-9 min-h-[44px] text-xs font-mono gap-1.5 border-dashed"
-                    disabled={busy}
+                    disabled={busy || restoreBlocked}
                     type="button"
                   >
                     {restoring ? (
@@ -246,15 +291,42 @@ export default function SeasonRolloverModal() {
         <AlertDialogContent className="bg-card border-amber-500/30 max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">Restore backup?</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
-              {pendingRestoreFile ? (
-                <>
-                  <span className="text-foreground">{pendingRestoreFile.name}</span> will be merged into your cloud farm.
-                  Matching IDs are updated; rows not in the file stay in the database.
-                </>
-              ) : (
-                'Backup rows will be merged into your cloud farm.'
-              )}
+            <AlertDialogDescription asChild>
+              <div className="text-muted-foreground font-mono text-xs space-y-2">
+                {pendingRestoreFile && (
+                  <p>
+                    <span className="text-foreground">{pendingRestoreFile.name}</span>
+                    {pendingBackup?.backupDate ? ` · ${pendingBackup.backupDate.slice(0, 10)}` : ''}
+                    {pendingBackup?.activeSeason != null ? ` · season ${pendingBackup.activeSeason}` : ''}
+                  </p>
+                )}
+                {pendingBackup && (
+                  <ul className="max-h-40 overflow-y-auto space-y-0.5">
+                    {backupCollectionCounts(pendingBackup).map(({ key, label, count }) => (
+                      <li key={key} className="flex justify-between gap-3">
+                        <span>{label}</span>
+                        <span className="text-foreground">{count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p>
+                  Records deleted since this backup will be restored; newer edits to the same records will be replaced.
+                </p>
+                {pendingBackup?.activeSeason != null && pendingBackup.activeSeason !== activeSeason && (
+                  <label className="flex items-start gap-2 text-foreground pt-1">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4"
+                      checked={switchActiveSeason}
+                      onChange={(event) => setSwitchActiveSeason(event.target.checked)}
+                    />
+                    <span>
+                      Backup season {pendingBackup.activeSeason} differs from current {activeSeason} — also switch active season?
+                    </span>
+                  </label>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dryRunReport, type TenantBundle } from "./extract-tenant.js";
-import { extractSql, tenantBundleTables } from "./tenant-registry.js";
+import { dryRunReport, tenantBundleChecksum, type TenantBundle } from "./extract-tenant.js";
+import { extractSql, TENANT_REGISTRY_VERSION, tenantBundleTables } from "./tenant-registry.js";
 
 const FARM_A = "11111111-1111-4111-8111-111111111111";
 const FARM_B = "22222222-2222-4222-8222-222222222222";
@@ -23,6 +23,8 @@ function bundleFor(farmId: string, extraFarmRows = false): TenantBundle {
   }
   return {
     bundleVersion: 1,
+    registryVersion: TENANT_REGISTRY_VERSION,
+    extractedTables: tenantBundleTables().map((entry) => `${entry.schema}.${entry.table}`),
     sourceBackupId: "backup-1",
     sourceRecoveredAt: "2026-09-10T07:00:00.000Z",
     farmId,
@@ -77,5 +79,15 @@ describe("tenant extraction rules", () => {
     expect(report).toContain(FARM_A);
     expect(report).toContain("including objects from other farms");
     expect(report).not.toContain("password");
+  });
+
+  it("stamps registry version and extracted table list into the checksum", () => {
+    const bundle = bundleFor(FARM_A);
+    expect(bundle.registryVersion).toBe(TENANT_REGISTRY_VERSION);
+    expect(bundle.extractedTables).toContain("public.fields");
+    expect(bundle.extractedTables).not.toContain("public.farm_subscriptions");
+    bundle.checksums["bundle.json"] = tenantBundleChecksum(bundle);
+    const tampered = { ...bundle, registryVersion: TENANT_REGISTRY_VERSION + 1, checksums: {} };
+    expect(tenantBundleChecksum(tampered as TenantBundle)).not.toBe(bundle.checksums["bundle.json"]);
   });
 });

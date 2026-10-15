@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client } from "pg";
+import { assertTlsDatabaseUrl } from "../../infrastructure/owner-backup/src/config.js";
+import { createRecoveryClient } from "./pg-types.js";
 import { extractSql, tenantBundleTables } from "./tenant-registry.js";
 
 export interface TenantInventory {
@@ -14,7 +15,8 @@ export async function inventoryTenant(options: {
   farmId: string;
 }): Promise<TenantInventory> {
   if (!options.farmId) throw new Error("farm_id is required.");
-  const client = new Client({ connectionString: options.databaseUrl, ssl: { rejectUnauthorized: true } });
+  assertTlsDatabaseUrl(options.databaseUrl);
+  const client = createRecoveryClient(options.databaseUrl);
   await client.connect();
   try {
     const farm = await client.query("SELECT id FROM public.farms WHERE id = $1", [options.farmId]);

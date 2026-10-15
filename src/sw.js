@@ -21,5 +21,5 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Handle navigation requests (like /settings, /activity) by serving index.html
 // This prevents 404 errors on page refresh for client-side routes.
 const handler = createHandlerBoundToURL('/index.html');
-const navigationRoute = new NavigationRoute(handler);
+const navigationRoute = new NavigationRoute(handler, { denylist: [/^\/api\//] });
 registerRoute(navigationRoute);

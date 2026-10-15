@@ -5,6 +5,8 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from 'vite-plugin-pwa';
 
+import { capacitorSupabaseEnvError } from "./scripts/ci/capacitorSupabaseEnv";
+
 // Duplicated from src/lib/weatherBuildConfig.ts. tsconfig.node.json includes
 // only this file, so the capacitor gate cannot import the tested helper.
 function assertCapacitorWeatherProxy(mode: string, proxyUrl: string | undefined): void {
@@ -21,7 +23,12 @@ function assertCapacitorWeatherProxy(mode: string, proxyUrl: string | undefined)
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   assertCapacitorWeatherProxy(mode, env.VITE_WEATHER_PROXY_URL);
-  return ({
+  if (mode === "capacitor") {
+    const supabaseEnvError = capacitorSupabaseEnvError(env);
+    if (supabaseEnvError) throw new Error(supabaseEnvError);
+  }
+
+  return {
   base: mode === "capacitor" ? "./" : "/",
   server: {
     host: "::",
@@ -212,5 +219,5 @@ export default defineConfig(({ mode }) => {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-});
+  };
 });

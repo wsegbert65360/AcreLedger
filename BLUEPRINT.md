@@ -301,7 +301,7 @@ Single planting event on a field. Core FSA 578 source record.
 `cropStatus` supports `Planted`, `Prevented Planting`, `Failed`, `Volunteer`, and
 `Cover Crop`. `cropSequence` distinguishes first and second crop. `plantingPattern`
 stores optional FSA practice/pattern notes.
-- **Acreage default**: `PlantModal`'s "Planted Acres" new-record default and its edit/duplicate fallback use `getDisplayFieldAcres(field, cluAssignments)` — the FSA crop acreage — never a raw `field.acreage` read, mirroring the spray treated-area default below. An edited-ref + CLU-hydration refresh effect preserves manual edits and stored values on edit/duplicate. Historical records were backfilled by migration `20260715130000_backfill_plant_acreage_to_fsa_acreage.sql`. Note the FSA-578 worksheet derives its acreage column from CLU assignments (`buildFsa578Rows`), not this stored `acreage`, so the stored value reconciles on-screen/record totals with what reports already show.
+- **Acreage default**: `PlantModal`'s "Planted Acres" new-record default and its edit/duplicate fallback use `getDisplayFieldAcres(field, cluAssignments)` — the FSA crop acreage — never a raw `field.acreage` read, mirroring the spray treated-area default below. An edited-ref + CLU-hydration refresh effect preserves manual edits and stored values on edit/duplicate. Historical records were backfilled by migration `20260715130000_backfill_plant_acreage_to_fsa_acreage.sql`. The FSA-578 worksheet apportions this stored acreage across assigned CLUs for split/variety plantings; second-crop and failed/replant rows may repeat the full CLU acreage.
 
 ### SprayRecord (2026 Standards)
 Pesticide/herbicide application. Refactored for universal private-applicator compliance (45+ states).
@@ -319,7 +319,7 @@ Supports multiple products per application (tank-mix) and advanced environmental
   deleted_at }
 ```
 - **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph) with manual override.
-- **Treated Area Default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`, `sprayExport.ts`) resolve to the FSA crop acreage shown on the field, never a raw `field.acreage` read. Read-time resolution goes through the shared `getEffectiveSprayTreatedAcres(record, field, cluAssignments)` helper: stored `treatedAreaSize` when present and positive, else `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, then boundary, then `field.acreage`). Current form edits preserve an explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray). The one-time migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql` intentionally normalized every active historical treated-area value because legacy automatic defaults could not be distinguished from manual entries. It changes only `treated_area_size` and leaves products, stored totals, weather, wind, temperature, humidity, application times, and notes untouched. Report/export product totals are calculated at read time from rate and normalized acreage when possible, without mutating stored records.
+- **Treated Area Default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`, `sprayExport.ts`) resolve to the FSA crop acreage shown on the field, never a raw `field.acreage` read. Read-time resolution goes through the shared `getEffectiveSprayTreatedAcres(record, field, cluAssignments)` helper: stored `treatedAreaSize` when present and positive, else `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, then boundary, then `field.acreage`). Current form edits preserve an explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray). The one-time migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql` intentionally normalized every active historical treated-area value because legacy automatic defaults could not be distinguished from manual entries. It changes only `treated_area_size` and leaves products, stored totals, weather, wind, temperature, humidity, application times, and notes untouched. This historical one-shot is now retired: guarded history plus `acreage_backfill_private.historical_backfills_retired()` prevents reruns after application, including restores without the migration ledger. It must never be used as data repair; recovery of lost partial areas remains an owner decision. Report/export product totals convert the effective treated area to the rate unit for every profile (including square feet), without mutating stored records.
 - **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
 - **Non-Compliant / Review Status**: Triggered if any product is missing an `epaRegNumber` or lacks a positive application rate and rate unit. Legacy records derive this review status in the UI without a database rewrite. Per-product totals are canonical and are recalculated synchronously from rate × treated acres before saving; the top-level `totalAmountApplied` remains only a legacy first-product numeric compatibility value and must never sum unlike units.
@@ -675,7 +675,7 @@ accepts only an empty trigger-created farm for reassignment, atomically remounts
 profile onto the new Auth ID, compensates a failed attach by deleting the new Auth user, and remaps
 only registry-declared user columns in a newly checksummed bundle. They receive fresh sessions rather
 than copied historical sessions. Full-project and isolated SQL restores must use
-`npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory>`;
+`npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory> --confirm-isolated-ref <isolated-project-ref>`;
 do not replace it with a hand-written `psql` sequence. `restore-isolated.ts` is authoritative for the
 declared order, including `auth-schema.sql`, `storage-schema.sql`, and optional migration schema/data
 files. It fails on missing required artifacts, then executes `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after
@@ -1057,10 +1057,14 @@ farm name in their header subtitles, in the on-screen preview and the PDF.
 
 Row construction rules (`buildFsa578Rows`):
 
-- Acreage comes from CLU assignments (one row per cropland CLU, using `assignment.acres`), not the
-  stored `PlantRecord.acreage`. Only fields with no cropland CLU assignments fall back to
-  `getDisplayFieldAcres(field, cluAssignments)`. Backfilling stored plant acreage therefore does not
-  change report output.
+- Same-sequence split/variety plantings use stored `PlantRecord.acreage`, capped to the field's
+  assigned cropland acres and apportioned across its CLUs in proportion to `assignment.acres`.
+  Second crops and explicit double-crop/replant rows may repeat full CLU acres. Failed rows
+  retain their stored partial acres and never expand other plantings. Cover and volunteer crops
+  retain separate status rows and are excluded from the CLU cap and planted totals. Validation
+  flags other same-sequence rows whose sum exceeds the CLU boundary.
+  Boundary reconciliation retains each CLU's full acres once. Unmatched legacy CLUs produce one
+  review row per CLU, rather than being paired with every tract.
 - Multiple planting records for the same field/CLU remain separate rows; never collapse to latest-only.
 - Assigned cropland CLUs with no planting record appear as review rows so missing reporting is visible.
 - When an assigned cropland field's `intendedUse` is hay or pasture, that label is the FSA crop
@@ -1070,7 +1074,13 @@ Row construction rules (`buildFsa578Rows`):
 
 The **Landlord** tab in Reports (`src/components/reports/LandlordSummaryReport.tsx`) is a
 per-landlord overview driven by the field-level `Field.landlordName` (not the legacy
-harvest-only `HarvestRecord.landlordName`). Selecting a landlord shows:
+harvest-only `HarvestRecord.landlordName`).
+
+Field `producerShare` is authoritative: landlord split is `100 - producerShare`. New harvests
+store that derived split; reports fall back to stored harvest splits only for legacy fields
+without a producer share. Update crop share in the field editor.
+
+Selecting a landlord shows:
 
 - **Fields overview** — one row per field with acres (CLU-aware via `getDisplayFieldAcres`),
   crop, total bushels, bu/acre, total bales, and landlord crop-share bushels. Grain and bale

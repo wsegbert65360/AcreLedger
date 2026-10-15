@@ -157,8 +157,6 @@ describe('SprayModal Data Retention', () => {
 
   const fillCoreStep = () => {
     act(() => {
-      fireEvent.change(screen.getByLabelText(/application date/i), { target: { value: '2026-06-23' } });
-      fireEvent.change(screen.getByLabelText(/start time/i), { target: { value: '08:00' } });
       fireEvent.change(screen.getByLabelText(/cert\. applicator/i), { target: { value: 'Cert Applicator' } });
       fireEvent.change(screen.getByLabelText(/license/i), { target: { value: 'L12345' } });
       fireEvent.change(screen.getByLabelText(/target pest/i), { target: { value: 'Grass' } });
@@ -514,8 +512,8 @@ describe('SprayModal product deletion', () => {
 
   const gotoMix = async () => {
     act(() => {
-      fireEvent.change(screen.getByLabelText(/application date/i), { target: { value: '2026-06-23' } });
-      fireEvent.change(screen.getByLabelText(/start time/i), { target: { value: '08:00' } });
+      fireEvent.change(screen.getByLabelText(/application date/i), { target: { value: toLocalIsoDate(Date.now()) } });
+      fireEvent.change(screen.getByLabelText(/start time/i), { target: { value: new Date().toTimeString().slice(0, 5) } });
       fireEvent.change(screen.getByLabelText(/cert\. applicator/i), { target: { value: 'Cert Applicator' } });
       fireEvent.change(screen.getByLabelText(/license/i), { target: { value: 'L12345' } });
       fireEvent.change(screen.getByLabelText(/target pest/i), { target: { value: 'Grass' } });

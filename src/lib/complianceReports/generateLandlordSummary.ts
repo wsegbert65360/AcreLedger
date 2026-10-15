@@ -1,3 +1,5 @@
+import { getLandlordSplitPercent } from '@/lib/cropShare';
+import { sanitizeCsvValue } from '@/utils/csv';
 import type {
   CustomSprayRecord,
   FertilizerApplication,
@@ -36,6 +38,7 @@ export type LandlordFieldSummary = {
   fieldId: string;
   fieldName: string;
   acres: number;
+  producerShare?: number;
   crop: string | null;
   totalBushels: number;
   buPerAcre: number | null;
@@ -139,7 +142,7 @@ function buildFieldSummaries(
       2,
     );
     const landlordShareBushels = roundTo(
-      fieldHarvests.reduce((sum, h) => sum + (h.bushels || 0) * ((h.landlordSplitPercent || 0) / 100), 0),
+      fieldHarvests.reduce((sum, h) => sum + (h.bushels || 0) * ((getLandlordSplitPercent(field, h.landlordSplitPercent) ?? 0) / 100), 0),
       2,
     );
     const buPerAcre = acres > 0 ? roundTo(totalBushels / acres, 2) : null;
@@ -160,6 +163,7 @@ function buildFieldSummaries(
     return {
       fieldId: field.id,
       fieldName: field.name,
+      producerShare: field.producerShare,
       acres,
       crop,
       totalBushels,
@@ -333,15 +337,6 @@ export function generateLandlordSummary(params: GenerateLandlordSummaryParams): 
   };
 }
 
-function escapeCsvCell(val: string | number | null | undefined): string {
-  if (val === null || val === undefined) return '""';
-  let str = String(val);
-  if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
-    str = `'${str}`;
-  }
-  str = str.replace(/"/g, '""');
-  return `"${str}"`;
-}
 
 /**
  * Flat per-field CSV with a totals row. Each row is one field; the activity
@@ -382,5 +377,5 @@ export function generateLandlordSummaryCSV(summary: LandlordSummary): string {
   ];
 
   const allRows = [headers, ...dataRows, totalsRow];
-  return allRows.map(row => row.map(cell => escapeCsvCell(cell)).join(',')).join('\n');
+  return allRows.map(row => row.map(cell => sanitizeCsvValue(cell)).join(',')).join('\n');
 }

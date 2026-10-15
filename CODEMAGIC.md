@@ -1,6 +1,6 @@
 # CodeMagic CI/CD Setup — AcreLedger
 
-This guide covers configuring [CodeMagic](https://codemagic.io) to build, sign, and distribute the AcreLedger iOS app.
+This guide covers configuring [CodeMagic](https://codemagic.io) to build, sign, and distribute the AcreLedger iOS and Android apps.
 
 The `codemagic.yaml` in the repo root follows the [CodeMagic React Native quick start](https://docs.codemagic.io/yaml-quick-start/building-a-react-native-app/) pattern, adapted for a Capacitor 8 web-to-native build (Android uses Java 21, Gradle 8.14.3, AGP 8.13.0).
 
@@ -71,7 +71,8 @@ The `VITE_*` variables are injected at build time by Vite. App Store and other n
 ## 6. Versioning
 
 - **Marketing version** (e.g., `3.5.0`) is read from `package.json` at build time.
-- **Build number** uses CodeMagic's built-in `$BUILD_NUMBER` counter.
+- **iOS build number** uses CodeMagic's built-in `$BUILD_NUMBER` counter.
+- **Android versionCode** is the highest Google Play build number across all tracks plus one. Lookup failure or a nonnumeric response stops the build; no automatic `$BUILD_NUMBER` fallback. Bootstrap the first upload with a manually reviewed version code if the Play lookup cannot return one.
 
 To bump the app version:
 1. Update `"version"` in `package.json`.
@@ -110,12 +111,23 @@ Upload to App Store Connect / TestFlight
 
 | Event | Action |
 |---|---|
-| Push to `main` | Triggers `acreledger-ios` workflow (full build → IPA → TestFlight) |
+| Push to `main` | GitHub Actions quality gate; no automatic Codemagic build |
+| GitLab nightly schedule (2:00 AM America/Chicago) | Requests both workflows when GitLab's scheduled main commit equals GitHub main, skipping unchanged successful or already active builds |
 | Manual | Click **Start new build** in CodeMagic dashboard |
 
 ---
 
-## 9. Files
+The [Builds API](https://docs.codemagic.io/rest-api/builds/) documents branch/tag selection, not an exact-commit parameter. The nightly script passes the scheduled SHA through the supported environment variables as `EXPECTED_BUILD_SHA`. Both workflows compare it to the checkout before installing dependencies and fail if GitHub main moved. Manual builds without this variable still work. GitHub branch protection must be configured by the owner if the new CI check should be required.
+
+## 9. Android signing and publishing
+
+- Select `acreledger-android`. It uses Node 22/Java 21, builds and syncs the Capacitor bundle, runs Android unit tests, then produces a signed AAB.
+- Upload the Android signing keystore under the reference `acreledger_upload`. Codemagic injects the `CM_KEYSTORE_*` and `CM_KEY_*` variables; keep all key material out of Git.
+- Add the `google_play` environment group with secure `GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS` (Google Play service-account JSON). Shared web variables remain in `appstore`.
+- Publishing is configured for the Play `internal` track. App setup, permissions, first-upload bootstrap, and draft status require owner review in Play Console; this guide does not change those settings.
+- Both platforms check the expected AcreLedger Supabase endpoint and reject the placeholder endpoint after building. Both run `test:db-integrity` against disposable local PGlite databases before building.
+
+## 10. Files
 
 | File | Purpose |
 |---|---|

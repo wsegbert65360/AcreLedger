@@ -142,6 +142,7 @@ describe('AddGrainModal harvest path', () => {
 
     await waitFor(() => expect(screen.getByLabelText(/crop type/i)).toHaveValue('Corn'));
     expect(screen.getByLabelText(/landlord %/i)).toHaveValue('25');
+    expect(screen.getByLabelText(/landlord %/i)).toHaveAttribute('readonly');
   });
 
   it('falls back to intended use and preserves a valid zero producer share', async () => {

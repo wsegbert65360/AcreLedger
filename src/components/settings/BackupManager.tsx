@@ -54,6 +54,11 @@ export default function BackupManager() {
     maintenanceSchedules,
     maintenanceLogs,
     activeSeason,
+    initialFetchComplete,
+    fetchError,
+    equipmentLoadFailed,
+    dataLoadSource,
+    dataLoadedAt,
   } = useFarm();
   const [backingUp, setBackingUp] = useState(false);
   const [lastBackup, setLastBackup] = useState<Date | null>(loadLastBackup);
@@ -84,10 +89,23 @@ export default function BackupManager() {
     ? Date.now() - lastBackup.getTime() > 7 * 86_400_000
     : false;
 
+  const backupBlocked = !initialFetchComplete;
+  const backupWarned = fetchError || equipmentLoadFailed;
+  const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed)
+    ? 'cache'
+    : (dataLoadSource ?? 'cloud');
+
   const handleBackup = async () => {
     if (!hasData) {
       toast.warning('Nothing to back up yet — add some records first.');
       return;
+    }
+    if (backupBlocked) {
+      toast.error('Wait for farm records to finish loading before backing up.');
+      return;
+    }
+    if (backupWarned) {
+      toast.warning('Some records failed to load from the cloud. This backup is marked as a cache copy and may be incomplete.');
     }
 
     setBackingUp(true);
@@ -115,6 +133,8 @@ export default function BackupManager() {
         maintenanceLogs,
         activeSeason,
         backupDate: new Date().toISOString(),
+        source: backupSource,
+        loadedAt: dataLoadedAt ?? new Date().toISOString(),
       };
       const filename = `acreledger-backup-${new Date().toISOString().split('T')[0]}.json`;
 
@@ -232,9 +252,19 @@ export default function BackupManager() {
           )}
         </div>
 
+        {(backupBlocked || backupWarned) && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-mono text-xs text-amber-700 dark:text-amber-400">
+            {backupBlocked
+              ? 'Wait for farm records to finish loading before backing up.'
+              : equipmentLoadFailed
+                ? 'Equipment records did not load. A backup now may omit current equipment.'
+                : 'Some records failed to load from the cloud. A backup now is a cache copy and may be incomplete.'}
+          </div>
+        )}
+
         <Button
           onClick={handleBackup}
-          disabled={backingUp || !hasData}
+          disabled={backingUp || !hasData || backupBlocked}
           variant="outline"
           className="w-full"
         >

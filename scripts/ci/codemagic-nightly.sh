@@ -6,6 +6,63 @@ set -eu
 API="https://api.codemagic.io"
 AUTH="x-auth-token: ${CODEMAGIC_API_TOKEN}"
 SHA="${CI_COMMIT_SHA}"
+GITHUB_REPO="wsegbert65360/AcreLedger"
+GITHUB_URL="https://github.com/$GITHUB_REPO.git"
+GITLAB_URL="https://gitlab.com/wsegbert65360/acreledger.git"
+GITLAB_SHA="$SHA"
+GITHUB_SHA="unknown"
+fail() {
+  echo "NIGHTLY FAILED: GitLab main $GITLAB_SHA != GitHub main $GITHUB_SHA ($1)" >&2
+  exit 1
+}
+github_main() {
+  curl -fsS "https://api.github.com/repos/$GITHUB_REPO/commits/main" 2>/dev/null |
+    jq -er '.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' 2>/dev/null
+}
+GITHUB_SHA=$(github_main) || fail "cannot read GitHub main"
+if [ "$GITLAB_SHA" != "$GITHUB_SHA" ]; then
+  [ -n "${GITHUB_SYNC_TOKEN:-}" ] && [ -n "${GITLAB_SYNC_TOKEN:-}" ] ||
+    fail "missing sync tokens"
+  SYNC_DIR=$(mktemp -d) || fail "cannot create sync directory"
+  trap 'rm -rf "$SYNC_DIR"' 0 HUP INT TERM
+  git init -q "$SYNC_DIR" 2>/dev/null || fail "cannot initialize sync repository"
+  # Credential-free URLs; authentication lives only in per-command environment.
+  # Suppress Git diagnostics so a server cannot echo a credential into CI logs.
+  sync_git() {
+    case "$1" in
+      github) SYNC_AUTH=$(printf 'x-access-token:%s' "$GITHUB_SYNC_TOKEN" | base64 | tr -d '\n') ;;
+      gitlab) SYNC_AUTH=$(printf 'oauth2:%s' "$GITLAB_SYNC_TOKEN" | base64 | tr -d '\n') ;;
+    esac
+    shift
+    GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=1 \
+      GIT_CONFIG_KEY_0=http.extraHeader \
+      GIT_CONFIG_VALUE_0="Authorization: Basic $SYNC_AUTH" \
+      git -C "$SYNC_DIR" "$@" >/dev/null 2>&1
+  }
+  sync_git github fetch --no-tags "$GITHUB_URL" refs/heads/main:refs/remotes/github/main ||
+    fail "GitHub fetch failed"
+  sync_git gitlab fetch --no-tags "$GITLAB_URL" refs/heads/main:refs/remotes/gitlab/main ||
+    fail "GitLab fetch failed"
+  GITHUB_SHA=$(git -C "$SYNC_DIR" rev-parse refs/remotes/github/main)
+  GITLAB_SHA=$(git -C "$SYNC_DIR" rev-parse refs/remotes/gitlab/main)
+  if git -C "$SYNC_DIR" merge-base --is-ancestor "$GITHUB_SHA" "$GITLAB_SHA"; then
+    SHA="$GITLAB_SHA"
+    if [ "$GITHUB_SHA" != "$GITLAB_SHA" ]; then
+      sync_git github push "$GITHUB_URL" "$SHA:refs/heads/main" ||
+        fail "GitHub fast-forward push failed"
+    fi
+  elif git -C "$SYNC_DIR" merge-base --is-ancestor "$GITLAB_SHA" "$GITHUB_SHA"; then
+    SHA="$GITHUB_SHA"
+    sync_git gitlab push "$GITLAB_URL" "$SHA:refs/heads/main" ||
+      fail "GitLab fast-forward push failed"
+  else
+    fail "main branches diverged"
+  fi
+  GITHUB_SHA=$(github_main) || fail "cannot verify GitHub main after sync"
+  [ "$GITHUB_SHA" = "$SHA" ] || fail "GitHub main changed after sync"
+  echo "Nightly main synchronized at $SHA"
+fi
+
 for WF in acreledger-ios acreledger-android; do
   RESP=$(curl -fsS -H "$AUTH" "$API/builds?appId=${CODEMAGIC_APP_ID}&workflowId=${WF}&branch=main" \
     | jq --arg wf "$WF" '{builds: [.builds[] | select(.fileWorkflowId==$wf and .branch=="main")]}')

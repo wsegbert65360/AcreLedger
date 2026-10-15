@@ -1,10 +1,12 @@
 // Isolated PostgreSQL regression test; no network or farm data is used.
-// Run with the absolute path to @electric-sql/pglite/dist/index.js.
+// Uses the project PGlite install; optional argv[2] overrides its module path.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-const { PGlite } = await import(pathToFileURL(process.argv[2]).href);
+const { PGlite } = await import(process.argv[2]
+  ? pathToFileURL(process.argv[2]).href
+  : '@electric-sql/pglite');
 const db = new PGlite();
 const migration = await readFile(
   new URL('../supabase/migrations/20260906012508_reconcile_offline_sync_zero_row.sql', import.meta.url),

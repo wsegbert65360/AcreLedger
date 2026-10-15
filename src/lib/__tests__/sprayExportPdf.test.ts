@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createJsPdfMock } from '@/test/jspdfMock';
 import type { Field, SprayRecord } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
+import { normalizeAreaForRate } from '@/lib/sprayExportFormatters';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
 
 const pdf = createJsPdfMock();
@@ -146,7 +147,7 @@ describe('generateSprayPDF', () => {
     expect(pdf.allText()).toContain('Compliance Status: Complete');
   });
 
-  it('keeps US product totals on the stored area number whatever its unit', () => {
+  it('converts US product totals to the rate unit including square feet', () => {
     const cases: Array<[number, string, string, string]> = [
       [50, 'ac', '22', 'oz/ac'],
       [20, 'ha', '22', 'oz/ac'],
@@ -157,11 +158,11 @@ describe('generateSprayPDF', () => {
       pdf.reset();
       const product = { product: 'Herbicide', rate, rateUnit, epaRegNumber: '524-549' };
       generateSprayPDF([makeRecord({ treatedAreaSize, treatedAreaUnit, products: [product] })], 'Test Farm', { fields: [field] });
-      expect(pdf.autoTables()[0].body[0][3]).toBe(formatSprayProductTotal(product, treatedAreaSize));
+      expect(pdf.autoTables()[0].body[0][3]).toBe(formatSprayProductTotal(product, normalizeAreaForRate(treatedAreaSize, treatedAreaUnit, rateUnit)));
     }
   });
 
-  it('keeps the US 20 ha / 22 oz/ac total at its pre-AU value', () => {
+  it('converts US 20 ha / 22 oz/ac totals to acres', () => {
     const record = makeRecord({
       treatedAreaSize: 20,
       treatedAreaUnit: 'ha',
@@ -170,7 +171,7 @@ describe('generateSprayPDF', () => {
 
     generateSprayPDF([record], 'Test Farm', { fields: [field], profile: 'us-epa' });
 
-    expect(pdf.autoTables()[0].body[0][3]).toBe('27.5 lb');
+    expect(pdf.autoTables()[0].body[0][3]).toBe('67.95 lb');
   });
 
   it('falls back to FSA cropland acreage when no treated area is stored', () => {

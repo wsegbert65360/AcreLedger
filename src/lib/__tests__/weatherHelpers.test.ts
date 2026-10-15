@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Sun, CloudRain, CloudSun, Cloud } from 'lucide-react';
 
 import {
@@ -14,7 +14,16 @@ import {
   getWeatherLucideIcon,
   getConditionGradient,
   matchFieldByCoords,
+  queryGeolocationPermission,
+  loadCachedWeatherCoords,
+  saveCachedWeatherCoords,
+  shouldRequestWeatherGeolocation,
+  WEATHER_COORDS_CACHE_KEY,
+  WEATHER_COORDS_CACHE_TTL_MS,
+  GEOLOCATION_MAX_AGE_MS,
 } from '../weatherHelpers';
+
+const nativeState = vi.hoisted(() => ({ isNative: false }));
 
 vi.mock('@/lib/native', () => ({
   native: {
@@ -22,14 +31,59 @@ vi.mock('@/lib/native', () => ({
       getCurrentPosition: vi.fn(),
     },
   },
+  isNativePlatform: () => nativeState.isNative,
 }));
 
 import { native } from '@/lib/native';
 
+function seedWeatherCoordsCache(coords: { lat: number; lon: number; ts: number }): void {
+  localStorage.setItem(WEATHER_COORDS_CACHE_KEY, JSON.stringify(coords));
+}
+
+function mockGeolocationPermission(
+  state: 'granted' | 'denied' | 'prompt' | 'missing' | 'throw',
+): void {
+  if (state === 'missing') {
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: undefined,
+    });
+    return;
+  }
+  if (state === 'throw') {
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: {
+        query: () => {
+          throw new Error('Safari does not support geolocation permission queries');
+        },
+      },
+    });
+    return;
+  }
+  Object.defineProperty(navigator, 'permissions', {
+    configurable: true,
+    value: {
+      query: vi.fn().mockResolvedValue({ state }),
+    },
+  });
+}
+
 describe('weatherHelpers', () => {
+  const originalPermissions = navigator.permissions;
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    nativeState.isNative = false;
+    mockGeolocationPermission('missing');
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: originalPermissions,
+    });
   });
 
   describe('ZIP_REGEX', () => {
@@ -137,6 +191,210 @@ describe('weatherHelpers', () => {
         lng: 0,
         locationString: '12345',
       });
+    });
+
+    it('does not call geolocation on load when cache exists and permission is prompt', async () => {
+      mockGeolocationPermission('prompt');
+      seedWeatherCoordsCache({ lat: 35.1235, lon: -90.1234, ts: Date.now() });
+
+      const result = await resolveCoords([], '');
+
+      expect(native.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        lat: 35.1235,
+        lng: -90.1234,
+        locationString: '35.1235,-90.1234',
+      });
+    });
+
+    it('calls geolocation when the cache is stale and permission is granted', async () => {
+      mockGeolocationPermission('granted');
+      seedWeatherCoordsCache({
+        lat: 35.1,
+        lon: -90.1,
+        ts: Date.now() - WEATHER_COORDS_CACHE_TTL_MS - 1000,
+      });
+      (native.geolocation.getCurrentPosition as any).mockResolvedValue({
+        coords: { latitude: 41.12345, longitude: -85.12345 },
+      });
+
+      const result = await resolveCoords([], '');
+
+      expect(native.geolocation.getCurrentPosition).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enableHighAccuracy: false,
+          timeout: 4000,
+          maximumAge: GEOLOCATION_MAX_AGE_MS,
+        }),
+      );
+      expect(result).toEqual({
+        lat: 41.1235,
+        lng: -85.1234,
+        locationString: '41.1235,-85.1234',
+      });
+      expect(loadCachedWeatherCoords()).toEqual({
+        lat: 41.1235,
+        lon: -85.1234,
+        ts: expect.any(Number),
+      });
+    });
+
+    it('calls geolocation on explicit refresh even with a fresh cache', async () => {
+      mockGeolocationPermission('prompt');
+      seedWeatherCoordsCache({ lat: 35.1235, lon: -90.1234, ts: Date.now() });
+      (native.geolocation.getCurrentPosition as any).mockResolvedValue({
+        coords: { latitude: 40.0, longitude: -74.0 },
+      });
+
+      const result = await resolveCoords([], '', { forceRefresh: true });
+
+      expect(native.geolocation.getCurrentPosition).toHaveBeenCalled();
+      expect(result.locationString).toBe('40,-74');
+    });
+
+    it('does not call geolocation on a passive timer when there is no cache', async () => {
+      mockGeolocationPermission('prompt');
+
+      const result = await resolveCoords([], '', { passive: true });
+
+      expect(native.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+      expect(result.locationString).toBe('');
+    });
+
+    it('calls geolocation on a passive timer when the cache is stale and permission is granted', async () => {
+      mockGeolocationPermission('granted');
+      seedWeatherCoordsCache({
+        lat: 35.1,
+        lon: -90.1,
+        ts: Date.now() - WEATHER_COORDS_CACHE_TTL_MS - 1000,
+      });
+      (native.geolocation.getCurrentPosition as ReturnType<typeof vi.fn>).mockResolvedValue({
+        coords: { latitude: 41.2, longitude: -85.2 },
+      });
+
+      await resolveCoords([], '', { passive: true });
+
+      expect(native.geolocation.getCurrentPosition).toHaveBeenCalledWith(
+        expect.objectContaining({ maximumAge: GEOLOCATION_MAX_AGE_MS }),
+      );
+    });
+
+    it('calls geolocation when no cache exists', async () => {
+      mockGeolocationPermission('prompt');
+      (native.geolocation.getCurrentPosition as any).mockResolvedValue({
+        coords: { latitude: 35.12345, longitude: -90.12345 },
+      });
+
+      const result = await resolveCoords([], '');
+
+      expect(native.geolocation.getCurrentPosition).toHaveBeenCalled();
+      expect(result.locationString).toBe('35.1235,-90.1234');
+    });
+
+    it('does not call geolocation when the permissions API is missing and a cache exists', async () => {
+      mockGeolocationPermission('missing');
+      seedWeatherCoordsCache({ lat: 35.1235, lon: -90.1234, ts: Date.now() });
+
+      const result = await resolveCoords([], '');
+
+      expect(native.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+      expect(result.locationString).toBe('35.1235,-90.1234');
+    });
+
+    it('does not call geolocation when permissions.query throws and a cache exists', async () => {
+      mockGeolocationPermission('throw');
+      seedWeatherCoordsCache({ lat: 35.1235, lon: -90.1234, ts: Date.now() });
+
+      const result = await resolveCoords([], '');
+
+      expect(native.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+      expect(result.locationString).toBe('35.1235,-90.1234');
+    });
+
+    it('uses cache silently when permission is denied', async () => {
+      mockGeolocationPermission('denied');
+      seedWeatherCoordsCache({ lat: 35.1235, lon: -90.1234, ts: Date.now() });
+
+      const result = await resolveCoords([], '', { forceRefresh: true });
+
+      expect(native.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+      expect(result.locationString).toBe('35.1235,-90.1234');
+    });
+
+    it('still requests GPS on native even with a prompt-state cache', async () => {
+      nativeState.isNative = true;
+      mockGeolocationPermission('prompt');
+      seedWeatherCoordsCache({ lat: 35.1235, lon: -90.1234, ts: Date.now() });
+      (native.geolocation.getCurrentPosition as any).mockResolvedValue({
+        coords: { latitude: 41.5, longitude: -85.5 },
+      });
+
+      const result = await resolveCoords([], '');
+
+      expect(native.geolocation.getCurrentPosition).toHaveBeenCalledWith(
+        expect.objectContaining({ enableHighAccuracy: false, timeout: 4000 }),
+      );
+      expect((native.geolocation.getCurrentPosition as ReturnType<typeof vi.fn>).mock.calls[0][0]).not.toHaveProperty('maximumAge');
+      expect(result.locationString).toBe('41.5,-85.5');
+    });
+  });
+
+  describe('queryGeolocationPermission', () => {
+    it('returns unknown when the permissions API is missing', async () => {
+      mockGeolocationPermission('missing');
+      await expect(queryGeolocationPermission()).resolves.toBe('unknown');
+    });
+
+    it('returns unknown when permissions.query throws', async () => {
+      mockGeolocationPermission('throw');
+      await expect(queryGeolocationPermission()).resolves.toBe('unknown');
+    });
+
+    it('returns unknown when permissions.query rejects', async () => {
+      Object.defineProperty(navigator, 'permissions', {
+        configurable: true,
+        value: { query: () => Promise.reject(new Error('not supported')) },
+      });
+      await expect(queryGeolocationPermission()).resolves.toBe('unknown');
+    });
+
+    it('returns the queried state when available', async () => {
+      mockGeolocationPermission('granted');
+      await expect(queryGeolocationPermission()).resolves.toBe('granted');
+    });
+  });
+
+  describe('weather coords cache', () => {
+    it('round-trips coords through localStorage', () => {
+      saveCachedWeatherCoords({ lat: 35.12345, lon: -90.12345, ts: 1_700_000_000_000 });
+      expect(loadCachedWeatherCoords()).toEqual({
+        lat: 35.1235,
+        lon: -90.1234,
+        ts: 1_700_000_000_000,
+      });
+    });
+
+    it('returns null when storage throws or JSON is invalid', () => {
+      localStorage.setItem(WEATHER_COORDS_CACHE_KEY, '{not-json');
+      expect(loadCachedWeatherCoords()).toBeNull();
+
+      const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('Storage error');
+      });
+      expect(loadCachedWeatherCoords()).toBeNull();
+      spy.mockRestore();
+    });
+  });
+
+  describe('shouldRequestWeatherGeolocation', () => {
+    it('never requests on web when permission is prompt and a cache exists', () => {
+      expect(shouldRequestWeatherGeolocation({
+        forceRefresh: false,
+        permission: 'prompt',
+        hasCache: true,
+        cacheStale: true,
+        nativePlatform: false,
+      })).toBe(false);
     });
   });
 

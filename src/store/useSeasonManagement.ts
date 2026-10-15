@@ -7,18 +7,20 @@ import {
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import {
-  mapFieldToDb, mapBinToDb, mapPlantToDb, mapSprayToDb,
-  mapHarvestToDb, mapHayToDb, mapCustomSprayToDb, mapGrainToDb, mapSeedToDb,
-  mapRecipeToDb, mapFertilizerToDb, mapFertilizerRecipeToDb, mapTillageToDb,
-  mapFsaTractToDb, mapFieldCluAssignmentToDb, mapWorkRequestToDb,
-  mapEquipmentToDb, mapMaintenanceScheduleToDb, mapMaintenanceLogToDb,
-} from '@/lib/mappers';
+  mapBinToDbForRestore, mapCustomSprayToDbForRestore, mapEquipmentToDbForRestore,
+  mapFertilizerRecipeToDbForRestore, mapFertilizerToDbForRestore, mapFieldCluAssignmentToDbForRestore,
+  mapFieldToDbForRestore, mapFsaTractToDbForRestore, mapGrainToDbForRestore, mapHarvestToDbForRestore,
+  mapHayToDbForRestore, mapMaintenanceLogToDbForRestore, mapMaintenanceScheduleToDbForRestore,
+  mapPlantToDbForRestore, mapRecipeToDbForRestore, mapSeedToDbForRestore, mapSprayToDbForRestore,
+  mapTillageToDbForRestore, mapWorkRequestToDbForRestore,
+} from '@/lib/restoreMappers';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
+import { ZodError } from 'zod';
 import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
-import { CURRENT_BACKUP_VERSION, normalizeBackupForRestore } from '@/lib/backupCompatibility';
+import { CURRENT_BACKUP_VERSION, assertSupportedBackupVersion, normalizeBackupForRestore } from '@/lib/backupCompatibility';
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import {
   isNativeOfflineStoreUnavailable,
@@ -82,6 +84,34 @@ function listLocalStorageKeys(): string[] {
  */
 export function shouldRefuseCacheClear(pendingCount: number): boolean {
   return pendingCount > 0;
+}
+
+export type RestoreFromBackupOptions = {
+  /** When true, also compare-and-set profiles.active_season to the backup season. */
+  switchActiveSeason?: boolean;
+};
+
+export function formatRestoreFailure(err: unknown): string {
+  if (err instanceof ZodError) {
+    const issue = err.issues[0];
+    const path = issue?.path?.length ? issue.path.join('.') : 'backup';
+    return `${path}: ${issue?.message ?? 'Invalid backup file.'}`;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Unknown error during restore.';
+}
+
+function restoreConflictSummary(result: unknown): string {
+  if (!result || typeof result !== 'object') return '';
+  const row = result as Record<string, unknown>;
+  const parts: string[] = [];
+  const grain = Number(row.grain_harvest_link_conflicts ?? 0);
+  const work = Number(row.work_request_number_conflicts ?? 0);
+  const schedules = Number(row.maintenance_schedule_name_conflicts ?? 0);
+  if (grain > 0) parts.push(`${grain} grain movement${grain === 1 ? '' : 's'} kept deleted to protect a newer harvest link`);
+  if (work > 0) parts.push(`${work} work request${work === 1 ? '' : 's'} kept deleted to protect a newer request number`);
+  if (schedules > 0) parts.push(`${schedules} maintenance task${schedules === 1 ? '' : 's'} kept deleted to protect a live task name`);
+  return parts.length > 0 ? ` ${parts.join('; ')}.` : '';
 }
 
 interface UseSeasonManagementArgs {
@@ -284,7 +314,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
   // ─── Restore ────────────────────────────────────────────────────────────────
 
-  const restoreFromBackup = useCallback(async (rawData: unknown): Promise<boolean> => {
+  const restoreFromBackup = useCallback(async (
+    rawData: unknown,
+    options?: RestoreFromBackupOptions,
+  ): Promise<boolean> => {
     if (!farm_id) {
       toast.error('No farm selected.');
       return false;
@@ -295,6 +328,11 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
+    if (!initialFetchComplete || fetchError || pendingSyncCount > 0) {
+      toast.error('Wait for cloud data and pending changes to finish syncing before restore.');
+      return false;
+    }
+
     if (typeof rawData !== 'object' || rawData === null) {
       toast.error('Invalid backup file format.');
       return false;
@@ -302,6 +340,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
 
     setLoading(true);
     try {
+      assertSupportedBackupVersion((rawData as { backupVersion?: unknown }).backupVersion);
       const backupData = backupSchema.parse(normalizeBackupForRestore(rawData));
 
       const { data: existingFieldRows, error: existingFieldsError } = await supabase
@@ -323,30 +362,40 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
           existingBoundaryByField.get(field.id),
         );
         return {
-          ...mapFieldToDb(field),
+          ...mapFieldToDbForRestore(field),
           operational_acreage: operationalAcreage,
         };
       });
-      const binsToDb        = (backupData.bins                 ?? []).map((b) => mapBinToDb({ ...b, farm_id } as unknown as Bin));
-      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => mapPlantToDb({ ...r, farm_id } as unknown as PlantRecord));
-      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => mapSprayToDb({ ...r, farm_id } as unknown as SprayRecord));
-      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => mapHarvestToDb({ ...r, farm_id } as unknown as HarvestRecord));
-      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => mapHayToDb({ ...r, farm_id } as unknown as HayHarvestRecord));
-      const customSprayToDb = (backupData.customSprayRecords   ?? []).map((r) => mapCustomSprayToDb({ ...r, farm_id } as unknown as CustomSprayRecord));
-      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => mapFertilizerToDb({ ...r, farm_id } as unknown as FertilizerApplication));
-      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => mapTillageToDb({ ...r, farm_id } as unknown as TillageRecord));
-      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => mapGrainToDb({ ...m, farm_id } as unknown as GrainMovement));
-      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => mapSeedToDb({ ...s, farm_id } as unknown as SavedSeed));
-      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => mapFertilizerRecipeToDb({ ...r, farm_id } as unknown as FertilizerRecipe));
-      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDb({ ...r, farm_id } as unknown as SprayRecipe));
-      const tractsToDb      = (backupData.fsaTracts            ?? []).map((t) => mapFsaTractToDb({ ...t, farmId: farm_id } as FsaTractImport));
-      const assignmentsToDb = (backupData.cluAssignments       ?? []).map((a) => mapFieldCluAssignmentToDb({ ...a, farmId: farm_id } as FieldCluAssignment));
-      const workRequestsToDb = (backupData.workRequests        ?? []).map((w) => mapWorkRequestToDb({ ...w, farm_id } as unknown as WorkRequest));
-      const equipmentToDb = (backupData.equipment ?? []).map((row) => mapEquipmentToDb({ ...row, farm_id } as Equipment));
-      const schedulesToDb = (backupData.maintenanceSchedules ?? []).map((row) => mapMaintenanceScheduleToDb({ ...row, farm_id } as MaintenanceSchedule));
-      const logsToDb = (backupData.maintenanceLogs ?? []).map((row) => mapMaintenanceLogToDb({ ...row, farm_id } as MaintenanceLog));
+      const binsToDb        = (backupData.bins                 ?? []).map((b) => mapBinToDbForRestore({ ...b, farm_id } as unknown as Bin));
+      const plantsToDb      = (backupData.plantRecords         ?? []).map((r) => mapPlantToDbForRestore({ ...r, farm_id } as unknown as PlantRecord));
+      const spraysToDb      = (backupData.sprayRecords         ?? []).map((r) => mapSprayToDbForRestore({ ...r, farm_id } as unknown as SprayRecord));
+      const harvestsToDb    = (backupData.harvestRecords       ?? []).map((r) => mapHarvestToDbForRestore({ ...r, farm_id } as unknown as HarvestRecord));
+      const hayToDb         = (backupData.hayHarvestRecords    ?? []).map((r) => mapHayToDbForRestore({ ...r, farm_id } as unknown as HayHarvestRecord));
+      const customSprayToDb = (backupData.customSprayRecords   ?? []).map((r) => mapCustomSprayToDbForRestore({ ...r, farm_id } as unknown as CustomSprayRecord));
+      const fertilizerToDb  = (backupData.fertilizerApplications ?? []).map((r) => mapFertilizerToDbForRestore({ ...r, farm_id } as unknown as FertilizerApplication));
+      const tillageToDb     = (backupData.tillageRecords         ?? []).map((r) => mapTillageToDbForRestore({ ...r, farm_id } as unknown as TillageRecord));
+      const grainToDb       = (backupData.grainMovements       ?? []).map((m) => mapGrainToDbForRestore({ ...m, farm_id } as unknown as GrainMovement));
+      const seedsToDb       = (backupData.savedSeeds           ?? []).map((s) => mapSeedToDbForRestore({ ...s, farm_id } as unknown as SavedSeed));
+      const fRecipesToDb    = (backupData.fertilizerRecipes    ?? []).map((r) => mapFertilizerRecipeToDbForRestore({ ...r, farm_id } as unknown as FertilizerRecipe));
+      const recipesToDb     = (backupData.sprayRecipes         ?? []).map((r) => mapRecipeToDbForRestore({ ...r, farm_id } as unknown as SprayRecipe));
+      const tractsToDb      = (backupData.fsaTracts            ?? []).map((t) => mapFsaTractToDbForRestore({ ...t, farmId: farm_id } as FsaTractImport));
+      const assignmentsToDb = (backupData.cluAssignments       ?? []).map((a) => mapFieldCluAssignmentToDbForRestore({ ...a, farmId: farm_id } as FieldCluAssignment));
+      const workRequestsToDb = (backupData.workRequests        ?? []).map((w) => mapWorkRequestToDbForRestore({ ...w, farm_id } as unknown as WorkRequest));
+      const equipmentToDb = (backupData.equipment ?? []).map((row) => mapEquipmentToDbForRestore({ ...row, farm_id } as Equipment));
+      const schedulesToDb = (backupData.maintenanceSchedules ?? []).map((row) => mapMaintenanceScheduleToDbForRestore({ ...row, farm_id } as MaintenanceSchedule));
+      const logsToDb = (backupData.maintenanceLogs ?? []).map((row) => mapMaintenanceLogToDbForRestore({ ...row, farm_id } as MaintenanceLog));
 
-      const payload = {
+      const switchActiveSeason = options?.switchActiveSeason === true
+        && backupData.activeSeason !== undefined
+        && backupData.activeSeason !== activeSeason;
+
+      if (backupData.activeSeason !== undefined) {
+        if (!isValidActiveSeason(backupData.activeSeason)) {
+          throw new Error(`Invalid season year in backup: ${backupData.activeSeason}`);
+        }
+      }
+
+      const payload: Record<string, unknown> = {
         fields: fieldsToDb,
         bins: binsToDb,
         plant_records: plantsToDb,
@@ -367,16 +416,13 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         maintenance_schedules: schedulesToDb,
         maintenance_logs: logsToDb,
       };
-
-      if (backupData.activeSeason !== undefined) {
-        if (!isValidActiveSeason(backupData.activeSeason)) {
-          throw new Error(`Invalid season year in backup: ${backupData.activeSeason}`);
-        }
+      if (switchActiveSeason) {
+        payload._expected_active_season = activeSeason;
       }
 
-      const { error } = await supabase.rpc('restore_farm_backup', {
+      const { data: restoreResult, error } = await supabase.rpc('restore_farm_backup', {
         p_payload: payload,
-        p_active_season: backupData.activeSeason ?? null,
+        p_active_season: switchActiveSeason ? backupData.activeSeason ?? null : null,
       });
 
       if (error) {
@@ -391,15 +437,15 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         );
       }
 
-      if (backupData.activeSeason !== undefined) {
+      if (switchActiveSeason && backupData.activeSeason !== undefined) {
         setActiveSeason(backupData.activeSeason);
         setViewingSeason(backupData.activeSeason);
       }
 
-      toast.success('Backup restored successfully.');
+      toast.success(`Backup restored successfully.${restoreConflictSummary(restoreResult)}`);
       return true;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error during restore.';
+      const message = formatRestoreFailure(err);
       console.error('Restore failed:', err);
       toast.error(`Restore failed: ${message}`);
       return false;
@@ -407,8 +453,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       setLoading(false);
     }
   }, [
-    farm_id, isOnline, setLoading, refetchFarmData,
-    setActiveSeason, setViewingSeason,
+    farm_id, isOnline, initialFetchComplete, fetchError, pendingSyncCount, activeSeason,
+    setLoading, refetchFarmData, setActiveSeason, setViewingSeason,
   ]);
 
   // ─── Clear Cache ─────────────────────────────────────────────────────────────

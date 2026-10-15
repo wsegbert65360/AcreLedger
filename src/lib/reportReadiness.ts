@@ -1,4 +1,5 @@
 import { getComplianceProfileFor } from '@/lib/compliance/profiles';
+import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { missingComplianceFields } from '@/lib/sprayCompliance';
 import type { Field, SprayRecord } from '@/types/farm';
@@ -60,6 +61,7 @@ interface SprayReadinessRecord {
   equipmentId?: string;
   windDirection?: string;
   sensitiveAreaCheck?: boolean;
+  applicationMethod?: string;
 }
 
 const NSW_PIC_LABEL = 'Property / PIC';
@@ -101,7 +103,7 @@ interface HayReadinessRecord {
 }
 
 interface LandlordReadinessSummary {
-  fields: Array<{ fieldId: string; fieldName: string; acres: number }>;
+  fields: Array<{ fieldId: string; fieldName: string; acres: number; producerShare?: number }>;
   activity: Array<{ fieldName: string }>;
 }
 
@@ -312,11 +314,10 @@ export function buildSprayReadiness(
       });
     }
 
-    if (isAu) {
-      // NSW EPA required-field list from the au-apvma profile. US license /
-      // EPA / treated-area-fallback checks do not apply to these records.
+    {
+      // Required compliance details apply to every profile.
       for (const label of missingComplianceFields(asComplianceRecord(record))) {
-        if (label === NSW_PIC_LABEL) {
+        if (isAu && label === NSW_PIC_LABEL) {
           // PIC is copied from the paddock at save time; the spray form
           // cannot type it. Open the field so the operator can set it there.
           issues.push({
@@ -334,11 +335,12 @@ export function buildSprayReadiness(
           ...baseIssue,
           id: `spray-${record.id}-nsw-${nswIssueKey(label)}`,
           severity: 'error',
-          category: NSW_DETAILS_CATEGORY,
+          category: isAu ? NSW_DETAILS_CATEGORY : 'Compliance details',
           message: `${record.fieldName} is missing ${label}.`,
         });
       }
-    } else {
+    }
+    if (!isAu) {
       // Exports resolve the treated area through the same effective-acreage
       // fallback the spray log uses (stored value, then CLU cropland, boundary,
       // raw acreage), so a missing stored value is advisory: only flag it when
@@ -480,13 +482,14 @@ export function buildLandlordReadiness(
 
   for (const harvest of harvestRecords) {
     if (!fieldById.has(harvest.fieldId)) continue;
-    if (harvest.landlordSplitPercent == null || !Number.isFinite(harvest.landlordSplitPercent)) {
+    const split = getLandlordSplitPercent(fieldById.get(harvest.fieldId), harvest.landlordSplitPercent);
+    if (split == null || !Number.isFinite(split)) {
       issues.push({
         id: `landlord-${harvest.id}-share`, itemId: harvest.fieldId, fieldId: harvest.fieldId,
         recordId: harvest.id, recordType: 'harvest', severity: 'error', category: 'Crop share',
         message: `${harvest.fieldName} has a harvest with no crop-share percentage.`, actionLabel: 'Review harvest record',
       });
-    } else if (harvest.landlordSplitPercent < 0 || harvest.landlordSplitPercent > 100) {
+    } else if (split < 0 || split > 100) {
       issues.push({
         id: `landlord-${harvest.id}-share-range`, itemId: harvest.fieldId, fieldId: harvest.fieldId,
         recordId: harvest.id, recordType: 'harvest', severity: 'error', category: 'Crop share',

@@ -4,5 +4,7 @@
 export function sanitizeCsvValue(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '""';
   const text = String(value).replace(/"/g, '""');
-  return /^[=+\-@\t\r]/.test(text) ? `"'${text}"` : `"${text}"`;
+  if (typeof value === 'number' && Number.isFinite(value)) return `"${text}"`;
+  return /^[=+\-@＝]/.test(text.trimStart()) || /^[\t\r]/.test(text)
+    ? `"'${text}"` : `"${text}"`;
 }

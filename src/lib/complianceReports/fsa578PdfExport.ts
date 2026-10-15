@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
-import { isEstablishedForageLabel } from './fsaReports';
+import { isEstablishedForageLabel, isSupplementalCrop } from './fsaReports';
 import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata } from './fsaReports';
 
 interface Fsa578PdfOptions {
@@ -38,10 +38,10 @@ function cluBoundaryKey(row: Fsa578ReportRow): string {
 
 export function buildFsa578Reconciliation(rows: Fsa578ReportRow[]): Fsa578Reconciliation {
   const reportingRows = rows.filter(row => row.landUse === 'Cropland');
-  const uniqueCluRows = [...new Map(reportingRows.map(row => [cluBoundaryKey(row), row])).values()];
+  const uniqueCluRows = [...new Map(reportingRows.map(row => [cluBoundaryKey(row), { ...row, acreage: row.cluAcres ?? row.acreage }])).values()];
 
   return {
-    cropTotals: sumBy(reportingRows, row => `${display(row.crop)} / ${display(row.intendedUse)}`),
+    cropTotals: sumBy(reportingRows, row => `${display(row.crop)} / ${display(row.intendedUse)}${isSupplementalCrop(row) ? ` (${row.cropStatus})` : ''}`),
     tractTotals: sumBy(uniqueCluRows, row => `Farm ${display(row.farmNumber)} / Tract ${display(row.tractNumber)}`),
     totalReportedAcres: roundTo(uniqueCluRows.reduce((sum, row) => sum + row.acreage, 0), 2),
   };
