@@ -2,8 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
 import { secureStorage } from '@/lib/secureStorage';
 
-const PLACEHOLDER_SUPABASE_URL = 'https://placeholder-url.supabase.co';
-const PLACEHOLDER_SUPABASE_ANON_KEY = 'placeholder-key';
+// Web and dev keep a fallback client when env is missing. import.meta.env.MODE
+// is replaced at build time, so a capacitor build dead-code-eliminates the
+// placeholder host and Codemagic's dist/assets grep stays meaningful.
+const PLACEHOLDER_SUPABASE_URL =
+    import.meta.env.MODE === 'capacitor' ? '' : 'https://placeholder-url.supabase.co';
+const PLACEHOLDER_SUPABASE_ANON_KEY =
+    import.meta.env.MODE === 'capacitor' ? '' : 'placeholder-key';
 
 function cleanEnvValue(value: unknown): string {
     if (typeof value !== 'string') return '';
