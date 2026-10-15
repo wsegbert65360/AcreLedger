@@ -7,6 +7,7 @@ import dashboardShot from '@/assets/landing/dashboard.png';
 import fieldShot from '@/assets/landing/field-detail.png';
 import reportsShot from '@/assets/landing/reports.png';
 import activityShot from '@/assets/landing/activity.png';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
 
 /**
  * Public landing page ("Field Margin" design) — a ledger-book-styled launch
@@ -444,7 +445,7 @@ const Landing = () => {
           </h2>
           <p className="landing-lede" data-reveal style={revealDelay(80)}>
             Have a question about using AcreLedger on your farm? Email{" "}
-            <a href="mailto:support@acreledger.app">support@acreledger.app</a>.
+            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
           </p>
           <div className="landing-faq" data-reveal style={revealDelay(120)}>
             {faqs
@@ -490,7 +491,7 @@ const Landing = () => {
       <footer className="landing-footer">
         <div className="landing-footer-inner">
           <span>AcreLedger</span>
-          <a href="mailto:support@acreledger.app">Contact</a>
+          <a href={SUPPORT_MAILTO}>Contact</a>
           <Link to="/support">Support</Link>
           <Link to="/privacy">Privacy policy</Link>
           <span>© 2026 AcreLedger</span>

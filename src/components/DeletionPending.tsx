@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import type { SignOutResult } from '@/lib/authSignOut';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
 
 export default function DeletionPending({ status, signOut }: {
   status: 'checking' | 'pending' | 'error';
@@ -27,10 +28,10 @@ export default function DeletionPending({ status, signOut }: {
         </h1>
         <p className="text-muted-foreground">
           {status === 'pending'
-            ? 'Your deletion request is pending. To cancel it or get help, contact support@acreledger.app.'
+            ? `Your deletion request is pending. To cancel it or get help, contact ${SUPPORT_EMAIL}.`
             : status === 'error' ? 'Reconnect and sign in again to check your account before continuing.' : 'Please wait before accessing your farm.'}
         </p>
-        <a className="text-primary underline" href="mailto:support@acreledger.app">Contact support@acreledger.app</a>
+        <a className="text-primary underline" href={SUPPORT_MAILTO}>Contact {SUPPORT_EMAIL}</a>
         <Button className="w-full h-11" disabled={busy} onClick={() => void handleSignOut()}>Sign Out</Button>
       </section>
     </main>

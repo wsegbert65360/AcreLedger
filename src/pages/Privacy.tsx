@@ -4,6 +4,7 @@ import { ArrowLeft, ShieldCheck, Lock, Globe, FileText, Trash2, Mail } from "luc
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/support";
 import { cn } from "@/lib/utils";
 
 interface PrivacyProps {
@@ -233,10 +234,10 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                             <p className="text-sm text-muted-foreground leading-relaxed">
                                 Privacy questions and support requests go to{' '}
                                 <a
-                                    href="mailto:support@acreledger.app"
+                                    href={SUPPORT_MAILTO}
                                     className="break-all font-bold text-foreground underline-offset-4 hover:text-primary hover:underline sm:break-normal"
                                 >
-                                    support@acreledger.app
+                                    {SUPPORT_EMAIL}
                                 </a>
                                 . The public{' '}
                                 <Link

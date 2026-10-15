@@ -4,9 +4,8 @@ import { ArrowLeft, LifeBuoy, Mail } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
 import { cn } from '@/lib/utils';
-
-const SUPPORT_EMAIL = 'support@acreledger.app';
 
 /**
  * Public support/contact page for signed-out visitors (Oct 1 launch).
@@ -72,7 +71,7 @@ export default function Support({ withBottomNav = false }: SupportProps) {
               <p className="text-sm leading-relaxed text-muted-foreground">
                 Write to{' '}
                 <a
-                  href={`mailto:${SUPPORT_EMAIL}`}
+                  href={SUPPORT_MAILTO}
                   className="break-all font-bold text-foreground underline-offset-4 hover:text-primary hover:underline sm:break-normal"
                 >
                   {SUPPORT_EMAIL}
