@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  applySkipNotes,
   assertFarmScopedWrite,
   extractSql,
   TENANT_REGISTRY,
   tenantBundleTables,
+  userIdColumns,
 } from "./tenant-registry.js";
 
 const KNOWN_FARM_OWNED = [
@@ -74,5 +76,19 @@ describe("tenant registry", () => {
     expect(() =>
       assertFarmScopedWrite("UPDATE public.fields SET deleted_at = now() WHERE farm_id = $1"),
     ).not.toThrow();
+  });
+
+  it("keeps farm_subscriptions out of the tenant bundle and lists billing skip notes", () => {
+    const keys = tenantBundleTables().map((entry) => `${entry.schema}.${entry.table}`);
+    expect(keys).not.toContain("public.farm_subscriptions");
+    expect(keys).toContain("public.account_deletion_requests");
+    const skipped = applySkipNotes();
+    expect(skipped.some((item) => item.table === "public.farm_subscriptions" && /billing/i.test(item.reason))).toBe(true);
+    expect(skipped.some((item) => item.table === "public.account_deletion_requests")).toBe(true);
+  });
+
+  it("remaps every declared userColumns entry", () => {
+    const deletion = TENANT_REGISTRY.find((entry) => entry.table === "account_deletion_requests");
+    expect(userIdColumns(deletion!)).toEqual(["user_id", "requested_by"]);
   });
 });

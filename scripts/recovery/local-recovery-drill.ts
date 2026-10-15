@@ -15,6 +15,7 @@ import type { CommandRunner } from "../../infrastructure/owner-backup/src/types.
 import { applyTenantRecovery, buildApplyPlan, type ApplyExecutor } from "./apply-tenant-recovery.js";
 import { tenantBundleChecksum, type TenantBundle } from "./extract-tenant.js";
 import { ISOLATED_RESTORE_ORDER, restoreIsolated } from "./restore-isolated.js";
+import { TENANT_REGISTRY_VERSION, registryKey, tenantBundleTables } from "./tenant-registry.js";
 
 const TARGET_FARM = "11111111-1111-4111-8111-111111111111";
 const CONTROL_FARM = "22222222-2222-4222-8222-222222222222";
@@ -35,13 +36,20 @@ function countByTable(dataset: { farms: FixtureRow[]; fields: FixtureRow[] }): R
 
 function targetBundle(dataset: { fields: FixtureRow[] }): TenantBundle {
   const fields = dataset.fields.filter((row) => row.farm_id === TARGET_FARM);
+  const tables: Record<string, unknown[]> = {};
+  for (const entry of tenantBundleTables()) {
+    tables[registryKey(entry)] = [];
+  }
+  tables["public.fields"] = fields;
   const bundle: TenantBundle = {
     bundleVersion: 1,
+    registryVersion: TENANT_REGISTRY_VERSION,
+    extractedTables: tenantBundleTables().map(registryKey),
     sourceBackupId: "local-disposable-drill",
     sourceRecoveredAt: "2026-09-19T00:00:00.000Z",
     farmId: TARGET_FARM,
     profileIds: [],
-    tables: { "public.fields": fields },
+    tables,
     counts: { "public.fields": fields.length },
     storage: { included: [], manualReview: [] },
     checksums: {},
@@ -124,7 +132,13 @@ async function run(): Promise<void> {
     await restoreIsolated({
       databaseUrl: "postgresql://postgres:disposable@localhost:5432/postgres?sslmode=require",
       plaintextDir: restored,
+      confirmIsolatedRef: "synthetic-isolated-ref",
       runner: restorePlanRunner,
+      tableCountReader: {
+        async count(schema, table) {
+          return tableCounts[`${schema}.${table}`] ?? 0;
+        },
+      },
     });
 
     const bundle = targetBundle(restoredDataset);

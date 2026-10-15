@@ -61,6 +61,12 @@ interface FarmState {
   initialFetchComplete: boolean;
   /** Global error state for data fetching */
   fetchError: boolean;
+  /** True when equipment/maintenance queries failed and cached equipment was kept. */
+  equipmentLoadFailed: boolean;
+  /** Whether the records currently shown came from the last successful cloud fetch or local cache. */
+  dataLoadSource: 'cloud' | 'cache';
+  /** ISO timestamp of the last cache hydrate or cloud fetch that populated records. */
+  dataLoadedAt: string | null;
   /** List of farm fields, filtered and sorted */
   fields: Field[];
   /** List of storage bins, filtered and sorted */
@@ -186,7 +192,7 @@ interface FarmState {
   /** Marks onboarding as complete on server & client */
   completeOnboarding: () => Promise<boolean>;
   /** Restores the entire farm state from a JSON backup */
-  restoreFromBackup: (data: any) => Promise<boolean>;
+  restoreFromBackup: (data: any, options?: import('./useSeasonManagement').RestoreFromBackupOptions) => Promise<boolean>;
   /** Refresh/refetch all farm data from Supabase */
   refresh: () => Promise<boolean>;
   /** Operations for managing FSA tract imports */
@@ -277,6 +283,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // True once the authoritative initial data load has settled for this session.
   // Online: set when fetchData resolves. Offline: set when cache hydration resolves.
   const [initialFetchComplete, setInitialFetchComplete] = useState(false);
+  const [equipmentLoadFailed, setEquipmentLoadFailed] = useState(false);
+  const [dataLoadSource, setDataLoadSource] = useState<'cloud' | 'cache'>('cache');
+  const [dataLoadedAt, setDataLoadedAt] = useState<string | null>(null);
   // Mirror isOnline in a ref so effects that must NOT re-run on network changes
   // (e.g. cache hydration) can still read the latest status when they settle.
   const isOnlineRef = useRef(isOnline);
@@ -364,6 +373,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     latestFetchRequestRef.current += 1;
     setCacheHydrated(false);
     setInitialFetchComplete(false);
+    setEquipmentLoadFailed(false);
+    setDataLoadSource('cache');
+    setDataLoadedAt(null);
     setStateOwnerKey(null);
     setFetchError(false);
     setPendingSyncCount(0);
@@ -444,6 +456,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       } finally {
         if (!cancelled && identityRef.current === hydrationIdentity) {
           setCacheHydrated(true);
+          setDataLoadSource('cache');
+          setDataLoadedAt(new Date().toISOString());
           // When offline, the local cache is the authoritative source — mark the
           // initial load settled. Online users wait for fetchData instead.
           if (!isOnlineRef.current) setInitialFetchComplete(true);
@@ -571,6 +585,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           maintenanceLogs: maintenanceLogsPages.error,
         });
       }
+      setEquipmentLoadFailed(!equipmentLoaded);
 
       const pagedErrors = [
         fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
@@ -657,6 +672,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           // Loading is complete only once every page of every collection has
           // succeeded — a truncated or failed load must not look settled.
           setInitialFetchComplete(true);
+          setDataLoadSource('cloud');
+          setDataLoadedAt(new Date().toISOString());
           return true;
         } catch (error) {
           if (isCurrentRequest()) {
@@ -954,7 +971,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   return (
     <FarmContext.Provider value={{
       deletionStatus: auth.deletionStatus,
-      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError,
+      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError, equipmentLoadFailed, dataLoadSource, dataLoadedAt,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,

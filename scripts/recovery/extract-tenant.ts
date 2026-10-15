@@ -2,12 +2,14 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client } from "pg";
 import { assertTlsDatabaseUrl } from "../../infrastructure/owner-backup/src/config.js";
-import { extractSql, tenantBundleTables, type TenantTable } from "./tenant-registry.js";
+import { createRecoveryClient } from "./pg-types.js";
+import { extractSql, registryKey, TENANT_REGISTRY_VERSION, tenantBundleTables, type TenantTable } from "./tenant-registry.js";
 
 export interface TenantBundle {
   bundleVersion: 1;
+  registryVersion: number;
+  extractedTables: string[];
   sourceBackupId: string;
   sourceRecoveredAt: string;
   farmId: string;
@@ -30,6 +32,7 @@ function rowFarmIds(entry: TenantTable, rows: Array<Record<string, unknown>>, fa
   }
 }
 
+/** Integrity-only SHA-256 of the unsigned bundle. Detects accidental edits; it is not authentication. */
 export function tenantBundleChecksum(bundle: TenantBundle): string {
   const unsigned = { ...bundle, checksums: {} };
   return createHash("sha256").update(JSON.stringify(unsigned)).digest("hex");
@@ -53,7 +56,7 @@ export async function extractTenant(options: {
     throw new Error("Typed farm_id confirmation does not match.");
   }
   assertTlsDatabaseUrl(options.databaseUrl);
-  const client = new Client({ connectionString: options.databaseUrl, ssl: { rejectUnauthorized: true } });
+  const client = createRecoveryClient(options.databaseUrl);
   await client.connect();
   try {
     const farm = await client.query("SELECT id FROM public.farms WHERE id = $1", [options.farmId]);
@@ -83,8 +86,11 @@ export async function extractTenant(options: {
       "SELECT bucket_id, name FROM storage.objects ORDER BY bucket_id, name",
     );
     const storageKeys = storageRows.rows.map((row) => `${row.bucket_id}/${row.name}`);
+    const extractedTables = tenantBundleTables().map(registryKey);
     const bundle: TenantBundle = {
       bundleVersion: 1,
+      registryVersion: TENANT_REGISTRY_VERSION,
+      extractedTables,
       sourceBackupId: options.sourceBackupId,
       sourceRecoveredAt: new Date().toISOString(),
       farmId: options.farmId,

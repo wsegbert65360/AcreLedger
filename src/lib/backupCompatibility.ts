@@ -1,7 +1,17 @@
 import { calculateAcreage } from '@/lib/gisService';
 import type { Field } from '@/types/farm';
 
-export const CURRENT_BACKUP_VERSION = 2;
+export const CURRENT_BACKUP_VERSION = 3;
+
+export function assertSupportedBackupVersion(version: unknown): void {
+  if (version == null) return;
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+    throw new Error('Invalid backup version.');
+  }
+  if (version > CURRENT_BACKUP_VERSION) {
+    throw new Error('This backup was made by a newer AcreLedger. Update the app before restoring it.');
+  }
+}
 
 type JsonRecord = Record<string, unknown>;
 

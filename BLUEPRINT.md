@@ -674,7 +674,7 @@ accepts only an empty trigger-created farm for reassignment, atomically remounts
 profile onto the new Auth ID, compensates a failed attach by deleting the new Auth user, and remaps
 only registry-declared user columns in a newly checksummed bundle. They receive fresh sessions rather
 than copied historical sessions. Full-project and isolated SQL restores must use
-`npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory>`;
+`npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory> --confirm-isolated-ref <isolated-project-ref>`;
 do not replace it with a hand-written `psql` sequence. `restore-isolated.ts` is authoritative for the
 declared order, including `auth-schema.sql`, `storage-schema.sql`, and optional migration schema/data
 files. It fails on missing required artifacts, then executes `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after

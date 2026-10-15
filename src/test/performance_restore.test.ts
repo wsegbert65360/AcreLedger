@@ -71,6 +71,9 @@ describe('Restore Performance Benchmark', () => {
             activeSeason: 2024,
             refetchFarmData: vi.fn().mockResolvedValue(true),
             isOnline: true,
+            initialFetchComplete: true,
+            fetchError: false,
+            pendingSyncCount: 0,
         };
     });
 
