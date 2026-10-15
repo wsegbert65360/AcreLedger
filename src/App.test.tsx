@@ -308,9 +308,9 @@ describe('signed-out routing (ticket C)', () => {
     navigate('/privacy');
     renderApp();
     expect(screen.getByText('AcreLedger Privacy Policy')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'support@acreledger.app' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'acreledgerapp@gmail.com' })).toHaveAttribute(
       'href',
-      'mailto:support@acreledger.app'
+      'mailto:acreledgerapp@gmail.com'
     );
     expect(screen.queryByRole('link', { name: 'Create account' })).not.toBeInTheDocument();
   });
@@ -319,9 +319,9 @@ describe('signed-out routing (ticket C)', () => {
     navigate('/support');
     renderApp();
     expect(screen.getByText('AcreLedger Support')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'support@acreledger.app' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'acreledgerapp@gmail.com' })).toHaveAttribute(
       'href',
-      'mailto:support@acreledger.app'
+      'mailto:acreledgerapp@gmail.com'
     );
     expect(screen.queryByRole('link', { name: 'Create account' })).not.toBeInTheDocument();
   });

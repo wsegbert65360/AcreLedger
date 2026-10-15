@@ -32,6 +32,7 @@ import CluFieldSelector from '@/components/CluFieldSelector';
 import type { CluLandUse, FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
 import { getCentroid } from '@/lib/geoHelpers';
 import { FSA_BOUNDARY_REQUEST_TEXT } from '@/lib/fsaOfficeRequestSheet';
+import { SUPPORT_EMAIL } from '@/lib/support';
 
 interface TractAssignmentFlowProps {
   onDone?: () => void;
@@ -849,7 +850,7 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                 <div className="rounded-lg border border-border bg-card p-3.5 text-xs text-muted-foreground flex gap-2 items-center">
                   <Mail size={16} className="text-primary shrink-0" />
                   <div>
-                    Need help? Email <span className="font-semibold text-foreground font-mono">support@acreledger.app</span>.
+                    Need help? Email <span className="font-semibold text-foreground font-mono">{SUPPORT_EMAIL}</span>.
                   </div>
                 </div>
               </TabsContent>

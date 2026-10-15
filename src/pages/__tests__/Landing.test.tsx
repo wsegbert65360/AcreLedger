@@ -105,13 +105,13 @@ describe('Landing', () => {
       'href',
       '/support'
     );
-    expect(screen.getByRole('link', { name: 'support@acreledger.app' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'acreledgerapp@gmail.com' })).toHaveAttribute(
       'href',
-      'mailto:support@acreledger.app'
+      'mailto:acreledgerapp@gmail.com'
     );
     expect(screen.getByRole('link', { name: /^contact$/i })).toHaveAttribute(
       'href',
-      'mailto:support@acreledger.app'
+      'mailto:acreledgerapp@gmail.com'
     );
   });
 
