@@ -1,3 +1,4 @@
+import { sanitizeCsvValue } from '@/utils/csv';
 import type {
   CustomSprayRecord,
   FertilizerApplication,
@@ -333,15 +334,6 @@ export function generateLandlordSummary(params: GenerateLandlordSummaryParams): 
   };
 }
 
-function escapeCsvCell(val: string | number | null | undefined): string {
-  if (val === null || val === undefined) return '""';
-  let str = String(val);
-  if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
-    str = `'${str}`;
-  }
-  str = str.replace(/"/g, '""');
-  return `"${str}"`;
-}
 
 /**
  * Flat per-field CSV with a totals row. Each row is one field; the activity
@@ -382,5 +374,5 @@ export function generateLandlordSummaryCSV(summary: LandlordSummary): string {
   ];
 
   const allRows = [headers, ...dataRows, totalsRow];
-  return allRows.map(row => row.map(cell => escapeCsvCell(cell)).join(',')).join('\n');
+  return allRows.map(row => row.map(cell => sanitizeCsvValue(cell)).join(',')).join('\n');
 }

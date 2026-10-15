@@ -38,7 +38,7 @@ function cluBoundaryKey(row: Fsa578ReportRow): string {
 
 export function buildFsa578Reconciliation(rows: Fsa578ReportRow[]): Fsa578Reconciliation {
   const reportingRows = rows.filter(row => row.landUse === 'Cropland');
-  const uniqueCluRows = [...new Map(reportingRows.map(row => [cluBoundaryKey(row), row])).values()];
+  const uniqueCluRows = [...new Map(reportingRows.map(row => [cluBoundaryKey(row), { ...row, acreage: row.cluAcres ?? row.acreage }])).values()];
 
   return {
     cropTotals: sumBy(reportingRows, row => `${display(row.crop)} / ${display(row.intendedUse)}`),

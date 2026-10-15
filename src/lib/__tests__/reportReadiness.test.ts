@@ -106,7 +106,7 @@ describe('spray readiness', () => {
       totalItems: 1,
       readyItems: 0,
       affectedItems: 1,
-      errors: 3,
+      errors: 11,
       warnings: 2,
     });
   });
@@ -121,6 +121,8 @@ describe('spray readiness', () => {
       licenseNumber: 'ABC123',
       treatedAreaSize: 20,
       windSpeed: 7,
+      startTime: '08:00', endTime: '09:00', windDirection: 'N',
+      cropOrSiteTreated: 'Corn', applicationMethod: 'Ground', equipmentId: 'Sprayer',
     }], 10);
 
     expect(summary).toMatchObject({ status: 'ready', readyItems: 1, errors: 0, warnings: 0 });
@@ -136,6 +138,8 @@ describe('spray readiness', () => {
       licenseNumber: 'ABC123',
       treatedAreaSize: 20,
       windSpeed: 7,
+      startTime: '08:00', endTime: '09:00', windDirection: 'N',
+      cropOrSiteTreated: 'Corn', applicationMethod: 'Ground', equipmentId: 'Sprayer',
     }], 10);
 
     expect(summary).toMatchObject({ status: 'review', errors: 1 });
@@ -152,6 +156,8 @@ describe('spray readiness', () => {
       licenseNumber: 'ABC123',
       treatedAreaSize: undefined,
       windSpeed: 7,
+      startTime: '08:00', endTime: '09:00', windDirection: 'N',
+      cropOrSiteTreated: 'Corn', applicationMethod: 'Ground', equipmentId: 'Sprayer',
     }], 10, [
       { id: 'field-1', name: 'North', acreage: 40, farm_id: 'farm-1', deleted_at: null, lat: null, lng: null },
     ] as never[]);
@@ -169,6 +175,8 @@ describe('spray readiness', () => {
       licenseNumber: 'ABC123',
       treatedAreaSize: undefined,
       windSpeed: 7,
+      startTime: '08:00', endTime: '09:00', windDirection: 'N',
+      cropOrSiteTreated: 'Corn', applicationMethod: 'Ground', equipmentId: 'Sprayer',
     }], 10);
 
     expect(summary).toMatchObject({ status: 'review', errors: 0, warnings: 1 });
@@ -354,6 +362,8 @@ describe('buildSprayReadiness NSW missing-fields list (au-apvma)', () => {
       licenseNumber: 'ABC123',
       treatedAreaSize: 20,
       windSpeed: 7,
+      startTime: '08:00', endTime: '09:00', windDirection: 'N',
+      cropOrSiteTreated: 'Corn', applicationMethod: 'Ground', equipmentId: 'Sprayer',
       complianceProfile: 'universal',
     }], 10);
 

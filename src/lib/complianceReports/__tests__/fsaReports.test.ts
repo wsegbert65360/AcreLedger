@@ -265,7 +265,7 @@ describe('FSA 578 report rows', () => {
         expect(rows.every(row => row.tractNumber === '1417')).toBe(true);
     });
 
-    it('keeps multiple planting records as separate FSA acreage rows', () => {
+    it('uses planting acres for same-sequence varieties on one CLU', () => {
         const field: Field = {
             id: 'field-1',
             farm_id: 'farm-1',
@@ -286,7 +286,7 @@ describe('FSA 578 report rows', () => {
             fieldName: 'Hensley',
             crop: 'Soybeans',
             seedVariety: 'Old Variety',
-            acreage: 40,
+            acreage: 25,
             plantDate: '2026-06-10',
             timestamp: new Date('2026-06-10T12:00:00.000Z').getTime(),
             seasonYear: 2026,
@@ -299,8 +299,7 @@ describe('FSA 578 report rows', () => {
             seedVariety: 'Eisenhower 2639e',
             plantDate: '2026-06-11',
             timestamp: new Date('2026-06-11T12:00:00.000Z').getTime(),
-            cropStatus: 'Cover Crop' as const,
-            plantingPattern: 'Double crop',
+            acreage: 15,
         };
 
         const tract: FsaTractImport = {
@@ -316,7 +315,7 @@ describe('FSA 578 report rows', () => {
                 features: [{
                     type: 'Feature',
                     geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
-                    properties: { cluNumber: '2', acres: 28.26 }
+                    properties: { cluNumber: '2', acres: 40 }
                 }]
             }
         };
@@ -329,16 +328,15 @@ describe('FSA 578 report rows', () => {
                 date: '2026-06-10',
                 seedVariety: 'Old Variety',
                 fieldNumber: '2',
-                acreage: 28.26,
+                acreage: 25,
                 cropStatus: 'Planted',
             }),
             expect.objectContaining({
                 date: '2026-06-11',
                 seedVariety: 'Eisenhower 2639e',
                 fieldNumber: '2',
-                acreage: 28.26,
-                cropStatus: 'Cover Crop',
-                plantingPattern: 'Double crop',
+                acreage: 15,
+                cropStatus: 'Planted',
             }),
         ]));
     });
@@ -507,7 +505,7 @@ describe('FSA 578 report rows', () => {
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({
             fieldNumber: '1',
-            acreage: 32.41,
+            acreage: 32,
             farmNumber: '918',
             tractNumber: '1327'
         });

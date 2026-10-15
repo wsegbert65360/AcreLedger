@@ -21,6 +21,7 @@ const fsaTractService = {
 };
 const enqueueMutation = vi.fn();
 const enqueueMutations = vi.fn();
+const replayQueue = vi.fn();
 const mapFsaTractToDb = vi.fn((t: FsaTractImport) => ({
   id: t.id, farm_id: t.farmId, tract_key: t.tractKey, filename: t.filename,
   feature_count: t.featureCount, geojson: t.geojson, imported_at: t.importedAt,
@@ -40,7 +41,7 @@ const mapFsaTractFromDb = vi.fn((row: unknown) => row as FsaTractImport);
 vi.doMock('@/services/cluAssignmentService', () => ({ cluAssignmentService }));
 vi.doMock('@/services/fsaTractService', () => ({ fsaTractService }));
 vi.doMock('@/lib/syncQueue', () => ({
-  syncQueue: { enqueueMutation, enqueueMutations, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() },
+  syncQueue: { enqueueMutation, enqueueMutations, replayQueue, shouldQueueWrite: vi.fn(async (online: boolean) => !online), kickReplay: vi.fn() },
 }));
 vi.doMock('@/lib/mappers', () => ({
   mapFsaTractToDb,
@@ -133,6 +134,7 @@ beforeEach(() => {
   enqueueMutations.mockReset();
   enqueueMutation.mockResolvedValue(undefined);
   enqueueMutations.mockResolvedValue(undefined);
+  replayQueue.mockResolvedValue(true);
   mapFsaTractToDb.mockImplementation((t: FsaTractImport) => ({
     id: t.id, farm_id: t.farmId, tract_key: t.tractKey, filename: t.filename,
     feature_count: t.featureCount, geojson: t.geojson, imported_at: t.importedAt,
@@ -362,6 +364,46 @@ describe('useFsaTracts — deleteTract (corrected cascade)', () => {
 
 // ---------------------------------------------------------------------------
 describe('useFsaTracts — importTract', () => {
+  it.each([true, false])('reconciles matched acres and confirmed removals in a durable batch (online=%s)', async isOnline => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { result } = renderFsaHook({ isOnline, tracts: [makeTract()], assignments: [
+      makeAssignment({ acres: 50 }), makeAssignment({ id: 'removed', cluNumber: '99' }),
+      makeAssignment({ id: 'unrelated', tractKey: 'other' }),
+    ] });
+    await act(async () => { expect(await result.current.ops.importTract('TK1', 'new.geojson', geojson, 1)).toBe(true); });
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('99'));
+    expect(result.current.assignState.value.find(a => a.id === 'a1')?.acres).toBe(40);
+    expect(result.current.assignState.value.find(a => a.id === 'removed')?.deletedAt).toBeTruthy();
+    expect(result.current.assignState.value.find(a => a.id === 'unrelated')?.acres).toBe(40);
+    if (isOnline) expect(replayQueue).toHaveBeenCalledWith(FARM);
+    else expect(replayQueue).not.toHaveBeenCalled();
+    expect(enqueueMutations).toHaveBeenCalledWith([
+      expect.objectContaining({ tableName: 'fsa_tract_imports', operation: 'insert', farmId: FARM }),
+      expect.objectContaining({ tableName: 'field_clu_assignments', operation: 'insert', payload: expect.objectContaining({ id: 'a1', acres: 40, farm_id: FARM }) }),
+      expect.objectContaining({ tableName: 'field_clu_assignments', operation: 'soft_delete', payload: expect.objectContaining({ id: 'removed' }) }),
+    ]);
+    confirm.mockRestore();
+  });
+
+  it('preserves the tract and assignments if removal confirmation is declined', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const original = makeAssignment({ cluNumber: '99' });
+    const { result } = renderFsaHook({ tracts: [makeTract()], assignments: [original] });
+    await act(async () => { expect(await result.current.ops.importTract('TK1', 'new.geojson', geojson, 1)).toBe(false); });
+    expect(enqueueMutations).not.toHaveBeenCalled();
+    expect(result.current.assignState.value).toEqual([original]);
+    expect(result.current.tractState.value[0].filename).toBe('tract.geojson');
+    confirm.mockRestore();
+  });
+
+  it('leaves both collections unchanged when reconciliation enqueue fails', async () => {
+    enqueueMutations.mockRejectedValue(new Error('storage full'));
+    const original = makeAssignment({ acres: 50 });
+    const { result } = renderFsaHook({ tracts: [makeTract()], assignments: [original] });
+    await act(async () => { expect(await result.current.ops.importTract('TK1', 'new.geojson', geojson, 1)).toBe(false); });
+    expect(result.current.assignState.value).toEqual([original]);
+    expect(result.current.tractState.value[0].filename).toBe('tract.geojson');
+  });
   it('online: delegates to fsaTractService.importTract', async () => {
     fsaTractService.importTract.mockResolvedValue({ data: makeTract({ id: 't1' }), error: null });
     const { result } = renderFsaHook();

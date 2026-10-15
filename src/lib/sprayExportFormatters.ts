@@ -1,7 +1,6 @@
 import { formatIsoDate } from '@/utils/dates';
 import type { SprayRecord } from '@/types/farm';
 import { formatSprayProductTotal, HECTARES_PER_ACRE } from '@/utils/unitConversion';
-import { resolveComplianceProfileId } from '@/lib/compliance/profiles';
 
 export const MISSING_VALUE = '-';
 
@@ -162,17 +161,15 @@ export function effectiveTreatedAreaUnit(record: Pick<SprayRecord, 'treatedAreaS
 }
 
 /**
- * Area to pass to formatSprayProductTotal. Only the AU profile converts the
- * area into the rate's unit; every other profile gets the area unchanged so
- * US product totals stay exactly as they were.
+ * Area to pass to formatSprayProductTotal, converted to the rate's unit for
+ * every compliance profile.
  */
 export function areaForProductTotal(
   area: number | null | undefined,
   areaUnit: string | undefined,
   rateUnit: string | undefined,
-  profile?: string | null,
+  _profile?: string | null,
 ): number | null | undefined {
-  if (resolveComplianceProfileId(profile) !== 'au-apvma') return area;
   if (area == null || !Number.isFinite(area)) return area;
   return normalizeAreaForRate(area, areaUnit, rateUnit);
 }
