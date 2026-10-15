@@ -24,8 +24,6 @@ workflows:
         # Existing shared web-build variables (VITE_SUPABASE_URL,
         # VITE_SUPABASE_ANON_KEY, weather, and rain endpoints).
         - appstore
-        # Google Play service-account credentials used for publishing.
-        - google_play
 
     cache:
       cache_paths:
@@ -114,17 +112,24 @@ workflows:
 
       - name: Set Android version code
         script: |
-          # No --tracks filter: inspect the highest code across all Play tracks.
-          # A lookup error cannot establish whether this is the first upload.
-          if ! LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME"); then
-            echo "Google Play version lookup failed; refusing an unsafe versionCode fallback" >&2
-            exit 1
+          if [ -n "${ANDROID_VERSION_CODE_OVERRIDE:-}" ]; then
+            VERSION_CODE=$ANDROID_VERSION_CODE_OVERRIDE
+          elif [ -n "${GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS:-}" ]; then
+            # No --tracks filter: inspect the highest code across all Play tracks.
+            # A lookup error cannot establish whether this is the first upload.
+            if ! LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME"); then
+              echo "Google Play version lookup failed; refusing an unsafe versionCode fallback" >&2
+              exit 1
+            fi
+            if ! echo "$LATEST" | grep -Eq '^[0-9]+$'; then
+              echo "Google Play did not return a numeric build number; set ANDROID_VERSION_CODE_OVERRIDE" >&2
+              exit 1
+            fi
+            VERSION_CODE=$((LATEST + 1))
+          else
+            # Play listing is a draft with no upload key: Codemagic build number.
+            VERSION_CODE=$BUILD_NUMBER
           fi
-          if ! echo "$LATEST" | grep -Eq '^[0-9]+$'; then
-            echo "Google Play did not return a numeric build number; first uploads need a manual versionCode" >&2
-            exit 1
-          fi
-          VERSION_CODE=$((LATEST + 1))
           echo "VERSION_CODE=$VERSION_CODE" >> "$CM_ENV"
 
       - name: Build signed Android App Bundle
@@ -145,10 +150,8 @@ workflows:
       - android/app/build/outputs/**/mapping.txt
 
     publishing:
-      google_play:
-        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-
+      # Play upload disabled until a service account key exists; Play listing
+      # still a draft; re-add group+publishing then.
       email:
         recipients:
           - wsegbert@gmail.com
