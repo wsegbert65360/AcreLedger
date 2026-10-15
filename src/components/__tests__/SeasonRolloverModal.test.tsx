@@ -14,6 +14,7 @@ const farm = vi.hoisted(() => ({
     initialFetchComplete: true,
     fetchError: false,
     pendingSyncCount: 0,
+    farmRole: 'owner' as string | null,
   },
 }));
 
@@ -27,9 +28,10 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+import { PRE_SEASON_RESET_WARNING, RESTORE_RESURRECT_WARNING, RESTORE_ROLE_DENIED } from '@/lib/backupRestorePolicy';
 import SeasonRolloverModal from '../SeasonRolloverModal';
 
-function backupFile(overrides: Record<string, unknown> = {}) {
+function backupFile(overrides: Record<string, unknown> = {}, name = 'acreledger-backup.json') {
   const payload = JSON.stringify({
     backupVersion: 2,
     backupDate: '2026-03-04T12:00:00.000Z',
@@ -39,7 +41,7 @@ function backupFile(overrides: Record<string, unknown> = {}) {
     ...overrides,
   });
   return {
-    name: 'acreledger-backup.json',
+    name,
     size: payload.length,
     text: async () => payload,
   } as File;
@@ -61,6 +63,7 @@ describe('SeasonRolloverModal restore confirmation', () => {
     farm.current.pendingSyncCount = 0;
     farm.current.activeSeason = 2026;
     farm.current.restoreFromBackup.mockResolvedValue(true);
+    farm.current.farmRole = 'owner';
   });
 
   it('disables upload while restore is gated', async () => {
@@ -79,12 +82,44 @@ describe('SeasonRolloverModal restore confirmation', () => {
     expect(screen.getAllByText(/season 2025/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Fields')).toBeInTheDocument();
     expect(screen.getByText('Spray records')).toBeInTheDocument();
-    expect(screen.getByText(
-      'Records deleted since this backup will be restored; newer edits to the same records will be replaced.',
-    )).toBeInTheDocument();
+    expect(screen.getByText(RESTORE_RESURRECT_WARNING)).toBeInTheDocument();
     expect(screen.getByText(/Backup season 2025 differs from current 2026/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restore backup' }));
     await waitFor(() => expect(farm.current.restoreFromBackup).toHaveBeenCalled());
-    expect(farm.current.restoreFromBackup.mock.calls[0][1]).toEqual({ switchActiveSeason: false });
+    expect(farm.current.restoreFromBackup.mock.calls[0][1]).toEqual({
+      switchActiveSeason: false,
+      preSeasonReset: false,
+      rollbackTables: undefined,
+    });
+  });
+
+  it('warns that a pre-season snapshot undoes the rollover and rolls records back', async () => {
+    await openRollover();
+    const input = screen.getByLabelText('Upload backup JSON file');
+    fireEvent.change(input, {
+      target: {
+        files: [backupFile({
+          rolloverDate: '2026-09-01T00:00:00.000Z',
+        }, 'Pre_Season_Reset_2026-09-01.json')],
+      },
+    });
+    await waitFor(() => expect(screen.getByText(PRE_SEASON_RESET_WARNING)).toBeInTheDocument());
+    expect(screen.getByText(RESTORE_RESURRECT_WARNING)).toBeInTheDocument();
+    const seasonBox = screen.getByRole('checkbox');
+    expect(seasonBox).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore backup' }));
+    await waitFor(() => expect(farm.current.restoreFromBackup).toHaveBeenCalled());
+    expect(farm.current.restoreFromBackup.mock.calls[0][1]).toEqual(expect.objectContaining({
+      switchActiveSeason: true,
+      preSeasonReset: true,
+      rollbackTables: expect.arrayContaining(['fields', 'spray_records']),
+    }));
+  });
+
+  it('hides restore from a worker', async () => {
+    farm.current.farmRole = 'worker';
+    await openRollover();
+    expect(screen.queryByLabelText('Upload backup JSON file')).not.toBeInTheDocument();
+    expect(screen.getByText(new RegExp(RESTORE_ROLE_DENIED))).toBeInTheDocument();
   });
 });

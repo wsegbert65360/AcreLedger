@@ -14,6 +14,7 @@ function bundle(farmId = FARM): TenantBundle {
         id: entry.ownership === "root" ? farmId : `${entry.table}-1`,
         farm_id: farmId,
         deleted_at: null,
+        ...(entry.schema === "public" && entry.table === "farms" ? { name: "Home Place" } : {}),
       },
     ];
   }
@@ -62,29 +63,40 @@ describe("apply tenant recovery", () => {
     expect(result.plan.skippedAuth).toBe(true);
   });
 
-  it("rejects snapshot mode without the second confirmation and pre-backup", () => {
-    expect(() =>
-      buildApplyPlan({
-        bundle: bundle(),
-        mode: "snapshot",
-        dryRun: false,
-        farmId: FARM,
-        confirm: "yes",
-        preBackupVerified: true,
-        executor: recordingExecutor(),
-      }),
-    ).toThrow(/RESTORE-FARM-TO-SNAPSHOT/);
-    expect(() =>
-      buildApplyPlan({
-        bundle: bundle(),
-        mode: "snapshot",
-        dryRun: false,
-        farmId: FARM,
-        confirm: "RESTORE-FARM-TO-SNAPSHOT",
-        preBackupVerified: false,
-        executor: recordingExecutor(),
-      }),
-    ).toThrow(/pre-recovery backup/);
+  it("rejects snapshot mode until the farm name and RESTORE are both typed", () => {
+    const base = {
+      bundle: bundle(),
+      mode: "snapshot" as const,
+      dryRun: false,
+      farmId: FARM,
+      preBackupVerified: true,
+      executor: recordingExecutor(),
+    };
+    expect(() => buildApplyPlan({ ...base, confirm: "RESTORE" })).toThrow(/farm name as the first/);
+    expect(() => buildApplyPlan({ ...base, confirmFarmName: "Other Place", confirm: "RESTORE" })).toThrow(/does not match/);
+    expect(() => buildApplyPlan({ ...base, confirmFarmName: "Home Place", confirm: "yes" })).toThrow(/typed confirmation RESTORE/);
+    expect(() => buildApplyPlan({
+      ...base,
+      confirmFarmName: "  Home Place  ",
+      confirm: "RESTORE",
+      preBackupVerified: false,
+    })).toThrow(/pre-recovery backup/);
+  });
+
+  it("refuses snapshot restore when the bundle has no farm name", () => {
+    const value = bundle();
+    value.tables["public.farms"] = [{ id: FARM, farm_id: FARM, deleted_at: null }];
+    value.checksums["bundle.json"] = tenantBundleChecksum(value);
+    expect(() => buildApplyPlan({
+      bundle: value,
+      mode: "snapshot",
+      dryRun: true,
+      farmId: FARM,
+      confirmFarmName: "Home Place",
+      confirm: "RESTORE",
+      preBackupVerified: false,
+      executor: recordingExecutor(),
+    })).toThrow(/cannot find the farm name/);
   });
 
   it("rejects a second farm_id in the bundle", () => {
@@ -132,7 +144,8 @@ describe("apply tenant recovery", () => {
       mode: "snapshot",
       dryRun: true,
       farmId: FARM,
-      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      confirmFarmName: "Home Place",
+      confirm: "RESTORE",
       preBackupVerified: false,
       executor: recordingExecutor(),
     });
@@ -163,7 +176,8 @@ describe("apply tenant recovery", () => {
       mode: "snapshot",
       dryRun: false,
       farmId: FARM,
-      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      confirmFarmName: "Home Place",
+      confirm: "RESTORE",
       preBackupVerified: true,
       executor,
     });
@@ -253,7 +267,8 @@ describe("apply tenant recovery", () => {
       mode: "snapshot",
       dryRun: true,
       farmId: FARM,
-      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      confirmFarmName: "Home Place",
+      confirm: "RESTORE",
       preBackupVerified: false,
       executor: recordingExecutor(),
     });
@@ -268,7 +283,8 @@ describe("apply tenant recovery", () => {
       mode: "snapshot",
       dryRun: true,
       farmId: FARM,
-      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      confirmFarmName: "Home Place",
+      confirm: "RESTORE",
       preBackupVerified: false,
       executor: recordingExecutor(),
     });
@@ -283,7 +299,8 @@ describe("apply tenant recovery", () => {
       mode: "snapshot",
       dryRun: true,
       farmId: FARM,
-      confirm: "RESTORE-FARM-TO-SNAPSHOT",
+      confirmFarmName: "Home Place",
+      confirm: "RESTORE",
       preBackupVerified: false,
       executor: recordingExecutor(),
     });

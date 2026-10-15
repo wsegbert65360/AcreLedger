@@ -4,6 +4,7 @@ import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
 import { endAuthSession, type SignOutScope } from '@/lib/authSignOut';
+import { readFarmRole, type FarmRole } from '@/lib/backupRestorePolicy';
 import {
   isValidActiveSeason,
   isValidViewingSeason,
@@ -19,6 +20,7 @@ export function useAuth() {
   const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
   const [viewingSeason, setViewingSeason] = useState<number>(new Date().getFullYear());
   const [onboardingComplete, setOnboardingComplete] = useState<boolean>(false);
+  const [farmRole, setFarmRole] = useState<FarmRole | null>(null);
   const activeSeasonRef = useRef(activeSeason);
   const identityRef = useRef<{ userId: string | null; generation: number }>({ userId: null, generation: 0 });
   const refreshAttemptedRef = useRef<string | null>(null);
@@ -33,6 +35,7 @@ export function useAuth() {
       setDeletionStatus('clear');
       setFarmId(null);
       setOnboardingComplete(false);
+      setFarmRole(null);
       setActiveSeason(year);
       setViewingSeason(year);
     }
@@ -177,14 +180,27 @@ export function useAuth() {
           return;
         }
         setDeletionStatus('clear');
-        const { data: profileData } = await supabase
+        let { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('farm_id, active_season, onboarding_complete')
+          .select('farm_id, active_season, onboarding_complete, farm_role')
           .eq('id', userId)
           .single();
+        if (profileError && /farm_role/i.test(String(profileError.message ?? ''))) {
+          const retry = await supabase
+            .from('profiles')
+            .select('farm_id, active_season, onboarding_complete')
+            .eq('id', userId)
+            .single();
+          profileData = retry.data ? { ...retry.data, farm_role: null } : null;
+          profileError = retry.error;
+        }
 
         if (!isCurrent()) return;
+        if (profileError) {
+          console.error('Could not load profile:', profileError);
+        }
         if (profileData) {
+          setFarmRole(readFarmRole((profileData as { farm_role?: unknown }).farm_role));
           setOnboardingComplete(Boolean(profileData.onboarding_complete));
           try {
             const key = `${userId}_al_onboarding_complete`;
@@ -352,6 +368,7 @@ export function useAuth() {
     setViewingSeason,
     onboardingComplete,
     setOnboardingComplete,
+    farmRole,
     signOut,
     ensureFarm,
   };

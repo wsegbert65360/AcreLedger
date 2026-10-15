@@ -8,6 +8,7 @@ import { exportDataAsJson } from '@/utils/backup';
 import { openSeasonRolloverModal } from '@/utils/seasonRollover';
 import { CURRENT_BACKUP_VERSION } from '@/lib/backupCompatibility';
 import { backupSchema } from '@/lib/backupSchema';
+import { canRestoreFarmBackup, RESTORE_ROLE_DENIED } from '@/lib/backupRestorePolicy';
 
 const LAST_BACKUP_KEY = 'acreledger_last_backup';
 
@@ -59,6 +60,7 @@ export default function BackupManager() {
     equipmentLoadFailed,
     dataLoadSource,
     dataLoadedAt,
+    farmRole,
   } = useFarm();
   const [backingUp, setBackingUp] = useState(false);
   const [lastBackup, setLastBackup] = useState<Date | null>(loadLastBackup);
@@ -90,6 +92,7 @@ export default function BackupManager() {
     : false;
 
   const backupBlocked = !initialFetchComplete;
+  const restoreAllowed = canRestoreFarmBackup(farmRole);
   const backupWarned = fetchError || equipmentLoadFailed;
   const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed)
     ? 'cache'
@@ -285,8 +288,13 @@ export default function BackupManager() {
           className="w-full min-h-[44px]"
         >
           <CalendarDays size={16} className="mr-2" />
-          Season rollover and restore
+          {restoreAllowed ? 'Season rollover and restore' : 'Season rollover'}
         </Button>
+        {!restoreAllowed && (
+          <p className="text-xs font-mono text-muted-foreground">
+            {RESTORE_ROLE_DENIED} You can still download a backup.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
