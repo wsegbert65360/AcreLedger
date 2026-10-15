@@ -616,6 +616,11 @@ older exports or pre-fix local cache data. Restore must always treat the current
   visibility, and online refreshes recover after socket suspension.
   A device viewing the previous active season advances to the new active season; an intentionally
   different historical selection is preserved when valid and otherwise clamped.
+- Only the farm owner or an admin may restore a backup. Workers may still download backups. The database function is the real gate. Until the role column exists, the app treats a missing role as allowed so profile load and restore stay usable, and the migration must be deployed before relying on the button gate.
+- The restore confirmation says records deleted after the backup come back, newer edits to those same records are replaced, and records that are not in the file stay in the book.
+- `restore_farm_backup` sets `statement_timeout` to 120 seconds for that call.
+- A pre-season reset file (name starting with `Pre_Season_Reset_`, or a non-empty `rolloverDate`) is an explicit undo of season rollover. The warning says everything entered since gets rolled back. Only when that undo flag is sent, rows in collections present in the file and absent from the snapshot are soft-deleted. An ordinary restore still leaves rows that are not in the file in place.
+- Owner snapshot recovery requires the farm name and then the word `RESTORE`. Merge still uses one confirmation, `MERGE-MISSING-DATA`.
 
 ### Owner Whole-Project Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)
 

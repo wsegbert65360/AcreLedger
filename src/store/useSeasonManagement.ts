@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { ZodError } from 'zod';
 import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
+import { canRestoreFarmBackup, RESTORE_ROLE_DENIED } from '@/lib/backupRestorePolicy';
 import { CURRENT_BACKUP_VERSION, assertSupportedBackupVersion, normalizeBackupForRestore } from '@/lib/backupCompatibility';
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import {
@@ -89,6 +90,10 @@ export function shouldRefuseCacheClear(pendingCount: number): boolean {
 export type RestoreFromBackupOptions = {
   /** When true, also compare-and-set profiles.active_season to the backup season. */
   switchActiveSeason?: boolean;
+  /** Pre_Season_Reset undo: soft-delete live rows the snapshot does not contain. */
+  preSeasonReset?: boolean;
+  /** Database table names whose arrays were present in that snapshot. */
+  rollbackTables?: string[];
 };
 
 export function formatRestoreFailure(err: unknown): string {
@@ -166,6 +171,7 @@ interface UseSeasonManagementArgs {
   initialFetchComplete: boolean;
   fetchError: boolean;
   pendingSyncCount: number;
+  farmRole?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -189,7 +195,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setTillageRecords, setFsaTracts, setCluAssignments, setWorkRequests,
     setEquipment, setMaintenanceSchedules, setMaintenanceLogs, setFarmId,
     refetchFarmData,
-    isOnline, initialFetchComplete, fetchError, pendingSyncCount,
+    isOnline, initialFetchComplete, fetchError, pendingSyncCount, farmRole,
   } = args;
 
   // ─── Rollover ───────────────────────────────────────────────────────────────
@@ -333,6 +339,11 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
+    if (!canRestoreFarmBackup(farmRole)) {
+      toast.error(RESTORE_ROLE_DENIED);
+      return false;
+    }
+
     if (typeof rawData !== 'object' || rawData === null) {
       toast.error('Invalid backup file format.');
       return false;
@@ -419,6 +430,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       if (switchActiveSeason) {
         payload._expected_active_season = activeSeason;
       }
+      if (options?.preSeasonReset) {
+        payload._pre_season_reset = true;
+        payload._rollback_tables = options.rollbackTables ?? [];
+      }
 
       const { data: restoreResult, error } = await supabase.rpc('restore_farm_backup', {
         p_payload: payload,
@@ -453,7 +468,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       setLoading(false);
     }
   }, [
-    farm_id, isOnline, initialFetchComplete, fetchError, pendingSyncCount, activeSeason,
+    farm_id, isOnline, initialFetchComplete, fetchError, pendingSyncCount, farmRole, activeSeason,
     setLoading, refetchFarmData, setActiveSeason, setViewingSeason,
   ]);
 

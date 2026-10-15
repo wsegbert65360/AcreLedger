@@ -8,7 +8,7 @@ The Settings backup that farmers download is unchanged. This toolkit reads the e
 
 1. Never restore one farm straight from a raw full dump into production.
 2. Restore the archive into a disposable isolated project first.
-3. Every production farm recovery needs a dry run, a fresh pre-recovery backup, an exact `farm_id`, and a typed confirmation.
+3. Every production farm recovery needs a dry run, a fresh pre-recovery backup, an exact `farm_id`, and a typed confirmation. Snapshot mode needs two: `--confirm-farm-name` with the exact farm name, then `--confirm RESTORE`. Merge stays `--confirm MERGE-MISSING-DATA`.
 4. Never paste the age private key, database password, or Google refresh token into chat or source files.
 
 ## Commands
