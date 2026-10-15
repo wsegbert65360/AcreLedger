@@ -67,6 +67,10 @@ runViteBuild('capacitor', {
   env: {
     ...sentinelEnv,
     VITE_WEATHER_PROXY_URL: DUMMY_PROXY_URL,
+    // Capacitor mode (PR #57) refuses a missing Supabase URL/anon key.
+    // Dummy values only — this scan is for the Visual Crossing sentinel.
+    VITE_SUPABASE_URL: DUMMY_PROXY_URL,
+    VITE_SUPABASE_ANON_KEY: 'bundle-scan-anon-key',
   },
 });
 

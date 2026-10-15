@@ -1,5 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
+import {
+  consumeProviderDailyCap,
+  createServiceRoleClient,
+  DEFAULT_WEATHER_DAILY_CAP,
+  resolveDailyCap,
+} from '../server/providerDailyUsage.js';
+
 type QueryValue = string | string[] | undefined;
 
 interface ApiRequest {
@@ -82,6 +89,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
 
+  res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 
@@ -110,6 +118,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseAnonKey) {
     return res.status(500).json({ error: 'Server configuration error: missing Supabase credentials' });
   }
@@ -177,6 +186,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const VC_KEY = process.env.VISUALCROSSING_API_KEY;
   if (!VC_KEY) {
     return res.status(500).json({ error: 'Server configuration error: missing Visual Crossing API key' });
+  }
+
+  if (!supabaseServiceRoleKey) {
+    return res.status(500).json({ error: 'Server configuration error: missing Supabase credentials' });
+  }
+
+  const weatherCap = resolveDailyCap(process.env.WEATHER_DAILY_CAP, DEFAULT_WEATHER_DAILY_CAP);
+  const globalCap = await consumeProviderDailyCap(
+    createServiceRoleClient(supabaseUrl, supabaseServiceRoleKey),
+    'weather',
+    weatherCap,
+  );
+  if (globalCap !== 'ok') {
+    return res.status(503).json({ error: 'Weather service temporarily unavailable' });
   }
 
   // ---------- Durable per-user quota ----------

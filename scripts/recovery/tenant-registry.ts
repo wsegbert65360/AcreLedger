@@ -399,6 +399,16 @@ export const TENANT_REGISTRY: TenantTable[] = [
     notes: "Weather-proxy quota. Restore only for the farm's user IDs.",
   },
   {
+    schema: "usage_private",
+    table: "provider_daily_usage",
+    ownership: "global",
+    hasDeletedAt: false,
+    restoreOrder: 0,
+    primaryKeys: ["provider", "day"],
+    includeInTenantBundle: false,
+    notes: "Global weather/AI daily spend counters. Infrastructure; never include in a single-farm bundle.",
+  },
+  {
     schema: "public",
     table: "billing_webhook_events",
     ownership: "global",

@@ -9,7 +9,7 @@ Each successful run writes one encrypted archive to the owner's personal Drive f
 - Database roles, public/application schema, and COPY-formatted data
 - Auth users and identities (password hashes included for full-project recovery)
 - Storage metadata plus actual Storage object bytes
-- Private operational schemas (`ai_assistant_private`, `weather_proxy_private`)
+- Private operational schemas (`ai_assistant_private`, `weather_proxy_private`, `usage_private`)
 - Soft-deleted rows
 - SHA-256 checksums and a non-PII manifest
 

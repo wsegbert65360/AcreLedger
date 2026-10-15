@@ -2,12 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authGetUser = vi.fn();
 const consumeRateLimit = vi.fn();
+const incrementUsage = vi.fn();
+const createClient = vi.fn();
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: { getUser: authGetUser },
-    rpc: consumeRateLimit,
-  })),
+  createClient: (...args: unknown[]) => createClient(...args),
 }));
 
 import handler from '../../api/weather-proxy';
@@ -57,10 +56,22 @@ describe('weather proxy', () => {
   beforeEach(() => {
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
     process.env.VISUALCROSSING_API_KEY = 'weather-key';
     process.env.ALLOWED_ORIGINS = 'https://acreledger.example,capacitor://localhost';
+    delete process.env.WEATHER_DAILY_CAP;
     authGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
     consumeRateLimit.mockResolvedValue({ data: true, error: null });
+    incrementUsage.mockResolvedValue({ data: true, error: null });
+    createClient.mockImplementation((_url: string, key: string) => {
+      if (key === 'service-role-key') {
+        return { rpc: incrementUsage };
+      }
+      return {
+        auth: { getUser: authGetUser },
+        rpc: consumeRateLimit,
+      };
+    });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -147,6 +158,37 @@ describe('weather proxy', () => {
     expect(state.status).toBe(429);
     expect(headers.get('Retry-After')).toBe('60');
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 without calling upstream when the global daily cap is exceeded', async () => {
+    incrementUsage.mockResolvedValue({ data: false, error: null });
+    const { state, headers } = await invoke();
+    expect(state.status).toBe(503);
+    expect(headers.get('Cache-Control')).toBe('no-store');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(consumeRateLimit).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 when the global daily cap RPC fails', async () => {
+    incrementUsage.mockResolvedValue({ data: null, error: { message: 'rpc unavailable' } });
+    const { state } = await invoke();
+    expect(state.status).toBe(503);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sets Cache-Control no-store on weather responses', async () => {
+    const { state, headers } = await invoke();
+    expect(state.status).toBe(200);
+    expect(headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('passes the default weather daily cap to the increment RPC', async () => {
+    const { state } = await invoke();
+    expect(state.status).toBe(200);
+    expect(incrementUsage).toHaveBeenCalledWith('increment_provider_daily_usage', {
+      p_provider: 'weather',
+      p_cap: 2000,
+    });
   });
 
   it('fails closed when the durable quota cannot be checked', async () => {

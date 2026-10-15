@@ -768,6 +768,45 @@ try {
 
   await db.exec('DROP FUNCTION IF EXISTS public.review_02_m4_definer_probe()');
 
+  const finalizeRows = await privileges('finalize_ai_assistant_turn');
+  assert.equal(finalizeRows.length, 1, 'finalize_ai_assistant_turn must exist');
+  assert.equal(finalizeRows[0].anon, false, 'anon must not EXECUTE finalize_ai_assistant_turn');
+  assert.equal(finalizeRows[0].authenticated, false, 'authenticated must not EXECUTE finalize_ai_assistant_turn');
+  assert.equal(finalizeRows[0].public, false, 'PUBLIC must not EXECUTE finalize_ai_assistant_turn');
+  assert.equal(finalizeRows[0].service_role, true, 'service_role must EXECUTE finalize_ai_assistant_turn');
+
+  const incrementRows = await privileges('increment_provider_daily_usage');
+  assert.equal(incrementRows.length, 1, 'increment_provider_daily_usage must exist');
+  assert.equal(incrementRows[0].anon, false);
+  assert.equal(incrementRows[0].authenticated, false);
+  assert.equal(incrementRows[0].public, false);
+  assert.equal(incrementRows[0].service_role, true);
+
+  const historyRows = await privileges('load_ai_assistant_history');
+  assert.equal(historyRows.length, 1, 'load_ai_assistant_history must exist');
+  assert.equal(historyRows[0].anon, false);
+  assert.equal(historyRows[0].authenticated, false);
+  assert.equal(historyRows[0].public, false);
+  assert.equal(historyRows[0].service_role, true);
+
+  assert.equal(
+    await hasTablePriv('authenticated', 'ai_assistant_private.turns', 'UPDATE'),
+    false,
+    'authenticated must not UPDATE ai_assistant_private.turns',
+  );
+
+  await db.exec('SET ROLE service_role');
+  try {
+    const first = (await db.query(`SELECT public.increment_provider_daily_usage('weather', 2) AS ok`)).rows[0].ok;
+    const second = (await db.query(`SELECT public.increment_provider_daily_usage('weather', 2) AS ok`)).rows[0].ok;
+    const third = (await db.query(`SELECT public.increment_provider_daily_usage('weather', 2) AS ok`)).rows[0].ok;
+    assert.equal(first, true);
+    assert.equal(second, true);
+    assert.equal(third, false, 'global cap must reject the request that would exceed p_cap');
+  } finally {
+    await db.exec('RESET ROLE');
+  }
+
   console.log('Review-02 access checks passed: signup metadata ignored, legacy policy and view absent, client execute revoked, service_role retains rollup, M3 same-farm FKs, M4 client table privileges revoked, new DEFINER functions deny anon EXECUTE.');
 } finally {
   await db.close();
