@@ -9,6 +9,7 @@ import { native } from '@/lib/native';
 import { toast } from 'sonner';
 import { Cloud, CloudDownload, Clock3, User, Thermometer, Wind, FlaskConical, StickyNote, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
+import { roundWeatherLatLng } from '@/lib/weatherCoords';
 import { WeatherService } from '@/services/WeatherService';
 import { toLocalIsoDate } from '@/utils/dates';
 
@@ -80,9 +81,10 @@ export default function CustomSprayModal({ field, open, onClose, initialData, mo
 
         setIsRecoveringWeather(true);
         try {
+            const { lat, lng } = roundWeatherLatLng(field.lat, field.lng);
             const weather = await WeatherService.fetchHistoricalConditions(
-                field.lat,
-                field.lng,
+                lat,
+                lng,
                 date,
                 applicationTime,
             );

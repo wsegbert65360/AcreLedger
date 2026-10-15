@@ -38,6 +38,8 @@ export async function askAcreLedger(
   history: AiHistoryTurn[] = [],
   signal?: AbortSignal,
 ): Promise<AiAnswer> {
+  // The server loads prior turns itself and ignores client history.
+  void history;
   const url = resolveAiAssistantUrl();
   const res = await fetch(url, {
     method: 'POST',
@@ -45,7 +47,7 @@ export async function askAcreLedger(
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ question, viewingSeason, history }),
+    body: JSON.stringify({ question, viewingSeason }),
     signal,
   });
 
@@ -63,7 +65,9 @@ export async function askAcreLedger(
       && typeof (payload as { error: unknown }).error === 'string'
       ? (payload as { error: string }).error
       : 'The assistant is unavailable right now.';
-    throw new Error(message);
+    const error = new Error(message) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
   }
 
   if (

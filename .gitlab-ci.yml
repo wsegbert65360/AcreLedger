@@ -58,6 +58,7 @@ build:
       when: never
     - when: on_success
   script:
+    - npm run verify:no-secret-in-bundle
     - npm run build
 
 codemagic_nightly:

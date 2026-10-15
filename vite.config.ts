@@ -7,10 +7,24 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { capacitorSupabaseEnvError } from "./scripts/ci/capacitorSupabaseEnv";
 
+// Duplicated from src/lib/weatherBuildConfig.ts. tsconfig.node.json includes
+// only this file, so the capacitor gate cannot import the tested helper.
+function assertCapacitorWeatherProxy(mode: string, proxyUrl: string | undefined): void {
+  if (mode !== "capacitor") return;
+  const cleaned = (proxyUrl ?? "").trim().replace(/^['"]|['"]$/g, "");
+  if (!cleaned) {
+    throw new Error(
+      "Capacitor build requires VITE_WEATHER_PROXY_URL. Do not ship VITE_VISUALCROSSING_KEY in an App Store or native bundle.",
+    );
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  assertCapacitorWeatherProxy(mode, env.VITE_WEATHER_PROXY_URL);
   if (mode === "capacitor") {
-    const supabaseEnvError = capacitorSupabaseEnvError(loadEnv(mode, process.cwd(), "VITE_"));
+    const supabaseEnvError = capacitorSupabaseEnvError(env);
     if (supabaseEnvError) throw new Error(supabaseEnvError);
   }
 

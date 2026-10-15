@@ -137,7 +137,10 @@ export function Auth({
                     toast.success('Password updated.');
                     navigate('/', { replace: true });
                 } else {
-                    const { error } = await supabase.auth.signUp({
+                    // Signup always lands on "check your email". Production
+                    // Confirm email in the Supabase Auth dashboard is an owner
+                    // toggle and is not flipped by this change.
+                    const { data, error } = await supabase.auth.signUp({
                         email,
                         password,
                         ...(Capacitor.isNativePlatform() ? {
@@ -145,6 +148,9 @@ export function Auth({
                         } : {}),
                     });
                     if (error) throw error;
+                    if (data?.session) {
+                        await supabase.auth.signOut();
+                    }
                     handleModeChange('verification_sent');
                 }
             } else {

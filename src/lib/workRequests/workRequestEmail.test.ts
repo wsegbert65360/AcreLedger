@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildWorkRequestMailto, buildMailtoUrl, workTypeLabel, farmNamesForRequest } from './workRequestEmail';
+import { buildWorkRequestMailto, buildMailtoUrl, workTypeLabel, farmNamesForRequest, providerEmailForSave, MAX_MAILTO_URL_LENGTH, MAX_WORK_REQUEST_EMAIL_BODY } from './workRequestEmail';
 import type { WorkRequest } from '@/types/farm';
 
 function makeRequest(overrides: Partial<WorkRequest> = {}): WorkRequest {
@@ -141,6 +141,34 @@ describe('buildWorkRequestMailto', () => {
     const { to } = buildWorkRequestMailto(makeRequest());
     expect(to).toBe('applicator@acme.com');
   });
+
+  it('joins the body with CRLF and caps a long note', () => {
+    const mailto = buildWorkRequestMailto(makeRequest({ notes: 'Spray '.repeat(800) }));
+    expect(mailto.body).toContain('\r\n');
+    expect(mailto.body.split('\r\n').every((line) => !line.includes('\n'))).toBe(true);
+    expect(mailto.body.length).toBeLessThanOrEqual(MAX_WORK_REQUEST_EMAIL_BODY);
+    expect(mailto.body).not.toMatch(/[ \t]$/);
+    expect(encodeURIComponent(mailto.body).length).toBeLessThanOrEqual(MAX_MAILTO_URL_LENGTH);
+    expect(buildMailtoUrl(mailto).length).toBeLessThanOrEqual(MAX_MAILTO_URL_LENGTH);
+  });
+
+  it('caps encodeURIComponent(body) so the mailto URL stays under 1800 chars', () => {
+    const mailto = buildWorkRequestMailto(makeRequest({ notes: 'é'.repeat(2000) }));
+    const encodedBody = encodeURIComponent(mailto.body);
+    const url = buildMailtoUrl(mailto);
+    expect(encodedBody.length).toBeLessThanOrEqual(MAX_MAILTO_URL_LENGTH);
+    expect(url.length).toBeLessThanOrEqual(MAX_MAILTO_URL_LENGTH);
+    expect(encodedBody.length).toBeGreaterThan(mailto.body.length);
+  });
+});
+
+describe('providerEmailForSave', () => {
+  it('trims a real address and rejects a malformed one', () => {
+    expect(providerEmailForSave('  applicator@acme.com ')).toEqual({ ok: true, email: 'applicator@acme.com' });
+    expect(providerEmailForSave('')).toEqual({ ok: true, email: undefined });
+    expect(providerEmailForSave('not-an-email').ok).toBe(false);
+    expect(providerEmailForSave('a@b').ok).toBe(false);
+  });
 });
 
 describe('buildMailtoUrl', () => {
@@ -148,5 +176,15 @@ describe('buildMailtoUrl', () => {
     const url = buildMailtoUrl({ to: 'a@b.com', subject: 'Hello There', body: 'Line 1\nLine 2' });
     expect(url.startsWith('mailto:a%40b.com?subject=')).toBe(true);
     expect(url).toContain('body=Line%201');
+  });
+
+  it('truncates a long encoded body so the URL stays under the cap', () => {
+    const url = buildMailtoUrl({
+      to: 'applicator@acme.com',
+      subject: 'Work Request – Spraying – Home Farm',
+      body: `${'Spray the west forty. '.repeat(400)}\r\n${'é'.repeat(400)}`,
+    });
+    expect(url.length).toBeLessThanOrEqual(MAX_MAILTO_URL_LENGTH);
+    expect(url.startsWith('mailto:applicator%40acme.com?subject=')).toBe(true);
   });
 });

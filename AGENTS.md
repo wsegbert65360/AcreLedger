@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-14 (Review-10: native privacy, CI gates, CSP and Android back behavior).
+> **Last updated:** 2026-10-15 (Review-09 owner decisions: global provider caps, server-side Ask the Book history, security headers).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-15** — Review-09 owner decisions: signup always shows check-your-email; weather and Ask the Book share a global UTC daily spend cap (`WEATHER_DAILY_CAP` default 2000, `AI_DAILY_CAP` default 500) returning HTTP 503; Ask the Book history is loaded from `ai_assistant_private.turns` and client history is ignored; `finalize_ai_assistant_turn` is service_role-only; Vercel sends security headers including CSP-Report-Only.
 - **2026-10-14** — Review-10 adds camera/photo-library usage strings, CSP fetch-origin checks, overlay-aware Android back handling, GitHub quality checks and all eleven database-integrity suites. Nightly native builds verify the requested SHA; both platforms reject placeholder Supabase bundles.
+- **2026-10-13** — Native and other non-dev builds do not bundle `VITE_VISUALCROSSING_KEY`. Capacitor requires `VITE_WEATHER_PROXY_URL`; CodeMagic fails the build when that URL is missing or when the vendor key appears in `dist/assets`. The weather proxy quota is 30 requests per minute and 500 per rolling 24 hours.
 - **2026-10-12** — FSA split/variety rows use planting acres apportioned across CLUs; the historical July acreage backfills are guarded one-shots, never repair operations. Tract reimports reconcile assignment acres and confirm removed CLUs before soft-delete.
 - **2026-10-12** — After `20261012020000_db_access_review_02_m3_m4.sql`, new `public` tables, functions, and sequences inherit no client grants (including no PUBLIC `EXECUTE` on functions). Every new table or function needs an explicit `GRANT` to `authenticated` and/or `service_role`.
-- **2026-10-09** — Capacitor 6 → 8.5.3 upgrade: bumped core/cli/ios/android to 8.5.3, sqlite to 8.1.1, secure-storage to 0.13.0, speech-recognition to 7.0.1, and all official Capacitor plugins to their 8.x versions. Android: minSdk 24, AGP 8.13.0, Gradle 8.14.3, androidx versions per plan. Android insets use Option A: removed custom MainActivity.java handler, configured SystemBars insetsHandling: ‘native’ with initialViewportFitValueHint: ‘cover’ (the app reads env(safe-area-inset-*), not the vars that ‘css’ injects). Codemagic Java 17 → 21. CapacitorSQLite and secure-storage encryption flags preserved. iOS validation and physical-device tests pending. Speech-recognition 7.0.1 compilation and device test unverified.
-- **2026-10-07** — Added pilot-gated equipment, maintenance schedules, and service/repair logs. Meter updates, unit changes, maintenance logging, and cascade soft-deletes use tenant-checked atomic RPCs and replay as one offline envelope. The three tables are included in customer backup/restore, owner recovery, test-data, and Ask the Book registries.
 
 ## Contents
 
@@ -250,6 +250,8 @@ Canonical detail: [BLUEPRINT → Ask the Book Read Registry](./BLUEPRINT.md#ask-
 - Voice uses on-device/OS speech through `src/lib/speech.ts` and `src/hooks/useAskVoice.ts`; only text reaches the server.
 - **Intentional product decision:** no persistent AI disclaimer beneath answers. Do not reintroduce one unless the product owner reverses the decision (canonical statement in BLUEPRINT).
 - Keep function tests outside `api/`. When the registry or endpoint changes, run the assistant unit tests, live RLS integration coverage when credentials exist, `npm run typecheck:api`, and a Vercel build.
+- Ask the Book conversation history is loaded server-side from `ai_assistant_private.turns` for the current user and farm. The handler ignores any `history` the client sends. `finalize_ai_assistant_turn` is executable only by `service_role`.
+- Weather proxy and Ask the Book also share a global UTC daily spend cap (`usage_private.provider_daily_usage`, env `WEATHER_DAILY_CAP` / `AI_DAILY_CAP`, defaults 2000 / 500). Exhaustion or RPC failure returns HTTP 503. Per-user quotas still return 429.
 
 ### Grain Movement
 
@@ -368,6 +370,7 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 - Native credentials and encryption material go through `secureStorage` (Keychain/Keystore).
 - Keep the native recovery scheme `com.wsegbert.acreledger://auth/recovery`, the Supabase redirect allowlist, `Info.plist`, the app listener, and recovery tests synchronized. Never accept arbitrary custom-scheme hosts or paths, and never establish a session from raw `access_token`/`refresh_token` values in the URL: the native listener accepts a PKCE `code` (`exchangeCodeForSession`) or a `token_hash` only when `type=recovery` (`verifyOtp`).
 - On `/auth?mode=recovery` the browser client must leave `detectSessionInUrl` off so the one-time PKCE code is exchanged only by `establishWebPasswordRecoverySession`. If that exchange fails or returns no session, reject it — do not treat an existing `getSession()` as this reset. A missing PKCE verifier tells the user to open the link in the same browser or app that requested the reset. Other URLs, including sign-in and sign-up, keep auto-detect.
+- Signup always shows the check-your-email screen. Production Confirm email in the Supabase Auth dashboard is an owner toggle; this repository does not flip it.
 
 ### CI/CD (CodeMagic)
 
@@ -382,6 +385,7 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 - Environment variable group `appstore` contains `VITE_*` build secrets and ASC API credentials.
 - Confirmed working TestFlight builds require `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `APP_STORE_CONNECT_PRIVATE_KEY`, `APP_STORE_CONNECT_ISSUER_ID`, and `APP_STORE_CONNECT_KEY_ID` in the `appstore` group.
 - `VITE_RAIN_API_URL` is optional because `RainService` falls back to `https://rain-api.vercel.app` when the variable is missing. If configured, it must be a clean HTTPS URL; do not include quotes, `KEY=`, commas, CLI commands, or duplicate `/rain` path suffixes.
+- Native builds require HTTPS `VITE_WEATHER_PROXY_URL`. Do not set `VITE_VISUALCROSSING_KEY` in the `appstore` group. `codemagic.yaml` fails the Capacitor build when the proxy URL is missing and when that key appears in `dist/assets`.
 - `VITE_SUPABASE_URL` must be the raw HTTPS project URL, e.g. `https://<project-ref>.supabase.co`; do not include quotes, `KEY=`, commas, CLI commands, or the Postgres connection string in Codemagic values.
 - Capacitor iOS builds depend on `npm run cap:build` using `vite build --mode capacitor`; keep `base: "./"` for capacitor mode so bundled JS/CSS load from `capacitor://localhost`.
 - Native builds include `capacitor-secure-storage-plugin`; keep the lockfile, CocoaPods resolution, and iOS Keychain-backed credential migration aligned.
@@ -510,9 +514,9 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 
 ## Weather and Rainfall Rules
 
-- Weather uses Visual Crossing, routed through `WeatherService.buildWeatherUrl`. In dev (or Capacitor builds with `VITE_VISUALCROSSING_KEY` set and no proxy), it calls the Visual Crossing API directly; otherwise it goes through the `/api/weather-proxy` Vercel Function. Production proxy requests require a Supabase bearer token, validated server-side with `auth.getUser(token)`. `WeatherService` resolves the proxy base via `resolveWeatherProxyUrl()`.
-- `VITE_WEATHER_PROXY_URL` (optional) overrides the proxy base for Capacitor builds. If set, it must be HTTPS (or `localhost`/`127.0.0.1`), have no surrounding quotes, and not already include the `/api/weather-proxy` path suffix — `WeatherService` appends it. A Capacitor build with neither `VITE_VISUALCROSSING_KEY` nor `VITE_WEATHER_PROXY_URL` throws at URL-build time rather than failing silently. `WeatherService.cleanEnvValue` strips stray quotes/whitespace from these env vars at load.
-- The proxy's server-only variables, exact-origin CORS allowlist, method and endpoint allowlists, timeout, and per-user quota (`429` with `Retry-After` on exhaustion, `503` fail-closed on RPC failure) are specified in [BLUEPRINT → Weather Proxy](./BLUEPRINT.md#weather-proxy-apiweather-proxyts). Never use a wildcard origin. Apply the rate-limit migration before deploying proxy code, and redeploy after any Vercel variable change.
+- Weather uses Visual Crossing, routed through `WeatherService.buildWeatherUrl`. Local `npm run dev` may call Visual Crossing directly when `VITE_VISUALCROSSING_KEY` is set. Every non-dev build, including Capacitor (`vite build --mode capacitor`), returns an empty bundled key so the vendor key is not inlined. Production web and native builds go through the `/api/weather-proxy` Vercel Function. Production proxy requests require a Supabase bearer token, validated server-side with `auth.getUser(token)`. `WeatherService` resolves the proxy base via `resolveWeatherProxyUrl()`.
+- `VITE_WEATHER_PROXY_URL` is required for Capacitor and other native builds. `vite.config.ts` fails a `capacitor` mode build when it is missing, and `codemagic.yaml` does the same before the native bundle step. If set, the URL must be HTTPS (or `localhost`/`127.0.0.1`), have no surrounding quotes, and not already include the `/api/weather-proxy` path suffix — `WeatherService` appends it. `cleanEnvValue` in `src/lib/weatherBuildConfig.ts` strips stray quotes/whitespace. Do not put `VITE_VISUALCROSSING_KEY` in the CodeMagic `appstore` group or any App Store/native build.
+- The proxy's server-only variables, exact-origin CORS allowlist, method and endpoint allowlists, timeout, and per-user quota are specified in [BLUEPRINT → Weather Proxy](./BLUEPRINT.md#weather-proxy-apiweather-proxyts). The per-user quota is 30 calls per authenticated user per one-minute window and 500 calls per rolling 24 hours (`20260928120000_add_weather_proxy_daily_rate_limit.sql`). Exhaustion returns `429` with `Retry-After`; database/RPC failure fails closed with `503`. A separate global UTC daily spend cap (`WEATHER_DAILY_CAP`, default 2000) also fails closed with `503`. Never use a wildcard origin. Apply the rate-limit migration before deploying proxy code, and redeploy after any Vercel variable change. Responses set `Cache-Control: no-store`.
 - Rainfall uses the Rain API with IEM Stage IV radar plus Supabase RPC merge.
 - Rainfall lookups should use coordinates when available so the radar merge remains active.
 - Lat/lng should be rounded to 4 decimals for radar grid consistency.

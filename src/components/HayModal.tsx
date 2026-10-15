@@ -10,6 +10,7 @@ import { native } from '@/lib/native';
 import { toast } from 'sonner';
 import { Tractor, Thermometer, Cloud, Hash, Layers, Loader2 } from 'lucide-react';
 import { getLatestForField } from '@/lib/utils';
+import { formatWeatherLatLng } from '@/lib/weatherCoords';
 import { WeatherService } from '@/services/WeatherService';
 import { toLocalIsoDate } from '@/utils/dates';
 
@@ -61,7 +62,7 @@ export default function HayModal({ field, open, onClose, initialData, mode = 'ed
     useEffect(() => {
         if (open && (!initialData || isDuplicate) && field.lat != null && field.lng != null) {
             setLoadingWeather(true);
-            WeatherService.fetchCurrentWeather(`${field.lat},${field.lng}`).then(w => {
+            WeatherService.fetchCurrentWeather(formatWeatherLatLng(field.lat, field.lng)).then(w => {
                 if (w) {
                     setTemp(w.temp.toString());
                     setConditions(`${w.wind}mph ${w.windDirection}, ${w.humidity}% humidity`);

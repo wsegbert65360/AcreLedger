@@ -47,9 +47,13 @@ describe("tenant registry", () => {
       expect(keys.has(key), `${key} missing from registry`).toBe(true);
     }
     expect(keys.has("public.billing_webhook_events")).toBe(true);
+    expect(keys.has("usage_private.provider_daily_usage")).toBe(true);
     const billing = TENANT_REGISTRY.find((entry) => entry.table === "billing_webhook_events");
     expect(billing?.ownership).toBe("global");
     expect(billing?.includeInTenantBundle).toBe(false);
+    const providerUsage = TENANT_REGISTRY.find((entry) => entry.table === "provider_daily_usage");
+    expect(providerUsage?.ownership).toBe("global");
+    expect(providerUsage?.includeInTenantBundle).toBe(false);
     const mrmsRuns = TENANT_REGISTRY.find((entry) => entry.table === "mrms_ingestion_runs");
     expect(mrmsRuns?.ownership).toBe("global");
     expect(mrmsRuns?.includeInTenantBundle).toBe(false);

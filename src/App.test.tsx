@@ -414,11 +414,27 @@ describe('signed-out routing (ticket C)', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Sign Up' }));
 
+    expect(await screen.findByRole('heading', { name: 'Check Your Email' })).toBeInTheDocument();
     expect(
       await screen.findByText(
         'Next: name your farm, add a field (by hand is fine), and log a planting. You can import FSA tracts later.'
       )
     ).toBeInTheDocument();
+  });
+
+  it('signs out a session returned at signup so the check-email screen is shown', async () => {
+    auth.signUp.mockResolvedValue({
+      data: { session: { access_token: 'unconfirmed-session' }, user: { id: 'user-1' } },
+      error: null,
+    });
+    navigate('/auth?mode=signup');
+    renderApp();
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'farmer@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenough1' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'longenough1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign Up' }));
+    expect(await screen.findByRole('heading', { name: 'Check Your Email' })).toBeInTheDocument();
+    expect(auth.signOut).toHaveBeenCalled();
   });
 
   it('sends a reset code and shows the address on the verification screen', async () => {

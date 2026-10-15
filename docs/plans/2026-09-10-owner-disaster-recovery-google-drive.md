@@ -121,6 +121,7 @@ Before building automation:
    - `storage`
    - `ai_assistant_private`
    - `weather_proxy_private`
+   - `usage_private`
    - `supabase_migrations`
    - extension-owned schemas that must be recreated rather than dumped
 4. Inventory enabled extensions, publications, Cron jobs, database webhooks, Auth configuration, Storage bucket configuration, and Edge Functions.

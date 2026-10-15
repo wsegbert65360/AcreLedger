@@ -62,11 +62,19 @@ workflows:
           npm run test
           npm run test:db-integrity
 
+      - name: Verify Visual Crossing key is not bundled
+        script: |
+          npm run verify:no-secret-in-bundle
+
       - name: Build web bundle and sync to Android
         script: |
           case "$VITE_AI_ASSISTANT_URL" in
             https://*) ;;
             *) echo "VITE_AI_ASSISTANT_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
+          esac
+          case "$VITE_WEATHER_PROXY_URL" in
+            https://*) ;;
+            *) echo "VITE_WEATHER_PROXY_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
           esac
           npm run build -- --mode capacitor
           npx cap sync android
@@ -80,6 +88,10 @@ workflows:
           fi
           if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
             echo "Capacitor bundle is missing the Ask the book endpoint" >&2
+            exit 1
+          fi
+          if [ -n "$VITE_VISUALCROSSING_KEY" ] && grep -RFqs "$VITE_VISUALCROSSING_KEY" dist/assets; then
+            echo "Capacitor bundle contains VITE_VISUALCROSSING_KEY" >&2
             exit 1
           fi
           node -e '
@@ -233,11 +245,19 @@ workflows:
           npm run test
           npm run test:db-integrity
 
+      - name: Verify Visual Crossing key is not bundled
+        script: |
+          npm run verify:no-secret-in-bundle
+
       - name: Build web bundle and sync to iOS
         script: |
           case "$VITE_AI_ASSISTANT_URL" in
             https://*) ;;
             *) echo "VITE_AI_ASSISTANT_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
+          esac
+          case "$VITE_WEATHER_PROXY_URL" in
+            https://*) ;;
+            *) echo "VITE_WEATHER_PROXY_URL must be a non-empty HTTPS URL" >&2; exit 1 ;;
           esac
           npm run cap:build
           if ! grep -Rqs "rtzqswpmhlbrbxjwyywl.supabase.co" dist/assets; then
@@ -250,6 +270,10 @@ workflows:
           fi
           if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
             echo "Capacitor bundle is missing the Ask the book endpoint" >&2
+            exit 1
+          fi
+          if [ -n "$VITE_VISUALCROSSING_KEY" ] && grep -RFqs "$VITE_VISUALCROSSING_KEY" dist/assets; then
+            echo "Capacitor bundle contains VITE_VISUALCROSSING_KEY" >&2
             exit 1
           fi
           node -e '

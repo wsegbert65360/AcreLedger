@@ -37,6 +37,7 @@ export const DEFAULT_APP_DATA_SCHEMAS = [
   "public",
   "ai_assistant_private",
   "weather_proxy_private",
+  "usage_private",
 ] as const;
 
 export interface DumpSpec {

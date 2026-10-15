@@ -14,6 +14,46 @@ export function workTypeLabel(workType: WorkType): string {
   return WORK_TYPE_LABELS[workType] ?? 'Work';
 }
 
+/** Mailto URLs stay under this many encoded characters (client/OS limits). */
+export const MAX_MAILTO_URL_LENGTH = 1800;
+export const MAX_WORK_REQUEST_EMAIL_BODY = MAX_MAILTO_URL_LENGTH;
+
+function truncateToEncodedLength(value: string, maxEncodedLength: number): string {
+  if (maxEncodedLength <= 0) return '';
+  if (encodeURIComponent(value).length <= maxEncodedLength) return value.trimEnd();
+
+  let lo = 0;
+  let hi = value.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (encodeURIComponent(value.slice(0, mid)).length <= maxEncodedLength) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return value.slice(0, lo).trimEnd();
+}
+
+function capMailtoBody(body: string, to: string, subject: string): string {
+  const prefix = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=`;
+  const budget = Math.max(0, MAX_MAILTO_URL_LENGTH - prefix.length);
+  return truncateToEncodedLength(body, budget);
+}
+
+const PROVIDER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Empty is allowed. A present address must be a single trimmed email. */
+export function providerEmailForSave(
+  value: string | null | undefined,
+): { ok: true; email: string | undefined } | { ok: false } {
+  if (value == null) return { ok: true, email: undefined };
+  const trimmed = value.trim();
+  if (!trimmed) return { ok: true, email: undefined };
+  if (trimmed.length > 254 || !PROVIDER_EMAIL_RE.test(trimmed)) return { ok: false };
+  return { ok: true, email: trimmed };
+}
+
 /** Sorted, de-duplicated list of farm names referenced by the request's fields. */
 export function farmNamesForRequest(request: WorkRequest): string[] {
   const names = new Set(request.fields.map(f => f.farmName).filter(Boolean));
@@ -85,10 +125,21 @@ export function buildWorkRequestMailto(request: WorkRequest): WorkRequestMailto 
   lines.push('');
   lines.push('Field boundaries, locations, maps, roads, and acreages should be verified before application.');
 
-  return {
-    to: request.providerEmail || '',
+  const to = request.providerEmail?.trim() || '';
+  const body = capMailtoBody(
+    lines
+      .join('\n')
+      .replace(/\r\n/g, '\n')
+      .replace(/\n/g, '\r\n')
+      .trim(),
+    to,
     subject,
-    body: lines.join('\n'),
+  );
+
+  return {
+    to,
+    subject,
+    body,
   };
 }
 
@@ -97,8 +148,8 @@ export function buildWorkRequestMailto(request: WorkRequest): WorkRequestMailto 
  * web where attachments cannot be added programmatically.
  */
 export function buildMailtoUrl(mailto: WorkRequestMailto): string {
+  const body = capMailtoBody(mailto.body, mailto.to, mailto.subject);
   const to = encodeURIComponent(mailto.to);
   const subject = encodeURIComponent(mailto.subject);
-  const body = encodeURIComponent(mailto.body);
-  return `mailto:${to}?subject=${subject}&body=${body}`;
+  return `mailto:${to}?subject=${subject}&body=${encodeURIComponent(body)}`;
 }

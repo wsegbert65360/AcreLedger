@@ -6,6 +6,7 @@ import { mapWorkRequestToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import { generateRequestNumber } from '@/lib/workRequests/requestNumber';
+import { providerEmailForSave } from '@/lib/workRequests/workRequestEmail';
 
 interface UseWorkRequestsArgs {
   farm_id: string | null;
@@ -29,6 +30,11 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
       toast.error('No farm selected.');
       return false;
     }
+    const providerEmail = providerEmailForSave(r.providerEmail);
+    if (!providerEmail.ok) {
+      toast.error('Enter a valid provider email.');
+      return false;
+    }
     if (isMutating.current) {
       toast.error('Another change is still saving. Please wait a moment and try again.');
       return false;
@@ -42,6 +48,7 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
     const requestNumber = r.requestNumber || generateRequestNumber(workRequests, timestamp);
     const newRecord: WorkRequest = {
       ...r,
+      providerEmail: providerEmail.email,
       requestNumber,
       id,
       timestamp,
@@ -159,13 +166,22 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
       toast.error('No farm selected.');
       return false;
     }
+    const providerEmail = providerEmailForSave(r.providerEmail);
+    if (!providerEmail.ok) {
+      toast.error('Enter a valid provider email.');
+      return false;
+    }
     if (isMutating.current) {
       toast.error('Another change is still saving. Please wait a moment and try again.');
       return false;
     }
     isMutating.current = true;
 
-    const stamped: WorkRequest = { ...r, updatedAt: new Date().toISOString() };
+    const stamped: WorkRequest = {
+      ...r,
+      providerEmail: providerEmail.email,
+      updatedAt: new Date().toISOString(),
+    };
 
     let mapped: ReturnType<typeof mapWorkRequestToDb>;
     try {

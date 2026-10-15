@@ -2,12 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authGetUser = vi.fn();
 const consumeRateLimit = vi.fn();
+const incrementUsage = vi.fn();
+const createClient = vi.fn();
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: { getUser: authGetUser },
-    rpc: consumeRateLimit,
-  })),
+  createClient: (...args: unknown[]) => createClient(...args),
 }));
 
 import handler from '../../api/weather-proxy';
@@ -57,12 +56,25 @@ describe('weather proxy', () => {
   beforeEach(() => {
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_ANON_KEY = 'anon-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
     process.env.VISUALCROSSING_API_KEY = 'weather-key';
     process.env.ALLOWED_ORIGINS = 'https://acreledger.example,capacitor://localhost';
+    delete process.env.WEATHER_DAILY_CAP;
     authGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
     consumeRateLimit.mockResolvedValue({ data: true, error: null });
+    incrementUsage.mockResolvedValue({ data: true, error: null });
+    createClient.mockImplementation((_url: string, key: string) => {
+      if (key === 'service-role-key') {
+        return { rpc: incrementUsage };
+      }
+      return {
+        auth: { getUser: authGetUser },
+        rpc: consumeRateLimit,
+      };
+    });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
       status: 200,
       json: vi.fn().mockResolvedValue({ days: [] }),
     }));
@@ -140,29 +152,133 @@ describe('weather proxy', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('returns 429 without calling upstream when the quota is exhausted', async () => {
+  it('returns 429 without calling upstream or incrementing the global cap when the quota is exhausted', async () => {
     consumeRateLimit.mockResolvedValue({ data: false, error: null });
     const { state, headers } = await invoke();
     expect(state.status).toBe(429);
     expect(headers.get('Retry-After')).toBe('60');
+    expect(state.body).toEqual({ error: 'Weather request limit exceeded' });
+    expect(incrementUsage).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 without calling upstream when the global daily cap is exceeded', async () => {
+    incrementUsage.mockResolvedValue({ data: false, error: null });
+    const { state, headers } = await invoke();
+    expect(state.status).toBe(503);
+    expect(headers.get('Cache-Control')).toBe('no-store');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(consumeRateLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 503 when the global daily cap RPC fails', async () => {
+    incrementUsage.mockResolvedValue({ data: null, error: { message: 'rpc unavailable' } });
+    const { state } = await invoke();
+    expect(state.status).toBe(503);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sets Cache-Control no-store on weather responses', async () => {
+    const { state, headers } = await invoke();
+    expect(state.status).toBe(200);
+    expect(headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('passes the default weather daily cap to the increment RPC', async () => {
+    const { state } = await invoke();
+    expect(state.status).toBe(200);
+    expect(incrementUsage).toHaveBeenCalledWith('increment_provider_daily_usage', {
+      p_provider: 'weather',
+      p_cap: 2000,
+    });
   });
 
   it('fails closed when the durable quota cannot be checked', async () => {
     consumeRateLimit.mockResolvedValue({ data: null, error: { message: 'rpc unavailable' } });
     const { state } = await invoke();
     expect(state.status).toBe(503);
+    expect(incrementUsage).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('preserves upstream status and JSON', async () => {
+  it('maps an upstream non-2xx to 502 without forwarding the provider body', async () => {
     vi.mocked(fetch).mockResolvedValue({
+      ok: false,
       status: 429,
       json: vi.fn().mockResolvedValue({ message: 'upstream quota' }),
     } as unknown as Response);
     const { state } = await invoke();
-    expect(state.status).toBe(429);
-    expect(state.body).toEqual({ message: 'upstream quota' });
+    expect(state.status).toBe(502);
+    expect(state.body).toEqual({ error: 'Weather provider request failed' });
+    expect(JSON.stringify(state.body)).not.toContain('upstream quota');
+  });
+
+  it('checks the server Visual Crossing key before consuming quota', async () => {
+    delete process.env.VISUALCROSSING_API_KEY;
+    const { state } = await invoke();
+    expect(state.status).toBe(500);
+    expect(consumeRateLimit).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('accepts lat,lng, ZIP, and a short address, and rejects dot paths', async () => {
+    for (const location of ['40,-90', '40.12, -93.5', '72301', '72301-1234', 'New York']) {
+      const { state } = await invoke({ query: { location } });
+      expect(state.status, location).toBe(200);
+    }
+    for (const location of ['.', '..', '../secret', 'a/b', 'x'.repeat(81)]) {
+      const rejected = await invoke({ query: { location } });
+      expect(rejected.state.status, location).toBe(400);
+    }
+    expect(consumeRateLimit).toHaveBeenCalledTimes(5);
+  });
+
+  it('accepts southern-hemisphere high-precision coords up to 15 decimals', async () => {
+    const accepted = [
+      '-33.12345678,151.1',
+      '-33.123456789012345,151.1',
+      '-90,180',
+      '0,-180',
+    ];
+    for (const location of accepted) {
+      const { state } = await invoke({ query: { location } });
+      expect(state.status, location).toBe(200);
+    }
+    const rejected = [
+      '-33.1234567890123456,151.1',
+      '-90.0000001,0',
+      '-91,0',
+    ];
+    for (const location of rejected) {
+      const { state } = await invoke({ query: { location } });
+      expect(state.status, location).toBe(400);
+    }
+    expect(consumeRateLimit).toHaveBeenCalledTimes(accepted.length);
+  });
+
+  it('allowlists the include and elements values the app sends', async () => {
+    const current = await invoke({
+      query: {
+        location: '72301',
+        include: 'current,days',
+        elements: 'datetime,temp,humidity,windspeed,winddir,precip,precipprob',
+      },
+    });
+    expect(current.state.status).toBe(200);
+
+    const historical = await invoke({
+      query: {
+        location: '38.465385,-93.544197',
+        include: 'hours,current',
+        elements: 'temp,humidity,windspeed,winddir',
+      },
+    });
+    expect(historical.state.status).toBe(200);
+
+    const badInclude = await invoke({ query: { location: '72301', include: 'hours,alerts' } });
+    expect(badInclude.state.status).toBe(400);
+    const badElements = await invoke({ query: { location: '72301', elements: 'temp,alerts' } });
+    expect(badElements.state.status).toBe(400);
   });
 
   it('returns 504 when the upstream request times out', async () => {

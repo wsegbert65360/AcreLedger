@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-10-07 (pilot-gated equipment maintenance, atomic meter RPCs, offline replay, and companion registries).
+> **Last updated:** 2026-10-13 (weather proxy quota is 30/minute and 500/rolling 24h; native builds require the proxy and must not bundle the Visual Crossing key).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -21,11 +21,12 @@
 
 ## Recent Changes
 
-Keep the five most recent substantive entries, newest first; Git holds the full history.
+Keep substantive entries, newest first; Git holds the full history.
 Update **Last updated** when editing guidance. Update a section’s **Verified against code** note
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-13** — Weather proxy quota is 30 requests per minute and 500 per rolling 24 hours. Capacitor/native builds require `VITE_WEATHER_PROXY_URL` and must not ship `VITE_VISUALCROSSING_KEY`.
 - **2026-10-07** — Added the pilot-gated equipment and maintenance model. Meter writes, unit conversion, maintenance logging, and cascade soft-delete are tenant-checked atomic RPCs with one-envelope offline replay; companion backup, recovery, AI, and test-data registries include all three tables.
 - **2026-10-02** — Web password recovery turns `detectSessionInUrl` off only on `/auth?mode=recovery`, so the one-time PKCE code is exchanged once by the recovery handler. A failed exchange is rejected even when a session already exists. A missing verifier tells the user to use the same browser or app that requested the reset. Sign-in and sign-up keep auto-detect.
 - **2026-09-29** — Billing: period end read from subscription items, live-subscription checkout gate, first-subscription-only trial, customer reuse, request-fingerprinted idempotency key. Recovery deep link is PKCE-code-only. Sync replay handles an expired session. Code and tests changed in the same pass but were not run.
@@ -499,11 +500,13 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 Weather rainfall fallbacks use completed calendar days in the provider location's timezone (Yesterday / Last 3 days / Last 7 days), excluding today's mixed observation/forecast total. `rainfallBasis` switches labels to rolling hours only after a successful radar lookup. Missing fallback days and failed historical range lookups remain unavailable (`null`), not zero; range failures include `dataWarning`. WeatherBar uses the weather response's resolved coordinates for radar rainfall, never an unrelated first field. Explicit saved ZIP/coordinates take priority over field defaults on the weather page.
 
 ### Weather Proxy (`api/weather-proxy.ts`)
-Production web and configured Capacitor weather traffic uses an authenticated Vercel Function so the Visual Crossing key never reaches the client. `WeatherService` sends the current Supabase access token; the function validates it with `auth.getUser`, validates the requested timeline endpoint, location, and query allowlist, then safely builds the upstream request. Only `GET` and `OPTIONS` are supported, and the upstream request times out after 10 seconds.
+Production web and Capacitor weather traffic uses an authenticated Vercel Function so the Visual Crossing key never reaches the client. Capacitor and other native builds require `VITE_WEATHER_PROXY_URL` and must not bundle `VITE_VISUALCROSSING_KEY`; that key is for local `npm run dev` only. `WeatherService` sends the current Supabase access token; the function validates it with `auth.getUser`, validates the requested timeline endpoint, location, and query allowlist, then safely builds the upstream request. Only `GET` and `OPTIONS` are supported, and the upstream request times out after 10 seconds. Upstream non-2xx responses are returned as `502` without the provider body.
 
 The function requires the server-only Vercel variables `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VISUALCROSSING_API_KEY`, and `ALLOWED_ORIGINS`. CORS uses exact comma-separated origins and fails closed for requests carrying an unknown origin; deployed web aliases and `capacitor://localhost` must be listed explicitly. Environment changes require a new Vercel deployment.
 
-Per-user quotas are enforced by `consume_weather_proxy_request()` from migration `20260721211903_add_weather_proxy_rate_limit.sql`: 30 calls per authenticated user per fixed one-minute window. The counter table is isolated in the non-exposed `weather_proxy_private` schema. The public wrapper is `SECURITY DEFINER`, has an empty `search_path`, derives the user from `auth.uid()`, and is executable only by `authenticated` and `service_role`. Quota exhaustion returns `429`; database/RPC failure fails closed with `503`.
+Per-user quotas are enforced by `consume_weather_proxy_request()` from migration `20260928120000_add_weather_proxy_daily_rate_limit.sql` (it replaced the minute-only counter in `20260721211903_add_weather_proxy_rate_limit.sql`): 30 calls per authenticated user per fixed one-minute window, and at most 500 calls per rolling 24 hours. The counter table is isolated in the non-exposed `weather_proxy_private` schema. The public wrapper is `SECURITY DEFINER`, has an empty `search_path`, derives the user from `auth.uid()`, and is executable only by `authenticated` and `service_role`. Quota exhaustion returns `429`; database/RPC failure fails closed with `503`. A missing server `VISUALCROSSING_API_KEY` returns `500` before the quota RPC runs.
+
+A second, global UTC-day spend cap covers every weather-proxy caller together: `usage_private.provider_daily_usage` incremented by `increment_provider_daily_usage('weather', cap)`, executable only by `service_role`. The cap is `WEATHER_DAILY_CAP` (default 2000). Exhaustion or RPC failure returns HTTP `503`. Ask the Book uses the same table with provider `'ai'` and `AI_DAILY_CAP` (default 500). Weather and Ask the Book responses set `Cache-Control: no-store`.
 
 ### Weather Page (`/weather`)
 Full-page weather dashboard accessible by tapping the WeatherBar on the Index page. Provides agricultural weather intelligence beyond the summary bar.
@@ -836,7 +839,7 @@ The public tool surface consists of flexible full-farm tools (`farm_overview`, `
 
 The assistant remains read-only at every layer. It has no mutation tool, no restore path, no arbitrary RPC execution, and no client capable of bypassing RLS. `api/ai-assistant.ts` runs a bounded named-tool loop through OpenRouter: at most four tool-capable rounds, eight tool executions, 1,000 rows per database page, ten pages, 12,000 serialized tool-result characters, a 45-second handler abort, and one answer-only synthesis round after tool access ends. These limits prevent open-ended model-driven queries and partial aggregate answers.
 
-Ask the Book uses the database-backed `ai_assistant_private` quota/audit flow; local operational rows are retained for 30 days. The public wrappers derive identity from `auth.uid()`, use an empty `search_path`, and deny `PUBLIC`/`anon`; private operational data is not part of the farm read catalog or backup/restore. OpenRouter requests must keep `data_collection: "deny"` and `require_parameters: true`, and account-level prompt logging must stay disabled.
+Ask the Book uses the database-backed `ai_assistant_private` quota/audit flow; local operational rows are retained for 30 days. Prior turns are loaded server-side from `ai_assistant_private.turns` for the current user and farm; the handler ignores any `history` array the client sends. `finalize_ai_assistant_turn` is executable only by `service_role` and is invoked with the service-role client. The public wrappers use an empty `search_path` and deny `PUBLIC`/`anon`; private operational data is not part of the farm read catalog or backup/restore. OpenRouter requests must keep `data_collection: "deny"` and `require_parameters: true`, and account-level prompt logging must stay disabled.
 
 Model routing: each request names a primary model and sends OpenRouter's `models` fallback list containing the fallback model, so one request can continue when the primary is unavailable or rate-limited. If the response is still unavailable or rate-limited (HTTP 429, 502, 503, or matching error text), the same tool round retries once with the fallback model alone and no `models` array, without consuming another quota token. `AI_MODEL` overrides the primary only and does not remove the fallback unless the primary already is the fallback. The current model IDs are the `DEFAULT_PRIMARY_MODEL` and `FALLBACK_MODEL` constants in `api/ai-assistant.ts`; that file is authoritative, and these docs intentionally do not repeat the IDs.
 

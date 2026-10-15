@@ -54,6 +54,28 @@ describe('reportClientError', () => {
     expect(JSON.stringify(body)).not.toContain('secret-code');
   });
 
+  it('redacts key, password, secret, and authorization params, bearer tokens, emails, and phones', () => {
+    vi.stubEnv('VITE_ERROR_REPORTING_DSN', 'https://errors.example/ingest');
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    reportClientError({
+      source: 'window.onerror',
+      message: 'failed ?key=abc&password=hunter2&secret=s3&authorization=tok user farmer@example.com 555-123-4567',
+      stack: 'Authorization: Bearer eyJabc.def',
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain('abc');
+    expect(serialized).not.toContain('hunter2');
+    expect(serialized).not.toContain('s3');
+    expect(serialized).not.toContain('farmer@example.com');
+    expect(serialized).not.toContain('555-123-4567');
+    expect(serialized).not.toContain('eyJabc.def');
+    expect(body.message).toContain('[redacted-email]');
+    expect(body.message).toContain('[redacted-phone]');
+    expect(body.stack).toContain('Bearer [redacted]');
+  });
+
   it('rejects non-https endpoints and URLs that embed secrets', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
