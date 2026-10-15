@@ -50,7 +50,10 @@ interface FarmState {
   pendingSyncCount: number;
   /** Queued changes that exhausted their retries and need export or discard. */
   failedSyncCount: number;
+  /** Fail-closed until the offline queue can be read. Sign-out and deletion blocking keep using this. */
   syncQueueLocked: boolean;
+  /** True only after a queue read failed. Stays false while the first read is still pending. */
+  syncQueueReadFailed: boolean;
   lastSync: Date | null;
   retryFailedSyncChanges: () => Promise<void>;
   getFailedSyncChanges: () => Promise<unknown[]>;
@@ -279,6 +282,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [failedSyncCount, setFailedSyncCount] = useState(0);
   const [syncQueueLocked, setSyncQueueLocked] = useState(true);
+  const [syncQueueReadFailed, setSyncQueueReadFailed] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [cacheHydrated, setCacheHydrated] = useState(false);
   const [stateOwnerKey, setStateOwnerKey] = useState<string | null>(null);
@@ -333,15 +337,20 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           setPendingSyncCount(Math.max(0, count - failed.length));
           setFailedSyncCount(failed.length);
           setSyncQueueLocked(false);
+          setSyncQueueReadFailed(false);
         }
       } catch (err) {
         console.error('Failed to read pending sync count:', err);
-        if (identityRef.current === requestIdentity) setSyncQueueLocked(true);
+        if (identityRef.current === requestIdentity) {
+          setSyncQueueLocked(true);
+          setSyncQueueReadFailed(true);
+        }
       }
     } else {
       setPendingSyncCount(0);
       setFailedSyncCount(0);
       setSyncQueueLocked(false);
+      setSyncQueueReadFailed(false);
     }
   }, [farm_id, identityKey]);
 
@@ -383,6 +392,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setPendingSyncCount(0);
     setFailedSyncCount(0);
     setSyncQueueLocked(!!identityKey);
+    setSyncQueueReadFailed(false);
     setLastSync(null);
     clearFarmData();
 
@@ -612,7 +622,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           } catch (error) {
             if (!isOfflineDatabaseUnavailableError(error) && !(error instanceof WebSyncQueueUnreadableError)) throw error;
             console.error('Offline changes remain locked; loading cloud snapshot:', error);
-            if (isCurrentRequest()) setSyncQueueLocked(true);
+            if (isCurrentRequest()) {
+              setSyncQueueLocked(true);
+              setSyncQueueReadFailed(true);
+            }
           }
           if (!isCurrentRequest()) return false;
           const fieldsData = overlayQueuedRows('fields', fieldsPages.rows, queued, farm_id);
@@ -974,7 +987,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   return (
     <FarmContext.Provider value={{
       deletionStatus: auth.deletionStatus,
-      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError, equipmentLoadFailed, dataLoadSource, dataLoadedAt,
+      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, syncQueueReadFailed, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError, equipmentLoadFailed, dataLoadSource, dataLoadedAt,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,

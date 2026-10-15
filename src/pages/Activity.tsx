@@ -70,6 +70,39 @@ const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; la
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | GrainMovement | TillageRecord;
 
+function useCanScrollFurtherRight() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const update = () => {
+      setCanScrollRight(node.scrollWidth - node.clientWidth - node.scrollLeft > 1);
+    };
+
+    update();
+    node.addEventListener('scroll', update, { passive: true });
+
+    let observer: ResizeObserver | undefined;
+    if (typeof ResizeObserver === 'function') {
+      observer = new ResizeObserver(update);
+      observer.observe(node);
+    } else {
+      window.addEventListener('resize', update);
+    }
+
+    return () => {
+      node.removeEventListener('scroll', update);
+      observer?.disconnect();
+      if (!observer) window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return { ref, canScrollRight };
+}
+
 export default function Activity() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -115,6 +148,7 @@ export default function Activity() {
   const [editingRecordType, setEditingRecordType] = useState<ActivityRecord['type'] | null>(null);
   const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
   const openedRecordRef = useRef<string | null>(null);
+  const { ref: activityTypesRef, canScrollRight: activityTypesCanScrollRight } = useCanScrollFurtherRight();
 
   const openModal = (type: ActivityRecord['type'], record: EditableRecord, mode: 'edit' | 'duplicate') => {
     if (type === 'grain' && (record as GrainMovement).harvestRecordId && mode === 'duplicate') {
@@ -339,15 +373,15 @@ export default function Activity() {
   return (
     <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
-        <div className="max-w-lg mx-auto px-4 py-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+        <div className="mx-auto flex min-w-0 max-w-lg flex-col gap-3 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
+          <div className="flex w-full min-w-0 items-center gap-3 sm:w-auto">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
               <ClipboardList size={20} className="text-primary" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-foreground tracking-tight">Activity</h1>
-                <SeasonSelect className="min-w-[4.75rem] border-none bg-muted/70 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-lg font-bold tracking-tight text-foreground">Activity</h1>
+                <SeasonSelect className="max-w-[6.5rem] shrink border-none bg-muted/70 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
               </div>
               <p className="text-xs text-muted-foreground">Review & manage</p>
             </div>
@@ -444,7 +478,8 @@ export default function Activity() {
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs — grouped pills */}
         <div className="relative -mx-4 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
-          <div role="group" aria-label="Activity types" className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
+          <div className="relative">
+          <div ref={activityTypesRef} role="group" aria-label="Activity types" className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
                 {group.tabs.map((t) => {
@@ -488,7 +523,14 @@ export default function Activity() {
               </div>
             ))}
           </div>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background via-background/85 to-transparent" />
+          {activityTypesCanScrollRight && (
+            <div
+              data-testid="activity-types-fade"
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent"
+            />
+          )}
+          </div>
         </div>
 
         {/* Search + Review Queue filter */}

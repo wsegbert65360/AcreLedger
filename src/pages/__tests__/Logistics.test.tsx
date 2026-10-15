@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import Logistics from '../Logistics';
@@ -27,6 +27,11 @@ vi.mock('@/store/farmStore', () => ({
 }));
 
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => <div data-testid="sync-status" /> }));
+vi.mock('@/components/BinManageModal', () => ({
+  BinManager: ({ initialAddOpen = false }: { initialAddOpen?: boolean }) => (
+    <div data-testid="bin-manager" data-initial-add-open={String(initialAddOpen)} />
+  ),
+}));
 vi.mock('@/components/SellModal', () => ({ default: () => null }));
 vi.mock('@/components/AddGrainModal', () => ({ default: () => null }));
 vi.mock('@/components/grain/BinMonitorPanel', () => ({ default: () => null }));
@@ -58,5 +63,22 @@ describe('Logistics inventory labels', () => {
 
     const percents = screen.getAllByTestId('silo').map(node => node.getAttribute('data-percent'));
     expect(percents).toEqual(['100', '0', '50']);
+  });
+
+  it('opens the add-bin form from the empty state', () => {
+    render(<Logistics />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^add bin$/i }));
+
+    expect(screen.getByTestId('bin-manager')).toHaveAttribute('data-initial-add-open', 'true');
+  });
+
+  it('does not open the add-bin form from the manage button', () => {
+    farm.bins = [bin('north', 1000)];
+    render(<Logistics />);
+
+    fireEvent.click(screen.getByRole('button', { name: /manage bins/i }));
+
+    expect(screen.getByTestId('bin-manager')).toHaveAttribute('data-initial-add-open', 'false');
   });
 });

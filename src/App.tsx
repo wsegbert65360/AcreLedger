@@ -29,6 +29,7 @@ import { establishWebPasswordRecoverySession, listenForNativePasswordRecovery } 
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { isBillingUiAvailable } from "@/lib/billing";
 import { isEquipmentUiEnabled } from "@/lib/equipment/feature";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
@@ -100,6 +101,11 @@ function ScrollToTop() {
   return null;
 }
 
+function BillingSettingsRedirect() {
+  const to = isBillingUiAvailable() ? '/settings?section=billing' : '/settings';
+  return <Navigate to={to} replace />;
+}
+
 const AnimatedRoutes = () => {
   const location = useLocation();
 
@@ -120,6 +126,8 @@ const AnimatedRoutes = () => {
           {isEquipmentUiEnabled() && <Route path="/equipment" element={<ErrorBoundary><Equipment /></ErrorBoundary>} />}
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+          <Route path="/billing" element={<BillingSettingsRedirect />} />
+          <Route path="/subscription" element={<BillingSettingsRedirect />} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
           <Route path="/privacy" element={<ErrorBoundary><Privacy withBottomNav /></ErrorBoundary>} />
           <Route path="/support" element={<ErrorBoundary><Support withBottomNav /></ErrorBoundary>} />

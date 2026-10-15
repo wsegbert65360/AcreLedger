@@ -2,14 +2,14 @@ import { Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { useFarm } from '@/store/farmStore';
 
 export default function SyncStatusIndicator() {
-  const { isOnline, pendingSyncCount, failedSyncCount = 0, syncQueueLocked } = useFarm();
+  const { isOnline, pendingSyncCount, failedSyncCount = 0, syncQueueReadFailed = false } = useFarm();
 
-  if (syncQueueLocked || failedSyncCount > 0) {
+  if (syncQueueReadFailed || failedSyncCount > 0) {
     return (
       <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20"
-        aria-label={syncQueueLocked ? 'Offline changes locked — sync status unknown' : `${failedSyncCount} changes need attention`}>
+        aria-label={syncQueueReadFailed ? 'Offline changes locked — sync status unknown' : `${failedSyncCount} changes need attention`}>
         <CloudOff size={14} />
-        <span>{syncQueueLocked ? '?' : failedSyncCount}</span>
+        <span>{syncQueueReadFailed ? '?' : failedSyncCount}</span>
       </div>
     );
   }

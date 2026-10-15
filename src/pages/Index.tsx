@@ -184,14 +184,14 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 shadow-sm backdrop-blur-xl print:hidden">
-        <div className="mx-auto flex max-w-lg flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
+        <div className="mx-auto flex min-w-0 max-w-lg flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Logo />
             <div className="hidden min-w-0 flex-col sm:flex">
-              <h1 className="text-sm font-bold text-foreground tracking-tight">Farm Overview</h1>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="whitespace-nowrap">{allFields.length} fields</span>
-                <SeasonSelect className="min-w-[4.75rem] border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
+              <h1 className="truncate text-sm font-bold tracking-tight text-foreground">Farm Overview</h1>
+              <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <span className="shrink-0 whitespace-nowrap">{allFields.length} fields</span>
+                <SeasonSelect className="max-w-[6.5rem] shrink border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
               </div>
             </div>
           </div>
@@ -221,9 +221,9 @@ const Index = () => {
               <span className="hidden sm:inline">Manage</span>
             </button>
           </div>
-          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground sm:hidden">
-            <span className="whitespace-nowrap">{allFields.length} fields</span>
-            <SeasonSelect className="min-w-[5.5rem] border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
+          <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground sm:hidden">
+            <span className="shrink-0 whitespace-nowrap">{allFields.length} fields</span>
+            <SeasonSelect className="max-w-[6.5rem] shrink border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
           </div>
         </div>
 

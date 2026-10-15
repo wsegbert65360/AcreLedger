@@ -413,8 +413,24 @@ describe('farmStore composed behaviors', () => {
       const { result } = renderHook(() => useFarm(), { wrapper });
       await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
       expect(result.current.syncQueueLocked).toBe(true);
+      expect(result.current.syncQueueReadFailed).toBe(true);
       expect(result.current.farmName).toBe('Cloud Farm');
       expect(result.current.lastSync).toBeNull();
+    });
+
+    it('keeps the queue locked without a failed read while the first count is pending', async () => {
+      let resolveCount: (count: number) => void = () => {};
+      getPendingCountMock.mockReturnValue(new Promise<number>((resolve) => {
+        resolveCount = resolve;
+      }));
+      const { result } = renderHook(() => useFarm(), { wrapper });
+
+      expect(result.current.syncQueueLocked).toBe(true);
+      expect(result.current.syncQueueReadFailed).toBe(false);
+
+      await act(async () => { resolveCount(0); });
+      await waitFor(() => expect(result.current.syncQueueLocked).toBe(false));
+      expect(result.current.syncQueueReadFailed).toBe(false);
     });
 
     it('refreshes parked counts after background replay and timestamps only an empty drain', async () => {

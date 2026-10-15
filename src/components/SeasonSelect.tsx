@@ -27,16 +27,16 @@ export default function SeasonSelect({
       <SelectTrigger
         aria-label="Season"
         className={cn(
-          'h-11 shrink-0 rounded-lg font-mono text-sm font-bold',
+          'h-11 min-w-0 max-w-full shrink rounded-lg font-mono text-sm font-bold [&>svg]:shrink-0',
           variant === 'sidebar'
             ? 'w-full border-sidebar-border bg-sidebar-accent/50 text-sidebar-primary'
-            : 'min-w-[5.25rem] border-border bg-muted/60 text-foreground',
+            : 'w-auto max-w-[6.5rem] border-border bg-muted/60 text-foreground',
           className,
         )}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2 overflow-hidden">
           {showIcon && <CalendarDays size={14} className="shrink-0 opacity-70" />}
-          <span>{viewingSeason}</span>
+          <span className="truncate">{viewingSeason}</span>
         </span>
       </SelectTrigger>
       <SelectContent className={cn('bg-card border-border', contentClassName)}>

@@ -31,9 +31,9 @@ vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
 
 import Settings from '../Settings';
 
-function renderSettings() {
+function renderSettings(path = '/settings') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <Settings />
     </MemoryRouter>,
   );
@@ -66,5 +66,35 @@ describe('Settings billing gate', () => {
     fireEvent.click(screen.getByRole('button', { name: /billing/i }));
     expect(screen.getByTestId('billing-manager')).toBeInTheDocument();
     expect(screen.getByText('$299/year')).toBeInTheDocument();
+  });
+
+  it('opens and scrolls to billing from ?section=billing', () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
+    const scrollIntoView = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    renderSettings('/settings?section=billing');
+
+    expect(screen.getByRole('button', { name: /billing/i })).toHaveAttribute('data-state', 'open');
+    expect(screen.getByTestId('billing-manager')).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    HTMLElement.prototype.scrollIntoView = original;
+  });
+
+  it('keeps the default section for an unknown section query', () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
+    renderSettings('/settings?section=nope');
+
+    expect(screen.getByRole('button', { name: /farm data/i })).toHaveAttribute('data-state', 'open');
+    expect(screen.getByRole('button', { name: /billing/i })).toHaveAttribute('data-state', 'closed');
+  });
+
+  it('does not open billing from the section query when billing UI is unavailable', () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    renderSettings('/settings?section=billing');
+
+    expect(screen.queryByRole('button', { name: /billing/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /farm data/i })).toHaveAttribute('data-state', 'open');
+    expect(screen.queryByTestId('billing-manager')).not.toBeInTheDocument();
   });
 });

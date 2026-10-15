@@ -4,7 +4,7 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import BinManageModal from '../BinManageModal';
+import BinManageModal, { BinManager } from '../BinManageModal';
 
 const addBinMock = vi.fn().mockResolvedValue(true);
 const updateBinMock = vi.fn().mockResolvedValue(true);
@@ -18,6 +18,9 @@ vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     addBin: addBinMock,
     updateBin: updateBinMock,
+    deleteBin: vi.fn(),
+    getBinTotal: () => 0,
+    bins: [],
     session: { user: { id: 'user-1' } },
   }),
 }));
@@ -70,5 +73,19 @@ describe('BinManageModal capacity', () => {
       fireEvent.click(save);
     });
     expect(addBinMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('BinManager add form', () => {
+  it('opens the add form on mount when initialAddOpen is set', () => {
+    render(<BinManager initialAddOpen />);
+    expect(screen.getByRole('heading', { name: 'Add Bin' })).toBeInTheDocument();
+  });
+
+  it('keeps the add form closed until Add New Bin is clicked', () => {
+    render(<BinManager />);
+    expect(screen.queryByRole('heading', { name: 'Add Bin' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /add new bin/i }));
+    expect(screen.getByRole('heading', { name: 'Add Bin' })).toBeInTheDocument();
   });
 });

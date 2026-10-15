@@ -127,10 +127,15 @@ export default function BinManageModal({ open, onClose, editBin }: BinManageModa
     );
 }
 
-export function BinManager() {
+interface BinManagerProps {
+    /** Open the add-bin form on mount. Used by the empty-state button only. */
+    initialAddOpen?: boolean;
+}
+
+export function BinManager({ initialAddOpen = false }: BinManagerProps) {
     const { bins, deleteBin, getBinTotal } = useFarm();
     const [editBin, setEditBin] = useState<Bin | null>(null);
-    const [addOpen, setAddOpen] = useState(false);
+    const [addOpen, setAddOpen] = useState(initialAddOpen);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
     const remainingBushels = deleteConfirm ? getBinTotal(deleteConfirm) : 0;

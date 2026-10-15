@@ -112,6 +112,7 @@ export default function Logistics() {
   const { bins, getBinTotal, grainMovements, session } = useFarm();
   const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const [managing, setManaging] = useState(false);
+  const [openAddOnManage, setOpenAddOnManage] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
   const [addingBin, setAddingBin] = useState<Bin | null>(null);
   const [selectedBinId, setSelectedBinId] = useState<string | null>(null);
@@ -180,7 +181,7 @@ export default function Logistics() {
           <h2 className="text-lg font-bold text-foreground">Manage storage bins</h2>
           <p className="text-sm text-muted-foreground">Add, rename, resize, or remove bins from active tracking.</p>
         </div>
-        <BinManager />
+        <BinManager initialAddOpen={openAddOnManage} />
       </section>
     );
   } else if (binOverview.length === 0) {
@@ -193,7 +194,10 @@ export default function Logistics() {
         <p className="mx-auto max-w-[16rem] text-sm leading-relaxed text-muted-foreground">
           Add your first bin to start monitoring capacity, inventory, and grain movement.
         </p>
-        <Button className="mt-5 bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={() => setManaging(true)}>
+        <Button className="mt-5 bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={() => {
+          setOpenAddOnManage(true);
+          setManaging(true);
+        }}>
           <Plus size={16} className="mr-2" />
           Add bin
         </Button>
@@ -390,6 +394,7 @@ export default function Logistics() {
               variant={managing ? 'default' : 'outline'}
               size="sm"
               onClick={() => {
+                setOpenAddOnManage(false);
                 setManaging((value) => !value);
                 setSelectedBinId(null);
               }}

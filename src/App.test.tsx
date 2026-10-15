@@ -129,6 +129,10 @@ vi.mock('./pages/Equipment', () => ({
   default: () => <div data-testid="equipment-page" />,
 }));
 
+vi.mock('./pages/Settings', () => ({
+  default: () => <div data-testid="settings-page" />,
+}));
+
 import { App as CapApp } from '@capacitor/app';
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -575,6 +579,7 @@ describe('signed-in routing (preserved behavior)', () => {
     navigate('/');
     farmState.current = { ...signedInState };
     sessionStorage.clear();
+    vi.unstubAllEnvs();
     vi.clearAllMocks();
     auth.signOut.mockResolvedValue({ error: null });
     auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
@@ -654,6 +659,35 @@ describe('signed-in routing (preserved behavior)', () => {
     renderApp();
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
     expect(screen.queryByTestId('equipment-page')).not.toBeInTheDocument();
+  });
+
+  it('redirects /billing and /subscription to the settings billing section', async () => {
+    vi.stubEnv('VITE_BILLING_UI_ENABLED', 'true');
+    platform.native = false;
+    navigate('/billing');
+    const view = renderApp();
+    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('?section=billing');
+
+    view.unmount();
+    navigate('/subscription');
+    renderApp();
+    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('?section=billing');
+    vi.unstubAllEnvs();
+  });
+
+  it('lands on /settings when billing UI is unavailable', async () => {
+    vi.stubEnv('VITE_BILLING_UI_ENABLED', 'true');
+    platform.native = true;
+    navigate('/billing');
+    renderApp();
+    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('');
+    vi.unstubAllEnvs();
   });
 
   it('shows a focused recovery page without Quick Add for an unknown route', async () => {
