@@ -23,11 +23,18 @@ describe('iOS capability usage descriptions', () => {
     expect(read('src/lib/native.ts')).toContain('Geolocation.getCurrentPosition');
     expect(read('src/lib/speech.ts')).toContain('SpeechRecognition');
     expectUsageDescription('NSLocationWhenInUseUsageDescription');
+    expectUsageDescription('NSLocationAlwaysAndWhenInUseUsageDescription');
     expectUsageDescription('NSMicrophoneUsageDescription');
     expectUsageDescription('NSSpeechRecognitionUsageDescription');
   });
 
-  it('does not request always-on location', () => {
-    expect(plist).not.toContain('NSLocationAlwaysAndWhenInUseUsageDescription');
+  it('explains foreground-only location and does not enable background location', () => {
+    expect(plist).toMatch(
+      /<key>NSLocationAlwaysAndWhenInUseUsageDescription<\/key>\s*<string>AcreLedger uses your location only while the app is open, to find weather data and set field coordinates\. It does not track your location in the background\.<\/string>/,
+    );
+    expect(plist).toMatch(
+      /<key>NSLocationWhenInUseUsageDescription<\/key>\s*<string>AcreLedger uses your location to find weather data and set field coordinates\.<\/string>/,
+    );
+    expect(plist).not.toContain('<key>UIBackgroundModes</key>');
   });
 });
