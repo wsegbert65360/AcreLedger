@@ -1,4 +1,5 @@
-import type { HarvestRecord } from '../../types/farm';
+import { getLandlordSplitPercent } from '@/lib/cropShare';
+import type { Field, HarvestRecord } from '../../types/farm';
 import { getWorkDateMs, parseLocalDate, toLocalIsoDate } from '../../utils/dates';
 
 export type LandlordStatementRow = {
@@ -21,7 +22,8 @@ export type LandlordStatement = {
 
 export function generateLandlordStatement(
   records: HarvestRecord[],
-  landlordName: string
+  landlordName: string,
+  fields: Field[] = [],
 ): LandlordStatement {
   // 1. Filter to only this landlord's records
   const filtered = records.filter(
@@ -34,9 +36,11 @@ export function generateLandlordStatement(
   );
 
   // 3. Map to statement rows
+  const fieldById = new Map(fields.map(field => [field.id, field]));
   const rows: LandlordStatementRow[] = sorted.map(r => {
+    const split = getLandlordSplitPercent(fieldById.get(r.fieldId), r.landlordSplitPercent) ?? 0;
     const landlordBushels = parseFloat(
-      ((r.bushels || 0) * ((r.landlordSplitPercent || 0) / 100)).toFixed(2)
+      ((r.bushels || 0) * (split / 100)).toFixed(2)
     );
     return {
       fieldName: r.fieldName,
@@ -45,7 +49,7 @@ export function generateLandlordStatement(
         ? formatDate(r.harvestDate)
         : formatDate(toLocalIsoDate(r.timestamp || Date.now())),
       totalBushels: r.bushels || 0,
-      landlordSplitPercent: r.landlordSplitPercent || 0,
+      landlordSplitPercent: split,
       landlordBushels,
       scaleTicketNumber: r.scaleTicketNumber,
     };

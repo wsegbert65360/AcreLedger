@@ -421,11 +421,10 @@ it.each([
   state.grainMovements = [];
   state.updateHarvestRecord.mockResolvedValue(true);
   state.addHarvestWithGrain.mockResolvedValue(true);
-  render(<HarvestModal field={field} open onClose={() => {}} />);
+  render(<HarvestModal field={{ ...field, producerShare: 100 - Number(splitValue) }} open onClose={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: /town/i }));
   fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: bushelValue } });
   fireEvent.change(screen.getByLabelText(/moisture/i), { target: { value: moistureValue } });
-  fireEvent.change(screen.getByLabelText(/landlord %/i), { target: { value: splitValue } });
   fireEvent.click(screen.getByRole('button', { name: /log harvest/i }));
 
   await Promise.resolve();
@@ -442,7 +441,6 @@ it('uses retry-stable IDs for atomic creation of a new bin harvest', async () =>
   fireEvent.click(screen.getByRole('button', { name: /bin/i }));
   fireEvent.change(screen.getByTestId('select'), { target: { value: 'bin-1' } });
   fireEvent.change(screen.getByLabelText(/moisture/i), { target: { value: '15' } });
-  fireEvent.change(screen.getByLabelText(/landlord %/i), { target: { value: '0' } });
   fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: '1200' } });
 
   fireEvent.click(screen.getByRole('button', { name: /log harvest/i }));
@@ -532,7 +530,6 @@ it.each([
   fireEvent.change(screen.getByTestId('select'), { target: { value: 'bin-1' } });
   fireEvent.change(screen.getByLabelText(/bushels/i), { target: { value: String(bushelValue) } });
   fireEvent.change(screen.getByLabelText(/moisture/i), { target: { value: '15' } });
-  fireEvent.change(screen.getByLabelText(/landlord %/i), { target: { value: '0' } });
   fireEvent.click(screen.getByRole('button', { name: /log harvest/i }));
   await waitFor(() => expect(state.addHarvestWithGrain).toHaveBeenCalled());
   expect(toast.warning).toHaveBeenCalledWith(warning, expect.anything());
@@ -558,4 +555,22 @@ it('subtracts stale leftovers before warning about a harvest edit projection', a
   expect(toast.warning).not.toHaveBeenCalled();
   expect(state.deleteGrainMovements).toHaveBeenCalledWith(['legacy']);
   state.getBinTotal.mockReturnValue(0);
+});
+
+
+it('uses the current field share on edit and duplicate instead of the stored split', async () => {
+  vi.clearAllMocks();
+  state.grainMovements = [linkedMovement()];
+  state.updateGrainMovementWithVersion.mockResolvedValue(true);
+  state.updateHarvestRecord.mockResolvedValue(true);
+  const initial = binHarvest({ landlordSplitPercent: 90 });
+  const { rerender } = render(<HarvestModal field={{ ...field, producerShare: 75 }} open onClose={() => {}} initialData={initial} />);
+  expect(screen.getByLabelText(/landlord %/i)).toHaveValue('25');
+  expect(screen.getByLabelText(/landlord %/i)).toHaveAttribute('readonly');
+  fireEvent.click(screen.getByRole('button', { name: /update record/i }));
+  await waitFor(() => expect(state.updateHarvestRecord).toHaveBeenCalledWith(expect.objectContaining({ landlordSplitPercent: 25 })));
+  rerender(<HarvestModal field={{ ...field, producerShare: 100 }} open onClose={() => {}} initialData={initial} mode="duplicate" />);
+  expect(screen.getByLabelText(/landlord %/i)).toHaveValue('0');
+  fireEvent.click(screen.getByRole('button', { name: /log duplicate/i }));
+  await waitFor(() => expect(state.addHarvestWithGrain).toHaveBeenCalledWith(expect.objectContaining({ harvest: expect.objectContaining({ landlordSplitPercent: 0 }) })));
 });

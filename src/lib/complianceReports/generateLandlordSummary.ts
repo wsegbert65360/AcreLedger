@@ -1,3 +1,4 @@
+import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { sanitizeCsvValue } from '@/utils/csv';
 import type {
   CustomSprayRecord,
@@ -37,6 +38,7 @@ export type LandlordFieldSummary = {
   fieldId: string;
   fieldName: string;
   acres: number;
+  producerShare?: number;
   crop: string | null;
   totalBushels: number;
   buPerAcre: number | null;
@@ -140,7 +142,7 @@ function buildFieldSummaries(
       2,
     );
     const landlordShareBushels = roundTo(
-      fieldHarvests.reduce((sum, h) => sum + (h.bushels || 0) * ((h.landlordSplitPercent || 0) / 100), 0),
+      fieldHarvests.reduce((sum, h) => sum + (h.bushels || 0) * ((getLandlordSplitPercent(field, h.landlordSplitPercent) ?? 0) / 100), 0),
       2,
     );
     const buPerAcre = acres > 0 ? roundTo(totalBushels / acres, 2) : null;
@@ -161,6 +163,7 @@ function buildFieldSummaries(
     return {
       fieldId: field.id,
       fieldName: field.name,
+      producerShare: field.producerShare,
       acres,
       crop,
       totalBushels,

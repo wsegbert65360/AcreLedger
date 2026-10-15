@@ -1,4 +1,5 @@
 import { getComplianceProfileFor } from '@/lib/compliance/profiles';
+import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { missingComplianceFields } from '@/lib/sprayCompliance';
 import type { Field, SprayRecord } from '@/types/farm';
@@ -102,7 +103,7 @@ interface HayReadinessRecord {
 }
 
 interface LandlordReadinessSummary {
-  fields: Array<{ fieldId: string; fieldName: string; acres: number }>;
+  fields: Array<{ fieldId: string; fieldName: string; acres: number; producerShare?: number }>;
   activity: Array<{ fieldName: string }>;
 }
 
@@ -481,13 +482,14 @@ export function buildLandlordReadiness(
 
   for (const harvest of harvestRecords) {
     if (!fieldById.has(harvest.fieldId)) continue;
-    if (harvest.landlordSplitPercent == null || !Number.isFinite(harvest.landlordSplitPercent)) {
+    const split = getLandlordSplitPercent(fieldById.get(harvest.fieldId), harvest.landlordSplitPercent);
+    if (split == null || !Number.isFinite(split)) {
       issues.push({
         id: `landlord-${harvest.id}-share`, itemId: harvest.fieldId, fieldId: harvest.fieldId,
         recordId: harvest.id, recordType: 'harvest', severity: 'error', category: 'Crop share',
         message: `${harvest.fieldName} has a harvest with no crop-share percentage.`, actionLabel: 'Review harvest record',
       });
-    } else if (harvest.landlordSplitPercent < 0 || harvest.landlordSplitPercent > 100) {
+    } else if (split < 0 || split > 100) {
       issues.push({
         id: `landlord-${harvest.id}-share-range`, itemId: harvest.fieldId, fieldId: harvest.fieldId,
         recordId: harvest.id, recordType: 'harvest', severity: 'error', category: 'Crop share',

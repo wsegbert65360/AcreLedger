@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 
+import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { effectiveTreatedAreaUnit, normalizeAreaForRate, normalizeTreatedArea } from '@/lib/sprayExportFormatters';
 import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
@@ -292,7 +293,8 @@ function compareFsa578Rows(a: Fsa578ReportRow, b: Fsa578ReportRow): number {
 function isPlantedCroplandRow(row: Fsa578ReportRow): boolean {
     return row.landUse === 'Cropland'
         && row.crop.trim().length > 0
-        && row.cropStatus !== 'Prevented Planting';
+        && row.cropStatus !== 'Prevented Planting'
+        && !isSupplementalCrop(row);
 }
 
 /**
@@ -339,13 +341,17 @@ export function calculateFsa578PlantedAcreTotals(rows: Fsa578ReportRow[]): {
     };
 }
 
+export function isSupplementalCrop(record: Pick<PlantRecord, 'cropStatus'>): boolean {
+    return record.cropStatus === 'Cover Crop' || record.cropStatus === 'Volunteer';
+}
+
 function allowsRepeatedCluAcres(record: Pick<PlantRecord, 'cropSequence' | 'cropStatus' | 'plantingPattern'>): boolean {
-    return record.cropSequence === 'Second Crop' || record.cropStatus === 'Failed'
+    return record.cropSequence === 'Second Crop'
         || /double\s*crop|replant/i.test(record.plantingPattern || '');
 }
 
-function plantingAcresForClu(record: PlantRecord, cluAcres: number, fieldCluAcres: number, records: PlantRecord[]): number {
-    if (allowsRepeatedCluAcres(record) || records.some(other => other.fieldId === record.fieldId && other.cropStatus === 'Failed')) return cluAcres;
+function plantingAcresForClu(record: PlantRecord, cluAcres: number, fieldCluAcres: number): number {
+    if (record.cropStatus !== 'Failed' && !isSupplementalCrop(record) && allowsRepeatedCluAcres(record)) return cluAcres;
     if (!Number.isFinite(record.acreage) || record.acreage <= 0 || fieldCluAcres <= 0) return 0;
     return roundTo(Math.min(record.acreage, fieldCluAcres) * cluAcres / fieldCluAcres, 2);
 }
@@ -427,7 +433,7 @@ export function buildFsa578Rows(
                     farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
                     tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                     fieldNumber: cluNumber,
-                    acreage: plantingAcresForClu(r, acres, legacyTotalAcres, fsaPlantRecords),
+                    acreage: plantingAcresForClu(r, acres, legacyTotalAcres),
                     cluAcres: acres,
                 };
             });
@@ -451,7 +457,7 @@ export function buildFsa578Rows(
                     farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
                     tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                     fieldNumber: containingFeature.cluNumber,
-                    acreage: plantingAcresForClu(r, containingFeature.acres, containingFeature.acres, fsaPlantRecords),
+                    acreage: plantingAcresForClu(r, containingFeature.acres, containingFeature.acres),
                     cluAcres: containingFeature.acres,
                 }];
             }
@@ -475,7 +481,7 @@ export function buildFsa578Rows(
                 farmNumber: tract.farmNumber || field?.fsaFarmNumber || '',
                 tractNumber: tract.tractNumber || field?.fsaTractNumber || '',
                 fieldNumber: a.cluNumber,
-                acreage: plantingAcresForClu(r, a.acres, croplandAssignments.reduce((sum, part) => sum + part.acres, 0), fsaPlantRecords),
+                acreage: plantingAcresForClu(r, a.acres, croplandAssignments.reduce((sum, part) => sum + part.acres, 0)),
                 cluAcres: tractAcres.get(`${a.tractKey}:${a.cluNumber}`) ?? a.acres,
                 assignmentWarning: assignmentWarning(a, fsaTracts, tractAcres),
             };
@@ -646,7 +652,7 @@ export function validateFsa578Rows(rows: Fsa578ReportRow[]): Fsa578ValidationIss
     const sequenceGroups = new Map<string, Fsa578ReportRow[]>();
     for (const row of rows) {
         if (row.assignmentWarning) issues.push({ rowId: row.id, severity: 'warning', field: 'fieldNumber', message: row.assignmentWarning });
-        if (row.landUse !== 'Cropland' || row.cluAcres == null || allowsRepeatedCluAcres(row)) continue;
+        if (row.landUse !== 'Cropland' || row.cluAcres == null || row.cropStatus === 'Failed' || isSupplementalCrop(row) || allowsRepeatedCluAcres(row)) continue;
         const key = [row.farmNumber, row.tractNumber, row.fieldNumber, row.cropSequence || 'First Crop'].join('|');
         const group = sequenceGroups.get(key) || [];
         group.push(row);
@@ -754,7 +760,7 @@ export function buildFsaFallProductionRows({
             moisturePercent: record.moisturePercent,
             destination: record.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale',
             evidenceReference: record.scaleTicketNumber || '',
-            landlordSplitPercent: record.landlordSplitPercent,
+            landlordSplitPercent: getLandlordSplitPercent(field, record.landlordSplitPercent),
             landlordName: record.landlordName,
             notes: '',
         };
@@ -1028,7 +1034,7 @@ export async function exportHarvestData(harvestRecords: HarvestRecord[], fields:
             sanitizeCsvValue(r.bushels),
             sanitizeCsvValue(r.moisturePercent),
             sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale'),
-            sanitizeCsvValue(r.landlordSplitPercent),
+            sanitizeCsvValue(getLandlordSplitPercent(field, r.landlordSplitPercent)),
             sanitizeCsvValue(r.landlordName),
             sanitizeCsvValue(r.scaleTicketNumber),
             sanitizeCsvValue(field?.fsaFarmNumber),
