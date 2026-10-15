@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { parseLocalizedNumber } from '@/lib/locale/numbers';
 import { native } from '@/lib/native';
 import { getLatestForField } from '@/lib/utils';
@@ -38,9 +39,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
     const [fieldId, setFieldId] = useState('');
     const [crop, setCrop] = useState('');
     const [landlordName, setLandlordName] = useState('');
-    const [landlordSplit, setLandlordSplit] = useState('0');
     const cropEditedRef = useRef(false);
-    const landlordSplitEditedRef = useRef(false);
     const landlordNameEditedRef = useRef(false);
 
     // Adjustment path state (plain inventory movement — not tied to a field harvest)
@@ -85,9 +84,6 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
             const suggestedHarvest = getLatestForField(harvestRecords, field.id, 'harvestDate', record => record.seasonYear === viewingSeason);
             setCrop(suggestedHarvest?.crop || field.intendedUse || '');
         }
-        if (!landlordSplitEditedRef.current) {
-            setLandlordSplit(field.producerShare != null ? (100 - field.producerShare).toString() : '0');
-        }
         if (!landlordNameEditedRef.current) {
             setLandlordName(field.landlordName || '');
         }
@@ -102,9 +98,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
         setFieldId('');
         setCrop('');
         setLandlordName('');
-        setLandlordSplit('0');
         cropEditedRef.current = false;
-        landlordSplitEditedRef.current = false;
         landlordNameEditedRef.current = false;
         createIdsRef.current = null;
     };
@@ -118,7 +112,8 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
 
     const parsedBushels = parseLocalizedNumber(bushels, preferences.locale);
     const parsedMoisture = parseLocalizedNumber(moisture, preferences.locale);
-    const parsedLandlordSplit = parseLocalizedNumber(landlordSplit, preferences.locale);
+    const selectedField = activeFields.find(f => f.id === fieldId);
+    const landlordSplit = getLandlordSplitPercent(selectedField) ?? 0;
     // All-season total: an inbound load is checked against physical bin contents.
     const projectedTotal = parsedBushels == null ? null : getBinTotal(bin.id) + parsedBushels;
     const inventoryWarning =
@@ -138,7 +133,7 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
     const harvestValid = sharedNumbersValid
         && !!fieldId
         && !!crop.trim()
-        && parsedLandlordSplit != null;
+        && Number.isFinite(landlordSplit) && landlordSplit >= 0 && landlordSplit <= 100;
 
     const adjustValid = sharedNumbersValid;
 
@@ -153,9 +148,9 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
         if (inventoryWarning) toast.warning(inventoryWarning);
 
         if (path === 'harvest') {
-            const ls = parsedLandlordSplit;
+            const ls = landlordSplit;
             const field = activeFields.find(f => f.id === fieldId);
-            if (!field || ls == null || !crop.trim()) {
+            if (!field || !Number.isFinite(ls) || ls < 0 || ls > 100 || !crop.trim()) {
                 native.haptic.error();
                 return;
             }
@@ -376,10 +371,12 @@ export default function AddGrainModal({ bin, open, onClose }: AddGrainModalProps
                                         name="addHarvestLandlordSplit"
                                         inputMode="decimal"
                                         value={landlordSplit}
-                                        onChange={e => { landlordSplitEditedRef.current = true; setLandlordSplit(e.target.value); }}
+                                        readOnly
+                                        aria-describedby="addHarvestShareHelp"
                                         placeholder="0"
                                         className="mt-1 bg-muted border-border text-foreground"
                                     />
+                                    <p id="addHarvestShareHelp" className="text-xs text-muted-foreground">Derived from field producer share.</p>
                                 </div>
                             </div>
                         ) : (

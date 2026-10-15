@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFsa578Readiness, buildSprayReadiness } from '@/lib/reportReadiness';
+import { getLandlordSplitPercent } from '@/lib/cropShare';
+import { buildFsa578Readiness, buildLandlordReadiness, buildSprayReadiness } from '@/lib/reportReadiness';
 import { areaForProductTotal } from '@/lib/sprayExportFormatters';
-import type { Field, PlantRecord, SprayRecord } from '@/types/farm';
+import type { Field, HarvestRecord, PlantRecord, SprayRecord } from '@/types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '@/types/fsaTract';
 import { sanitizeCsvValue } from '@/utils/csv';
 import { calculateSprayProductFields } from '@/utils/unitConversion';
 
 import { buildFsa578Reconciliation } from '../fsa578PdfExport';
-import { buildFsa578Rows, calculateFsa578PlantedAcreTotals, generateMissouriLogRows, validateFsa578Rows } from '../fsaReports';
+import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLogRows, validateFsa578Rows } from '../fsaReports';
+import { generateLandlordSummary } from '../generateLandlordSummary';
 
 const field: Field = { id: 'f', farm_id: 'farm', name: 'North', acreage: 40, lat: 0, lng: 0,
   fsaFarmNumber: '1', fsaTractNumber: '2/3', cluNumbers: ['1', '2'], deleted_at: null };
@@ -100,5 +102,55 @@ describe('review-07 acreage and compliance regressions', () => {
     expect(sanitizeCsvValue(-3)).toBe('"-3"');
     expect(sanitizeCsvValue('  =1+1')).toBe('"\'  =1+1"');
     expect(sanitizeCsvValue('\ttext')).toBe('"\'\ttext"');
+  });
+});
+
+
+describe('review-07 owner decisions', () => {
+  it('preserves partial failed acres without expanding unrelated plantings', () => {
+    const records = [plant('failed', 8, { cropStatus: 'Failed', cropSequence: 'Second Crop', plantingPattern: 'Replant' }),
+      plant('main', 24), plant('variety', 16)];
+    const rows = buildFsa578Rows(records, [field], [assignment]);
+    expect(rows.map(row => row.acreage)).toEqual([8, 24, 16]);
+    expect(validateFsa578Rows(rows).filter(issue => issue.field === 'acreage')).toEqual([]);
+    const split = buildFsa578Rows(records, [field], [
+      { ...assignment, acres: 30 }, { ...assignment, id: 'b', cluNumber: '2', acres: 10 },
+    ]);
+    expect(split.filter(row => row.cropStatus === 'Failed').map(row => row.acreage)).toEqual([6, 2]);
+    const legacy = buildFsa578Rows(records, [{ ...field, fsaTractNumber: '2', cluNumbers: ['1'] }], [], [tract('1-2', '1', 40)]);
+    expect(legacy.map(row => row.acreage)).toEqual([8, 24, 16]);
+  });
+
+  it.each(['Cover Crop', 'Volunteer'] as const)('keeps %s separate from main-crop acres and the CLU cap', cropStatus => {
+    const rows = buildFsa578Rows([plant('main', 40), plant('supplemental', 12, { cropStatus, seedVariety: 'main' })], [field], [assignment]);
+    expect(rows).toHaveLength(2);
+    expect(rows.find(row => row.cropStatus === cropStatus)?.acreage).toBe(12);
+    expect(validateFsa578Rows(rows).filter(issue => issue.field === 'acreage')).toEqual([]);
+    expect(calculateFsa578PlantedAcreTotals(rows)).toEqual({ totalAcres: 40, byField: [{ fieldName: 'North', acres: 40 }] });
+    expect(buildFsa578Reconciliation(rows).cropTotals.some(row => row.label.includes(cropStatus) && row.acres === 12)).toBe(true);
+    expect(buildFsa578Reconciliation(rows).totalReportedAcres).toBe(40);
+    expect(calculateFsa578PlantedAcreTotals(rows.filter(row => row.cropStatus === cropStatus)).totalAcres).toBe(0);
+    const over = buildFsa578Rows([plant('main', 30), plant('extra', 20), plant('supplemental', 12, { cropStatus })], [field], [assignment]);
+    expect(validateFsa578Rows(over).some(issue => issue.message.includes('same-sequence'))).toBe(true);
+  });
+
+  it.each([0, 100, 66.67])('uses producer share %s instead of conflicting stored harvest splits', producerShare => {
+    const ownerField = { ...field, producerShare, landlordName: 'Owner' };
+    const harvest: HarvestRecord = { id: 'h', fieldId: 'f', fieldName: 'North', destination: 'town',
+      moisturePercent: 15, landlordSplitPercent: 90, bushels: 1000, crop: 'Corn', harvestDate: '2026-10-01',
+      farm_id: 'farm', timestamp: 0, seasonYear: 2026, deleted_at: null };
+    const summary = generateLandlordSummary({ landlordName: 'Owner', fields: [ownerField], cluAssignments: [assignment],
+      harvestRecords: [harvest], plantRecords: [], sprayRecords: [], customSprayRecords: [],
+      fertilizerApplications: [], tillageRecords: [], hayHarvestRecords: [] });
+    expect(getLandlordSplitPercent(ownerField, 90)).toBeCloseTo(100 - producerShare);
+    expect(summary.totals.landlordShareBushels).toBeCloseTo(1000 * (100 - producerShare) / 100);
+    expect(buildLandlordReadiness(summary, [{ ...harvest, landlordSplitPercent: undefined }]).issues.filter(issue => issue.category === 'Crop share')).toEqual([]);
+    expect(buildFsaFallProductionRows({ harvestRecords: [harvest], hayRecords: [], fields: [ownerField] }).grainRows[0].landlordSplitPercent).toBeCloseTo(100 - producerShare);
+    const legacy = generateLandlordSummary({ landlordName: 'Owner', fields: [{ ...ownerField, producerShare: undefined }],
+      cluAssignments: [], harvestRecords: [harvest], plantRecords: [], sprayRecords: [], customSprayRecords: [],
+      fertilizerApplications: [], tillageRecords: [], hayHarvestRecords: [] });
+    expect(legacy.totals.landlordShareBushels).toBe(900);
+    expect(buildLandlordReadiness(legacy, [{ ...harvest, landlordSplitPercent: undefined }]).issues.some(issue => issue.category === 'Crop share')).toBe(true);
+    expect(buildLandlordReadiness({ ...summary, fields: summary.fields.map(row => ({ ...row, producerShare: 101 })) }, [harvest]).issues.some(issue => issue.category === 'Crop share')).toBe(true);
   });
 });

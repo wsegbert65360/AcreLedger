@@ -1058,8 +1058,10 @@ Row construction rules (`buildFsa578Rows`):
 
 - Same-sequence split/variety plantings use stored `PlantRecord.acreage`, capped to the field's
   assigned cropland acres and apportioned across its CLUs in proportion to `assignment.acres`.
-  Second crops, double crops, and failed/replant rows may repeat full CLU acres. Validation flags
-  same-sequence rows whose sum exceeds the CLU boundary; planted and crop totals sum these row acres.
+  Second crops and explicit double-crop/replant rows may repeat full CLU acres. Failed rows
+  retain their stored partial acres and never expand other plantings. Cover and volunteer crops
+  retain separate status rows and are excluded from the CLU cap and planted totals. Validation
+  flags other same-sequence rows whose sum exceeds the CLU boundary.
   Boundary reconciliation retains each CLU's full acres once. Unmatched legacy CLUs produce one
   review row per CLU, rather than being paired with every tract.
 - Multiple planting records for the same field/CLU remain separate rows; never collapse to latest-only.
@@ -1071,7 +1073,13 @@ Row construction rules (`buildFsa578Rows`):
 
 The **Landlord** tab in Reports (`src/components/reports/LandlordSummaryReport.tsx`) is a
 per-landlord overview driven by the field-level `Field.landlordName` (not the legacy
-harvest-only `HarvestRecord.landlordName`). Selecting a landlord shows:
+harvest-only `HarvestRecord.landlordName`).
+
+Field `producerShare` is authoritative: landlord split is `100 - producerShare`. New harvests
+store that derived split; reports fall back to stored harvest splits only for legacy fields
+without a producer share. Update crop share in the field editor.
+
+Selecting a landlord shows:
 
 - **Fields overview** — one row per field with acres (CLU-aware via `getDisplayFieldAcres`),
   crop, total bushels, bu/acre, total bales, and landlord crop-share bushels. Grain and bale

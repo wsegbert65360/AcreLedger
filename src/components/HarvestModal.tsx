@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { parseLocalizedNumber } from '@/lib/locale/numbers';
 import { native } from '@/lib/native';
 import { getLatestForField } from '@/lib/utils';
@@ -65,7 +66,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
-  const [landlordSplit, setLandlordSplit] = useState(initialData?.landlordSplitPercent?.toString() || '');
+  const landlordSplit = getLandlordSplitPercent(field, initialData?.landlordSplitPercent) ?? 0;
   const [bushels, setBushels] = useState(initialData?.bushels?.toString() || '');
   const [crop, setCrop] = useState(initialData?.crop || '');
   const [landlordName, setLandlordName] = useState(initialData?.landlordName || '');
@@ -96,7 +97,6 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       setDestination(initialData.destination || null);
       setBinId(initialData.binId || '');
       setMoisture(initialData.moisturePercent?.toString() || '');
-      setLandlordSplit(initialData.landlordSplitPercent?.toString() || '');
       setBushels(initialData.bushels?.toString() || '');
       setCrop(initialData.crop || '');
       setLandlordName(initialData.landlordName || '');
@@ -106,7 +106,6 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       setDestination(null);
       setBinId('');
       setMoisture('');
-      setLandlordSplit(field.producerShare != null ? (100 - field.producerShare).toString() : '0');
       setBushels('');
       setCrop(suggestedHarvest?.crop || field.intendedUse || '');
       setLandlordName(field.landlordName || '');
@@ -121,7 +120,6 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
       setDestination(null);
       setBinId('');
       setMoisture('');
-      setLandlordSplit('');
       setBushels('');
       setCrop('');
       setLandlordName('');
@@ -131,7 +129,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
 
   const handleSubmit = async (keepOpen = false) => {
     const m = parseLocalizedNumber(moisture, preferences.locale) ?? NaN;
-    const ls = parseLocalizedNumber(landlordSplit, preferences.locale) ?? NaN;
+    const ls = landlordSplit;
     const bu = parseLocalizedNumber(bushels, preferences.locale) ?? NaN;
     if (
       isNaN(m) || isNaN(ls) || isNaN(bu) ||
@@ -356,7 +354,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
     }
   };
 
-  const valid = Number.isFinite(localDateTimeMs(harvestDate, harvestTime)) && destination && moisture && landlordSplit && bushels && (destination === 'town' || binId);
+  const valid = Number.isFinite(localDateTimeMs(harvestDate, harvestTime)) && destination && moisture && Number.isFinite(landlordSplit) && landlordSplit >= 0 && landlordSplit <= 100 && bushels && (destination === 'town' || binId);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) { createIdsRef.current = null; reset(); onClose(); } }}>
@@ -521,10 +519,12 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
                   type="text"
                   inputMode="decimal"
                   value={landlordSplit}
-                  onChange={e => setLandlordSplit(e.target.value)}
+                  readOnly
+                  aria-describedby="harvestShareHelp"
                   placeholder="0"
                   className="mt-1 bg-muted border-border text-foreground"
                 />
+                <p id="harvestShareHelp" className="text-xs text-muted-foreground">Derived from field producer share; stored split used for legacy fields.</p>
               </div>
             </div>
           </div>
