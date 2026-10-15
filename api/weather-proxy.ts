@@ -192,17 +192,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(500).json({ error: 'Server configuration error: missing Supabase credentials' });
   }
 
-  const weatherCap = resolveDailyCap(process.env.WEATHER_DAILY_CAP, DEFAULT_WEATHER_DAILY_CAP);
-  const globalCap = await consumeProviderDailyCap(
-    createServiceRoleClient(supabaseUrl, supabaseServiceRoleKey),
-    'weather',
-    weatherCap,
-  );
-  if (globalCap !== 'ok') {
-    return res.status(503).json({ error: 'Weather service temporarily unavailable' });
-  }
-
-  // ---------- Durable per-user quota ----------
+  // Per-user quota first. An over-quota caller must not consume the shared provider cap.
   const { data: rateLimitAllowed, error: rateLimitError } = await supabase
     .rpc('consume_weather_proxy_request');
   if (rateLimitError) {
@@ -212,6 +202,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (rateLimitAllowed !== true) {
     res.setHeader('Retry-After', '60');
     return res.status(429).json({ error: 'Weather request limit exceeded' });
+  }
+
+  const weatherCap = resolveDailyCap(process.env.WEATHER_DAILY_CAP, DEFAULT_WEATHER_DAILY_CAP);
+  const globalCap = await consumeProviderDailyCap(
+    createServiceRoleClient(supabaseUrl, supabaseServiceRoleKey),
+    'weather',
+    weatherCap,
+  );
+  if (globalCap !== 'ok') {
+    return res.status(503).json({ error: 'Weather service temporarily unavailable' });
   }
 
   // ---------- Build target URL ----------

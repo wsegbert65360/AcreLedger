@@ -383,6 +383,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     : Number.NaN;
   const seasonYear = clampViewingSeason(requestedSeason, activeSeason);
 
+  // Per-user quota first. An over-quota caller must not consume the shared provider cap.
+  const { data: consumeData, error: consumeError } = await supabase.rpc(
+    'consume_ai_assistant_request',
+    { p_question: question },
+  );
+  if (consumeError) {
+    console.error('AI assistant quota error:', consumeError);
+    return res.status(503).json({ error: 'Assistant is temporarily unavailable.' });
+  }
+
+  const consumePayload: Record<string, unknown> = isPlainObject(consumeData)
+    ? consumeData
+    : { allowed: consumeData };
+  if (consumePayload.allowed !== true) {
+    return res.status(429).json({ error: 'Daily question limit reached.' });
+  }
+  const turnId = typeof consumePayload.turn_id === 'string' ? consumePayload.turn_id : null;
+
   const service = createServiceRoleClient(supabaseUrl, supabaseServiceRoleKey);
   const aiCap = resolveDailyCap(process.env.AI_DAILY_CAP, DEFAULT_AI_DAILY_CAP);
   const globalCap = await consumeProviderDailyCap(service, 'ai', aiCap);
@@ -403,23 +421,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(503).json({ error: 'Assistant is temporarily unavailable.' });
   }
   const history = historyFromStoredTurns(historyRows);
-
-  const { data: consumeData, error: consumeError } = await supabase.rpc(
-    'consume_ai_assistant_request',
-    { p_question: question },
-  );
-  if (consumeError) {
-    console.error('AI assistant quota error:', consumeError);
-    return res.status(503).json({ error: 'Assistant is temporarily unavailable.' });
-  }
-
-  const consumePayload: Record<string, unknown> = isPlainObject(consumeData)
-    ? consumeData
-    : { allowed: consumeData };
-  if (consumePayload.allowed !== true) {
-    return res.status(429).json({ error: 'Daily question limit reached.' });
-  }
-  const turnId = typeof consumePayload.turn_id === 'string' ? consumePayload.turn_id : null;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HANDLER_TIMEOUT_MS);

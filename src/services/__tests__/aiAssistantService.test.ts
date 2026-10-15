@@ -12,7 +12,7 @@ describe('askAcreLedger', () => {
     vi.restoreAllMocks();
   });
 
-  it('posts the question, viewing season, history, and bearer token', async () => {
+  it('posts the question, viewing season, and bearer token without client history', async () => {
     vi.resetModules();
     const { askAcreLedger } = await import('../aiAssistantService');
     vi.mocked(fetch).mockResolvedValue({
@@ -38,8 +38,8 @@ describe('askAcreLedger', () => {
     expect(body).toEqual({
       question: 'When was corn planted?',
       viewingSeason: 2026,
-      history: [{ role: 'user', content: 'Hi' }, { role: 'assistant', content: 'Hello' }],
     });
+    expect(body).not.toHaveProperty('history');
     expect(result).toEqual({ answer: 'April 12, Pioneer.', lookups: ['Earliest corn'] });
   });
 

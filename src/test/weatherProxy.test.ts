@@ -152,11 +152,13 @@ describe('weather proxy', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('returns 429 without calling upstream when the quota is exhausted', async () => {
+  it('returns 429 without calling upstream or incrementing the global cap when the quota is exhausted', async () => {
     consumeRateLimit.mockResolvedValue({ data: false, error: null });
     const { state, headers } = await invoke();
     expect(state.status).toBe(429);
     expect(headers.get('Retry-After')).toBe('60');
+    expect(state.body).toEqual({ error: 'Weather request limit exceeded' });
+    expect(incrementUsage).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -166,7 +168,7 @@ describe('weather proxy', () => {
     expect(state.status).toBe(503);
     expect(headers.get('Cache-Control')).toBe('no-store');
     expect(fetch).not.toHaveBeenCalled();
-    expect(consumeRateLimit).not.toHaveBeenCalled();
+    expect(consumeRateLimit).toHaveBeenCalledTimes(1);
   });
 
   it('returns 503 when the global daily cap RPC fails', async () => {
@@ -195,6 +197,7 @@ describe('weather proxy', () => {
     consumeRateLimit.mockResolvedValue({ data: null, error: { message: 'rpc unavailable' } });
     const { state } = await invoke();
     expect(state.status).toBe(503);
+    expect(incrementUsage).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 

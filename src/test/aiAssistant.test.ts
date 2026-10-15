@@ -323,10 +323,12 @@ describe('ai assistant proxy', () => {
     expect(consumeRpc).not.toHaveBeenCalled();
   });
 
-  it('returns 429 when the daily quota is exhausted', async () => {
+  it('returns 429 when the daily quota is exhausted without incrementing the global cap', async () => {
     consumeRpc.mockResolvedValue({ data: { allowed: false }, error: null });
     const { state } = await invoke();
     expect(state.status).toBe(429);
+    expect(state.body).toEqual({ error: 'Daily question limit reached.' });
+    expect(incrementUsage).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -336,7 +338,7 @@ describe('ai assistant proxy', () => {
     expect(state.status).toBe(503);
     expect(headers.get('Cache-Control')).toBe('no-store');
     expect(fetch).not.toHaveBeenCalled();
-    expect(consumeRpc).not.toHaveBeenCalled();
+    expect(consumeRpc).toHaveBeenCalledTimes(1);
   });
 
   it('finalizes turns with the service-role client', async () => {
@@ -351,6 +353,7 @@ describe('ai assistant proxy', () => {
     consumeRpc.mockResolvedValue({ data: null, error: { message: 'rpc unavailable' } });
     const { state } = await invoke();
     expect(state.status).toBe(503);
+    expect(incrementUsage).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 
