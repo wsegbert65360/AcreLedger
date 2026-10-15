@@ -76,6 +76,8 @@ git() {
     expect(ci).toContain('apk add --no-cache curl jq git');
     expect(ci).toContain('GITHUB_SYNC_TOKEN');
     expect(ci).toContain('GITLAB_SYNC_TOKEN');
+    expect(ci).toContain('$CI_PIPELINE_SOURCE == "schedule"');
+    expect(ci).not.toContain('- if: $CI_MERGE_REQUEST_IID');
   });
 
   it.each([
