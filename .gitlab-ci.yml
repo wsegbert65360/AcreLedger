@@ -76,7 +76,9 @@ codemagic_nightly:
     - test -n "$CODEMAGIC_API_TOKEN" || { echo "CODEMAGIC_API_TOKEN not set" >&2; exit 1; }
     - sh scripts/ci/codemagic-nightly.sh
 
+# GitLab runs only the nightly schedule plus manual web runs; push/MR checks run on GitHub Actions (quality); Vercel deploys via its Git integration and does not depend on GitLab CI.
 workflow:
   rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - when: never
