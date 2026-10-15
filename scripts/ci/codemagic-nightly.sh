@@ -64,8 +64,15 @@ if [ "$GITLAB_SHA" != "$GITHUB_SHA" ]; then
 fi
 
 for WF in acreledger-ios acreledger-android; do
-  RESP=$(curl -fsS -H "$AUTH" "$API/builds?appId=${CODEMAGIC_APP_ID}&workflowId=${WF}&branch=main" \
-    | jq --arg wf "$WF" '{builds: [.builds[] | select(.fileWorkflowId==$wf and .branch=="main")]}')
+  # Capture curl before jq. A failed curl piped into jq would still look successful.
+  BUILDS_JSON=$(curl -fsS -H "$AUTH" "$API/builds?appId=${CODEMAGIC_APP_ID}&workflowId=${WF}&branch=main") || {
+    echo "NIGHTLY FAILED: $WF cannot list builds" >&2
+    exit 1
+  }
+  RESP=$(printf '%s\n' "$BUILDS_JSON" | jq --arg wf "$WF" '{builds: [.builds[] | select(.fileWorkflowId==$wf and .branch=="main")]}') || {
+    echo "NIGHTLY FAILED: $WF cannot parse builds" >&2
+    exit 1
+  }
   # Skip too if a build for this exact commit is already queued/running.
   ACTIVE=$(echo "$RESP" | jq -r --arg sha "$SHA" '[.builds[] | select(.status|IN("queued","preparing","fetching","building","publishing","testing")) | select(.commit.hash==$sha)] | length')
   LAST=$(echo "$RESP" | jq -r '[.builds[] | select(.status=="finished")] | sort_by(.startedAt) | last | .commit.hash // ""')
@@ -76,7 +83,16 @@ for WF in acreledger-ios acreledger-android; do
     echo "$WF: no changes since last successful build ($SHA) - skip"; continue
   fi
   echo "$WF: last successful=${LAST:-none}, main=$SHA - starting build"
-  curl -fsS -X POST -H "$AUTH" -H "Content-Type: application/json" \
+  TRIGGER_JSON=$(curl -fsS -X POST -H "$AUTH" -H "Content-Type: application/json" \
     -d "{\"appId\":\"${CODEMAGIC_APP_ID}\",\"workflowId\":\"${WF}\",\"branch\":\"main\"}" \
-    "$API/builds" | jq -c .
+    "$API/builds") || {
+    echo "NIGHTLY FAILED: $WF cannot start build" >&2
+    exit 1
+  }
+  # jq -er treats "" as success; accept only a non-empty string.
+  BUILD_ID=$(printf '%s\n' "$TRIGGER_JSON" | jq -er '.buildId | select(type == "string" and length > 0)') || {
+    echo "NIGHTLY FAILED: $WF response missing buildId" >&2
+    exit 1
+  }
+  echo "$WF: started build $BUILD_ID"
 done

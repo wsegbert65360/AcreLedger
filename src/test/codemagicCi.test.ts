@@ -137,4 +137,167 @@ git() {
     expect(result.stdout + result.stderr).not.toContain('fake-github-token');
     expect(result.stdout + result.stderr).not.toContain('fake-gitlab-token');
   });
+
+  function logicalLines(script: string): string[] {
+    const lines = script.split('\n');
+    const out: string[] = [];
+    let current = '';
+    for (const line of lines) {
+      if (line.endsWith('\\')) current += line.slice(0, -1);
+      else {
+        out.push(current + line);
+        current = '';
+      }
+    }
+    if (current) out.push(current);
+    return out;
+  }
+
+  it('fails closed when a Codemagic list or start call cannot be confirmed', () => {
+    const loop = nightly.slice(nightly.indexOf('for WF in'));
+    const curlLines = logicalLines(loop).filter((line) => /\bcurl\s+-/.test(line));
+    expect(nightly.startsWith('#!/bin/sh\n')).toBe(true);
+    expect(nightly).not.toMatch(/\bpipefail\b/);
+    expect(nightly).not.toMatch(/echo\b[^\n]*\$(AUTH|CODEMAGIC_API_TOKEN)\b/);
+    expect(curlLines.length).toBe(2);
+    for (const line of curlLines) {
+      expect(line).toContain('||');
+      expect(line).not.toMatch(/\|\s*jq\b/);
+    }
+    expect(loop).toContain("jq -er '.buildId | select(type == \"string\" and length > 0)'");
+    expect(loop).toContain('echo "$WF: started build $BUILD_ID"');
+    expect(loop).toContain('NIGHTLY FAILED: $WF cannot list builds');
+    expect(loop).toContain('NIGHTLY FAILED: $WF cannot parse builds');
+    expect(loop).toContain('NIGHTLY FAILED: $WF cannot start build');
+    expect(loop).toContain('NIGHTLY FAILED: $WF response missing buildId');
+    expect(loop).toContain('already in progress - skip');
+    expect(loop).toContain('no changes since last successful build');
+    expect(loop).not.toMatch(/echo\b[^\n]*\$(AUTH|BUILDS_JSON|TRIGGER_JSON|CODEMAGIC_API_TOKEN)\b/);
+  });
+
+  const buildSha = 'a'.repeat(40);
+  const buildToken = 'nightly-token-secret';
+  const buildCurl = `
+curl() {
+  method=GET
+  url=
+  prev=
+  for arg in "$@"; do
+    if [ "$prev" = "-X" ]; then method=$arg; fi
+    case "$arg" in
+      https://*|http://*) url=$arg ;;
+    esac
+    prev=$arg
+  done
+  case "$url" in
+    *api.github.com*)
+      printf '%s\\n' '{"sha":"'"$CI_COMMIT_SHA"'"}' ;;
+    *api.codemagic.io/builds*)
+      if [ "$method" = POST ]; then
+        if [ "\${POST_FAIL:-}" = 1 ]; then
+          echo "curl: (7) Failed to connect to api.codemagic.io" >&2
+          return 7
+        fi
+        printf '%s\\n' "\${POST_BODY:-}"
+        return 0
+      fi
+      if [ "\${GET_FAIL:-}" = 1 ]; then
+        echo "curl: (7) Failed to connect to api.codemagic.io" >&2
+        return 7
+      fi
+      printf '%s\\n' "\${GET_BODY:-}" ;;
+    *)
+      echo "unexpected curl" >&2
+      return 98 ;;
+  esac
+}
+git() { echo "git should not run" >&2; return 97; }
+`;
+  function buildRun(env: Record<string, string> = {}) {
+    return run(buildCurl + nightly, {
+      CI_COMMIT_SHA: buildSha,
+      CODEMAGIC_API_TOKEN: buildToken,
+      CODEMAGIC_APP_ID: 'app-test',
+      GET_FAIL: '',
+      POST_FAIL: '',
+      GET_BODY: '{"builds":[]}',
+      POST_BODY: '{"buildId":"build-123"}',
+      ...env,
+    });
+  }
+  function expectNoBuildSecrets(result: { stdout: string; stderr: string }) {
+    const output = result.stdout + result.stderr;
+    expect(output).not.toContain(buildToken);
+    expect(output).not.toContain('x-auth-token');
+    expect(output).not.toContain('fake-github-token');
+    expect(output).not.toContain('fake-gitlab-token');
+  }
+
+  it('exits nonzero when the start POST cannot connect', () => {
+    const result = buildRun({ POST_FAIL: '1' });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios cannot start build');
+    expect(result.stderr).toContain('curl: (7) Failed to connect to api.codemagic.io');
+    expect(result.stderr).not.toContain('acreledger-android');
+    expect(result.stdout).not.toContain('started build');
+    expectNoBuildSecrets(result);
+  });
+
+  it.each([
+    '{}',
+    '{"buildId":null}',
+    '{"buildId":""}',
+    '{"buildId":42}',
+  ])('exits nonzero when the start response has no build id (%s)', (body) => {
+    const result = buildRun({ POST_BODY: body });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios response missing buildId');
+    expect(result.stderr).not.toContain('acreledger-android');
+    expect(result.stdout).not.toContain('started build');
+    expectNoBuildSecrets(result);
+  });
+
+  it.each([
+    [{ GET_FAIL: '1' }, 'cannot list builds'],
+    [{ GET_BODY: 'not-json' }, 'cannot parse builds'],
+  ])('exits nonzero when listing builds fails (%j)', (env, reason) => {
+    const result = buildRun(env);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('NIGHTLY FAILED: acreledger-ios ' + reason);
+    expect(result.stderr).not.toContain('acreledger-android');
+    expect(result.stdout).not.toContain('starting build');
+    expect(result.stdout).not.toContain('started build');
+    expectNoBuildSecrets(result);
+  });
+
+  it('prints the build id when Codemagic accepts the start request', () => {
+    const result = buildRun();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('acreledger-ios: started build build-123');
+    expect(result.stdout).toContain('acreledger-android: started build build-123');
+    expect(result.stderr).not.toContain('NIGHTLY FAILED');
+    expectNoBuildSecrets(result);
+  });
+
+  it.each([
+    ['finished', `no changes since last successful build (${buildSha}) - skip`],
+    ['building', `build for ${buildSha} already in progress - skip`],
+  ])('keeps the %s skip path and does not post', (status, message) => {
+    const body = JSON.stringify({
+      builds: ['acreledger-ios', 'acreledger-android'].map((workflowId) => ({
+        fileWorkflowId: workflowId,
+        branch: 'main',
+        status,
+        startedAt: '2026-10-01T00:00:00.000Z',
+        commit: { hash: buildSha },
+      })),
+    });
+    const result = buildRun({ GET_BODY: body, POST_FAIL: '1' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('acreledger-ios: ' + message);
+    expect(result.stdout).toContain('acreledger-android: ' + message);
+    expect(result.stdout).not.toContain('started build');
+    expect(result.stderr).not.toContain('NIGHTLY FAILED');
+    expectNoBuildSecrets(result);
+  });
 });
