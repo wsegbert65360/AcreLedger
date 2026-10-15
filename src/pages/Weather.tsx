@@ -19,15 +19,18 @@ import ForecastGrid from '@/components/weather/ForecastGrid';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import RadarEmbed from '@/components/weather/RadarEmbed';
 import { SprayDecisionMatrix } from '@/components/weather/SprayDecisionMatrix';
-import { native } from '@/lib/native';
+import { isNativePlatform, native } from '@/lib/native';
 import {
+  fallbackToFields,
   formatTime,
   getConditionGradient,
   getWeatherLucideIcon,
   getWindRotation,
+  loadCachedWeatherCoords,
   loadZip,
   matchFieldByCoords,
   resolveCoords,
+  saveCachedWeatherCoords,
   saveZip,
   ZIP_REGEX,
 } from '@/lib/weatherHelpers';
@@ -40,7 +43,7 @@ import { ExtendedWeatherData } from '@/types/weather';
 
 export default function Weather() {
   const navigate = useNavigate();
-  const { session, fields } = useFarm();
+  const { session, fields, initialFetchComplete } = useFarm();
   const userId = session?.user?.id;
 
   const [weather, setWeather] = useState<ExtendedWeatherData | null>(null);
@@ -134,6 +137,21 @@ export default function Weather() {
     const saved = loadZip(userId);
     const hasSavedOrFields = saved.trim() !== '' || Boolean(fieldCoordsKey);
 
+    // Empty fields on first paint must not trigger a Safari location prompt.
+    // Serve a cached GPS fix immediately; wait for the store before a live read.
+    if (!hasSavedOrFields && !initialFetchComplete) {
+      const cached = loadCachedWeatherCoords();
+      if (cached) {
+        setCoords({ lat: cached.lat, lng: cached.lon });
+        setUsingGps(false);
+        loadWeather(`${cached.lat},${cached.lon}`);
+      } else {
+        setLoading(true);
+        setUsingGps(false);
+      }
+      return;
+    }
+
     setLoading(true);
     setUsingGps(!hasSavedOrFields);
 
@@ -154,7 +172,7 @@ export default function Weather() {
       });
 
     return () => { cancelled = true; };
-  }, [userId, locationEffectKey, loadWeather]);
+  }, [userId, fieldCoordsKey, locationEffectKey, loadWeather, initialFetchComplete]);
 
   useEffect(() => {
     return () => {
@@ -166,7 +184,7 @@ export default function Weather() {
   useEffect(() => {
     const interval = setInterval(() => {
       const saved = loadZip(userId);
-      resolveCoords(fieldsRef.current, saved)
+      resolveCoords(fieldsRef.current, saved, { passive: true })
         .then(({ lat, lng, locationString }) => {
           const hasCoords = lat !== 0 && lng !== 0;
           setCoords(hasCoords ? { lat, lng } : null);
@@ -208,20 +226,55 @@ export default function Weather() {
     setLoading(true);
     setUsingGps(true);
     setSearchError('');
-    native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000 })
-      .then((pos) => {
-        const lat = Math.round(pos.coords.latitude * 10000) / 10000;
-        const lng = Math.round(pos.coords.longitude * 10000) / 10000;
-        const locStr = `${lat},${lng}`;
-        setInputLoc(locStr);
-        setCoords({ lat, lng });
-        saveZip(locStr, userId);
-        loadWeather(locStr);
+
+    // Capacitor permission UX stays on the plugin call, with the same options.
+    if (isNativePlatform()) {
+      native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000 })
+        .then((pos) => {
+          const lat = Math.round(pos.coords.latitude * 10000) / 10000;
+          const lng = Math.round(pos.coords.longitude * 10000) / 10000;
+          const locStr = `${lat},${lng}`;
+          setInputLoc(locStr);
+          setCoords({ lat, lng });
+          saveZip(locStr, userId);
+          saveCachedWeatherCoords({ lat, lon: lng, ts: Date.now() });
+          loadWeather(locStr);
+        })
+        .catch(() => {
+          setSearchError('Failed to get GPS location');
+          setLoading(false);
+          setUsingGps(false);
+        });
+      return;
+    }
+
+    // Web: an explicit tap may request a fix (maximumAge included). Denied,
+    // or a dismissed prompt, falls back to the cache or saved location quietly.
+    resolveCoords([], '', { forceRefresh: true })
+      .then(({ lat, lng, locationString }) => {
+        if (lat !== 0 || lng !== 0) {
+          const locStr = locationString || `${lat},${lng}`;
+          setInputLoc(locStr);
+          setCoords({ lat, lng });
+          saveZip(locStr, userId);
+          setUsingGps(false);
+          loadWeather(locStr);
+          return;
+        }
+        const fallback = fallbackToFields(fieldsRef.current, loadZip(userId));
+        setUsingGps(false);
+        if (fallback.locationString) {
+          if (fallback.lat !== 0 || fallback.lng !== 0) {
+            setCoords({ lat: fallback.lat, lng: fallback.lng });
+          }
+          loadWeather(fallback.locationString);
+          return;
+        }
+        setLoading(false);
       })
       .catch(() => {
-        setSearchError('Failed to get GPS location');
-        setLoading(false);
         setUsingGps(false);
+        setLoading(false);
       });
   }, [userId, loadWeather]);
 
@@ -231,7 +284,7 @@ export default function Weather() {
     const hasSavedOrFields = saved.trim() !== '' || fields.some(f => f.lat != null && f.lng != null);
     setUsingGps(!hasSavedOrFields);
 
-    resolveCoords(fields, saved)
+    resolveCoords(fields, saved, { forceRefresh: true })
       .then(({ lat, lng, locationString }) => {
         const gotGps = lat !== 0 && lng !== 0;
         setCoords(gotGps ? { lat, lng } : null);

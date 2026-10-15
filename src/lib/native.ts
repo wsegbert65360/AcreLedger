@@ -8,6 +8,11 @@ import { toast } from 'sonner';
 
 const isNative = Capacitor.isNativePlatform();
 
+/** Live platform check so web-only geolocation policy can skip Capacitor. */
+export function isNativePlatform(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
 export function sanitizeNativeFileName(fileName: string): string {
   const cleanName = fileName
     // eslint-disable-next-line no-control-regex

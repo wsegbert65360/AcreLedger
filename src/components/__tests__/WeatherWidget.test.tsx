@@ -20,6 +20,7 @@ vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     session: { user: { id: 'user-1' } },
     fields: farmState.fields,
+    initialFetchComplete: true,
   }),
 }));
 
