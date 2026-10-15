@@ -19,6 +19,14 @@ import { Button } from '@/components/ui/button';
 import { native } from '@/lib/native';
 import { assertSupportedBackupVersion, normalizeBackupForRestore } from '@/lib/backupCompatibility';
 import { backupCollectionCounts, backupSchema, type BackupData } from '@/lib/backupSchema';
+import {
+  canRestoreFarmBackup,
+  isPreSeasonResetBackup,
+  PRE_SEASON_RESET_WARNING,
+  preSeasonRollbackTables,
+  RESTORE_RESURRECT_WARNING,
+  RESTORE_ROLE_DENIED,
+} from '@/lib/backupRestorePolicy';
 import { useFarm } from '@/store/farmStore';
 import {
   clearRolloverDismiss,
@@ -30,7 +38,7 @@ import {
 export default function SeasonRolloverModal() {
   const {
     session, activeSeason, rolloverToNewSeason, restoreFromBackup, loading,
-    initialFetchComplete, fetchError, pendingSyncCount,
+    initialFetchComplete, fetchError, pendingSyncCount, farmRole,
   } = useFarm();
   const [open, setOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -38,6 +46,7 @@ export default function SeasonRolloverModal() {
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
   const [pendingBackup, setPendingBackup] = useState<BackupData | null>(null);
+  const [pendingPreSeason, setPendingPreSeason] = useState(false);
   const [switchActiveSeason, setSwitchActiveSeason] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentYear = new Date().getFullYear();
@@ -81,10 +90,16 @@ export default function SeasonRolloverModal() {
   };
 
   const restoreBlocked = !initialFetchComplete || fetchError || pendingSyncCount > 0;
+  const restoreAllowed = canRestoreFarmBackup(farmRole);
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!restoreAllowed) {
+      toast.error(RESTORE_ROLE_DENIED);
+      resetFileInput();
+      return;
+    }
     if (restoreBlocked) {
       toast.error('Wait for cloud data and pending changes to finish syncing before restore.');
       resetFileInput();
@@ -100,9 +115,12 @@ export default function SeasonRolloverModal() {
       const data = JSON.parse(await file.text());
       assertSupportedBackupVersion(data?.backupVersion);
       const backup = backupSchema.parse(normalizeBackupForRestore(data));
+      const preSeason = isPreSeasonResetBackup(file.name, backup);
+      const seasonDiffers = backup.activeSeason !== undefined && backup.activeSeason !== activeSeason;
       setPendingRestoreFile(file);
       setPendingBackup(backup);
-      setSwitchActiveSeason(false);
+      setPendingPreSeason(preSeason);
+      setSwitchActiveSeason(preSeason && seasonDiffers);
       setRestoreConfirmOpen(true);
     } catch (err) {
       console.error('Failed to read backup:', err);
@@ -130,6 +148,8 @@ export default function SeasonRolloverModal() {
         && pendingBackup.activeSeason !== activeSeason;
       const success = await restoreFromBackup(data, {
         switchActiveSeason: seasonDiffers && switchActiveSeason,
+        preSeasonReset: pendingPreSeason,
+        rollbackTables: pendingPreSeason ? preSeasonRollbackTables(data) : undefined,
       });
       if (success) {
         native.haptic.success();
@@ -153,6 +173,7 @@ export default function SeasonRolloverModal() {
       setRestoring(false);
       setPendingRestoreFile(null);
       setPendingBackup(null);
+      setPendingPreSeason(false);
       setSwitchActiveSeason(false);
       setRestoreConfirmOpen(false);
       resetFileInput();
@@ -163,6 +184,7 @@ export default function SeasonRolloverModal() {
     setRestoreConfirmOpen(false);
     setPendingRestoreFile(null);
     setPendingBackup(null);
+    setPendingPreSeason(false);
     setSwitchActiveSeason(false);
     resetFileInput();
   };
@@ -212,7 +234,7 @@ export default function SeasonRolloverModal() {
                   <span className="text-foreground">Prior-year records:</span> {activeSeason} activity stays in your database; use the season selector in the sidebar to view it.
                 </li>
                 <li>
-                  <span className="text-foreground">New-year dashboard:</span> {targetSeason == null ? 'No season change is available yet. Restore remains available below.' : `Lists and stats default to ${targetSeason} until you add records for this season. Nothing is deleted.`}
+                  <span className="text-foreground">New-year dashboard:</span> {targetSeason == null ? (restoreAllowed ? 'No season change is available yet. Restore remains available below.' : 'No season change is available yet.') : `Lists and stats default to ${targetSeason} until you add records for this season. Nothing is deleted.`}
                 </li>
               </ul>
             </div>
@@ -222,11 +244,14 @@ export default function SeasonRolloverModal() {
                 <div className="space-y-0.5 min-w-0">
                   <h4 className="text-xs font-semibold font-mono text-muted-foreground">Restore from backup</h4>
                   <p className="text-xs font-mono text-muted-foreground/70">
-                    {restoreBlocked
-                      ? 'Wait for cloud data and pending changes to finish syncing before restore.'
-                      : 'Merges backup rows into your cloud farm, then reloads from the cloud.'}
+                    {!restoreAllowed
+                      ? `${RESTORE_ROLE_DENIED} You can still download a backup.`
+                      : restoreBlocked
+                        ? 'Wait for cloud data and pending changes to finish syncing before restore.'
+                        : 'Merges backup rows into your cloud farm, then reloads from the cloud.'}
                   </p>
                 </div>
+                {restoreAllowed && (
                 <div className="relative shrink-0">
                   <input
                     ref={fileInputRef}
@@ -256,6 +281,7 @@ export default function SeasonRolloverModal() {
                     {restoring ? 'Restoring…' : restoreSuccess ? 'Done' : 'Upload JSON'}
                   </Button>
                 </div>
+                )}
               </div>
             </div>
           </div>
@@ -310,9 +336,10 @@ export default function SeasonRolloverModal() {
                     ))}
                   </ul>
                 )}
-                <p>
-                  Records deleted since this backup will be restored; newer edits to the same records will be replaced.
-                </p>
+                <p>{RESTORE_RESURRECT_WARNING}</p>
+                {pendingPreSeason && (
+                  <p className="text-amber-700 dark:text-amber-400">{PRE_SEASON_RESET_WARNING}</p>
+                )}
                 {pendingBackup?.activeSeason != null && pendingBackup.activeSeason !== activeSeason && (
                   <label className="flex items-start gap-2 text-foreground pt-1">
                     <input

@@ -31,6 +31,7 @@ const farm = vi.hoisted(() => ({
     equipmentLoadFailed: false,
     dataLoadSource: 'cloud' as const,
     dataLoadedAt: '2026-10-13T00:00:00.000Z',
+    farmRole: 'owner' as string | null,
   },
 }));
 
@@ -59,6 +60,7 @@ describe('BackupManager load gates', () => {
     farm.current.equipmentLoadFailed = false;
     farm.current.dataLoadSource = 'cloud';
     farm.current.dataLoadedAt = '2026-10-13T00:00:00.000Z';
+    farm.current.farmRole = 'owner';
   });
 
   it('blocks download until the first cloud fetch finishes', () => {
@@ -90,5 +92,16 @@ describe('BackupManager load gates', () => {
       loadedAt: '2026-10-13T00:00:00.000Z',
       backupVersion: 3,
     }));
+  });
+
+  it('lets a worker download a backup and hides restore', async () => {
+    farm.current.farmRole = 'worker';
+    render(<BackupManager />);
+    expect(screen.getByRole('button', { name: /Download Backup JSON/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^Season rollover$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /and restore/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Only the farm owner or an admin can restore a backup/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Download Backup JSON/i }));
+    await waitFor(() => expect(exportDataAsJson).toHaveBeenCalled());
   });
 });

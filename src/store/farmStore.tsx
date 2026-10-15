@@ -185,6 +185,8 @@ interface FarmState {
   farm_id: string | null;
   /** Display name of the current farm */
   farmName: string | null;
+  /** owner, admin, or worker. Null until the profile role is loaded. */
+  farmRole: 'owner' | 'admin' | 'worker' | null;
   /** Update display name of the current farm */
   updateFarmName: (name: string) => Promise<boolean>;
   /** Whether the user has completed the onboarding flow */
@@ -241,7 +243,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     farm_id, setFarmId,
     activeSeason, setActiveSeason,
     viewingSeason, setViewingSeason,
-    onboardingComplete, setOnboardingComplete, ensureFarm,
+    onboardingComplete, setOnboardingComplete, farmRole, ensureFarm,
   } = auth;
   const sessionResolved = session !== undefined;
   const sessionUserId = session?.user?.id ?? null;
@@ -836,6 +838,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     initialFetchComplete,
     fetchError,
     pendingSyncCount,
+    farmRole,
   });
 
   // --- Composed signOut (auth + cache clear) ---
@@ -1005,6 +1008,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       clearLocalCache: seasonOps.clearLocalCache,
       farm_id,
       farmName,
+      farmRole,
       updateFarmName,
       onboardingComplete,
       completeOnboarding,

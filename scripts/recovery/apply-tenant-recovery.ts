@@ -35,11 +35,13 @@ export interface ApplyOptions {
   dryRun: boolean;
   farmId: string;
   confirm: string;
+  /** Snapshot mode only. Exact farm name, trimmed. Merge callers may omit it. */
+  confirmFarmName?: string;
   preBackupVerified: boolean;
   executor: ApplyExecutor;
 }
 
-const SNAPSHOT_CONFIRM = "RESTORE-FARM-TO-SNAPSHOT";
+const SNAPSHOT_CONFIRM = "RESTORE";
 const MERGE_CONFIRM = "MERGE-MISSING-DATA";
 const SAFE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
 
@@ -119,6 +121,33 @@ async function populateConflicts(plan: ApplyPlan, bundle: TenantBundle, executor
   }
 }
 
+function farmNameFromBundle(bundle: TenantBundle): string {
+  const rows = bundle.tables["public.farms"] ?? [];
+  const match = rows.find((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+    return String((row as Record<string, unknown>).id) === bundle.farmId;
+  }) as Record<string, unknown> | undefined;
+  const name = match?.name;
+  if (typeof name !== "string" || name.trim() === "") {
+    throw new Error("Snapshot restore cannot find the farm name in the bundle.");
+  }
+  return name.trim();
+}
+
+function assertSnapshotConfirmations(options: ApplyOptions): void {
+  const expectedName = farmNameFromBundle(options.bundle);
+  const typedName = options.confirmFarmName?.trim() ?? "";
+  if (typedName === "") {
+    throw new Error("Snapshot restore requires the farm name as the first typed confirmation.");
+  }
+  if (typedName !== expectedName) {
+    throw new Error("Typed farm name does not match the snapshot farm.");
+  }
+  if (options.confirm !== SNAPSHOT_CONFIRM) {
+    throw new Error("Snapshot restore requires typed confirmation RESTORE.");
+  }
+}
+
 export function buildApplyPlan(options: ApplyOptions): ApplyPlan {
   assertTenantBundleChecksum(options.bundle);
   if (options.bundle.registryVersion !== TENANT_REGISTRY_VERSION) {
@@ -129,8 +158,8 @@ export function buildApplyPlan(options: ApplyOptions): ApplyPlan {
   if (options.farmId !== options.bundle.farmId) {
     throw new Error("Target farm_id does not match the bundle.");
   }
-  if (options.mode === "snapshot" && options.confirm !== SNAPSHOT_CONFIRM) {
-    throw new Error("Snapshot restore requires typed confirmation RESTORE-FARM-TO-SNAPSHOT.");
+  if (options.mode === "snapshot") {
+    assertSnapshotConfirmations(options);
   }
   if (options.mode === "merge" && options.confirm !== MERGE_CONFIRM) {
     throw new Error("Merge restore requires typed confirmation MERGE-MISSING-DATA.");
@@ -280,6 +309,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         dryRun,
         farmId: arg("--farm-id") ?? "",
         confirm: arg("--confirm") ?? "",
+        confirmFarmName: arg("--confirm-farm-name"),
         preBackupVerified: process.argv.includes("--pre-backup-verified"),
         executor,
       });
