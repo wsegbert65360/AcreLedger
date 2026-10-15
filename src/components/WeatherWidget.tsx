@@ -3,7 +3,16 @@ import { useNavigate } from 'react-router-dom';
 
 import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer } from 'lucide-react';
 
-import { getWindRotation, loadZip, matchFieldByCoords, saveZip, ZIP_REGEX } from '@/lib/weatherHelpers';
+import { isNativePlatform } from '@/lib/native';
+import {
+  getWindRotation,
+  loadCachedWeatherCoords,
+  loadZip,
+  matchFieldByCoords,
+  resolveCoords,
+  saveZip,
+  ZIP_REGEX,
+} from '@/lib/weatherHelpers';
 import { RainService } from '@/services/RainService';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
@@ -14,7 +23,7 @@ function initialWeather(): WeatherData {
 }
 
 export default function WeatherBar() {
-  const { session, fields } = useFarm();
+  const { session, fields, initialFetchComplete } = useFarm();
   const userId = session?.user?.id;
   const navigate = useNavigate();
 
@@ -30,24 +39,58 @@ export default function WeatherBar() {
   // from flashing on the initial load or a retry.
   const [hasData, setHasData] = useState(false);
   const hasDataRef = useRef(false);
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+
+  const firstFieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
+  const fieldCoordsKey = firstFieldWithCoords && firstFieldWithCoords.lat != null && firstFieldWithCoords.lng != null
+    ? `${firstFieldWithCoords.lat},${firstFieldWithCoords.lng}`
+    : '';
 
   useEffect(() => {
     const saved = loadZip(userId);
     if (saved) {
       setZip(saved);
       setInputZip(saved);
-    } else {
-      const fieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
-      if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
-        setZip(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
+      return;
+    }
+
+    const fieldWithCoords = fieldsRef.current.find(f => f.lat != null && f.lng != null);
+    if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
+      setZip(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
+      setInputZip('');
+      setUsingCoords(true);
+      return;
+    }
+
+    const cached = loadCachedWeatherCoords();
+    if (cached) {
+      setZip(`${cached.lat},${cached.lon}`);
+      setInputZip('');
+      setUsingCoords(true);
+    }
+
+    // Wait for fields to hydrate before a live GPS read so Safari is not
+    // prompted on every launch while `fields` is still the empty first paint.
+    if (!initialFetchComplete) return;
+
+    // Native geolocation stays on the weather page's existing Capacitor call.
+    // The dashboard card must not start a second fix on every launch.
+    if (isNativePlatform()) return;
+
+    let cancelled = false;
+    resolveCoords(fieldsRef.current, saved).then(({ lat, lng, locationString }) => {
+      if (cancelled || !locationString) return;
+      setZip(locationString);
+      if (lat !== 0 && lng !== 0) {
         setInputZip('');
         setUsingCoords(true);
       }
-    }
-  }, [userId, fields]);
-
-  const fieldsRef = useRef(fields);
-  fieldsRef.current = fields;
+    }).catch((error: unknown) => {
+      console.error('[WeatherWidget] Failed to resolve location:', error);
+    });
+    return () => { cancelled = true; };
+  }, [userId, fieldCoordsKey, initialFetchComplete]);
 
   const abortRef = useRef<AbortController | null>(null);
 

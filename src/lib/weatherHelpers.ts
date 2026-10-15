@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-import { native } from '@/lib/native';
+import { isNativePlatform, native } from '@/lib/native';
 
 /** Regex for 5-digit or 5+4-digit US zip codes. */
 export const ZIP_REGEX = /^\d{5}(-\d{4})?$/;
@@ -27,6 +27,129 @@ export function saveZip(zip: string, userId?: string): void {
   } catch {
     /* ignore storage errors */
   }
+}
+
+/** Last GPS fix used for weather. `{lat,lon,ts}` as stored in localStorage. */
+export type CachedWeatherCoords = { lat: number; lon: number; ts: number };
+
+export type GeolocationPermissionState = 'granted' | 'denied' | 'prompt' | 'unknown';
+
+export type ResolveCoordsOptions = {
+  /** User tapped refresh — request a live position even if the cache is fresh. */
+  forceRefresh?: boolean;
+  /**
+   * Background timer. Never prompts. A live fix runs only when permission is
+   * already granted and the cached fix is older than 6 hours.
+   */
+  passive?: boolean;
+};
+
+export const WEATHER_COORDS_CACHE_KEY = 'al_weather_coords';
+/** Skip a live GPS read on load when the cached fix is newer than this. */
+export const WEATHER_COORDS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+/** Allow the browser to reuse a recent OS fix instead of a cold GPS lock. */
+export const GEOLOCATION_MAX_AGE_MS = 30 * 60 * 1000;
+
+function roundCoord(value: number): number {
+  return Math.round(value * 10000) / 10000;
+}
+
+function isFiniteCoord(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+/**
+ * Read the Permissions API geolocation state when the browser supports it.
+ * Safari iOS often throws or omits `navigator.permissions` — never let that
+ * reject the weather load.
+ */
+export async function queryGeolocationPermission(): Promise<GeolocationPermissionState> {
+  try {
+    const permissions = typeof navigator === 'undefined' ? undefined : navigator.permissions;
+    if (!permissions || typeof permissions.query !== 'function') return 'unknown';
+    const status = await permissions.query({ name: 'geolocation' });
+    if (status.state === 'granted' || status.state === 'denied' || status.state === 'prompt') {
+      return status.state;
+    }
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Read the last weather GPS fix from localStorage. */
+export function loadCachedWeatherCoords(): CachedWeatherCoords | null {
+  try {
+    const raw = localStorage.getItem(WEATHER_COORDS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const { lat, lon, ts } = parsed as Record<string, unknown>;
+    if (!isFiniteCoord(lat) || !isFiniteCoord(lon) || !isFiniteCoord(ts)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180 || ts <= 0) return null;
+    return { lat: roundCoord(lat), lon: roundCoord(lon), ts };
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a weather GPS fix. Swallows quota / private-mode storage errors. */
+export function saveCachedWeatherCoords(coords: CachedWeatherCoords): void {
+  try {
+    const payload: CachedWeatherCoords = {
+      lat: roundCoord(coords.lat),
+      lon: roundCoord(coords.lon),
+      ts: coords.ts,
+    };
+    localStorage.setItem(WEATHER_COORDS_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+function coordsFromCache(cached: CachedWeatherCoords): { lat: number; lng: number; locationString: string } {
+  return {
+    lat: cached.lat,
+    lng: cached.lon,
+    locationString: `${cached.lat},${cached.lon}`,
+  };
+}
+
+function isCacheStale(cached: CachedWeatherCoords, now = Date.now()): boolean {
+  return now - cached.ts > WEATHER_COORDS_CACHE_TTL_MS;
+}
+
+/**
+ * Decide whether a web weather load should call `getCurrentPosition`.
+ * Native Capacitor keeps requesting a fix whenever the GPS path is reached.
+ */
+export function shouldRequestWeatherGeolocation({
+  forceRefresh,
+  passive = false,
+  permission,
+  hasCache,
+  cacheStale,
+  nativePlatform,
+}: {
+  forceRefresh: boolean;
+  passive?: boolean;
+  permission: GeolocationPermissionState;
+  hasCache: boolean;
+  cacheStale: boolean;
+  nativePlatform: boolean;
+}): boolean {
+  if (nativePlatform) return true;
+  if (permission === 'denied') return false;
+  if (forceRefresh) return true;
+  // A timer must not surface the Safari prompt. Refresh only a known grant
+  // whose cached fix is actually stale.
+  if (passive) return permission === 'granted' && hasCache && cacheStale;
+  if (!hasCache) return true;
+  // Safari often reports "prompt" (or throws, which we map to "unknown")
+  // even after the user allowed location once. A cache means we already have
+  // a fix — do not re-prompt on load.
+  if (permission === 'prompt' || permission === 'unknown') return false;
+  return cacheStale;
 }
 
 /** Format the current time as 'h:mm AM/PM'. */
@@ -62,43 +185,78 @@ export function fallbackToFields(
   return { lat: 0, lng: 0, locationString: savedZip || '' };
 }
 
+function requestWeatherPosition(
+  fallback: { lat: number; lng: number; locationString: string },
+  cached: CachedWeatherCoords | null,
+): Promise<{ lat: number; lng: number; locationString: string }> {
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      resolve(cached ? coordsFromCache(cached) : fallback);
+    }, 5000);
+
+    const options: PositionOptions = {
+      enableHighAccuracy: false,
+      timeout: 4000,
+    };
+    if (!isNativePlatform()) {
+      options.maximumAge = GEOLOCATION_MAX_AGE_MS;
+    }
+
+    native.geolocation.getCurrentPosition(options)
+      .then((pos) => {
+        clearTimeout(timeoutId);
+        const lat = roundCoord(pos.coords.latitude);
+        const lng = roundCoord(pos.coords.longitude);
+        saveCachedWeatherCoords({ lat, lon: lng, ts: Date.now() });
+        resolve({ lat, lng, locationString: `${lat},${lng}` });
+      })
+      .catch(() => {
+        clearTimeout(timeoutId);
+        resolve(cached ? coordsFromCache(cached) : fallback);
+      });
+  });
+}
+
 /**
  * Resolve coordinates for weather + radar.
  *
  * Priority:
  *   1. Saved zip/coords or field coordinates (via `fallbackToFields`)
- *   2. Browser / native GPS
+ *   2. Cached GPS fix, then a live browser / native GPS read
  *
  * GPS is only attempted when no saved location or field coords exist.
+ * On web, load does not call GPS when a cached fix exists and permission is
+ * not a confirmed grant (prompt, denied, or Permissions API missing/throwing).
+ * Safari iOS otherwise re-prompts on almost every launch. Native Capacitor
+ * still requests a fix whenever this GPS path is reached.
  */
-export function resolveCoords(
+export async function resolveCoords(
   fields: { lat: number | null; lng: number | null }[],
   savedZip: string,
+  options?: ResolveCoordsOptions,
 ): Promise<{ lat: number; lng: number; locationString: string }> {
   const fallback = fallbackToFields(fields, savedZip);
   if ((fallback.lat !== 0 && fallback.lng !== 0) || savedZip.trim()) {
-    return Promise.resolve(fallback);
+    return fallback;
   }
 
-  // Browser GPS is only requested when no saved location or field coords exist.
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      // GPS took too long — use fallback
-      resolve(fallback);
-    }, 5000);
-
-    native.geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000 })
-      .then((pos) => {
-        clearTimeout(timeoutId);
-        const lat = Math.round(pos.coords.latitude * 10000) / 10000;
-        const lng = Math.round(pos.coords.longitude * 10000) / 10000;
-        resolve({ lat, lng, locationString: `${lat},${lng}` });
-      })
-      .catch(() => {
-        clearTimeout(timeoutId);
-        resolve(fallback);
-      });
+  const cached = loadCachedWeatherCoords();
+  const nativePlatform = isNativePlatform();
+  const permission = nativePlatform ? 'unknown' : await queryGeolocationPermission();
+  const requestGps = shouldRequestWeatherGeolocation({
+    forceRefresh: options?.forceRefresh === true,
+    passive: options?.passive === true,
+    permission,
+    hasCache: cached != null,
+    cacheStale: cached ? isCacheStale(cached) : true,
+    nativePlatform,
   });
+
+  if (!requestGps) {
+    return cached ? coordsFromCache(cached) : fallback;
+  }
+
+  return requestWeatherPosition(fallback, cached);
 }
 
 /**
