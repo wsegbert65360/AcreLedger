@@ -186,7 +186,7 @@ describe('WeatherBar without a location', () => {
     render(<WeatherBar />);
     fireEvent.click(await screen.findByRole('heading', { name: 'No Location' }));
     expect(screen.getByLabelText('Zip code or coordinates')).toBeInTheDocument();
-    expect(screen.queryByText('Loading?')).toBeNull();
+    expect(screen.queryByText(/Loading/)).toBeNull();
     expect(fetchCurrentWeather).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Open weather' })).toBeNull();
@@ -199,7 +199,7 @@ describe('WeatherBar without a location', () => {
   it('waits for field hydration', () => {
     farmState.initialFetchComplete = false;
     render(<WeatherBar />);
-    expect(screen.getByText('Loading?')).toBeInTheDocument();
+    expect(screen.getByText(/Loading/)).toBeInTheDocument();
     expect(screen.queryByText('No Location')).toBeNull();
   });
   it('saves a submitted ZIP and loads the normal card', async () => {
