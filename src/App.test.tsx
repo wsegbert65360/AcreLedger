@@ -157,6 +157,7 @@ const signedInState = {
   farm_id: 'farm-1',
   fields: [{ id: 'field-1', name: 'North', acreage: 40, deleted_at: null }],
   onboardingComplete: true,
+  onboardingStatusKnown: true,
   initialFetchComplete: true,
   fetchError: null,
 };
@@ -697,5 +698,49 @@ describe('signed-in routing (preserved behavior)', () => {
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to fields' })).toHaveAttribute('href', '/');
     expect(screen.queryByRole('button', { name: 'Quick add record' })).not.toBeInTheDocument();
+  });
+
+  it('stays on the dashboard while onboarding status is still unknown', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = {
+      ...signedInState,
+      fields: [],
+      onboardingComplete: false,
+      initialFetchComplete: true,
+      onboardingStatusKnown: false,
+    };
+    renderApp();
+    expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('sends a known new user with no fields to onboarding', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = {
+      ...signedInState,
+      fields: [],
+      onboardingComplete: false,
+      initialFetchComplete: true,
+      onboardingStatusKnown: true,
+    };
+    renderApp();
+    await vi.waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
+    expect(screen.queryByTestId('app-dashboard')).not.toBeInTheDocument();
+  });
+
+  it('redirects /setup to settings', async () => {
+    navigate('/setup');
+    renderApp();
+    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('');
+  });
+
+  it('keeps the query string when redirecting /setup', async () => {
+    navigate('/setup?section=billing');
+    renderApp();
+    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('?section=billing');
   });
 });

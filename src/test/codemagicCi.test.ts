@@ -196,10 +196,17 @@ const jqStubSource = String.raw`
 });
 `;
 
+// Git Bash splits PATH on every colon, so a "C:/..." temp dir is not one entry.
+function toShellPath(dir: string): string {
+  const forward = dir.split('\\').join('/');
+  const drive = /^([A-Za-z]):\/(.*)$/.exec(forward);
+  return drive ? `/${drive[1].toLowerCase()}/${drive[2]}` : forward;
+}
+
 function run(source: string, env: Record<string, string> = {}) {
   const dir = mkdtempSync(resolve(tmpdir(), 'codemagic-test-'));
   try {
-    const testDir = dir.split('\\').join('/');
+    const testDir = toShellPath(dir);
     writeFileSync(resolve(dir, 'jq-stub.js'), jqStubSource);
     return spawnSync(shell, ['-c', source], {
       encoding: 'utf8',

@@ -7,6 +7,7 @@ const vercel = JSON.parse(
   readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8'),
 ) as {
   headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
+  rewrites: Array<{ source: string; destination: string }>;
 };
 
 function headerMap(source: string): Map<string, string> {
@@ -40,5 +41,19 @@ describe('vercel.json security headers', () => {
     expect(csp).toContain('https://nominatim.openstreetmap.org');
     expect(csp).toContain('https://itunes.apple.com');
     expect(csp).toContain('https://cdnjs.cloudflare.com');
+  });
+});
+
+describe('vercel.json cache and asset rewrites', () => {
+  it('does not rewrite missing hashed assets to index.html', () => {
+    const rewrite = vercel.rewrites.find(entry => entry.destination === '/index.html');
+    expect(rewrite?.source).toBe('/((?!api/|assets/).*)');
+  });
+
+  it('caches hashed assets immutably and keeps the shell uncached', () => {
+    expect(headerMap('/assets/(.*)').get('Cache-Control')).toBe('public, max-age=31536000, immutable');
+    expect(headerMap('/').get('Cache-Control')).toContain('no-store');
+    expect(headerMap('/index.html').get('Cache-Control')).toContain('no-store');
+    expect(headerMap('/(sw.js|service-worker.js)').get('Cache-Control')).toContain('no-store');
   });
 });

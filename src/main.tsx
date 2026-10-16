@@ -18,6 +18,7 @@ import "./index.css";
 
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { installGlobalErrorHandlers } from "./utils/errorReporting.ts";
+import { createReloadOnce } from "./lib/swReload.ts";
 import { registerSW } from 'virtual:pwa-register';
 
 installGlobalErrorHandlers();
@@ -43,34 +44,7 @@ if (import.meta.env.DEV) {
       });
   }
 } else {
-  let reloading = false;
-  let deferred = false;
-  // Upper bound on how long a pending update waits for open dialogs/forms.
-  // After this many deferrals the update is force-applied even if an overlay is
-  // still open — better to lose a long-idle draft than to never update a stuck
-  // tab. At 30 s per deferral this is ~5 minutes.
-  let deferCount = 0;
-  const MAX_DEFERS = 10;
-  const reloadOnce = () => {
-    if (reloading || deferred) return;
-    // Don't reload while the user is mid-entry in a modal/drawer/sheet — a
-    // silent reload would lose unsaved work. Radix overlays expose
-    // [data-state="open"] while mounted; retry shortly after they close so the
-    // pending update still applies. Once we've hit the defer cap, stop waiting
-    // so a long-lived overlay can't block the update indefinitely.
-    const overlayOpen = !!document.querySelector('[data-state="open"], [role="dialog"], [role="alertdialog"]');
-    if (overlayOpen && deferCount < MAX_DEFERS) {
-      deferred = true;
-      deferCount += 1;
-      window.setTimeout(() => {
-        deferred = false;
-        reloadOnce();
-      }, 30_000);
-      return;
-    }
-    reloading = true;
-    window.location.reload();
-  };
+  const reloadOnce = createReloadOnce();
 
   window.addEventListener('vite:preloadError', (event) => {
     // Keep the active overlay mounted until the existing safe reload guard
@@ -80,10 +54,7 @@ if (import.meta.env.DEV) {
   });
 
   registerSW({
-    onNeedRefresh() {
-      // A new service worker is waiting to activate — reload to apply it.
-      reloadOnce();
-    },
+    onNeedReload: reloadOnce,
     onOfflineReady() {
       console.log('App ready for offline use');
     },
@@ -107,8 +78,9 @@ if (import.meta.env.DEV) {
   });
 
   // sw.js calls skipWaiting(), so a new worker activates immediately and may
-  // never reach the "waiting" state onNeedRefresh watches for. Reload when
-  // control actually flips to the new worker instead.
+  // never sit in the "waiting" state. Reload when control flips to the new
+  // worker. onNeedReload covers the plugin's activated event; both paths use
+  // the same guard.
   if ('serviceWorker' in navigator) {
     // Only an UPDATE flips the controller mid-session. On a first-ever visit
     // the new worker claims the previously-uncontrolled page via clients.claim(),

@@ -282,4 +282,42 @@ describe('useAuth session and active-season synchronization', () => {
     await waitFor(() => expect(auth.refreshSession).toHaveBeenCalledTimes(2));
     expect(result.current.deletionStatus).toBe('clear');
   });
+
+  it('keeps onboarding unknown after SIGNED_IN until the profile resolves', async () => {
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.onboardingStatusKnown).toBe(true));
+
+    act(() => auth.onAuthStateChange.mock.calls[0][0]('SIGNED_OUT', null));
+    let finish!: (value: Partial<SupabaseResult>) => void;
+    cloud.setTablePages('profiles', [new Promise(resolve => { finish = resolve; })]);
+    act(() => auth.onAuthStateChange.mock.calls[0][0]('SIGNED_IN', session));
+
+    expect(result.current.onboardingStatusKnown).toBe(false);
+    expect(result.current.onboardingComplete).toBe(false);
+
+    await act(async () => finish({ data: { ...state.profile, onboarding_complete: true } }));
+    await waitFor(() => expect(result.current.onboardingStatusKnown).toBe(true));
+    expect(result.current.onboardingComplete).toBe(true);
+  });
+
+  it('resets onboarding status to unknown on SIGNED_OUT', async () => {
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.onboardingStatusKnown).toBe(true));
+    act(() => auth.onAuthStateChange.mock.calls[0][0]('SIGNED_OUT', null));
+    expect(result.current.onboardingStatusKnown).toBe(false);
+    expect(result.current.onboardingComplete).toBe(false);
+  });
+
+  it('trusts a cached onboarding completion before the profile resolves', async () => {
+    localStorage.setItem('user-1_al_onboarding_complete', '1');
+    let finish!: (value: Partial<SupabaseResult>) => void;
+    cloud.setTablePages('profiles', [new Promise(resolve => { finish = resolve; })]);
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.onboardingStatusKnown).toBe(true);
+    expect(result.current.onboardingComplete).toBe(true);
+    await act(async () => finish({ data: { ...state.profile, onboarding_complete: true } }));
+    expect(result.current.onboardingStatusKnown).toBe(true);
+    expect(result.current.onboardingComplete).toBe(true);
+  });
 });

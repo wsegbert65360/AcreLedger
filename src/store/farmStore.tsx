@@ -194,6 +194,8 @@ interface FarmState {
   updateFarmName: (name: string) => Promise<boolean>;
   /** Whether the user has completed the onboarding flow */
   onboardingComplete: boolean;
+  /** False until a cached or profile onboarding flag has actually been read. */
+  onboardingStatusKnown: boolean;
   /** Marks onboarding as complete on server & client */
   completeOnboarding: () => Promise<boolean>;
   /** Restores the entire farm state from a JSON backup */
@@ -246,7 +248,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     farm_id, setFarmId,
     activeSeason, setActiveSeason,
     viewingSeason, setViewingSeason,
-    onboardingComplete, setOnboardingComplete, farmRole, ensureFarm,
+    onboardingComplete, setOnboardingComplete, onboardingStatusKnown, farmRole, ensureFarm,
   } = auth;
   const sessionResolved = session !== undefined;
   const sessionUserId = session?.user?.id ?? null;
@@ -1024,6 +1026,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       farmRole,
       updateFarmName,
       onboardingComplete,
+      onboardingStatusKnown,
       completeOnboarding,
       restoreFromBackup: seasonOps.restoreFromBackup,
       refresh,
