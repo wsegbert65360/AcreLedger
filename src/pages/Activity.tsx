@@ -339,24 +339,24 @@ export default function Activity() {
   return (
     <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0">
-        <div className="max-w-lg mx-auto px-4 py-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+        <div className="mx-auto flex min-w-0 max-w-lg flex-col gap-3 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
+          <div className="flex w-full min-w-0 items-center gap-3 sm:w-auto">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
               <ClipboardList size={20} className="text-primary" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-foreground tracking-tight">Activity</h1>
-                <SeasonSelect className="min-w-[4.75rem] border-none bg-muted/70 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-lg font-bold tracking-tight text-foreground">Activity</h1>
+                <SeasonSelect className="max-w-[6.5rem] shrink border-none bg-muted/70 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
               </div>
               <p className="text-xs text-muted-foreground">Review & manage</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end flex-grow w-full sm:w-auto sm:flex-grow-0">
-            <SyncStatusIndicator />
+          <div className="flex min-w-0 w-full items-center justify-end gap-2 sm:w-auto">
+            <div className="shrink-0"><SyncStatusIndicator /></div>
 
-            <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+            <div className="flex min-w-0 items-center gap-1.5">
               {tab === 'spray' && (
                 <button
                   onClick={() => {
@@ -422,7 +422,7 @@ export default function Activity() {
                     };
                     openQuickAdd(map[tab] || null);
                   }}
-                  className="quick-add-trigger flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg bg-primary p-2.5 text-xs font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                  className="quick-add-trigger shrink-0 whitespace-nowrap flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg bg-primary p-2.5 text-xs font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                 >
                   <Plus size={14} strokeWidth={2.5} />
                   <span>

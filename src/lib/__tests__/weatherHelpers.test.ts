@@ -6,6 +6,7 @@ import { Sun, CloudRain, CloudSun, Cloud } from 'lucide-react';
 
 import {
   ZIP_REGEX,
+  parseWeatherLocationInput,
   loadZip,
   saveZip,
   formatTime,
@@ -443,4 +444,19 @@ describe('weatherHelpers', () => {
     expect(native.geolocation.getCurrentPosition).not.toHaveBeenCalled();
   });
 
+});
+
+describe('parseWeatherLocationInput', () => {
+  it.each(['', '   '])('rejects empty input %j', raw => {
+    expect(parseWeatherLocationInput(raw)).toEqual({ ok: false, error: 'Enter a zip code or coordinates' });
+  });
+  it.each(['72301', '12345-6789'])('accepts ZIP %s', value => {
+    expect(parseWeatherLocationInput(value)).toEqual({ ok: true, value, coords: null });
+  });
+  it('accepts coordinates', () => {
+    expect(parseWeatherLocationInput(' 35.1,-90.2 ')).toEqual({ ok: true, value: '35.1,-90.2', coords: { lat: 35.1, lng: -90.2 } });
+  });
+  it('rejects invalid input', () => {
+    expect(parseWeatherLocationInput('abc')).toEqual({ ok: false, error: 'Enter a valid 5/9-digit zip or lat,lng' });
+  });
 });

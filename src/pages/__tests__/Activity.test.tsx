@@ -170,6 +170,11 @@ function renderActivity(route: string) {
 describe('Activity query-driven tab selection', () => {
   beforeEach(() => installFarmMock({ sprayRecords: [makeSprayRecord({})] }));
 
+  it('keeps Log Activity from shrinking or wrapping', () => {
+    render(<MemoryRouter><Activity /></MemoryRouter>);
+    expect(screen.getByRole('button', { name: /Log Activity/i })).toHaveClass('shrink-0', 'whitespace-nowrap');
+  });
+
   it('selects the tab named in ?tab= and shows its content and export action', () => {
     renderActivity('/activity?tab=spray');
 

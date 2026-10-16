@@ -80,7 +80,7 @@ const STATUS_CONFIG: Record<SyncState, StatusConfig> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SyncStatus() {
-  const { session, pendingSyncCount, failedSyncCount = 0, getFailedSyncChanges, discardFailedSyncChanges, retryFailedSyncChanges, syncQueueLocked, lastSync } = useFarm();
+  const { session, pendingSyncCount, failedSyncCount = 0, getFailedSyncChanges, discardFailedSyncChanges, retryFailedSyncChanges, syncQueueLocked, syncQueueReadFailed = false, lastSync } = useFarm();
   const sessionUserId = session?.user.id;
   const [syncState, setSyncState] = useState<SyncState>(
     navigator.onLine ? 'connecting' : 'offline'
@@ -158,7 +158,7 @@ export default function SyncStatus() {
 
   if (!session) return null;
 
-  const visibleState = syncQueueLocked ? 'locked' : failedSyncCount > 0 ? 'attention' : pendingSyncCount > 0 && navigator.onLine ? 'pending' : syncState;
+  const visibleState = syncQueueReadFailed ? 'locked' : failedSyncCount > 0 ? 'attention' : pendingSyncCount > 0 && navigator.onLine ? 'pending' : syncQueueLocked && syncState === 'connected' ? 'pending' : syncState;
   const config = STATUS_CONFIG[visibleState];
 
   return (

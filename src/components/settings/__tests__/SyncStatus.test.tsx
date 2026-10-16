@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SyncStatus from '../SyncStatus';
 
 const control = vi.hoisted(() => ({
+  syncQueueLocked: false,
+  syncQueueReadFailed: false,
   pendingSyncCount: 0,
   subscription: null as null | ((status: string) => void),
 }));
@@ -12,6 +14,8 @@ vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     session: { user: { id: 'user-1' } },
     pendingSyncCount: control.pendingSyncCount,
+    syncQueueLocked: control.syncQueueLocked,
+    syncQueueReadFailed: control.syncQueueReadFailed,
   }),
 }));
 
@@ -32,6 +36,17 @@ describe('SyncStatus', () => {
     localStorage.clear();
     control.subscription = null;
     control.pendingSyncCount = 0;
+    control.syncQueueLocked = false;
+    control.syncQueueReadFailed = false;
+  });
+
+  it('does not show locked or synced while checking the queue', () => {
+    control.syncQueueLocked = true;
+    render(<SyncStatus />);
+    act(() => control.subscription?.('SUBSCRIBED'));
+    expect(screen.queryByText('Offline changes locked')).toBeNull();
+    expect(screen.queryByText('Synced')).toBeNull();
+    expect(screen.getByText('Pending Sync')).toBeInTheDocument();
   });
 
   it('shows pending and does not record a completed sync while work remains queued', () => {

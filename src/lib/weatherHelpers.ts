@@ -443,3 +443,11 @@ export function evaluateSprayConditions({
 }
 
 
+
+export function parseWeatherLocationInput(raw: string): { ok: true; value: string; coords: { lat: number; lng: number } | null } | { ok: false; error: string } {
+  const value = raw.trim();
+  if (!value) return { ok: false, error: 'Enter a zip code or coordinates' };
+  const match = value.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+  if (!match && !ZIP_REGEX.test(value)) return { ok: false, error: 'Enter a valid 5/9-digit zip or lat,lng' };
+  return { ok: true, value, coords: match ? { lat: Number(match[1]), lng: Number(match[2]) } : null };
+}

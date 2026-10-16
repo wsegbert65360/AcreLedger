@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Settings as SettingsIcon, Sprout, Database, User, CreditCard, Tractor, ChevronRight } from 'lucide-react';
 import FsaTractManager from '@/components/settings/FsaTractManager';
 import SeedManager from '@/components/settings/SeedManager';
@@ -23,7 +24,27 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 
+const SETTINGS_SECTIONS = ['farm-data', 'data-management', 'billing', 'account-display'] as const;
+
+function settingsSectionFromQuery(section: string | null, billingAvailable: boolean): string | null {
+  if (!section || !(SETTINGS_SECTIONS as readonly string[]).includes(section)) return null;
+  if (section === 'billing' && !billingAvailable) return null;
+  return section;
+}
+
 export default function Settings() {
+  const [searchParams] = useSearchParams();
+  const billingAvailable = isBillingUiAvailable();
+  const requestedSection = settingsSectionFromQuery(searchParams.get('section'), billingAvailable);
+  const openSections = requestedSection && requestedSection !== 'farm-data'
+    ? ['farm-data', requestedSection]
+    : ['farm-data'];
+
+  useEffect(() => {
+    if (!requestedSection) return;
+    document.getElementById(`settings-section-${requestedSection}`)?.scrollIntoView?.({ block: 'start' });
+  }, [requestedSection]);
+
   return (
     <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
@@ -48,8 +69,8 @@ export default function Settings() {
             <ChevronRight size={18} className="text-muted-foreground" />
           </Link>
         )}
-        <Accordion type="multiple" defaultValue={['farm-data']} className="space-y-4">
-          <AccordionItem value="farm-data" className="border border-border rounded-2xl bg-card px-4">
+        <Accordion key={requestedSection ?? 'default'} type="multiple" defaultValue={openSections} className="space-y-4">
+          <AccordionItem id="settings-section-farm-data" value="farm-data" className="scroll-mt-24 border border-border rounded-2xl bg-card px-4">
             <AccordionTrigger className="hover:no-underline py-4">
               <div className="flex items-center gap-2 text-foreground">
                 <Sprout size={18} className="text-plant" />
@@ -70,7 +91,7 @@ export default function Settings() {
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="data-management" className="border border-border rounded-2xl bg-card px-4">
+          <AccordionItem id="settings-section-data-management" value="data-management" className="scroll-mt-24 border border-border rounded-2xl bg-card px-4">
             <AccordionTrigger className="hover:no-underline py-4">
               <div className="flex items-center gap-2 text-foreground">
                 <Database size={18} className="text-spray" />
@@ -86,8 +107,8 @@ export default function Settings() {
             </AccordionContent>
           </AccordionItem>
 
-          {isBillingUiAvailable() && (
-            <AccordionItem value="billing" className="border border-border rounded-2xl bg-card px-4">
+          {billingAvailable && (
+            <AccordionItem id="settings-section-billing" value="billing" className="scroll-mt-24 border border-border rounded-2xl bg-card px-4">
               <AccordionTrigger className="hover:no-underline py-4">
                 <div className="flex items-center gap-2 text-foreground">
                   <CreditCard size={18} className="text-harvest" />
@@ -102,7 +123,7 @@ export default function Settings() {
             </AccordionItem>
           )}
 
-          <AccordionItem value="account-display" className="border border-border rounded-2xl bg-card px-4">
+          <AccordionItem id="settings-section-account-display" value="account-display" className="scroll-mt-24 border border-border rounded-2xl bg-card px-4">
             <AccordionTrigger className="hover:no-underline py-4">
               <div className="flex items-center gap-2 text-foreground">
                 <User size={18} className="text-primary" />

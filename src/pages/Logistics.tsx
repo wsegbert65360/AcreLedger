@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowLeft, Banknote, Plus, Settings, Wheat } from 'lucide-react';
 
 import AddGrainModal from '@/components/AddGrainModal';
-import { BinManager } from '@/components/BinManageModal';
+import BinManageModal, { BinManager } from '@/components/BinManageModal';
 import BinMonitorPanel, { BinMonitorPanelData, BinTrendPoint } from '@/components/grain/BinMonitorPanel';
 import BinSiloThumb from '@/components/grain/BinSiloThumb';
 import SellModal from '@/components/SellModal';
@@ -112,6 +112,7 @@ export default function Logistics() {
   const { bins, getBinTotal, grainMovements, session } = useFarm();
   const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const [managing, setManaging] = useState(false);
+  const [addBinOpen, setAddBinOpen] = useState(false);
   const [sellingBin, setSellingBin] = useState<Bin | null>(null);
   const [addingBin, setAddingBin] = useState<Bin | null>(null);
   const [selectedBinId, setSelectedBinId] = useState<string | null>(null);
@@ -185,7 +186,7 @@ export default function Logistics() {
     );
   } else if (binOverview.length === 0) {
     mainContent = (
-      <div className="rounded-2xl border-2 border-dashed border-border bg-card p-8 text-center shadow-sm">
+      <div className="rounded-2xl border-2 border-dashed border-border bg-card w-full min-w-0 overflow-hidden p-5 sm:p-8 text-center shadow-sm">
         <div className="mx-auto mb-3 flex justify-center text-muted-foreground">
           <BinSiloThumb id="empty-storage" percentFull={0} />
         </div>
@@ -193,7 +194,7 @@ export default function Logistics() {
         <p className="mx-auto max-w-[16rem] text-sm leading-relaxed text-muted-foreground">
           Add your first bin to start monitoring capacity, inventory, and grain movement.
         </p>
-        <Button className="mt-5 bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={() => setManaging(true)}>
+        <Button className="w-full sm:w-auto mt-5 bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={() => setAddBinOpen(true)}>
           <Plus size={16} className="mr-2" />
           Add bin
         </Button>
@@ -405,6 +406,7 @@ export default function Logistics() {
 
       <main className="mx-auto max-w-lg space-y-4 px-4 py-4 lg:max-w-6xl lg:px-8">{mainContent}</main>
 
+      {addBinOpen && <BinManageModal open onClose={() => setAddBinOpen(false)} />}
       {sellingBin && <SellModal bin={sellingBin} open={!!sellingBin} onClose={() => setSellingBin(null)} />}
       {addingBin && <AddGrainModal bin={addingBin} open={!!addingBin} onClose={() => setAddingBin(null)} />}
     </div>

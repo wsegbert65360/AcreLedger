@@ -17,7 +17,8 @@ import { useFarm } from '@/store/farmStore';
 import type { FarmSubscription } from '@/types/farm';
 import { formatIsoDate } from '@/utils/dates';
 
-function getStatusBadge(subscription: FarmSubscription | null): { label: string; className: string } {
+function getStatusBadge(subscription: FarmSubscription | null, { allowlisted }: { allowlisted: boolean }): { label: string; className: string } {
+  if (!allowlisted) return { label: 'Free', className: 'bg-plant/10 text-plant border-plant/20' };
   if (!subscription || subscription.deleted_at) {
     return { label: 'Not subscribed', className: 'bg-muted text-muted-foreground border-border' };
   }
@@ -29,6 +30,8 @@ function getStatusBadge(subscription: FarmSubscription | null): { label: string;
     case 'past_due':
     case 'unpaid':
       return { label: 'Action needed', className: 'bg-harvest/10 text-harvest border-harvest/20' };
+    case 'canceled':
+      return { label: 'Canceled', className: 'bg-muted text-muted-foreground border-border' };
     default:
       return { label: 'Not subscribed', className: 'bg-muted text-muted-foreground border-border' };
   }
@@ -60,14 +63,18 @@ export default function BillingManager() {
 
   const { session, farm_id } = useFarm();
   const [subscription, setSubscription] = useState<FarmSubscription | null>(null);
+  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
 
   const userId = session?.user?.id ?? null;
   const userEmail = session?.user?.email ?? null;
 
   useEffect(() => {
+    setSubscriptionLoaded(false);
+    setSubscription(null);
     if (!farm_id || !userId) {
       setSubscription(null);
+      setSubscriptionLoaded(true);
       return;
     }
     let cancelled = false;
@@ -79,6 +86,7 @@ export default function BillingManager() {
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
+        setSubscriptionLoaded(true);
         if (error) {
           toast.error('Could not load billing status.');
           return;
@@ -144,7 +152,7 @@ export default function BillingManager() {
   const isOwner = hasActiveRow && subscription.owner_user_id === userId;
   // No row yet: the first allowlisted member to check out becomes the owner.
   const canManage = !hasActiveRow || isOwner;
-  const badge = getStatusBadge(subscription);
+  const badge = getStatusBadge(subscription, { allowlisted });
   // past_due/unpaid subscriptions are still live in Stripe, so those owners fix
   // payment in the portal; a second Checkout would create a parallel subscription.
   const needsCheckout =
@@ -163,9 +171,9 @@ export default function BillingManager() {
             <CreditCard size={18} className="text-primary" />
             Billing
           </span>
-          <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
+          {(!allowlisted || subscriptionLoaded) && <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
             {badge.label}
-          </Badge>
+          </Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -10,11 +10,12 @@ import {
   Loader2,
   MapPin,
   RefreshCw,
-  Search,
   Thermometer,
   Wind,
 } from 'lucide-react';
 
+import WeatherLocationSearch from '@/components/weather/WeatherLocationSearch';
+import WeatherNoLocation from '@/components/weather/WeatherNoLocation';
 import ForecastGrid from '@/components/weather/ForecastGrid';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import RadarEmbed from '@/components/weather/RadarEmbed';
@@ -32,7 +33,7 @@ import {
   resolveCoords,
   saveCachedWeatherCoords,
   saveZip,
-  ZIP_REGEX,
+  parseWeatherLocationInput,
 } from '@/lib/weatherHelpers';
 import { RainService } from '@/services/RainService';
 import { WeatherService } from '@/services/WeatherService';
@@ -195,32 +196,19 @@ export default function Weather() {
     return () => clearInterval(interval);
   }, [userId, loadWeather]);
 
-  const handleLocationSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    const loc = inputLoc.trim();
-    if (!loc) {
-      setSearchError('Enter a zip code or coordinates');
+  const handleLocationSubmit = useCallback((raw: string) => {
+    const parsed = parseWeatherLocationInput(raw);
+    if (!parsed.ok) {
+      setSearchError(parsed.error);
       return;
     }
-
-    const coordsMatch = loc.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
-    if (!coordsMatch && !ZIP_REGEX.test(loc)) {
-      setSearchError('Enter a valid 5/9-digit zip or lat,lng');
-      return;
-    }
-
+    const loc = parsed.value;
     setSearchError('');
-    if (coordsMatch) {
-      const lat = parseFloat(coordsMatch[1]);
-      const lng = parseFloat(coordsMatch[2]);
-      setCoords({ lat, lng });
-    } else {
-      setCoords(null);
-    }
+    setCoords(parsed.coords);
 
     saveZip(loc, userId);
     loadWeather(loc);
-  }, [inputLoc, userId, loadWeather]);
+  }, [userId, loadWeather]);
 
   const handleUseGps = useCallback(() => {
     setLoading(true);
@@ -342,45 +330,7 @@ export default function Weather() {
       <main className="max-w-lg mx-auto px-4 py-3 space-y-3 lg:max-w-5xl lg:px-8">
         {/* ── Location Selector ── */}
         <div className="bg-card border border-border rounded-2xl p-3">
-          <form onSubmit={handleLocationSubmit} className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
-                <input
-                  type="text"
-                  placeholder="Enter zip code (e.g. 72301) or lat,lng..."
-                  value={inputLoc}
-                  onChange={(e) => {
-                    setInputLoc(e.target.value);
-                    setSearchError('');
-                  }}
-                  className="w-full bg-muted/30 border border-border rounded-xl pl-9 pr-4 py-2 text-xs font-mono placeholder:text-muted-foreground/60 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl text-xs transition-colors shrink-0 disabled:opacity-50"
-              >
-                Search
-              </button>
-              <button
-                type="button"
-                onClick={handleUseGps}
-                disabled={loading}
-                title="Use Current Location"
-                aria-label="Use Current Location"
-                className="p-2 border border-border hover:bg-muted/40 text-muted-foreground rounded-xl flex items-center justify-center shrink-0 transition-colors disabled:opacity-50"
-              >
-                <Crosshair size={16} className={usingGps ? 'animate-pulse text-primary' : ''} />
-              </button>
-            </div>
-            {searchError && (
-              <p className="text-xs font-semibold text-destructive mt-0.5 ml-1 uppercase tracking-wider">
-                {searchError}
-              </p>
-            )}
-          </form>
+          <WeatherLocationSearch inputId="weatherLocation" value={inputLoc} onChange={value => { setInputLoc(value); setSearchError(''); }} onSubmit={handleLocationSubmit} error={searchError} disabled={loading} onUseGps={handleUseGps} usingGps={usingGps} />
         </div>
 
         {/* ── Loading State ── */}
@@ -395,13 +345,7 @@ export default function Weather() {
 
         {/* ── No Location ── */}
         {!loading && !weather && (
-          <div className="text-center py-16 px-4 border-2 border-dashed border-border rounded-2xl bg-muted/20">
-            <MapPin size={40} className="mx-auto text-muted-foreground/20 mb-3" />
-            <h3 className="text-sm font-bold text-foreground mb-1">No Location</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-[260px] mx-auto">
-              Enter a zip code or coordinates in the search bar above, allow location access, or add field coordinates.
-            </p>
-          </div>
+          <WeatherNoLocation />
         )}
 
         {/* ── Weather Content ── */}

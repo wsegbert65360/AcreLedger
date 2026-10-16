@@ -5,13 +5,13 @@ import { WifiOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { useFarm } from '@/store/farmStore';
 
 export default function OfflineBanner() {
-  const { isOnline, pendingSyncCount, failedSyncCount = 0, syncQueueLocked } = useFarm();
+  const { isOnline, pendingSyncCount, failedSyncCount = 0, syncQueueReadFailed = false } = useFarm();
   const [showStatus, setShowStatus] = useState<'offline' | 'syncing' | 'synced' | 'hidden'>('hidden');
   const prevIsOnline = useRef(isOnline);
   const prevCount = useRef(pendingSyncCount);
 
   useEffect(() => {
-    if (syncQueueLocked || failedSyncCount > 0) {
+    if (syncQueueReadFailed || failedSyncCount > 0) {
       setShowStatus('hidden');
     } else if (!isOnline) {
       setShowStatus('offline');
@@ -33,13 +33,13 @@ export default function OfflineBanner() {
 
     prevIsOnline.current = isOnline;
     prevCount.current = pendingSyncCount;
-  }, [isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked]);
+  }, [isOnline, pendingSyncCount, failedSyncCount, syncQueueReadFailed]);
 
-  if (syncQueueLocked || failedSyncCount > 0) {
+  if (syncQueueReadFailed || failedSyncCount > 0) {
     return (
       <div role="status" aria-live="polite" className="relative z-[100] bg-amber-500 text-amber-950 flex items-center justify-center gap-2 py-2 px-4 text-xs font-bold lg:pl-60 print:hidden">
         <WifiOff size={14} />
-        <span>{syncQueueLocked ? 'Offline changes locked — sync status unknown' : `${failedSyncCount} change${failedSyncCount === 1 ? ' needs' : 's need'} attention. Open Settings → Cloud Sync.`}</span>
+        <span>{syncQueueReadFailed ? 'Offline changes locked — sync status unknown' : `${failedSyncCount} change${failedSyncCount === 1 ? ' needs' : 's need'} attention. Open Settings → Cloud Sync.`}</span>
       </div>
     );
   }
