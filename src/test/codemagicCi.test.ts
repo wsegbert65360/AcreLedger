@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,9 +10,197 @@ const workflow = readFileSync(resolve(root, 'codemagic.yaml'), 'utf8');
 const nightly = readFileSync(resolve(root, 'scripts/ci/codemagic-nightly.sh'), 'utf8');
 const shell = process.platform === 'win32' ? 'C:/Program Files/Git/bin/sh.exe' : '/bin/sh';
 
+// Implements the jq invocations in scripts/ci/codemagic-nightly.sh so buildRun
+// tests do not need a real jq binary (missing on Vercel images and Windows Git sh).
+// Each program is matched in full. Any other filter exits nonzero.
+const jqStubSource = String.raw`
+(async () => {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  const raw = Buffer.concat(chunks.map((c) => (Buffer.isBuffer(c) ? c : Buffer.from(c)))).toString('utf8');
+
+  function fail(code, message) {
+    if (message) process.stderr.write(message + '\n');
+    process.exit(code);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    fail(4, 'parse error');
+  }
+
+  let exitOnFalse = false;
+  let rawOut = false;
+  const vars = Object.create(null);
+  const positional = [];
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--arg') {
+      vars[argv[++i]] = argv[++i];
+      continue;
+    }
+    if (a.charAt(0) === '-' && a !== '-') {
+      for (const ch of a.slice(1)) {
+        if (ch === 'e') exitOnFalse = true;
+        else if (ch === 'r') rawOut = true;
+      }
+      continue;
+    }
+    positional.push(a);
+  }
+  const filter = positional[0] || '';
+
+  function emit(value) {
+    if (rawOut && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) {
+      process.stdout.write(String(value) + '\n');
+    } else {
+      process.stdout.write(JSON.stringify(value) + '\n');
+    }
+  }
+
+  function done(value, noOutput) {
+    // jq -e: exit 4 when nothing was produced, 1 when the last value is null or false.
+    if (noOutput) process.exit(exitOnFalse ? 4 : 0);
+    if (exitOnFalse && (value === null || value === false)) {
+      emit(value);
+      process.exit(1);
+    }
+    emit(value);
+    process.exit(0);
+  }
+
+  function iterate(value) {
+    if (Array.isArray(value)) return value;
+    if (value !== null && typeof value === 'object') return Object.values(value);
+    const kind = value === null ? 'null' : typeof value;
+    fail(5, 'Cannot iterate over ' + kind);
+  }
+
+  function asBuilds(input) {
+    return iterate(field(input, 'builds'));
+  }
+
+  function field(obj, key) {
+    if (obj === null || obj === undefined) return null;
+    if (typeof obj !== 'object' || Array.isArray(obj)) {
+      fail(5, 'Cannot index ' + typeof obj + ' with string "' + key + '"');
+    }
+    return Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : null;
+  }
+
+  function commitHash(build) {
+    return field(field(build, 'commit'), 'hash');
+  }
+
+  // jq type order: null < false < true < numbers < strings < arrays < objects.
+  function typeRank(value) {
+    if (value === null) return 0;
+    if (value === false) return 1;
+    if (value === true) return 2;
+    if (typeof value === 'number') return 3;
+    if (typeof value === 'string') return 4;
+    if (Array.isArray(value)) return 5;
+    if (typeof value === 'object') return 6;
+    return 7;
+  }
+
+  function compareCodePoints(a, b) {
+    const aa = Array.from(a);
+    const bb = Array.from(b);
+    const n = aa.length < bb.length ? aa.length : bb.length;
+    for (let i = 0; i < n; i++) {
+      const ca = aa[i].codePointAt(0);
+      const cb = bb[i].codePointAt(0);
+      if (ca < cb) return -1;
+      if (ca > cb) return 1;
+    }
+    if (aa.length < bb.length) return -1;
+    if (aa.length > bb.length) return 1;
+    return 0;
+  }
+
+  function jqCompare(a, b) {
+    const ra = typeRank(a);
+    const rb = typeRank(b);
+    if (ra !== rb) return ra < rb ? -1 : 1;
+    if (ra <= 2) return 0;
+    if (ra === 3) {
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    }
+    if (ra === 4) return compareCodePoints(a, b);
+    if (ra === 5) {
+      const n = a.length < b.length ? a.length : b.length;
+      for (let i = 0; i < n; i++) {
+        const c = jqCompare(a[i], b[i]);
+        if (c !== 0) return c;
+      }
+      if (a.length < b.length) return -1;
+      if (a.length > b.length) return 1;
+      return 0;
+    }
+    const ka = Object.keys(a).sort(compareCodePoints);
+    const kb = Object.keys(b).sort(compareCodePoints);
+    const keys = jqCompare(ka, kb);
+    if (keys !== 0) return keys;
+    for (let i = 0; i < ka.length; i++) {
+      const c = jqCompare(a[ka[i]], b[ka[i]]);
+      if (c !== 0) return c;
+    }
+    return 0;
+  }
+
+  const filterSha = '.sha | select(type == "string" and test("^[0-9a-f]{40}$"))';
+  const filterBuilds = '{builds: [.builds[] | select(.fileWorkflowId==$wf and .branch=="main")]}';
+  const filterActive = '[.builds[] | select(.status|IN("queued","preparing","fetching","building","publishing","testing")) | select(.commit.hash==$sha)] | length';
+  const filterLast = '[.builds[] | select(.status=="finished")] | sort_by(.startedAt) | last | .commit.hash // ""';
+  const filterBuildId = '.buildId | select(type == "string" and length > 0)';
+
+  if (filter === filterSha) {
+    const sha = field(data, 'sha');
+    if (typeof sha === 'string' && /^[0-9a-f]{40}$/.test(sha)) done(sha);
+    else done(null, true);
+  } else if (filter === filterBuilds) {
+    const wf = vars.wf;
+    const builds = asBuilds(data).filter((b) => field(b, 'fileWorkflowId') === wf && field(b, 'branch') === 'main');
+    done({ builds: builds });
+  } else if (filter === filterActive) {
+    const sha = vars.sha;
+    const active = new Set(['queued', 'preparing', 'fetching', 'building', 'publishing', 'testing']);
+    let count = 0;
+    for (const b of asBuilds(data)) {
+      if (!active.has(field(b, 'status'))) continue;
+      if (commitHash(b) === sha) count++;
+    }
+    done(count);
+  } else if (filter === filterLast) {
+    const finished = asBuilds(data).filter((b) => field(b, 'status') === 'finished');
+    finished.sort((a, b) => jqCompare(field(a, 'startedAt'), field(b, 'startedAt')));
+    if (finished.length === 0) done('');
+    const hash = commitHash(finished[finished.length - 1]);
+    done(hash === null || hash === false ? '' : hash);
+  } else if (filter === filterBuildId) {
+    const id = field(data, 'buildId');
+    if (typeof id === 'string' && id.length > 0) done(id);
+    else done(null, true);
+  } else {
+    fail(3, 'unsupported jq filter');
+  }
+})().catch((err) => {
+  process.stderr.write((err && err.message ? err.message : String(err)) + '\n');
+  process.exit(5);
+});
+`;
+
 function run(source: string, env: Record<string, string> = {}) {
   const dir = mkdtempSync(resolve(tmpdir(), 'codemagic-test-'));
   try {
+    const testDir = dir.split('\\').join('/');
+    writeFileSync(resolve(dir, 'jq-stub.js'), jqStubSource);
     return spawnSync(shell, ['-c', source], {
       encoding: 'utf8',
       env: {
@@ -21,7 +209,8 @@ function run(source: string, env: Record<string, string> = {}) {
         CI_COMMIT_SHA: 'lab',
         GITHUB_SYNC_TOKEN: 'fake-github-token',
         GITLAB_SYNC_TOKEN: 'fake-gitlab-token',
-        TEST_DIR: dir.split('\\').join('/'),
+        TEST_DIR: testDir,
+        NODE_BIN: process.execPath.split('\\').join('/'),
         ...env,
       },
     });
@@ -214,6 +403,9 @@ curl() {
   esac
 }
 git() { echo "git should not run" >&2; return 97; }
+jq() {
+  "$NODE_BIN" "$TEST_DIR/jq-stub.js" "$@"
+}
 `;
   function buildRun(env: Record<string, string> = {}) {
     return run(buildCurl + nightly, {
@@ -346,6 +538,9 @@ curl() {
   esac
 }
 git() { echo "git should not run" >&2; return 97; }
+jq() {
+  "$NODE_BIN" "$TEST_DIR/jq-stub.js" "$@"
+}
 `;
     const result = run(recordingCurl + nightly, {
       CI_COMMIT_SHA: buildSha,
@@ -389,5 +584,158 @@ git() { echo "git should not run" >&2; return 97; }
     expect(result.stdout).not.toContain('started build');
     expect(result.stderr).not.toContain('NIGHTLY FAILED');
     expectNoBuildSecrets(result);
+  });
+
+  function nightlyFilters(): string[] {
+    const filters: string[] = [];
+    const re = /\bjq\b[^\n]*?'([^']*)'/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(nightly))) filters.push(match[1]);
+    return filters;
+  }
+
+  function jqRun(argsPrefix: string, filter: string, input: string) {
+    const prefix = argsPrefix ? argsPrefix + ' ' : '';
+    return run(
+      'printf \'%s\' "$JQ_INPUT" | "$NODE_BIN" "$TEST_DIR/jq-stub.js" ' + prefix + '"$JQ_FILTER"',
+      { JQ_INPUT: input, JQ_FILTER: filter },
+    );
+  }
+
+  it('runs the nightly filters and rejects any other expression', () => {
+    const filters = nightlyFilters();
+    expect(filters).toEqual([
+      '.sha | select(type == "string" and test("^[0-9a-f]{40}$"))',
+      '{builds: [.builds[] | select(.fileWorkflowId==$wf and .branch=="main")]}',
+      '[.builds[] | select(.status|IN("queued","preparing","fetching","building","publishing","testing")) | select(.commit.hash==$sha)] | length',
+      '[.builds[] | select(.status=="finished")] | sort_by(.startedAt) | last | .commit.hash // ""',
+      '.buildId | select(type == "string" and length > 0)',
+    ]);
+    const sha = 'ab'.repeat(20);
+    const accepted = [
+      ['-er', filters[0], JSON.stringify({ sha }), sha + '\n'],
+      ['--arg wf acreledger-ios', filters[1], '{"builds":[]}', '{"builds":[]}\n'],
+      ['-r --arg sha ' + sha, filters[2], '{"builds":[]}', '0\n'],
+      ['-r', filters[3], '{"builds":[]}', '\n'],
+      ['-er', filters[4], '{"buildId":"build-123"}', 'build-123\n'],
+    ] as const;
+    for (const [prefix, filter, input, stdout] of accepted) {
+      const result = jqRun(prefix, filter, input);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe(stdout);
+    }
+    const changed = [
+      filters[0] + ' | .',
+      filters[1].replace(' and .branch=="main"', ''),
+      filters[2].replace('"testing"', '"cancelled"'),
+      filters[3].replace('sort_by(.startedAt) | ', ''),
+      '.buildId',
+    ];
+    for (const filter of changed) {
+      const result = jqRun('-er --arg wf acreledger-ios --arg sha ' + sha, filter, JSON.stringify({ sha, buildId: 'build-123', builds: [] }));
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('unsupported jq filter');
+      expect(result.stdout).toBe('');
+    }
+  });
+
+  it('exits 4 from jq -e when select produces nothing', () => {
+    const filters = nightlyFilters();
+    for (const [filter, input] of [
+      [filters[0], '{"sha":null}'],
+      [filters[0], '{"sha":"ABC"}'],
+      [filters[4], '{}'],
+      [filters[4], '{"buildId":null}'],
+      [filters[4], '{"buildId":""}'],
+      [filters[4], '{"buildId":false}'],
+      [filters[4], '{"buildId":42}'],
+    ] as const) {
+      const result = jqRun('-er', filter, input);
+      expect(result.status).toBe(4);
+      expect(result.stdout).toBe('');
+    }
+    const emptyLast = jqRun('-er', filters[3], '{"builds":[]}');
+    expect(emptyLast.status).toBe(0);
+    expect(emptyLast.stdout).toBe('\n');
+    const falseHash = jqRun('-er', filters[3], JSON.stringify({
+      builds: [{ status: 'finished', startedAt: 't', commit: { hash: false } }],
+    }));
+    expect(falseHash.status).toBe(0);
+    expect(falseHash.stdout).toBe('\n');
+    const zeroActive = jqRun('-er --arg sha missing', filters[2], '{"builds":[]}');
+    expect(zeroActive.status).toBe(0);
+    expect(zeroActive.stdout).toBe('0\n');
+  });
+
+  it.each([
+    [null, false],
+    [false, true],
+    [true, 0],
+    [-1, 2],
+    [0, ''],
+    [1, '2026-10-02T00:00:00.000Z'],
+    [null, '2026-10-02T00:00:00.000Z'],
+    ['', 'a'],
+    ['a', 'b'],
+    ['\uFFFF', '\u{1F600}'],
+    ['z', ['a']],
+    [[1], [2]],
+    [[1], [1, 2]],
+    [['z'], { a: 1 }],
+    [{ a: 1 }, { a: 2 }],
+    [{ a: 1 }, { a: 1, b: 1 }],
+    [{ a: 9 }, { b: 0 }],
+  ])('sort_by(.startedAt) orders %j before %j', (lower, higher) => {
+    const input = JSON.stringify({
+      builds: [
+        { status: 'finished', startedAt: higher, commit: { hash: 'higher' } },
+        { status: 'finished', startedAt: null, commit: { hash: 'ignored-null' } },
+        { status: 'building', startedAt: { zz: 1 }, commit: { hash: 'ignored-active' } },
+        { status: 'finished', startedAt: lower, commit: { hash: 'lower' } },
+      ],
+    });
+    const result = jqRun('-r', nightlyFilters()[3], input);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('higher\n');
+  });
+
+  it('keeps input order when startedAt values compare equal', () => {
+    const result = jqRun('-r', nightlyFilters()[3], JSON.stringify({
+      builds: [
+        { status: 'finished', startedAt: null, commit: { hash: 'first' } },
+        { status: 'finished', startedAt: null, commit: { hash: 'second' } },
+      ],
+    }));
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('second\n');
+  });
+
+  it('iterates object values of .builds[]', () => {
+    const filters = nightlyFilters();
+    const filtered = jqRun('--arg wf acreledger-ios', filters[1], JSON.stringify({
+      builds: {
+        z: { fileWorkflowId: 'acreledger-ios', branch: 'main', mark: 'z' },
+        a: { fileWorkflowId: 'acreledger-ios', branch: 'side', mark: 'a' },
+        m: { fileWorkflowId: 'acreledger-ios', branch: 'main', mark: 'm' },
+      },
+    }));
+    expect(filtered.status).toBe(0);
+    expect(JSON.parse(filtered.stdout)).toEqual({
+      builds: [
+        { fileWorkflowId: 'acreledger-ios', branch: 'main', mark: 'z' },
+        { fileWorkflowId: 'acreledger-ios', branch: 'main', mark: 'm' },
+      ],
+    });
+    const active = jqRun('-r --arg sha abc', filters[2], JSON.stringify({
+      builds: {
+        only: { status: 'publishing', commit: { hash: 'abc' } },
+        other: { status: 'finished', commit: { hash: 'abc' } },
+      },
+    }));
+    expect(active.status).toBe(0);
+    expect(active.stdout).toBe('1\n');
+    const rejected = jqRun('--arg wf acreledger-ios', filters[1], '{"builds":"nope"}');
+    expect(rejected.status).not.toBe(0);
+    expect(rejected.stderr).toContain('Cannot iterate over string');
   });
 });
