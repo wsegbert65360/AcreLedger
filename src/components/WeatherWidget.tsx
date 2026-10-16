@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 
 import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer } from 'lucide-react';
 
+import WeatherLocationSearch from '@/components/weather/WeatherLocationSearch';
+import WeatherNoLocation from '@/components/weather/WeatherNoLocation';
 import { isNativePlatform } from '@/lib/native';
 import {
   getWindRotation,
@@ -11,7 +13,7 @@ import {
   matchFieldByCoords,
   resolveCoords,
   saveZip,
-  ZIP_REGEX,
+  parseWeatherLocationInput,
 } from '@/lib/weatherHelpers';
 import { RainService } from '@/services/RainService';
 import { WeatherService } from '@/services/WeatherService';
@@ -27,6 +29,7 @@ export default function WeatherBar() {
   const userId = session?.user?.id;
   const navigate = useNavigate();
 
+  const [locationStatus, setLocationStatus] = useState<'resolving' | 'resolved' | 'none'>('resolving');
   const [zip, setZip] = useState<string>('');
   const [inputZip, setInputZip] = useState('');
   const [usingCoords, setUsingCoords] = useState(false);
@@ -50,6 +53,7 @@ export default function WeatherBar() {
   useEffect(() => {
     const saved = loadZip(userId);
     if (saved) {
+      setLocationStatus('resolved');
       setZip(saved);
       setInputZip(saved);
       return;
@@ -57,6 +61,7 @@ export default function WeatherBar() {
 
     const fieldWithCoords = fieldsRef.current.find(f => f.lat != null && f.lng != null);
     if (fieldWithCoords && fieldWithCoords.lat != null && fieldWithCoords.lng != null) {
+      setLocationStatus('resolved');
       setZip(`${fieldWithCoords.lat.toFixed(4)},${fieldWithCoords.lng.toFixed(4)}`);
       setInputZip('');
       setUsingCoords(true);
@@ -65,6 +70,7 @@ export default function WeatherBar() {
 
     const cached = loadCachedWeatherCoords();
     if (cached) {
+      setLocationStatus('resolved');
       setZip(`${cached.lat},${cached.lon}`);
       setInputZip('');
       setUsingCoords(true);
@@ -72,21 +78,35 @@ export default function WeatherBar() {
 
     // Wait for fields to hydrate before a live GPS read so Safari is not
     // prompted on every launch while `fields` is still the empty first paint.
-    if (!initialFetchComplete) return;
+    if (!initialFetchComplete) {
+      if (!cached) setLocationStatus('resolving');
+      return;
+    }
 
     // Native geolocation stays on the weather page's existing Capacitor call.
     // The dashboard card must not start a second fix on every launch.
-    if (isNativePlatform()) return;
+    if (isNativePlatform()) {
+      if (!cached) setLocationStatus('none');
+      return;
+    }
 
+    if (!cached) setLocationStatus('resolving');
     let cancelled = false;
     resolveCoords(fieldsRef.current, saved).then(({ lat, lng, locationString }) => {
-      if (cancelled || !locationString) return;
+      if (cancelled) return;
+      if (!locationString) {
+        if (!cached) setLocationStatus('none');
+        return;
+      }
+      setLocationStatus('resolved');
       setZip(locationString);
       if (lat !== 0 && lng !== 0) {
         setInputZip('');
         setUsingCoords(true);
       }
     }).catch((error: unknown) => {
+      if (cancelled) return;
+      if (!cached) setLocationStatus('none');
       console.error('[WeatherWidget] Failed to resolve location:', error);
     });
     return () => { cancelled = true; };
@@ -170,29 +190,27 @@ export default function WeatherBar() {
     };
   }, [zip, load]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const z = inputZip.trim();
-
-    if (!z) {
-      setZipError('Enter a zip code or coordinates');
+  const submitLocation = (raw: string) => {
+    const parsed = parseWeatherLocationInput(raw);
+    if (!parsed.ok) {
+      setZipError(parsed.error);
       return;
     }
-
-    const coordsMatch = z.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
-    if (!coordsMatch && !ZIP_REGEX.test(z)) {
-      setZipError('Enter a valid 5 or 9-digit zip code');
-      return;
-    }
-
+    const z = parsed.value;
     setZipError('');
     setLocationName('');
     setWeather(initialWeather());
     setHasData(false);
     hasDataRef.current = false;
-    setZip(z);
-    setUsingCoords(!!coordsMatch);
     saveZip(z, userId);
+    setZip(z);
+    setLocationStatus('resolved');
+    setUsingCoords(!!parsed.coords);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitLocation(inputZip);
   };
 
   const weatherUnavailable = Boolean(weather.isError && !hasData);
@@ -204,6 +222,16 @@ export default function WeatherBar() {
     }
     navigate('/weather');
   };
+
+  if (locationStatus === 'none' && !zip) {
+    return (
+      <div id="coachmark-weather" className="group relative min-h-[96px] overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm min-[380px]:p-4">
+        <WeatherNoLocation compact description="Enter a zip code or coordinates, allow location access, or add field coordinates.">
+          <WeatherLocationSearch inputId="weatherZipEmpty" value={inputZip} onChange={value => { setInputZip(value); setZipError(''); }} onSubmit={submitLocation} error={zipError} />
+        </WeatherNoLocation>
+      </div>
+    );
+  }
 
   return (
     <div

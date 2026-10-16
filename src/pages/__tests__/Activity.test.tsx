@@ -167,8 +167,33 @@ function renderActivity(route: string) {
   );
 }
 
+describe('Activity type scroll cue', () => {
+  it('shows a right-edge fade only when the chip row can scroll further right', () => {
+    installFarmMock();
+    renderActivity('/activity');
+
+    const row = screen.getByRole('group', { name: 'Activity types' });
+    expect(screen.queryByTestId('activity-types-fade')).not.toBeInTheDocument();
+
+    Object.defineProperty(row, 'scrollWidth', { configurable: true, value: 800 });
+    Object.defineProperty(row, 'clientWidth', { configurable: true, value: 320 });
+    Object.defineProperty(row, 'scrollLeft', { configurable: true, value: 0 });
+    fireEvent.scroll(row);
+    expect(screen.getByTestId('activity-types-fade')).toBeInTheDocument();
+
+    Object.defineProperty(row, 'scrollLeft', { configurable: true, value: 480 });
+    fireEvent.scroll(row);
+    expect(screen.queryByTestId('activity-types-fade')).not.toBeInTheDocument();
+  });
+});
+
 describe('Activity query-driven tab selection', () => {
   beforeEach(() => installFarmMock({ sprayRecords: [makeSprayRecord({})] }));
+
+  it('keeps Log Activity from shrinking or wrapping', () => {
+    render(<MemoryRouter><Activity /></MemoryRouter>);
+    expect(screen.getByRole('button', { name: /Log Activity/i })).toHaveClass('shrink-0', 'whitespace-nowrap');
+  });
 
   it('selects the tab named in ?tab= and shows its content and export action', () => {
     renderActivity('/activity?tab=spray');

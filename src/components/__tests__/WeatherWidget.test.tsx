@@ -8,7 +8,17 @@ const navigate = vi.fn();
 const fetchCurrentWeather = vi.fn();
 const fetchComprehensiveRainfall = vi.fn();
 
+const zipState = vi.hoisted(() => ({
+  saved: '64093',
+  native: false,
+  saveZip: vi.fn(),
+  resolveCoords: vi.fn(),
+  cached: null as { lat: number; lon: number; ts: number } | null,
+}));
+vi.mock('@/lib/native', () => ({ isNativePlatform: () => zipState.native }));
+
 const farmState = vi.hoisted(() => ({
+  initialFetchComplete: true,
   fields: [{ id: 'f1', lat: 39.1234, lng: -93.5678 }] as { id: string; lat: number | null; lng: number | null }[],
 }));
 
@@ -20,7 +30,7 @@ vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
     session: { user: { id: 'user-1' } },
     fields: farmState.fields,
-    initialFetchComplete: true,
+    initialFetchComplete: farmState.initialFetchComplete,
   }),
 }));
 
@@ -28,7 +38,10 @@ vi.mock('@/lib/weatherHelpers', async () => {
   const actual = await vi.importActual<typeof import('@/lib/weatherHelpers')>('@/lib/weatherHelpers');
   return {
     ...actual,
-    loadZip: () => '64093',
+    loadZip: () => zipState.saved,
+    saveZip: zipState.saveZip,
+    loadCachedWeatherCoords: () => zipState.cached,
+    resolveCoords: zipState.resolveCoords,
   };
 });
 
@@ -48,6 +61,12 @@ import WeatherBar from '../WeatherWidget';
 
 describe('WeatherBar', () => {
   beforeEach(() => {
+    zipState.saved = '64093';
+    zipState.native = false;
+    zipState.cached = null;
+    zipState.saveZip.mockReset();
+    zipState.resolveCoords.mockResolvedValue({ lat: 0, lng: 0, locationString: '' });
+    farmState.initialFetchComplete = true;
     navigate.mockReset();
     fetchCurrentWeather.mockReset();
     fetchComprehensiveRainfall.mockReset();
@@ -155,5 +174,134 @@ describe('WeatherBar', () => {
     await screen.findByText(/72\u00b0F/);
     expect(await screen.findByText('0.25"')).toBeTruthy();
     expect(screen.queryByText('0.00"')).toBeNull();
+  });
+});
+
+describe('WeatherBar without a location', () => {
+  beforeEach(() => {
+    zipState.saved = '';
+    zipState.cached = null;
+    farmState.fields = [];
+    farmState.initialFetchComplete = true;
+    zipState.native = true;
+    zipState.saveZip.mockClear();
+    navigate.mockClear();
+    fetchCurrentWeather.mockReset();
+    fetchCurrentWeather.mockResolvedValue({ temp: 72, wind: 4, humidity: 55, windDirection: 'S', locationName: 'Field', isError: false });
+    zipState.resolveCoords.mockReset();
+    zipState.resolveCoords.mockResolvedValue({ lat: 0, lng: 0, locationString: '' });
+  });
+  it('shows a set-zip prompt on native without fetching or navigating', async () => {
+    render(<WeatherBar />);
+    const prompt = await screen.findByRole('heading', { name: 'Set your zip code to see weather' });
+    fireEvent.click(prompt);
+    expect(screen.getByLabelText('Zip code or coordinates')).toBeInTheDocument();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(screen.queryByText('No location')).toBeNull();
+    expect(screen.queryByText('No Location')).toBeNull();
+    expect(fetchCurrentWeather).not.toHaveBeenCalled();
+    expect(zipState.resolveCoords).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Open weather' })).toBeNull();
+  });
+  it('shows a set-zip prompt when web resolution returns empty', async () => {
+    zipState.native = false;
+    render(<WeatherBar />);
+    expect(await screen.findByRole('heading', { name: 'Set your zip code to see weather' })).toBeInTheDocument();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(fetchCurrentWeather).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+  it('shows a set-zip prompt when location resolution rejects and nothing is saved', async () => {
+    zipState.native = false;
+    zipState.resolveCoords.mockRejectedValue(new Error('denied'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<WeatherBar />);
+
+    expect(await screen.findByRole('heading', { name: 'Set your zip code to see weather' })).toBeInTheDocument();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(fetchCurrentWeather).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+  it('waits for field hydration', () => {
+    farmState.initialFetchComplete = false;
+    render(<WeatherBar />);
+    expect(screen.getByText(/Loading/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Set your zip code to see weather' })).toBeNull();
+    expect(screen.queryByText('No Location')).toBeNull();
+    expect(zipState.resolveCoords).not.toHaveBeenCalled();
+  });
+  it('loads weather for a saved zip', async () => {
+    zipState.saved = '64093';
+    zipState.native = false;
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 4,
+      temp: 68,
+      humidity: 40,
+      windDirection: 'N',
+      locationName: "Lee's Summit",
+      isError: false,
+    });
+
+    render(<WeatherBar />);
+
+    expect(await screen.findByText('68°F')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Set your zip code to see weather' })).toBeNull();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(fetchCurrentWeather).toHaveBeenCalledWith('64093', expect.any(AbortSignal));
+  });
+  it('loads weather from field coordinates when no zip is saved', async () => {
+    zipState.native = false;
+    farmState.fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 3,
+      temp: 70,
+      humidity: 50,
+      windDirection: 'E',
+      locationName: 'Field',
+      isError: false,
+    });
+
+    render(<WeatherBar />);
+
+    expect(await screen.findByText('70°F')).toBeTruthy();
+    expect(fetchCurrentWeather).toHaveBeenCalledWith('39.1234,-93.5678', expect.any(AbortSignal));
+    expect(screen.queryByRole('heading', { name: 'Set your zip code to see weather' })).toBeNull();
+    expect(zipState.resolveCoords).not.toHaveBeenCalled();
+  });
+  it('loads weather from cached coordinates when no zip or field is saved', async () => {
+    zipState.native = false;
+    zipState.cached = { lat: 38.5, lon: -90.25, ts: Date.now() };
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 6,
+      temp: 71,
+      humidity: 48,
+      windDirection: 'W',
+      locationName: 'Cached',
+      isError: false,
+    });
+
+    render(<WeatherBar />);
+
+    expect(await screen.findByText('71°F')).toBeTruthy();
+    expect(fetchCurrentWeather).toHaveBeenCalledWith('38.5,-90.25', expect.any(AbortSignal));
+    expect(screen.queryByRole('heading', { name: 'Set your zip code to see weather' })).toBeNull();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+  });
+  it('saves a submitted ZIP and loads the normal card', async () => {
+    render(<WeatherBar />);
+    fireEvent.change(await screen.findByLabelText('Zip code or coordinates'), { target: { value: '72301' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(zipState.saveZip).toHaveBeenCalledWith('72301', 'user-1');
+    await waitFor(() => expect(fetchCurrentWeather).toHaveBeenCalledWith('72301', expect.any(AbortSignal)));
+    expect(screen.getByRole('button', { name: 'Open weather' })).toBeInTheDocument();
+  });
+  it('shows invalid input without fetching', async () => {
+    render(<WeatherBar />);
+    fireEvent.change(await screen.findByLabelText('Zip code or coordinates'), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(screen.getByText('Enter a valid 5/9-digit zip or lat,lng')).toBeInTheDocument();
+    expect(fetchCurrentWeather).not.toHaveBeenCalled();
   });
 });

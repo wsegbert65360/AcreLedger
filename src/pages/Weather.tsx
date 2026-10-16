@@ -10,11 +10,12 @@ import {
   Loader2,
   MapPin,
   RefreshCw,
-  Search,
   Thermometer,
   Wind,
 } from 'lucide-react';
 
+import WeatherLocationSearch from '@/components/weather/WeatherLocationSearch';
+import WeatherNoLocation from '@/components/weather/WeatherNoLocation';
 import ForecastGrid from '@/components/weather/ForecastGrid';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import RadarEmbed from '@/components/weather/RadarEmbed';
@@ -32,7 +33,7 @@ import {
   resolveCoords,
   saveCachedWeatherCoords,
   saveZip,
-  ZIP_REGEX,
+  parseWeatherLocationInput,
 } from '@/lib/weatherHelpers';
 import { RainService } from '@/services/RainService';
 import { WeatherService } from '@/services/WeatherService';
@@ -53,12 +54,15 @@ export default function Weather() {
   const [usingGps, setUsingGps] = useState(false);
   const [inputLoc, setInputLoc] = useState('');
   const [searchError, setSearchError] = useState('');
+  // No saved zip, field, or GPS fix after location resolution. Show the zip prompt.
+  const [needsLocation, setNeedsLocation] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
   const loadWeather = useCallback(async (loc: string) => {
     if (!loc.trim()) return;
+    setNeedsLocation(false);
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -137,19 +141,39 @@ export default function Weather() {
     const saved = loadZip(userId);
     const hasSavedOrFields = saved.trim() !== '' || Boolean(fieldCoordsKey);
 
+    if (hasSavedOrFields) setNeedsLocation(false);
+
     // Empty fields on first paint must not trigger a Safari location prompt.
     // Serve a cached GPS fix immediately; wait for the store before a live read.
     if (!hasSavedOrFields && !initialFetchComplete) {
       const cached = loadCachedWeatherCoords();
       if (cached) {
+        setNeedsLocation(false);
         setCoords({ lat: cached.lat, lng: cached.lon });
         setUsingGps(false);
         loadWeather(`${cached.lat},${cached.lon}`);
       } else {
+        // Field coordinates may still arrive. Keep loading rather than the zip prompt.
+        setNeedsLocation(false);
         setLoading(true);
         setUsingGps(false);
       }
       return;
+    }
+
+    // Native geolocation stays on the explicit current-location button.
+    // With nothing saved after fields hydrate, ask for a zip instead of
+    // starting another fix that ends on "No location".
+    if (!hasSavedOrFields && isNativePlatform()) {
+      const cached = loadCachedWeatherCoords();
+      if (!cached) {
+        setNeedsLocation(true);
+        setLoading(false);
+        setUsingGps(false);
+        setCoords(null);
+        return;
+      }
+      setNeedsLocation(false);
     }
 
     setLoading(true);
@@ -161,14 +185,20 @@ export default function Weather() {
         const hasCoords = lat !== 0 && lng !== 0;
         setCoords(hasCoords ? { lat, lng } : null);
         setUsingGps(false);
-        if (locationString) loadWeather(locationString);
-        else setLoading(false);
+        if (locationString) {
+          setNeedsLocation(false);
+          loadWeather(locationString);
+        } else {
+          setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
+          setLoading(false);
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         console.error('[Weather] Failed to resolve the initial location:', error);
         setUsingGps(false);
         setLoading(false);
+        setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
       });
 
     return () => { cancelled = true; };
@@ -195,32 +225,19 @@ export default function Weather() {
     return () => clearInterval(interval);
   }, [userId, loadWeather]);
 
-  const handleLocationSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    const loc = inputLoc.trim();
-    if (!loc) {
-      setSearchError('Enter a zip code or coordinates');
+  const handleLocationSubmit = useCallback((raw: string) => {
+    const parsed = parseWeatherLocationInput(raw);
+    if (!parsed.ok) {
+      setSearchError(parsed.error);
       return;
     }
-
-    const coordsMatch = loc.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
-    if (!coordsMatch && !ZIP_REGEX.test(loc)) {
-      setSearchError('Enter a valid 5/9-digit zip or lat,lng');
-      return;
-    }
-
+    const loc = parsed.value;
     setSearchError('');
-    if (coordsMatch) {
-      const lat = parseFloat(coordsMatch[1]);
-      const lng = parseFloat(coordsMatch[2]);
-      setCoords({ lat, lng });
-    } else {
-      setCoords(null);
-    }
+    setCoords(parsed.coords);
 
     saveZip(loc, userId);
     loadWeather(loc);
-  }, [inputLoc, userId, loadWeather]);
+  }, [userId, loadWeather]);
 
   const handleUseGps = useCallback(() => {
     setLoading(true);
@@ -289,13 +306,19 @@ export default function Weather() {
         const gotGps = lat !== 0 && lng !== 0;
         setCoords(gotGps ? { lat, lng } : null);
         setUsingGps(false);
-        if (locationString) loadWeather(locationString);
-        else setLoading(false);
+        if (locationString) {
+          setNeedsLocation(false);
+          loadWeather(locationString);
+        } else {
+          setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
+          setLoading(false);
+        }
       })
       .catch((error: unknown) => {
         console.error('[Weather] Failed to resolve refresh location:', error);
         setUsingGps(false);
         setLoading(false);
+        setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
       });
   }, [userId, fields, loadWeather]);
 
@@ -303,6 +326,7 @@ export default function Weather() {
   const bgGradient = weather
     ? getConditionGradient(weather.icon, weather.isRainingNow)
     : '';
+  const showSetZipPrompt = needsLocation && !loading && !weather;
 
   return (
     <div className={`min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8 ${bgGradient ? `bg-gradient-to-b ${bgGradient}` : ''}`}>
@@ -320,8 +344,8 @@ export default function Weather() {
             <div className="flex flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight">Weather</h1>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <MapPin size={10} className="text-emerald-500/60" />
-                {weather?.locationName || (loading ? 'Locating…' : 'No location')}
+                <MapPin size={10} className="text-emerald-500/60 shrink-0" />
+                {weather?.locationName || (loading ? 'Locating…' : 'Set your zip code to see weather')}
               </p>
             </div>
           </div>
@@ -341,46 +365,16 @@ export default function Weather() {
 
       <main className="max-w-lg mx-auto px-4 py-3 space-y-3 lg:max-w-5xl lg:px-8">
         {/* ── Location Selector ── */}
-        <div className="bg-card border border-border rounded-2xl p-3">
-          <form onSubmit={handleLocationSubmit} className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
-                <input
-                  type="text"
-                  placeholder="Enter zip code (e.g. 72301) or lat,lng..."
-                  value={inputLoc}
-                  onChange={(e) => {
-                    setInputLoc(e.target.value);
-                    setSearchError('');
-                  }}
-                  className="w-full bg-muted/30 border border-border rounded-xl pl-9 pr-4 py-2 text-xs font-mono placeholder:text-muted-foreground/60 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl text-xs transition-colors shrink-0 disabled:opacity-50"
-              >
-                Search
-              </button>
-              <button
-                type="button"
-                onClick={handleUseGps}
-                disabled={loading}
-                title="Use Current Location"
-                aria-label="Use Current Location"
-                className="p-2 border border-border hover:bg-muted/40 text-muted-foreground rounded-xl flex items-center justify-center shrink-0 transition-colors disabled:opacity-50"
-              >
-                <Crosshair size={16} className={usingGps ? 'animate-pulse text-primary' : ''} />
-              </button>
-            </div>
-            {searchError && (
-              <p className="text-xs font-semibold text-destructive mt-0.5 ml-1 uppercase tracking-wider">
-                {searchError}
-              </p>
-            )}
-          </form>
+        <div className="bg-card border border-border rounded-2xl p-3 space-y-2">
+          {showSetZipPrompt && (
+            <h2 className="text-sm font-bold text-foreground">Set your zip code to see weather</h2>
+          )}
+          <WeatherLocationSearch inputId="weatherLocation" value={inputLoc} onChange={value => { setInputLoc(value); setSearchError(''); }} onSubmit={handleLocationSubmit} error={searchError} disabled={loading} onUseGps={handleUseGps} usingGps={usingGps} />
+          {showSetZipPrompt && (
+            <p className="text-center text-xs text-muted-foreground leading-relaxed">
+              Enter a zip code in the search field above to see weather.
+            </p>
+          )}
         </div>
 
         {/* ── Loading State ── */}
@@ -393,15 +387,9 @@ export default function Weather() {
           </div>
         )}
 
-        {/* ── No Location ── */}
-        {!loading && !weather && (
-          <div className="text-center py-16 px-4 border-2 border-dashed border-border rounded-2xl bg-muted/20">
-            <MapPin size={40} className="mx-auto text-muted-foreground/20 mb-3" />
-            <h3 className="text-sm font-bold text-foreground mb-1">No Location</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-[260px] mx-auto">
-              Enter a zip code or coordinates in the search bar above, allow location access, or add field coordinates.
-            </p>
-          </div>
+        {/* Zip prompt replaces the no-location panel; keep it for other empty results. */}
+        {!loading && !weather && !showSetZipPrompt && (
+          <WeatherNoLocation />
         )}
 
         {/* ── Weather Content ── */}

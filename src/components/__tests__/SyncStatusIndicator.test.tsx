@@ -17,6 +17,17 @@ vi.mock('@/store/farmStore', async () => {
 const mockedUseFarm = vi.mocked(farmStore.useFarm);
 
 describe('SyncStatusIndicator', () => {
+  it('shows checking while the queue is locked before its first read', () => {
+    mockedUseFarm.mockReturnValue({ isOnline: true, pendingSyncCount: 0, syncQueueLocked: true, syncQueueReadFailed: false } as any);
+    render(<SyncStatusIndicator />);
+    expect(screen.getByLabelText('Checking sync status')).toBeInTheDocument();
+    expect(screen.queryByLabelText('All changes synced')).toBeNull();
+  });
+  it('shows locked only after a read failure', () => {
+    mockedUseFarm.mockReturnValue({ isOnline: true, pendingSyncCount: 0, syncQueueLocked: true, syncQueueReadFailed: true } as any);
+    render(<SyncStatusIndicator />);
+    expect(screen.getByLabelText(/Offline changes locked/)).toBeInTheDocument();
+  });
   it('shows synced state when online with no pending items', () => {
     mockedUseFarm.mockReturnValue({ isOnline: true, pendingSyncCount: 0 } as any);
     render(<SyncStatusIndicator />);

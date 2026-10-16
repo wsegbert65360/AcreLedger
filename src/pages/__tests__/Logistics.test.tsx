@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import Logistics from '../Logistics';
@@ -27,6 +27,10 @@ vi.mock('@/store/farmStore', () => ({
 }));
 
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => <div data-testid="sync-status" /> }));
+vi.mock('@/components/BinManageModal', () => ({
+  default: ({ open }: { open: boolean }) => open ? <div role="dialog" aria-label="Add Bin" /> : null,
+  BinManager: () => <div data-testid="bin-manager" />,
+}));
 vi.mock('@/components/SellModal', () => ({ default: () => null }));
 vi.mock('@/components/AddGrainModal', () => ({ default: () => null }));
 vi.mock('@/components/grain/BinMonitorPanel', () => ({ default: () => null }));
@@ -43,6 +47,21 @@ describe('Logistics inventory labels', () => {
     farm.bins = [];
     farm.grainMovements = [];
     farm.totals = {};
+  });
+
+  it('opens the add form directly from the empty state', () => {
+    render(<Logistics />);
+    fireEvent.click(screen.getByRole('button', { name: /^add bin$/i }));
+    expect(screen.getByRole('dialog', { name: 'Add Bin' })).toBeInTheDocument();
+    expect(screen.queryByTestId('bin-manager')).toBeNull();
+  });
+
+  it('keeps header Manage bins opening the manager', () => {
+    farm.bins = [bin('one', 1000)];
+    render(<Logistics />);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage bins' }));
+    expect(screen.getByTestId('bin-manager')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Add Bin' })).toBeNull();
   });
 
   it('labels over-capacity and negative inventory while clamping the fill bar', () => {
