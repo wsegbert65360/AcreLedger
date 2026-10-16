@@ -25,7 +25,7 @@ try {
   `);
   await db.exec(await readFile(new URL('../supabase/migrations/20260910230451_account_deletion_requests.sql', import.meta.url), 'utf8'));
   await db.exec(`INSERT INTO public.account_deletion_requests (user_id, farm_id) VALUES ('${user}', '${farm}')`);
-  await db.exec(await readFile(new URL('../supabase/migrations/20261012160305_preserve_account_deletion_audit.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261013040147_preserve_account_deletion_audit.sql', import.meta.url), 'utf8'));
   let { rows } = await db.query('SELECT * FROM public.account_deletion_requests');
   const id = rows[0].id;
   assert.equal(rows[0].requested_by, user);

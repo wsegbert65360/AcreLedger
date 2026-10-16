@@ -29,7 +29,7 @@ Navigation checks and editorial changes do not constitute verification of archit
 - **2026-10-14** — Review-10 adds camera/photo-library usage strings, CSP fetch-origin checks, overlay-aware Android back handling, GitHub quality checks and all eleven database-integrity suites. Nightly native builds verify the requested SHA; both platforms reject placeholder Supabase bundles.
 - **2026-10-13** — Native and other non-dev builds do not bundle `VITE_VISUALCROSSING_KEY`. Capacitor requires `VITE_WEATHER_PROXY_URL`; CodeMagic fails the build when that URL is missing or when the vendor key appears in `dist/assets`. The weather proxy quota is 30 requests per minute and 500 per rolling 24 hours.
 - **2026-10-12** — FSA split/variety rows use planting acres apportioned across CLUs; the historical July acreage backfills are guarded one-shots, never repair operations. Tract reimports reconcile assignment acres and confirm removed CLUs before soft-delete.
-- **2026-10-12** — After `20261012020000_db_access_review_02_m3_m4.sql`, new `public` tables, functions, and sequences inherit no client grants (including no PUBLIC `EXECUTE` on functions). Every new table or function needs an explicit `GRANT` to `authenticated` and/or `service_role`.
+- **2026-10-12** — After `20261013035852_db_access_review_02_m3_m4.sql`, new `public` tables, functions, and sequences inherit no client grants (including no PUBLIC `EXECUTE` on functions). Every new table or function needs an explicit `GRANT` to `authenticated` and/or `service_role`.
 
 ## Contents
 

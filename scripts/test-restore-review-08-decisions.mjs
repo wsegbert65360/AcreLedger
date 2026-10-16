@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
 const migration = await readFile(
-  new URL('../supabase/migrations/20261015153000_restore_owner_admin_and_timeout.sql', import.meta.url),
+  new URL('../supabase/migrations/20261015175710_restore_owner_admin_and_timeout.sql', import.meta.url),
   'utf8',
 );
 
