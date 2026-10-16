@@ -70,6 +70,39 @@ const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; la
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | GrainMovement | TillageRecord;
 
+function useCanScrollFurtherRight() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const update = () => {
+      setCanScrollRight(node.scrollWidth - node.clientWidth - node.scrollLeft > 1);
+    };
+
+    update();
+    node.addEventListener('scroll', update, { passive: true });
+
+    let observer: ResizeObserver | undefined;
+    if (typeof ResizeObserver === 'function') {
+      observer = new ResizeObserver(update);
+      observer.observe(node);
+    } else {
+      window.addEventListener('resize', update);
+    }
+
+    return () => {
+      node.removeEventListener('scroll', update);
+      observer?.disconnect();
+      if (!observer) window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return { ref, canScrollRight };
+}
+
 export default function Activity() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -115,6 +148,7 @@ export default function Activity() {
   const [editingRecordType, setEditingRecordType] = useState<ActivityRecord['type'] | null>(null);
   const [editingMode, setEditingMode] = useState<'edit' | 'duplicate'>('edit');
   const openedRecordRef = useRef<string | null>(null);
+  const { ref: activityTypesRef, canScrollRight: activityTypesCanScrollRight } = useCanScrollFurtherRight();
 
   const openModal = (type: ActivityRecord['type'], record: EditableRecord, mode: 'edit' | 'duplicate') => {
     if (type === 'grain' && (record as GrainMovement).harvestRecordId && mode === 'duplicate') {
@@ -444,7 +478,8 @@ export default function Activity() {
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs — grouped pills */}
         <div className="relative -mx-4 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
-          <div role="group" aria-label="Activity types" className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
+          <div className="relative">
+          <div ref={activityTypesRef} role="group" aria-label="Activity types" className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
                 {group.tabs.map((t) => {
@@ -488,7 +523,14 @@ export default function Activity() {
               </div>
             ))}
           </div>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background via-background/85 to-transparent" />
+          {activityTypesCanScrollRight && (
+            <div
+              data-testid="activity-types-fade"
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent"
+            />
+          )}
+          </div>
         </div>
 
         {/* Search + Review Queue filter */}

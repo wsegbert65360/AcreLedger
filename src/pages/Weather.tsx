@@ -54,12 +54,15 @@ export default function Weather() {
   const [usingGps, setUsingGps] = useState(false);
   const [inputLoc, setInputLoc] = useState('');
   const [searchError, setSearchError] = useState('');
+  // No saved zip, field, or GPS fix after location resolution. Show the zip prompt.
+  const [needsLocation, setNeedsLocation] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
   const loadWeather = useCallback(async (loc: string) => {
     if (!loc.trim()) return;
+    setNeedsLocation(false);
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -138,19 +141,39 @@ export default function Weather() {
     const saved = loadZip(userId);
     const hasSavedOrFields = saved.trim() !== '' || Boolean(fieldCoordsKey);
 
+    if (hasSavedOrFields) setNeedsLocation(false);
+
     // Empty fields on first paint must not trigger a Safari location prompt.
     // Serve a cached GPS fix immediately; wait for the store before a live read.
     if (!hasSavedOrFields && !initialFetchComplete) {
       const cached = loadCachedWeatherCoords();
       if (cached) {
+        setNeedsLocation(false);
         setCoords({ lat: cached.lat, lng: cached.lon });
         setUsingGps(false);
         loadWeather(`${cached.lat},${cached.lon}`);
       } else {
+        // Field coordinates may still arrive. Keep loading rather than the zip prompt.
+        setNeedsLocation(false);
         setLoading(true);
         setUsingGps(false);
       }
       return;
+    }
+
+    // Native geolocation stays on the explicit current-location button.
+    // With nothing saved after fields hydrate, ask for a zip instead of
+    // starting another fix that ends on "No location".
+    if (!hasSavedOrFields && isNativePlatform()) {
+      const cached = loadCachedWeatherCoords();
+      if (!cached) {
+        setNeedsLocation(true);
+        setLoading(false);
+        setUsingGps(false);
+        setCoords(null);
+        return;
+      }
+      setNeedsLocation(false);
     }
 
     setLoading(true);
@@ -162,14 +185,20 @@ export default function Weather() {
         const hasCoords = lat !== 0 && lng !== 0;
         setCoords(hasCoords ? { lat, lng } : null);
         setUsingGps(false);
-        if (locationString) loadWeather(locationString);
-        else setLoading(false);
+        if (locationString) {
+          setNeedsLocation(false);
+          loadWeather(locationString);
+        } else {
+          setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
+          setLoading(false);
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         console.error('[Weather] Failed to resolve the initial location:', error);
         setUsingGps(false);
         setLoading(false);
+        setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
       });
 
     return () => { cancelled = true; };
@@ -277,13 +306,19 @@ export default function Weather() {
         const gotGps = lat !== 0 && lng !== 0;
         setCoords(gotGps ? { lat, lng } : null);
         setUsingGps(false);
-        if (locationString) loadWeather(locationString);
-        else setLoading(false);
+        if (locationString) {
+          setNeedsLocation(false);
+          loadWeather(locationString);
+        } else {
+          setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
+          setLoading(false);
+        }
       })
       .catch((error: unknown) => {
         console.error('[Weather] Failed to resolve refresh location:', error);
         setUsingGps(false);
         setLoading(false);
+        setNeedsLocation(!hasSavedOrFields && !loadCachedWeatherCoords());
       });
   }, [userId, fields, loadWeather]);
 
@@ -291,6 +326,7 @@ export default function Weather() {
   const bgGradient = weather
     ? getConditionGradient(weather.icon, weather.isRainingNow)
     : '';
+  const showSetZipPrompt = needsLocation && !loading && !weather;
 
   return (
     <div className={`min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8 ${bgGradient ? `bg-gradient-to-b ${bgGradient}` : ''}`}>
@@ -308,8 +344,8 @@ export default function Weather() {
             <div className="flex flex-col">
               <h1 className="text-sm font-bold text-foreground tracking-tight">Weather</h1>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <MapPin size={10} className="text-emerald-500/60" />
-                {weather?.locationName || (loading ? 'Locating…' : 'No location')}
+                <MapPin size={10} className="text-emerald-500/60 shrink-0" />
+                {weather?.locationName || (loading ? 'Locating…' : 'Set your zip code to see weather')}
               </p>
             </div>
           </div>
@@ -329,8 +365,16 @@ export default function Weather() {
 
       <main className="max-w-lg mx-auto px-4 py-3 space-y-3 lg:max-w-5xl lg:px-8">
         {/* ── Location Selector ── */}
-        <div className="bg-card border border-border rounded-2xl p-3">
+        <div className="bg-card border border-border rounded-2xl p-3 space-y-2">
+          {showSetZipPrompt && (
+            <h2 className="text-sm font-bold text-foreground">Set your zip code to see weather</h2>
+          )}
           <WeatherLocationSearch inputId="weatherLocation" value={inputLoc} onChange={value => { setInputLoc(value); setSearchError(''); }} onSubmit={handleLocationSubmit} error={searchError} disabled={loading} onUseGps={handleUseGps} usingGps={usingGps} />
+          {showSetZipPrompt && (
+            <p className="text-center text-xs text-muted-foreground leading-relaxed">
+              Enter a zip code in the search field above to see weather.
+            </p>
+          )}
         </div>
 
         {/* ── Loading State ── */}
@@ -343,8 +387,8 @@ export default function Weather() {
           </div>
         )}
 
-        {/* ── No Location ── */}
-        {!loading && !weather && (
+        {/* Zip prompt replaces the no-location panel; keep it for other empty results. */}
+        {!loading && !weather && !showSetZipPrompt && (
           <WeatherNoLocation />
         )}
 

@@ -5,7 +5,7 @@ export default function WeatherNoLocation({ compact = false, description = 'Ente
   return (
     <div className={`text-center ${compact ? 'py-4' : 'py-16'} px-4 border-2 border-dashed border-border rounded-2xl bg-muted/20`}>
       <MapPin size={compact ? 24 : 40} className="mx-auto text-muted-foreground/20 mb-3" />
-      <h3 className="text-sm font-bold text-foreground mb-1">No Location</h3>
+      <h3 className="text-sm font-bold text-foreground mb-1">Set your zip code to see weather</h3>
       <p className="text-xs text-muted-foreground leading-relaxed max-w-[260px] mx-auto">{description}</p>
       {children && <div className="mt-3">{children}</div>}
     </div>

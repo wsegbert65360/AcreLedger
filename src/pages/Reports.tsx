@@ -547,12 +547,12 @@ export default function Reports() {
           className="space-y-4"
         >
         {/* Season Selector */}
-        <div className="flex min-h-14 items-center justify-between gap-4 rounded-2xl border border-border bg-muted/30 px-3 py-2 print:hidden">
-          <div className="flex items-center gap-2">
-            <HistoryIcon size={16} className="text-muted-foreground" />
-            <span className="text-xs font-semibold text-muted-foreground">Season view</span>
+        <div className="flex min-h-14 min-w-0 items-center justify-between gap-4 rounded-2xl border border-border bg-muted/30 px-3 py-2 print:hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            <HistoryIcon size={16} className="shrink-0 text-muted-foreground" />
+            <span className="truncate text-xs font-semibold text-muted-foreground">Season view</span>
           </div>
-          <SeasonSelect className="w-[5.5rem] bg-background text-sm" />
+          <SeasonSelect className="max-w-[6.5rem] shrink bg-background text-sm" />
         </div>
 
         {/* Tab Bar — flex-1 shrink-0 allows tabs to fill screen width equally on desktop, but never shrink below content size on mobile */}
