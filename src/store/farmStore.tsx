@@ -299,6 +299,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const identityRef = useRef(identityKey);
   identityRef.current = identityKey;
   const latestFetchRequestRef = useRef(0);
+  const equipmentStateRef = useRef({ equipment, maintenanceSchedules, maintenanceLogs });
+  useEffect(() => { equipmentStateRef.current = { equipment, maintenanceSchedules, maintenanceLogs }; });
 
   const clearFarmData = useCallback(() => {
     setFields([]);
@@ -652,6 +654,15 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             schedulesMapped = overlayQueuedRows('maintenance_schedules', maintenanceSchedulesPages.rows, queued, farm_id).map(mapMaintenanceScheduleFromDb);
             logsMapped = overlayQueuedRows('maintenance_logs', maintenanceLogsPages.rows, queued, farm_id).map(mapMaintenanceLogFromDb);
             const merged = applyParkedEquipmentMutations(equipmentMapped, schedulesMapped, logsMapped, queued, true);
+            equipmentMapped = merged.equipment;
+            schedulesMapped = merged.schedules;
+            logsMapped = merged.logs;
+          } else {
+            // Fail-soft: keep the cached equipment, but still show queued/parked work on it.
+            const retained = equipmentStateRef.current;
+            const merged = applyParkedEquipmentMutations(
+              retained.equipment, retained.maintenanceSchedules, retained.maintenanceLogs, queued, true,
+            );
             equipmentMapped = merged.equipment;
             schedulesMapped = merged.schedules;
             logsMapped = merged.logs;

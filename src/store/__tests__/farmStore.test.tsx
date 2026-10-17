@@ -627,5 +627,30 @@ describe('farmStore composed behaviors', () => {
       expect(result.current.fields).toEqual([]);
       expect(result.current.farmName).toBeNull();
     });
+
+    it('overlays queued equipment mutations onto retained cache when equipment fails to load', async () => {
+      control.isOnline = true;
+      cacheControl.data.equipment = [{
+        id: 'cloud-1', farm_id: 'farm-1', kind: 'tractor', make: 'Deere', meterUnit: 'hours',
+        currentReading: 1000, status: 'active', createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z', deleted_at: null,
+      }];
+      cloud.setTableHandler('equipment', { data: null, error: { message: 'relation missing' } });
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm' }, error: null });
+      getQueueMock.mockResolvedValue([{
+        id: 'q1', table_name: 'equipment', operation: 'update', farm_id: 'farm-1', retry_count: 0,
+        payload: { id: 'cloud-1', make: 'Case' },
+      }]);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.equipmentLoadFailed).toBe(true);
+      expect(result.current.equipment).toHaveLength(1);
+      expect(result.current.equipment[0].make).toBe('Case');
+
+      await act(async () => { await result.current.refresh(); });
+      expect(result.current.equipment).toHaveLength(1);
+      expect(result.current.equipment[0].make).toBe('Case');
+    });
   });
 });

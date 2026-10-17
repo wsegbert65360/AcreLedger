@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Cloud, CloudOff, WifiOff } from 'lucide-react';
@@ -90,14 +92,29 @@ export default function SyncStatus() {
   const [, forceRender] = useState(0);
 
   const exportFailed = async () => {
-    const changes = await getFailedSyncChanges?.();
-    const blob = new Blob([JSON.stringify(changes ?? [], null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `acreledger-unsynced-changes-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setActionError(null);
+    try {
+      const changes = await getFailedSyncChanges?.();
+      const data = JSON.stringify(changes ?? [], null, 2);
+      const fileName = `acreledger-unsynced-changes-${new Date().toISOString().slice(0, 10)}.json`;
+      if (Capacitor.isNativePlatform()) {
+        const shared = await native.shareFile({ fileName, data, title: 'AcreLedger unsynced changes', encoding: 'utf8' });
+        if (shared === false) {
+          setActionError('Could not export unsynced changes.');
+        }
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not export unsynced changes.');
+    }
   };
 
   const discardFailed = async () => {

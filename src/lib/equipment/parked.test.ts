@@ -52,6 +52,44 @@ describe('applyParkedEquipmentMutations', () => {
     expect(result.equipment[1]).toMatchObject({ kind: 'truck', currentReading: 12, meterUnit: 'miles' });
   });
 
+  it('applies the same parked mutations twice without changing the result', () => {
+    const update = parked({ operation: 'update', payload: { id: 'cloud-1', make: 'Case' } });
+    const onceUpdate = applyParkedEquipmentMutations([machine], [], [], [update]);
+    const twiceUpdate = applyParkedEquipmentMutations(
+      onceUpdate.equipment, onceUpdate.schedules, onceUpdate.logs, [update],
+    );
+    expect(twiceUpdate).toEqual(onceUpdate);
+    expect(twiceUpdate.equipment).toHaveLength(1);
+    expect(twiceUpdate.equipment[0].make).toBe('Case');
+
+    const softDelete = parked({
+      id: 'q-del',
+      operation: 'soft_delete',
+      payload: { id: 'cloud-1' },
+    });
+    const onceDelete = applyParkedEquipmentMutations([machine], [], [], [softDelete]);
+    const twiceDelete = applyParkedEquipmentMutations(
+      onceDelete.equipment, onceDelete.schedules, onceDelete.logs, [softDelete],
+    );
+    expect(twiceDelete).toEqual(onceDelete);
+    expect(onceDelete.equipment[0].deleted_at).toEqual(twiceDelete.equipment[0].deleted_at);
+
+    const insert = parked({
+      id: 'q-ins',
+      payload: {
+        id: 'local-1', farm_id: 'farm-1', kind: 'truck', meter_unit: 'miles',
+        current_reading: 12, status: 'active', created_at: '2026-02-01T00:00:00Z',
+        updated_at: '2026-02-01T00:00:00Z',
+      },
+    });
+    const onceInsert = applyParkedEquipmentMutations([machine], [], [], [insert]);
+    const twiceInsert = applyParkedEquipmentMutations(
+      onceInsert.equipment, onceInsert.schedules, onceInsert.logs, [insert],
+    );
+    expect(twiceInsert).toEqual(onceInsert);
+    expect(twiceInsert.equipment.map(item => item.id)).toEqual(['cloud-1', 'local-1']);
+  });
+
   it('ignores parked rows from other tables', () => {
     const result = applyParkedEquipmentMutations([machine], [], [], [
       parked({ table_name: 'spray_records', payload: { id: 'spray-1' } }),
