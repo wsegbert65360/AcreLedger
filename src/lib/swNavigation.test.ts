@@ -13,14 +13,27 @@ const BUILD_A = '<!doctype html><script src="/assets/index-OLD.js"></script>';
 const BUILD_B = '<!doctype html><script src="/assets/index-NEW.js"></script>';
 
 function navigateRequest(url: string): Request {
+  // A Proxy that forwards getters with the proxy as receiver throws
+  // "Cannot read private member #state" on Node 20. Override mode in place.
   const request = new Request(url);
-  return new Proxy(request, {
-    get(target, prop, receiver) {
-      if (prop === 'mode') return 'navigate';
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  }) as Request;
+  Object.defineProperty(request, 'mode', { value: 'navigate' });
+  return request;
+}
+
+function strictNavigateFetch(body: string | null): (
+  input: Request,
+  ...rest: unknown[]
+) => Promise<Response> {
+  return (input, ...rest) => {
+    if (input.mode === 'navigate' && rest.length > 0) {
+      throw new TypeError('RequestInit is not allowed for a navigate request');
+    }
+    if (body === null) return new Promise<Response>(() => {});
+    return Promise.resolve(new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+    }));
+  };
 }
 
 /** Precache directory-index behavior: `/` and `/index.html` both hit the shell. */
@@ -95,18 +108,25 @@ describe('navigation fallback', () => {
     expect(vi.mocked(caches.match)).not.toHaveBeenCalled();
   });
 
+  it('returns network HTML when fetch throws TypeError if given RequestInit for a navigate request', async () => {
+    const fresh = '<!doctype html><script src="/assets/index-FRESH.js"></script>';
+    const fetchImpl = vi.fn(strictNavigateFetch(fresh));
+    const sample = navigateRequest(`${location.origin}/settings`);
+    expect(() => fetchImpl(sample, {})).toThrow(TypeError);
+    fetchImpl.mockClear();
+
+    const matchPrecache = vi.fn(async () => new Response(BUILD_A));
+    const response = await handleNavigation(sample, { fetchImpl, matchPrecache });
+    expect(await response.text()).toBe(fresh);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0]).toHaveLength(1);
+    expect(matchPrecache).not.toHaveBeenCalled();
+  });
+
   it('falls back to the precached shell when the network hangs and that URL is not cached', async () => {
     expect(NAVIGATION_TIMEOUT_MS).toBe(3_000);
     vi.useFakeTimers();
-    let aborted = false;
-    const fetchImpl = vi.fn((input: Request, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
-      expect(input.url).toContain('/settings');
-      init?.signal?.addEventListener('abort', () => {
-        aborted = true;
-        reject(new DOMException('Aborted', 'AbortError'));
-      });
-      void resolve;
-    }));
+    const fetchImpl = vi.fn(strictNavigateFetch(null));
     const matchPrecache = vi.fn(async (url: string) => {
       return url === '/index.html' ? new Response(BUILD_B) : undefined;
     });
@@ -115,9 +135,7 @@ describe('navigation fallback', () => {
       navigateRequest(`${location.origin}/settings`),
       { fetchImpl, matchPrecache, timeoutMs: NAVIGATION_TIMEOUT_MS },
     );
-    const result = pending.then(async (response) => {
-      return { html: await response.text(), aborted };
-    });
+    const result = pending.then(async (response) => response.text());
     await vi.advanceTimersByTimeAsync(NAVIGATION_TIMEOUT_MS - 1);
     let settled = false;
     void result.then(() => {
@@ -128,9 +146,13 @@ describe('navigation fallback', () => {
     expect(matchPrecache).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
-    const { html, aborted: didAbort } = await result;
-    expect(didAbort).toBe(true);
+    const html = await result;
     expect(html).toBe(BUILD_B);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0]).toHaveLength(1);
+    const fetched = fetchImpl.mock.calls[0]?.[0] as Request;
+    expect(fetched.mode).toBe('navigate');
+    expect(fetched.url).toContain('/settings');
     expect(matchPrecache).toHaveBeenCalledTimes(1);
     expect(matchPrecache).toHaveBeenCalledWith('/index.html');
   });

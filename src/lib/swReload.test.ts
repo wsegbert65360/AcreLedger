@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createReloadOnce,
   MAX_DEFERS,
+  SW_RELOAD_COOLDOWN_MS,
   SW_RELOAD_DEFER_MS,
   SW_RELOADED_AT_KEY,
 } from './swReload';
@@ -59,5 +60,25 @@ describe('service worker reload guard', () => {
     sessionStorage.setItem(SW_RELOADED_AT_KEY, String(Date.now()));
     createReloadOnce({ reload })();
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('retries once when the cooldown window ends and does not stack timers', () => {
+    const elapsed = 4_000;
+    sessionStorage.setItem(SW_RELOADED_AT_KEY, String(Date.now() - elapsed));
+    const reloadOnce = createReloadOnce({ reload });
+    const pendingBefore = vi.getTimerCount();
+    reloadOnce();
+    reloadOnce();
+    reloadOnce();
+    expect(reload).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(pendingBefore + 1);
+
+    vi.advanceTimersByTime(SW_RELOAD_COOLDOWN_MS - elapsed - 1);
+    expect(reload).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(SW_RELOAD_COOLDOWN_MS);
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });

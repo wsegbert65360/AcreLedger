@@ -59,23 +59,18 @@ Tradeoff: if a brand-new user's profile request fails, they see an empty dashboa
   - All 113 precache URLs in the live `sw.js` return 200.
 
 ### Fix
-1. **`src/sw.js`: serve navigations network-first, falling back to the precached index.html.** This is the main fix. Online users always get the current `index.html` (`no-store`), which points at hashed assets; any asset not in the old precache falls through to the network. Fresh code then no longer depends on the service-worker update lifecycle, and offline still works.
+1. **`src/sw.js`: serve navigations network-first, with no runtime HTML cache, falling back to the precached index.html.** This is the main fix. Online users always get the current `index.html` (`no-store`), which points at hashed assets; any asset not in the old precache falls through to the network. Fresh code then no longer depends on the service-worker update lifecycle, and offline still works. There is no `NetworkFirst` strategy and no `al-navigations` runtime cache. `installRoutes` (`src/lib/swNavigation.ts`) registers the navigation route before precaching. The handler calls `fetch(request)` with no `RequestInit` — a navigate-mode request plus init throws `TypeError` on older Chrome — and races that fetch against a 3s timer. A hang, a failure, or a non-OK response uses the current precached `/index.html` only.
    ```js
-   import { precacheAndRoute, cleanupOutdatedCaches, matchPrecache } from 'workbox-precaching';
-   import { registerRoute, NavigationRoute } from 'workbox-routing';
-   import { NetworkFirst } from 'workbox-strategies';
+   import { cleanupOutdatedCaches } from 'workbox-precaching';
+   import { installRoutes } from './lib/swNavigation';
+   installRoutes(self.__WB_MANIFEST);
    cleanupOutdatedCaches();
-   const networkFirst = new NetworkFirst({ cacheName: 'al-navigations', networkTimeoutSeconds: 4 });
-   registerRoute(new NavigationRoute(async (opts) => {
-     try { return (await networkFirst.handle(opts)) ?? await matchPrecache('/index.html'); }
-     catch { return (await matchPrecache('/index.html')) ?? Response.error(); }
-   }, { denylist: [/^\/api\//] }));
    ```
-   `workbox-strategies` is already installed as a transitive dependency. Add it to `package.json` dependencies pinned to the installed 7.x so the import is explicit.
+   A reload skipped because one already ran inside the 10s guard is retried once when that window ends.
 2. **`src/main.tsx`: one reload path, guarded against loops.**
    - Pass `onNeedReload: reloadOnce` to `registerSW` so the plugin's `activated` reload goes through the guard. Delete the dead `onNeedRefresh`.
    - Narrow the overlay selector to real modals: `[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]`. This drops the bare `[data-state="open"]` that matches Accordions.
-   - Loop guard: before `window.location.reload()`, set `sessionStorage['al_sw_reloaded_at'] = Date.now()`. Skip the reload if it was set less than 10 s ago. Together with the existing `reloading` flag, this caps it at one reload per update, even if `controllerchange` and `activated` both fire or the new page is briefly served stale.
+   - Loop guard: before `window.location.reload()`, set `sessionStorage['al_sw_reloaded_at'] = Date.now()`. If it was set less than 10 s ago, do not reload immediately. Schedule exactly one retry for the remaining time (`setTimeout`); repeated calls in that window must not stack another timer. When the window ends, reload once. Together with the existing `reloading` flag, this caps it at one reload per update, even if `controllerchange` and `activated` both fire or the new page is briefly served stale.
    - Extract `reloadOnce`/`shouldDeferReload` into a small testable module, `src/lib/swReload.ts`. `main.tsx` is excluded from coverage and hard to unit-test.
 3. **`vercel.json`**
    - Change the rewrite source to `/((?!api/|assets/).*)` so missing hashed chunks return a real 404. `vite:preloadError` then triggers `reloadOnce`, which now loads fresh HTML through network-first.
@@ -87,13 +82,13 @@ Tradeoff: if a brand-new user's profile request fails, they see an empty dashboa
   - It does *not* defer for an open Accordion (`data-state="open"` with no dialog role).
   - It force-reloads after `MAX_DEFERS`.
   - Two triggers in a row (`controllerchange` + `activated`) produce exactly one `location.reload`.
-  - A recent `al_sw_reloaded_at` in sessionStorage suppresses a second reload.
+  - A recent `al_sw_reloaded_at` in sessionStorage suppresses an immediate reload, then reloads once when the 10 s window ends. Repeated calls schedule only one retry.
 - `src/test/securityHeaders.test.ts`, extended or as a sibling test:
   - The rewrite excludes `assets/`.
   - `/assets/(.*)` is `immutable`.
   - `sw.js`, `/` and `/index.html` stay `no-store`.
 - New `src/test/swSource.test.ts` (static source check, the same style as the existing config tests):
-  - `src/sw.js` uses `NetworkFirst` for navigations.
+  - `src/sw.js` serves navigations network-first with no runtime HTML cache (no `NetworkFirst`, no `al-navigations`) and falls back to the precached shell.
   - It no longer uses `createHandlerBoundToURL`.
   - It still calls `skipWaiting`/`clients.claim`.
 
@@ -123,7 +118,7 @@ In `src/App.test.tsx` → "signed-in routing":
 
 ## Verification
 - `npx vitest run src/App.test.tsx src/store/__tests__/useAuth.test.tsx src/lib/swReload.test.ts src/test/securityHeaders.test.ts src/test/swSource.test.ts`, then the full `npm test`, `npm run lint` and `npx tsc --noEmit`.
-- `npm run build`, then check that `dist/sw.js` contains `NetworkFirst` and that the precache manifest still lists `index.html`.
+- `npm run build`, then check that `dist/sw.js` has no `NetworkFirst` and no `al-navigations` runtime cache, and that the precache manifest still lists `index.html`. Navigations are network-first and fall back to that precached shell. A reload skipped inside the 10 s guard retries once when the window ends.
 - `npm run preview` with Playwright:
   1. Sign in, then Setup → Sign Out, then sign in at `/auth?mode=signin`. Stay on `/` for more than 2 s, three times out of three.
   2. Open `/setup`; it should land on `/settings`.

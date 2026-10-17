@@ -21,8 +21,9 @@ export function shouldDeferReload(root: ParentNode = document, deferCount = 0): 
 
 /**
  * One reload path for service-worker activation and controller changes.
- * A second trigger in the same page, or a reload that already ran in the last
- * 10 seconds, is ignored so the update cannot loop.
+ * A second trigger in the same page is ignored. A trigger within 10 seconds
+ * of a reload that already ran waits out the rest of that window, then runs
+ * once. Repeated triggers share that single timer.
  */
 export function createReloadOnce(overrides: {
   reload?: () => void;
@@ -33,6 +34,7 @@ export function createReloadOnce(overrides: {
   let reloading = false;
   let deferred = false;
   let deferCount = 0;
+  let retryTimer: number | undefined;
 
   const reloadOnce = () => {
     if (reloading || deferred) return;
@@ -48,7 +50,18 @@ export function createReloadOnce(overrides: {
     const raw = sessionStorage.getItem(SW_RELOADED_AT_KEY);
     if (raw !== null) {
       const last = Number(raw);
-      if (Number.isFinite(last) && now() - last < SW_RELOAD_COOLDOWN_MS) return;
+      if (Number.isFinite(last)) {
+        const elapsed = now() - last;
+        if (elapsed < SW_RELOAD_COOLDOWN_MS) {
+          if (retryTimer === undefined) {
+            retryTimer = window.setTimeout(() => {
+              retryTimer = undefined;
+              reloadOnce();
+            }, SW_RELOAD_COOLDOWN_MS - elapsed);
+          }
+          return;
+        }
+      }
     }
     reloading = true;
     sessionStorage.setItem(SW_RELOADED_AT_KEY, String(now()));

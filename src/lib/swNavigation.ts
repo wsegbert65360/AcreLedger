@@ -28,24 +28,24 @@ export async function handleNavigation(
   request: Request,
   deps: NavigationDeps = {},
 ): Promise<Response> {
-  const doFetch = deps.fetchImpl ?? ((input, init) => fetch(input, init));
+  const doFetch = deps.fetchImpl ?? ((input: Request) => fetch(input));
   const matchShell = deps.matchPrecache ?? workboxMatchPrecache;
   const timeoutMs = deps.timeoutMs ?? NAVIGATION_TIMEOUT_MS;
-  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    // fetch(navigateRequest, init) throws TypeError on older Chrome because
+    // the implementation rebuilds the request. Workbox races a timer instead
+    // of passing AbortSignal (workbox #1796). Call fetch with no init.
     const response = await Promise.race([
-      doFetch(request, { signal: controller.signal }),
-      new Promise<Response>((_resolve, reject) => {
-        timer = setTimeout(() => {
-          controller.abort();
-          reject(new DOMException('Navigation timed out', 'AbortError'));
-        }, timeoutMs);
+      doFetch(request),
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), timeoutMs);
       }),
     ]);
     if (response?.ok) return response;
   } catch {
-    // Offline, aborted, or still hanging past the deadline.
+    // Offline, or the network fetch failed. A timeout settles the race
+    // and falls through to the precached shell.
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
