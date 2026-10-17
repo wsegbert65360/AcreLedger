@@ -79,7 +79,7 @@ function markDeleted<T extends { id: string; deleted_at: string | null }>(
   id: string,
   deletedAt: string,
 ): T[] {
-  return list.map(item => item.id === id ? { ...item, deleted_at: deletedAt } : item);
+  return list.map(item => item.id === id ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
 }
 
 /**
@@ -112,9 +112,9 @@ export function applyParkedEquipmentMutations(
     if (rpc?.rpc === 'soft_delete_equipment_cascade') {
       const equipmentId = String(rpc.args.p_equipment_id ?? payload.id ?? '');
       if (!equipmentId) continue;
-      nextEquipment = nextEquipment.map(item => item.id === equipmentId ? { ...item, deleted_at: deletedAt } : item);
-      nextSchedules = nextSchedules.map(item => item.equipmentId === equipmentId ? { ...item, deleted_at: deletedAt } : item);
-      nextLogs = nextLogs.map(item => item.equipmentId === equipmentId ? { ...item, deleted_at: deletedAt } : item);
+      nextEquipment = nextEquipment.map(item => item.id === equipmentId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
+      nextSchedules = nextSchedules.map(item => item.equipmentId === equipmentId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
+      nextLogs = nextLogs.map(item => item.equipmentId === equipmentId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
       continue;
     }
 

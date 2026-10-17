@@ -25,9 +25,19 @@ vi.mock('@/components/settings/AccountManager', () => ({
   default: () => <div data-testid="account-manager">Delete Account</div>,
 }));
 vi.mock('@/components/settings/DevTools', () => ({ default: () => null }));
-vi.mock('@/components/settings/RegionManager', () => ({ default: () => null }));
+vi.mock('@/components/settings/RegionManager', () => ({
+  default: () => <div data-testid="region-manager" />,
+}));
 vi.mock('@/components/VersionFooter', () => ({ default: () => null }));
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
+
+const farmControl = vi.hoisted(() => ({
+  session: { user: { email: 'farmer@example.com' } } as { user: { email: string } } | null,
+}));
+
+vi.mock('@/store/farmStore', () => ({
+  useFarm: () => ({ session: farmControl.session }),
+}));
 
 import Settings from '../Settings';
 
@@ -96,5 +106,49 @@ describe('Settings billing gate', () => {
     expect(screen.queryByRole('button', { name: /billing/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /farm data/i })).toHaveAttribute('data-state', 'open');
     expect(screen.queryByTestId('billing-manager')).not.toBeInTheDocument();
+  });
+});
+
+describe('Settings AU pilot gate', () => {
+  beforeEach(() => {
+    farmControl.session = { user: { email: 'farmer@example.com' } };
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  function openAccountDisplay() {
+    fireEvent.click(screen.getByRole('button', { name: /account & display/i }));
+  }
+
+  it('hides the region card by default', () => {
+    renderSettings();
+    openAccountDisplay();
+    expect(screen.queryByTestId('region-manager')).not.toBeInTheDocument();
+  });
+
+  it('shows the region card when the pilot flag is exactly true', () => {
+    vi.stubEnv('VITE_AU_PILOT_ENABLED', 'true');
+    renderSettings();
+    openAccountDisplay();
+    expect(screen.getByTestId('region-manager')).toBeInTheDocument();
+  });
+
+  it('shows the region card when the allowlist contains the session email in a different case', () => {
+    farmControl.session = { user: { email: 'Farmer@Example.com' } };
+    vi.stubEnv('VITE_AU_PILOT_ALLOWLIST', 'farmer@example.com');
+    renderSettings();
+    openAccountDisplay();
+    expect(screen.getByTestId('region-manager')).toBeInTheDocument();
+  });
+
+  it('hides the region card for an email that is not on the allowlist', () => {
+    farmControl.session = { user: { email: 'other@example.com' } };
+    vi.stubEnv('VITE_AU_PILOT_ALLOWLIST', 'farmer@example.com');
+    renderSettings();
+    openAccountDisplay();
+    expect(screen.queryByTestId('region-manager')).not.toBeInTheDocument();
   });
 });
