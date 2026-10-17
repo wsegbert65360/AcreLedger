@@ -1,3 +1,5 @@
+-- SUPERSEDED for existing projects by 20261017041928_apply_missing_safeguards.sql. Never applied in production (audit 2026-10-17). Do not db push this out-of-order file to prod; after applying the consolidated migration, mark this version applied with supabase migration repair --status applied 20260922120000. Kept unchanged for fresh replay (supabase db reset / verify:migrations); the consolidated migration is idempotent so it is a no-op after this file runs.
+
 BEGIN;
 
 -- A single-column harvest_record_id FK proves that a harvest exists, but not

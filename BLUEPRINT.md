@@ -744,7 +744,7 @@ Every farm-owned table has RLS enabled with policies that restrict access to the
 
 - **Core tables** (`fields`, `bins`, `plant_records`, `spray_records`, `harvest_records`, `hay_harvest_records`, `fertilizer_applications`, `tillage_records`, `grain_movements`, `saved_seeds`, `fertilizer_recipes`, `spray_recipes`), plus `custom_spray_records` and `work_requests`: no `DELETE` grant for `authenticated`, a SELECT policy with `deleted_at IS NULL`, and the restrictive "Restrict updates on deleted rows" policy. Soft-deleted rows are therefore invisible and immutable to clients; restores go through `restore_farm_backup`.
 - **`fsa_tract_imports` and `field_clu_assignments`**: no `DELETE` grant, but the SELECT policy intentionally omits `deleted_at IS NULL` and there is no restrictive update policy, so their conflict-key upserts can resurrect tombstones. Client code must filter soft-deleted rows for these two tables.
-- **Legacy grant:** the core tables still carry a `GRANT SELECT ... TO anon` from `20260628100000`. It exposes no rows because every policy targets `authenticated`, but new tables must not copy it.
+- **Legacy grant:** the core tables still carry a `GRANT SELECT ... TO anon` from `20260628100000`. It exposes no rows because every policy targets `authenticated`, but new tables must not copy it. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` revokes those grants and applies the unique-active-grain and tenant-FK guards.
 
 Restore works through the authenticated `restore_farm_backup` `SECURITY DEFINER` wrapper; its internal restore helpers must not be granted to `anon` or `authenticated`.
 
