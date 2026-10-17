@@ -8,26 +8,38 @@ const defaultEnv = (): AuPilotEnv => ({
   VITE_AU_PILOT_ALLOWLIST: import.meta.env.VITE_AU_PILOT_ALLOWLIST,
 });
 
-/** Comma-separated emails. Empty entries are dropped. Matching is case-insensitive. */
+/** Comma-separated emails or user ids. Empty entries are dropped. Case is preserved. */
 export function parseAuPilotAllowlist(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
     .split(',')
-    .map(entry => entry.trim().toLowerCase())
+    .map(entry => entry.trim())
     .filter(Boolean);
 }
 
+export type AuPilotIdentity = {
+  email?: string | null;
+  id?: string | null;
+};
+
 /**
  * Australia pilot region card. Hidden unless the flag is exactly "true",
- * or the signed-in email is on the optional allowlist. Hiding the card does
- * not change a region the user already chose.
+ * or the signed-in email (case-insensitive) or user id (exact) is on the
+ * optional allowlist. Hiding the card does not change a region the user
+ * already chose.
  */
 export function isAuPilotEnabled(
-  email: string | null | undefined,
+  identity: AuPilotIdentity | null | undefined,
   env: AuPilotEnv = defaultEnv(),
 ): boolean {
   if (env.VITE_AU_PILOT_ENABLED === 'true') return true;
-  const normalized = email?.trim().toLowerCase() ?? '';
-  if (!normalized) return false;
-  return parseAuPilotAllowlist(env.VITE_AU_PILOT_ALLOWLIST).includes(normalized);
+  if (!identity) return false;
+  const allowlist = parseAuPilotAllowlist(env.VITE_AU_PILOT_ALLOWLIST);
+  if (allowlist.length === 0) return false;
+  const email = identity.email?.trim().toLowerCase() ?? '';
+  const id = identity.id?.trim() ?? '';
+  if (!email && !id) return false;
+  return allowlist.some(entry =>
+    (email !== '' && entry.toLowerCase() === email) || (id !== '' && entry === id),
+  );
 }

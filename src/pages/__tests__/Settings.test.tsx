@@ -32,7 +32,7 @@ vi.mock('@/components/VersionFooter', () => ({ default: () => null }));
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
 
 const farmControl = vi.hoisted(() => ({
-  session: { user: { email: 'farmer@example.com' } } as { user: { email: string } } | null,
+  session: { user: { email: 'farmer@example.com' } } as { user: { email?: string | null; id?: string } } | null,
 }));
 
 vi.mock('@/store/farmStore', () => ({
@@ -111,10 +111,12 @@ describe('Settings billing gate', () => {
 
 describe('Settings AU pilot gate', () => {
   beforeEach(() => {
+    localStorage.clear();
     farmControl.session = { user: { email: 'farmer@example.com' } };
   });
 
   afterEach(() => {
+    localStorage.clear();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
@@ -150,5 +152,24 @@ describe('Settings AU pilot gate', () => {
     renderSettings();
     openAccountDisplay();
     expect(screen.queryByTestId('region-manager')).not.toBeInTheDocument();
+  });
+
+  it('shows the region card when the allowlist contains the session user id', () => {
+    farmControl.session = { user: { id: 'User-1', email: 'other@example.com' } };
+    vi.stubEnv('VITE_AU_PILOT_ALLOWLIST', 'User-1');
+    renderSettings();
+    openAccountDisplay();
+    expect(screen.getByTestId('region-manager')).toBeInTheDocument();
+  });
+
+  it('shows the region card when the saved country is already AU and the pilot gate is off', async () => {
+    farmControl.session = { user: { id: 'user-au', email: 'other@example.com' } };
+    localStorage.setItem(
+      'user-au_al_app_prefs',
+      JSON.stringify({ country: 'AU', locale: 'en-AU', unitSystem: 'metric' }),
+    );
+    renderSettings();
+    openAccountDisplay();
+    expect(await screen.findByTestId('region-manager')).toBeInTheDocument();
   });
 });

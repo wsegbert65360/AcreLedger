@@ -98,9 +98,37 @@ describe('SyncStatus', () => {
         }));
       });
       expect(createObjectURL).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     } finally {
       URL.createObjectURL = originalCreate;
     }
+  });
+
+  it('shows an error when failed changes cannot be read', async () => {
+    control.failedSyncCount = 1;
+    control.getFailed.mockRejectedValue(new Error('queue unreadable'));
+    render(<SyncStatus />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('queue unreadable');
+    expect(shareFileMock).not.toHaveBeenCalled();
+  });
+
+  it('shows an error when the phone share returns false or throws', async () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    control.failedSyncCount = 1;
+    shareFileMock.mockResolvedValue(false);
+    render(<SyncStatus />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not export unsynced changes.');
+  });
+
+  it('shows an error when the phone share throws', async () => {
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    control.failedSyncCount = 1;
+    shareFileMock.mockRejectedValue(new Error('share failed'));
+    render(<SyncStatus />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('share failed');
   });
 
   it('downloads failed changes on the web and revokes the object URL after the click', async () => {

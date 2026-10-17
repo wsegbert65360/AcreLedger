@@ -79,7 +79,7 @@ Codemagic secret.txt
 
 # local scratch, review, and generated artifacts
 *.tincan-backup-*
-*.patch
+/*.patch
 /server/*.js
 /vite.config.js
 supabase/functions/**/*.js
