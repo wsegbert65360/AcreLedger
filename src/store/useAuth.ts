@@ -20,6 +20,7 @@ export function useAuth() {
   const [activeSeason, setActiveSeason] = useState<number>(new Date().getFullYear());
   const [viewingSeason, setViewingSeason] = useState<number>(new Date().getFullYear());
   const [onboardingComplete, setOnboardingComplete] = useState<boolean>(false);
+  const [onboardingStatusKnown, setOnboardingStatusKnown] = useState(false);
   const [farmRole, setFarmRole] = useState<FarmRole | null>(null);
   const activeSeasonRef = useRef(activeSeason);
   const identityRef = useRef<{ userId: string | null; generation: number }>({ userId: null, generation: 0 });
@@ -35,6 +36,7 @@ export function useAuth() {
       setDeletionStatus('clear');
       setFarmId(null);
       setOnboardingComplete(false);
+      setOnboardingStatusKnown(false);
       setFarmRole(null);
       setActiveSeason(year);
       setViewingSeason(year);
@@ -111,7 +113,10 @@ export function useAuth() {
           }
           
           if (storedId) setFarmId(storedId);
-          if (storedOnboarding === '1') setOnboardingComplete(true);
+          if (storedOnboarding === '1') {
+            setOnboardingComplete(true);
+            setOnboardingStatusKnown(true);
+          }
           if (storedSeason) {
             const active = parseInt(storedSeason, 10);
             if (isValidActiveSeason(active)) {
@@ -202,6 +207,7 @@ export function useAuth() {
         if (profileData) {
           setFarmRole(readFarmRole((profileData as { farm_role?: unknown }).farm_role));
           setOnboardingComplete(Boolean(profileData.onboarding_complete));
+          setOnboardingStatusKnown(true);
           try {
             const key = `${userId}_al_onboarding_complete`;
             if (profileData.onboarding_complete) localStorage.setItem(key, '1');
@@ -367,6 +373,7 @@ export function useAuth() {
     viewingSeason,
     setViewingSeason,
     onboardingComplete,
+    onboardingStatusKnown,
     setOnboardingComplete,
     farmRole,
     signOut,

@@ -3,6 +3,9 @@
   "private": true,
   "version": "3.6.0-AcreLedger",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "postinstall": "patch-package",
     "dev": "vite",

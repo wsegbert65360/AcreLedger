@@ -106,6 +106,11 @@ function BillingSettingsRedirect() {
   return <Navigate to={to} replace />;
 }
 
+function SetupRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/settings${search}`} replace />;
+}
+
 const AnimatedRoutes = () => {
   const location = useLocation();
 
@@ -126,6 +131,7 @@ const AnimatedRoutes = () => {
           {isEquipmentUiEnabled() && <Route path="/equipment" element={<ErrorBoundary><Equipment /></ErrorBoundary>} />}
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+          <Route path="/setup" element={<SetupRedirect />} />
           <Route path="/billing" element={<BillingSettingsRedirect />} />
           <Route path="/subscription" element={<BillingSettingsRedirect />} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
@@ -151,7 +157,7 @@ const ModalMap = {
 };
 
 const AppContent = () => {
-  const { session, loading, deletionStatus, signOut, isOnline, farm_id, fields, onboardingComplete, initialFetchComplete, fetchError, refresh } = useFarm();
+  const { session, loading, deletionStatus, signOut, isOnline, farm_id, fields, onboardingComplete, onboardingStatusKnown, initialFetchComplete, fetchError, refresh } = useFarm();
   const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
   const navigate = useNavigate();
@@ -329,11 +335,12 @@ const AppContent = () => {
   }
 
   const onboardingKey = `${session.user.id}_al_onboarding_complete`;
-  // Require the initial data load to settle before deciding onboarding. Without
-  // this, the transient empty-fields render before fetchData resolves would
-  // bounce an existing user (especially on a new device / cleared storage) into
-  // /onboarding with no way back once their fields populate.
+  // Wait for both the data load and a known profile onboarding status.
+  // onboardingComplete false also means the profile has not loaded yet, and
+  // the empty-fields render before fetchData resolves would bounce an existing
+  // user (especially on a new device / cleared storage) into /onboarding.
   const needsOnboarding =
+    onboardingStatusKnown &&
     initialFetchComplete &&
     !fetchError &&
     !onboardingComplete &&
