@@ -76,3 +76,19 @@ acreledger_fields*.csv
 
 # Local secrets (never commit)
 Codemagic secret.txt
+
+# local scratch, review, and generated artifacts
+*.tincan-backup-*
+/*.patch
+/server/*.js
+/vite.config.js
+supabase/functions/**/*.js
+recent_changes*.diff
+/query.sql
+/migrations2025*.sql
+Claude outputs/
+icon-concepts/
+.review/
+/patches/
+equipment-plan-*.md
+GROK-PROMPT.md

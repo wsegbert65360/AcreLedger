@@ -8,8 +8,11 @@ import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManag
 import DisplayManager from '@/components/settings/DisplayManager';
 import RegionManager from '@/components/settings/RegionManager';
 import BillingManager from '@/components/settings/BillingManager';
+import { isAuPilotEnabled } from '@/lib/auPilot';
 import { isBillingUiAvailable } from '@/lib/billing';
 import { isEquipmentUiEnabled } from '@/lib/equipment/feature';
+import { useFarm } from '@/store/farmStore';
+import { useAppPreferences } from '@/store/useAppPreferences';
 import SyncStatus from '@/components/settings/SyncStatus';
 import BackupManager from '@/components/settings/BackupManager';
 import SecurityManager from '@/components/settings/SecurityManager';
@@ -33,6 +36,12 @@ function settingsSectionFromQuery(section: string | null, billingAvailable: bool
 }
 
 export default function Settings() {
+  const { session } = useFarm();
+  const { preferences } = useAppPreferences(session?.user?.id);
+  const auPilotVisible = isAuPilotEnabled({
+    email: session?.user?.email,
+    id: session?.user?.id,
+  }) || preferences.country === 'AU';
   const [searchParams] = useSearchParams();
   const billingAvailable = isBillingUiAvailable();
   const requestedSection = settingsSectionFromQuery(searchParams.get('section'), billingAvailable);
@@ -135,7 +144,7 @@ export default function Settings() {
                 <div className="space-y-6">
                   <AccountManager />
                   <DisplayManager />
-                  <RegionManager />
+                  {auPilotVisible && <RegionManager />}
                 </div>
                 <div className="space-y-6">
                   <SecurityManager />
