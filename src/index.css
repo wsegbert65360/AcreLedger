@@ -425,13 +425,13 @@ html.color ::selection {
   background: hsl(var(--hue-cyan) / 0.28);
 }
 
-html.color button.bg-primary,
-html.color a.bg-primary,
-html.color button.quick-add-trigger,
-html.color button.bg-primary.quick-add-trigger,
-html.color button.bg-primary:hover,
-html.color button.quick-add-trigger:hover,
-html.color button.quick-add-trigger:focus-visible {
+html.color button.bg-primary:not(:disabled),
+html.color a.bg-primary:not(:disabled),
+html.color button.quick-add-trigger:not(:disabled),
+html.color button.bg-primary.quick-add-trigger:not(:disabled),
+html.color button.bg-primary:not(:disabled):hover,
+html.color button.quick-add-trigger:not(:disabled):hover,
+html.color button.quick-add-trigger:not(:disabled):focus-visible {
   background-image: none !important;
   background-color: #14261a !important;
   color: #ffffff !important;
@@ -439,18 +439,28 @@ html.color button.quick-add-trigger:focus-visible {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
-html.color button.bg-primary svg,
-html.color button.quick-add-trigger svg {
+html.color button.bg-primary:not(:disabled) svg,
+html.color button.quick-add-trigger:not(:disabled) svg {
   color: #ffffff !important;
   stroke: #ffffff !important;
 }
 
-html.color button.bg-primary:disabled {
-  background-color: #14261a !important;
-  color: rgba(255, 255, 255, 0.55) !important;
-  border: 2px solid rgba(255, 255, 255, 0.35) !important;
+html.color button.bg-primary:disabled,
+html.color button.quick-add-trigger:disabled,
+html.color button.bg-primary.quick-add-trigger:disabled {
+  background-image: none !important;
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  border: 2px solid hsl(var(--border)) !important;
   opacity: 1;
   box-shadow: none;
+  cursor: not-allowed;
+}
+
+html.color button.bg-primary:disabled svg,
+html.color button.quick-add-trigger:disabled svg {
+  color: hsl(var(--muted-foreground)) !important;
+  stroke: hsl(var(--muted-foreground)) !important;
 }
 
 html.color nav.fixed.bottom-0 > div > a:nth-child(1),

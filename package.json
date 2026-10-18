@@ -1,7 +1,7 @@
 {
   "name": "acre-ledger",
   "private": true,
-  "version": "3.6.0-AcreLedger",
+  "version": "3.6.1",
   "type": "module",
   "engines": {
     "node": "22.x"

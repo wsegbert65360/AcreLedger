@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 
 import { getLandlordSplitPercent } from '@/lib/cropShare';
+import { farmNameForCsv } from '@/lib/farmDisplayName';
 import { effectiveTreatedAreaUnit, normalizeAreaForRate, normalizeTreatedArea } from '@/lib/sprayExportFormatters';
 import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
@@ -893,7 +894,7 @@ export async function exportFsaFallProductionData({
     const cropYear = metadata?.cropYear ?? harvestRecords[0]?.seasonYear ?? hayRecords[0]?.seasonYear ?? new Date().getFullYear();
     const csvContent = buildFsaFallProductionCsv({
         metadata: {
-            farmName: metadata?.farmName || 'AcreLedger Farm',
+            farmName: farmNameForCsv(metadata?.farmName),
             cropYear,
             reportDate: metadata?.reportDate || today,
         },
@@ -997,7 +998,7 @@ export async function exportFsa578Data(
     const cropYear = metadata?.cropYear ?? plantRecords[0]?.seasonYear ?? new Date().getFullYear();
     const csvContent = buildFsa578WorksheetCsv({
         metadata: {
-            farmName: metadata?.farmName || 'AcreLedger Farm',
+            farmName: farmNameForCsv(metadata?.farmName),
             producerName: metadata?.producerName,
             county: metadata?.county,
             state: metadata?.state,

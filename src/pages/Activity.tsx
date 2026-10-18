@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFarm } from '@/store/farmStore';
-import { ClipboardList, Trash2, FileDown, Plus, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ChevronRight, ClipboardList, FileDown, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCanScrollFurtherRight } from '@/hooks/useCanScrollFurtherRight';
 import { useUndoDelete } from '@/hooks/useUndoDelete';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { useQuickAdd } from '@/context/QuickAddContext';
@@ -69,39 +70,6 @@ const TAB_GROUPS: { group: string; tabs: { key: Tab; icon: React.ElementType; la
 
 
 type EditableRecord = PlantRecord | SprayRecord | HarvestRecord | HayHarvestRecord | CustomSprayRecord | FertilizerApplication | GrainMovement | TillageRecord;
-
-function useCanScrollFurtherRight() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-
-    const update = () => {
-      setCanScrollRight(node.scrollWidth - node.clientWidth - node.scrollLeft > 1);
-    };
-
-    update();
-    node.addEventListener('scroll', update, { passive: true });
-
-    let observer: ResizeObserver | undefined;
-    if (typeof ResizeObserver === 'function') {
-      observer = new ResizeObserver(update);
-      observer.observe(node);
-    } else {
-      window.addEventListener('resize', update);
-    }
-
-    return () => {
-      node.removeEventListener('scroll', update);
-      observer?.disconnect();
-      if (!observer) window.removeEventListener('resize', update);
-    };
-  }, []);
-
-  return { ref, canScrollRight };
-}
 
 export default function Activity() {
   const navigate = useNavigate();
@@ -527,8 +495,14 @@ export default function Activity() {
             <div
               data-testid="activity-types-fade"
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background to-transparent"
-            />
+              className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-end bg-gradient-to-l from-card via-card/90 to-transparent"
+            >
+              <ChevronRight
+                aria-hidden="true"
+                data-testid="activity-types-chevron"
+                className="pointer-events-none h-4 w-4 text-foreground"
+              />
+            </div>
           )}
           </div>
         </div>

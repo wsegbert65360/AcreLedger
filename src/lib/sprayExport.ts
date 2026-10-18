@@ -22,6 +22,7 @@ import { cleanName } from '@/utils/text';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
 import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
+import { farmNameForPdf, knownFarmName } from '@/lib/farmDisplayName';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { resolveComplianceProfileId } from '@/lib/compliance/profiles';
 import type { ComplianceProfileId } from '@/lib/compliance/profiles';
@@ -64,7 +65,8 @@ export function generateSprayPDF(
   const isAu = profileId === 'au-apvma';
   const isMulti = records.length > 1;
   const now = new Date().toLocaleDateString();
-  const displayFarmName = farmName || '-';
+  const displayFarmName = farmNameForPdf(farmName);
+  const filenameFarmName = knownFarmName(farmName) || 'Farm';
   const chronologicalRecords = [...records].sort((a, b) =>
     (a.sprayDate || '').localeCompare(b.sprayDate || '') || a.timestamp - b.timestamp
   );
@@ -343,7 +345,7 @@ export function generateSprayPDF(
     if (isMulti) {
       const start = rangeStart || 'Start';
       const end = rangeEnd || 'End';
-      finalFilename = `SprayLog_${sanitizeFilename(displayFarmName)}_${start}_to_${end}.pdf`;
+      finalFilename = `SprayLog_${sanitizeFilename(filenameFarmName)}_${start}_to_${end}.pdf`;
     } else {
       const rec = records[0];
       finalFilename = `SprayRecord_${sanitizeFilename(rec.fieldName)}_${rec.sprayDate || 'NoDate'}.pdf`;

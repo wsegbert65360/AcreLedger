@@ -5,7 +5,6 @@ import { CalendarDays, MessageCircle, Sprout, Plus } from 'lucide-react';
 import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
 import { useQuickAdd } from '@/context/QuickAddContext';
 import { native } from '@/lib/native';
-import pkg from '../../package.json';
 
 export default function Sidebar() {
   const { pathname } = useLocation();
@@ -79,7 +78,7 @@ export default function Sidebar() {
           <span className="text-xs font-semibold text-sidebar-foreground/50">Season</span>
         </div>
         <SeasonSelect variant="sidebar" />
-        <p className="text-xs font-mono text-sidebar-foreground/40">v{pkg.version}</p>
+        <p className="text-xs font-mono text-sidebar-foreground/40">v{__APP_VERSION__}</p>
       </div>
     </nav>
   );

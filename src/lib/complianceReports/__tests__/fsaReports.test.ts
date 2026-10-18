@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     buildFsa578Rows,
     buildFsa578WorksheetCsv,
     buildFsaFallProductionCsv,
     buildFsaFallProductionRows,
     calculateFsa578PlantedAcreTotals,
+    exportFsa578Data,
+    exportFsaFallProductionData,
     generateMissouriLogRows,
     validateFsa578Rows,
     validateFsaFallProductionRows
@@ -1421,5 +1423,70 @@ describe('established forage labels', () => {
         // not generate a missing-crop-status error, even when the label is
         // descriptive ("Hay Ground") rather than the bare word.
         expect(issues.filter(issue => issue.field === 'cropStatus')).toEqual([]);
+    });
+});
+
+async function captureDownloadedCsv(run: () => Promise<void>): Promise<string> {
+    const captured: string[] = [];
+    const RealBlob = globalThis.Blob;
+    const CapturingBlob = class extends RealBlob {
+        constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+            super(parts, options);
+            captured.push((parts ?? []).map(part => (typeof part === 'string' ? part : '')).join(''));
+        }
+    };
+    vi.stubGlobal('Blob', CapturingBlob);
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:farm-name');
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+        await run();
+    } finally {
+        vi.stubGlobal('Blob', RealBlob);
+        createObjectURL.mockRestore();
+        revokeObjectURL.mockRestore();
+        click.mockRestore();
+    }
+    const csv = captured.find(text => text.includes('Farm Name'));
+    expect(csv).toBeTruthy();
+    return csv ?? '';
+}
+
+describe('compliance export farm name', () => {
+    it('writes the real farm name into the FSA-578 CSV and leaves the cell empty when it is missing', async () => {
+        const named = await captureDownloadedCsv(() => exportFsa578Data([], [], [], [], {
+            farmName: 'QA Test Farm',
+            cropYear: 2026,
+            reportDate: '2026-10-18',
+        }));
+        expect(named).toContain('"QA Test Farm"');
+        expect(named).not.toContain('AcreLedger Farm');
+
+        const missing = await captureDownloadedCsv(() => exportFsa578Data([], [], [], [], {
+            cropYear: 2026,
+            reportDate: '2026-10-18',
+        }));
+        expect(missing).toContain('"Farm Name",""');
+        expect(missing).not.toContain('AcreLedger Farm');
+    });
+
+    it('writes the real farm name into the fall production CSV and leaves the cell empty when it is missing', async () => {
+        const named = await captureDownloadedCsv(() => exportFsaFallProductionData({
+            harvestRecords: [],
+            hayRecords: [],
+            fields: [],
+            metadata: { farmName: 'QA Test Farm', cropYear: 2026, reportDate: '2026-10-18' },
+        }));
+        expect(named).toContain('"QA Test Farm"');
+        expect(named).not.toContain('AcreLedger Farm');
+
+        const missing = await captureDownloadedCsv(() => exportFsaFallProductionData({
+            harvestRecords: [],
+            hayRecords: [],
+            fields: [],
+            metadata: { cropYear: 2026, reportDate: '2026-10-18' },
+        }));
+        expect(missing).toContain('"Farm Name",""');
+        expect(missing).not.toContain('AcreLedger Farm');
     });
 });

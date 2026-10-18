@@ -184,7 +184,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 shadow-sm backdrop-blur-xl print:hidden">
-        <div className="mx-auto flex min-w-0 max-w-lg flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
+        <div className="mx-auto grid min-w-0 max-w-lg grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 py-2.5 sm:flex sm:flex-row sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Logo />
             <div className="hidden min-w-0 flex-col sm:flex">
@@ -195,7 +195,7 @@ const Index = () => {
               </div>
             </div>
           </div>
-          <div className="absolute right-4 top-2.5 flex items-center gap-2 sm:static">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setAddOpen(true)}
               aria-label="Add new field"
@@ -221,7 +221,7 @@ const Index = () => {
               <span className="hidden sm:inline">Manage</span>
             </button>
           </div>
-          <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground sm:hidden">
+          <div className="col-span-2 flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground sm:hidden">
             <span className="shrink-0 whitespace-nowrap">{allFields.length} fields</span>
             <SeasonSelect className="max-w-[6.5rem] shrink border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
           </div>

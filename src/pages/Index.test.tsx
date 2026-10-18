@@ -203,3 +203,32 @@ describe('Index field search keyboard visibility', () => {
     expect(viewport.removeEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
   });
 });
+
+/** `absolute` at the mobile breakpoint, allowing only an `sm:`-prefixed token. */
+function hasMobileAbsolute(className: string): boolean {
+  return className.split(/\s+/).some((token) => {
+    if (!token || token === 'sm:absolute') return false;
+    return token === 'absolute' || (token.endsWith(':absolute') && !token.split(':').includes('sm'));
+  });
+}
+
+describe('dashboard header season pill at 360px and 400px (#63)', () => {
+  it('keeps the season selector in flow below the Manage button instead of overlapping it', () => {
+    render(<Index />);
+
+    const manage = screen.getByRole('button', { name: 'Manage fields' });
+    const actionRow = manage.parentElement as HTMLElement;
+    expect(hasMobileAbsolute(actionRow.className)).toBe(false);
+
+    const seasonRow = screen.getAllByText('Season')
+      .map((node) => node.parentElement as HTMLElement)
+      .find((row) => row.className.split(/\s+/).includes('sm:hidden'));
+    expect(seasonRow).toBeTruthy();
+    expect(hasMobileAbsolute(seasonRow!.className)).toBe(false);
+    expect(actionRow.contains(seasonRow!)).toBe(false);
+    expect(seasonRow!.parentElement).toBe(actionRow.parentElement);
+
+    const siblings = Array.from(actionRow.parentElement!.children);
+    expect(siblings.indexOf(seasonRow!)).toBeGreaterThan(siblings.indexOf(actionRow));
+  });
+});

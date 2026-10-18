@@ -3,6 +3,7 @@ import ReportTable from '@/components/ReportTable';
 import { FsaFallProductionRow, FsaFallValidationIssue } from '@/lib/complianceReports';
 import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
 import type { ReportExportStatus } from '@/lib/reportExportHistory';
+import { complianceFarmSubtitle, farmNameForProse } from '@/lib/farmDisplayName';
 import { formatIsoDate } from '@/utils/dates';
 import { MobileReportExportPanel } from './MobileReportExportPanel';
 
@@ -18,7 +19,7 @@ interface FallFsaReportProps {
   readinessSummary: ReportReadinessSummary;
   onIssueAction?: (issue: ReportReadinessIssue) => void;
   exportStatus?: ReportExportStatus;
-  farmName: string;
+  farmName: string | null;
   viewingSeason: number;
   reportDate: string;
   onExportCsv: () => void;
@@ -46,7 +47,7 @@ export default function FallFsaReport({
     <>
       <MobileReportExportPanel
         title="Fall production worksheet"
-        description={`Review ${viewingSeason} harvest and hay production readiness for ${farmName || 'your farm'}, then export the worksheet for FSA review.`}
+        description={`Review ${viewingSeason} harvest and hay production readiness for ${farmNameForProse(farmName)}, then export the worksheet for FSA review.`}
         summary={readinessSummary}
         itemLabel="records"
         onExportPdf={onExportPdf}
@@ -57,7 +58,7 @@ export default function FallFsaReport({
       <div className="hidden lg:block print:block">
       <ReportTable
       title="FSA Fall Harvest / Production Evidence Worksheet"
-      subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
+      subtitle={complianceFarmSubtitle(farmName, viewingSeason, reportDate)}
       headers={['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #']}
       onExport={onExportCsv}
       onExportPdf={onExportPdf}

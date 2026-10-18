@@ -6,9 +6,10 @@
  * the editingRecordType discriminator (works from the All tab), and the spray
  * review queue staying season + search scoped.
  */
+import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import type { Field, PlantRecord, SprayRecord, ActivityRecord } from '@/types/farm';
 
@@ -82,6 +83,7 @@ vi.mock('@/components/activity/GrainTab', () => ({ default: ({ records, onToggle
 vi.mock('@/components/activity/HistoryFeed', () => ({ default: ({ records }: any) => <div data-testid="history-feed" data-count={records.length} /> }));
 
 import Activity from '../Activity';
+import { useCanScrollFurtherRight } from '@/hooks/useCanScrollFurtherRight';
 
 const field: Field = {
   id: 'field-1',
@@ -167,23 +169,110 @@ function renderActivity(route: string) {
   );
 }
 
-describe('Activity type scroll cue', () => {
-  it('shows a right-edge fade only when the chip row can scroll further right', () => {
+describe('Activity type scroll cue at 400px', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows a right-edge fade and chevron only when the chip row can scroll further right', () => {
     installFarmMock();
     renderActivity('/activity');
 
     const row = screen.getByRole('group', { name: 'Activity types' });
+    expect(row).toHaveClass('overflow-x-auto');
     expect(screen.queryByTestId('activity-types-fade')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('activity-types-chevron')).not.toBeInTheDocument();
 
     Object.defineProperty(row, 'scrollWidth', { configurable: true, value: 800 });
     Object.defineProperty(row, 'clientWidth', { configurable: true, value: 320 });
     Object.defineProperty(row, 'scrollLeft', { configurable: true, value: 0 });
     fireEvent.scroll(row);
-    expect(screen.getByTestId('activity-types-fade')).toBeInTheDocument();
+
+    const fade = screen.getByTestId('activity-types-fade');
+    const chevron = within(fade).getByTestId('activity-types-chevron');
+    expect(chevron).toHaveAttribute('aria-hidden', 'true');
+    expect(chevron).toHaveClass('pointer-events-none');
+    expect(fade).toHaveClass('pointer-events-none', 'from-card');
 
     Object.defineProperty(row, 'scrollLeft', { configurable: true, value: 480 });
     fireEvent.scroll(row);
     expect(screen.queryByTestId('activity-types-fade')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('activity-types-chevron')).not.toBeInTheDocument();
+  });
+
+  it('recomputes the cue from tab content, not only the scrollport box', () => {
+    const observed: Element[] = [];
+    let notify: ResizeObserverCallback = () => {};
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        notify = callback;
+      }
+      observe(element: Element) {
+        observed.push(element);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock);
+
+    installFarmMock();
+    renderActivity('/activity');
+    const row = screen.getByRole('group', { name: 'Activity types' });
+    expect(observed).toContain(row);
+    expect(observed.some((element) => element !== row && row.contains(element))).toBe(true);
+
+    Object.defineProperty(row, 'scrollWidth', { configurable: true, value: 728 });
+    Object.defineProperty(row, 'clientWidth', { configurable: true, value: 320 });
+    Object.defineProperty(row, 'scrollLeft', { configurable: true, value: 0 });
+    act(() => {
+      notify([], {} as ResizeObserver);
+    });
+    expect(screen.getByTestId('activity-types-fade')).toBeInTheDocument();
+    expect(screen.getByTestId('activity-types-chevron')).toBeInTheDocument();
+  });
+
+  it('shows the fade and chevron when the tabs row mounts after the first render', () => {
+    const proto = Element.prototype;
+    const previous = {
+      scrollWidth: Object.getOwnPropertyDescriptor(proto, 'scrollWidth'),
+      clientWidth: Object.getOwnPropertyDescriptor(proto, 'clientWidth'),
+      scrollLeft: Object.getOwnPropertyDescriptor(proto, 'scrollLeft'),
+    };
+    Object.defineProperty(proto, 'scrollWidth', { configurable: true, get: () => 800 });
+    Object.defineProperty(proto, 'clientWidth', { configurable: true, get: () => 320 });
+    Object.defineProperty(proto, 'scrollLeft', { configurable: true, get: () => 0 });
+
+    function LateTabs() {
+      const { ref, canScrollRight } = useCanScrollFurtherRight();
+      const [showRow, setShowRow] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setShowRow(true)}>Mount tabs</button>
+          {showRow && <div ref={ref} role="group" aria-label="Activity types" />}
+          {canScrollRight && (
+            <div data-testid="activity-types-fade" aria-hidden="true">
+              <span data-testid="activity-types-chevron" aria-hidden="true" className="pointer-events-none" />
+            </div>
+          )}
+        </>
+      );
+    }
+
+    try {
+      render(<LateTabs />);
+      expect(screen.queryByRole('group', { name: 'Activity types' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('activity-types-fade')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mount tabs' }));
+
+      expect(screen.getByRole('group', { name: 'Activity types' })).toBeInTheDocument();
+      expect(screen.getByTestId('activity-types-fade')).toBeInTheDocument();
+      expect(screen.getByTestId('activity-types-chevron')).toBeInTheDocument();
+    } finally {
+      if (previous.scrollWidth) Object.defineProperty(proto, 'scrollWidth', previous.scrollWidth);
+      if (previous.clientWidth) Object.defineProperty(proto, 'clientWidth', previous.clientWidth);
+      if (previous.scrollLeft) Object.defineProperty(proto, 'scrollLeft', previous.scrollLeft);
+    }
   });
 });
 

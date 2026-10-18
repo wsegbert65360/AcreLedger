@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Capacitor } from '@capacitor/core';
+import { farmNameForPdf } from '@/lib/farmDisplayName';
 import { native } from '@/lib/native';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
@@ -77,7 +78,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(firstPage ? 8.5 : 7.5);
     doc.setTextColor(70);
-    const identity = `Farm: ${metadata.farmName || '________________'}  |  Crop year: ${metadata.cropYear}  |  Producer: ${metadata.producerName || '________________'}  |  County/State: ${[metadata.county, metadata.state].filter(Boolean).join(', ') || '________________'}`;
+    const identity = `Farm: ${farmNameForPdf(metadata.farmName)}  |  Crop year: ${metadata.cropYear}  |  Producer: ${metadata.producerName || '________________'}  |  County/State: ${[metadata.county, metadata.state].filter(Boolean).join(', ') || '________________'}`;
     doc.text(identity, 12, firstPage ? 20 : 15);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(40);
@@ -215,7 +216,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(110);
-    doc.text(`AcreLedger | ${metadata.farmName || 'Farm'} | Crop year ${metadata.cropYear} | Generated ${metadata.reportDate}`, 12, pageHeight - 6);
+    doc.text(`AcreLedger | ${farmNameForPdf(metadata.farmName)} | Crop year ${metadata.cropYear} | Generated ${metadata.reportDate}`, 12, pageHeight - 6);
     doc.text(`Page ${page} of ${pageCount}`, pageWidth - 12, pageHeight - 6, { align: 'right' });
   }
 
