@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-10-13 (weather proxy quota is 30/minute and 500/rolling 24h; native builds require the proxy and must not bundle the Visual Crossing key).
+> **Last updated:** 2026-10-17 (compliance profiles and the AU pilot documented; equipment UI corrected to "live for everyone"; service-worker navigation and reload guard described).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,9 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-17** — Documented compliance profiles (`us-epa` / `au-apvma`), region preferences, the `auPilot` allowlist gate, locale terminology, and the area-unit boundary in a new [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot) section; `SprayRecord` now shows the real `complianceProfile` union plus `pic` / `waterRate` / `waterRateUnit`. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration, not a gate. Service Worker rewritten for the network-first navigation route, the 3 s timeout, the precache fallback, and the single-retry reload guard.
+- **2026-10-16** — AU pilot card gated by `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141_add_spray_water_rate_unit_pic.sql`; root clutter gitignored; parked equipment mutations overlaid onto the retained cache on a fail-soft fetch.
+- **2026-10-15** — Backup restore is gated to farm owner and admin (the database function is the real gate), `restore_farm_backup` sets a 120 s `statement_timeout`, and a pre-season reset file is treated as an explicit rollover undo. *(Body edited 2026-10-15 in `ddd7261`; logged here 2026-10-17.)*
 - **2026-10-13** — Weather proxy quota is 30 requests per minute and 500 per rolling 24 hours. Capacitor/native builds require `VITE_WEATHER_PROXY_URL` and must not ship `VITE_VISUALCROSSING_KEY`.
 - **2026-10-07** — Added the pilot-gated equipment and maintenance model. Meter writes, unit conversion, maintenance logging, and cascade soft-delete are tenant-checked atomic RPCs with one-envelope offline replay; companion backup, recovery, AI, and test-data registries include all three tables.
 - **2026-10-02** — Web password recovery turns `detectSessionInUrl` off only on `/auth?mode=recovery`, so the one-time PKCE code is exchanged once by the recovery handler. A failed exchange is rejected even when a session already exists. A missing verifier tells the user to use the same browser or app that requested the reset. Sign-in and sign-up keep auto-detect.
@@ -59,6 +62,7 @@ Navigation checks and editorial changes do not constitute verification of archit
   - [Bin](#bin)
   - [PlantRecord](#plantrecord)
   - [SprayRecord (2026 Standards)](#sprayrecord-2026-standards)
+  - [Compliance Profiles and Regional Settings (Australia Pilot)](#compliance-profiles-and-regional-settings-australia-pilot)
   - [HarvestRecord](#harvestrecord)
   - [HayHarvestRecord](#hayharvestrecord)
   - [CustomSprayRecord](#customsprayrecord)
@@ -313,19 +317,40 @@ Supports multiple products per application (tank-mix) and advanced environmental
   windSpeed, windDirection, temperature, relativeHumidity,
   targetPest, applicatorName, licenseNumber, equipmentId,
   siteAddress, involvedTechnicians, mixtureRate, totalMixtureVolume,
-  rei, notes, complianceProfile: 'universal', isPremixed, nonCompliant, 
+  rei, notes, complianceProfile: 'us-epa' | 'au-apvma', isPremixed, nonCompliant, 
   nozzleType, nozzleSize, pressurePsi, boomHeight, actualSpeed, 
   windSpeedEnd, windDirectionEnd, tempEnd, sensitiveAreaCheck, sensitiveAreaNotes,
+  pic, waterRate, waterRateUnit,
   deleted_at }
 ```
 - **End Time Estimation**: Application duration is auto-calculated at a default rate of **60.6 acres/hour** (representing a 100' wide sprayer at 5 mph) with manual override.
 - **Treated Area Default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`, `sprayExport.ts`) resolve to the FSA crop acreage shown on the field, never a raw `field.acreage` read. Read-time resolution goes through the shared `getEffectiveSprayTreatedAcres(record, field, cluAssignments)` helper: stored `treatedAreaSize` when present and positive, else `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, then boundary, then `field.acreage`). Current form edits preserve an explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray). The one-time migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql` intentionally normalized every active historical treated-area value because legacy automatic defaults could not be distinguished from manual entries. It changes only `treated_area_size` and leaves products, stored totals, weather, wind, temperature, humidity, application times, and notes untouched. This historical one-shot is now retired: guarded history plus `acreage_backfill_private.historical_backfills_retired()` prevents reruns after application, including restores without the migration ledger. It must never be used as data repair; recovery of lost partial areas remains an owner decision. Report/export product totals convert the effective treated area to the rate unit for every profile (including square feet), without mutating stored records.
 - **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
-- **Non-Compliant / Review Status**: Triggered if any product is missing an `epaRegNumber` or lacks a positive application rate and rate unit. Legacy records derive this review status in the UI without a database rewrite. Per-product totals are canonical and are recalculated synchronously from rate × treated acres before saving; the top-level `totalAmountApplied` remains only a legacy first-product numeric compatibility value and must never sum unlike units.
+- **Non-Compliant / Review Status**: Profile-driven — see [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot). Under `us-epa`, triggered if any product is missing an `epaRegNumber` or lacks a positive application rate and rate unit; under `au-apvma` the registration-number check is off and PIC / water rate / treated-area-in-hectares are required instead. Legacy records derive this review status in the UI without a database rewrite. Per-product totals are canonical and are recalculated synchronously from rate × treated acres before saving; the top-level `totalAmountApplied` remains only a legacy first-product numeric compatibility value and must never sum unlike units.
 - **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
 - **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
 - **Weather Recovery**: "Recover Past Weather" feature pulls historical conditions from Visual Crossing based on field location and start time.
+
+### Compliance Profiles and Regional Settings (Australia Pilot)
+
+Spray compliance is **profile-driven**, not US-only. `@/lib/compliance/profiles.ts` is the single source of truth for which fields a record must carry and which product checks apply.
+
+- **Profile IDs** are `'us-epa' | 'au-apvma'`. Stored records may carry legacy placeholders (`'universal'`, `''`, null); `resolveComplianceProfileId()` maps every unknown value to `'us-epa'`. **US behavior is frozen** — never change the `us-epa` field set or its product checks to accommodate a new region; add a profile instead.
+- **`us-epa`** requires product names, start/end time, weather, certified applicator, license number, wind direction, crop/site, application method, equipment ID, EPA reg numbers, and rates. All three product checks (name, registration number, rate) are on.
+- **`au-apvma`** requires date, start/finish time, applicator, **PIC (property identification code)**, paddock, treated area in hectares, crop/situation, target pest, label product names, rate/dose, **water rate**, equipment type, wind speed, wind direction, and sensitive areas/buffers. `requireRegistrationNumber` is **off** — APVMA approval/permit numbers are captured but only required "when relevant" (NSW EPA), so a missing one must not flag review.
+- **Never read `complianceProfile` directly.** Go through `resolveComplianceProfileId()` / `getComplianceProfileFor()`; `getMissingComplianceFields(record, profileId)` and step validation are profile-aware and must stay that way.
+
+**Region preferences** live in `@/store/useAppPreferences.ts`: `{ country: 'US' | 'AU', locale: 'en-US' | 'en-AU', unitSystem: 'imperial' | 'metric' }`, defaulting to US/imperial.
+
+- Preferences are **device-local and scoped by user id** (`${uid}_al_app_prefs`). Every caller must pass the signed-in user id — `useAppPreferences(session?.user?.id)`. Calling it with no id writes the unscoped `al_app_prefs` key that the spray form never reads, which is exactly the 10-05 defect. Hook instances do not share state, so a change only lands on the next remount.
+- `RegionManager` (Settings → Account & Display) writes country, locale, and unit system together. `country` selects the default compliance profile via `defaultProfileForCountry()`.
+- **The card is gated.** `@/lib/auPilot.ts` `isAuPilotEnabled(identity, env)` shows it only when `VITE_AU_PILOT_ENABLED === 'true'`, or when the signed-in email (case-insensitive) or user id (exact) appears in the comma-separated `VITE_AU_PILOT_ALLOWLIST`. Hiding the card never changes a region the user already chose, so an existing AU user keeps working. Do not mount `RegionManager` unconditionally.
+- **Terminology** goes through `@/lib/locale/terms.ts` `term(key, locale)` — AU renders "paddock"/"paddocks" where US renders "field"/"fields". This is a deliberately tiny helper, not a string catalog; full i18n extraction is out of pilot scope. Number formatting goes through `@/lib/locale/numbers.ts` `formatNumber()`, which takes the locale explicitly.
+
+**Area units are converted at the boundary, never stored twice.** `treatedAreaSize` is stored in the unit named by `treatedAreaUnit` (`'ac'`, `'ha'`, `'sqft'`). Rate math goes through `normalizeAreaForRate(value, areaUnit, rateUnit)` and duration math through `normalizeTreatedArea(value, unit, target)`, both in `@/lib/sprayExportFormatters.ts`. Never hand a raw acre figure to an `L/ha` or `kg/ha` calculation — that is the 2.47× error from the 10-05 review. `acresToHectares()` in `@/utils/unitConversion.ts` is the only approved conversion helper.
+
+`pic`, `water_rate`, and `water_rate_unit` are written by `mapSprayToDb` on **every** spray save, US included, so `20261005162141_add_spray_water_rate_unit_pic.sql` is load-bearing for all users. `fields.pic` (`20261005013057`) is likewise sent on every field write.
 
 ### HarvestRecord
 Grain harvest event.
@@ -418,7 +443,7 @@ Meter state is concurrency-sensitive and must never use a client read-then-compa
 
 Offline calls store one allowlisted RPC envelope. Replay re-stamps `p_farm_id` from the active queue scope, parks missing/deleted targets immediately, and preserves failed equipment work over the next cloud snapshot. Parked work from unrelated tables must not freeze all cloud refreshes. New reading-based schedules snapshot the machine's current reading on creation. Due-day calculations use the user's local calendar date, not UTC midnight.
 
-The `/equipment` route, dashboard card, and Settings link remain hidden unless `VITE_EQUIPMENT_UI_ENABLED=true`. The tables still participate in strict customer backup/restore, owner recovery, test data, and the read-only Ask the Book registry while the UI is pilot-gated.
+The `/equipment` route, dashboard card, and Settings link are **live for every user** (enabled in `65bcda4`). No flag gates them; `VITE_EQUIPMENT_UI_ENABLED` survives only as an unread declaration in `src/vite-env.d.ts` and must not be treated as a kill switch. Because `fetchData` loads `equipment`, `maintenance_schedules`, and `maintenance_logs` in the same pass as every other table, the three equipment migrations (`20261006214500`, `20261006233000`, `20261007090000`) must be applied in production before a build ships. Those three fetches are fail-soft, so a missing table keeps the cached equipment copy instead of failing the whole load. The tables participate in strict customer backup/restore, owner recovery, test data, and the read-only Ask the Book registry.
 
 ### SavedSeed
 Seed inventory reference. Not season-scoped.
@@ -1117,7 +1142,8 @@ event to automatically sync content to Supabase.
 
 ### PWA & Bundling
 - **Vite Configuration**: `manualChunks` should be avoided for UI libraries (Lucide, Radix, Framer Motion) to prevent initialization order artifacts. Use Vite's default strategy for these.
-- **Service Worker**: `sw.js` handles navigation routing to `index.html`.
+- **Service Worker**: `src/sw.js` registers a **network-first** `NavigationRoute`, built from `@/lib/swNavigation.ts`. A navigation fetch is raced against `NAVIGATION_TIMEOUT_MS` (3 s); a hang, a network failure, or a non-OK response falls back to the current precached `/index.html`, whose hashed assets are still in that precache. There is **no runtime HTML cache** — a stale shell paired with evicted hashed assets is what produced the white-screen reports, so do not add one. The navigate fetch must be issued without a `RequestInit` (passing one re-arms the timer race).
+- **Reload guard**: `@/lib/swReload.ts` allows a **single** retry after a reload. If a navigation still fails once the page has already reloaded for this reason, the app stops reloading and surfaces the failure rather than entering a reload loop. `src/test/swSource.test.ts` asserts the compiled worker source keeps these properties; keep it green.
 - **Weather deployment order**: Apply `20260721211903_add_weather_proxy_rate_limit.sql`, configure the four server-only proxy variables in Vercel, then create a new deployment. Updating Vercel variables alone does not modify an existing deployment.
 
 ---
