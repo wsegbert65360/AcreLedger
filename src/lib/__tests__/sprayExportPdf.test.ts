@@ -102,6 +102,18 @@ describe('generateSprayPDF', () => {
     expect(tables[1].head[0]).toEqual(['Product / Active Ingredients', 'EPA Reg #', 'Rate', 'Total Applied']);
   });
 
+  it('prints the real farm name in the spray header and a fill-in blank when the name is missing', () => {
+    generateSprayPDF([makeRecord()], 'QA Test Farm', { fields: [field] });
+    expect(pdf.allText()).toContain('Farm: QA Test Farm');
+    expect(pdf.allText()).not.toContain('AcreLedger Farm');
+
+    pdf.reset();
+    generateSprayPDF([makeRecord()], null, { fields: [field] });
+    const blank = pdf.allText();
+    expect(blank).toContain('Farm: ________________');
+    expect(blank).not.toContain('AcreLedger Farm');
+  });
+
   it('embeds attachment images and never renders raw attachment tokens or base64', () => {
     const record = makeRecord({
       notes: `Scout noted heavy pressure. [ATTACHMENT:${PNG_ATTACHMENT}]`,

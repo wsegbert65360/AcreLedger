@@ -1,8 +1,14 @@
 /**
  * @vitest-environment jsdom
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const packageVersion = JSON.parse(
+  readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'),
+).version as string;
 
 const platform = vi.hoisted(() => ({ value: 'web' }));
 const appInfo = vi.hoisted(() => ({
@@ -46,6 +52,12 @@ describe('VersionFooter', () => {
     vi.unstubAllGlobals();
   });
 
+  it('shows the package.json version from the build-time constant', () => {
+    render(<VersionFooter />);
+    expect(__APP_VERSION__).toBe(packageVersion);
+    expect(screen.getByText(`v${packageVersion}`)).toBeInTheDocument();
+  });
+
   it('keeps the manual check on the web app', () => {
     render(<VersionFooter />);
     expect(screen.getByRole('button', { name: 'Check for updates' })).toBeInTheDocument();
@@ -85,7 +97,7 @@ describe('VersionFooter', () => {
     render(<VersionFooter />);
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(screen.getByText(/v3\.6\.0/)).toBeInTheDocument();
+    expect(screen.getByText(`v${packageVersion}`)).toBeInTheDocument();
     expect(screen.queryByText('You need to update')).not.toBeInTheDocument();
     expect(screen.queryByText('Up to date')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /check for updates/i })).not.toBeInTheDocument();

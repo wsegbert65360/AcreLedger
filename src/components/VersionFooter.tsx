@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { toast } from 'sonner';
-import packageJson from '../../package.json';
 import {
   ACRELEDGER_IOS_BUNDLE_ID,
   isStoreVersionNewer,
@@ -22,7 +21,7 @@ async function installedIosVersion(fallback: string): Promise<string> {
 }
 
 export default function VersionFooter() {
-  const version = packageJson.version;
+  const version = __APP_VERSION__;
   const ios = Capacitor.getPlatform() === 'ios';
   const [checking, setChecking] = useState(false);
   const [iosStatus, setIosStatus] = useState<IosUpdateStatus>('hidden');

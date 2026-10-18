@@ -319,10 +319,16 @@ export default function QuickAddDialog() {
                 onClick={handleStartActivity}
                 className="quick-add-trigger flex-grow sm:flex-initial bg-primary hover:bg-primary/90 text-primary-foreground h-11 text-xs font-bold"
                 disabled={!selectedFieldId}
+                aria-describedby={!selectedFieldId ? 'quick-add-pick-field-hint' : undefined}
               >
                 Log {ACTIVITIES.find(a => a.key === selectedType)?.label || 'Activity'}
               </Button>
             </DialogFooter>
+            {!selectedFieldId && (
+              <p id="quick-add-pick-field-hint" className="text-xs text-muted-foreground">
+                Pick a field first
+              </p>
+            )}
           </div>
         )}
       </DialogContent>

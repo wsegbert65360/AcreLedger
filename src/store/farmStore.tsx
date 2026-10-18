@@ -239,6 +239,28 @@ interface FarmState {
 
 const FarmContext = createContext<FarmState | null>(null);
 
+/** User-scoped offline cache table for the current farm's display name. */
+const FARM_NAME_CACHE_TABLE = 'farm_name';
+
+function farmIdFromIdentityKey(identity: string): string {
+  const splitAt = identity.indexOf(':');
+  return splitAt === -1 ? '' : identity.slice(splitAt + 1);
+}
+
+function readCachedFarmName(data: unknown, farmId: string): string | null {
+  if (!farmId || !Array.isArray(data) || data.length === 0) return null;
+  const entry = data[0];
+  if (!entry || typeof entry !== 'object') return null;
+  const record = entry as { farmId?: unknown; name?: unknown };
+  if (record.farmId !== farmId || typeof record.name !== 'string') return null;
+  const name = record.name.trim();
+  return name || null;
+}
+
+function farmNameCacheValue(farmId: string, name: string): { farmId: string; name: string }[] {
+  return [{ farmId, name }];
+}
+
 export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Auth & Session ---
   const auth = useAuth();
@@ -301,6 +323,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const identityRef = useRef(identityKey);
   identityRef.current = identityKey;
   const latestFetchRequestRef = useRef(0);
+  // Monotonic stamp for user renames. Farms reads and startup cache hydration
+  // capture it when they start and drop the name if a rename has moved on, so
+  // a slow refresh or restore cannot put the previous name back into state or
+  // the farm_name cache.
+  const farmNameGenerationRef = useRef(0);
   const equipmentStateRef = useRef({ equipment, maintenanceSchedules, maintenanceLogs });
   useEffect(() => { equipmentStateRef.current = { equipment, maintenanceSchedules, maintenanceLogs }; });
 
@@ -410,12 +437,17 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     const hydrationIdentity = identityKey;
     let cancelled = false;
     const hydrateCache = async () => {
+      // Captured before farm_name loadCache settles. A restore that started
+      // before a rename is stale: applying it would overwrite the new name,
+      // and the cache effect would persist that stale name. Skipping
+      // setFarmName leaves every other collection on this path unchanged.
+      const farmNameGeneration = farmNameGenerationRef.current;
       try {
         const [
           fieldsData, binsData, plantData, sprayData, harvestData, hayData, customSprayData,
           fertilizerData, tillageData, grainData, seedsData, fertilizerRecipesData, recipesData,
           tractsData, assignmentsData, workRequestsData, equipmentData,
-          maintenanceSchedulesData, maintenanceLogsData
+          maintenanceSchedulesData, maintenanceLogsData, farmNameData,
         ] = await Promise.all([
           offlineStorage.loadCache('fields', userId),
           offlineStorage.loadCache('bins', userId),
@@ -436,6 +468,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           offlineStorage.loadCache('equipment', userId),
           offlineStorage.loadCache('maintenance_schedules', userId),
           offlineStorage.loadCache('maintenance_logs', userId),
+          offlineStorage.loadCache(FARM_NAME_CACHE_TABLE, userId),
         ]);
 
         if (cancelled || identityRef.current !== hydrationIdentity) return;
@@ -464,6 +497,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         if (equipmentData) setEquipment(equipmentData);
         if (maintenanceSchedulesData) setMaintenanceSchedules(maintenanceSchedulesData);
         if (maintenanceLogsData) setMaintenanceLogs(maintenanceLogsData);
+        const hydratedFarmName = readCachedFarmName(farmNameData, farmIdFromIdentityKey(hydrationIdentity));
+        const renameStillCurrent = farmNameGenerationRef.current === farmNameGeneration;
+        if (hydratedFarmName && renameStillCurrent) setFarmName(hydratedFarmName);
         setStateOwnerKey(hydrationIdentity);
       } catch (err) {
         if (!cancelled && identityRef.current === hydrationIdentity) {
@@ -532,13 +568,30 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             .range(from, to),
         );
 
+      // Started beside the collection reads so a farms result is applied as
+      // soon as it settles, including when another collection throws. A failed
+      // or blank read must not wipe a name already hydrated for this identity.
+      // A read that started before the latest rename is stale: applying its
+      // name would overwrite the rename in state, and the cache effect would
+      // persist that stale name. Skipping setFarmName skips that cache write.
+      const farmNameGeneration = farmNameGenerationRef.current;
+      const farmsRead = Promise.resolve(
+        supabase.from('farms').select('name').eq('id', farm_id).single(),
+      ).then((result) => {
+        const name = !result.error && typeof result.data?.name === 'string'
+          ? result.data.name.trim()
+          : '';
+        const renameStillCurrent = farmNameGenerationRef.current === farmNameGeneration;
+        if (name && isCurrentRequest() && renameStillCurrent) setFarmName(name);
+        return result;
+      }).catch((error: unknown) => ({ data: null, error }));
+
       const [
         fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
         hayPages, customSprayPages, fertilizerPages, tillagePages, grainPages,
         seedsPages, fertilizerRecipesPages, recipesPages, tractsPages,
         assignmentsPages, workRequestsPages, equipmentPages,
         maintenanceSchedulesPages, maintenanceLogsPages,
-        { data: farmData, error: farmErr }
       ] = await Promise.all([
         pagedQuery('fields'),
         pagedQuery('bins'),
@@ -583,9 +636,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             .order('id', { ascending: true })
             .range(from, to),
         ),
-        supabase.from('farms').select('name').eq('id', farm_id).single()
       ]);
 
+      if (!isCurrentRequest()) return false;
+      const { error: farmErr } = await farmsRead;
       if (!isCurrentRequest()) return false;
 
       // Equipment is fail-soft: a missing or failing equipment table must not
@@ -693,10 +747,6 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           }
           setStateOwnerKey(requestIdentity);
 
-          if (farmData && farmData.name) {
-            setFarmName(farmData.name);
-          }
-
           // Loading is complete only once every page of every collection has
           // succeeded — a truncated or failed load must not look settled.
           setInitialFetchComplete(true);
@@ -787,6 +837,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('equipment', cacheOwnerUserId, equipment); } }, [equipment, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('maintenance_schedules', cacheOwnerUserId, maintenanceSchedules); } }, [maintenanceSchedules, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('maintenance_logs', cacheOwnerUserId, maintenanceLogs); } }, [maintenanceLogs, cacheOwnerUserId]);
+  useEffect(() => {
+    if (!cacheOwnerUserId || !farm_id) return;
+    const name = farmName?.trim();
+    if (!name) return;
+    void offlineStorage.saveCache(FARM_NAME_CACHE_TABLE, cacheOwnerUserId, farmNameCacheValue(farm_id, name));
+  }, [farmName, farm_id, cacheOwnerUserId]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
@@ -944,19 +1000,36 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   const updateFarmName = useCallback(async (newName: string): Promise<boolean> => {
     const userId = session?.user?.id;
-    if (!newName.trim()) {
+    const trimmed = newName.trim();
+    if (!trimmed) {
       toast.error('Farm name cannot be empty.');
       return false;
     }
 
+    // Any farms read that already started predates this attempt. Bump again
+    // only once the new name is applied, so a read that raced the write and
+    // still has the previous name is also stale. A failed attempt leaves the
+    // counter here: a read started after this attempt still applies.
+    farmNameGenerationRef.current += 1;
+    const requestIdentity = identityRef.current;
     try {
-      if (!farm_id && !await ensureFarm()) return false;
+      const resolvedFarmId = farm_id || await ensureFarm();
+      if (!resolvedFarmId) return false;
       if (!userId || sessionUserIdRef.current !== userId) return false;
-      const { error } = await supabase.rpc('update_farm_name', { p_name: newName.trim() });
+      if (requestIdentity && identityRef.current !== requestIdentity) return false;
+      const { error } = await supabase.rpc('update_farm_name', { p_name: trimmed });
       if (error) throw error;
       if (sessionUserIdRef.current !== userId) return false;
+      if (requestIdentity && identityRef.current !== requestIdentity) return false;
 
-      setFarmName(newName.trim());
+      farmNameGenerationRef.current += 1;
+      setFarmName(trimmed);
+      try {
+        await offlineStorage.saveCache(FARM_NAME_CACHE_TABLE, userId, farmNameCacheValue(resolvedFarmId, trimmed));
+      } catch (cacheError) {
+        console.error('Failed to cache farm name:', cacheError);
+      }
+      if (sessionUserIdRef.current !== userId) return false;
       toast.success('Farm name updated successfully.');
       return true;
     } catch (err: any) {

@@ -3,6 +3,7 @@ import ReportTable from '@/components/ReportTable';
 import { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578FieldAcreTotal } from '@/lib/complianceReports';
 import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
 import type { ReportExportStatus } from '@/lib/reportExportHistory';
+import { complianceFarmSubtitle, farmNameForProse } from '@/lib/farmDisplayName';
 import { formatIsoDate } from '@/utils/dates';
 import { MobileReportExportPanel } from './MobileReportExportPanel';
 
@@ -18,7 +19,7 @@ interface FsaPlantReportProps {
   readinessSummary: ReportReadinessSummary;
   onIssueAction?: (issue: ReportReadinessIssue) => void;
   exportStatus?: ReportExportStatus;
-  farmName: string;
+  farmName: string | null;
   viewingSeason: number;
   reportDate: string;
   onExportCsv: () => void;
@@ -46,7 +47,7 @@ export default function FsaPlantReport({
     <>
       <MobileReportExportPanel
         title="FSA-578 acreage worksheet"
-        description={`Review ${viewingSeason} acreage readiness for ${farmName || 'your farm'}, then export the worksheet for county FSA review.`}
+        description={`Review ${viewingSeason} acreage readiness for ${farmNameForProse(farmName)}, then export the worksheet for county FSA review.`}
         summary={readinessSummary}
         itemLabel="fields"
         onExportPdf={onExportPdf}
@@ -57,7 +58,7 @@ export default function FsaPlantReport({
       <div className="hidden lg:block print:block">
       <ReportTable
       title="FSA-578 Acreage Certification Worksheet"
-      subtitle={`Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`}
+      subtitle={complianceFarmSubtitle(farmName, viewingSeason, reportDate)}
       headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'SEQ', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
       onExport={onExportCsv}
       onExportPdf={onExportPdf}

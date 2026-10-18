@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createJsPdfMock } from '@/test/jspdfMock';
+import { complianceFarmSubtitle } from '@/lib/farmDisplayName';
 import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata } from '../fsaReports';
 
 const pdf = createJsPdfMock();
@@ -9,8 +10,10 @@ vi.doMock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false
 vi.doMock('@/lib/native', () => ({ native: { sharePdf: pdf.sharePdf } }));
 
 let exportFsa578WorksheetPdf: typeof import('../fsa578PdfExport').exportFsa578WorksheetPdf;
+let exportToPdf: typeof import('../pdfExport').exportToPdf;
 beforeAll(async () => {
   ({ exportFsa578WorksheetPdf } = await import('../fsa578PdfExport'));
+  ({ exportToPdf } = await import('../pdfExport'));
 });
 
 const metadata: Fsa578WorksheetMetadata = {
@@ -120,6 +123,53 @@ describe('exportFsa578WorksheetPdf', () => {
     expect(text).toContain('FSA office corrections / notes:');
     expect(text).toContain('Reviewed with:');
     expect(text).toContain('Producer initials:');
+  });
+
+  it('prints QA Test Farm in the FSA-578 PDF and a fill-in blank when the name is missing', () => {
+    exportFsa578WorksheetPdf({
+      metadata: { ...metadata, farmName: 'QA Test Farm' },
+      rows: [row({})],
+      issues: [],
+      fileName: 'fsa578.pdf',
+    });
+    expect(pdf.allText()).toContain('Farm: QA Test Farm');
+    expect(pdf.allText()).not.toContain('AcreLedger Farm');
+
+    pdf.reset();
+    exportFsa578WorksheetPdf({
+      metadata: { ...metadata, farmName: '' },
+      rows: [row({})],
+      issues: [],
+      fileName: 'fsa578.pdf',
+    });
+    const blank = pdf.allText();
+    expect(blank).toContain('Farm: ________________');
+    expect(blank).toContain('AcreLedger | ________________ | Crop year 2026');
+    expect(blank).not.toContain('AcreLedger Farm');
+  });
+
+  it('prints the real farm name on the fall production PDF subtitle and a fill-in blank when it is missing', () => {
+    exportToPdf({
+      title: 'FSA Fall Harvest / Production Evidence Worksheet',
+      subtitle: complianceFarmSubtitle('QA Test Farm', 2026, 'Oct 18, 2026', 'pdf'),
+      headers: ['DATE'],
+      rows: [],
+      fileName: 'fall.pdf',
+    });
+    expect(pdf.allText()).toContain('Farm: QA Test Farm');
+    expect(pdf.allText()).not.toContain('AcreLedger Farm');
+
+    pdf.reset();
+    exportToPdf({
+      title: 'FSA Fall Harvest / Production Evidence Worksheet',
+      subtitle: complianceFarmSubtitle(null, 2026, 'Oct 18, 2026', 'pdf'),
+      headers: ['DATE'],
+      rows: [],
+      fileName: 'fall.pdf',
+    });
+    const blank = pdf.allText();
+    expect(blank).toContain('Farm: ________________');
+    expect(blank).not.toContain('AcreLedger Farm');
   });
 
   it('repeats farm name and crop year in the header identity and every page footer', () => {

@@ -24,6 +24,7 @@ import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import { formatIsoDate, getWorkDateMs, toLocalIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
+import { complianceFarmSubtitle, knownFarmName } from '@/lib/farmDisplayName';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { areaForProductTotal, effectiveTreatedAreaUnit } from '@/lib/sprayExportFormatters';
 import { Field } from '@/types/farm';
@@ -383,7 +384,7 @@ export default function Reports() {
 
       exportFsa578WorksheetPdf({
         metadata: {
-          farmName: farmName || 'AcreLedger Farm',
+          farmName: knownFarmName(farmName),
           cropYear: viewingSeason,
           reportDate,
         },
@@ -423,7 +424,7 @@ export default function Reports() {
     runTrackedExport('fsa-harvest', () => {
       exportToPdf({
         title: 'FSA Fall Harvest / Production Evidence Worksheet',
-        subtitle: `Farm: ${farmName || 'AcreLedger Farm'} | Crop Year: ${viewingSeason} | Not an official USDA form. Generated ${reportDate}.`,
+        subtitle: complianceFarmSubtitle(farmName, viewingSeason, reportDate, 'pdf'),
         headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #'],
         rows: fsaFallRows.map(row => [
           fmtDate(row.harvestDate) || '—',
@@ -482,10 +483,11 @@ export default function Reports() {
 
   const handleExportLandlordPdf = () => {
     if (!landlordSummary) return;
+    const printableFarmName = knownFarmName(farmName);
     runTrackedExport('landlord-statement', () => {
       exportToPdf({
         title: 'Landlord Summary',
-        subtitle: `${farmName ? farmName + ' — ' : ''}Prepared for: ${selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
+        subtitle: `${printableFarmName ? printableFarmName + ' — ' : ''}Prepared for: ${selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
         orientation: 'landscape',
         headers: ['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'BALES', 'LANDLORD SHARE'],
         rows: landlordSummary.fields.map(f => [
@@ -589,11 +591,11 @@ export default function Reports() {
             fsaReadinessIssues={fsaReadinessIssues}
             readinessSummary={fsaReadinessSummary}
             exportStatus={getExportStatus('fsa-plant')}
-            farmName={farmName || 'AcreLedger Farm'}
+            farmName={farmName}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
             onExportCsv={() => runTrackedExport('fsa-plant', async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
-              farmName: farmName || 'AcreLedger Farm',
+              farmName: knownFarmName(farmName),
               cropYear: viewingSeason,
               reportDate: toLocalIsoDate(Date.now()),
             }), 'FSA-578 worksheet data')}
@@ -641,7 +643,7 @@ export default function Reports() {
             readinessSummary={fsaFallReadinessSummary}
             exportStatus={getExportStatus('fsa-harvest')}
             onIssueAction={handleIssueAction}
-            farmName={farmName || 'AcreLedger Farm'}
+            farmName={farmName}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
             onExportCsv={() => runTrackedExport('fsa-harvest', () => exportFsaFallProductionData({
@@ -649,7 +651,7 @@ export default function Reports() {
               hayRecords,
               fields,
               metadata: {
-                farmName: farmName || 'AcreLedger Farm',
+                farmName: knownFarmName(farmName),
                 cropYear: viewingSeason,
                 reportDate: toLocalIsoDate(Date.now()),
               },
