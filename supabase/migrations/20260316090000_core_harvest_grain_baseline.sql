@@ -7,6 +7,7 @@
 -- migrations that harden them are already marked applied. Mark it as applied
 -- (`supabase migration repair --status applied 20260316090000`) instead.
 -- It is a reconstruction, not an authoritative schema-only dump.
+-- 20261017041928_apply_missing_safeguards.sql does not depend on this baseline.
 
 -- Reviewed core-table bootstrap for empty `supabase db reset`.
 -- Source: current TypeScript row types plus later ADD COLUMN IF NOT EXISTS
