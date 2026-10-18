@@ -758,5 +758,115 @@ describe('farmStore composed behaviors', () => {
       expect(result.current.farmName).toBe('QA Test Farm');
       expect(saveCacheMock).not.toHaveBeenCalled();
     });
+
+    it('drops a cached farm name restore that started before a rename and keeps the new name in state and cache', async () => {
+      let resolveFarmName!: (value: unknown) => void;
+      const heldFarmName = new Promise(resolve => { resolveFarmName = resolve; });
+      cacheControl.load = (table) => (table === 'farm_name' ? heldFarmName : null);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(loadCacheMock).toHaveBeenCalledWith('farm_name', 'user-1'));
+
+      await act(async () => {
+        expect(await result.current.updateFarmName('New Farm')).toBe(true);
+      });
+      expect(result.current.farmName).toBe('New Farm');
+
+      await act(async () => {
+        resolveFarmName([{ farmId: 'farm-1', name: 'Old Farm' }]);
+        await heldFarmName;
+      });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+
+      expect(result.current.farmName).toBe('New Farm');
+      const farmNameWrites = saveCacheMock.mock.calls.filter(([table]) => table === 'farm_name');
+      expect(farmNameWrites.length).toBeGreaterThan(0);
+      for (const [, userId, value] of farmNameWrites) {
+        expect(userId).toBe('user-1');
+        expect(value).toEqual([{ farmId: 'farm-1', name: 'New Farm' }]);
+      }
+    });
+
+    it('drops a farms read that started before a rename and keeps the new name in state and cache', async () => {
+      control.isOnline = true;
+      cloud.setTableHandler('farms', { data: { name: 'Old Farm' }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.farmName).toBe('Old Farm'));
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+
+      let resolveFarms!: (value: { data: { name: string }; error: null }) => void;
+      const heldFarms = new Promise<{ data: { name: string }; error: null }>(resolve => {
+        resolveFarms = resolve;
+      });
+      cloud.setTablePages('farms', [heldFarms]);
+      cloud.fns.from.mockClear();
+      let refreshDone!: Promise<boolean>;
+      act(() => { refreshDone = result.current.refresh(); });
+      await waitFor(() => expect(cloud.fns.from).toHaveBeenCalledWith('farms'));
+
+      saveCacheMock.mockClear();
+      await act(async () => {
+        expect(await result.current.updateFarmName('New Farm')).toBe(true);
+      });
+      expect(result.current.farmName).toBe('New Farm');
+
+      await act(async () => {
+        resolveFarms({ data: { name: 'Old Farm' }, error: null });
+        await refreshDone;
+      });
+
+      expect(result.current.farmName).toBe('New Farm');
+      const farmNameWrites = saveCacheMock.mock.calls.filter(([table]) => table === 'farm_name');
+      expect(farmNameWrites.length).toBeGreaterThan(0);
+      for (const [, userId, value] of farmNameWrites) {
+        expect(userId).toBe('user-1');
+        expect(value).toEqual([{ farmId: 'farm-1', name: 'New Farm' }]);
+      }
+    });
+
+    it('applies a later server name from a farms read that started after the rename', async () => {
+      control.isOnline = true;
+      cloud.setTableHandler('farms', { data: { name: 'Old Farm' }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.farmName).toBe('Old Farm'));
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+
+      await act(async () => {
+        expect(await result.current.updateFarmName('New Farm')).toBe(true);
+      });
+      expect(result.current.farmName).toBe('New Farm');
+
+      let resolveFarms!: (value: { data: { name: string }; error: null }) => void;
+      cloud.setTablePages('farms', [new Promise(resolve => { resolveFarms = resolve; })]);
+      cloud.fns.from.mockClear();
+      let refreshDone!: Promise<boolean>;
+      act(() => { refreshDone = result.current.refresh(); });
+      await waitFor(() => expect(cloud.fns.from).toHaveBeenCalledWith('farms'));
+
+      await act(async () => {
+        resolveFarms({ data: { name: 'Server Farm' }, error: null });
+        expect(await refreshDone).toBe(true);
+      });
+      expect(result.current.farmName).toBe('Server Farm');
+      expect(saveCacheMock).toHaveBeenCalledWith('farm_name', 'user-1', [{ farmId: 'farm-1', name: 'Server Farm' }]);
+    });
+
+    it('applies a farms read that started after a failed rename', async () => {
+      control.isOnline = true;
+      cloud.setTableHandler('farms', { data: { name: 'Old Farm' }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.farmName).toBe('Old Farm'));
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+
+      cloud.setRpcResult({ data: null, error: { message: 'nope' } });
+      await act(async () => {
+        expect(await result.current.updateFarmName('New Farm')).toBe(false);
+      });
+      expect(result.current.farmName).toBe('Old Farm');
+
+      cloud.setRpcResult({ data: null, error: null });
+      cloud.setTableHandler('farms', { data: { name: 'Server Farm' }, error: null });
+      await act(async () => { expect(await result.current.refresh()).toBe(true); });
+      expect(result.current.farmName).toBe('Server Farm');
+    });
   });
 });
