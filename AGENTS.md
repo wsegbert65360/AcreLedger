@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-15 (Review-09 owner decisions: global provider caps, server-side Ask the Book history, security headers).
+> **Last updated:** 2026-10-17 (regional settings and the AU compliance profile added; equipment UI corrected to "live for everyone"; service-worker navigation guards).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,12 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-17** — Spray compliance is profile-driven (`us-epa` / `au-apvma`), not US-only; added [Regional Settings and the Australia Pilot](#regional-settings-and-the-australia-pilot) covering the `auPilot` allowlist gate, user-id-scoped region preferences, locale terminology, and the acres/hectares boundary. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration in `vite-env.d.ts`, not a kill switch. Service-worker navigation is network-first with a 3 s timeout, a precache fallback, and a single-retry reload guard.
+- **2026-10-16** — AU pilot card gated behind `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141`; root clutter gitignored (`*.tincan-backup-*`, root `*.patch`, compiled `server/*.js`); parked equipment mutations overlaid on a fail-soft fetch; `engines.node` pinned to `22.x`.
 - **2026-10-15** — Review-09 owner decisions: signup always shows check-your-email; weather and Ask the Book share a global UTC daily spend cap (`WEATHER_DAILY_CAP` default 2000, `AI_DAILY_CAP` default 500) returning HTTP 503; Ask the Book history is loaded from `ai_assistant_private.turns` and client history is ignored; `finalize_ai_assistant_turn` is service_role-only; Vercel sends security headers including CSP-Report-Only.
 - **2026-10-14** — Review-10 adds camera/photo-library usage strings, CSP fetch-origin checks, overlay-aware Android back handling, GitHub quality checks and all eleven database-integrity suites. Nightly native builds verify the requested SHA; both platforms reject placeholder Supabase bundles.
 - **2026-10-13** — Native and other non-dev builds do not bundle `VITE_VISUALCROSSING_KEY`. Capacitor requires `VITE_WEATHER_PROXY_URL`; CodeMagic fails the build when that URL is missing or when the vendor key appears in `dist/assets`. The weather proxy quota is 30 requests per minute and 500 per rolling 24 hours.
 - **2026-10-12** — FSA split/variety rows use planting acres apportioned across CLUs; the historical July acreage backfills are guarded one-shots, never repair operations. Tract reimports reconcile assignment acres and confirm removed CLUs before soft-delete.
-- **2026-10-12** — After `20261013035852_db_access_review_02_m3_m4.sql`, new `public` tables, functions, and sequences inherit no client grants (including no PUBLIC `EXECUTE` on functions). Every new table or function needs an explicit `GRANT` to `authenticated` and/or `service_role`.
 
 ## Contents
 
@@ -122,9 +123,16 @@ Rules), then open only the files for that area.
 - [@/context/QuickAddContext.tsx](./src/context/QuickAddContext.tsx) — global Quick Add provider managing modal states, preselected types, and active fields.
 - [@/components/QuickAddDialog.tsx](./src/components/QuickAddDialog.tsx) — global Quick Add dialog providing field selection and GPS-based nearest field detection.
 
+**Compliance profiles & regional settings (AU pilot)**
+- [@/lib/compliance/profiles.ts](./src/lib/compliance/profiles.ts) — the `us-epa` / `au-apvma` registry: required-field sets, product checks, `resolveComplianceProfileId()`, `defaultProfileForCountry()`. Single source of truth; US behavior is frozen. Details: [BLUEPRINT → Compliance Profiles and Regional Settings](./BLUEPRINT.md#compliance-profiles-and-regional-settings-australia-pilot).
+- [@/store/useAppPreferences.ts](./src/store/useAppPreferences.ts) — device-local `{ country, locale, unitSystem }`, scoped by user id. Always call it with `session?.user?.id`.
+- [@/lib/auPilot.ts](./src/lib/auPilot.ts) + [@/components/settings/RegionManager.tsx](./src/components/settings/RegionManager.tsx) — the `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST` gate and the Region card it guards. Never mount the card ungated.
+- [@/lib/locale](./src/lib/locale) — `term(key, locale)` for paddock/field wording and `formatNumber()` for locale-aware numbers. Both take the locale explicitly.
+- [@/lib/sprayExportFormatters.ts](./src/lib/sprayExportFormatters.ts) and [@/utils/unitConversion.ts](./src/utils/unitConversion.ts) — `normalizeAreaForRate` / `normalizeTreatedArea` / `acresToHectares`, the only approved area-unit boundary.
+
 **Equipment & maintenance**
-- [@/types/equipment.ts](./src/types/equipment.ts), [@/store/useEquipment.ts](./src/store/useEquipment.ts), and [@/pages/Equipment.tsx](./src/pages/Equipment.tsx) — non-seasonal equipment state, atomic meter/service mutations, and the pilot UI.
-- [@/lib/equipment](./src/lib/equipment) — due-status, meter conversion, parked-mutation overlay, pilot flag, and CSV export helpers. Details: [BLUEPRINT → Equipment and Maintenance](./BLUEPRINT.md#equipment-and-maintenance).
+- [@/types/equipment.ts](./src/types/equipment.ts), [@/store/useEquipment.ts](./src/store/useEquipment.ts), and [@/pages/Equipment.tsx](./src/pages/Equipment.tsx) — non-seasonal equipment state, atomic meter/service mutations, and the equipment UI (live for all users; no feature flag).
+- [@/lib/equipment](./src/lib/equipment) — due-status, meter conversion, parked-mutation overlay, and CSV export helpers. Details: [BLUEPRINT → Equipment and Maintenance](./BLUEPRINT.md#equipment-and-maintenance).
 - [supabase/migrations/20261006214500_equipment_maintenance.sql](./supabase/migrations/20261006214500_equipment_maintenance.sql) and [20261006233000_equipment_meter_rpcs.sql](./supabase/migrations/20261006233000_equipment_meter_rpcs.sql) — tenant-scoped schema and atomic RPC contracts. Do not replace these RPCs with client-side read/compare/write sequences.
 
 **Offline, native & accounts**
@@ -267,11 +275,24 @@ Canonical detail: [BLUEPRINT → GrainMovement](./BLUEPRINT.md#grainmovement).
 Canonical detail: [BLUEPRINT → SprayRecord](./BLUEPRINT.md#sprayrecord-2026-standards).
 
 - Multiple products per application; tank-mix UI rows key on a temporary `ui_id`, never the array index.
-- A missing `epaRegNumber`, or a missing, zero, negative, or unitless product rate, marks the record for compliance review. Derive this for legacy rows at read time; do not rewrite historical records to change the flag.
+- **Compliance is profile-driven, not US-only.** `@/lib/compliance/profiles.ts` owns the required-field set and product checks for each profile (`us-epa`, `au-apvma`). Resolve a record's profile with `resolveComplianceProfileId()` / `getComplianceProfileFor()` and check it with `getMissingComplianceFields(record, profileId)` — never branch on a raw `complianceProfile` string, and never hard-code the US field list into shared code. Legacy values (`'universal'`, `''`, null) resolve to `us-epa`.
+- **US behavior is frozen.** Do not change the `us-epa` field set or its product checks to make another region work; add or amend a profile instead. Under `us-epa`, a missing `epaRegNumber`, or a missing, zero, negative, or unitless product rate, marks the record for compliance review. Under `au-apvma`, the registration-number check is off (APVMA numbers are "when relevant") and PIC, water rate, paddock, and treated area in hectares are required instead. Derive review status for legacy rows at read time; do not rewrite historical records to change the flag.
+- `mapSprayToDb` writes `pic`, `water_rate`, and `water_rate_unit` on **every** spray save, US included, so `20261005162141_add_spray_water_rate_unit_pic.sql` is load-bearing for all users — likewise `fields.pic` (`20261005013057`) on every field write. Confirm both columns are live in prod before shipping a build that writes them.
 - Per-product totals are canonical and recalculated synchronously before save. `totalAmountApplied` is a legacy first-product value; never sum unlike units into it.
 - Keep spray terminology state-neutral unless a specific legal report requires state wording.
 - Import `WIND_ALERT_MPH` from `@/lib/weatherHelpers.ts`; do not re-declare it.
 - Treated-area defaults and every report/export fallback go through `getEffectiveSprayTreatedAcres(record, field, cluAssignments)`, never a raw `field.acreage` read. An explicitly stored `treatedAreaSize` is always preserved.
+
+### Regional Settings and the Australia Pilot
+
+Canonical detail: [BLUEPRINT → Compliance Profiles and Regional Settings](./BLUEPRINT.md#compliance-profiles-and-regional-settings-australia-pilot).
+
+- Region preferences are `{ country: 'US' | 'AU', locale: 'en-US' | 'en-AU', unitSystem: 'imperial' | 'metric' }` in `@/store/useAppPreferences.ts`, defaulting to US/imperial. They are **device-local and scoped by user id**.
+- **Always pass the user id**: `useAppPreferences(session?.user?.id)`. Calling it bare writes the unscoped `al_app_prefs` key that the spray form never reads — the exact defect that made the AU setting inert. Hook instances do not share state, so a change lands on the next remount.
+- **The Region card is gated.** Mount `RegionManager` only behind `isAuPilotEnabled(identity, env)` from `@/lib/auPilot.ts`: `VITE_AU_PILOT_ENABLED === 'true'`, or the signed-in email (case-insensitive) or user id (exact) on the comma-separated `VITE_AU_PILOT_ALLOWLIST`. Never mount it unconditionally — picking Australia switches a production US user to the APVMA profile, metric units, and paddock terminology. Hiding the card must not reset a region an existing AU user already chose.
+- `country` selects the default compliance profile through `defaultProfileForCountry()`; it does not rewrite existing records.
+- **Terminology** comes from `@/lib/locale/terms.ts` `term(key, locale)` (AU: paddock/paddocks); numbers from `@/lib/locale/numbers.ts` `formatNumber()`. Both take the locale explicitly. This is a deliberately small helper set, not a string catalog — do not start a full i18n extraction inside the pilot.
+- **Convert area at the boundary.** `treatedAreaSize` is stored in the unit named by `treatedAreaUnit` (`'ac'`, `'ha'`, `'sqft'`). Rate math goes through `normalizeAreaForRate(value, areaUnit, rateUnit)` and duration math through `normalizeTreatedArea(...)` in `@/lib/sprayExportFormatters.ts`; `acresToHectares()` in `@/utils/unitConversion.ts` is the only approved conversion. Never pass a raw acre figure into an `L/ha` or `kg/ha` calculation — that is a silent 2.47× overstatement on a compliance record.
 
 ### Activity Record Acreage Defaults
 
@@ -418,9 +439,11 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
   - Record save/validation success: success notification haptic.
   - Form validation failure: error notification haptic.
 - **Layout Insets**: Use CSS env safe-area variables for header and bottom navigation spacing to prevent content overlaps on notched screens (e.g. Dynamic Island).
-- **PWA / Service Worker** (`src/main.tsx`): In `DEV`, service workers and caches are unregistered/cleared on load so code changes always win. In production, `registerSW` is wired so a waiting worker (`onNeedRefresh`) **and** a `controllerchange` flip both trigger an auto-reload — iOS checks for SW updates only ~daily on its own, so the app also polls `registration.update()` on `visibilitychange`, `focus`, `online`, and every 30 min while visible. Two safety guards must be preserved when touching this code:
+- **PWA / Service Worker** (`src/main.tsx`): In `DEV`, service workers and caches are unregistered/cleared on load so code changes always win. In production, `registerSW` is wired so a waiting worker (`onNeedRefresh`) **and** a `controllerchange` flip both trigger an auto-reload — iOS checks for SW updates only ~daily on its own, so the app also polls `registration.update()` on `visibilitychange`, `focus`, `online`, and every 30 min while visible. Four safety guards must be preserved when touching this code:
   - The reload is deferred while a Radix overlay is open (`[data-state="open"]`, `[role="dialog"]`, `[role="alertdialog"]`) so unsaved form entries aren't lost; after `MAX_DEFERS` (10 × 30 s ≈ 5 min) it force-reloads so a stuck overlay can't pin the tab to a stale worker forever.
   - The `controllerchange` handler is guarded on `hadControllerAtLoad` so a first-ever visit (where the new worker claims a previously-uncontrolled page via `clients.claim()`) is **not** reloaded. Don't drop either guard — reloading on first load or mid-entry both wreck UX.
+  - Navigations are served **network-first** by the `NavigationRoute` built in `@/lib/swNavigation.ts`, raced against `NAVIGATION_TIMEOUT_MS` (3 s); a hang, a network failure, or a non-OK response falls back to the current precached `/index.html`. There is **no runtime HTML cache** — don't add one, and don't pass a `RequestInit` to the navigate fetch, which re-arms the timer race.
+  - `@/lib/swReload.ts` permits a **single** retry after a reload. If a navigation still fails once the page has already reloaded for this reason, stop reloading and surface the failure rather than looping. `src/test/swSource.test.ts` asserts these properties against the compiled worker source; keep it green.
 
 ## UI and Component Rules
 
