@@ -5,9 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = resolve(projectRoot, 'dist');
+const srcRoot = resolve(projectRoot, 'src');
 const viteBin = resolve(projectRoot, 'node_modules/vite/bin/vite.js');
 
 const SENTINEL = 'ZZSENTINELVCKEY0000';
+const BILLING_ALLOWLIST_ENV_NAME = 'VITE_BILLING_ALLOWLIST';
+const BILLING_ALLOWLIST_SENTINEL = 'zzsentinel-allowlist@example.invalid';
 const DUMMY_PROXY_URL = 'https://example.invalid';
 
 function walk(directory) {
@@ -21,24 +24,99 @@ function toRepoPath(filePath) {
   return relative(projectRoot, filePath).split(sep).join('/');
 }
 
-function scanDist(label) {
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+function scanDistForNeedles(label, needles) {
   if (!existsSync(distRoot)) {
-    console.error(`${label}: dist is missing after the Vite build.`);
-    process.exit(1);
+    fail(`${label}: dist is missing after the Vite build.`);
   }
 
   const hits = [];
   for (const file of walk(distRoot)) {
-    if (readFileSync(file).includes(SENTINEL)) hits.push(toRepoPath(file));
+    const contents = readFileSync(file);
+    for (const needle of needles) {
+      if (contents.includes(needle)) {
+        hits.push(toRepoPath(file));
+        break;
+      }
+    }
   }
 
   if (hits.length > 0) {
-    console.error(`${label}: sentinel ${SENTINEL} found in the bundle:`);
+    console.error(`${label}: forbidden billing/weather sentinel found in the bundle:`);
     for (const hit of hits) console.error(`- ${hit}`);
     process.exit(1);
   }
 
   console.log(`${label}: no sentinel in dist.`);
+}
+
+function scanSrcForBillingAllowlistName() {
+  if (!existsSync(srcRoot)) {
+    fail('src/ is missing; cannot scan for client allowlist references.');
+  }
+
+  const hits = [];
+  for (const file of walk(srcRoot)) {
+    if (readFileSync(file, 'utf8').includes(BILLING_ALLOWLIST_ENV_NAME)) {
+      hits.push(toRepoPath(file));
+    }
+  }
+
+  if (hits.length > 0) {
+    console.error(`src/ still references ${BILLING_ALLOWLIST_ENV_NAME}:`);
+    for (const hit of hits) console.error(`- ${hit}`);
+    process.exit(1);
+  }
+
+  console.log(`src/: no ${BILLING_ALLOWLIST_ENV_NAME} references.`);
+}
+
+function parseAllowlistEntries(raw) {
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function scanDistForAllowlistEntries() {
+  if (!existsSync(distRoot)) {
+    fail('normal build: dist is missing after the Vite build.');
+  }
+
+  const raw = process.env.BILLING_ALLOWLIST;
+  const entries = parseAllowlistEntries(typeof raw === 'string' ? raw : '');
+  if (entries.length === 0) {
+    console.log('normal build: BILLING_ALLOWLIST has no entries to scan.');
+    return;
+  }
+
+  const matchingFiles = [];
+  let matchCount = 0;
+  for (const file of walk(distRoot)) {
+    const text = readFileSync(file, 'utf8').toLowerCase();
+    let fileMatched = false;
+    for (const entry of entries) {
+      if (text.includes(entry.toLowerCase())) {
+        matchCount += 1;
+        fileMatched = true;
+      }
+    }
+    if (fileMatched) matchingFiles.push(toRepoPath(file));
+  }
+
+  if (matchCount > 0) {
+    console.error(
+      `BILLING_ALLOWLIST entries found in the bundle (${matchCount} matching entries):`,
+    );
+    for (const file of matchingFiles) console.error(`- ${file}`);
+    process.exit(1);
+  }
+
+  console.log('normal build: no BILLING_ALLOWLIST entries in dist.');
 }
 
 function runViteBuild(label, extraEnv) {
@@ -48,20 +126,25 @@ function runViteBuild(label, extraEnv) {
     env: extraEnv.env,
     stdio: 'inherit',
   });
-  scanDist(label);
 }
 
 if (!existsSync(viteBin)) {
-  console.error('vite is not installed (node_modules/vite/bin/vite.js missing).');
-  process.exit(1);
+  fail('vite is not installed (node_modules/vite/bin/vite.js missing).');
 }
+
+scanSrcForBillingAllowlistName();
 
 const sentinelEnv = {
   ...process.env,
   VITE_VISUALCROSSING_KEY: SENTINEL,
+  [BILLING_ALLOWLIST_ENV_NAME]: BILLING_ALLOWLIST_SENTINEL,
 };
 
+const billingSentinelNeedles = [SENTINEL, BILLING_ALLOWLIST_SENTINEL, BILLING_ALLOWLIST_ENV_NAME];
+
 runViteBuild('web', { args: [], env: sentinelEnv });
+scanDistForNeedles('web', billingSentinelNeedles);
+
 runViteBuild('capacitor', {
   args: ['--mode', 'capacitor'],
   env: {
@@ -73,5 +156,26 @@ runViteBuild('capacitor', {
     VITE_SUPABASE_ANON_KEY: 'bundle-scan-anon-key',
   },
 });
+scanDistForNeedles('capacitor', billingSentinelNeedles);
 
 console.log('Visual Crossing sentinel is absent from web and capacitor bundles.');
+console.log('Billing allowlist sentinel is absent from web and capacitor bundles.');
+
+// Always fail if the client env name leaked into dist (sentinel builds above).
+// The real-list email/id scan is strict only in Vercel production: fail when
+// BILLING_ALLOWLIST is unset there; elsewhere warn and skip.
+const billingAllowlistEnv = process.env.BILLING_ALLOWLIST;
+if (billingAllowlistEnv === undefined) {
+  if (process.env.VERCEL_ENV === 'production') {
+    fail('BILLING_ALLOWLIST must be set in Vercel production for the bundle check');
+  }
+  console.warn(
+    'BILLING_ALLOWLIST is unset; skipping the real-list bundle scan.',
+  );
+} else {
+  const normalEnv = { ...process.env };
+  delete normalEnv[BILLING_ALLOWLIST_ENV_NAME];
+  runViteBuild('normal', { args: [], env: normalEnv });
+  scanDistForNeedles('normal', [BILLING_ALLOWLIST_ENV_NAME]);
+  scanDistForAllowlistEntries();
+}

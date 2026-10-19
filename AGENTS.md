@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-17 (regional settings and the AU compliance profile added; equipment UI corrected to "live for everyone"; service-worker navigation guards).
+> **Last updated:** 2026-10-19 (billing rollout allowlist moved server-side; `VITE_BILLING_ALLOWLIST` removed from the client).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,12 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). The client no longer reads `VITE_BILLING_ALLOWLIST`; the bundle guard fails if that name, a billing sentinel, or allowlist entries appear in `dist`. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere.
 - **2026-10-17** — Spray compliance is profile-driven (`us-epa` / `au-apvma`), not US-only; added [Regional Settings and the Australia Pilot](#regional-settings-and-the-australia-pilot) covering the `auPilot` allowlist gate, user-id-scoped region preferences, locale terminology, and the acres/hectares boundary. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration in `vite-env.d.ts`, not a kill switch. Service-worker navigation is network-first with a 3 s timeout, a precache fallback, and a single-retry reload guard.
 - **2026-10-16** — AU pilot card gated behind `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141`; root clutter gitignored (`*.tincan-backup-*`, root `*.patch`, compiled `server/*.js`); parked equipment mutations overlaid on a fail-soft fetch; `engines.node` pinned to `22.x`.
 - **2026-10-15** — Review-09 owner decisions: signup always shows check-your-email; weather and Ask the Book share a global UTC daily spend cap (`WEATHER_DAILY_CAP` default 2000, `AI_DAILY_CAP` default 500) returning HTTP 503; Ask the Book history is loaded from `ai_assistant_private.turns` and client history is ignored; `finalize_ai_assistant_turn` is service_role-only; Vercel sends security headers including CSP-Report-Only.
 - **2026-10-14** — Review-10 adds camera/photo-library usage strings, CSP fetch-origin checks, overlay-aware Android back handling, GitHub quality checks and all eleven database-integrity suites. Nightly native builds verify the requested SHA; both platforms reject placeholder Supabase bundles.
-- **2026-10-13** — Native and other non-dev builds do not bundle `VITE_VISUALCROSSING_KEY`. Capacitor requires `VITE_WEATHER_PROXY_URL`; CodeMagic fails the build when that URL is missing or when the vendor key appears in `dist/assets`. The weather proxy quota is 30 requests per minute and 500 per rolling 24 hours.
-- **2026-10-12** — FSA split/variety rows use planting acres apportioned across CLUs; the historical July acreage backfills are guarded one-shots, never repair operations. Tract reimports reconcile assignment acres and confirm removed CLUs before soft-delete.
 
 ## Contents
 
@@ -150,7 +149,7 @@ Rules), then open only the files for that area.
 - [docs/runbooks/full-project-recovery.md](./docs/runbooks/full-project-recovery.md) and [docs/runbooks/single-farm-recovery.md](./docs/runbooks/single-farm-recovery.md) — owner operating procedures. Full-project SQL restore must use the checked-in `restore-isolated` command rather than a hand-written file sequence.
 
 **Billing**
-- [api/create-checkout-session.ts](./api/create-checkout-session.ts), [api/create-portal-session.ts](./api/create-portal-session.ts), [api/stripe-webhook.ts](./api/stripe-webhook.ts), [server/billing.ts](./server/billing.ts), and [@/lib/billing.ts](./src/lib/billing.ts) — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
+- [api/create-checkout-session.ts](./api/create-checkout-session.ts), [api/create-portal-session.ts](./api/create-portal-session.ts), [api/billing-eligibility.ts](./api/billing-eligibility.ts), [api/stripe-webhook.ts](./api/stripe-webhook.ts), [server/billing.ts](./server/billing.ts), and [@/lib/billing.ts](./src/lib/billing.ts) — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
 
 **CI/CD**
 - [codemagic.yaml](./codemagic.yaml) — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
@@ -375,7 +374,7 @@ Canonical detail: [BLUEPRINT → Owner Whole-Project Disaster Recovery](./BLUEPR
 
 Canonical detail: [BLUEPRINT → Stripe Billing](./BLUEPRINT.md#stripe-billing-test-mode-web-only).
 
-- Web-only, and hidden unless `VITE_BILLING_UI_ENABLED === 'true'` and the caller matches both the client and server allowlists (empty allowlists fail closed). Capacitor renders no billing surface.
+- Web-only, and hidden unless `VITE_BILLING_UI_ENABLED === 'true'`. Capacitor renders no billing surface. The rollout allowlist is server-only (`BILLING_ALLOWLIST`): required in Vercel production (the bundle check fails if unset), optional with a warning elsewhere. Empty or unset fails closed at runtime. The Settings card asks `GET /api/billing-eligibility` with the caller's bearer token and never reads `VITE_BILLING_ALLOWLIST`.
 - `BILLING_LIVE_CHARGES` stays absent or exactly `false`, and the server accepts only `sk_test_` keys, until the product owner approves the legal and production rollout.
 - Enforcement is off by default: a missing or soft-deleted subscription row is `unmanaged` with full access. Do not let absent billing data become a paywall.
 - Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` lives on subscription **items**, not the Subscription; use `resolveCurrentPeriodEnd` (`server/billing.ts`). Build webhook tests from the basil shape.

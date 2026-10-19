@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-10-17 (compliance profiles and the AU pilot documented; equipment UI corrected to "live for everyone"; service-worker navigation and reload guard described).
+> **Last updated:** 2026-10-19 (billing rollout allowlist moved server-side; `VITE_BILLING_ALLOWLIST` removed from the client).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). `VITE_BILLING_ALLOWLIST` is unused; the client caches `{ userId, allowlisted }` in memory and only uses it when the cached user id matches. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere; empty or unset fails closed to "Billing coming soon".
 - **2026-10-17** — Documented compliance profiles (`us-epa` / `au-apvma`), region preferences, the `auPilot` allowlist gate, locale terminology, and the area-unit boundary in a new [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot) section; `SprayRecord` now shows the real `complianceProfile` union plus `pic` / `waterRate` / `waterRateUnit`. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration, not a gate. Service Worker rewritten for the network-first navigation route, the 3 s timeout, the precache fallback, and the single-retry reload guard.
 - **2026-10-16** — AU pilot card gated by `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141_add_spray_water_rate_unit_pic.sql`; root clutter gitignored; parked equipment mutations overlaid onto the retained cache on a fail-soft fetch.
 - **2026-10-15** — Backup restore is gated to farm owner and admin (the database function is the real gate), `restore_farm_backup` sets a 120 s `statement_timeout`, and a pre-season reset file is treated as an explicit rollover undo. *(Body edited 2026-10-15 in `ddd7261`; logged here 2026-10-17.)*
@@ -782,9 +783,13 @@ The live auth integration suite verifies forbidden operations by asserting Postg
 
 Billing is implemented but intentionally restricted to Stripe test mode. The Settings card is
 web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and remains hidden in Capacitor. Internal
-rollout requires a matching client and server allowlist entry; an empty allowlist means billing is
-unavailable. `BILLING_LIVE_CHARGES` must remain absent or exactly `false`, and the server accepts
-only `sk_test_` keys until the owner explicitly approves a production/legal rollout.
+rollout is gated by the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs).
+`BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and
+optional with a warning elsewhere; empty or unset means billing is unavailable at runtime. The
+client asks `GET /api/billing-eligibility` with the caller's bearer token and never reads
+`VITE_BILLING_ALLOWLIST`. `BILLING_LIVE_CHARGES` must
+remain absent or exactly `false`, and the server accepts only `sk_test_` keys until the owner
+explicitly approves a production/legal rollout.
 
 Product access enforcement is off by default. A missing or soft-deleted subscription row is
 `unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
@@ -793,9 +798,11 @@ passes `enforce: true`; absence of billing data must not accidentally become a p
 The locked product terms are a 122-day trial and a three-day `past_due` grace period.
 `farm_subscriptions` is the authoritative local entitlement mirror; the client never treats query
 parameters or client-reported Stripe state as authoritative. Farm members may select their
-farm's active row, but only service-role server paths write it. The checkout and portal endpoints
-authenticate the caller's Supabase bearer token, resolve the authoritative profile/farm, apply the
-subscription-owner gate, and accept only HTTPS Stripe URLs.
+farm's active row, but only service-role server paths write it. The eligibility, checkout, and
+portal endpoints authenticate the caller's Supabase bearer token. Eligibility decides from the
+verified user identity only (query/body claims are ignored) and returns `{ allowlisted: boolean }`.
+Checkout and portal resolve the authoritative profile/farm, apply the subscription-owner gate, and
+accept only HTTPS Stripe URLs.
 
 Checkout rules (`server/billing.ts`, `api/create-checkout-session.ts`): a live subscription
 (`trialing`, `active`, `past_due`, `unpaid`) returns 409 and the owner manages payment in the

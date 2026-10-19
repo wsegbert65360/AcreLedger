@@ -67,8 +67,8 @@ Accept the October 1 web rollout only when all of these are true:
 - No page or signup step reachable by a rollout farmer promises "four free
   months," "4 months," or any other fixed free period.
 - The feature-flagged internal Stripe test surface is excluded from the
-  production rollout. `VITE_BILLING_UI_ENABLED` is not `true`, client and server
-  billing allowlists are empty, and `BILLING_LIVE_CHARGES` is absent or `false`.
+  production rollout. `VITE_BILLING_UI_ENABLED` is not `true`, the server
+  `BILLING_ALLOWLIST` is empty, and `BILLING_LIVE_CHARGES` is absent or `false`.
   The retained `BillingManager` four-month-trial copy and checkout are not
   reachable by a rollout farmer.
 - Every `$299` statement visible before signup calls the amount **planned** and

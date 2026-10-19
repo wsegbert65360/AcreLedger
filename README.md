@@ -84,11 +84,21 @@ VITE_AI_ASSISTANT_URL=https://your-app.vercel.app
 
 # Optional client crash collector (public browser endpoint; never include credentials)
 VITE_ERROR_REPORTING_DSN=https://errors.example/ingest
+
+# Billing (Stripe TEST MODE). Allowlist is server-only; never VITE_BILLING_ALLOWLIST.
+VITE_BILLING_UI_ENABLED=
+BILLING_LIVE_CHARGES=false
+BILLING_ALLOWLIST=
+STRIPE_SECRET_KEY=
+STRIPE_PRICE_ID=
+STRIPE_WEBHOOK_SECRET=
 ```
 
 `VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly. For iOS/Capacitor weather, set an absolute HTTPS `VITE_WEATHER_PROXY_URL`. Do not set `VITE_VISUALCROSSING_KEY` for App Store or native builds; that key is for local dev only. The web app uses the server-side `/api/weather-proxy`.
 
 `VITE_ERROR_REPORTING_DSN` is optional and disabled when empty. When set, it must be an HTTPS collector URL with no credentials, query, or fragment. The browser sends bounded, token-redacted error details and the pathname only; it omits cookies and URL query strings. Because every `VITE_*` value is public, the collector must accept CORS JSON posts without embedded secrets and enforce its own rate limits and retention policy.
+
+Billing is web-only and hidden unless `VITE_BILLING_UI_ENABLED` is exactly `true`. The rollout allowlist is the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs) checked by `GET /api/billing-eligibility`. Do not set `VITE_BILLING_ALLOWLIST`; that client variable is unused and must not appear in the bundle. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere. Empty or unset fails closed at runtime (everyone sees "Billing coming soon"). Stripe keys stay `sk_test_` until live charges are approved.
 
 ## Deployment
 

@@ -7,10 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  isBillingAllowlisted,
+  fetchBillingEligibility,
+  getCachedBillingEligibility,
   isBillingUiAvailable,
   requestBillingSession,
 } from '@/lib/billing';
+import { freshAccessToken } from '@/lib/freshAccessToken';
 import { native } from '@/lib/native';
 import { supabase } from '@/lib/supabase';
 import { useFarm } from '@/store/farmStore';
@@ -64,10 +66,11 @@ export default function BillingManager() {
   const { session, farm_id } = useFarm();
   const [subscription, setSubscription] = useState<FarmSubscription | null>(null);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
+  const [eligibility, setEligibility] = useState<{ userId: string; allowlisted: boolean } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
   const userId = session?.user?.id ?? null;
-  const userEmail = session?.user?.email ?? null;
+  const allowlisted = userId != null && eligibility?.userId === userId ? eligibility.allowlisted : null;
 
   useEffect(() => {
     setSubscriptionLoaded(false);
@@ -97,6 +100,45 @@ export default function BillingManager() {
       cancelled = true;
     };
   }, [farm_id, userId]);
+
+  useEffect(() => {
+    if (!billingUiEnabled || !userId) {
+      setEligibility(null);
+      return;
+    }
+
+    const cached = getCachedBillingEligibility(userId);
+    if (cached !== undefined) {
+      setEligibility({ userId, allowlisted: cached });
+      return;
+    }
+
+    setEligibility(null);
+    const controller = new AbortController();
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await freshAccessToken({
+          message: 'Please sign in again to manage billing.',
+        });
+        if (cancelled || controller.signal.aborted) return;
+        const value = await fetchBillingEligibility({
+          userId,
+          accessToken: token,
+          signal: controller.signal,
+        });
+        if (cancelled || controller.signal.aborted) return;
+        setEligibility({ userId, allowlisted: value });
+      } catch {
+        if (cancelled || controller.signal.aborted) return;
+        setEligibility({ userId, allowlisted: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [billingUiEnabled, userId]);
 
   // One-shot notices when Stripe redirects back to Settings.
   useEffect(() => {
@@ -144,15 +186,12 @@ export default function BillingManager() {
 
   if (!billingUiEnabled || !session || !farm_id) return null;
 
-  const allowlisted = isBillingAllowlisted(
-    { email: userEmail, userId },
-    import.meta.env.VITE_BILLING_ALLOWLIST as string | undefined,
-  );
+  const eligibilityKnown = allowlisted !== null;
   const hasActiveRow = subscription != null && subscription.deleted_at == null;
   const isOwner = hasActiveRow && subscription.owner_user_id === userId;
   // No row yet: the first allowlisted member to check out becomes the owner.
   const canManage = !hasActiveRow || isOwner;
-  const badge = getStatusBadge(subscription, { allowlisted });
+  const badge = getStatusBadge(subscription, { allowlisted: allowlisted === true });
   // past_due/unpaid subscriptions are still live in Stripe, so those owners fix
   // payment in the portal; a second Checkout would create a parallel subscription.
   const needsCheckout =
@@ -171,13 +210,13 @@ export default function BillingManager() {
             <CreditCard size={18} className="text-primary" />
             Billing
           </span>
-          {(!allowlisted || subscriptionLoaded) && <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
+          {eligibilityKnown && (!allowlisted || subscriptionLoaded) && <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
             {badge.label}
           </Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {!allowlisted ? (
+        {!eligibilityKnown ? null : !allowlisted ? (
           <p className="text-sm text-muted-foreground">
             Billing is coming soon. AcreLedger is free for your farm while billing rolls out.
           </p>
