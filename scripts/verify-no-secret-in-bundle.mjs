@@ -3,6 +3,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  BILLING_EMAIL_SOURCE_FILES,
+  collectHardcodedEmailReport,
+  formatEmailScanFailure,
+  isMinifiedDistFile,
+  resolveBillingAllowlistGuard,
+} from './billingEmailScan.mjs';
+
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = resolve(projectRoot, 'dist');
 const srcRoot = resolve(projectRoot, 'src');
@@ -119,6 +127,35 @@ function scanDistForAllowlistEntries() {
   console.log('normal build: no BILLING_ALLOWLIST entries in dist.');
 }
 
+function scanHardcodedBillingEmails() {
+  /** @type {Array<{ label: string, text: string, minified?: boolean }>} */
+  const entries = [];
+  for (const rel of BILLING_EMAIL_SOURCE_FILES) {
+    const abs = resolve(projectRoot, rel);
+    if (!existsSync(abs)) {
+      fail(`hardcoded email check: missing billing source ${rel}`);
+    }
+    entries.push({ label: rel, text: readFileSync(abs, 'utf8'), minified: false });
+  }
+
+  if (!existsSync(distRoot)) {
+    fail('hardcoded email check: dist is missing after the web Vite build.');
+  }
+
+  for (const file of walk(distRoot)) {
+    const rel = toRepoPath(file);
+    const text = readFileSync(file, 'utf8');
+    entries.push({ label: rel, text, minified: isMinifiedDistFile(rel, text) });
+  }
+
+  const reports = collectHardcodedEmailReport(entries);
+  if (reports.length > 0) {
+    fail(formatEmailScanFailure(reports));
+  }
+
+  console.log('hardcoded email check: no disallowed addresses in billing sources or web dist.');
+}
+
 function runViteBuild(label, extraEnv) {
   console.log(`${label}: building...`);
   execFileSync(process.execPath, [viteBin, 'build', ...extraEnv.args], {
@@ -144,6 +181,9 @@ const billingSentinelNeedles = [SENTINEL, BILLING_ALLOWLIST_SENTINEL, BILLING_AL
 
 runViteBuild('web', { args: [], env: sentinelEnv });
 scanDistForNeedles('web', billingSentinelNeedles);
+// Always on: not gated by VERCEL_ENV or BILLING_ALLOWLIST. Must run before the
+// capacitor build replaces dist, because the email scan covers the web build.
+scanHardcodedBillingEmails();
 
 runViteBuild('capacitor', {
   args: ['--mode', 'capacitor'],
@@ -163,15 +203,15 @@ console.log('Billing allowlist sentinel is absent from web and capacitor bundles
 
 // Always fail if the client env name leaked into dist (sentinel builds above).
 // The real-list email/id scan is strict only in Vercel production: fail when
-// BILLING_ALLOWLIST is unset there; elsewhere warn and skip.
-const billingAllowlistEnv = process.env.BILLING_ALLOWLIST;
-if (billingAllowlistEnv === undefined) {
-  if (process.env.VERCEL_ENV === 'production') {
-    fail('BILLING_ALLOWLIST must be set in Vercel production for the bundle check');
-  }
-  console.warn(
-    'BILLING_ALLOWLIST is unset; skipping the real-list bundle scan.',
-  );
+// BILLING_ALLOWLIST is missing, empty, or whitespace-only there; elsewhere
+// warn and skip when the variable is unset. The hardcoded email scan above
+// already ran and does not depend on this guard.
+const billingAllowlistGuard = resolveBillingAllowlistGuard(process.env);
+if (billingAllowlistGuard.action === 'fail') {
+  fail(billingAllowlistGuard.message);
+}
+if (billingAllowlistGuard.action === 'skip') {
+  console.warn(billingAllowlistGuard.message);
 } else {
   const normalEnv = { ...process.env };
   delete normalEnv[BILLING_ALLOWLIST_ENV_NAME];
