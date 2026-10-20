@@ -10,6 +10,9 @@ vi.mock('@supabase/supabase-js', () => ({
 
 import handler from '../../api/billing-eligibility';
 
+/** Three non-empty base64url segments so the request passes the JWT shape gate. */
+const WELL_FORMED_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEifQ.sig';
+
 type RequestInput = Parameters<typeof handler>[0];
 type ResponseInput = Parameters<typeof handler>[1];
 
@@ -39,7 +42,7 @@ function createRequest(overrides: Partial<RequestInput> = {}): RequestInput {
     method: 'GET',
     headers: {
       origin: 'https://acreledger.example',
-      authorization: 'Bearer valid-token',
+      authorization: `Bearer ${WELL_FORMED_TOKEN}`,
     },
     query: {},
     ...overrides,
@@ -94,6 +97,73 @@ describe('billing eligibility API', () => {
     expect(Object.keys(result.state.body as object)).toEqual(['allowlisted']);
   });
 
+  it.each([
+    ['not three segments', 'not-a-jwt'],
+    ['two segments', 'only.two'],
+    ['four segments', 'a.b.c.d'],
+    ['empty middle segment', 'a..c'],
+    ['empty first segment', '.b.c'],
+    ['empty last segment', 'a.b.'],
+    ['non-base64url character', 'ab+c.def.ghi'],
+    ['base64 padding', 'abc.def.ghi='],
+  ])('returns 401 for a garbage bearer token (%s) before the Supabase config check', async (_label, token) => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
+
+    const result = createResponse();
+    await handler(
+      createRequest({
+        headers: {
+          origin: 'https://acreledger.example',
+          authorization: `Bearer ${token}`,
+        },
+      }),
+      result.response,
+    );
+
+    expect(result.state).toEqual({
+      status: 401,
+      body: { error: 'Missing or invalid authorization header' },
+    });
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 for an oversized bearer token before the Supabase config check', async () => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
+
+    const result = createResponse();
+    await handler(
+      createRequest({
+        headers: {
+          origin: 'https://acreledger.example',
+          authorization: `Bearer ${'a'.repeat(4000)}.${'b'.repeat(4000)}.${'c'.repeat(4000)}`,
+        },
+      }),
+      result.response,
+    );
+
+    expect(result.state).toEqual({
+      status: 401,
+      body: { error: 'Missing or invalid authorization header' },
+    });
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 when Supabase config is missing for a well-formed bearer token', async () => {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
+
+    const result = createResponse();
+    await handler(createRequest(), result.response);
+
+    expect(result.state).toEqual({
+      status: 500,
+      body: { error: 'Server configuration error' },
+    });
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
   it('returns 401 when the bearer token is missing', async () => {
     const result = createResponse();
     await handler(
@@ -120,7 +190,7 @@ describe('billing eligibility API', () => {
     const result = createResponse();
     await handler(createRequest({ headers: {
       origin: 'https://acreledger.example',
-      authorization: 'Bearer stale-token',
+      authorization: `Bearer ${WELL_FORMED_TOKEN}`,
     } }), result.response);
 
     expect(result.state).toMatchObject({

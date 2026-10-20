@@ -46,6 +46,20 @@ function cleanEnvValue(value: string | undefined): string {
   return trimmed;
 }
 
+/**
+ * Compact JWT shape: exactly three non-empty base64url segments.
+ * Checked before Supabase config so a missing or garbage bearer value
+ * cannot turn into a configuration 500. Real access tokens stay far
+ * below the length cap.
+ */
+const MAX_BEARER_TOKEN_LENGTH = 8192;
+const JWT_COMPACT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+function isJwtShapedBearerToken(token: string): boolean {
+  if (token.length === 0 || token.length > MAX_BEARER_TOKEN_LENGTH) return false;
+  return JWT_COMPACT_SHAPE.test(token);
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   // ---------- CORS ----------
   const origin = getHeader(req.headers, 'origin');
@@ -79,7 +93,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
   const token = authHeader.slice(7).trim();
-  if (!token) {
+  if (!isJwtShapedBearerToken(token)) {
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
 

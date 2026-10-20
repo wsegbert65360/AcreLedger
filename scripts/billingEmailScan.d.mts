@@ -16,6 +16,23 @@ export function collectHardcodedEmailReport(
 
 export function formatEmailScanFailure(reportLines: string[]): string;
 
+/** Replace address-shaped substrings so a path or file name cannot print one. */
+export function maskAddressShapedText(value: string): string;
+
+export function formatSentinelBundleFailure(label: string, filePaths: readonly string[]): string;
+
+export function formatClientAllowlistReferenceFailure(
+  envName: string,
+  filePaths: readonly string[],
+): string;
+
+export function formatAllowlistEntryBundleFailure(
+  matchCount: number,
+  filePaths: readonly string[],
+): string;
+
+export function formatMissingBillingSourceFailure(repoPath: string): string;
+
 export type BillingAllowlistGuard =
   | { action: 'fail'; message: string }
   | { action: 'skip'; message: string }

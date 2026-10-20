@@ -7,7 +7,11 @@ import { describe, expect, it } from 'vitest';
 import {
   BILLING_EMAIL_SOURCE_FILES,
   collectHardcodedEmailReport,
+  formatAllowlistEntryBundleFailure,
+  formatClientAllowlistReferenceFailure,
   formatEmailScanFailure,
+  formatMissingBillingSourceFailure,
+  formatSentinelBundleFailure,
   isMinifiedDistFile,
   resolveBillingAllowlistGuard,
   scanTextForDisallowedEmails,
@@ -185,6 +189,57 @@ describe('hardcoded billing email scan', () => {
     for (const rel of BILLING_EMAIL_SOURCE_FILES) {
       const text = readFileSync(resolve(root, rel), 'utf8');
       expect(scanTextForDisallowedEmails(rel, text)).toEqual([]);
+    }
+  });
+});
+
+describe('bundle file-path failure messages', () => {
+  const plantedDir = `dist/${PLANTED}/index.js`;
+  const plantedFile = `public/${PLANTED}.map`;
+  // Kept split so src/ does not contain the removed client env name as one literal.
+  const allowlistEnvName = ['VITE', 'BILLING', 'ALLOWLIST'].join('_');
+
+  it('masks an address-shaped file path in every bundle scan failure', () => {
+    const messages = [
+      formatSentinelBundleFailure('web', [plantedDir]),
+      formatSentinelBundleFailure('capacitor', [plantedDir, 'dist/assets/index.js']),
+      formatSentinelBundleFailure('normal', [plantedFile]),
+      formatClientAllowlistReferenceFailure(allowlistEnvName, [`src/${PLANTED}/Billing.tsx`]),
+      formatAllowlistEntryBundleFailure(2, [plantedFile, 'dist/assets/index.js']),
+      formatMissingBillingSourceFailure(`server/${PLANTED}.ts`),
+    ];
+
+    expect(messages[0]).toBe(
+      'web: forbidden billing/weather sentinel found in the bundle:\n- [redacted]/index.js',
+    );
+    expect(messages[1]).toBe(
+      [
+        'capacitor: forbidden billing/weather sentinel found in the bundle:',
+        '- [redacted]/index.js',
+        '- dist/assets/index.js',
+      ].join('\n'),
+    );
+    expect(messages[2]).toBe(
+      'normal: forbidden billing/weather sentinel found in the bundle:\n- [redacted]',
+    );
+    expect(messages[3]).toBe(
+      `src/ still references ${allowlistEnvName}:\n- [redacted]/Billing.tsx`,
+    );
+    expect(messages[4]).toBe(
+      [
+        'BILLING_ALLOWLIST entries found in the bundle (2 matching entries):',
+        '- [redacted]',
+        '- dist/assets/index.js',
+      ].join('\n'),
+    );
+    expect(messages[5]).toBe('hardcoded email check: missing billing source [redacted]');
+
+    for (const message of messages) {
+      expect(message).toContain('[redacted]');
+      expect(message).not.toContain(PLANTED);
+      expect(message).not.toContain('planted-billing-scan');
+      expect(message).not.toContain('leak-check');
+      expect(message).not.toMatch(/@/);
     }
   });
 });

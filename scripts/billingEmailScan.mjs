@@ -74,8 +74,12 @@ export function isAllowedBillingEmail(address) {
   return ALLOWED_EMAIL_DOMAINS.has(domainOf(normalized));
 }
 
-/** Replace address-shaped substrings so a path or file name cannot print one. */
-function maskAddressShapedText(value) {
+/**
+ * Replace address-shaped substrings so a path or file name cannot print one.
+ * @param {string} value
+ * @returns {string}
+ */
+export function maskAddressShapedText(value) {
   return value.replace(createEmailRe(), REDACTED_ADDRESS);
 }
 
@@ -176,6 +180,57 @@ export function formatEmailScanFailure(reportLines) {
     'hardcoded email check failed. Disallowed email-looking string(s) found:',
     ...reportLines.map((line) => `- ${maskAddressShapedText(line)}`),
   ].join('\n');
+}
+
+/**
+ * Header plus a `- path` list. Every path goes through `maskAddressShapedText`.
+ * @param {string} header
+ * @param {string[]} filePaths
+ */
+function formatMaskedPathFailure(header, filePaths) {
+  return [header, ...filePaths.map((filePath) => `- ${maskAddressShapedText(filePath)}`)].join('\n');
+}
+
+/**
+ * Sentinel hit in dist. `filePaths` are repo paths; address-shaped text is masked.
+ * @param {string} label
+ * @param {string[]} filePaths
+ */
+export function formatSentinelBundleFailure(label, filePaths) {
+  return formatMaskedPathFailure(
+    `${label}: forbidden billing/weather sentinel found in the bundle:`,
+    filePaths,
+  );
+}
+
+/**
+ * Client source still mentions the removed allowlist env name.
+ * @param {string} envName
+ * @param {string[]} filePaths
+ */
+export function formatClientAllowlistReferenceFailure(envName, filePaths) {
+  return formatMaskedPathFailure(`src/ still references ${envName}:`, filePaths);
+}
+
+/**
+ * Real allowlist entries were found in the built bundle. Paths are masked.
+ * The entries themselves are not included.
+ * @param {number} matchCount
+ * @param {string[]} filePaths
+ */
+export function formatAllowlistEntryBundleFailure(matchCount, filePaths) {
+  return formatMaskedPathFailure(
+    `BILLING_ALLOWLIST entries found in the bundle (${matchCount} matching entries):`,
+    filePaths,
+  );
+}
+
+/**
+ * A billing source file from the scan list is missing. The path is masked.
+ * @param {string} repoPath
+ */
+export function formatMissingBillingSourceFailure(repoPath) {
+  return `hardcoded email check: missing billing source ${maskAddressShapedText(repoPath)}`;
 }
 
 /**

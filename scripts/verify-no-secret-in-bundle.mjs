@@ -6,7 +6,11 @@ import { fileURLToPath } from 'node:url';
 import {
   BILLING_EMAIL_SOURCE_FILES,
   collectHardcodedEmailReport,
+  formatAllowlistEntryBundleFailure,
+  formatClientAllowlistReferenceFailure,
   formatEmailScanFailure,
+  formatMissingBillingSourceFailure,
+  formatSentinelBundleFailure,
   isMinifiedDistFile,
   resolveBillingAllowlistGuard,
 } from './billingEmailScan.mjs';
@@ -54,9 +58,7 @@ function scanDistForNeedles(label, needles) {
   }
 
   if (hits.length > 0) {
-    console.error(`${label}: forbidden billing/weather sentinel found in the bundle:`);
-    for (const hit of hits) console.error(`- ${hit}`);
-    process.exit(1);
+    fail(formatSentinelBundleFailure(label, hits));
   }
 
   console.log(`${label}: no sentinel in dist.`);
@@ -75,9 +77,7 @@ function scanSrcForBillingAllowlistName() {
   }
 
   if (hits.length > 0) {
-    console.error(`src/ still references ${BILLING_ALLOWLIST_ENV_NAME}:`);
-    for (const hit of hits) console.error(`- ${hit}`);
-    process.exit(1);
+    fail(formatClientAllowlistReferenceFailure(BILLING_ALLOWLIST_ENV_NAME, hits));
   }
 
   console.log(`src/: no ${BILLING_ALLOWLIST_ENV_NAME} references.`);
@@ -117,11 +117,7 @@ function scanDistForAllowlistEntries() {
   }
 
   if (matchCount > 0) {
-    console.error(
-      `BILLING_ALLOWLIST entries found in the bundle (${matchCount} matching entries):`,
-    );
-    for (const file of matchingFiles) console.error(`- ${file}`);
-    process.exit(1);
+    fail(formatAllowlistEntryBundleFailure(matchCount, matchingFiles));
   }
 
   console.log('normal build: no BILLING_ALLOWLIST entries in dist.');
@@ -133,7 +129,7 @@ function scanHardcodedBillingEmails() {
   for (const rel of BILLING_EMAIL_SOURCE_FILES) {
     const abs = resolve(projectRoot, rel);
     if (!existsSync(abs)) {
-      fail(`hardcoded email check: missing billing source ${rel}`);
+      fail(formatMissingBillingSourceFailure(rel));
     }
     entries.push({ label: rel, text: readFileSync(abs, 'utf8'), minified: false });
   }
