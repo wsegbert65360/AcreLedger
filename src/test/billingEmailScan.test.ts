@@ -44,12 +44,52 @@ describe('hardcoded billing email scan', () => {
       'Farmer@Example.COM',
       'zzsentinel-allowlist@example.invalid',
       'ZZ@Example.Invalid',
-      "iconRetinaUrl: 'my-icon@2x.png'",
+      'filename: "AppIcon-512@2x.png"',
+      '+farmer@example.com',
+      "first.last+tag@example.invalid",
     ].join('\n');
 
     expect(scanTextForDisallowedEmails('src/components/settings/BillingManager.tsx', text)).toEqual(
       [],
     );
+  });
+
+  it('matches local parts that start with + or another RFC 5322 atext character', () => {
+    const leadChars = ['!', '#', '$', '%', '&', "'", '*', '+', '/', '=', '?', '^', '_', '`', '{', '|', '}', '~', '-'];
+    const samples = [
+      ...leadChars.map((char) => `${char}acreledgerapp@gmail.com`),
+      'a.acreledgerapp@gmail.com',
+      'first.last@leak-check.test',
+      '+alias@leak-check.test',
+      "user!#$%&'*+/=?^_`{|}~-tag@leak-check.test",
+    ];
+
+    for (const sample of samples) {
+      const output = failureText('src/lib/billing.ts', sample);
+      expect(output).toContain('src/lib/billing.ts:1');
+      expect(output).not.toContain(sample);
+      expect(output).not.toContain('acreledgerapp');
+      expect(output).not.toContain('leak-check');
+      expect(output).not.toMatch(/@/);
+    }
+  });
+
+  it('rejects a real address with a .png or .map suffix and allows an exact asset name', () => {
+    expect(
+      scanTextForDisallowedEmails(
+        'ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json',
+        '{ "filename" : "AppIcon-512@2x.png" }',
+      ),
+    ).toEqual([]);
+
+    const samples = ['a@b.com.png', 'a@b.com.map', 'farmer@example.com.png', 'farmer@example.com.map'];
+    for (const sample of samples) {
+      const output = failureText('api/billing-eligibility.ts', sample);
+      expect(output).toContain('api/billing-eligibility.ts:1');
+      expect(output).not.toContain(sample);
+      expect(output).not.toContain('example.com');
+      expect(output).not.toMatch(/@/);
+    }
   });
 
   it('rejects lookalike addresses and domains other than the example domains', () => {
@@ -70,6 +110,34 @@ describe('hardcoded billing email scan', () => {
       expect(output).not.toContain(sample.split('@')[0]);
       expect(output).not.toMatch(/@/);
     }
+  });
+
+  it('masks address-shaped text in printed file names and paths', () => {
+    const minifiedReport = scanTextForDisallowedEmails(`dist/${PLANTED}/index.js`, PLANTED, {
+      minified: true,
+    });
+    const minifiedOutput = formatEmailScanFailure(minifiedReport);
+    expect(minifiedOutput).toContain('[redacted]');
+    expect(minifiedOutput).toContain('match');
+    expect(minifiedOutput).not.toContain(PLANTED);
+    expect(minifiedOutput).not.toContain('planted-billing-scan');
+    expect(minifiedOutput).not.toContain('leak-check');
+    expect(minifiedOutput).not.toMatch(/@/);
+
+    const lineReport = scanTextForDisallowedEmails(`notes/${PLANTED}/billing.ts`, `x\n${PLANTED}\n`);
+    const lineOutput = formatEmailScanFailure(lineReport);
+    expect(lineOutput).toContain('[redacted]');
+    expect(lineOutput).toContain(':2');
+    expect(lineOutput).not.toContain(PLANTED);
+    expect(lineOutput).not.toMatch(/@/);
+
+    const formatted = formatEmailScanFailure([`public/${PLANTED}.map:9`]);
+    expect(formatted).toContain('[redacted]');
+    expect(formatted).toContain(':9');
+    expect(formatted).not.toContain(PLANTED);
+    expect(formatted).not.toContain('planted-billing-scan');
+    expect(formatted).not.toContain('leak-check');
+    expect(formatted).not.toMatch(/@/);
   });
 
   it('reports minified dist files as a match count and omits the address', () => {

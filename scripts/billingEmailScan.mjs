@@ -29,34 +29,30 @@ const EXACT_EMAIL_ALLOWLIST = new Set([
  */
 const ALLOWED_EMAIL_DOMAINS = new Set(['example.com', 'example.invalid']);
 
-/** Filename extensions that make `name@file.ext` a path, not an email. */
-const ASSET_TLDS = new Set([
-  'png',
-  'jpg',
-  'jpeg',
-  'gif',
-  'svg',
-  'webp',
-  'ico',
-  'avif',
-  'woff',
-  'woff2',
-  'ttf',
-  'otf',
-  'eot',
-  'css',
-  'js',
-  'mjs',
-  'cjs',
-  'map',
-  'json',
-  'html',
-  'htm',
-  'wasm',
+/**
+ * Full filenames that are assets, not mailboxes. The match must be the entire
+ * scanned token. A file extension is not enough: `a@b.com.png` is still an address.
+ */
+const EXACT_ASSET_ALLOWLIST = new Set([
+  // iOS universal 1024pt app icon in AppIcon.appiconset; @2x is Apple's scale marker.
+  'AppIcon-512@2x.png',
 ]);
 
-const EMAIL_SOURCE =
-  '(?<![A-Za-z0-9._%+\\-])[A-Za-z0-9](?:[A-Za-z0-9._%+\\-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,24}(?![A-Za-z0-9-])';
+/** RFC 5322 atext. A local part may start with any of these, not only a letter or digit. */
+const ATEXT_CLASS = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]";
+/** atext plus `.`, so a match cannot begin in the middle of a local part. */
+const LOCAL_BOUNDARY_CLASS = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]";
+
+const EMAIL_SOURCE = [
+  `(?<!${LOCAL_BOUNDARY_CLASS})`,
+  `${ATEXT_CLASS}(?:${ATEXT_CLASS}|\\.${ATEXT_CLASS}){0,63}`,
+  '@',
+  '(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+',
+  '[A-Za-z]{2,24}',
+  '(?![A-Za-z0-9-])',
+].join('');
+
+const REDACTED_ADDRESS = '[redacted]';
 
 const MINIFIED_LINE_LENGTH = 500;
 
@@ -68,15 +64,19 @@ function domainOf(address) {
   return address.slice(address.lastIndexOf('@') + 1).toLowerCase();
 }
 
-function isAssetFilename(address) {
-  const tld = address.slice(address.lastIndexOf('.') + 1).toLowerCase();
-  return ASSET_TLDS.has(tld);
+function isAllowedAssetName(address) {
+  return EXACT_ASSET_ALLOWLIST.has(address);
 }
 
 export function isAllowedBillingEmail(address) {
   const normalized = address.toLowerCase();
   if (EXACT_EMAIL_ALLOWLIST.has(normalized)) return true;
   return ALLOWED_EMAIL_DOMAINS.has(domainOf(normalized));
+}
+
+/** Replace address-shaped substrings so a path or file name cannot print one. */
+function maskAddressShapedText(value) {
+  return value.replace(createEmailRe(), REDACTED_ADDRESS);
 }
 
 /**
@@ -126,15 +126,16 @@ export function scanTextForDisallowedEmails(fileLabel, text, options = {}) {
       }
       cursor = start;
     }
-    if (isAssetFilename(address) || isAllowedBillingEmail(address)) continue;
+    if (isAllowedAssetName(address) || isAllowedBillingEmail(address)) continue;
     matchCount += 1;
     if (!minified) lineNumbers.push(line);
   }
 
   if (matchCount === 0) return [];
+  const safeLabel = maskAddressShapedText(fileLabel);
   if (minified) {
     const noun = matchCount === 1 ? 'match' : 'matches';
-    return [`${fileLabel} (${matchCount} ${noun})`];
+    return [`${safeLabel} (${matchCount} ${noun})`];
   }
 
   /** @type {string[]} */
@@ -142,7 +143,7 @@ export function scanTextForDisallowedEmails(fileLabel, text, options = {}) {
   let previous = 0;
   for (const lineNumber of lineNumbers) {
     if (lineNumber === previous) continue;
-    lines.push(`${fileLabel}:${lineNumber}`);
+    lines.push(`${safeLabel}:${lineNumber}`);
     previous = lineNumber;
   }
   return lines;
@@ -173,7 +174,7 @@ export function collectHardcodedEmailReport(entries) {
 export function formatEmailScanFailure(reportLines) {
   return [
     'hardcoded email check failed. Disallowed email-looking string(s) found:',
-    ...reportLines.map((line) => `- ${line}`),
+    ...reportLines.map((line) => `- ${maskAddressShapedText(line)}`),
   ].join('\n');
 }
 
