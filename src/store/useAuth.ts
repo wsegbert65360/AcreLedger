@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { endAuthSession, type SignOutScope } from '@/lib/authSignOut';
 import { readFarmRole, type FarmRole } from '@/lib/backupRestorePolicy';
+import { clearBillingEligibilityCache } from '@/lib/billing';
 import {
   isValidActiveSeason,
   isValidViewingSeason,
@@ -29,6 +30,7 @@ export function useAuth() {
   const acceptSession = useCallback((nextSession: Session | null, signedOut = false) => {
     const userId = signedOut ? null : nextSession?.user?.id ?? null;
     if (signedOut || identityRef.current.userId !== userId) {
+      clearBillingEligibilityCache();
       identityRef.current = { userId, generation: identityRef.current.generation + 1 };
       refreshAttemptedRef.current = null;
       const year = new Date().getFullYear();
@@ -151,6 +153,10 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       authEventCount += 1;
+      const nextUserId = event === 'SIGNED_OUT' ? null : newSession?.user?.id ?? null;
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || identityRef.current.userId !== nextUserId) {
+        clearBillingEligibilityCache();
+      }
       acceptSession(newSession, event === 'SIGNED_OUT');
     });
 

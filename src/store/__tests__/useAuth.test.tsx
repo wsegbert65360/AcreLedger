@@ -2,6 +2,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as billing from '@/lib/billing';
 import { createSupabaseMock, type SupabaseResult } from '@/test/supabaseMock';
 
 const auth = {
@@ -47,6 +48,31 @@ describe('useAuth session and active-season synchronization', () => {
     auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
     auth.refreshSession.mockResolvedValue({ data: { session }, error: null });
     auth.signOut.mockResolvedValue({ error: null });
+  });
+
+  it('clears billing eligibility cache on sign-out, sign-in, and user switch', async () => {
+    const spy = vi.spyOn(billing, 'clearBillingEligibilityCache');
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    spy.mockClear();
+
+    act(() => auth.onAuthStateChange.mock.calls[0][0]('SIGNED_OUT', null));
+    expect(spy).toHaveBeenCalled();
+    spy.mockClear();
+
+    act(() => auth.onAuthStateChange.mock.calls[0][0]('SIGNED_IN', session));
+    expect(spy).toHaveBeenCalled();
+    spy.mockClear();
+
+    act(() => auth.onAuthStateChange.mock.calls[0][0]('SIGNED_IN', {
+      user: { id: 'user-2', app_metadata: {}, user_metadata: {} },
+    }));
+    expect(spy).toHaveBeenCalled();
+    spy.mockClear();
+
+    await act(async () => { await result.current.signOut(); });
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it('delegates sign-out to Supabase auth', async () => {

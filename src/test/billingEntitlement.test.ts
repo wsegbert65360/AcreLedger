@@ -1,12 +1,13 @@
 import { Capacitor } from '@capacitor/core';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  clearBillingEligibilityCache,
+  fetchBillingEligibility,
+  getCachedBillingEligibility,
   getFarmBillingAccess,
-  isBillingAllowlisted,
   isBillingUiAvailable,
   isBillingUiEnabled,
-  parseBillingAllowlist,
   requestBillingSession,
 } from '@/lib/billing';
 import type { FarmSubscription } from '@/types/farm';
@@ -194,27 +195,141 @@ describe('isBillingUiAvailable', () => {
   });
 });
 
-describe('billing allowlist', () => {
-  it('parses a comma-separated allowlist case-insensitively', () => {
-    expect(parseBillingAllowlist(' Owner@Example.com , user-2 ,,')).toEqual([
-      'owner@example.com',
-      'user-2',
-    ]);
-    expect(parseBillingAllowlist(undefined)).toEqual([]);
-    expect(parseBillingAllowlist('')).toEqual([]);
+describe('fetchBillingEligibility', () => {
+  afterEach(() => {
+    clearBillingEligibilityCache();
+    vi.unstubAllGlobals();
   });
 
-  it('matches either the email or the user id', () => {
-    const raw = 'owner@example.com,user-2';
-    expect(isBillingAllowlisted({ email: 'OWNER@example.com', userId: 'other' }, raw)).toBe(true);
-    expect(isBillingAllowlisted({ email: null, userId: 'USER-2' }, raw)).toBe(true);
-    expect(isBillingAllowlisted({ email: 'nope@example.com', userId: 'user-3' }, raw)).toBe(false);
+  it('returns true when the server reports allowlisted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ allowlisted: true }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
+    ).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/billing-eligibility',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ Authorization: 'Bearer token-1' }),
+      }),
+    );
   });
 
-  it('denies everyone when the allowlist is empty or identity is missing', () => {
-    expect(isBillingAllowlisted({ email: 'owner@example.com', userId: 'user-1' }, '')).toBe(false);
-    expect(isBillingAllowlisted({ email: 'owner@example.com' }, undefined)).toBe(false);
-    expect(isBillingAllowlisted(null, 'owner@example.com')).toBe(false);
+  it('returns false when the server reports not allowlisted', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ allowlisted: false }), { status: 200 }),
+      ),
+    );
+
+    await expect(
+      fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
+    ).resolves.toBe(false);
+  });
+
+  it('fails closed on a non-2xx response, bad JSON, or a network error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ allowlisted: true }), { status: 500 }),
+      ),
+    );
+    await expect(
+      fetchBillingEligibility({ userId: 'user-a', accessToken: 't' }),
+    ).resolves.toBe(false);
+
+    clearBillingEligibilityCache();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not-json', { status: 200 })));
+    await expect(
+      fetchBillingEligibility({ userId: 'user-b', accessToken: 't' }),
+    ).resolves.toBe(false);
+
+    clearBillingEligibilityCache();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    await expect(
+      fetchBillingEligibility({ userId: 'user-c', accessToken: 't' }),
+    ).resolves.toBe(false);
+  });
+
+  it('does not reuse a cached answer for a different user id', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ allowlisted: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ allowlisted: false }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
+    ).resolves.toBe(true);
+    expect(getCachedBillingEligibility('user-1')).toBe(true);
+    expect(getCachedBillingEligibility('user-2')).toBeUndefined();
+    await expect(
+      fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
+    ).resolves.toBe(true);
+    await expect(
+      fetchBillingEligibility({ userId: 'user-2', accessToken: 'token-2' }),
+    ).resolves.toBe(false);
+    expect(getCachedBillingEligibility('user-2')).toBe(false);
+    expect(getCachedBillingEligibility('user-1')).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache an aborted in-flight eligibility request', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const abort = () => {
+          const error = new Error('Aborted');
+          error.name = 'AbortError';
+          reject(error);
+        };
+        if (init?.signal?.aborted) {
+          abort();
+          return;
+        }
+        init?.signal?.addEventListener('abort', abort, { once: true });
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = fetchBillingEligibility({
+      userId: 'user-1',
+      accessToken: 'token-1',
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(pending).resolves.toBe(false);
+    expect(getCachedBillingEligibility('user-1')).toBeUndefined();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: true }), { status: 200 })),
+    );
+    await expect(
+      fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
+    ).resolves.toBe(true);
+  });
+
+  it('clearBillingEligibilityCache drops a late in-flight result', async () => {
+    let finish!: (value: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () => new Promise<Response>(resolve => {
+          finish = resolve;
+        }),
+      ),
+    );
+
+    const pending = fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' });
+    clearBillingEligibilityCache();
+    finish(new Response(JSON.stringify({ allowlisted: true }), { status: 200 }));
+    await expect(pending).resolves.toBe(false);
+    expect(getCachedBillingEligibility('user-1')).toBeUndefined();
   });
 });
 

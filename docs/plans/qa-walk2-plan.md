@@ -196,7 +196,7 @@ allowlisted trialing users briefly see "Not subscribed".
 **Tests — new `src/components/settings/__tests__/BillingManager.test.tsx`:**
 - Mock `useFarm` (session plus `farm_id`), `@/lib/supabase` (a chainable `from().select().eq().is().maybeSingle()` that resolves to a controllable row), and `@/lib/billing`.
   - `isBillingUiAvailable` → true.
-  - `isBillingAllowlisted` → controllable; or stub `VITE_BILLING_ALLOWLIST` with `vi.stubEnv`.
+  - `fetchBillingEligibility` → controllable (server allowlist via `GET /api/billing-eligibility`).
 - Cases:
   - Not allowlisted → the badge reads "Free" next to the "free for your farm" copy, and "Not subscribed" is absent.
   - Allowlisted, trialing row → "Free trial", plus the trial copy.

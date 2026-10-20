@@ -126,31 +126,117 @@ export function isBillingUiAvailable(
 }
 
 /**
- * Internal rollout allowlist (comma-separated emails or user IDs) mirrored
- * from the server's BILLING_ALLOWLIST via VITE_BILLING_ALLOWLIST. Empty means
- * nobody is allowlisted and every eligible user sees "Billing coming soon".
+ * In-memory rollout eligibility for the current browser session. Stored as
+ * `{ userId, allowlisted }` and only reused when the cached user id matches
+ * the signed-in user. Failures are stored as false (fail closed).
  */
-export function parseBillingAllowlist(raw: string | undefined): string[] {
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map(entry => entry.trim().toLowerCase())
-    .filter(Boolean);
+type EligibilityCacheEntry = { userId: string; allowlisted: boolean };
+
+let eligibilityCache: EligibilityCacheEntry | null = null;
+let eligibilityInflight: { userId: string; promise: Promise<boolean> } | null = null;
+let eligibilityAbort: AbortController | null = null;
+
+/**
+ * Drop cached eligibility and abort any in-flight check. Call from the
+ * central auth handler on SIGNED_IN, SIGNED_OUT, and user-id change.
+ */
+export function clearBillingEligibilityCache(): void {
+  eligibilityAbort?.abort();
+  eligibilityAbort = null;
+  eligibilityCache = null;
+  eligibilityInflight = null;
 }
 
-export function isBillingAllowlisted(
-  identity: { email?: string | null; userId?: string | null } | null | undefined,
-  raw: string | undefined,
-): boolean {
-  if (!identity) return false;
-  const allowlist = parseBillingAllowlist(raw);
-  if (allowlist.length === 0) return false;
-  const email = identity.email?.trim().toLowerCase();
-  const userId = identity.userId?.trim().toLowerCase();
-  return (
-    (email !== undefined && email !== null && email !== '' && allowlist.includes(email)) ||
-    (userId !== undefined && userId !== null && userId !== '' && allowlist.includes(userId))
-  );
+export function getCachedBillingEligibility(userId: string): boolean | undefined {
+  if (!userId || eligibilityCache?.userId !== userId) return undefined;
+  return eligibilityCache.allowlisted;
+}
+
+function parseEligibilityPayload(payload: unknown): boolean | null {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+  if (!('allowlisted' in payload)) return null;
+  const allowlisted = (payload as { allowlisted: unknown }).allowlisted;
+  return typeof allowlisted === 'boolean' ? allowlisted : null;
+}
+
+/**
+ * GET /api/billing-eligibility with the caller's bearer token. The server
+ * decides from the verified user only; this client never ships the allowlist.
+ * Network, non-2xx, and malformed responses fail closed (`false`).
+ */
+export async function fetchBillingEligibility(options: {
+  userId: string;
+  accessToken: string;
+  apiBase?: string;
+  signal?: AbortSignal;
+}): Promise<boolean> {
+  const cached = getCachedBillingEligibility(options.userId);
+  if (cached !== undefined) return cached;
+
+  if (eligibilityInflight?.userId === options.userId) return eligibilityInflight.promise;
+
+  if (eligibilityInflight) {
+    eligibilityAbort?.abort();
+    eligibilityInflight = null;
+  }
+
+  const controller = new AbortController();
+  eligibilityAbort = controller;
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  const request = loadBillingEligibility({
+    accessToken: options.accessToken,
+    apiBase: options.apiBase,
+    signal: controller.signal,
+  }).then(allowlisted => {
+    const aborted = controller.signal.aborted;
+    if (eligibilityInflight?.promise === request) {
+      eligibilityInflight = null;
+      if (eligibilityAbort === controller) eligibilityAbort = null;
+      if (!aborted) {
+        eligibilityCache = { userId: options.userId, allowlisted };
+      }
+    }
+    return aborted ? false : allowlisted;
+  });
+  eligibilityInflight = { userId: options.userId, promise: request };
+  return request;
+}
+
+async function loadBillingEligibility(options: {
+  accessToken: string;
+  apiBase?: string;
+  signal?: AbortSignal;
+}): Promise<boolean> {
+  const token = options.accessToken.trim();
+  if (!token) return false;
+
+  try {
+    const base = (options.apiBase ?? '/api').replace(/\/+$/, '');
+    const response = await fetch(`${base}/billing-eligibility`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      signal: options.signal,
+    });
+    if (options.signal?.aborted) return false;
+    if (!response.ok) return false;
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      return false;
+    }
+    return parseEligibilityPayload(payload) ?? false;
+  } catch {
+    return false;
+  }
 }
 
 export type BillingSessionKind = 'checkout' | 'portal';

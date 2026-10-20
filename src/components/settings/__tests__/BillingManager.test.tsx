@@ -5,7 +5,17 @@ import { createSupabaseMock } from '@/test/supabaseMock';
 
 const control = vi.hoisted(() => ({ allowlisted: false }));
 vi.mock('@/store/farmStore', () => ({ useFarm: () => ({ farm_id: 'farm-1', session: { user: { id: 'user-1', email: 'test@example.com' } } }) }));
-vi.mock('@/lib/billing', () => ({ isBillingUiAvailable: () => true, isBillingAllowlisted: () => control.allowlisted, requestBillingSession: vi.fn() }));
+vi.mock('@/lib/billing', () => ({
+  isBillingUiAvailable: () => true,
+  getCachedBillingEligibility: () => undefined,
+  clearBillingEligibilityCache: vi.fn(),
+  fetchBillingEligibility: vi.fn(async () => control.allowlisted),
+  requestBillingSession: vi.fn(),
+}));
+vi.mock('@/lib/freshAccessToken', () => ({
+  freshAccessToken: vi.fn(async () => 'token-1'),
+  SignInAgainError: class SignInAgainError extends Error {},
+}));
 const mock = createSupabaseMock();
 vi.doMock('@/lib/supabase', () => ({ supabase: mock.client }));
 let BillingManager: typeof import('../BillingManager').default;
@@ -13,9 +23,9 @@ beforeAll(async () => { BillingManager = (await import('../BillingManager')).def
 function mount() { render(<MemoryRouter><BillingManager /></MemoryRouter>); }
 describe('BillingManager status', () => {
   beforeEach(() => { mock.reset(); control.allowlisted = false; });
-  it('shows Free beside the free copy for non-allowlisted users', () => {
+  it('shows Free beside the free copy for non-allowlisted users', async () => {
     mount();
-    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(await screen.findByText('Free')).toBeInTheDocument();
     expect(screen.getByText(/free for your farm/)).toBeInTheDocument();
     expect(screen.queryByText('Not subscribed')).toBeNull();
   });

@@ -1,8 +1,9 @@
 /**
  * Shared pure billing helpers for the Stripe test-mode checkout endpoints
  * (api/create-checkout-session.ts, api/create-portal-session.ts,
- * api/stripe-webhook.ts). Kept dependency-free so `npm run typecheck:api`
- * and unit tests can exercise the rules without a Stripe client or network.
+ * api/billing-eligibility.ts, api/stripe-webhook.ts). Kept dependency-free so
+ * `npm run typecheck:api` and unit tests can exercise the rules without a
+ * Stripe client or network.
  *
  * Test mode only: every gate here fails closed. Live charges stay disabled
  * until Will approves legal copy (BILLING_LIVE_CHARGES must stay false).
