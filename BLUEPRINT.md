@@ -795,7 +795,12 @@ Product access enforcement is off by default. A missing or soft-deleted subscrip
 `unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
 passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
 
-The locked product terms are a 122-day trial and a three-day `past_due` grace period.
+Trial PR 1 prepares a 3-month free trial, no card needed, stamped once by the server
+with `now() + interval '3 months'`. Each farm and user gets one claim in service-only
+`trial_claims`; members inherit the farm deadline. Existing farms are not stamped by
+onboarding and await rollout backfill. Enforcement stays OFF. Trial metadata and
+claims are excluded from customer backup/restore. The current Stripe checkout still
+uses its 122-day trial and three-day `past_due` grace period until later PRs.
 `farm_subscriptions` is the authoritative local entitlement mirror; the client never treats query
 parameters or client-reported Stripe state as authoritative. Farm members may select their
 farm's active row, but only service-role server paths write it. The eligibility, checkout, and

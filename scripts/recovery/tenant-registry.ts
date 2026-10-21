@@ -42,6 +42,20 @@ export function userIdColumns(entry: TenantTable): string[] {
 export const TENANT_REGISTRY: TenantTable[] = [
   {
     schema: "public",
+    table: "trial_claims",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    userColumn: "user_id",
+    hasDeletedAt: false,
+    restoreOrder: 30,
+    primaryKeys: ["user_id"],
+    includeInTenantBundle: false,
+    excludeFromApply: true,
+    excludeFromApplyReason: "billing trial claims require operator reconciliation",
+    notes: "Permanent per-user trial ledger. Preserve in full-project backups; never reset through tenant or customer restore.",
+  },
+  {
+    schema: "public",
     table: "farms",
     ownership: "root",
     farmColumn: "id",

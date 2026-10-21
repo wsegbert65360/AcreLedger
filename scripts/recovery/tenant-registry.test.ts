@@ -31,6 +31,7 @@ const KNOWN_FARM_OWNED = [
   "public.maintenance_schedules",
   "public.maintenance_logs",
   "public.farm_subscriptions",
+  "public.trial_claims",
   "public.farm_rainfall_daily",
   "public.field_rainfall_hourly",
   "public.field_rainfall_coverage",
@@ -85,9 +86,11 @@ describe("tenant registry", () => {
   it("keeps farm_subscriptions out of the tenant bundle and lists billing skip notes", () => {
     const keys = tenantBundleTables().map((entry) => `${entry.schema}.${entry.table}`);
     expect(keys).not.toContain("public.farm_subscriptions");
+    expect(keys).not.toContain("public.trial_claims");
     expect(keys).toContain("public.account_deletion_requests");
     const skipped = applySkipNotes();
     expect(skipped.some((item) => item.table === "public.farm_subscriptions" && /billing/i.test(item.reason))).toBe(true);
+    expect(skipped.some((item) => item.table === "public.trial_claims" && /billing/i.test(item.reason))).toBe(true);
     expect(skipped.some((item) => item.table === "public.account_deletion_requests")).toBe(true);
   });
 
