@@ -247,13 +247,19 @@ export default function Reports() {
   );
 
   // Landlord specific logic — driven by field-level landlord assignment
+  const [wholeFarm, setWholeFarm] = useState(false);
+  const summaryExportType = wholeFarm ? 'farm-owner-summary' : 'landlord-statement';
+  const summaryTitle = wholeFarm ? 'Farm Owner Summary' : 'Landlord Summary';
   const [selectedLandlord, setSelectedLandlord] = useState<string>('');
+  const summaryFilePrefix = wholeFarm ? 'Farm_Owner_Summary' : `${selectedLandlord}_Summary`;
   const uniqueLandlords = useMemo(() => getFieldLandlordNames(fields), [fields]);
 
   const landlordSummary = useMemo(() => {
-    if (!selectedLandlord) return null;
+    if (!wholeFarm && !selectedLandlord) return null;
     return generateLandlordSummary({
-      landlordName: selectedLandlord,
+      landlordName: wholeFarm ? 'Farm Owner' : selectedLandlord,
+      scope: wholeFarm ? 'farm' : 'landlord',
+      farmId: farm_id ?? undefined,
       fields,
       cluAssignments,
       plantRecords,
@@ -265,24 +271,25 @@ export default function Reports() {
       hayHarvestRecords: hayRecords,
       seasonYear: viewingSeason,
     });
-  }, [selectedLandlord, fields, cluAssignments, plantRecords, sprayRecords, customSprayRecords, fertilizerRecords, tillageRecords, harvestRecords, hayRecords, viewingSeason]);
+  }, [wholeFarm, farm_id, selectedLandlord, fields, cluAssignments, plantRecords, sprayRecords, customSprayRecords, fertilizerRecords, tillageRecords, harvestRecords, hayRecords, viewingSeason]);
   const landlordReadinessSummary = useMemo(
-    () => selectedLandlord ? buildLandlordReadiness(landlordSummary, harvestRecords) : null,
-    [selectedLandlord, landlordSummary, harvestRecords],
+    () => landlordSummary ? buildLandlordReadiness(landlordSummary, harvestRecords) : null,
+    [landlordSummary, harvestRecords],
   );
 
-  const exportFingerprints = useMemo<Partial<Record<ReportTab, string>>>(() => ({
+  const exportFingerprints = useMemo<Partial<Record<ReportTab | ReportExportType, string>>>(() => ({
     'fsa-plant': buildReportFingerprint(fsaPlantRows),
     'spray-audit': buildReportFingerprint(sprayRecords),
     'fertilizer-summary': buildReportFingerprint(fertilizerRecords),
     'fsa-harvest': buildReportFingerprint(fsaFallRows),
     'hay-summary': buildReportFingerprint(hayRecords),
-    'landlord-statement': buildReportFingerprint(landlordSummary ? {
+    [summaryExportType]: buildReportFingerprint(landlordSummary ? {
+      scope: wholeFarm ? 'farm' : selectedLandlord,
       fields: landlordSummary.fields,
       activity: landlordSummary.activity,
       totals: landlordSummary.totals,
     } : null),
-  }), [fsaPlantRows, sprayRecords, fertilizerRecords, fsaFallRows, hayRecords, landlordSummary]);
+  }), [fsaPlantRows, sprayRecords, fertilizerRecords, fsaFallRows, hayRecords, landlordSummary, wholeFarm, selectedLandlord, summaryExportType]);
 
   const getExportStatus = (reportType: ReportExportType) => {
     void exportHistoryVersion;
@@ -349,10 +356,14 @@ export default function Reports() {
   };
 
   const handleExportLandlordCSV = () => {
+    if (wholeFarm && !farm_id) {
+      toast.error('Select a farm before exporting the Farm Owner Summary.');
+      return;
+    }
     if (!landlordSummary) return;
-    runTrackedExport('landlord-statement', async () => {
+    runTrackedExport(summaryExportType, async () => {
       const csv = generateLandlordSummaryCSV(landlordSummary);
-      const fileName = sanitizeNativeFileName(`${selectedLandlord}_Summary_${viewingSeason}.csv`);
+      const fileName = sanitizeNativeFileName(`${summaryFilePrefix}_${viewingSeason}.csv`);
 
       if (Capacitor.isNativePlatform()) {
         await native.shareFile({
@@ -373,7 +384,7 @@ export default function Reports() {
       link.click();
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 2000); // Wait 2s to ensure browser starts download
-    }, 'landlord summary');
+    }, `${summaryTitle} CSV`);
   };
 
   const handleExportFsaPlantPdf = () => {
@@ -482,12 +493,16 @@ export default function Reports() {
   };
 
   const handleExportLandlordPdf = () => {
+    if (wholeFarm && !farm_id) {
+      toast.error('Select a farm before exporting the Farm Owner Summary.');
+      return;
+    }
     if (!landlordSummary) return;
     const printableFarmName = knownFarmName(farmName);
-    runTrackedExport('landlord-statement', () => {
+    runTrackedExport(summaryExportType, () => {
       exportToPdf({
-        title: 'Landlord Summary',
-        subtitle: `${printableFarmName ? printableFarmName + ' — ' : ''}Prepared for: ${selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
+        title: summaryTitle,
+        subtitle: `${printableFarmName ? printableFarmName + ' — ' : ''}Prepared for: ${wholeFarm ? 'Farm Owner' : selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
         orientation: 'landscape',
         headers: ['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'BALES', 'LANDLORD SHARE'],
         rows: landlordSummary.fields.map(f => [
@@ -499,7 +514,7 @@ export default function Reports() {
           f.totalBales.toLocaleString(),
           f.landlordShareBushels.toLocaleString(),
         ]),
-        fileName: sanitizeNativeFileName(`${selectedLandlord}_Summary_${viewingSeason}.pdf`),
+        fileName: sanitizeNativeFileName(`${summaryFilePrefix}_${viewingSeason}.pdf`),
         summaryText: 'Production / Landlord Share',
         summaryValue: `${landlordSummary.totals.totalBushels.toLocaleString()} BU · ${landlordSummary.totals.totalBales.toLocaleString()} BALES · ${landlordSummary.totals.landlordShareBushels.toLocaleString()} BU SHARE`,
         footerText: landlordSummary.activity.length > 0
@@ -509,7 +524,7 @@ export default function Reports() {
             ]
           : undefined,
       });
-    }, 'landlord PDF');
+    }, `${summaryTitle} PDF`);
   };
 
   return (
@@ -677,6 +692,8 @@ export default function Reports() {
         {/* ── Landlord Summary ──────────────────────────────────────────────── */}
         <TabsContent value="landlord-statement" className="mt-0">
           <LandlordSummaryReport
+            wholeFarm={wholeFarm}
+            onWholeFarmChange={setWholeFarm}
             selectedLandlord={selectedLandlord}
             setSelectedLandlord={setSelectedLandlord}
             uniqueLandlords={uniqueLandlords}
@@ -685,7 +702,7 @@ export default function Reports() {
             onExportCsv={handleExportLandlordCSV}
             onExportPdf={handleExportLandlordPdf}
             readinessSummary={landlordReadinessSummary}
-            exportStatus={getExportStatus('landlord-statement')}
+            exportStatus={getExportStatus(summaryExportType)}
             onIssueAction={handleIssueAction}
           />
         </TabsContent>

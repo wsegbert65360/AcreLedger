@@ -74,6 +74,10 @@ export type LandlordSummary = {
 
 export interface GenerateLandlordSummaryParams {
   landlordName: string;
+  /** Farm-wide mode includes owned land as well as every landlord. */
+  scope?: 'landlord' | 'farm';
+  /** Required for farm-wide mode; missing farm fails closed. */
+  farmId?: string;
   fields: Field[];
   cluAssignments: FieldCluAssignment[];
   plantRecords: PlantRecord[];
@@ -83,7 +87,7 @@ export interface GenerateLandlordSummaryParams {
   tillageRecords: TillageRecord[];
   harvestRecords: HarvestRecord[];
   hayHarvestRecords: HayHarvestRecord[];
-  /** Optional season tag for display/exports; does not filter records (caller pre-scopes). */
+  /** Season tag for display/exports; farm-wide mode also filters records by this season. */
   seasonYear?: number;
 }
 
@@ -285,6 +289,25 @@ function buildActivityRows(
   return rows.sort((a, b) => a.sortKey - b.sortKey);
 }
 
+/** Farm-wide reports enforce tenant, season, and active-record scope before aggregation. */
+function scopeFarmSummary(params: GenerateLandlordSummaryParams): GenerateLandlordSummaryParams {
+  const activeFarmRecord = <T extends { farm_id?: string; deleted_at?: string | null }>(record: T) =>
+    !!params.farmId && record.farm_id === params.farmId && !record.deleted_at;
+  const seasonRecords = <T extends { farm_id?: string; deleted_at?: string | null; seasonYear?: number }>(records: T[]) =>
+    records.filter(record => activeFarmRecord(record) && record.seasonYear === params.seasonYear);
+  return {
+    ...params,
+    fields: params.fields.filter(activeFarmRecord),
+    plantRecords: seasonRecords(params.plantRecords),
+    sprayRecords: seasonRecords(params.sprayRecords),
+    customSprayRecords: seasonRecords(params.customSprayRecords),
+    fertilizerApplications: seasonRecords(params.fertilizerApplications),
+    tillageRecords: seasonRecords(params.tillageRecords),
+    harvestRecords: seasonRecords(params.harvestRecords),
+    hayHarvestRecords: seasonRecords(params.hayHarvestRecords),
+  };
+}
+
 export function generateLandlordSummary(params: GenerateLandlordSummaryParams): LandlordSummary {
   const {
     landlordName,
@@ -298,9 +321,9 @@ export function generateLandlordSummary(params: GenerateLandlordSummaryParams): 
     harvestRecords,
     hayHarvestRecords,
     seasonYear,
-  } = params;
+  } = params.scope === 'farm' ? scopeFarmSummary(params) : params;
 
-  const landlordFields = fields.filter(f => !f.deleted_at && isLandlordField(f, landlordName));
+  const landlordFields = fields.filter(f => !f.deleted_at && (params.scope === 'farm' || isLandlordField(f, landlordName)));
   const landlordFieldIds = new Set(landlordFields.map(f => f.id));
   const fieldNameById = new Map(landlordFields.map(f => [f.id, f.name]));
 

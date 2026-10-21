@@ -4,7 +4,8 @@ export type ReportExportType =
   | 'fertilizer-summary'
   | 'fsa-harvest'
   | 'hay-summary'
-  | 'landlord-statement';
+  | 'landlord-statement'
+  | 'farm-owner-summary';
 
 export interface ReportExportHistoryEntry {
   exportedAt: string;

@@ -10,6 +10,8 @@ import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 interface LandlordSummaryReportProps {
+  wholeFarm?: boolean;
+  onWholeFarmChange?: (wholeFarm: boolean) => void;
   selectedLandlord: string;
   setSelectedLandlord: (name: string) => void;
   uniqueLandlords: string[];
@@ -33,6 +35,8 @@ const ACTIVITY_LABEL: Record<LandlordActivityType, string> = {
 };
 
 export default function LandlordSummaryReport({
+  wholeFarm = false,
+  onWholeFarmChange,
   selectedLandlord,
   setSelectedLandlord,
   uniqueLandlords,
@@ -44,6 +48,7 @@ export default function LandlordSummaryReport({
   onIssueAction,
   exportStatus,
 }: LandlordSummaryReportProps) {
+  const reportTitle = wholeFarm ? 'Farm Owner Summary' : 'Landlord Summary';
   const seasonLabel = landlordSummary?.seasonYear != null
     ? `${landlordSummary.seasonYear} crop year`
     : 'all seasons';
@@ -53,12 +58,18 @@ export default function LandlordSummaryReport({
       <div className="bg-card border border-border rounded-lg p-4 print:border-foreground/20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 print:hidden">
           <div>
-            <h2 className="font-bold text-foreground text-base mb-1">Landlord Summary</h2>
+            <h2 className="font-bold text-foreground text-base mb-1">{reportTitle}</h2>
             <p className="text-xs text-muted-foreground">
-              All field activity, grain yield, bale production, and crop share for the selected landlord. Generated {reportDate}.
+              All field activity, grain yield, bale production, and crop share {wholeFarm ? 'across the entire farm, including owned land' : 'for the selected landlord'}. Generated {reportDate}.
             </p>
           </div>
-          <Select value={selectedLandlord} onValueChange={setSelectedLandlord}>
+          {onWholeFarmChange && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant={wholeFarm ? 'outline' : 'default'} className="h-11" aria-pressed={!wholeFarm} onClick={() => onWholeFarmChange(false)}>Landlord Summary</Button>
+              <Button variant={wholeFarm ? 'default' : 'outline'} className="h-11" aria-pressed={wholeFarm} onClick={() => onWholeFarmChange(true)}>Farm Owner Summary</Button>
+            </div>
+          )}
+          {!wholeFarm && <Select value={selectedLandlord} onValueChange={setSelectedLandlord}>
             <SelectTrigger className="w-full sm:w-[200px] h-11 font-mono text-sm bg-background border-border">
               <SelectValue placeholder="Select Landlord" />
             </SelectTrigger>
@@ -69,10 +80,10 @@ export default function LandlordSummaryReport({
                 </SelectItem>
               ))}
             </SelectContent>
-          </Select>
+          </Select>}
         </div>
 
-        {!selectedLandlord ? (
+        {!wholeFarm && !selectedLandlord ? (
           <div className="py-12 text-center border-2 border-dashed border-border rounded-lg bg-muted/20">
             <p className="text-muted-foreground text-sm">
               Select a landlord to generate their summary
@@ -106,7 +117,7 @@ export default function LandlordSummaryReport({
 
             {readinessSummary && (
               <MobileReportExportPanel
-                title={`${selectedLandlord} landlord summary`}
+                title={wholeFarm ? reportTitle : `${selectedLandlord} landlord summary`}
                 description={`Review ${seasonLabel} field activity, grain yield, bale production, and crop-share completeness before exporting.`}
                 summary={readinessSummary}
                 itemLabel="fields"
@@ -143,7 +154,7 @@ export default function LandlordSummaryReport({
               {landlordSummary.fields.length === 0 ? (
                 <tr className="full-width-row">
                   <td colSpan={7} className="py-12 text-center text-muted-foreground text-xs">
-                    No fields assigned to this landlord.
+                    {wholeFarm ? 'No active fields on this farm.' : 'No fields assigned to this landlord.'}
                   </td>
                 </tr>
               ) : (
@@ -164,13 +175,13 @@ export default function LandlordSummaryReport({
             {/* Activity timeline */}
             <ReportTable
               title="Activity Timeline"
-              subtitle={`All field activity for this landlord · ${seasonLabel}`}
+              subtitle={`All field activity ${wholeFarm ? 'across the entire farm' : 'for this landlord'} · ${seasonLabel}`}
               headers={['DATE', 'FIELD', 'TYPE', 'CROP', 'DETAIL']}
             >
               {landlordSummary.activity.length === 0 ? (
                 <tr className="full-width-row">
                   <td colSpan={5} className="py-12 text-center text-muted-foreground text-xs">
-                    No activity logged for this landlord's fields.
+                    {wholeFarm ? 'No activity logged for this farm.' : "No activity logged for this landlord's fields."}
                   </td>
                 </tr>
               ) : (

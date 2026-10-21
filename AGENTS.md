@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-19 (billing rollout allowlist moved server-side; `VITE_BILLING_ALLOWLIST` removed from the client).
+> **Last updated:** 2026-10-20 (Farm Owner Summary scope and exports documented).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-20** — Reports > Landlord now documents Farm Owner Summary: current-farm fields including owned/unassigned land, season-scoped activity, CSV/Detailed-PDF exports, and a missing-farm export guard.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). The client no longer reads `VITE_BILLING_ALLOWLIST`; the bundle guard fails if that name, a billing sentinel, or allowlist entries appear in `dist`. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere.
 - **2026-10-17** — Spray compliance is profile-driven (`us-epa` / `au-apvma`), not US-only; added [Regional Settings and the Australia Pilot](#regional-settings-and-the-australia-pilot) covering the `auPilot` allowlist gate, user-id-scoped region preferences, locale terminology, and the acres/hectares boundary. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration in `vite-env.d.ts`, not a kill switch. Service-worker navigation is network-first with a 3 s timeout, a precache fallback, and a single-retry reload guard.
 - **2026-10-16** — AU pilot card gated behind `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141`; root clutter gitignored (`*.tincan-backup-*`, root `*.patch`, compiled `server/*.js`); parked equipment mutations overlaid on a fail-soft fetch; `engines.node` pinned to `22.x`.
 - **2026-10-15** — Review-09 owner decisions: signup always shows check-your-email; weather and Ask the Book share a global UTC daily spend cap (`WEATHER_DAILY_CAP` default 2000, `AI_DAILY_CAP` default 500) returning HTTP 503; Ask the Book history is loaded from `ai_assistant_private.turns` and client history is ignored; `finalize_ai_assistant_turn` is service_role-only; Vercel sends security headers including CSP-Report-Only.
-- **2026-10-14** — Review-10 adds camera/photo-library usage strings, CSP fetch-origin checks, overlay-aware Android back handling, GitHub quality checks and all eleven database-integrity suites. Nightly native builds verify the requested SHA; both platforms reject placeholder Supabase bundles.
 
 ## Contents
 
@@ -97,8 +97,8 @@ Rules), then open only the files for that area.
 - [@/lib/reportExportHistory.ts](./src/lib/reportExportHistory.ts) — per-user/farm/season/report local export fingerprints and changed-since-export status.
 - [@/components/reports/MobileReportExportPanel.tsx](./src/components/reports/MobileReportExportPanel.tsx) + [ReportReadinessPanel.tsx](./src/components/reports/ReportReadinessPanel.tsx) + [ReportIssueList.tsx](./src/components/reports/ReportIssueList.tsx) — mobile export-first report workspace, readiness summary, and actionable grouped issues.
 - [@/lib/complianceReports/fsa578PdfExport.ts](./src/lib/complianceReports/fsa578PdfExport.ts) — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
-- [@/lib/complianceReports/generateLandlordSummary.ts](./src/lib/complianceReports/generateLandlordSummary.ts) — Landlord Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
-- [@/components/reports/LandlordSummaryReport.tsx](./src/components/reports/LandlordSummaryReport.tsx) — Landlord tab report UI (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
+- [@/lib/complianceReports/generateLandlordSummary.ts](./src/lib/complianceReports/generateLandlordSummary.ts) — Landlord Summary and farm-wide Farm Owner Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
+- [@/components/reports/LandlordSummaryReport.tsx](./src/components/reports/LandlordSummaryReport.tsx) — Landlord tab UI for Landlord Summary and Farm Owner Summary (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
 - [@/lib/sprayExport.ts](./src/lib/sprayExport.ts) — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
 
 **FSA tracts & CLU**
@@ -342,7 +342,9 @@ Reports:
 
 Canonical detail: [BLUEPRINT → Landlord Summary Report](./BLUEPRINT.md#landlord-summary-report).
 
-- Driven by field-level `Field.landlordName`, not the legacy `HarvestRecord.landlordName`. Only landlords with at least one non-deleted field are selectable.
+- Reports > Landlord offers Landlord Summary and Farm Owner Summary. The per-landlord mode uses field-level `Field.landlordName`, not the legacy `HarvestRecord.landlordName`; only landlords with at least one non-deleted field are selectable.
+- Farm Owner Summary includes all active fields in the current farm, including owned/unassigned land, and only current-farm, non-deleted activity for the selected `viewingSeason`. No landlord selection is required.
+- Both modes provide CSV and Detailed PDF exports. Farm Owner Summary exports require a current `farm_id`, use the Farm Owner Summary title/filename, and track export history separately from the per-landlord report.
 - Acreage uses `getDisplayFieldAcres`; dates use `parseLocalDate` (see [Date Parsing and Sorting](#date-parsing-and-sorting)); every `ReportTable` cell carries `data-label`.
 - Hay bales stay separate from bushels, with no inferred landlord bale share.
 - Keep the retired `LandlordStatementReport` / `generateLandlordStatement` until its test coverage is migrated.

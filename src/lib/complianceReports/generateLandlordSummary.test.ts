@@ -261,3 +261,36 @@ describe('generateLandlordSummaryCSV', () => {
     expect(csv).toContain('100');
   });
 });
+
+
+describe('Farm Owner Summary', () => {
+  test('includes owned land and all landlords with the same totals and activity sections', () => {
+    const summary = generateLandlordSummary({ ...baseParams, scope: 'farm', farmId: 'farm1', landlordName: 'Farm Owner' });
+    expect(summary.fields.map(field => field.fieldId)).toEqual(['f1', 'f2', 'f3', 'f4']);
+    expect(summary.totals).toEqual({ acres: 250, totalBushels: 19000, totalBales: 325, landlordShareBushels: 3970 });
+    expect(new Set(summary.activity.map(row => row.activityType))).toEqual(new Set(['plant', 'spray', 'customSpray', 'fertilizer', 'tillage', 'harvest', 'hay']));
+    expect(generateLandlordSummaryCSV(summary)).toContain('No-Landlord Field');
+  });
+
+  test('excludes other farms, deleted fields/records, other seasons and orphan activity', () => {
+    const summary = generateLandlordSummary({
+      ...baseParams, scope: 'farm', farmId: 'farm1', landlordName: 'Farm Owner',
+      fields: [...fields, { ...fields[0], id: 'foreign', farm_id: 'farm2' }],
+      harvestRecords: [
+        ...harvestRecords,
+        { ...harvestRecords[0], id: 'deleted', deleted_at: '2026-10-01' },
+        { ...harvestRecords[0], id: 'old', seasonYear: 2025 },
+        { ...harvestRecords[0], id: 'foreign', farm_id: 'farm2' },
+        { ...harvestRecords[0], id: 'orphan', fieldId: 'missing' },
+        { ...harvestRecords[0], id: 'deleted-field', fieldId: 'f5' },
+      ],
+    });
+    expect(summary.fields).toHaveLength(4);
+    expect(summary.totals.totalBushels).toBe(19000);
+    expect(summary.activity.filter(row => row.activityType === 'harvest')).toHaveLength(3);
+  });
+
+  test('fails closed without a current farm', () => {
+    expect(generateLandlordSummary({ ...baseParams, scope: 'farm', landlordName: 'Farm Owner' }).fields).toEqual([]);
+  });
+});

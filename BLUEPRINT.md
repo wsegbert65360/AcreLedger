@@ -1111,21 +1111,31 @@ Row construction rules (`buildFsa578Rows`):
 
 ### Landlord Summary Report
 
-The **Landlord** tab in Reports (`src/components/reports/LandlordSummaryReport.tsx`) is a
-per-landlord overview driven by the field-level `Field.landlordName` (not the legacy
-harvest-only `HarvestRecord.landlordName`).
+The **Landlord** tab in Reports (`src/components/reports/LandlordSummaryReport.tsx`) offers
+**Landlord Summary** and **Farm Owner Summary**. The per-landlord overview uses field-level
+`Field.landlordName` (not the legacy harvest-only `HarvestRecord.landlordName`).
+
+Farm Owner Summary requires no landlord selection and covers every active field in the
+current farm, including owned land and fields without a landlord assignment. Its activity
+records are restricted to the current `farm_id`, selected `viewingSeason`, and non-deleted
+records. It shares the Fields overview and Activity Timeline below, retaining separate grain
+and bale totals and the existing landlord crop-share calculation across those fields.
+Both modes offer CSV and Detailed PDF exports; farm-wide exports use the Farm Owner Summary
+title and `Farm_Owner_Summary_<season>` filename prefix. Both farm-wide export handlers stop
+with a clear message if no current farm is selected, before generating a file. Export history
+uses a separate `farm-owner-summary` report type, scoped by user, farm, and season.
 
 Field `producerShare` is authoritative: landlord split is `100 - producerShare`. New harvests
 store that derived split; reports fall back to stored harvest splits only for legacy fields
 without a producer share. Update crop share in the field editor.
 
-Selecting a landlord shows:
+Selecting a landlord, or choosing Farm Owner Summary for the entire farm, shows:
 
 - **Fields overview** — one row per field with acres (CLU-aware via `getDisplayFieldAcres`),
   crop, total bushels, bu/acre, total bales, and landlord crop-share bushels. Grain and bale
   production remain separate units; the totals row uses a weighted average for overall bu/acre.
 - **Activity Timeline** — all season-scoped activity (plant, spray, custom spray, fertilizer,
-  tillage, grain harvest, hay harvest) across the landlord's fields, sorted by date, with colored
+  tillage, grain harvest, hay harvest) across the selected scope's fields, sorted by date, with colored
   activity pills. Hay entries show bale count/type and cutting number.
 - **Exports** — CSV (`generateLandlordSummaryCSV`, per-field summary + totals) and a **Detailed
   PDF** via `exportToPdf` (landscape, fields table + activity timeline in the footer). The PDF
