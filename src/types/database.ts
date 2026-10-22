@@ -354,3 +354,18 @@ export interface FarmSubscriptionRow {
     updated_at: string;
     deleted_at?: string | null;
 }
+
+/** Server-owned farm metadata; excluded from client mutation payloads. */
+export interface FarmRow {
+    id: string;
+    name: string;
+    readonly trial_started_at: string | null;
+    readonly trial_ends_at: string | null;
+}
+
+/** Billing infrastructure: service/definer access only; never customer restore data. */
+export interface TrialClaimRow {
+    readonly user_id: string;
+    readonly farm_id: string;
+    readonly claimed_at: string;
+}

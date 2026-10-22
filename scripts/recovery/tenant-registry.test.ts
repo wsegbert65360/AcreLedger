@@ -31,6 +31,7 @@ const KNOWN_FARM_OWNED = [
   "public.maintenance_schedules",
   "public.maintenance_logs",
   "public.farm_subscriptions",
+  "public.trial_claims",
   "public.farm_rainfall_daily",
   "public.field_rainfall_hourly",
   "public.field_rainfall_coverage",
@@ -59,6 +60,16 @@ describe("tenant registry", () => {
     expect(mrmsRuns?.includeInTenantBundle).toBe(false);
   });
 
+  it("preserves salted trial identity infrastructure outside tenant recovery", () => {
+    const salt = TENANT_REGISTRY.find((entry) => entry.schema === "trial_private" && entry.table === "identity_salt");
+    expect(salt?.ownership).toBe("global");
+    expect(salt?.includeInTenantBundle).toBe(false);
+    expect(salt?.excludeFromApply).toBe(true);
+    const claims = TENANT_REGISTRY.find((entry) => entry.table === "trial_claims");
+    expect(claims?.primaryKeys).toEqual(["identity_hash"]);
+    expect(tenantBundleTables()).not.toContain(salt);
+  });
+
   it("extract SQL is always farm or user scoped", () => {
     for (const entry of tenantBundleTables()) {
       const spec = extractSql(entry);
@@ -85,9 +96,11 @@ describe("tenant registry", () => {
   it("keeps farm_subscriptions out of the tenant bundle and lists billing skip notes", () => {
     const keys = tenantBundleTables().map((entry) => `${entry.schema}.${entry.table}`);
     expect(keys).not.toContain("public.farm_subscriptions");
+    expect(keys).not.toContain("public.trial_claims");
     expect(keys).toContain("public.account_deletion_requests");
     const skipped = applySkipNotes();
     expect(skipped.some((item) => item.table === "public.farm_subscriptions" && /billing/i.test(item.reason))).toBe(true);
+    expect(skipped.some((item) => item.table === "public.trial_claims" && /billing/i.test(item.reason))).toBe(true);
     expect(skipped.some((item) => item.table === "public.account_deletion_requests")).toBe(true);
   });
 

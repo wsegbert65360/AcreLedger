@@ -32,7 +32,7 @@ export interface TenantTable {
   notes: string;
 }
 
-export const TENANT_REGISTRY_VERSION = 3;
+export const TENANT_REGISTRY_VERSION = 4;
 
 export function userIdColumns(entry: TenantTable): string[] {
   if (entry.userColumns && entry.userColumns.length > 0) return entry.userColumns;
@@ -40,6 +40,32 @@ export function userIdColumns(entry: TenantTable): string[] {
 }
 
 export const TENANT_REGISTRY: TenantTable[] = [
+  {
+    schema: "trial_private",
+    table: "identity_salt",
+    ownership: "global",
+    hasDeletedAt: false,
+    restoreOrder: 0,
+    primaryKeys: ["singleton"],
+    includeInTenantBundle: false,
+    excludeFromApply: true,
+    excludeFromApplyReason: "private trial salt must never be rotated by tenant recovery",
+    notes: "Secret installation salt. Preserve with claims in full-project recovery only; never include in customer or tenant exports.",
+  },
+  {
+    schema: "public",
+    table: "trial_claims",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    userColumn: "user_id",
+    hasDeletedAt: false,
+    restoreOrder: 30,
+    primaryKeys: ["identity_hash"],
+    includeInTenantBundle: false,
+    excludeFromApply: true,
+    excludeFromApplyReason: "billing trial claims require operator reconciliation",
+    notes: "Permanent salted-identity trial ledger; nullable user_id survives account deletion. Preserve in full-project backups; never reset through tenant or customer restore.",
+  },
   {
     schema: "public",
     table: "farms",

@@ -447,3 +447,18 @@ export type ActivityRecord =
   | { type: 'fertilizer'; data: FertilizerApplication }
   | { type: 'tillage'; data: TillageRecord }
   | { type: 'grain'; data: GrainMovement };
+
+/** Server-owned farm trial metadata, inherited by every member. ISO timestamps. */
+export interface Farm {
+  id: string;
+  name: string;
+  readonly trial_started_at: string | null;
+  readonly trial_ends_at: string | null;
+}
+
+/** Service-only claim ledger, excluded from customer backup/restore. */
+export interface TrialClaim {
+  readonly user_id: string;
+  readonly farm_id: string;
+  readonly claimed_at: string;
+}
