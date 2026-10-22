@@ -25,7 +25,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
-- **2026-10-21** — Trial PR 1 prepares server-owned 3-month farm trial dates, a service-only per-user claim ledger, and billing-history deletion protection. Existing farms await rollout backfill; enforcement stays OFF.
+- **2026-10-21** — Trial PR 1 prepares server-owned 3-month farm trial dates, a service-only salted-identity claim ledger, and billing-history deletion protection. Existing farms await rollout backfill; enforcement stays OFF.
 - **2026-10-20** — Reports > Landlord now documents Farm Owner Summary: current-farm fields including owned/unassigned land, season-scoped activity, CSV/Detailed-PDF exports, and a missing-farm export guard.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). The client no longer reads `VITE_BILLING_ALLOWLIST`; the bundle guard fails if that name, a billing sentinel, or allowlist entries appear in `dist`. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere.
 - **2026-10-17** — Spray compliance is profile-driven (`us-epa` / `au-apvma`), not US-only; added [Regional Settings and the Australia Pilot](#regional-settings-and-the-australia-pilot) covering the `auPilot` allowlist gate, user-id-scoped region preferences, locale terminology, and the acres/hectares boundary. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration in `vite-env.d.ts`, not a kill switch. Service-worker navigation is network-first with a 3 s timeout, a precache fallback, and a single-retry reload guard.
@@ -374,7 +374,7 @@ Canonical detail: [BLUEPRINT → Owner Whole-Project Disaster Recovery](./BLUEPR
 
 ### Stripe Billing (Test Mode Only)
 
-- Trial PR 1 prepares a 3-month free farm trial, no card needed: server-stamped once by `ensure_user_farm`, one per farm and per user via service-only `trial_claims`. Members inherit farm dates; existing farms await rollout backfill. Enforcement stays OFF. The current Stripe 122-day checkout trial is unchanged until a later PR. Trial metadata/claims are excluded from customer backup and restore.
+- Trial PR 1 prepares a 3-month free farm trial, no card needed: server-stamped once by `ensure_user_farm`, one per farm and per normalized email identity via service-only `trial_claims`. A private installation salt protects the identity hash; claims survive Auth deletion with a nullable user reference. Members inherit farm dates; existing farms await rollout backfill. Enforcement stays OFF. The current Stripe 122-day checkout trial is unchanged until a later PR. Trial metadata/claims are excluded from customer backup and restore.
 
 Canonical detail: [BLUEPRINT → Stripe Billing](./BLUEPRINT.md#stripe-billing-test-mode-web-only).
 

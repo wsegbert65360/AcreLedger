@@ -796,8 +796,14 @@ Product access enforcement is off by default. A missing or soft-deleted subscrip
 passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
 
 Trial PR 1 prepares a 3-month free trial, no card needed, stamped once by the server
-with `now() + interval '3 months'`. Each farm and user gets one claim in service-only
-`trial_claims`; members inherit the farm deadline. Existing farms are not stamped by
+with `now() + interval '3 months'`. Each farm and normalized email identity gets one claim in service-only
+`trial_claims`; members inherit the farm deadline. Claims use a unique SHA-256 hash of a
+private installation salt plus a domain-separated, trimmed/lowercase Auth email. The salt
+lives in `trial_private.identity_salt` with RLS and no client/service-role read grants; only
+the postgres-owned `ensure_user_farm` reads it. Claims retain their hash after Auth deletion
+(`user_id ON DELETE SET NULL`), preventing another trial for the same email. A different
+email is a different identity; this is not real-person identity verification. Preserve the
+salt and claims together in full-project recovery, never tenant/customer exports. Existing farms are not stamped by
 onboarding and await rollout backfill. Enforcement stays OFF. Trial metadata and
 claims are excluded from customer backup/restore. The current Stripe checkout still
 uses its 122-day trial and three-day `past_due` grace period until later PRs.

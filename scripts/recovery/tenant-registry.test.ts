@@ -60,6 +60,16 @@ describe("tenant registry", () => {
     expect(mrmsRuns?.includeInTenantBundle).toBe(false);
   });
 
+  it("preserves salted trial identity infrastructure outside tenant recovery", () => {
+    const salt = TENANT_REGISTRY.find((entry) => entry.schema === "trial_private" && entry.table === "identity_salt");
+    expect(salt?.ownership).toBe("global");
+    expect(salt?.includeInTenantBundle).toBe(false);
+    expect(salt?.excludeFromApply).toBe(true);
+    const claims = TENANT_REGISTRY.find((entry) => entry.table === "trial_claims");
+    expect(claims?.primaryKeys).toEqual(["identity_hash"]);
+    expect(tenantBundleTables()).not.toContain(salt);
+  });
+
   it("extract SQL is always farm or user scoped", () => {
     for (const entry of tenantBundleTables()) {
       const spec = extractSql(entry);
