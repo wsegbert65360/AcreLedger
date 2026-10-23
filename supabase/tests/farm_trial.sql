@@ -47,7 +47,15 @@ SELECT set_config('request.jwt.claim.sub', 'f2222222-2222-4222-8222-222222222222
 SELECT public.ensure_user_farm();
 SELECT ok((SELECT trial_started_at IS NULL FROM public.farms WHERE id = public.ensure_user_farm()), 'same normalized email cannot reclaim after deletion');
 SELECT throws_ok(format('DELETE FROM public.farms WHERE id = %L', (SELECT id FROM trial_fixture)), '23503', NULL, 'claimed farm hard deletion is restricted');
-UPDATE public.farms SET deleted_at = now() WHERE id = (SELECT id FROM trial_fixture);
-SELECT ok((SELECT deleted_at IS NOT NULL FROM public.farms WHERE id = (SELECT id FROM trial_fixture)), 'farm soft deletion preserves claim history');
+SELECT ok(EXISTS (
+  SELECT 1
+  FROM trial_fixture t
+  JOIN public.farms f ON f.id = t.id
+  JOIN public.trial_claims c ON c.farm_id = f.id
+  WHERE c.identity_hash IS NOT NULL
+    AND c.user_id IS NULL
+    AND f.trial_started_at = t.started
+    AND f.trial_ends_at = t.ends
+), 'restricted farm deletion preserves farm, identity claim, and trial dates');
 SELECT * FROM finish();
 ROLLBACK;
