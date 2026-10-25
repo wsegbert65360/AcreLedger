@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FarmTrialBanners from '@/components/FarmTrialBanners';
 
@@ -14,9 +14,27 @@ vi.mock('@/hooks/useFarmTrial', () => ({
 vi.mock('@/lib/billing', () => ({ isBillingUiAvailable: () => control.available, getCachedBillingEligibility: () => ({ allowlisted: control.allowed, checkoutEnabled: control.checkout, liveCharges: control.live }), fetchBillingEligibility: vi.fn() }));
 vi.mock('@/lib/freshAccessToken', () => ({ freshAccessToken: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ maybeSingle: async () => ({ data: { status: 'past_due', current_period_end: '2026-10-25T12:00:00Z', deleted_at: null }, error: null }) }) }) }) }) } }));
-function mount() { return render(<MemoryRouter><FarmTrialBanners /></MemoryRouter>); }
+function mount(search = '') { return render(<MemoryRouter initialEntries={[`/${search}`]}><FarmTrialBanners /></MemoryRouter>); }
+afterEach(() => vi.unstubAllEnvs());
 beforeEach(() => { Object.assign(control, { checkout: false, live: false, native: false, available: true, allowed: true, days: 14 }); });
 describe('farm trial banners', () => {
+  it('overrides the preview countdown without enabling billing', () => {
+    vi.stubEnv('VITE_VERCEL_ENV', 'preview');
+    control.days = null;
+    mount('?trialDaysLeft=7');
+    expect(screen.getByText('7 days left in your free trial.')).toBeInTheDocument();
+    expect(screen.queryByText('Subscribe')).toBeNull();
+  });
+  it('uses zero to hide the preview reminder', () => {
+    vi.stubEnv('VITE_VERCEL_ENV', 'preview');
+    mount('?trialDaysLeft=0');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+  it.each([['production', '7'], ['preview', '-1']])('preserves the real countdown for %s with override %s', (env, value) => {
+    vi.stubEnv('VITE_VERCEL_ENV', env);
+    mount(`?trialDaysLeft=${value}`);
+    expect(screen.getByText('14 days left in your free trial.')).toBeInTheDocument();
+  });
   it.each([14, 7, 1])('shows exact approved reminder at %s days', days => {
     control.days = days; mount();
     expect(screen.getByText(`${days} days left in your free trial.`)).toBeInTheDocument();

@@ -2,6 +2,15 @@ import type { FarmSubscription } from '@/types/farm';
 
 const DAY_MS = 86_400_000;
 
+/** Preview-only banner display override. Never use for trial dates or entitlements. */
+export function getTrialDaysLeftOverride(env: string | undefined, search: string): number | null {
+  if (env !== 'preview') return null;
+  const value = new URLSearchParams(search).get('trialDaysLeft');
+  if (value === null || !/^\d+$/.test(value)) return null;
+  const days = Number(value);
+  return Number.isSafeInteger(days) ? days : null;
+}
+
 /** Server timestamps are instants. Ceil partial days; never expire before the deadline. */
 export function getFarmTrialStatus(trialEndsAt: string | null | undefined, now = Date.now()) {
   const end = trialEndsAt ? Date.parse(trialEndsAt) : NaN;

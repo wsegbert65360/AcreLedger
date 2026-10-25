@@ -1,10 +1,19 @@
 ﻿import { describe, expect, it } from 'vitest';
 
-import { getFarmTrialStatus, getPaymentGraceDays, getTrialBannerThreshold } from '@/lib/farmTrial';
+import { getFarmTrialStatus, getPaymentGraceDays, getTrialBannerThreshold, getTrialDaysLeftOverride } from '@/lib/farmTrial';
 import type { FarmSubscription } from '@/types/farm';
 
 const now = Date.parse('2026-10-25T12:00:00Z');
 describe('farm trial display math', () => {
+  it.each([0, 1, 7, 14, 90])('allows a preview display override of %s days', days => {
+    expect(getTrialDaysLeftOverride('preview', `?other=value&trialDaysLeft=${days}`)).toBe(days);
+  });
+  it.each(['production', 'development', 'test', '', 'Preview', undefined])('ignores overrides in env %s', env => {
+    expect(getTrialDaysLeftOverride(env, '?trialDaysLeft=7')).toBeNull();
+  });
+  it.each(['', '?other=7', '?trialDaysLeft=', '?trialDaysLeft=-1', '?trialDaysLeft=1.5', '?trialDaysLeft=NaN', '?trialDaysLeft=Infinity', '?trialDaysLeft=1e2', '?trialDaysLeft=abc', '?trialDaysLeft=%207', '?trialDaysLeft=%2B7', '?trialDaysLeft=9007199254740992'])('ignores invalid override %s', search => {
+    expect(getTrialDaysLeftOverride('preview', search)).toBeNull();
+  });
   it('omits grandfathered, missing and invalid dates', () => {
     for (const date of [null, undefined, '', 'invalid']) expect(getFarmTrialStatus(date, now)).toEqual({ phase: 'none', daysLeft: 0 });
   });

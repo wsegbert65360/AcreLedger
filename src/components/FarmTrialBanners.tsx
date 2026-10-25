@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { useFarmTrial, useTrialClock } from '@/hooks/useFarmTrial';
 import { fetchBillingEligibility, getCachedBillingEligibility, isBillingUiAvailable } from '@/lib/billing';
-import { getFarmTrialStatus, getPaymentGraceDays, getTrialBannerThreshold } from '@/lib/farmTrial';
+import { getFarmTrialStatus, getPaymentGraceDays, getTrialBannerThreshold, getTrialDaysLeftOverride } from '@/lib/farmTrial';
 import { freshAccessToken } from '@/lib/freshAccessToken';
 import * as native from '@/lib/native';
 import { supabase } from '@/lib/supabase';
@@ -13,6 +13,7 @@ import type { BillingEligibility } from '@/lib/billing';
 import type { FarmSubscription } from '@/types/farm';
 
 export default function FarmTrialBanners() {
+  const { search } = useLocation();
   const { farm_id, session } = useFarm();
   const farm = useFarmTrial();
   const now = useTrialClock();
@@ -59,7 +60,10 @@ export default function FarmTrialBanners() {
   }, [liveCharges, farm_id, userId]);
 
   if (!farm_id || !userId) return null;
-  const trial = getFarmTrialStatus(farm?.trial_ends_at, now);
+  const daysOverride = getTrialDaysLeftOverride(import.meta.env.VITE_VERCEL_ENV, search);
+  const trial = daysOverride === null
+    ? getFarmTrialStatus(farm?.trial_ends_at, now)
+    : { phase: daysOverride > 0 ? 'active' : 'ended', daysLeft: daysOverride };
   const threshold = trial.phase === 'active' ? getTrialBannerThreshold(trial.daysLeft) : null;
   const reminderKey = `${userId}:${farm_id}:${farm?.trial_ends_at}:${threshold}`;
   const canSubscribe = billingAvailable && eligibility?.userId === userId && eligibility.capabilities.allowlisted && eligibility.capabilities.checkoutEnabled;
