@@ -251,9 +251,9 @@ describe('billing eligibility API', () => {
   it.each([
     ['sk_test_trial_fixture', undefined, true, false],
     ['sk_live_trial_fixture', 'false', false, false],
-    ['sk_live_trial_fixture', 'TrUe', true, true],
+    ['sk_live_trial_fixture', 'TrUe', false, true],
     ['', undefined, false, false],
-    ['sk_live_trial_fixture', ' true ', false, false],
+    ['sk_live_trial_fixture', ' true ', false, true],
   ])('returns safe capabilities for configured billing', async (key, live, checkoutEnabled, liveCharges) => {
     process.env.STRIPE_SECRET_KEY = key;
     if (live !== undefined) process.env.BILLING_LIVE_CHARGES = live;
@@ -271,7 +271,7 @@ describe('billing eligibility API', () => {
     process.env.BILLING_LIVE_CHARGES = 'true';
     const result = createResponse();
     await handler(createRequest(), result.response);
-    expect(result.state.body).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: true });
+    expect(result.state.body).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
   });
 
 });

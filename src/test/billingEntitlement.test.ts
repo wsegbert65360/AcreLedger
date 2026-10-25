@@ -225,8 +225,8 @@ describe('fetchBillingEligibility', () => {
     expect(await fetchBillingEligibility({ userId: 'test-mode-user', accessToken: 'token' })).toEqual(expected);
     expect(getCachedBillingEligibility('test-mode-user')).toEqual(expected);
   });
-  it('ignores checkout capability for a non-allowlisted or malformed response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: false, checkoutEnabled: true, liveCharges: 'true' }), { status: 200 })));
+  it.each([true, 'true'])('ignores checkout and live charges for non-allowlisted responses (%s)', async liveCharges => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: false, checkoutEnabled: true, liveCharges }), { status: 200 })));
     expect(await fetchBillingEligibility({ userId: 'non-allowed', accessToken: 'token' })).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
   });
 

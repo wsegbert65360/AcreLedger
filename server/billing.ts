@@ -32,6 +32,13 @@ export type TestModeBillingCheck =
   | { ok: true; config: TestModeBillingConfig }
   | { ok: false; reason: string };
 
+function readBillingMode(env: Record<string, string | undefined>) {
+  return {
+    secretKey: (env.STRIPE_SECRET_KEY ?? '').trim(),
+    liveCharges: env.BILLING_LIVE_CHARGES?.trim().toLowerCase(),
+  };
+}
+
 /**
  * Refuse unless the server is explicitly configured for Stripe TEST mode:
  * BILLING_LIVE_CHARGES must be absent or exactly "false", the secret key must
@@ -40,12 +47,11 @@ export type TestModeBillingCheck =
 export function assertTestModeBilling(
   env: Record<string, string | undefined>,
 ): TestModeBillingCheck {
-  const liveCharges = env.BILLING_LIVE_CHARGES;
-  if (liveCharges !== undefined && liveCharges.trim().toLowerCase() !== 'false') {
+  const { secretKey, liveCharges } = readBillingMode(env);
+  if (liveCharges !== undefined && liveCharges !== 'false') {
     return { ok: false, reason: 'Billing is not enabled: live charges are disallowed.' };
   }
 
-  const secretKey = (env.STRIPE_SECRET_KEY ?? '').trim();
   if (!secretKey) {
     return { ok: false, reason: 'Billing is not configured: missing Stripe secret key.' };
   }
@@ -371,10 +377,11 @@ export function isUniqueViolation(error: { code?: string | null } | null | undef
 
 /** Public capabilities only; never expose Stripe configuration or key material. */
 export function getBillingCapabilities(allowlisted: boolean, env: Record<string, string | undefined>) {
-  const liveCharges = env.BILLING_LIVE_CHARGES?.toLowerCase() === 'true';
+  const { secretKey, liveCharges } = readBillingMode(env);
+  const testMode = secretKey.startsWith('sk_test_') && (liveCharges === undefined || liveCharges === 'false');
   return {
     allowlisted,
-    checkoutEnabled: allowlisted && ((env.STRIPE_SECRET_KEY ?? '').trim().startsWith('sk_test_') || liveCharges),
-    liveCharges,
+    checkoutEnabled: allowlisted && testMode,
+    liveCharges: allowlisted && liveCharges === 'true',
   };
 }

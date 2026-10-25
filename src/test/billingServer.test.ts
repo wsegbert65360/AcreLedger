@@ -10,6 +10,7 @@ import {
   buildSubscriptionUpsert,
   canOpenPortal,
   canStartCheckout,
+  getBillingCapabilities,
   isBillingAllowlisted,
   isUniqueViolation,
   mapStripeStatusToBillingStatus,
@@ -75,6 +76,31 @@ describe('assertTestModeBilling', () => {
     expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_PRICE_ID: '' })).toMatchObject({ ok: false });
     expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_PRICE_ID: 'prod_123' })).toMatchObject({
       ok: false,
+    });
+  });
+});
+
+describe('billing capabilities', () => {
+  it.each([
+    [undefined, 'sk_test_fixture', true],
+    ['false', 'sk_test_fixture', true],
+    [' FaLsE ', ' sk_test_fixture ', true],
+    ['true', 'sk_test_fixture', false],
+    [' TrUe ', 'sk_test_fixture', false],
+    ['false', 'sk_live_fixture', false],
+    ['true', 'sk_live_fixture', false],
+    ['', 'sk_test_fixture', false],
+    ['yes', 'sk_test_fixture', false],
+    [undefined, '', false],
+  ])('matches test-mode assertion for flag %s and key %s', (live, key, expected) => {
+    const env = { ...TEST_ENV, BILLING_LIVE_CHARGES: live, STRIPE_SECRET_KEY: key };
+    expect(getBillingCapabilities(true, env).checkoutEnabled).toBe(expected);
+    expect(assertTestModeBilling(env).ok).toBe(expected);
+    expect(getBillingCapabilities(false, env)).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
+  });
+  it('normalizes live charges and scopes them to the allowlist', () => {
+    expect(getBillingCapabilities(true, { BILLING_LIVE_CHARGES: ' TrUe ' })).toEqual({
+      allowlisted: true, checkoutEnabled: false, liveCharges: true,
     });
   });
 });

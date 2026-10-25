@@ -1,22 +1,25 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FarmTrialBanners from '@/components/FarmTrialBanners';
 
-const control = vi.hoisted(() => ({ checkout: false, live: false, native: false, available: true, allowed: true, days: 14 as number | null }));
+const control = vi.hoisted(() => ({ checkout: false, live: false, native: false, available: true, allowed: true, eligibilityError: false, paymentReads: vi.fn(), days: 14 as number | null }));
 vi.mock('@/lib/native', () => ({ isNativePlatform: () => control.native }));
 vi.mock('@/store/farmStore', () => ({ useFarm: () => ({ farm_id: 'farm-1', session: { user: { id: 'user-1' } } }) }));
 vi.mock('@/hooks/useFarmTrial', () => ({
   useTrialClock: () => Date.parse('2026-10-25T12:00:00Z'),
   useFarmTrial: () => ({ trial_ends_at: control.days === null ? null : new Date(Date.parse('2026-10-25T12:00:00Z') + control.days * 86400000).toISOString() }),
 }));
-vi.mock('@/lib/billing', () => ({ isBillingUiAvailable: () => control.available, getCachedBillingEligibility: () => ({ allowlisted: control.allowed, checkoutEnabled: control.checkout, liveCharges: control.live }), fetchBillingEligibility: vi.fn() }));
-vi.mock('@/lib/freshAccessToken', () => ({ freshAccessToken: vi.fn() }));
-vi.mock('@/lib/supabase', () => ({ supabase: { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ maybeSingle: async () => ({ data: { status: 'past_due', current_period_end: '2026-10-25T12:00:00Z', deleted_at: null }, error: null }) }) }) }) }) } }));
+vi.mock('@/lib/billing', () => ({ isBillingUiAvailable: () => control.available, getCachedBillingEligibility: () => control.eligibilityError ? undefined : ({ allowlisted: control.allowed, checkoutEnabled: control.checkout, liveCharges: control.live }), fetchBillingEligibility: vi.fn(async () => { throw new Error('eligibility unavailable'); }) }));
+vi.mock('@/lib/freshAccessToken', () => ({ freshAccessToken: vi.fn(async () => 'token') }));
+vi.mock('@/lib/supabase', () => ({ supabase: { from: () => {
+  control.paymentReads();
+  return { select: () => ({ eq: () => ({ is: () => ({ maybeSingle: async () => ({ data: { status: 'past_due', current_period_end: '2026-10-25T12:00:00Z', deleted_at: null }, error: null }) }) }) }) };
+} } }));
 function mount(search = '') { return render(<MemoryRouter initialEntries={[`/${search}`]}><FarmTrialBanners /></MemoryRouter>); }
 afterEach(() => vi.unstubAllEnvs());
-beforeEach(() => { Object.assign(control, { checkout: false, live: false, native: false, available: true, allowed: true, days: 14 }); });
+beforeEach(() => { Object.assign(control, { checkout: false, live: false, native: false, available: true, allowed: true, eligibilityError: false, days: 14 }); control.paymentReads.mockClear(); });
 describe('farm trial banners', () => {
   it('overrides the preview countdown without enabling billing', () => {
     vi.stubEnv('VITE_VERCEL_ENV', 'preview');
@@ -52,8 +55,19 @@ describe('farm trial banners', () => {
     control.checkout = true; mount(); expect(await screen.findByRole('link', { name: 'Subscribe' })).toHaveAttribute('href', '/settings?section=billing');
     expect(screen.queryByText(/Your payment didn't/)).toBeNull();
   });
-  it('hides Subscribe when not allowlisted', () => {
-    control.checkout = true; control.live = true; control.allowed = false; mount(); expect(screen.queryByText('Subscribe')).toBeNull();
+  it('hides Subscribe and never fetches payment failures when not allowlisted, even with live charges', async () => {
+    control.checkout = true; control.live = true; control.allowed = false;
+    await act(async () => { mount(); });
+    expect(screen.queryByText('Subscribe')).toBeNull();
+    expect(screen.queryByText(/Your payment didn't/)).toBeNull();
+    expect(control.paymentReads).not.toHaveBeenCalled();
+  });
+  it('fails closed on eligibility errors without fetching payment failures', async () => {
+    control.eligibilityError = true; control.checkout = true; control.live = true;
+    await act(async () => { mount(); });
+    expect(screen.queryByText('Subscribe')).toBeNull();
+    expect(screen.queryByText(/Your payment didn't/)).toBeNull();
+    expect(control.paymentReads).not.toHaveBeenCalled();
   });
   it.each(['native', 'available'])('blocks purchases with %s gate closed', gate => {
     control.checkout = true; control.live = true; if (gate === 'native') control.native = true; else control.available = false;

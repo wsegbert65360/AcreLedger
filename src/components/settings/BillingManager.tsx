@@ -71,10 +71,11 @@ export default function BillingManager() {
   const { session, farm_id } = useFarm();
   const [subscription, setSubscription] = useState<FarmSubscription | null>(null);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
-  const [eligibility, setEligibility] = useState<{ userId: string; allowlisted: boolean } | null>(null);
+  const [eligibility, setEligibility] = useState<{ userId: string; allowlisted: boolean; checkoutEnabled: boolean } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
   const userId = session?.user?.id ?? null;
+  const checkoutEnabled = userId != null && eligibility?.userId === userId && eligibility.checkoutEnabled;
   const allowlisted = userId != null && eligibility?.userId === userId ? eligibility.allowlisted : null;
 
   useEffect(() => {
@@ -114,7 +115,7 @@ export default function BillingManager() {
 
     const cached = getCachedBillingEligibility(userId);
     if (cached !== undefined) {
-      setEligibility({ userId, allowlisted: cached.allowlisted });
+      setEligibility({ userId, allowlisted: cached.allowlisted, checkoutEnabled: cached.checkoutEnabled });
       return;
     }
 
@@ -133,10 +134,10 @@ export default function BillingManager() {
           signal: controller.signal,
         });
         if (cancelled || controller.signal.aborted) return;
-        setEligibility({ userId, allowlisted: value.allowlisted });
+        setEligibility({ userId, allowlisted: value.allowlisted, checkoutEnabled: value.checkoutEnabled });
       } catch {
         if (cancelled || controller.signal.aborted) return;
-        setEligibility({ userId, allowlisted: false });
+        setEligibility({ userId, allowlisted: false, checkoutEnabled: false });
       }
     })();
     return () => {
@@ -239,7 +240,7 @@ export default function BillingManager() {
                 Ask the farm owner to manage billing for this farm.
               </p>
             )}
-            {canManage && needsCheckout && (
+            {checkoutEnabled && canManage && needsCheckout && (
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => openBillingSession('checkout')}

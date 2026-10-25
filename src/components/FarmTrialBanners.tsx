@@ -42,7 +42,7 @@ export default function FarmTrialBanners() {
     return () => { cancelled = true; controller.abort(); };
   }, [billingAvailable, userId]);
 
-  const liveCharges = billingAvailable && eligibility?.userId === userId && eligibility?.capabilities.liveCharges === true;
+  const liveCharges = billingAvailable && eligibility?.userId === userId && eligibility?.capabilities.allowlisted === true && eligibility.capabilities.liveCharges === true;
 
   useEffect(() => {
     if (!liveCharges || !farm_id || !userId) return;

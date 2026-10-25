@@ -165,7 +165,7 @@ function parseEligibilityPayload(payload: unknown): BillingEligibility {
   return {
     allowlisted,
     checkoutEnabled: allowlisted && value.checkoutEnabled === true,
-    liveCharges: value.liveCharges === true,
+    liveCharges: allowlisted && value.liveCharges === true,
   };
 }
 
