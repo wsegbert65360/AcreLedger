@@ -41,14 +41,8 @@ function createResponse() {
   return { response, state };
 }
 
-let farmTrialEndsAt: string | null;
-let farmLookupError: { message: string } | null;
-
 describe('create checkout session API', () => {
   beforeEach(() => {
-    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-25T12:00:00Z'));
-    farmTrialEndsAt = '2026-11-01T12:00:00Z';
-    farmLookupError = null;
     process.env.BILLING_LIVE_CHARGES = 'false';
     process.env.STRIPE_SECRET_KEY = 'sk_test_key';
     process.env.STRIPE_PRICE_ID = 'price_test';
@@ -73,7 +67,7 @@ describe('create checkout session API', () => {
             maybeSingle: vi.fn().mockResolvedValue(
               table === 'profiles'
                 ? { data: { id: 'user-1', farm_id: 'farm-1' }, error: null }
-                : { data: { trial_ends_at: farmTrialEndsAt }, error: farmLookupError },
+                : { data: null, error: null },
             ),
           }),
         }),
@@ -89,7 +83,7 @@ describe('create checkout session API', () => {
     vi.clearAllMocks();
   });
 
-  it('creates the configured annual checkout with the existing farm deadline and farm-scoped idempotency', async () => {
+  it('creates the configured annual checkout with a 122-day trial and farm-scoped idempotency', async () => {
     const request: RequestInput = {
       method: 'POST',
       headers: {
@@ -109,7 +103,7 @@ describe('create checkout session API', () => {
         payment_method_collection: 'always',
         line_items: [{ price: 'price_test', quantity: 1 }],
         subscription_data: {
-          trial_end: Date.parse(farmTrialEndsAt!) / 1000,
+          trial_period_days: 122,
           metadata: { farm_id: 'farm-1', user_id: 'user-1' },
         },
         metadata: { farm_id: 'farm-1', user_id: 'user-1' },
@@ -120,23 +114,6 @@ describe('create checkout session API', () => {
       }),
       { idempotencyKey: expect.stringMatching(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/) },
     );
-  });
-
-  it.each(['2026-10-27T12:00:00Z', '2026-10-26T12:00:00Z', '2026-10-24T12:00:00Z', null])('creates no trial when the server deadline is %s', async deadline => {
-    farmTrialEndsAt = deadline;
-    const result = createResponse();
-    await handler({ method: 'POST', headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' }, query: {} }, result.response);
-    expect(result.state.status).toBe(200);
-    const params = mocks.createCheckoutSession.mock.calls[0][0];
-    expect(params.subscription_data).not.toHaveProperty('trial_end');
-    expect(params.subscription_data).not.toHaveProperty('trial_period_days');
-  });
-  it('fails closed when the farm deadline cannot be read', async () => {
-    farmLookupError = { message: 'read failed' };
-    const result = createResponse();
-    await handler({ method: 'POST', headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' }, query: {} }, result.response);
-    expect(result.state.status).toBe(500);
-    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('cleans quoted or padded Supabase env values before creating the client', async () => {
@@ -325,9 +302,7 @@ describe('create checkout session API', () => {
       },
       from: vi.fn((table: string) => ({
         select: () => ({
-          eq: () => table === 'farms'
-            ? { maybeSingle: vi.fn().mockResolvedValue({ data: { trial_ends_at: '2026-10-24T12:00:00Z' }, error: null }) }
-            : table === 'profiles'
+          eq: () => table === 'profiles'
             ? { maybeSingle: vi.fn().mockResolvedValue({ data: { farm_id: 'farm-1' }, error: null }) }
             : {
                 is: () => ({
