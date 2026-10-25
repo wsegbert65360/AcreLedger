@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-10-19 (billing rollout allowlist moved server-side; `VITE_BILLING_ALLOWLIST` removed from the client).
+> **Last updated:** 2026-10-25 (checkout reuses server-owned trial deadlines; approved public legal pages).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-25** — Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Added approved Privacy, Terms and Refund pages dated November 1, 2026. Allowlist, native purchase suppression and access enforcement are unchanged.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). `VITE_BILLING_ALLOWLIST` is unused; the client caches `{ userId, allowlisted }` in memory and only uses it when the cached user id matches. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere; empty or unset fails closed to "Billing coming soon".
 - **2026-10-17** — Documented compliance profiles (`us-epa` / `au-apvma`), region preferences, the `auPilot` allowlist gate, locale terminology, and the area-unit boundary in a new [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot) section; `SprayRecord` now shows the real `complianceProfile` union plus `pic` / `waterRate` / `waterRateUnit`. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration, not a gate. Service Worker rewritten for the network-first navigation route, the 3 s timeout, the precache fallback, and the single-retry reload guard.
 - **2026-10-16** — AU pilot card gated by `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141_add_spray_water_rate_unit_pic.sql`; root clutter gitignored; parked equipment mutations overlaid onto the retained cache on a fail-soft fetch.
@@ -805,8 +806,8 @@ the postgres-owned `ensure_user_farm` reads it. Claims retain their hash after A
 email is a different identity; this is not real-person identity verification. Preserve the
 salt and claims together in full-project recovery, never tenant/customer exports. Existing farms are not stamped by
 onboarding and await rollout backfill. Enforcement stays OFF. Trial metadata and
-claims are excluded from customer backup/restore. The current Stripe checkout still
-uses its 122-day trial and three-day `past_due` grace period until later PRs.
+claims are excluded from customer backup/restore. Stripe checkout reuses the server-stamped farm trial deadline only when more than 48 hours remain.
+The existing three-day `past_due` access rule is unchanged by this checkout update.
 `farm_subscriptions` is the authoritative local entitlement mirror; the client never treats query
 parameters or client-reported Stripe state as authoritative. Farm members may select their
 farm's active row, but only service-role server paths write it. The eligibility, checkout, and
@@ -818,11 +819,12 @@ accept only HTTPS Stripe URLs.
 Checkout rules (`server/billing.ts`, `api/create-checkout-session.ts`): a live subscription
 (`trialing`, `active`, `past_due`, `unpaid`) returns 409 and the owner manages payment in the
 Customer Portal, because a second Checkout would create a parallel subscription; only a `canceled`
-or `incomplete` row may start a new Checkout. The 122-day trial is a first-subscription offer,
-granted only when the farm's row has never carried a Stripe subscription (`shouldGrantTrial`);
-re-subscribing after cancellation bills immediately. An existing `stripe_customer_id` is reused
+or `incomplete` row may start a new Checkout. Checkout reads the current farm's server-stamped
+`trial_ends_at` through the caller's RLS-scoped client and passes it as Stripe `trial_end` only
+when more than 48 hours remain. Missing/invalid/expired/near-expiry deadlines grant no trial,
+and a failed farm lookup refuses checkout. No fresh trial duration is created. An existing `stripe_customer_id` is reused
 (`buildCheckoutCustomerParams`), otherwise the customer is seeded from the caller's email. The
-idempotency key is state-derived and also carries a fingerprint of the request origin and email,
+idempotency key is state-derived and also carries a fingerprint of the request origin, email, and trial deadline,
 since Stripe rejects a reused key whose parameters differ. The Settings card offers Checkout only
 for no row, `canceled`, or `incomplete`; `past_due`/`unpaid` owners see Manage billing.
 

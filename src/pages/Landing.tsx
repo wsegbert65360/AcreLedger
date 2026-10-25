@@ -142,9 +142,9 @@ const faqs = [
       'No. AcreLedger creates working documents from the information you enter. Follow product labels and confirm filing requirements with your county FSA office or other authority.',
   },
   {
-    question: 'What does the limited rollout cost?',
+    question: 'What does AcreLedger cost?',
     answer:
-      'There is no charge during the limited rollout, and billing is coming soon. The planned price after the rollout is $299 per farm for a year, billed annually. Everything you have recorded stays in the book, and you can export any of it at any time.',
+      '3-month free trial, no card needed. Then $299 per farm per year.',
   },
   {
     question: 'Does it work without cell service?',
@@ -221,13 +221,14 @@ const Landing = () => {
                 Farm records for row-crop operations
               </p>
               <h1 className="landing-h1" data-reveal style={revealDelay(80)}>
-                Field records in. <em>FSA paperwork out.</em>
+                Keep field work and FSA paperwork in one place
               </h1>
               <p className="landing-hero-sub" data-reveal style={revealDelay(160)}>
                 AcreLedger keeps planting, spraying, harvest, grain, and reports
                 in one farm book. Log each field from the truck cab, even without
                 signal, then print the paperwork you need.
               </p>
+              <p className="landing-hero-sub">iPhone and any web browser</p>
               <div className="landing-hero-actions" data-reveal style={revealDelay(240)}>
                 <Link
                   className="landing-btn"
@@ -242,13 +243,8 @@ const Landing = () => {
               {!isNative && (
                 <>
                   <p className="landing-hero-terms" data-reveal style={revealDelay(320)}>
-                    Limited rollout · No charge today · Billing coming soon ·
-                    Planned price: $299 per farm, billed annually
+                    3-month free trial, no card needed. Then $299 per farm per year.
                   </p>
-                  <div className="landing-stamp" data-reveal="stamp" style={revealDelay(480)}>
-                    NO CHARGE
-                    <small>LIMITED ROLLOUT</small>
-                  </div>
                 </>
               )}
             </div>
@@ -373,7 +369,7 @@ const Landing = () => {
                 Terms of the book.
               </h2>
               <p className="landing-lede" data-reveal style={revealDelay(80)}>
-                No charge during the limited rollout. Billing is coming soon.
+                3-month free trial, no card needed. Then $299 per farm per year.
               </p>
               <div className="landing-ticket-wrap">
                 <dl className="landing-ticket" data-reveal>
@@ -382,18 +378,8 @@ const Landing = () => {
                     <span>No. 2026-001</span>
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.green)}>
-                    <dt>Limited rollout</dt>
-                    <dd>
-                      No charge
-                      <small>billing coming soon</small>
-                    </dd>
-                  </div>
-                  <div className="landing-ticket-line" style={accent(ACCENTS.red)}>
-                    <dt>Planned price</dt>
-                    <dd>
-                      $299.00
-                      <small>per farm / year, billed annually</small>
-                    </dd>
+                    <dt>Farm subscription</dt>
+                    <dd>3-month free trial, no card needed. Then $299 per farm per year.</dd>
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.gold)}>
                     <dt>Your records</dt>
@@ -402,15 +388,8 @@ const Landing = () => {
                       <small>PDF · CSV · full backup export</small>
                     </dd>
                   </div>
-                  <div className="landing-ticket-net">
-                    <span>Net due today</span>
-                    <span>$0.00</span>
-                  </div>
                   <p className="landing-ticket-note">
-                    Billing is coming soon, and no payment method is collected when
-                    you create an account. The planned future price is $299 per farm
-                    per year, billed annually. Internet service, third-party services,
-                    and professional or government filing fees cost extra.
+                    3-month free trial, no card needed. Then $299 per farm per year.
                   </p>
                 </dl>
 
@@ -427,7 +406,7 @@ const Landing = () => {
                     </Link>
                   </div>
                   <p className="landing-hero-terms">
-                    No charge when you create an account today.
+                    3-month free trial, no card needed. Then $299 per farm per year.
                   </p>
                 </div>
               </div>
@@ -451,7 +430,7 @@ const Landing = () => {
             {faqs
               .filter(
                 (faq) =>
-                  !isNative || faq.question !== 'What does the limited rollout cost?',
+                  !isNative || faq.question !== 'What does AcreLedger cost?',
               )
               .map((faq) => (
                 <details key={faq.question}>
@@ -476,8 +455,7 @@ const Landing = () => {
             </div>
             {!isNative && (
               <p className="landing-final-terms" data-reveal style={revealDelay(200)}>
-                Limited rollout · No charge today · Billing coming soon ·
-                Planned price: $299 per farm, billed annually
+                3-month free trial, no card needed. Then $299 per farm per year.
               </p>
             )}
             <div className="landing-stamp" data-reveal="stamp" style={revealDelay(320)}>
@@ -494,6 +472,8 @@ const Landing = () => {
           <a href={SUPPORT_MAILTO}>Contact</a>
           <Link to="/support">Support</Link>
           <Link to="/privacy">Privacy policy</Link>
+          <Link to="/terms">Terms of service</Link>
+          <Link to="/refund">Refund policy</Link>
           <span>© 2026 AcreLedger</span>
           <span className="landing-footer-legal">
             Working documents for your records and appointments. FSA acceptance

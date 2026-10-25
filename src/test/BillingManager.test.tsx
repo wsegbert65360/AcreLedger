@@ -182,7 +182,7 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
@@ -190,14 +190,14 @@ describe('BillingManager', () => {
     stubBillingFetch({ eligibilityError: new Error('network down') });
     const { unmount } = renderBilling();
     expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     unmount();
 
     clearBillingEligibilityCache();
     stubBillingFetch({ eligibilityStatus: 500, allowlisted: true });
     renderBilling();
     expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
   it('does not flash checkout buttons while eligibility is pending', () => {
@@ -207,7 +207,7 @@ describe('BillingManager', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderBilling();
 
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
     expect(screen.queryByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeNull();
   });
@@ -227,7 +227,7 @@ describe('BillingManager', () => {
     expect(getCachedBillingEligibility('user-2')).toBeUndefined();
 
     const view = renderBilling();
-    expect(await screen.findByRole('button', { name: /start 4-month free trial/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
 
     farmState.session = {
       access_token: 'token-2',
@@ -250,7 +250,7 @@ describe('BillingManager', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeNull();
   });
 
@@ -302,7 +302,7 @@ describe('BillingManager', () => {
     });
 
     expect(screen.getByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
   it('does not reuse a previous user eligibility after a user switch', async () => {
@@ -317,7 +317,7 @@ describe('BillingManager', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { unmount } = renderBilling();
-    expect(await screen.findByRole('button', { name: /start 4-month free trial/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
     unmount();
 
     farmState.session = {
@@ -336,7 +336,7 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/billing-eligibility'))).toHaveLength(2);
   });
 
@@ -352,7 +352,7 @@ describe('BillingManager', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const first = renderBilling();
-    expect(await screen.findByRole('button', { name: /start 4-month free trial/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
     first.unmount();
 
     farmState.session = null;
@@ -376,14 +376,14 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
   it('offers the trial checkout to an allowlisted farm without a subscription', async () => {
     renderBilling();
 
-    expect(await screen.findByRole('button', { name: /start 4-month free trial/i })).toBeInTheDocument();
-    expect(screen.getByText(/\$299\/year after the trial/i)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
+    expect(screen.getByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
@@ -406,7 +406,7 @@ describe('BillingManager', () => {
     });
 
     renderBilling();
-    fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /subscribe/i }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -425,7 +425,7 @@ describe('BillingManager', () => {
     const fetchMock = stubBillingFetch({ allowlisted: true });
 
     renderBilling();
-    fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /subscribe/i }));
 
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith('Please sign in again to manage billing.');
@@ -444,7 +444,7 @@ describe('BillingManager', () => {
     const fetchMock = stubBillingFetch({ allowlisted: true });
 
     renderBilling();
-    fireEvent.click(await screen.findByRole('button', { name: /start 4-month free trial/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /subscribe/i }));
 
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith('Please sign in again to manage billing.');
@@ -485,7 +485,7 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByText(/Ask the farm owner to manage billing/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
@@ -494,7 +494,7 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByRole('button', { name: /manage billing/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.getByText(/Active\. Renews yearly/i)).toBeInTheDocument();
   });
 
@@ -505,7 +505,7 @@ describe('BillingManager', () => {
     });
 
     renderBilling();
-    const button = await screen.findByRole('button', { name: /start 4-month free trial/i });
+    const button = await screen.findByRole('button', { name: /subscribe/i });
     fireEvent.click(button);
 
     await waitFor(() => {

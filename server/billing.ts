@@ -9,9 +9,6 @@
  * until Will approves legal copy (BILLING_LIVE_CHARGES must stay false).
  */
 
-/** Locked product decision (Manager GO 2026-09-07): 4-month full-product trial. */
-export const TRIAL_PERIOD_DAYS = 122;
-
 /** Locked product decision: past_due farms keep access for a 3-day grace window. */
 export const PAST_DUE_GRACE_DAYS = 3;
 
@@ -189,15 +186,12 @@ function fingerprint(value: string): string {
   return hash.toString(36);
 }
 
-/**
- * The 122-day trial is a first-subscription offer only. A farm whose mirrored
- * row ever carried a Stripe subscription (for example a canceled one) must not
- * get another free trial by re-running Checkout.
- */
-export function shouldGrantTrial(
-  existing: { stripe_subscription_id?: string | null } | null | undefined,
-): boolean {
-  return !existing?.stripe_subscription_id?.trim();
+/** Reuse only the server-stamped farm deadline; never create a new Stripe trial. */
+export function getCheckoutTrialEnd(trialEndsAt: string | null | undefined, now = Date.now()): number | undefined {
+  if (!trialEndsAt || !Number.isFinite(now)) return undefined;
+  const trialEnd = Math.floor(Date.parse(trialEndsAt) / 1000);
+  return Number.isFinite(trialEnd) && trialEnd > Math.floor(now / 1000) + 48 * 60 * 60
+    ? trialEnd : undefined;
 }
 
 /**

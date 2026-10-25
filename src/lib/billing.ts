@@ -11,9 +11,6 @@ import type { FarmSubscription, FarmSubscriptionStatus } from '@/types/farm';
  * subscription row keeps full access until the product owner says enforce.
  */
 
-/** Locked product decision (Manager GO 2026-09-07): 4-month full-product trial. */
-export const TRIAL_PERIOD_DAYS = 122;
-
 /** Locked product decision: past_due farms keep access for a 3-day grace window. */
 export const PAST_DUE_GRACE_DAYS = 3;
 

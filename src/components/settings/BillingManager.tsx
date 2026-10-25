@@ -248,7 +248,7 @@ export default function BillingManager() {
                   size="sm"
                   className="min-h-11 bg-plant text-plant-foreground hover:bg-plant/90"
                 >
-                  {hadPriorSubscription ? 'Reactivate subscription' : 'Start 4-month free trial'}
+                  {hadPriorSubscription ? 'Reactivate subscription' : 'Subscribe'}
                 </Button>
               </div>
             )}
@@ -267,8 +267,7 @@ export default function BillingManager() {
             )}
             {canManage && subscription == null && (
               <p className="text-xs text-muted-foreground">
-                $299/year after the trial. Your payment method is collected at checkout; the first
-                charge happens when the trial ends.
+                3-month free trial, no card needed. Then $299 per farm per year.
               </p>
             )}
           </>
