@@ -37,7 +37,7 @@ export default function Privacy({ withBottomNav = false }: PrivacyProps) {
                 <Card className="border-border/40 bg-card/50 shadow-xl">
                     <CardContent className="space-y-5 pt-6 text-sm text-muted-foreground leading-relaxed">
                         <CardTitle className="text-xl">{"AcreLedger Privacy Policy"}</CardTitle>
-                        <p>{"Last updated: October 20, 2026"}</p>
+                        <p>{"Last updated: [effective date, set when published]"}</p>
                         <p>{"AcreLedger is provided by "}<strong>{"Egbert Farms, LLC"}</strong>{" (\"we\"), which runs it from Henry County, Missouri, USA. This policy explains what we collect, why we collect it, and who helps us run the service. Questions: "}<strong><a href="mailto:acreledgerapp@gmail.com" className="underline">acreledgerapp@gmail.com</a></strong>{"."}</p>
                         <h2 className="text-lg font-bold text-foreground pt-4">{"The short version"}</h2>
                         <ul className="list-disc space-y-3 pl-5">

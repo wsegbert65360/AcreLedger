@@ -47,7 +47,7 @@ describe('Privacy', () => {
 
   it('publishes the approved date without draft or internal notes', () => {
     const { container } = renderPrivacy();
-    expect(screen.getByText('Last updated: October 20, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Last updated: [effective date, set when published]')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/DRAFT|internal|GST|set the final date|Source notes/i);
   });
 
