@@ -9,7 +9,7 @@ vi.mock('@/lib/billing', () => ({
   isBillingUiAvailable: () => true,
   getCachedBillingEligibility: () => undefined,
   clearBillingEligibilityCache: vi.fn(),
-  fetchBillingEligibility: vi.fn(async () => control.allowlisted),
+  fetchBillingEligibility: vi.fn(async () => ({ allowlisted: control.allowlisted, checkoutEnabled: false, liveCharges: false })),
   requestBillingSession: vi.fn(),
 }));
 vi.mock('@/lib/freshAccessToken', () => ({
@@ -22,7 +22,7 @@ let BillingManager: typeof import('../BillingManager').default;
 beforeAll(async () => { BillingManager = (await import('../BillingManager')).default; });
 function mount() { render(<MemoryRouter><BillingManager /></MemoryRouter>); }
 describe('BillingManager status', () => {
-  beforeEach(() => { mock.reset(); control.allowlisted = false; });
+  beforeEach(() => { mock.reset(); mock.setTableHandler('farms', { data: null, error: null }); control.allowlisted = false; });
   it('shows Free beside the free copy for non-allowlisted users', async () => {
     mount();
     expect(await screen.findByText('Free')).toBeInTheDocument();
@@ -48,5 +48,21 @@ describe('BillingManager status', () => {
     mock.setTablePages('farm_subscriptions', [new Promise(() => {})]);
     mount();
     expect(screen.queryByText('Not subscribed')).toBeNull();
+  });
+});
+
+describe('server-owned farm trial status', () => {
+  beforeEach(() => { mock.reset(); control.allowlisted = false; });
+  it('shows the approved farm trial copy independently of subscription dates', async () => {
+    mock.setTableHandler('farms', { data: { trial_started_at: '2026-10-01T00:00:00Z', trial_ends_at: '2099-12-01T00:00:00Z' }, error: null });
+    mount();
+    expect(await screen.findByText('Free trial: full access until Dec 1, 2099. No card needed.')).toBeInTheDocument();
+    expect(screen.getByText('Your free trial started when you set up this farm. Each farm gets one.')).toBeInTheDocument();
+  });
+  it.each([null, '2000-01-01T00:00:00Z'])('omits trial copy for absent/ended farm trial (%s)', async trial_ends_at => {
+    mock.setTableHandler('farms', { data: { trial_started_at: null, trial_ends_at }, error: null });
+    mount();
+    await screen.findByText('Free');
+    expect(screen.queryByLabelText('Farm free trial')).toBeNull();
   });
 });

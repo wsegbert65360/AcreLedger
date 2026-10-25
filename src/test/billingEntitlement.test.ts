@@ -209,7 +209,7 @@ describe('fetchBillingEligibility', () => {
 
     await expect(
       fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: false });
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/billing-eligibility',
       expect.objectContaining({
@@ -217,6 +217,17 @@ describe('fetchBillingEligibility', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer token-1' }),
       }),
     );
+  });
+
+  it('carries and caches public capabilities, defaulting absent fields to false', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: true, checkoutEnabled: true, liveCharges: false }), { status: 200 })));
+    const expected = { allowlisted: true, checkoutEnabled: true, liveCharges: false };
+    expect(await fetchBillingEligibility({ userId: 'test-mode-user', accessToken: 'token' })).toEqual(expected);
+    expect(getCachedBillingEligibility('test-mode-user')).toEqual(expected);
+  });
+  it('ignores checkout capability for a non-allowlisted or malformed response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: false, checkoutEnabled: true, liveCharges: 'true' }), { status: 200 })));
+    expect(await fetchBillingEligibility({ userId: 'non-allowed', accessToken: 'token' })).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
   });
 
   it('returns false when the server reports not allowlisted', async () => {
@@ -229,7 +240,7 @@ describe('fetchBillingEligibility', () => {
 
     await expect(
       fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
   });
 
   it('fails closed on a non-2xx response, bad JSON, or a network error', async () => {
@@ -241,19 +252,19 @@ describe('fetchBillingEligibility', () => {
     );
     await expect(
       fetchBillingEligibility({ userId: 'user-a', accessToken: 't' }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
 
     clearBillingEligibilityCache();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not-json', { status: 200 })));
     await expect(
       fetchBillingEligibility({ userId: 'user-b', accessToken: 't' }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
 
     clearBillingEligibilityCache();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     await expect(
       fetchBillingEligibility({ userId: 'user-c', accessToken: 't' }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
   });
 
   it('does not reuse a cached answer for a different user id', async () => {
@@ -264,16 +275,16 @@ describe('fetchBillingEligibility', () => {
 
     await expect(
       fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
-    ).resolves.toBe(true);
-    expect(getCachedBillingEligibility('user-1')).toBe(true);
+    ).resolves.toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: false });
+    expect(getCachedBillingEligibility('user-1')).toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: false });
     expect(getCachedBillingEligibility('user-2')).toBeUndefined();
     await expect(
       fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: false });
     await expect(
       fetchBillingEligibility({ userId: 'user-2', accessToken: 'token-2' }),
-    ).resolves.toBe(false);
-    expect(getCachedBillingEligibility('user-2')).toBe(false);
+    ).resolves.toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
+    expect(getCachedBillingEligibility('user-2')).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
     expect(getCachedBillingEligibility('user-1')).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -302,7 +313,7 @@ describe('fetchBillingEligibility', () => {
       signal: controller.signal,
     });
     controller.abort();
-    await expect(pending).resolves.toBe(false);
+    await expect(pending).resolves.toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
     expect(getCachedBillingEligibility('user-1')).toBeUndefined();
 
     vi.stubGlobal(
@@ -311,7 +322,7 @@ describe('fetchBillingEligibility', () => {
     );
     await expect(
       fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' }),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: false });
   });
 
   it('clearBillingEligibilityCache drops a late in-flight result', async () => {
@@ -328,7 +339,7 @@ describe('fetchBillingEligibility', () => {
     const pending = fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' });
     clearBillingEligibilityCache();
     finish(new Response(JSON.stringify({ allowlisted: true }), { status: 200 }));
-    await expect(pending).resolves.toBe(false);
+    await expect(pending).resolves.toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
     expect(getCachedBillingEligibility('user-1')).toBeUndefined();
   });
 });

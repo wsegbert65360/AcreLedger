@@ -125,6 +125,7 @@ beforeEach(() => {
   });
   refreshSessionMock.mockResolvedValue({ data: { session: farmState.session } });
   fromMock.mockImplementation((table: string) => {
+    if (table === 'farms') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
     expect(table).toBe('farm_subscriptions');
     return {
       select: () => ({
@@ -214,7 +215,7 @@ describe('BillingManager', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' });
-    expect(getCachedBillingEligibility('user-1')).toBe(true);
+    expect(getCachedBillingEligibility('user-1')).toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: false });
     expect(getCachedBillingEligibility('user-2')).toBeUndefined();
 
     const view = renderBilling();

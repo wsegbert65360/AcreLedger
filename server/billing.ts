@@ -368,3 +368,13 @@ export const HANDLED_WEBHOOK_EVENT_TYPES: ReadonlySet<string> = new Set([
 export function isUniqueViolation(error: { code?: string | null } | null | undefined): boolean {
   return error?.code === '23505';
 }
+
+/** Public capabilities only; never expose Stripe configuration or key material. */
+export function getBillingCapabilities(allowlisted: boolean, env: Record<string, string | undefined>) {
+  const liveCharges = env.BILLING_LIVE_CHARGES?.toLowerCase() === 'true';
+  return {
+    allowlisted,
+    checkoutEnabled: allowlisted && ((env.STRIPE_SECRET_KEY ?? '').trim().startsWith('sk_test_') || liveCharges),
+    liveCharges,
+  };
+}
