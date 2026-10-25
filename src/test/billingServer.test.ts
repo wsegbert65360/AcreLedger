@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   HANDLED_WEBHOOK_EVENT_TYPES,
   PAST_DUE_GRACE_DAYS,
-  TRIAL_PERIOD_DAYS,
   assertTestModeBilling,
   buildCheckoutCustomerParams,
   buildCheckoutIdempotencyKey,
@@ -18,7 +17,7 @@ import {
   readSubscriptionMetadata,
   resolveCurrentPeriodEnd,
   shouldApplySubscriptionSnapshot,
-  shouldGrantTrial,
+  getCheckoutTrialEnd,
 } from '../../server/billing';
 
 const TEST_ENV = {
@@ -29,7 +28,6 @@ const TEST_ENV = {
 
 describe('billing constants', () => {
   it('matches the locked product decisions', () => {
-    expect(TRIAL_PERIOD_DAYS).toBe(122);
     expect(PAST_DUE_GRACE_DAYS).toBe(3);
   });
 });
@@ -190,11 +188,13 @@ describe('buildCheckoutIdempotencyKey request fingerprint', () => {
   });
 });
 
-describe('shouldGrantTrial', () => {
-  it('grants the trial only to farms that never had a Stripe subscription', () => {
-    expect(shouldGrantTrial(null)).toBe(true);
-    expect(shouldGrantTrial({ stripe_subscription_id: null })).toBe(true);
-    expect(shouldGrantTrial({ stripe_subscription_id: 'sub_old' })).toBe(false);
+describe('getCheckoutTrialEnd', () => {
+  const now = Date.parse('2026-10-25T12:00:00Z');
+  it('keeps the exact server deadline when more than 48 hours remain', () => {
+    expect(getCheckoutTrialEnd('2026-11-01T12:00:00Z', now)).toBe(Date.parse('2026-11-01T12:00:00Z') / 1000);
+  });
+  it.each(['2026-10-27T12:00:00Z', '2026-10-26T12:00:00Z', '2026-10-24T12:00:00Z', null, undefined, 'invalid'])('grants no fresh trial for %s', deadline => {
+    expect(getCheckoutTrialEnd(deadline, now)).toBeUndefined();
   });
 });
 
