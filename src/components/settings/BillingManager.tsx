@@ -230,7 +230,7 @@ export default function BillingManager() {
         )}
         {!eligibilityKnown ? null : !allowlisted ? (
           <p className="text-sm text-muted-foreground">
-            Billing is coming soon. AcreLedger is free for your farm while billing rolls out.
+            3-month free trial, no card needed. Then $299 per farm per year.
           </p>
         ) : (
           <>
