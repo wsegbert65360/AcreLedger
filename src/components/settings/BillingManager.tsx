@@ -6,12 +6,14 @@ import { CreditCard } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useFarmTrial, useTrialClock } from '@/hooks/useFarmTrial';
 import {
   fetchBillingEligibility,
   getCachedBillingEligibility,
   isBillingUiAvailable,
   requestBillingSession,
 } from '@/lib/billing';
+import { getFarmTrialStatus } from '@/lib/farmTrial';
 import { freshAccessToken } from '@/lib/freshAccessToken';
 import { native } from '@/lib/native';
 import { supabase } from '@/lib/supabase';
@@ -61,15 +63,19 @@ function getStatusLine(subscription: FarmSubscription | null): string {
 }
 
 export default function BillingManager() {
+  const farmTrial = useFarmTrial();
+  const now = useTrialClock();
+  const trialActive = getFarmTrialStatus(farmTrial?.trial_ends_at, now).phase === 'active';
   const billingUiEnabled = isBillingUiAvailable();
 
   const { session, farm_id } = useFarm();
   const [subscription, setSubscription] = useState<FarmSubscription | null>(null);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
-  const [eligibility, setEligibility] = useState<{ userId: string; allowlisted: boolean } | null>(null);
+  const [eligibility, setEligibility] = useState<{ userId: string; allowlisted: boolean; checkoutEnabled: boolean } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
   const userId = session?.user?.id ?? null;
+  const checkoutEnabled = userId != null && eligibility?.userId === userId && eligibility.checkoutEnabled;
   const allowlisted = userId != null && eligibility?.userId === userId ? eligibility.allowlisted : null;
 
   useEffect(() => {
@@ -109,7 +115,7 @@ export default function BillingManager() {
 
     const cached = getCachedBillingEligibility(userId);
     if (cached !== undefined) {
-      setEligibility({ userId, allowlisted: cached });
+      setEligibility({ userId, allowlisted: cached.allowlisted, checkoutEnabled: cached.checkoutEnabled });
       return;
     }
 
@@ -128,10 +134,10 @@ export default function BillingManager() {
           signal: controller.signal,
         });
         if (cancelled || controller.signal.aborted) return;
-        setEligibility({ userId, allowlisted: value });
+        setEligibility({ userId, allowlisted: value.allowlisted, checkoutEnabled: value.checkoutEnabled });
       } catch {
         if (cancelled || controller.signal.aborted) return;
-        setEligibility({ userId, allowlisted: false });
+        setEligibility({ userId, allowlisted: false, checkoutEnabled: false });
       }
     })();
     return () => {
@@ -216,6 +222,12 @@ export default function BillingManager() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {trialActive && (
+          <section aria-label="Farm free trial" className="space-y-2">
+            <p className="text-sm text-foreground">Free trial: full access until {formatIsoDate(farmTrial?.trial_ends_at)}. No card needed.</p>
+            <p className="text-sm text-muted-foreground">Your free trial started when you set up this farm. Each farm gets one.</p>
+          </section>
+        )}
         {!eligibilityKnown ? null : !allowlisted ? (
           <p className="text-sm text-muted-foreground">
             Billing is coming soon. AcreLedger is free for your farm while billing rolls out.
@@ -228,7 +240,7 @@ export default function BillingManager() {
                 Ask the farm owner to manage billing for this farm.
               </p>
             )}
-            {canManage && needsCheckout && (
+            {checkoutEnabled && canManage && needsCheckout && (
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => openBillingSession('checkout')}

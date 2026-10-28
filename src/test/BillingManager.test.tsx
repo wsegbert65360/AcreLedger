@@ -84,13 +84,14 @@ function renderBilling() {
   );
 }
 
-function eligibilityResponse(allowlisted: boolean, status = 200): Response {
-  return new Response(JSON.stringify({ allowlisted }), { status });
+function eligibilityResponse(allowlisted: boolean, status = 200, checkoutEnabled = allowlisted): Response {
+  return new Response(JSON.stringify({ allowlisted, checkoutEnabled, liveCharges: false }), { status });
 }
 
 function stubBillingFetch(options?: {
   allowlisted?: boolean;
   eligibilityStatus?: number;
+  checkoutEnabled?: boolean;
   eligibilityError?: Error;
   checkout?: Response | Error;
 }): ReturnType<typeof vi.fn> {
@@ -98,7 +99,7 @@ function stubBillingFetch(options?: {
     const url = String(input);
     if (url.includes('/api/billing-eligibility')) {
       if (options?.eligibilityError) throw options.eligibilityError;
-      return eligibilityResponse(options?.allowlisted ?? true, options?.eligibilityStatus ?? 200);
+      return eligibilityResponse(options?.allowlisted ?? true, options?.eligibilityStatus ?? 200, options?.checkoutEnabled);
     }
     if (options?.checkout instanceof Error) throw options.checkout;
     if (options?.checkout) return options.checkout;
@@ -125,6 +126,7 @@ beforeEach(() => {
   });
   refreshSessionMock.mockResolvedValue({ data: { session: farmState.session } });
   fromMock.mockImplementation((table: string) => {
+    if (table === 'farms') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
     expect(table).toBe('farm_subscriptions');
     return {
       select: () => ({
@@ -166,6 +168,13 @@ describe('BillingManager', () => {
     } finally {
       vi.restoreAllMocks();
     }
+  });
+
+  it('hides checkout for allowlisted accounts when the server disables checkout', async () => {
+    stubBillingFetch({ allowlisted: true, checkoutEnabled: false });
+    renderBilling();
+    expect(await screen.findByText('No billing subscription for this farm yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start 4-month free trial|reactivate subscription/i })).toBeNull();
   });
 
   it('shows "coming soon" without any checkout action for non-allowlisted users', async () => {
@@ -214,7 +223,7 @@ describe('BillingManager', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await fetchBillingEligibility({ userId: 'user-1', accessToken: 'token-1' });
-    expect(getCachedBillingEligibility('user-1')).toBe(true);
+    expect(getCachedBillingEligibility('user-1')).toEqual({ allowlisted: true, checkoutEnabled: true, liveCharges: false });
     expect(getCachedBillingEligibility('user-2')).toBeUndefined();
 
     const view = renderBilling();

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { isBillingAllowlisted } from '../server/billing.js';
+import { getBillingCapabilities, isBillingAllowlisted } from '../server/billing.js';
 
 type QueryValue = string | string[] | undefined;
 
@@ -127,7 +127,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       { email, userId: user.id },
       process.env.BILLING_ALLOWLIST,
     );
-    return res.status(200).json({ allowlisted });
+    return res.status(200).json(getBillingCapabilities(allowlisted, process.env));
   } catch (err: unknown) {
     console.error('Billing eligibility error:', err);
     return res.status(500).json({ error: 'Unexpected server error' });

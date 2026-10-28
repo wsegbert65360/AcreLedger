@@ -51,6 +51,8 @@ function createRequest(overrides: Partial<RequestInput> = {}): RequestInput {
 
 describe('billing eligibility API', () => {
   beforeEach(() => {
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.BILLING_LIVE_CHARGES;
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_ANON_KEY = 'anon-key';
     process.env.ALLOWED_ORIGINS = 'https://acreledger.example';
@@ -71,6 +73,8 @@ describe('billing eligibility API', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     delete process.env.BILLING_ALLOWLIST;
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.BILLING_LIVE_CHARGES;
   });
 
   it('returns allowlisted true for an allowlisted user', async () => {
@@ -79,9 +83,9 @@ describe('billing eligibility API', () => {
 
     expect(result.state).toEqual({
       status: 200,
-      body: { allowlisted: true },
+      body: { allowlisted: true, checkoutEnabled: false, liveCharges: false },
     });
-    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted']);
+    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted', 'checkoutEnabled', 'liveCharges']);
     expect(result.headers.get('Cache-Control')).toBe('no-store');
   });
 
@@ -92,9 +96,9 @@ describe('billing eligibility API', () => {
 
     expect(result.state).toEqual({
       status: 200,
-      body: { allowlisted: false },
+      body: { allowlisted: false, checkoutEnabled: false, liveCharges: false },
     });
-    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted']);
+    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted', 'checkoutEnabled', 'liveCharges']);
   });
 
   it.each([
@@ -213,9 +217,9 @@ describe('billing eligibility API', () => {
 
     expect(result.state).toEqual({
       status: 200,
-      body: { allowlisted: false },
+      body: { allowlisted: false, checkoutEnabled: false, liveCharges: false },
     });
-    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted']);
+    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted', 'checkoutEnabled', 'liveCharges']);
   });
 
   it('returns allowlisted false when BILLING_ALLOWLIST is empty or unset', async () => {
@@ -224,7 +228,7 @@ describe('billing eligibility API', () => {
     await handler(createRequest(), unsetResult.response);
     expect(unsetResult.state).toEqual({
       status: 200,
-      body: { allowlisted: false },
+      body: { allowlisted: false, checkoutEnabled: false, liveCharges: false },
     });
 
     process.env.BILLING_ALLOWLIST = '';
@@ -232,16 +236,42 @@ describe('billing eligibility API', () => {
     await handler(createRequest(), emptyResult.response);
     expect(emptyResult.state).toEqual({
       status: 200,
-      body: { allowlisted: false },
+      body: { allowlisted: false, checkoutEnabled: false, liveCharges: false },
     });
   });
 
-  it('responds 200 with only the allowlisted key', async () => {
+  it('responds 200 with only public billing booleans', async () => {
     const result = createResponse();
     await handler(createRequest(), result.response);
 
     expect(result.state.status).toBe(200);
-    expect(result.state.body).toEqual({ allowlisted: true });
-    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted']);
+    expect(result.state.body).toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: false });
+    expect(Object.keys(result.state.body as object)).toEqual(['allowlisted', 'checkoutEnabled', 'liveCharges']);
   });
+  it.each([
+    ['sk_test_trial_fixture', undefined, true, false],
+    ['sk_live_trial_fixture', 'false', false, false],
+    ['sk_live_trial_fixture', 'TrUe', false, true],
+    ['', undefined, false, false],
+    ['sk_live_trial_fixture', ' true ', false, true],
+  ])('returns safe capabilities for configured billing', async (key, live, checkoutEnabled, liveCharges) => {
+    process.env.STRIPE_SECRET_KEY = key;
+    if (live !== undefined) process.env.BILLING_LIVE_CHARGES = live;
+    const result = createResponse();
+    await handler(createRequest(), result.response);
+    expect(result.state.body).toEqual({ allowlisted: true, checkoutEnabled, liveCharges });
+    const body = JSON.stringify(result.state.body);
+    if (key) expect(body).not.toContain(key);
+    expect(body).not.toContain('sk_');
+    expect(console.error).not.toHaveBeenCalled();
+  });
+  it('never enables checkout for a non-allowlisted user, even with test or live billing', async () => {
+    process.env.BILLING_ALLOWLIST = 'someone-else';
+    process.env.STRIPE_SECRET_KEY = 'sk_test_trial_fixture';
+    process.env.BILLING_LIVE_CHARGES = 'true';
+    const result = createResponse();
+    await handler(createRequest(), result.response);
+    expect(result.state.body).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
+  });
+
 });
