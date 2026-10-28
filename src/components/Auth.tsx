@@ -382,6 +382,14 @@ export function Auth({
                                 <Button type="submit" className="w-full" disabled={loading}>
                                     {loading ? 'Processing...' : buttonLabel}
                                 </Button>
+                                {mode === 'signup' && (
+                                    <p className="text-xs text-muted-foreground text-center">
+                                        By creating an account, I agree to the{' '}
+                                        <Link to="/terms" className="underline hover:text-primary">Terms</Link>
+                                        {' '}and{' '}
+                                        <Link to="/privacy" className="underline hover:text-primary">Privacy Policy</Link>
+                                    </p>
+                                )}
                                 {mode === 'signin' && (
                                     <>
                                         <Button

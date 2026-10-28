@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-10-21 (server-owned farm trial metadata documented).
+> **Last updated:** 2026-10-25 (approved public legal pages).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Allowlist, native purchase suppression and access enforcement are unchanged.
 - **2026-10-21** — Trial PR 1 prepares server-owned 3-month farm trial dates, a service-only salted-identity claim ledger, and billing-history deletion protection. Existing farms await rollout backfill; enforcement stays OFF.
 - **2026-10-20** — Reports > Landlord now documents Farm Owner Summary: current-farm fields including owned/unassigned land, season-scoped activity, CSV/Detailed-PDF exports, and a missing-farm export guard.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). The client no longer reads `VITE_BILLING_ALLOWLIST`; the bundle guard fails if that name, a billing sentinel, or allowlist entries appear in `dist`. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere.
 - **2026-10-17** — Spray compliance is profile-driven (`us-epa` / `au-apvma`), not US-only; added [Regional Settings and the Australia Pilot](#regional-settings-and-the-australia-pilot) covering the `auPilot` allowlist gate, user-id-scoped region preferences, locale terminology, and the acres/hectares boundary. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration in `vite-env.d.ts`, not a kill switch. Service-worker navigation is network-first with a 3 s timeout, a precache fallback, and a single-retry reload guard.
-- **2026-10-16** — AU pilot card gated behind `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141`; root clutter gitignored (`*.tincan-backup-*`, root `*.patch`, compiled `server/*.js`); parked equipment mutations overlaid on a fail-soft fetch; `engines.node` pinned to `22.x`.
 
 ## Contents
 

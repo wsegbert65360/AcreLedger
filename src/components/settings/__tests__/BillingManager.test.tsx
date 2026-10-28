@@ -23,10 +23,10 @@ beforeAll(async () => { BillingManager = (await import('../BillingManager')).def
 function mount() { render(<MemoryRouter><BillingManager /></MemoryRouter>); }
 describe('BillingManager status', () => {
   beforeEach(() => { mock.reset(); mock.setTableHandler('farms', { data: null, error: null }); control.allowlisted = false; });
-  it('shows Free beside the free copy for non-allowlisted users', async () => {
+  it('shows Free beside the approved trial copy for non-allowlisted users', async () => {
     mount();
     expect(await screen.findByText('Free')).toBeInTheDocument();
-    expect(screen.getByText(/free for your farm/)).toBeInTheDocument();
+    expect(screen.getByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByText('Not subscribed')).toBeNull();
   });
   it('shows the loaded trial badge and trial copy', async () => {

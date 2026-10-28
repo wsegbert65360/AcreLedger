@@ -310,6 +310,13 @@ describe('signed-out routing (ticket C)', () => {
     expect(screen.queryByRole('heading', { name: 'Welcome Back' })).not.toBeInTheDocument();
   });
 
+  it.each([['/terms', 'AcreLedger Terms of Service'], ['/refund', 'AcreLedger Refund Policy']])('keeps %s publicly readable', (path, title) => {
+    navigate(path);
+    renderApp();
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.getByText('Last updated: November 1, 2026')).toBeInTheDocument();
+  });
+
   it('keeps /privacy publicly readable', () => {
     navigate('/privacy');
     renderApp();
@@ -633,6 +640,12 @@ describe('signed-in routing (preserved behavior)', () => {
     await vi.waitFor(() => expect(sessionStorage.getItem('al_password_recovery_pending')).toBeNull());
     expect(screen.queryByRole('heading', { name: 'Choose New Password' })).not.toBeInTheDocument();
     expect(screen.getByTestId('app-dashboard')).toBeInTheDocument();
+  });
+
+  it.each([['/terms', 'AcreLedger Terms of Service'], ['/refund', 'AcreLedger Refund Policy']])('renders %s inside the app shell', async (path, title) => {
+    navigate(path);
+    renderApp();
+    expect(await screen.findByText(title)).toBeInTheDocument();
   });
 
   it('still renders /privacy inside the app shell', async () => {

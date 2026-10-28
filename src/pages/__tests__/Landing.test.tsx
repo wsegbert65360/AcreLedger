@@ -28,7 +28,7 @@ describe('Landing', () => {
 
     expect(screen.getAllByText('AcreLedger').length).toBeGreaterThan(0);
     expect(
-      screen.getByRole('heading', { name: /field records in\. fsa paperwork out\./i })
+      screen.getByRole('heading', { name: /Keep field work and FSA paperwork in one place/i })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: /what goes in the book\./i })
@@ -40,22 +40,11 @@ describe('Landing', () => {
     expect(screen.getByAltText(/AcreLedger dashboard with live weather/i)).toBeInTheDocument();
   });
 
-  it('explains the no-charge limited rollout and planned annual price', () => {
+  it('uses the approved trial, price, and device copy', () => {
     renderLanding();
-
-    expect(
-      screen.getAllByText(/Planned price: \$299 per farm, billed annually/i)
-    ).toHaveLength(2);
-    expect(screen.getByText('billing coming soon')).toBeInTheDocument();
-    expect(screen.getByText('per farm / year, billed annually')).toBeInTheDocument();
-    expect(screen.getByText('$0.00')).toBeInTheDocument();
-    expect(
-      screen.getByText(/no payment method is collected when you create an account/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/the planned future price is \$299 per farm per year/i)
-    ).toBeInTheDocument();
-    expect(screen.getByRole('main')).not.toHaveTextContent(/four[- ]month|4[- ]month/i);
+    expect(screen.getAllByText('3-month free trial, no card needed. Then $299 per farm per year.').length).toBeGreaterThanOrEqual(5);
+    expect(screen.getByText('iPhone and any web browser')).toBeInTheDocument();
+    expect(screen.getByRole('main')).not.toHaveTextContent(/coming soon|no charge|planned price|four[- ]month|4[- ]month|Android|iPad/i);
   });
 
   it('carries the approved FSA footer disclaimer', () => {
@@ -101,6 +90,8 @@ describe('Landing', () => {
       'href',
       '/privacy'
     );
+    expect(screen.getByRole('link', { name: /terms of service/i })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: /refund policy/i })).toHaveAttribute('href', '/refund');
     expect(screen.getByRole('link', { name: /^support$/i })).toHaveAttribute(
       'href',
       '/support'
@@ -124,7 +115,7 @@ describe('Landing', () => {
     );
     expect(screen.queryByRole('heading', { name: /terms of the book/i })).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/what does the limited rollout cost/i)
+      screen.queryByText(/what does acreledger cost/i)
     ).not.toBeInTheDocument();
 
     const signInLinks = screen.getAllByRole('link', { name: /sign in/i });

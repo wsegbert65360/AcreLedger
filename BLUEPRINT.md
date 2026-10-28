@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-10-19 (billing rollout allowlist moved server-side; `VITE_BILLING_ALLOWLIST` removed from the client).
+> **Last updated:** 2026-10-25 (approved public legal pages).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Allowlist, native purchase suppression and access enforcement are unchanged.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). `VITE_BILLING_ALLOWLIST` is unused; the client caches `{ userId, allowlisted }` in memory and only uses it when the cached user id matches. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere; empty or unset fails closed to "Billing coming soon".
 - **2026-10-17** — Documented compliance profiles (`us-epa` / `au-apvma`), region preferences, the `auPilot` allowlist gate, locale terminology, and the area-unit boundary in a new [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot) section; `SprayRecord` now shows the real `complianceProfile` union plus `pic` / `waterRate` / `waterRateUnit`. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration, not a gate. Service Worker rewritten for the network-first navigation route, the 3 s timeout, the precache fallback, and the single-retry reload guard.
 - **2026-10-16** — AU pilot card gated by `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141_add_spray_water_rate_unit_pic.sql`; root clutter gitignored; parked equipment mutations overlaid onto the retained cache on a fail-soft fetch.

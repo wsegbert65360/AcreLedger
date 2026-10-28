@@ -35,7 +35,9 @@ import { isEquipmentUiEnabled } from "@/lib/equipment/feature";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 import Privacy from "./pages/Privacy";
+import Refund from "./pages/Refund";
 import Support from "./pages/Support";
+import Terms from "./pages/Terms";
 
 const PlantModal = lazy(() => import("@/components/PlantModal"));
 const SprayModal = lazy(() => import("@/components/SprayModal"));
@@ -137,6 +139,8 @@ const AnimatedRoutes = () => {
           <Route path="/subscription" element={<BillingSettingsRedirect />} />
           <Route path="/onboarding" element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
           <Route path="/privacy" element={<ErrorBoundary><Privacy withBottomNav /></ErrorBoundary>} />
+          <Route path="/terms" element={<ErrorBoundary><Terms withBottomNav /></ErrorBoundary>} />
+          <Route path="/refund" element={<ErrorBoundary><Refund withBottomNav /></ErrorBoundary>} />
           <Route path="/support" element={<ErrorBoundary><Support withBottomNav /></ErrorBoundary>} />
           <Route path="/weather" element={<ErrorBoundary><Weather /></ErrorBoundary>} />
           <Route path="/field/:id" element={<ErrorBoundary><FieldDetailScreen /></ErrorBoundary>} />
@@ -329,6 +333,8 @@ const AppContent = () => {
           )}
         />
         <Route path="/privacy" element={<ErrorBoundary><Privacy /></ErrorBoundary>} />
+        <Route path="/terms" element={<ErrorBoundary><Terms /></ErrorBoundary>} />
+        <Route path="/refund" element={<ErrorBoundary><Refund /></ErrorBoundary>} />
         <Route path="/support" element={<ErrorBoundary><Support /></ErrorBoundary>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

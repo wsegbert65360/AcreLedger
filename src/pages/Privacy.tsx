@@ -1,263 +1,43 @@
-import { Link, useNavigate } from "react-router-dom";
+import LegalPolicyPage from "@/components/LegalPolicyPage";
 
-import { ArrowLeft, ShieldCheck, Lock, Globe, FileText, Trash2, Mail } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/support";
-import { cn } from "@/lib/utils";
-
-interface PrivacyProps {
-    withBottomNav?: boolean;
-}
-
-export default function Privacy({ withBottomNav = false }: PrivacyProps) {
-    const navigate = useNavigate();
-
-    const goBack = () => {
-        if ((window.history.state?.idx ?? 0) > 0) {
-            navigate(-1);
-            return;
-        }
-        navigate('/');
-    };
-
+export default function Privacy({ withBottomNav = false }: { withBottomNav?: boolean }) {
     return (
-        <div className={cn(
-            "min-h-screen bg-background pb-12",
-            withBottomNav && "pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-12",
-        )}>
-            <div className="max-w-2xl mx-auto p-4 space-y-6 lg:max-w-4xl lg:px-8">
-                <header className="flex items-center gap-4 py-4">
-                    <Button variant="ghost" size="icon" onClick={goBack} aria-label="Go back" className="h-11 w-11 text-muted-foreground">
-                        <ArrowLeft size={20} />
-                    </Button>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
-                </header>
-
-                <Card className="border-border/40 bg-card/50 backdrop-blur-sm shadow-xl">
-                    <CardHeader className="border-b border-border/10 pb-6">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 bg-primary/10 rounded-lg">
-                                <ShieldCheck className="text-primary" size={24} />
-                            </div>
-                            <div>
-                                <CardTitle className="text-xl">AcreLedger Privacy Policy</CardTitle>
-                                <p className="text-xs text-muted-foreground mt-1">Last updated: September 27, 2026</p>
-                            </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground leading-relaxed mt-4 italic">
-                            At AcreLedger, we understand that your farm data is your most valuable asset.
-                            This policy outlines how we collect, protect, and isolate your agricultural information.
-                        </p>
-                    </CardHeader>
-                    <CardContent className="space-y-8 pt-8">
-                        {/* Section 1 */}
-                        <section className="space-y-4">
-                            <div className="flex items-center gap-2 text-primary">
-                                <FileText size={18} />
-                                <h2 className="font-bold text-lg">1. Data Collection & Usage</h2>
-                            </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                                We collect only the data necessary to manage your field operations and compliance reporting:
-                            </p>
-                            <ul className="list-none space-y-3">
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Field Data:</span>
-                                    GPS coordinates, field boundaries, and acreage for the fields you manage.
-                                </li>
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Account Data:</span>
-                                    Your email address, user ID, farm name, and sign-in information needed to operate and secure your account.
-                                </li>
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Contact Details:</span>
-                                    Phone numbers, email addresses, and physical or billing addresses that you choose to save in work requests or application records.
-                                </li>
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Activity Logs:</span>
-                                    Records of Planting, Spraying, Harvesting, and Fertilizer applications, including product formulas and dates.
-                                </li>
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Photos:</span>
-                                    Spray-ticket or product-label photos that you attach to a field record.
-                                </li>
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Location Services:</span>
-                                    We use GPS data to provide hyper-local weather from Visual Crossing and to "Pin" activity locations in the field.
-                                </li>
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Ask the Book:</span>
-                                    Text questions and answers are kept in an operational log for 30 days. Voice audio is not stored by AcreLedger.
-                                </li>
-                                <li className="flex flex-col gap-1 border-l-2 border-primary/30 pl-3 text-sm sm:flex-row sm:gap-2">
-                                    <span className="shrink-0 font-bold text-foreground">Crash Diagnostics:</span>
-                                    When crash reporting is enabled in your version of the app, an error report (the error message, stack trace, and the page you were on) is sent to our crash-reporting provider. Sign-in tokens and attached photos are removed first, and the report does not include your farm records. It is used only to fix bugs, never for advertising or tracking. You can turn this off in Settings under Security &amp; Privacy.
-                                </li>
-                            </ul>
-                        </section>
-
-                        {/* Section 2 */}
-                        <section className="space-y-4">
-                            <div className="flex items-center gap-2 text-primary">
-                                <Lock size={18} />
-                                <h2 className="font-bold text-lg">2. Data Isolation & Security</h2>
-                            </div>
-                            <div className="p-4 bg-muted/30 rounded-lg border border-border/30 space-y-3">
-                                <p className="text-sm text-foreground/90 font-bold">Multi-Tenancy Architecture</p>
-                                <p className="text-sm text-muted-foreground leading-relaxed">
-                                    Your data is stored using Supabase with industry-standard encryption.
-                                </p>
-                                <div className="grid gap-4 mt-2">
-                                    <div className="space-y-1">
-                                        <p className="text-xs text-foreground font-bold uppercase tracking-tighter">Row Level Security (RLS)</p>
-                                        <p className="text-xs text-muted-foreground">We employ strict RLS policies to ensure that your farm data is "invisible" to any other user. No other farmer can see your logs, and you cannot see theirs.</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs text-foreground font-bold uppercase tracking-tighter">Tenant Isolation</p>
-                                        <p className="text-xs text-muted-foreground">All data is tagged with a unique farm_id or tenant_id at the database level, preventing accidental data leaks.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Section 3 */}
-                        <section className="space-y-4">
-                            <div className="flex items-center gap-2 text-primary">
-                                <Globe size={18} />
-                                <h2 className="font-bold text-lg">3. Third-Party Integrations</h2>
-                            </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                                AcreLedger connects to the following services to provide essential functionality:
-                            </p>
-                            <div className="space-y-4">
-                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-bold text-foreground">Supabase</p>
-                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                            Provides account authentication and encrypted cloud storage for farm records.
-                                        </p>
-                                    </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">Account and farm data</span>
-                                </div>
-                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-bold text-foreground">Visual Crossing Weather</p>
-                                    </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
-                                </div>
-                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-bold text-foreground">Iowa Environmental Mesonet (IEM) Stage IV</p>
-                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                            Field rainfall lookups use IEM Stage IV radar. AcreLedger sends field location coordinates to retrieve rainfall totals; it does not send your name or farm records.
-                                        </p>
-                                    </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">GPS Data only</span>
-                                </div>
-                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-bold text-foreground">Google Fonts</p>
-                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                            The marketing landing page loads its display fonts (Fraunces, Newsreader, IBM Plex Mono) from Google Fonts, so your browser requests those files from Google. The application's own fonts (Inter, JetBrains Mono) are bundled with the app and are not fetched from Google.
-                                        </p>
-                                    </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">Fonts</span>
-                                </div>
-                                <div className="flex flex-col gap-3 rounded-lg border border-border/20 bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-bold text-foreground">Vercel</p>
-                                    </div>
-                                    <span className="self-start rounded-lg bg-primary/20 px-2 py-0.5 text-xs font-bold uppercase text-primary sm:shrink-0">Hosting/SSL</span>
-                                </div>
-                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
-                                    <div>
-                                        <p className="text-sm font-bold text-foreground">OpenRouter (Ask the book)</p>
-                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                            Questions you ask about your records are sent through OpenRouter to an eligible model provider to draft an answer from this farm’s data only. AcreLedger requests only providers marked as not collecting user data, and OpenRouter prompt logging must remain disabled. AcreLedger keeps a 30-day operational log of questions and answers.
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-center p-3 bg-muted/20 border border-border/20 rounded-lg">
-                                    <div>
-                                        <p className="text-sm font-bold text-foreground">Voice questions (Ask the book)</p>
-                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                                            Voice questions use this device’s microphone. The phone or browser turns your speech into words — Apple (iPhone) or the browser vendor (often Google in Chrome) may process that audio as part of OS/browser speech. AcreLedger servers receive only the text question, the same payload as a typed question. Audio is not stored in the farm book.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Section 4 */}
-                        <section className="space-y-4">
-                            <div className="flex items-center gap-2 text-primary">
-                                <Trash2 size={18} />
-                                <h2 className="font-bold text-lg">4. Your Control Over Data</h2>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="p-3 border border-border/40 rounded-lg">
-                                    <p className="text-sm font-bold mb-1">Soft Deletes</p>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                        When you delete a record (like a fertilizer log), it is marked as deleted and excluded from active records. It remains recoverable until the account deletion process removes data that we are not legally required to retain.
-                                    </p>
-                                </div>
-                                <div className="p-3 border border-border/40 rounded-lg">
-                                    <p className="text-sm font-bold mb-1">Account Deletion</p>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                        You can initiate permanent account deletion in Settings under Account &amp; Display. We complete requests within 30 days and delete associated personal data unless retention is legally required.
-                                    </p>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Section 5 */}
-                        <section className="space-y-4 border-t border-border/10 pt-6">
-                            <div className="flex items-center gap-2 text-primary">
-                                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                                <h2 className="font-bold text-lg uppercase tracking-tight">5. Compliance & Reporting</h2>
-                            </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed border-l-2 border-primary pl-4">
-                                AcreLedger is designed to help you meet Missouri 1% and federal compliance standards by generating "Audit-Ready" PDF reports based on your saved logs.
-                                <span className="block mt-2 font-bold text-foreground/90">
-                                    We do not share these reports with any government agency (like the FSA) unless you explicitly choose to export and send them yourself.
-                                </span>
-                            </p>
-                        </section>
-
-                        {/* Section 6 */}
-                        <section className="space-y-4 border-t border-border/10 pt-6">
-                            <div className="flex items-center gap-2 text-primary">
-                                <Mail size={18} />
-                                <h2 className="font-bold text-lg">6. Contact</h2>
-                            </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                                Privacy questions and support requests go to{' '}
-                                <a
-                                    href={SUPPORT_MAILTO}
-                                    className="break-all font-bold text-foreground underline-offset-4 hover:text-primary hover:underline sm:break-normal"
-                                >
-                                    {SUPPORT_EMAIL}
-                                </a>
-                                . The public{' '}
-                                <Link
-                                    to="/support"
-                                    className="font-bold text-foreground underline-offset-4 hover:text-primary hover:underline"
-                                >
-                                    support page
-                                </Link>
-                                {' '}is also available without signing in.
-                            </p>
-                        </section>
-                    </CardContent>
-                </Card>
-
-                <footer className="text-center py-8">
-                    <p className="text-xs font-mono text-muted-foreground/60 uppercase tracking-[0.2em]">
-                        &copy; 2026 AcreLedger Precision Agriculture. All Rights Isolated.
-                    </p>
-                </footer>
-            </div>
-        </div>
+        <LegalPolicyPage title="Privacy Policy" policyTitle="AcreLedger Privacy Policy" withBottomNav={withBottomNav}>
+            <p>{"Last updated: November 1, 2026"}</p>
+            <p>{"AcreLedger is provided by "}<strong>{"Egbert Farms, LLC"}</strong>{" (\"we\"), which runs it from Henry County, Missouri, USA. This policy explains what we collect, why we collect it, and who helps us run the service. Questions: "}<strong><a href="mailto:acreledgerapp@gmail.com" className="underline">acreledgerapp@gmail.com</a></strong>{"."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"The short version"}</h2>
+            <ul className="list-disc space-y-3 pl-5"><li>{"Your farm records are yours. We use them only to run AcreLedger for you."}</li><li><strong>{"We don't sell your data, we don't show ads, and we don't run tracking or analytics tools."}</strong></li><li>{"A few outside services help us run the app (listed below). They get only what they need."}</li></ul>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"What we collect"}</h2>
+            <p><strong>{"Account info:"}</strong>{" your email address, your login details (handled by our login provider), and your name if you enter it."}</p>
+            <p><strong>{"Farm records you enter:"}</strong>{" farms, fields and boundaries, crops, planting, spraying, fertilizer and input records, harvest and grain bin records, equipment, work requests, notes, and team members you invite."}</p>
+            <p><strong>{"FSA and land data you import:"}</strong>{" FSA tract and CLU information, farm/tract/field numbers, acreage, and FSA-578-style planting report details that you enter or import (including shapefiles, which are read on your device)."}</p>
+            <p><strong>{"Location:"}</strong>{" field locations and boundaries you draw or import. If you allow it, your device's current location "}<em>{"while the app is open"}</em>{", to set field coordinates and get local weather. We don't track your location in the background."}</p>
+            <p><strong>{"Voice (optional):"}</strong>{" if you use \"ask by voice,\" your device's speech recognition (Apple, or your browser) turns speech into text. We receive the text, not the audio."}</p>
+            <p><strong>{"Photos (optional):"}</strong>{" if you allow camera or photo-library access, you can take or attach photos of spray tickets and product labels. The photos are saved as part of that spray record in our database (not in a separate file store). They are included in your backups and exports. You can turn off camera and photo access in your device settings."}</p>
+            <p><strong>{"Error logs:"}</strong>{" when something goes wrong, the app logs the error on your device only. We don't send crash reports to anyone. If we ever add a crash-reporting provider, we'll update this policy first."}</p>
+            <p><strong>{"Billing:"}</strong>{" handled by Stripe. We receive your subscription status, the email on the account and a Stripe customer ID. "}<strong>{"We never see or store your full card number."}</strong></p>
+            <p><strong>{"Saved on your device:"}</strong>{" the app keeps a copy of your records and settings on your phone, tablet or computer so it works offline."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Who helps us run AcreLedger"}</h2>
+            <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th scope="col" className="p-3 border-b">{"Service"}</th><th scope="col" className="p-3 border-b">{"What it does"}</th><th scope="col" className="p-3 border-b">{"What it receives"}</th></tr></thead><tbody><tr><td className="p-3 border-b align-top">{"Supabase"}</td><td className="p-3 border-b align-top">{"Login and database where your records are stored (hosted on Amazon Web Services in Oregon, USA)"}</td><td className="p-3 border-b align-top">{"Account info, all farm records and spray-record photos"}</td></tr><tr><td className="p-3 border-b align-top">{"Vercel"}</td><td className="p-3 border-b align-top">{"Hosts the website and app servers"}</td><td className="p-3 border-b align-top">{"Normal web request data (e.g. IP address)"}</td></tr><tr><td className="p-3 border-b align-top">{"Stripe"}</td><td className="p-3 border-b align-top">{"Payments and billing"}</td><td className="p-3 border-b align-top">{"Email, payment details, farm/user ID"}</td></tr><tr><td className="p-3 border-b align-top">{"Visual Crossing"}</td><td className="p-3 border-b align-top">{"Weather forecasts and history"}</td><td className="p-3 border-b align-top">{"Field or device location (coordinates)"}</td></tr><tr><td className="p-3 border-b align-top">{"Rain API (rain-api.vercel.app)"}</td><td className="p-3 border-b align-top">{"Rainfall totals per field"}</td><td className="p-3 border-b align-top">{"Field coordinates/boundary and date ranges"}</td></tr><tr><td className="p-3 border-b align-top">{"OpenRouter (and the AI model provider it routes to)"}</td><td className="p-3 border-b align-top">{"Answers questions in \"Ask\""}</td><td className="p-3 border-b align-top">{"Your question and the farm records needed to answer it"}</td></tr><tr><td className="p-3 border-b align-top">{"Esri (ArcGIS)"}</td><td className="p-3 border-b align-top">{"Satellite map imagery"}</td><td className="p-3 border-b align-top">{"Map area being viewed (standard tile requests)"}</td></tr><tr><td className="p-3 border-b align-top">{"OpenStreetMap Nominatim"}</td><td className="p-3 border-b align-top">{"Looks up nearest road for work requests"}</td><td className="p-3 border-b align-top">{"Field coordinates"}</td></tr><tr><td className="p-3 border-b align-top">{"Google Fonts"}</td><td className="p-3 border-b align-top">{"Website fonts"}</td><td className="p-3 border-b align-top">{"Standard web request data"}</td></tr><tr><td className="p-3 border-b align-top">{"Apple"}</td><td className="p-3 border-b align-top">{"iOS app delivery; on-device speech recognition"}</td><td className="p-3 border-b align-top">{"As set by Apple"}</td></tr></tbody></table></div>
+            <p><strong>{"About the AI assistant (\"Ask\")."}</strong>{" Using the assistant is "}<strong>{"optional"}</strong>{". When you use it, your question and the farm records needed to answer it are sent through OpenRouter to an outside AI model provider. "}<strong>{"That provider may log your question and records, or use them to improve its AI models."}</strong>{" Don't type anything into the assistant that you wouldn't want shared. The assistant can only read your own farm and can't change your records. If you don't use it, nothing is sent to these providers."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Why we use it"}</h2>
+            <p>{"We use your data to run AcreLedger, keep your account secure, sync your devices, show weather and rainfall, produce reports, bill you, answer support emails, and meet our legal duties."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Sharing"}</h2>
+            <p>{"We share data only with the services above, with people you invite to your farm, if the law requires it, or if the business is sold (in which case this policy still applies to your data). We don't sell it."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Keeping and deleting data"}</h2>
+            <ul className="list-disc space-y-3 pl-5"><li>{"While your account exists we keep your records, including when your farm is read-only. Unpaid farms are never deleted."}</li><li>{"When you delete a record, it is first hidden (\"soft deleted\") so mistakes can be undone."}</li><li><strong>{"If you ask us to delete your account,"}</strong>{" we remove your personal information and farm data within "}<strong>{"30 days"}</strong>{". It is gone from our backups within "}<strong>{"90 days"}</strong>{". Billing records (such as invoices and payment history) are kept for "}<strong>{"7 years"}</strong>{" for tax purposes. Export anything you want to keep before you ask."}</li><li>{"Deleting your account is different from a trial ending or a subscription lapsing. "}<strong>{"Those never delete your data;"}</strong>{" the farm just becomes read-only."}</li><li>{"You can export your data any time."}</li></ul>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Where your data is stored"}</h2>
+            <p>{"Your account and farm records, including photos, are stored in the United States, in a database hosted on Amazon Web Services in Oregon (us-west-2) by Supabase."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Security"}</h2>
+            <p>{"Your data travels over encrypted connections. In the database, each farm's data is walled off from every other farm. No system is perfect. If a breach affects you, we'll tell you as the law requires."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Your choices and rights"}</h2>
+            <p>{"You can view, export, correct or delete your data in the app, or email us. You can turn off location, camera, photo and microphone access in your device settings. Residents of some US states may have extra rights; email us and we'll honor them."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Children"}</h2>
+            <p>{"AcreLedger is for adults running farm businesses. We don't knowingly collect data from children under 13."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Australia"}</h2>
+            <p><strong>{"If you are in Australia."}</strong>{" We handle your personal information in line with the Australian Privacy Principles where they apply to us. Your information, including your farm records and photos, is stored overseas in the United States, in a database hosted on Amazon Web Services in Oregon (us-west-2). It is also processed in the United States by the other service providers listed in this policy. You can ask to see or correct your personal information, or complain about how we've handled it, by emailing acreledgerapp@gmail.com. We will reply within 30 days. If you ask us to delete your account, your personal and farm data is removed within 30 days and is gone from backups within 90 days. Billing records are kept for 7 years for tax purposes. If you use the optional AI assistant, your question and the farm records it needs are sent through OpenRouter to AI model providers, which may be outside Australia and may log them or use them to improve their models. If you're not satisfied, you can contact the Office of the Australian Information Commissioner (oaic.gov.au)."}</p>
+            <h2 className="text-lg font-bold text-foreground pt-4">{"Changes"}</h2>
+            <p>{"We'll post updates here and tell you in the app or by email about important changes."}</p>
+        </LegalPolicyPage>
     );
 }

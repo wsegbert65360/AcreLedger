@@ -32,26 +32,30 @@ describe('Privacy', () => {
     );
   });
 
-  it('links to the public support page', () => {
-    renderPrivacy();
-    expect(screen.getByRole('link', { name: /support page/i })).toHaveAttribute(
-      'href',
-      '/support'
-    );
+  it('renders the approved error logging and offline storage wording', () => {
+    const { container } = renderPrivacy();
+    expect(container).toHaveTextContent("Error logs: when something goes wrong, the app logs the error on your device only. We don't send crash reports to anyone. If we ever add a crash-reporting provider, we'll update this policy first.");
+    expect(container).toHaveTextContent('Saved on your device: the app keeps a copy of your records and settings on your phone, tablet or computer so it works offline.');
   });
 
-  it('names the rainfall radar source and Google Fonts among third parties', () => {
-    renderPrivacy();
-    expect(screen.getByText('Iowa Environmental Mesonet (IEM) Stage IV')).toBeInTheDocument();
-    expect(screen.getByText(/IEM Stage IV radar/i)).toBeInTheDocument();
-    expect(screen.getByText('Google Fonts')).toBeInTheDocument();
+  it('renders the approved Australia complaint and retention wording', () => {
+    const { container } = renderPrivacy();
+    expect(container).toHaveTextContent("If you're not satisfied, you can contact the Office of the Australian Information Commissioner (oaic.gov.au).");
+    expect(container).toHaveTextContent('We will reply within 30 days.');
+    expect(container).toHaveTextContent('Billing records are kept for 7 years for tax purposes.');
   });
 
-  it('discloses optional contact details, record photos, and Ask the Book history', () => {
-    renderPrivacy();
-    expect(screen.getByText('Contact Details:')).toBeInTheDocument();
-    expect(screen.getByText('Photos:')).toBeInTheDocument();
-    expect(screen.getByText('Ask the Book:')).toBeInTheDocument();
-    expect(screen.getByText(/operational log for 30 days/i)).toBeInTheDocument();
+  it('publishes the approved date without draft or internal notes', () => {
+    const { container } = renderPrivacy();
+    expect(screen.getByText('Last updated: November 1, 2026')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/DRAFT|internal|GST|set the final date|Source notes/i);
+  });
+
+  it('lists the approved service providers and optional AI disclosure', () => {
+    const { container } = renderPrivacy();
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Rain API (rain-api.vercel.app)' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Google Fonts' })).toBeInTheDocument();
+    expect(container).toHaveTextContent('That provider may log your question and records, or use them to improve its AI models.');
   });
 });
