@@ -174,7 +174,7 @@ describe('BillingManager', () => {
     stubBillingFetch({ allowlisted: true, checkoutEnabled: false });
     renderBilling();
     expect(await screen.findByText('No billing subscription for this farm yet.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start 4-month free trial|reactivate subscription/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /subscribe|reactivate subscription/i })).toBeNull();
   });
 
   it('shows approved trial copy without any checkout action for non-allowlisted users', async () => {
