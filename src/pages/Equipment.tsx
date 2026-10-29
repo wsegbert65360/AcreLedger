@@ -3,6 +3,7 @@ import { ArrowLeft, Download, Gauge, Pencil, Plus, Trash2, Wrench } from 'lucide
 import { toast } from 'sonner';
 
 import BottomNav from '@/components/BottomNav';
+import EquipmentDetails from '@/components/equipment/EquipmentDetails';
 import EquipmentIcon from '@/components/equipment/EquipmentIcon';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,7 @@ import {
   type DueStatus,
 } from '@/lib/equipment';
 import { exportMaintenanceCsv } from '@/lib/equipment/export';
-import { toLocalIsoDate } from '@/utils/dates';
+import { formatIsoDate, toLocalIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
 import type { Equipment as EquipmentRecord, EquipmentKind, MaintenanceLogKind, MaintenanceSchedule, MeterUnit } from '@/types/equipment';
 
@@ -35,13 +36,54 @@ function todayIso() {
 }
 
 function machineName(machine: EquipmentRecord) {
-  return [machine.year, machine.make, machine.model].filter(Boolean).join(' ') || `${machine.kind[0].toUpperCase()}${machine.kind.slice(1)}`;
+  const parts = [
+    typeof machine.year === 'number' && Number.isFinite(machine.year) ? String(machine.year) : undefined,
+    trimmed(machine.make),
+    trimmed(machine.model),
+  ].filter((part): part is string => Boolean(part));
+  return parts.join(' ') || `${machine.kind[0].toUpperCase()}${machine.kind.slice(1)}`;
 }
 
 function optionalNumber(value: string): number | undefined {
   if (!value.trim()) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function trimmed(value: string | undefined): string | undefined {
+  const text = value?.trim();
+  return text ? text : undefined;
+}
+
+function EquipmentListCard({
+  machine,
+  due,
+  onOpen,
+}: {
+  machine: EquipmentRecord;
+  due: { status: DueStatus; taskName?: string };
+  onOpen: () => void;
+}) {
+  const serial = trimmed(machine.serialNumber);
+  const notes = trimmed(machine.notes);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-h-20 w-full items-start gap-3 rounded-2xl border bg-card p-3 text-left shadow-sm transition hover:border-primary/30"
+    >
+      <EquipmentIcon kind={machine.kind} color={resolveBrandColor(machine.make) ?? EMPTY_COLOR} />
+      <span className="min-w-0 flex-1">
+        <span className="block break-words font-bold leading-tight line-clamp-2">{machineName(machine)}</span>
+        <span className="mt-0.5 block text-xs capitalize text-muted-foreground">
+          {machine.kind} · {machine.currentReading.toLocaleString()} {UNIT_LABEL[machine.meterUnit]}
+        </span>
+        {serial ? <span className="mt-0.5 block break-words text-xs text-muted-foreground">Serial {serial}</span> : null}
+        {notes ? <span className="mt-0.5 line-clamp-2 break-words text-xs text-muted-foreground">{notes}</span> : null}
+      </span>
+      <StatusBadge status={due.status} task={due.taskName} />
+    </button>
+  );
 }
 
 function StatusBadge({ status, task }: { status: DueStatus; task?: string }) {
@@ -286,10 +328,11 @@ export default function Equipment() {
     <main className="mx-auto max-w-lg space-y-4 px-4 py-4 lg:max-w-5xl lg:px-8">
       {!selected ? <>
         {sorted.length === 0 && <section className="rounded-2xl border-2 border-dashed p-10 text-center"><Wrench className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" /><h2 className="font-bold">No equipment yet</h2><p className="mt-1 text-sm text-muted-foreground">Add your first machine to track meters, maintenance, and repairs.</p><Button className="mt-4 h-11" onClick={() => setEditing('new')}><Plus className="mr-2 h-4 w-4" />Add equipment</Button></section>}
-        <div className="grid gap-3 lg:grid-cols-2">{sorted.map(({ machine, due }) => <button type="button" key={machine.id} onClick={() => setSelectedId(machine.id)} className="flex min-h-20 w-full items-center gap-3 rounded-2xl border bg-card p-3 text-left shadow-sm transition hover:border-primary/30"><EquipmentIcon kind={machine.kind} color={resolveBrandColor(machine.make) ?? EMPTY_COLOR} /><span className="min-w-0 flex-1"><span className="block truncate font-bold">{machineName(machine)}</span><span className="block text-xs capitalize text-muted-foreground">{machine.kind} · {machine.currentReading.toLocaleString()} {UNIT_LABEL[machine.meterUnit]}</span></span><StatusBadge status={due.status} task={due.taskName} /></button>)}</div>
+        <div className="grid gap-3 lg:grid-cols-2">{sorted.map(({ machine, due }) => <EquipmentListCard key={machine.id} machine={machine} due={due} onOpen={() => setSelectedId(machine.id)} />)}</div>
         {maintenanceLogs.length > 0 && <Button variant="outline" className="h-11 w-full" onClick={() => void exportMaintenanceCsv(maintenanceLogs, equipment, `AcreLedger_Equipment_${todayIso()}.csv`)}><Download className="mr-2 h-4 w-4" />Export all logs</Button>}
       </> : <>
-        <section className="rounded-2xl border bg-card p-4 shadow-sm"><div className="flex items-start gap-4"><EquipmentIcon kind={selected.kind} color={resolveBrandColor(selected.make) ?? EMPTY_COLOR} size={72} /><div className="min-w-0 flex-1"><p className="text-sm text-muted-foreground">{selected.serialNumber ? `Serial ${selected.serialNumber}` : 'No serial number'}</p><p className="mt-1 text-2xl font-black">{selected.currentReading.toLocaleString()} <span className="text-sm font-semibold text-muted-foreground">{UNIT_LABEL[selected.meterUnit]}</span></p><p className="text-xs text-muted-foreground">{selected.readingUpdatedAt ? `Updated ${new Date(selected.readingUpdatedAt).toLocaleDateString()}` : 'Reading date not set'}</p></div><Button size="icon" variant="ghost" onClick={() => setEditing(selected)} aria-label="Edit equipment"><Pencil className="h-4 w-4" /></Button></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="outline" className="h-11 px-2" onClick={() => setMeterMachine(selected)}><Gauge className="mr-1 h-4 w-4" />Meter</Button><Button variant="outline" className="h-11 px-2" onClick={() => setLogKind('service')}>Service</Button><Button variant="outline" className="h-11 px-2" onClick={() => setLogKind('repair')}>Repair</Button></div></section>
+        <section className="rounded-2xl border bg-card p-4 shadow-sm"><div className="flex items-start gap-4"><EquipmentIcon kind={selected.kind} color={resolveBrandColor(selected.make) ?? EMPTY_COLOR} size={72} /><div className="min-w-0 flex-1"><p className="text-2xl font-black">{selected.currentReading.toLocaleString()} <span className="text-sm font-semibold text-muted-foreground">{UNIT_LABEL[selected.meterUnit]}</span></p>{trimmed(selected.readingUpdatedAt) ? <p className="text-xs text-muted-foreground">Updated {formatIsoDate(selected.readingUpdatedAt, 'en-US')}</p> : null}</div><Button size="icon" variant="ghost" onClick={() => setEditing(selected)} aria-label="Edit equipment"><Pencil className="h-4 w-4" /></Button></div><div className="mt-4 grid grid-cols-3 gap-2"><Button variant="outline" className="h-11 px-2" onClick={() => setMeterMachine(selected)}><Gauge className="mr-1 h-4 w-4" />Meter</Button><Button variant="outline" className="h-11 px-2" onClick={() => setLogKind('service')}>Service</Button><Button variant="outline" className="h-11 px-2" onClick={() => setLogKind('repair')}>Repair</Button></div></section>
+        <EquipmentDetails machine={selected} />
         <section className="space-y-2"><div className="flex items-center justify-between"><h2 className="font-bold">Maintenance</h2><Button size="sm" variant="outline" className="h-11" onClick={() => setScheduleEditor('new')}><Plus className="mr-1 h-4 w-4" />Task</Button></div>{selectedSchedules.length === 0 && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">No recurring maintenance tasks.</p>}{selectedSchedules.map(schedule => { const due = computeDueStatus(schedule, selected, todayIso()); return <div key={schedule.id} className="flex items-center gap-3 rounded-xl border bg-card p-3"><div className="min-w-0 flex-1"><p className="font-semibold">{schedule.taskName}</p><p className="text-xs text-muted-foreground">{schedule.intervalValue && `Every ${schedule.intervalValue} ${UNIT_LABEL[selected.meterUnit]}`}{schedule.intervalValue && schedule.intervalDays ? ' or ' : ''}{schedule.intervalDays && `every ${schedule.intervalDays} days`}</p></div><StatusBadge status={due.status} /><Button size="icon" variant="ghost" onClick={() => setScheduleEditor(schedule)} aria-label={`Edit ${schedule.taskName}`}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" onClick={() => window.confirm(`Delete ${schedule.taskName}?`) && void deleteMaintenanceSchedule(schedule.id)} aria-label={`Delete ${schedule.taskName}`}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>; })}</section>
         <section className="space-y-2"><div className="flex items-center justify-between"><h2 className="font-bold">Service & repairs</h2>{selectedLogs.length > 0 && <Button size="sm" variant="outline" className="h-11" onClick={() => void exportMaintenanceCsv(selectedLogs, [selected], `AcreLedger_${machineName(selected).replace(/\s+/g, '_')}_${todayIso()}.csv`)}><Download className="mr-1 h-4 w-4" />CSV</Button>}</div><div className="grid grid-cols-2 gap-2"><div className="rounded-xl border bg-card p-3"><p className="text-xs text-muted-foreground">All time</p><p className="font-mono text-lg font-bold">${(totals[selected.id]?.allTime.total ?? 0).toFixed(2)}</p></div><div className="rounded-xl border bg-card p-3"><p className="text-xs text-muted-foreground">{thisYear}</p><p className="font-mono text-lg font-bold">${(totals[selected.id]?.byYear[thisYear]?.total ?? 0).toFixed(2)}</p></div></div>{selectedLogs.length === 0 && <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">No service or repairs logged.</p>}{selectedLogs.map(log => <div key={log.id} className="rounded-xl border bg-card p-3"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold capitalize">{log.kind}{log.description ? ` · ${log.description}` : ''}</p><p className="text-xs text-muted-foreground">{new Date(`${log.performedOn}T12:00:00`).toLocaleDateString()}{log.vendor ? ` · ${log.vendor}` : ''}{log.readingAtService != null ? ` · ${log.readingAtService} ${UNIT_LABEL[selected.meterUnit]}` : ''}</p></div><span className="font-mono text-sm font-bold">${((log.costParts ?? 0) + (log.costLabor ?? 0)).toFixed(2)}</span></div></div>)}</section>
         <Button variant="destructive" className="h-11 w-full" onClick={() => void removeMachine(selected)}><Trash2 className="mr-2 h-4 w-4" />Delete equipment</Button>
