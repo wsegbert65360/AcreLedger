@@ -807,7 +807,7 @@ email is a different identity; this is not real-person identity verification. Pr
 salt and claims together in full-project recovery, never tenant/customer exports. Existing farms are not stamped by
 onboarding and await rollout backfill. Enforcement stays OFF. Trial metadata and
 claims are excluded from customer backup/restore. Stripe checkout reuses the server-stamped farm trial deadline only when more than 48 hours remain.
-The existing three-day `past_due` access rule is unchanged by this checkout update.
+The existing 14-day `past_due` access rule is unchanged by this checkout update.
 `farm_subscriptions` is the authoritative local entitlement mirror; the client never treats query
 parameters or client-reported Stripe state as authoritative. Farm members may select their
 farm's active row, but only service-role server paths write it. The eligibility, checkout, and

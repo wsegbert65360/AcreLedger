@@ -1,3 +1,4 @@
+import { PAST_DUE_GRACE_DAYS } from '@/lib/billing';
 import type { FarmSubscription } from '@/types/farm';
 
 const DAY_MS = 86_400_000;
@@ -25,9 +26,9 @@ export function getTrialBannerThreshold(daysLeft: number): 14 | 7 | 1 | null {
   return daysLeft <= 1 ? 1 : daysLeft <= 7 ? 7 : 14;
 }
 
-/** Display-only future 14-day grace policy; does not change entitlement enforcement. */
+/** Display-only days left in the shared past-due grace window. Does not change entitlement enforcement. */
 export function getPaymentGraceDays(subscription: FarmSubscription | null, now = Date.now()): number {
   if (!subscription || subscription.deleted_at || !['past_due', 'unpaid'].includes(subscription.status)) return 0;
   const end = subscription.current_period_end ? Date.parse(subscription.current_period_end) : NaN;
-  return Number.isFinite(end) ? Math.max(0, Math.ceil((end + 14 * DAY_MS - now) / DAY_MS)) : 0;
+  return Number.isFinite(end) ? Math.max(0, Math.ceil((end + PAST_DUE_GRACE_DAYS * DAY_MS - now) / DAY_MS)) : 0;
 }

@@ -11,8 +11,8 @@ import type { FarmSubscription, FarmSubscriptionStatus } from '@/types/farm';
  * subscription row keeps full access until the product owner says enforce.
  */
 
-/** Locked product decision: past_due farms keep access for a 3-day grace window. */
-export const PAST_DUE_GRACE_DAYS = 3;
+/** Locked product decision: past_due farms keep access for a 14-day grace window. */
+export const PAST_DUE_GRACE_DAYS = 14;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -42,7 +42,7 @@ export interface FarmBillingAccessOptions {
    * still grants access. When true the farm is locked without a live row.
    */
   enforce?: boolean;
-  /** past_due grace window in days; defaults to the locked 3-day policy. */
+  /** past_due grace window in days; defaults to the locked 14-day policy. */
   graceDays?: number;
 }
 
@@ -50,7 +50,7 @@ export interface FarmBillingAccessOptions {
  * Entitlement rule for a farm's subscription row (source of truth is the
  * `farm_subscriptions` mirror, never client-reported state):
  * - `trialing` / `active`: full access.
- * - `past_due`: full access through a 3-day grace window anchored at
+ * - `past_due`: full access through a 14-day grace window anchored at
  *   `current_period_end` (falling back to `trial_ends_at`); fails closed when
  *   no anchor exists.
  * - `canceled` / `unpaid`: access continues until `current_period_end`.

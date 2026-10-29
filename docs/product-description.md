@@ -133,7 +133,7 @@ Billing is deliberately **web-only for v1**:
 - The **source of truth is a server-mirrored `farm_subscriptions` row** fed by a
   signed Stripe webhook — never client-reported state.
 - Access phases: `trialing` (full access) → `active` (full access) → `past_due`
-  (full access through a **3-day grace window**) → `canceled`/`unpaid` (access
+  (full access through a **14-day grace window**) → `canceled`/`unpaid` (access
   continues only until `current_period_end`) → `incomplete` (abandoned checkout,
   locked). Missing or soft-deleted subscription rows follow the enforcement
   flag.
