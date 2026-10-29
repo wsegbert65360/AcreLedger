@@ -11,7 +11,10 @@ vi.mock('@/hooks/useFarmTrial', () => ({
   useTrialClock: () => Date.parse('2026-10-25T12:00:00Z'),
   useFarmTrial: () => ({ trial_ends_at: control.days === null ? null : new Date(Date.parse('2026-10-25T12:00:00Z') + control.days * 86400000).toISOString() }),
 }));
-vi.mock('@/lib/billing', () => ({ isBillingUiAvailable: () => control.available, getCachedBillingEligibility: () => control.eligibilityError ? undefined : ({ allowlisted: control.allowed, checkoutEnabled: control.checkout, liveCharges: control.live }), fetchBillingEligibility: vi.fn(async () => { throw new Error('eligibility unavailable'); }) }));
+vi.mock('@/lib/billing', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/billing')>();
+  return { ...actual, isBillingUiAvailable: () => control.available, getCachedBillingEligibility: () => control.eligibilityError ? undefined : ({ allowlisted: control.allowed, checkoutEnabled: control.checkout, liveCharges: control.live }), fetchBillingEligibility: vi.fn(async () => { throw new Error('eligibility unavailable'); }) };
+});
 vi.mock('@/lib/freshAccessToken', () => ({ freshAccessToken: vi.fn(async () => 'token') }));
 vi.mock('@/lib/supabase', () => ({ supabase: { from: () => {
   control.paymentReads();

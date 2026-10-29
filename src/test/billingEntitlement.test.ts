@@ -73,24 +73,27 @@ describe('getFarmBillingAccess', () => {
     expect(getFarmBillingAccess({ subscription: deleted, enforce: false }).hasAccess).toBe(true);
   });
 
-  it('keeps past_due access inside the 3-day grace window after period end', () => {
-    // Period ends 2027-01-08; 2027-01-11T00:00:00Z is exactly +3 days.
-    const nowMs = Date.parse('2027-01-11T00:00:00.000Z');
-    const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due' }),
-      nowMs,
-    });
-    expect(access).toEqual({ hasAccess: true, inGrace: true, phase: 'grace', status: 'past_due' });
+  it('keeps past_due access on day 13 and at the exact +14-day grace edge', () => {
+    // Period ends 2027-01-08. Day 13 is inside the window. The inclusive edge
+    // matches the old +3-day rule: exactly graceDays later is still in grace.
+    for (const iso of ['2027-01-21T00:00:00.000Z', '2027-01-22T00:00:00.000Z']) {
+      const access = getFarmBillingAccess({
+        subscription: makeSubscription({ status: 'past_due' }),
+        nowMs: Date.parse(iso),
+      });
+      expect(access).toEqual({ hasAccess: true, inGrace: true, phase: 'grace', status: 'past_due' });
+    }
   });
 
-  it('locks past_due after the grace window expires', () => {
-    const nowMs = Date.parse('2027-01-11T00:00:00.001Z');
-    const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due' }),
-      nowMs,
-    });
-    expect(access.hasAccess).toBe(false);
-    expect(access.phase).toBe('locked');
+  it('locks past_due one millisecond after the +14-day edge and on day 15', () => {
+    for (const iso of ['2027-01-22T00:00:00.001Z', '2027-01-23T00:00:00.000Z']) {
+      const access = getFarmBillingAccess({
+        subscription: makeSubscription({ status: 'past_due' }),
+        nowMs: Date.parse(iso),
+      });
+      expect(access.hasAccess).toBe(false);
+      expect(access.phase).toBe('locked');
+    }
   });
 
   it('honors a custom grace window for past_due', () => {

@@ -28,7 +28,7 @@ const TEST_ENV = {
 
 describe('billing constants', () => {
   it('matches the locked product decisions', () => {
-    expect(PAST_DUE_GRACE_DAYS).toBe(3);
+    expect(PAST_DUE_GRACE_DAYS).toBe(14);
   });
 });
 

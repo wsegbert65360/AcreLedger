@@ -9,8 +9,8 @@
  * until Will approves legal copy (BILLING_LIVE_CHARGES must stay false).
  */
 
-/** Locked product decision: past_due farms keep access for a 3-day grace window. */
-export const PAST_DUE_GRACE_DAYS = 3;
+/** Locked product decision: past_due farms keep access for a 14-day grace window. */
+export const PAST_DUE_GRACE_DAYS = 14;
 
 export type BillingStatus =
   | 'trialing'
