@@ -29,9 +29,17 @@ const CLU_STYLES = {
   context: { color: '#cbd5e1', fillColor: '#64748b', weight: 2, opacity: 0.65, fillOpacity: 0.08 },
 };
 
-function boundaryRings(field: Field | undefined): L.LatLngExpression[][] {
-  return (field?.boundary?.coordinates ?? [])
-    .map(ring => ring.map(point => [point[1], point[0]] as L.LatLngExpression))
+export function boundaryRings(field: Field | undefined): L.LatLngExpression[][] {
+  const geometry = field?.boundary ?? undefined;
+  if (!geometry || !hasValidGeometry(geometry)) return [];
+
+  const latlngs = getLatLngsFromGeometry(geometry);
+  if (geometry.type === 'Polygon') {
+    return (latlngs as L.LatLngExpression[][]).filter(ring => ring.length >= 3);
+  }
+
+  return (latlngs as L.LatLngExpression[][][])
+    .flat()
     .filter(ring => ring.length >= 3);
 }
 
@@ -64,7 +72,8 @@ function TractPolygons({ features, field }: { features: DisplayFeature[]; field:
       groupRef.current = null;
     }
 
-    if (features.length === 0) return;
+    const rings = boundaryRings(field);
+    if (features.length === 0 && rings.length === 0) return;
 
     const group = L.featureGroup();
 
@@ -94,7 +103,6 @@ function TractPolygons({ features, field }: { features: DisplayFeature[]; field:
       }
     }
 
-    const rings = boundaryRings(field);
     for (const ring of rings) {
       L.polygon(ring, {
         color: '#020617',
@@ -253,7 +261,7 @@ export default function FieldBoundaryMap({ fieldId }: FieldBoundaryMapProps) {
         {features.length === 0 && boundaryRings(field).length === 0 && field.lat != null && field.lng != null && <Marker position={center} />}
       </MapContainer>
 
-      {features.length === 0 && !loading && (
+      {features.length === 0 && boundaryRings(field).length === 0 && !loading && (
         <div className="absolute bottom-2 left-2 z-10 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs font-medium text-muted-foreground">
           No boundary data
         </div>
