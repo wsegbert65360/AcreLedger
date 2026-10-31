@@ -1,12 +1,15 @@
+import { useFarm } from '@/store/farmStore';
 import { Link, useLocation } from 'react-router-dom';
 import { navTabs } from './navConfig';
 import SeasonSelect from '@/components/SeasonSelect';
 import { CalendarDays, MessageCircle, Sprout, Plus } from 'lucide-react';
+import { isAskBookEnabled } from '@/lib/askBookAccess';
 import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
 import { useQuickAdd } from '@/context/QuickAddContext';
 import { native } from '@/lib/native';
 
 export default function Sidebar() {
+  const { farm_id } = useFarm();
   const { pathname } = useLocation();
 
   const { openQuickAdd } = useQuickAdd();
@@ -38,7 +41,7 @@ export default function Sidebar() {
           <span>Quick Add Record</span>
         </button>
 
-        <button
+        {isAskBookEnabled(farm_id) && <button
           type="button"
           onClick={() => {
             native.haptic.light();
@@ -48,7 +51,7 @@ export default function Sidebar() {
         >
           <MessageCircle size={16} strokeWidth={2} />
           <span>Ask the book</span>
-        </button>
+        </button>}
 
         <div className="space-y-1">
           {navTabs.map(({ path, icon: Icon, label }) => {

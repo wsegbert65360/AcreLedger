@@ -48,10 +48,10 @@ experience.
    non-private sample farm data.
 2. Select the final TestFlight build from a reviewed commit containing these
    changes.
-3. Capture Dashboard, Field detail, Activity, Reports, Storage, and Ask the Book
+3. Capture Dashboard, Field detail, Activity, Reports, and Storage
    on both device families from that exact build.
 4. Re-run the dimension, RGB/no-alpha, privacy, and visual-content checks on all
-   12 final PNGs.
+   10 final PNGs.
 5. Enter the final assets in App Store Connect only after owner approval.
 
 The repository has no safe production demo mode. The existing developer test

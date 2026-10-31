@@ -77,11 +77,6 @@ inventory, in/out movements including negative estimate corrections, and
 crop-share splits for landlords. A bin's real total is never hidden by the
 viewing season.
 
-**Answers questions about the book.** "Ask the Book" is a read-only assistant:
-type a plain-language question (or use optional on-device voice input) and it
-answers from the farm's own saved records. It cannot add, edit, or delete
-anything — it is a search companion, not an agent.
-
 **Keeps farms separate.** Multi-tenant by design: every record is scoped and
 protected by its farm through row-level security; one account can hold multiple
 farms, and no farm's data leaks into another's screens or exports.
@@ -91,9 +86,8 @@ farms, and no farm's data leaks into another's screens or exports.
 Mobile-first, PWA-ready React 18 (TypeScript strict) app wrapped in a native iOS
 app via Capacitor 6; Supabase Postgres/Auth/RLS for the backend; shadcn/ui +
 Tailwind for UI; Visual Crossing for field-level weather and IEM Stage IV for
-rainfall; Vercel Functions for the weather proxy, the read-only AI assistant,
-and billing; Stripe for subscriptions; CodeMagic CI/CD for TestFlight and App
-Store. The same codebase ships as a web app **and** an iOS app.
+rainfall; Vercel Functions for the weather proxy and billing; Stripe for
+subscriptions; CodeMagic CI/CD for TestFlight and App Store. The same codebase ships as a web app **and** an iOS app.
 
 ---
 
@@ -103,16 +97,16 @@ Store. The same codebase ships as a web app **and** an iOS app.
 
 A **per-farm subscription** to the full AcreLedger product. The unit of purchase
 is the farm, not the seat or the device: one subscription covers the farm's
-records, exports, AI assistant, and all signed-in devices on that farm. The
-product is sold as an **annual subscription (currently priced at $299/year on the
-web landing page)**.
+records, exports, and all signed-in devices on that farm. The product is sold as
+an **annual subscription (currently priced at $299/year on the web landing
+page)**.
 
 ### The funnel: trial → subscribe
 
 - **Free sign-up, full product.** New farms get the complete product for a
   **4-month (122-day) full-product trial** — a locked product decision. There is
   no crippled free tier during trial; the entire feature set (reports, exports,
-  FSA, grain, Ask the Book) is available.
+  FSA, grain) is available.
 - **Conversion at trial end.** After trial, continued access requires an active
   subscription. Checkout happens through **Stripe Checkout** (annual price),
   subscription management through the **Stripe Customer Portal**.

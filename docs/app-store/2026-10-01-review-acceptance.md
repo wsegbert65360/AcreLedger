@@ -1,7 +1,7 @@
 # App Review acceptance — screenshots and sample farm
 
 Decision date: September 27, 2026. Launch target: October 1. This file is the
-acceptance bar for the review account, the 12 final screenshots, and the
+acceptance bar for the review account, the 10 final screenshots, and the
 separate October 1 public-web rollout promise. Listing copy, privacy answers,
 and the version record stay in
 [`2026-10-01-submission-package.md`](./2026-10-01-submission-package.md).
@@ -14,7 +14,7 @@ Review, or a public release.
 A reviewer who installs the selected 3.6.0 build can sign in to one disposable
 farm and see a working record book: fields on a map, a season of activity,
 grain in bins, and a report that is ready to export. The same farm, on that
-same build, is what the six App Store scenes show. The iOS app stays a free
+same build, is what the five App Store scenes show. The iOS app stays a free
 companion. It does not sell anything and does not send the reviewer to buy on
 the web.
 
@@ -39,8 +39,6 @@ this outcome.
 - The captured Reports scene is the default **FSA-578** tab. It must read
   **Ready to export**, with every sample field ready. Other report tabs may be
   empty. They may not show a warning or error state.
-- Ask the Book is shown as one typed, read-only question with a visible answer
-  that matches the sample bins. No voice recording in the screenshot.
 
 ## October 1 public-web rollout promise
 
@@ -122,7 +120,6 @@ requests, or extra farms.
 | Harvest and grain | One corn harvest from `North Forty` into `North Bin`, with bushels and moisture. One soybean harvest from `Creek Bottom` into `East Bin`. | A real elevator, buyer, scale ticket, or landlord name. No sale is required. |
 | Bins | `North Bin` and `East Bin`, each with capacity above the stored bushels and at least one inbound movement. Storage shows a non-zero amount in both. | Prices, real bin sites, or a sale destination. |
 | Reports | FSA-578 status is Ready to export and `4 of 4` fields ready. Spray Audit is Ready to export for its one record. Fertilizer, Fall FSA, Hay, Landlord, and Work Reqs are empty, not warning states. | Readiness copy that says Review recommended, a missing-data list, or a real landlord. |
-| Ask the Book | Typed question `How much grain is in each bin?` The visible answer names `North Bin` and `East Bin` with the same bushels shown on Storage. | An error, an empty answer, a claim that records were changed, or voice audio. |
 | Map center | A non-customer point chosen by the owner so the boundary is readable. | The owner's home, a customer's farm, or any production field export. |
 
 Weather may appear on the dashboard. If it errors or shows a street address,
@@ -141,7 +138,7 @@ still looks complete without an error.
 
 ## 2. Screenshot acceptance
 
-Twelve final PNGs, six scenes on each device, in this order:
+Ten final PNGs, five scenes on each device, in this order:
 
 1. Fields dashboard for Sample Creek Farm: season 2026, crop filters, acreage,
    and the four field cards. Weather is clean or absent, never an error.
@@ -152,7 +149,6 @@ Twelve final PNGs, six scenes on each device, in this order:
 4. Reports on FSA-578: **Ready to export** and **4 of 4** fields ready.
 5. Storage: both bins, a non-zero amount in each, and one recent inbound
    movement. No price and no buyer.
-6. Ask the Book: the grain question and the matching answer, fully readable.
 
 Device files:
 
@@ -246,8 +242,6 @@ not submit the app and does not store the review password.
   returns in the binary, screenshots, or review notes.
 - Review can delete the demo account. The owner must be able to recreate the
   fictional farm during the review window.
-- Ask the Book needs the network. A failed answer during capture or review
-  misses the scene.
 - Agreement, DSA, and password-reset completion can block submission after the
   screenshots are otherwise ready.
 - October 1 is the target, not permission to submit.

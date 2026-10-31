@@ -14,6 +14,7 @@ import {
   DEFAULT_AI_DAILY_CAP,
   resolveDailyCap,
 } from '../server/providerDailyUsage.js';
+import { isAskBookEnabled } from '../src/lib/askBookAccess.js';
 
 interface ApiRequest {
   method?: string;
@@ -373,6 +374,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const farmId = typeof profile?.farm_id === 'string' ? profile.farm_id : '';
   if (!farmId) {
     return res.status(400).json({ error: 'No farm selected.' });
+  }
+
+  if (!isAskBookEnabled(farmId)) {
+    return res.status(403).json({ error: 'Ask the book is not available for this farm' });
   }
 
   const activeSeason = typeof profile?.active_season === 'number' && Number.isInteger(profile.active_season)

@@ -132,6 +132,24 @@ function fetchBodies(): Array<Record<string, unknown>> {
 }
 
 describe('ai assistant proxy', () => {
+  it.each([
+    'cc3280e8-8fe3-49a8-9020-7132a7e8241c',
+    'd4124658-d3dc-41e8-9792-b3327954c5c5',
+  ])('rejects non-allowlisted farm %s before any RPC or provider call', async (farmId) => {
+    profilesMaybeSingle.mockResolvedValue({
+      data: { farm_id: farmId, active_season: 2026 },
+      error: null,
+    });
+    const { state } = await invoke();
+    expect(state.status).toBe(403);
+    expect(state.body).toEqual({ error: 'Ask the book is not available for this farm' });
+    expect(consumeRpc).not.toHaveBeenCalled();
+    expect(loadHistoryRpc).not.toHaveBeenCalled();
+    expect(incrementUsage).not.toHaveBeenCalled();
+    expect(finalizeRpc).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     fromTables.length = 0;
     if (toolMocks.actualExecute) {
@@ -150,7 +168,7 @@ describe('ai assistant proxy', () => {
     incrementUsage.mockResolvedValue({ data: true, error: null });
     loadHistoryRpc.mockResolvedValue({ data: [], error: null });
     profilesMaybeSingle.mockResolvedValue({
-      data: { farm_id: 'farm-1', active_season: 2026 },
+      data: { farm_id: '28e107ba-3384-4b6e-9917-8a694803cb82', active_season: 2026 },
       error: null,
     });
     createClientMock.mockImplementation((url: string, key: string, options: unknown) => ({
@@ -304,7 +322,7 @@ describe('ai assistant proxy', () => {
     expect(state.status).toBe(200);
     expect(loadHistoryRpc).toHaveBeenCalledWith({
       p_user_id: 'user-1',
-      p_farm_id: 'farm-1',
+      p_farm_id: '28e107ba-3384-4b6e-9917-8a694803cb82',
       p_limit: 3,
     });
     const messages = fetchBodies()[0].messages as Array<{ role: string; content: string }>;

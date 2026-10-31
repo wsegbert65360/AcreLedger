@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const farmState = vi.hoisted(() => ({
+  farm_id: 'd4124658-d3dc-41e8-9792-b3327954c5c5',
   fields: [{
     id: 'field-1',
     name: 'North Field',
@@ -230,5 +231,17 @@ describe('dashboard header season pill at 360px and 400px (#63)', () => {
 
     const siblings = Array.from(actionRow.parentElement!.children);
     expect(siblings.indexOf(seasonRow!)).toBeGreaterThan(siblings.indexOf(actionRow));
+  });
+});
+
+describe('Ask the book farm access', () => {
+  it.each([
+    ['d4124658-d3dc-41e8-9792-b3327954c5c5', false],
+    ['28e107ba-3384-4b6e-9917-8a694803cb82', true],
+    ['cc3280e8-8fe3-49a8-9020-7132a7e8241c', false],
+  ])('checks entry visibility for %s', (farmId, enabled) => {
+    farmState.farm_id = farmId;
+    render(<Index />);
+    expect(screen.queryByRole('button', { name: 'Ask the book' }) !== null).toBe(enabled);
   });
 });
