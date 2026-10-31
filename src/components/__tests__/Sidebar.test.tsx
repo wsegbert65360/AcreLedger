@@ -12,6 +12,9 @@ vi.mock('@/context/AskAcreLedgerContext', () => ({ useAskAcreLedger: () => ({ op
 vi.mock('@/context/QuickAddContext', () => ({ useQuickAdd: () => ({ openQuickAdd: vi.fn() }) }));
 vi.mock('@/lib/native', () => ({ native: { haptic: { light: vi.fn() } } }));
 
+const farmState = vi.hoisted(() => ({ farm_id: 'd4124658-d3dc-41e8-9792-b3327954c5c5' }));
+vi.mock('@/store/farmStore', () => ({ useFarm: () => farmState }));
+
 import Sidebar from '../Sidebar';
 
 const packageVersion = JSON.parse(
@@ -27,5 +30,16 @@ describe('Sidebar version', () => {
     );
     expect(__APP_VERSION__).toBe(packageVersion);
     expect(screen.getByText(`v${packageVersion}`)).toBeInTheDocument();
+  });
+});
+
+describe('Ask the book farm access', () => {
+  it.each([
+    ['d4124658-d3dc-41e8-9792-b3327954c5c5', false],
+    ['cc3280e8-8fe3-49a8-9020-7132a7e8241c', true],
+  ])('checks entry visibility for %s', (farmId, enabled) => {
+    farmState.farm_id = farmId;
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Ask the book' }) !== null).toBe(enabled);
   });
 });

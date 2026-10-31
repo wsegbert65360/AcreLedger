@@ -58,9 +58,6 @@ Paste the following into App Review Notes:
 > review.
 >
 > Location is optional and is used for field coordinates and local weather.
-> Voice input is optional. Apple's speech recognition turns speech into text;
-> AcreLedger sends the resulting text question, not an audio recording, to Ask
-> the Book. Ask the Book is read-only and cannot change farm records.
 >
 > Account deletion starts in Setup > Account & Display. The user types DELETE to
 > confirm. AcreLedger records the request, signs the user out, and completes the
@@ -138,7 +135,7 @@ new build; do not change the answer if the cryptography changes.
 
 ## Screenshot package
 
-Acceptance for the review account and the 12 final screenshots is in
+Acceptance for the review account and the 10 final screenshots is in
 [`2026-10-01-review-acceptance.md`](./2026-10-01-review-acceptance.md). Draft
 captures do not meet that bar.
 
@@ -151,7 +148,7 @@ Use these primary portrait sizes:
 - iPhone 6.9-inch: 1320 × 2868 PNG, no alpha.
 - iPad 13-inch: 2064 × 2752 PNG, no alpha.
 
-Capture the same six scenes in this order:
+Capture the same five scenes in this order:
 
 1. Dashboard — weather, acreage, crop filters, and field cards. Caption concept:
    `Your whole farm at a glance`.
@@ -163,8 +160,6 @@ Capture the same six scenes in this order:
    `Know what is ready before you export`.
 5. Storage — bins with inventory and recent movements. Caption concept:
    `Know what is in every bin`.
-6. Ask the Book — a useful read-only question and answer using sample data.
-   Caption concept: `Ask a question about your farm book`.
 
 Capture rules:
 

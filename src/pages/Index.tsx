@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
+import { isAskBookEnabled } from '@/lib/askBookAccess';
 import { useAskAcreLedger } from '@/context/AskAcreLedgerContext';
 import { useFarm } from '@/store/farmStore';
 import FieldList from '@/components/FieldList';
@@ -28,6 +29,7 @@ import { localTodayIso, summarizeEquipmentStatus } from '@/lib/equipment';
 
 const Index = () => {
   const {
+    farm_id,
     fields: allFields,
     cluAssignments,
     plantRecords,
@@ -204,14 +206,14 @@ const Index = () => {
               <Plus size={16} className="text-primary" />
               <span className="hidden sm:inline">Add field</span>
             </button>
-            <button
+            {isAskBookEnabled(farm_id) && <button
               type="button"
               onClick={() => openAsk()}
               aria-label="Ask the book"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-card/70 text-muted-foreground shadow-sm transition-all hover:bg-card hover:text-foreground active:scale-95"
             >
               <MessageCircle size={16} />
-            </button>
+            </button>}
             <button
               onClick={() => setManageOpen(true)}
               aria-label="Manage fields"

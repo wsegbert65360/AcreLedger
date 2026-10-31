@@ -21,6 +21,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/lib/supabase";
 import { FarmProvider, useFarm } from "@/store/farmStore";
+import { isAskBookEnabled } from '@/lib/askBookAccess';
 import { AskAcreLedgerProvider } from "@/context/AskAcreLedgerContext";
 import { QuickAddProvider, useQuickAdd } from "@/context/QuickAddContext";
 import AskAcreLedger from "@/components/AskAcreLedger";
@@ -372,7 +373,7 @@ const AppContent = () => {
 
       {/* Global Quick Add Dialog */}
       <QuickAddDialog />
-      <AskAcreLedger />
+      {isAskBookEnabled(farm_id) && <AskAcreLedger />}
 
       {/* Global Modals triggered from Quick Add */}
       {selectedField && (() => {
