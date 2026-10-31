@@ -1,5 +1,5 @@
 export const ASK_BOOK_ALLOWED_FARM_IDS: readonly string[] = [
-  'cc3280e8-8fe3-49a8-9020-7132a7e8241c',
+  '28e107ba-3384-4b6e-9917-8a694803cb82',
 ];
 
 export function isAskBookEnabled(farmId: string | null | undefined): boolean {

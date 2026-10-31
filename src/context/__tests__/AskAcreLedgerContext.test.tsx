@@ -13,15 +13,19 @@ function Consumer() {
 }
 
 describe('Ask drawer access', () => {
-  it('blocks direct opens and hides an open drawer after the farm changes', () => {
+  it.each([
+    'cc3280e8-8fe3-49a8-9020-7132a7e8241c',
+    'd4124658-d3dc-41e8-9792-b3327954c5c5',
+  ])('blocks direct opens and hides an open drawer for %s', (farmId) => {
+    farm.farm_id = farmId;
     const view = render(<AskAcreLedgerProvider><Consumer /></AskAcreLedgerProvider>);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByText('Closed')).toBeInTheDocument();
-    farm.farm_id = 'cc3280e8-8fe3-49a8-9020-7132a7e8241c';
+    farm.farm_id = '28e107ba-3384-4b6e-9917-8a694803cb82';
     view.rerender(<AskAcreLedgerProvider><Consumer /></AskAcreLedgerProvider>);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByText('Open')).toBeInTheDocument();
-    farm.farm_id = 'd4124658-d3dc-41e8-9792-b3327954c5c5';
+    farm.farm_id = farmId;
     view.rerender(<AskAcreLedgerProvider><Consumer /></AskAcreLedgerProvider>);
     expect(screen.getByText('Closed')).toBeInTheDocument();
   });
