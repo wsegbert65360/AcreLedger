@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useFarmTrial, useTrialClock } from '@/hooks/useFarmTrial';
 import { fetchBillingEligibility, getCachedBillingEligibility, isBillingUiAvailable } from '@/lib/billing';
-import { getFarmTrialStatus, getPaymentGraceDays, getTrialBannerThreshold, getTrialDaysLeftOverride } from '@/lib/farmTrial';
+import { isFarmComped, getFarmTrialStatus, getPaymentGraceDays, getTrialBannerThreshold, getTrialDaysLeftOverride } from '@/lib/farmTrial';
 import { freshAccessToken } from '@/lib/freshAccessToken';
 import * as native from '@/lib/native';
 import { supabase } from '@/lib/supabase';
@@ -69,7 +69,7 @@ export default function FarmTrialBanners() {
   const canSubscribe = billingAvailable && eligibility?.userId === userId && eligibility.capabilities.allowlisted && eligibility.capabilities.checkoutEnabled;
   const graceDays = liveCharges && payment?.farmId === farm_id && payment?.userId === userId
     ? getPaymentGraceDays(payment.subscription, now) : 0;
-  const showTrial = threshold !== null && dismissed !== reminderKey;
+  const showTrial = !isFarmComped(farm?.comp, now) && threshold !== null && dismissed !== reminderKey;
   if (!showTrial && graceDays <= 0) return null;
 
   return (
