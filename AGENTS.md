@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-01 (complimentary access metadata and farm trial dates).
+> **Last updated:** 2026-11-01 (complimentary access metadata, trial dates, and PG17 MAINTAIN/search-path hardening).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -26,6 +26,7 @@ only after checking that section’s implementation, recording the date, commit,
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
+- **2026-11-01** — Added PG17 MAINTAIN revocation for public relations and the retired-backfill function search-path pin; disposable focused and full-chain rehearsal commands cover the change. New tables created by supabase_admin must explicitly revoke MAINTAIN from API roles and PUBLIC.
 - **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
 - **2026-10-21** — Trial PR 1 prepares server-owned 3-month farm trial dates, a service-only salted-identity claim ledger, and billing-history deletion protection. Existing farms await rollout backfill; enforcement stays OFF.
 - **2026-10-20** — Reports > Landlord now documents Farm Owner Summary: current-farm fields including owned/unassigned land, season-scoped activity, CSV/Detailed-PDF exports, and a missing-farm export guard.
@@ -236,6 +237,7 @@ Canonical detail: [BLUEPRINT → Database Conventions](./BLUEPRINT.md#5-database
 - Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
 - **Do not use `.select()` in update or soft-delete mutations** to verify success. The `deleted_at IS NULL` SELECT policy hides a just-soft-deleted row from the returning clause, so the client sees 0 rows and falsely rolls back. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
 - Sole exception to the upsert rule: inserts, offline replay, and backup restore for `fsa_tract_imports` (`farm_id,tract_key`) and `field_clu_assignments` (`farm_id,tract_key,clu_number`) must upsert on those conflict keys so soft-deleted rows are resurrected. Do not "fix" them into plain inserts. Details: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
+- Public tables/views/materialized views must not grant PG17 MAINTAIN to anon, authenticated, or PUBLIC. See [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory) for default-privilege limits and rollback scope.
 - New migrations use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql` (checked by `npm run verify:migrations`).
 - New farm-owned tables follow the strict template in [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory): RLS enabled, farm-scoped policies through `public.profiles`, `SELECT, INSERT, UPDATE` (no `DELETE`) for `authenticated`, no `anon` grant, `deleted_at IS NULL` in the SELECT policy, and the restrictive "no updates on deleted rows" policy. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` consolidates the unique-active-grain index, farm-scoped harvest/grain FK, and anon revoke on the 12 core tables.
 - New `public` tables, functions, and sequences need explicit `GRANT`s to `authenticated` and/or `service_role`. Default privileges no longer give client roles (or PUBLIC) access.
