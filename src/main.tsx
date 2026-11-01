@@ -17,6 +17,7 @@ import App from "./App.tsx";
 import "./index.css";
 
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
+import WebAnalytics from "./components/WebAnalytics.tsx";
 import { installGlobalErrorHandlers } from "./utils/errorReporting.ts";
 import { createReloadOnce } from "./lib/swReload.ts";
 import { registerSW } from 'virtual:pwa-register';
@@ -97,5 +98,6 @@ if (import.meta.env.DEV) {
 createRoot(document.getElementById("root")!).render(
     <ErrorBoundary>
         <App />
+        <WebAnalytics />
     </ErrorBoundary>
 );
