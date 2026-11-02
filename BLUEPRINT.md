@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-11-01 (complimentary access metadata and farm trial dates).
+> **Last updated:** 2026-11-01 (farm_comps billing audit log).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
 - **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). `VITE_BILLING_ALLOWLIST` is unused; the client caches `{ userId, allowlisted }` in memory and only uses it when the cached user id matches. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere; empty or unset fails closed to "Billing coming soon".
@@ -798,7 +799,7 @@ The live auth integration suite verifies forbidden operations by asserting Postg
 
 ### Stripe Billing (Test Mode, Web Only)
 
-`farm_comps` is service-managed billing infrastructure, soft-deleted through `deleted_at`, with no client table grants. `get_farm_comp_status` exposes only live status/expiry to the caller's current farm membership. No comp IDs are seeded. The migration history has no `billing_audit_log`, so no audit trigger is installed. Comps are excluded from customer backup/restore and Ask the Book (private billing metadata), and classified separately in owner recovery. This status changes display only: live comps replace the Settings trial line and suppress countdown reminders; Settings otherwise shows local trial start/end dates. No access enforcement, settings flag, or native purchase UI is added.
+`farm_comps` is service-managed billing infrastructure, soft-deleted through `deleted_at`, with no client table grants. `get_farm_comp_status` exposes only live status/expiry to the caller's current farm membership. No comp IDs are seeded. `billing_audit_log` is a service-role-only append table (RLS enabled, no client policies, grants match `farm_comps`) with an AFTER INSERT OR UPDATE trigger on `farm_comps`: action `insert` on insert, `soft_delete` when `deleted_at` first becomes set, otherwise `update`. There is no DELETE trigger. Comps and the audit log are excluded from customer backup/restore and Ask the Book (private billing metadata), and classified separately in owner recovery. This status changes display only: live comps replace the Settings trial line and suppress countdown reminders; Settings otherwise shows local trial start/end dates. No access enforcement, settings flag, or native purchase UI is added.
 
 Billing is implemented but intentionally restricted to Stripe test mode. The Settings card is
 web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and remains hidden in Capacitor. Internal

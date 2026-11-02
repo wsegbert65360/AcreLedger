@@ -390,3 +390,15 @@ export interface GetFarmCompStatusRpc {
     Args: { p_farm_id: string };
     Returns: FarmCompStatus[];
 }
+
+/** Service-managed billing audit; excluded from customer backup/restore. */
+export interface BillingAuditLogRow {
+    id: string;
+    farm_id: string;
+    table_name: string;
+    action: 'insert' | 'update' | 'soft_delete';
+    old_row: Record<string, unknown> | null;
+    new_row: Record<string, unknown> | null;
+    actor: string | null;
+    created_at: string;
+}
