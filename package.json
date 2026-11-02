@@ -19,7 +19,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:db-trial": "node scripts/test-farm-trial-migration.mjs && node scripts/test-farm-comps-migration.mjs",
-    "test:db-integrity": "node scripts/test-tenant-harvest-grain-migration.mjs && node scripts/test-h9-migration.mjs && node scripts/test-harvest-grain-baseline.mjs && node scripts/test-equipment-migrations.mjs && node scripts/test-db-access-review-02.mjs && node scripts/test-h1-migration.mjs && node scripts/test-h6-migration.mjs && node scripts/test-h8-migration.mjs && node scripts/test-h10-migration.mjs && node scripts/test-account-deletion-migration.mjs && node scripts/test-backfill-aug-sep-2026.mjs && node scripts/test-restore-review-08-decisions.mjs && node scripts/test-farm-trial-migration.mjs && node scripts/test-farm-comps-migration.mjs",
+    "test:db-integrity": "node scripts/test-tenant-harvest-grain-migration.mjs && node scripts/test-h9-migration.mjs && node scripts/test-harvest-grain-baseline.mjs && node scripts/test-equipment-migrations.mjs && node scripts/test-db-access-review-02.mjs && node scripts/test-h1-migration.mjs && node scripts/test-h6-migration.mjs && node scripts/test-h8-migration.mjs && node scripts/test-h10-migration.mjs && node scripts/test-account-deletion-migration.mjs && node scripts/test-backfill-aug-sep-2026.mjs && node scripts/test-restore-review-08-decisions.mjs && node scripts/test-farm-trial-migration.mjs && node scripts/test-farm-comps-migration.mjs && npm run test:db-hardening",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b",
     "typecheck:api": "tsc -p tsconfig.api.json",
@@ -42,7 +42,9 @@
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:no-secret-in-bundle": "node scripts/verify-no-secret-in-bundle.mjs",
     "verify:migrations": "node scripts/verify-supabase-migrations.mjs",
-    "docs:toc": "node scripts/verify-docs.mjs --write"
+    "docs:toc": "node scripts/verify-docs.mjs --write",
+    "test:db-hardening": "node scripts/test-db-hardening-migration.mjs",
+    "rehearse:db-hardening": "node scripts/rehearse-db-hardening-chain.mjs"
   },
   "overrides": {
     "picomatch": "^2.3.2",

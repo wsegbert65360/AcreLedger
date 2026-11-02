@@ -729,6 +729,21 @@ the full Auth restore path.
 - **Filename references are historical anchors**: migrations cited by name in these docs (acreage backfills, preserved grant/protection and quota migrations) document provenance. If a cited migration is ever renamed or squashed, the stated rule — not the filename — remains authoritative; update the citation instead of re-deriving the rule from the file.
 
 ### Data API Access (Mandatory)
+
+Migration `20261101000000_db_hardening_maintain_search_path.sql` revokes only PG17
+MAINTAIN from anon, authenticated and PUBLIC on every public table, partitioned
+table, view and materialized view. It revokes schema-local postgres default
+MAINTAIN grants to API roles where authorized. Global default grants are additive:
+schema-local revokes do not cancel global grants. postgres cannot change
+supabase_admin defaults; new public relations must explicitly revoke MAINTAIN
+from these roles (no event trigger is installed). Service-role privileges remain intact.
+The migration pins only the object-free retired-backfill function to an empty
+search path and reports other unpinned non-extension functions without changing them.
+The paired SQL in `supabase/rollbacks/` restores authenticated MAINTAIN only on
+the 22 observed tables and resets that function's search path; it does not restore
+unsafe defaults or anon/PUBLIC grants. Run `npm run test:db-hardening` and
+`npm run rehearse:db-hardening` for disposable PGlite evidence.
+
 Starting May 2026, Supabase requires explicit `GRANT` statements for all tables exposed via the Data API (`supabase-js`). Every new **farm-owned** table uses this strict template (the `custom_spray_records` / `work_requests` pattern):
 ```sql
 -- Grants: no DELETE (soft delete only) and no anon access
