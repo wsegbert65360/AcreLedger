@@ -13,7 +13,7 @@ import {
   isBillingUiAvailable,
   requestBillingSession,
 } from '@/lib/billing';
-import { getFarmTrialStatus } from '@/lib/farmTrial';
+import { formatFarmTrialDate, getFarmTrialStatus, isFarmComped } from '@/lib/farmTrial';
 import { freshAccessToken } from '@/lib/freshAccessToken';
 import { native } from '@/lib/native';
 import { supabase } from '@/lib/supabase';
@@ -65,6 +65,7 @@ function getStatusLine(subscription: FarmSubscription | null): string {
 export default function BillingManager() {
   const farmTrial = useFarmTrial();
   const now = useTrialClock();
+  const comped = isFarmComped(farmTrial?.comp, now);
   const trialActive = getFarmTrialStatus(farmTrial?.trial_ends_at, now).phase === 'active';
   const billingUiEnabled = isBillingUiAvailable();
 
@@ -222,9 +223,12 @@ export default function BillingManager() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {trialActive && (
+        {comped ? (
+          <p className="text-sm text-foreground">Complimentary access{farmTrial?.comp?.expires_at ? ` until ${formatFarmTrialDate(farmTrial.comp.expires_at)}` : ''}</p>
+        ) : trialActive && (
           <section aria-label="Farm free trial" className="space-y-2">
-            <p className="text-sm text-foreground">Free trial: full access until {formatIsoDate(farmTrial?.trial_ends_at)}. No card needed.</p>
+            <p className="text-sm text-foreground">Free trial: full access until {formatFarmTrialDate(farmTrial?.trial_ends_at)}. No card needed.</p>
+            {farmTrial?.trial_started_at && <p className="text-sm text-muted-foreground">Trial started {formatFarmTrialDate(farmTrial.trial_started_at)} · ends {formatFarmTrialDate(farmTrial.trial_ends_at)}</p>}
             <p className="text-sm text-muted-foreground">Your free trial started when you set up this farm. Each farm gets one.</p>
           </section>
         )}

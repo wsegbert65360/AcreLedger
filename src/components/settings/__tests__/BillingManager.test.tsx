@@ -54,7 +54,7 @@ describe('BillingManager status', () => {
 describe('server-owned farm trial status', () => {
   beforeEach(() => { mock.reset(); control.allowlisted = false; });
   it('shows the approved farm trial copy independently of subscription dates', async () => {
-    mock.setTableHandler('farms', { data: { trial_started_at: '2026-10-01T00:00:00Z', trial_ends_at: '2099-12-01T00:00:00Z' }, error: null });
+    mock.setTableHandler('farms', { data: { trial_started_at: '2026-10-01T00:00:00Z', trial_ends_at: '2099-12-01T12:00:00Z' }, error: null });
     mount();
     expect(await screen.findByText('Free trial: full access until Dec 1, 2099. No card needed.')).toBeInTheDocument();
     expect(screen.getByText('Your free trial started when you set up this farm. Each farm gets one.')).toBeInTheDocument();
@@ -64,5 +64,28 @@ describe('server-owned farm trial status', () => {
     mount();
     await screen.findByText('Free');
     expect(screen.queryByLabelText('Farm free trial')).toBeNull();
+  });
+});
+
+describe('complimentary farm display', () => {
+  beforeEach(() => {
+    mock.reset(); control.allowlisted = false;
+    mock.setTableHandler('farms', { data: { trial_started_at: '2026-10-01T12:00:00Z', trial_ends_at: '2099-12-01T12:00:00Z' }, error: null });
+  });
+  it('shows local trial start and end dates', async () => {
+    mount();
+    expect(await screen.findByText('Trial started Oct 1, 2026 · ends Dec 1, 2099')).toBeInTheDocument();
+  });
+  it.each([null, '2099-12-01T12:00:00Z'])('replaces trial line for live comp (%s)', async expires_at => {
+    mock.setRpcResult({ data: [{ is_comped: true, expires_at }], error: null });
+    mount();
+    expect(await screen.findByText(expires_at ? 'Complimentary access until Dec 1, 2099' : 'Complimentary access')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Farm free trial')).toBeNull();
+  });
+  it.each(['expired', 'error'])('keeps trial display when comp is %s', async mode => {
+    mock.setRpcResult(mode === 'error' ? { data: null, error: { message: 'offline' } } : { data: [{ is_comped: true, expires_at: '2000-01-01T12:00:00Z' }], error: null });
+    mount();
+    expect(await screen.findByText('Trial started Oct 1, 2026 · ends Dec 1, 2099')).toBeInTheDocument();
+    expect(screen.queryByText(/Complimentary access/)).toBeNull();
   });
 });

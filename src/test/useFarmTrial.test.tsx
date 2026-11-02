@@ -15,7 +15,7 @@ describe('current farm trial read', () => {
     const farm = { trial_started_at: '2026-10-01T00:00:00Z', trial_ends_at: '2027-01-01T00:00:00Z' };
     mock.setTableHandler('farms', { data: farm, error: null });
     const { result, rerender } = renderHook(() => useFarmTrial());
-    await waitFor(() => expect(result.current).toEqual(farm));
+    await waitFor(() => expect(result.current).toEqual({ ...farm, comp: null }));
     expect(mock.fns.from).toHaveBeenCalledWith('farms');
     expect(mock.fns.select).toHaveBeenCalledWith('trial_started_at, trial_ends_at');
     expect(mock.fns.eq).toHaveBeenCalledWith('id', 'farm-1');
@@ -29,5 +29,23 @@ describe('current farm trial read', () => {
     mock.setTableHandler('farms', { data: null, error: { message: 'offline' } });
     const { result } = renderHook(() => useFarmTrial());
     await waitFor(() => expect(result.current).toBeNull());
+  });
+});
+
+describe('comp status read', () => {
+  const farm = { trial_started_at: '2026-10-01T12:00:00Z', trial_ends_at: '2099-01-01T12:00:00Z' };
+  it.each([null, '2099-02-01T12:00:00Z', '2000-01-01T12:00:00Z'])('reads comp expiry %s through the farm-scoped RPC', async expires_at => {
+    mock.setTableHandler('farms', { data: farm, error: null });
+    mock.setRpcResult({ data: [{ is_comped: true, expires_at }], error: null });
+    const { result } = renderHook(() => useFarmTrial());
+    await waitFor(() => expect(result.current?.comp).toEqual({ is_comped: true, expires_at }));
+    expect(mock.fns.rpc).toHaveBeenCalledWith('get_farm_comp_status', { p_farm_id: 'farm-1' });
+  });
+  it.each(['error', 'throw'])('preserves trial dates on RPC %s', async mode => {
+    mock.setTableHandler('farms', { data: farm, error: null });
+    if (mode === 'throw') mock.setRpcThrow(new Error('offline'));
+    else mock.setRpcResult({ data: null, error: { message: 'offline' } });
+    const { result } = renderHook(() => useFarmTrial());
+    await waitFor(() => expect(result.current).toEqual({ ...farm, comp: null }));
   });
 });

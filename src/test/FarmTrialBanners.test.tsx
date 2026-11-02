@@ -4,12 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FarmTrialBanners from '@/components/FarmTrialBanners';
 
-const control = vi.hoisted(() => ({ checkout: false, live: false, native: false, available: true, allowed: true, eligibilityError: false, paymentReads: vi.fn(), days: 14 as number | null }));
+const control = vi.hoisted(() => ({ comp: null as { is_comped: boolean; expires_at: string | null } | null, checkout: false, live: false, native: false, available: true, allowed: true, eligibilityError: false, paymentReads: vi.fn(), days: 14 as number | null }));
 vi.mock('@/lib/native', () => ({ isNativePlatform: () => control.native }));
 vi.mock('@/store/farmStore', () => ({ useFarm: () => ({ farm_id: 'farm-1', session: { user: { id: 'user-1' } } }) }));
 vi.mock('@/hooks/useFarmTrial', () => ({
   useTrialClock: () => Date.parse('2026-10-25T12:00:00Z'),
-  useFarmTrial: () => ({ trial_ends_at: control.days === null ? null : new Date(Date.parse('2026-10-25T12:00:00Z') + control.days * 86400000).toISOString() }),
+  useFarmTrial: () => ({ comp: control.comp, trial_ends_at: control.days === null ? null : new Date(Date.parse('2026-10-25T12:00:00Z') + control.days * 86400000).toISOString() }),
 }));
 vi.mock('@/lib/billing', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/billing')>();
@@ -22,7 +22,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: { from: () => {
 } } }));
 function mount(search = '') { return render(<MemoryRouter initialEntries={[`/${search}`]}><FarmTrialBanners /></MemoryRouter>); }
 afterEach(() => vi.unstubAllEnvs());
-beforeEach(() => { Object.assign(control, { checkout: false, live: false, native: false, available: true, allowed: true, eligibilityError: false, days: 14 }); control.paymentReads.mockClear(); });
+beforeEach(() => { Object.assign(control, { comp: null, checkout: false, live: false, native: false, available: true, allowed: true, eligibilityError: false, days: 14 }); control.paymentReads.mockClear(); });
 describe('farm trial banners', () => {
   it('overrides the preview countdown without enabling billing', () => {
     vi.stubEnv('VITE_VERCEL_ENV', 'preview');
@@ -86,4 +86,18 @@ describe('farm trial banners', () => {
     expect(await screen.findByText("Your payment didn't go through. Update your card in the next 14 days to keep adding records. Your records stay safe either way.")).toBeInTheDocument();
   });
 
+});
+
+describe('comp countdown suppression', () => {
+  it.each([null, '2099-01-01T00:00:00Z'])('hides countdown for live comp (%s), including preview override', expires_at => {
+    control.comp = { is_comped: true, expires_at };
+    vi.stubEnv('VITE_VERCEL_ENV', 'preview');
+    mount('?trialDaysLeft=7');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+  it('shows trial countdown for an expired comp', () => {
+    control.comp = { is_comped: true, expires_at: '2000-01-01T00:00:00Z' };
+    mount();
+    expect(screen.getByText('14 days left in your free trial.')).toBeInTheDocument();
+  });
 });

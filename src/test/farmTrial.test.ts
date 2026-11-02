@@ -36,3 +36,26 @@ describe('farm trial display math', () => {
     expect(getPaymentGraceDays({ ...subscription, deleted_at: 'deleted' }, now)).toBe(0);
   });
 });
+
+describe('comp display expiry', () => {
+  it.each([
+    [null, false],
+    [{ is_comped: false, expires_at: null }, false],
+    [{ is_comped: true, expires_at: null }, true],
+    [{ is_comped: true, expires_at: '2099-01-01T00:00:00Z' }, true],
+    [{ is_comped: true, expires_at: '2000-01-01T00:00:00Z' }, false],
+    [{ is_comped: true, expires_at: '2026-11-01T00:00:00Z' }, false],
+    [{ is_comped: true, expires_at: 'invalid' }, false],
+  ])('validates %j', async (comp, expected) => {
+    const { isFarmComped } = await import('@/lib/farmTrial');
+    expect(isFarmComped(comp, Date.parse('2026-11-01T00:00:00Z'))).toBe(expected);
+  });
+});
+
+it('formats timestamp deadlines using the local calendar date', async () => {
+  const { formatFarmTrialDate } = await import('@/lib/farmTrial');
+  const instant = '2026-11-01T00:30:00Z';
+  expect(formatFarmTrialDate(instant)).toBe(new Date(instant).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }));
+  expect(formatFarmTrialDate('2026-11-01')).toBe('Nov 1, 2026');
+  expect(formatFarmTrialDate(null)).toBe('');
+});

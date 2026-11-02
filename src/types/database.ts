@@ -369,3 +369,24 @@ export interface TrialClaimRow {
     readonly farm_id: string;
     readonly claimed_at: string;
 }
+
+/** Service-managed billing metadata; excluded from customer backup/restore. */
+export interface FarmCompRow {
+    id: string;
+    farm_id: string;
+    reason: string;
+    granted_by: string | null;
+    created_at: string | null;
+    expires_at: string | null;
+    deleted_at: string | null;
+}
+
+export interface FarmCompStatus {
+    is_comped: boolean;
+    expires_at: string | null;
+}
+
+export interface GetFarmCompStatusRpc {
+    Args: { p_farm_id: string };
+    Returns: FarmCompStatus[];
+}
