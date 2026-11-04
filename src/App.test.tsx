@@ -104,7 +104,7 @@ vi.mock('@/lib/syncQueue', () => ({
 vi.mock('@/lib/native', () => ({
   native: {
     haptic: { light: vi.fn(), success: vi.fn(), error: vi.fn() },
-    statusBar: { setLight: vi.fn(), setDark: vi.fn() },
+    statusBar: { lightText: vi.fn(), darkText: vi.fn() },
   },
 }));
 

@@ -10,8 +10,8 @@ import DisplayManager from '../DisplayManager';
 vi.mock('@/lib/native', () => ({
   native: {
     statusBar: {
-      setDark: vi.fn(),
-      setLight: vi.fn(),
+      darkText: vi.fn(),
+      lightText: vi.fn(),
     },
   },
 }));
