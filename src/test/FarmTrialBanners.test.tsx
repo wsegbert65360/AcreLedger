@@ -72,8 +72,13 @@ describe('farm trial banners', () => {
     expect(screen.queryByText(/Your payment didn't/)).toBeNull();
     expect(control.paymentReads).not.toHaveBeenCalled();
   });
-  it.each(['native', 'available'])('blocks purchases with %s gate closed', gate => {
-    control.checkout = true; control.live = true; if (gate === 'native') control.native = true; else control.available = false;
+  it('renders no trial or payment wording on native', () => {
+    control.checkout = true; control.live = true; control.native = true;
+    mount(); expect(screen.queryByLabelText('Farm trial notices')).toBeNull();
+    expect(screen.queryByText(/free trial/)).toBeNull();
+  });
+  it('blocks purchases with the billing-availability gate closed', () => {
+    control.checkout = true; control.live = true; control.available = false;
     mount(); expect(screen.queryByText('Subscribe')).toBeNull(); expect(screen.queryByText(/Your payment didn't/)).toBeNull();
     expect(screen.getByText('14 days left in your free trial.')).toBeInTheDocument();
   });

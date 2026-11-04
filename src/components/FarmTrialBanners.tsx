@@ -59,7 +59,8 @@ export default function FarmTrialBanners() {
     return () => { cancelled = true; };
   }, [liveCharges, farm_id, userId]);
 
-  if (!farm_id || !userId) return null;
+  // The native app is a free companion (App Review 3.1.3(f)): no trial or payment wording.
+  if (native.isNativePlatform() || !farm_id || !userId) return null;
   const daysOverride = getTrialDaysLeftOverride(import.meta.env.VITE_VERCEL_ENV, search);
   const trial = daysOverride === null
     ? getFarmTrialStatus(farm?.trial_ends_at, now)

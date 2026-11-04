@@ -62,6 +62,17 @@ within 30 days.
 
 ## Validation log
 
+- 2026-11-03 — macOS (Xcode 26.5, CocoaPods 1.17.0) at 3.6.1: `pod install`
+  and unsigned Debug and Release simulator builds succeeded on Capacitor 8.5.3,
+  including speech-recognition 7.0.1 compilation. The app launched on iPhone 17
+  Pro Max; the native signed-out screen showed sign-in only, with no price,
+  trial, or signup wording. Fixed: the trial-countdown banner ("N days left in
+  your free trial") rendered on native; it now renders nothing on Capacitor.
+  Lint, typecheck, and `npm run test` passed. Sample Creek Farm exists in
+  production with 4 fields, boundaries, plantings, 1 spray, 2 harvests, and
+  2 bins; the North Forty field row still carries intended use Corn and FSA
+  farm 1234 / tract 2 instead of Grain, 1001 / 2001.
+
 - 2026-10-09 — Capacitor 6 → 8.5.3 upgrade implementation in progress on working tree (uncommitted). iOS: CocoaPods pod install, Xcode 26 validation, signing/archive creation, TestFlight upload, and physical-device checklist remain pending macOS/App Store access. Speech-recognition 7.0.1 iOS compilation is unverified. SQLCipher and secure-storage encryption flags confirmed present in generated `ios/App/App/capacitor.config.json`.
 - 2026-09-29 — Windows validation on the reconciled review-fix tree (rebased
   onto the 13-commit remote head `e039a0d`, Node 22.22.3): lint 0 errors and 72
