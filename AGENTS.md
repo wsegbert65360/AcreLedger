@@ -530,6 +530,7 @@ import { Map as MapIcon, History as HistoryIcon } from 'lucide-react';
 - When adding new top-level routes, wrap the element in `<ErrorBoundary>`.
 - Do not remove or bypass the error boundary; it prevents full-app blank-screen crashes.
 - For non-fatal async errors (Supabase failures, weather/rainfall lookups), use `toast.error(...)` and degrade gracefully rather than throwing.
+- Crash reports go only through `src/utils/errorReporting.ts` (redacted, opt-out, rate-capped; plain collector or Sentry DSN, no SDK). Do not add a vendor SDK, user identity, or breadcrumbs. Do not set `VITE_ERROR_REPORTING_DSN` in production or CodeMagic until the Privacy Policy and App Store privacy answers disclose crash data. Details: [BLUEPRINT → Crash Reporting](./BLUEPRINT.md#crash-reporting).
 
 ## React and Performance Rules
 
