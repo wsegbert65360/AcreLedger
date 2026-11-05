@@ -75,6 +75,7 @@ vi.mock('@/context/AskAcreLedgerContext', () => ({
 vi.mock('@/components/Sidebar', () => ({ default: () => null }));
 vi.mock('@/components/BottomNav', () => ({ default: () => null }));
 vi.mock('@/components/FarmTrialBanners', () => ({ default: () => null }));
+vi.mock('@/components/FarmReadOnlyBanner', () => ({ default: () => null }));
 vi.mock('@/components/OfflineBanner', () => ({ default: () => null }));
 vi.mock('@/components/SeasonRolloverModal', () => ({ default: () => null }));
 vi.mock('@/components/QuickAddDialog', () => ({ default: () => null }));

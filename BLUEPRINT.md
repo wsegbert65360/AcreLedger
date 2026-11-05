@@ -815,6 +815,23 @@ Product access enforcement is off by default. A missing or soft-deleted subscrip
 `unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
 passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
 
+Read-only (view-only) mode is that path, gated by the build-time flag `VITE_BILLING_ENFORCE === 'true'`
+(web and native). `useFarmAccessState` loads the farm's `trial_ends_at`, `get_farm_comp_status`, and
+live `farm_subscriptions` row inside `FarmProvider`, refreshing on focus and visibility. It keeps the
+last good snapshot for the same user and farm when a read fails or the device is offline, and with no
+snapshot the farm keeps full access. `getFarmAccessState` decides, in order: a live comp grants access;
+a subscription that `getFarmBillingAccess({ enforce: true })` allows grants access; a future trial
+deadline grants access; a remaining non-deleted subscription row locks (`subscription-ended`); no
+parseable trial date keeps access (`no-trial-date`, pending the rollout backfill); otherwise the farm
+locks (`trial-ended`). An `incomplete` checkout therefore falls back to the trial. While locked,
+`FarmProvider` wraps each action in `READ_ONLY_BLOCKED_ACTIONS` so it shows one `farm-read-only` toast
+and returns its failure value (`false`, or `'failed'` for `updateEquipmentReading`) without touching
+state, the database, or the sync queue. Wrappers are cached per underlying action to keep identities
+stable. Already-queued offline changes still replay. `FarmReadOnlyBanner` explains the lock and, on the
+web when the billing UI is available, links to Settings → Billing; native shows only the view-only
+sentence. The Quick Add button is hidden while locked. This is a client-side gate only: RLS does not
+yet refuse writes from a locked farm.
+
 Trial PR 1 prepares a 3-month free trial, no card needed, stamped once by the server
 with `now() + interval '3 months'`. Each farm and normalized email identity gets one claim in service-only
 `trial_claims`; members inherit the farm deadline. Claims use a unique SHA-256 hash of a

@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 
 import { Auth } from "@/components/Auth";
 import FarmTrialBanners from "@/components/FarmTrialBanners";
+import FarmReadOnlyBanner from "@/components/FarmReadOnlyBanner";
 import BottomNav from "@/components/BottomNav";
 import CoachmarkOverlay from "@/components/CoachmarkOverlay";
 import DeletionPending from "@/components/DeletionPending";
@@ -163,7 +164,7 @@ const ModalMap = {
 };
 
 const AppContent = () => {
-  const { session, loading, deletionStatus, signOut, isOnline, farm_id, fields, onboardingComplete, onboardingStatusKnown, initialFetchComplete, fetchError, refresh } = useFarm();
+  const { session, loading, deletionStatus, signOut, isOnline, farm_id, fields, onboardingComplete, onboardingStatusKnown, initialFetchComplete, fetchError, refresh, farmAccess } = useFarm();
   const { activeModal, selectedField, clearActiveModal, openQuickAdd } = useQuickAdd();
   const location = useLocation();
   const navigate = useNavigate();
@@ -358,13 +359,15 @@ const AppContent = () => {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const showQuickAddFab = location.pathname === '/' || location.pathname === '/weather';
+  // A view-only farm cannot add records, so the Quick Add button is hidden.
+  const showQuickAddFab = !farmAccess?.readOnly && (location.pathname === '/' || location.pathname === '/weather');
 
   return (
     <>
       <OfflineBanner />
       <Sidebar />
       <div className="lg:pl-60 print:pl-0">
+        <FarmReadOnlyBanner />
         <FarmTrialBanners />
         <AnimatedRoutes />
       </div>

@@ -76,7 +76,14 @@ vi.doMock('@/hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: control.isOnline }),
 }));
 
-vi.doMock('@/store/usePlantRecords', () => ({ usePlantRecords: () => ({}) }));
+const addPlantRecordMock = vi.fn().mockResolvedValue(true);
+const accessControl = { readOnly: false };
+vi.doMock('@/hooks/useFarmAccessState', () => ({
+  useFarmAccessState: () => accessControl.readOnly
+    ? { readOnly: true, reason: 'trial-ended' }
+    : { readOnly: false, reason: 'not-enforced' },
+}));
+vi.doMock('@/store/usePlantRecords', () => ({ usePlantRecords: () => ({ addPlantRecord: addPlantRecordMock }) }));
 vi.doMock('@/store/useSprayRecords', () => ({ useSprayRecords: () => ({}) }));
 vi.doMock('@/store/useHarvestRecords', () => ({ useHarvestRecords: () => ({}) }));
 vi.doMock('@/store/useHayRecords', () => ({ useHayRecords: () => ({}) }));
@@ -867,6 +874,48 @@ describe('farmStore composed behaviors', () => {
       cloud.setTableHandler('farms', { data: { name: 'Server Farm' }, error: null });
       await act(async () => { expect(await result.current.refresh()).toBe(true); });
       expect(result.current.farmName).toBe('Server Farm');
+    });
+  });
+
+  describe('read-only mode', () => {
+    beforeEach(() => {
+      accessControl.readOnly = false;
+      addPlantRecordMock.mockClear();
+    });
+
+    it('passes actions through when the farm has full access', async () => {
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await expect(result.current.addPlantRecord({} as never)).resolves.toBe(true);
+      expect(addPlantRecordMock).toHaveBeenCalledTimes(1);
+      expect(result.current.farmAccess.readOnly).toBe(false);
+    });
+
+    it('blocks writes with one view-only toast and returns failure', async () => {
+      accessControl.readOnly = true;
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.farmAccess.readOnly).toBe(true));
+      await expect(result.current.addPlantRecord({} as never)).resolves.toBe(false);
+      await expect(result.current.updateFarmName('New name')).resolves.toBe(false);
+      expect(addPlantRecordMock).not.toHaveBeenCalled();
+      expect(toastError).toHaveBeenCalledWith(
+        'This farm is view-only. You can still view and export your records.',
+        { id: 'farm-read-only' },
+      );
+    });
+
+    it('keeps a stable action identity across renders', async () => {
+      const { result, rerender } = renderHook(() => useFarm(), { wrapper });
+      const first = result.current.addPlantRecord;
+      rerender();
+      expect(result.current.addPlantRecord).toBe(first);
+    });
+
+    it('lets queued-change retry run while view-only', async () => {
+      accessControl.readOnly = true;
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.farmAccess.readOnly).toBe(true));
+      await act(async () => { await result.current.retryFailedSyncChanges(); });
+      expect(retryFailedMock).toHaveBeenCalled();
     });
   });
 });
