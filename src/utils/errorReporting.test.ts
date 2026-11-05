@@ -11,6 +11,7 @@ import {
   handleWindowError,
   installGlobalErrorHandlers,
   reportClientError,
+  resetErrorReportLimits,
 } from './errorReporting';
 
 function Boom(): never {
@@ -19,6 +20,7 @@ function Boom(): never {
 
 describe('reportClientError', () => {
   afterEach(() => {
+    resetErrorReportLimits();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -102,6 +104,7 @@ describe('reportClientError', () => {
 
 describe('global handlers', () => {
   afterEach(() => {
+    resetErrorReportLimits();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
@@ -124,6 +127,7 @@ describe('global handlers', () => {
 
 describe('ErrorBoundary', () => {
   afterEach(() => {
+    resetErrorReportLimits();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
