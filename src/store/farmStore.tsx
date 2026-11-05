@@ -33,6 +33,11 @@ import { useWorkRequests } from './useWorkRequests';
 import { useEquipment } from './useEquipment';
 import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { useFarmAccessState } from '../hooks/useFarmAccessState';
+import {
+  isBillingEnforced, READ_ONLY_BLOCKED_ACTIONS, READ_ONLY_FAILURE_VALUES, READ_ONLY_MESSAGE, READ_ONLY_TOAST_ID,
+  type FarmAccessState,
+} from '@/lib/farmAccess';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
 import { syncQueue, WebSyncQueueUnreadableError, type QueuedMutation } from '../lib/syncQueue';
@@ -179,6 +184,11 @@ interface FarmState {
   addFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'id' | 'farm_id'>) => Promise<boolean>;
   updateFertilizerRecipe: (recipe: Omit<FertilizerRecipe, 'farm_id'>) => Promise<boolean>;
   deleteFertilizerRecipe: (id: string) => Promise<boolean>;
+  /**
+   * Read-only (view-only) mode for an unpaid farm. Off unless
+   * VITE_BILLING_ENFORCE=true; blocked actions toast and return failure.
+   */
+  farmAccess: FarmAccessState;
   /** This-device sign out and cache clearing; deletion can request global scope. */
   deletionStatus: 'checking' | 'clear' | 'pending' | 'error';
   signOut: (options?: ClearLocalCacheOptions & { scope?: SignOutScope; preserveLocalData?: boolean }) => Promise<SignOutResult>;
@@ -847,6 +857,32 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
 
+  // --- Read-only (view-only) mode ---
+  const farmAccess = useFarmAccessState({
+    enforce: isBillingEnforced(import.meta.env),
+    farmId: farm_id,
+    userId: sessionUserId ?? undefined,
+    isOnline,
+  });
+  const readOnlyRef = useRef(farmAccess.readOnly);
+  useEffect(() => { readOnlyRef.current = farmAccess.readOnly; }, [farmAccess.readOnly]);
+  // Cache one wrapper per underlying action so guarded actions keep a stable
+  // identity whenever the wrapped action does (autosave effects depend on it).
+  const readOnlyGuardsRef = useRef(new WeakMap<(...args: never[]) => unknown, (...args: never[]) => unknown>());
+  const guardReadOnly = useCallback((action: (...args: never[]) => unknown, failure: unknown) => {
+    const cached = readOnlyGuardsRef.current.get(action);
+    if (cached) return cached;
+    const guarded = (...args: never[]) => {
+      if (readOnlyRef.current) {
+        toast.error(READ_ONLY_MESSAGE, { id: READ_ONLY_TOAST_ID });
+        return Promise.resolve(failure);
+      }
+      return action(...args);
+    };
+    readOnlyGuardsRef.current.set(action, guarded);
+    return guarded;
+  }, []);
+
   // --- Compose CRUD hooks ---
   const plantOps = usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlantRecords, isOnline, onMutation: updatePendingSyncCount });
   const sprayOps = useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSprayRecords, isOnline, onMutation: updatePendingSyncCount });
@@ -1070,56 +1106,67 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     }
   }, [ensureFarm, farm_id, session, setOnboardingComplete]);
 
+  const value: FarmState = {
+    farmAccess,
+    deletionStatus: auth.deletionStatus,
+    session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, syncQueueReadFailed, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError, equipmentLoadFailed, dataLoadSource, dataLoadedAt,
+    fields: sortedFields,
+    bins: filteredBins,
+    plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,
+    fertilizerApplications,
+    tillageRecords,
+    grainMovements,
+    savedSeeds,
+    fertilizerRecipes,
+    sprayRecipes,
+    fsaTracts,
+    cluAssignments,
+    workRequests,
+    equipment: equipment.filter(item => !item.deleted_at),
+    maintenanceSchedules: maintenanceSchedules.filter(item => !item.deleted_at),
+    maintenanceLogs: maintenanceLogs.filter(item => !item.deleted_at),
+    activeSeason, viewingSeason, seasonOptions, setViewingSeason: selectViewingSeason,
+    rolloverToNewSeason: seasonOps.rolloverToNewSeason,
+    ...plantOps,
+    ...sprayOps,
+    ...harvestOps,
+    ...hayOps,
+    ...customSprayOps,
+    ...fertilizerOps,
+    ...tillageOps,
+    ...grainOps,
+    ...workRequestOps,
+    ...equipmentOps,
+    getBinTotal,
+    ...entityOps,
+    signOut,
+    clearLocalCache: seasonOps.clearLocalCache,
+    farm_id,
+    farmName,
+    farmRole,
+    updateFarmName,
+    onboardingComplete,
+    onboardingStatusKnown,
+    completeOnboarding,
+    restoreFromBackup: seasonOps.restoreFromBackup,
+    refresh,
+    importTract: tractOps.importTract,
+    deleteTract: tractOps.deleteTract,
+    assignClu: tractOps.assignClu,
+    updateCluLandUse: tractOps.updateCluLandUse,
+    unassignClu: tractOps.unassignClu,
+  };
+  const guardedActions = value as unknown as Record<string, (...args: never[]) => unknown>;
+  for (const action of READ_ONLY_BLOCKED_ACTIONS) {
+    if (typeof guardedActions[action] !== 'function') continue;
+    const failure = action in READ_ONLY_FAILURE_VALUES
+      ? READ_ONLY_FAILURE_VALUES[action as keyof typeof READ_ONLY_FAILURE_VALUES]
+      : false;
+    guardedActions[action] = guardReadOnly(guardedActions[action], failure);
+  }
+
   return (
-    <FarmContext.Provider value={{
-      deletionStatus: auth.deletionStatus,
-      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, syncQueueReadFailed, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError, equipmentLoadFailed, dataLoadSource, dataLoadedAt,
-      fields: sortedFields,
-      bins: filteredBins,
-      plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,
-      fertilizerApplications,
-      tillageRecords,
-      grainMovements,
-      savedSeeds,
-      fertilizerRecipes,
-      sprayRecipes,
-      fsaTracts,
-      cluAssignments,
-      workRequests,
-      equipment: equipment.filter(item => !item.deleted_at),
-      maintenanceSchedules: maintenanceSchedules.filter(item => !item.deleted_at),
-      maintenanceLogs: maintenanceLogs.filter(item => !item.deleted_at),
-      activeSeason, viewingSeason, seasonOptions, setViewingSeason: selectViewingSeason,
-      rolloverToNewSeason: seasonOps.rolloverToNewSeason,
-      ...plantOps,
-      ...sprayOps,
-      ...harvestOps,
-      ...hayOps,
-      ...customSprayOps,
-      ...fertilizerOps,
-      ...tillageOps,
-      ...grainOps,
-      ...workRequestOps,
-      ...equipmentOps,
-      getBinTotal,
-      ...entityOps,
-      signOut,
-      clearLocalCache: seasonOps.clearLocalCache,
-      farm_id,
-      farmName,
-      farmRole,
-      updateFarmName,
-      onboardingComplete,
-      onboardingStatusKnown,
-      completeOnboarding,
-      restoreFromBackup: seasonOps.restoreFromBackup,
-      refresh,
-      importTract: tractOps.importTract,
-      deleteTract: tractOps.deleteTract,
-      assignClu: tractOps.assignClu,
-      updateCluLandUse: tractOps.updateCluLandUse,
-      unassignClu: tractOps.unassignClu,
-    }}>
+    <FarmContext.Provider value={value}>
       {children}
     </FarmContext.Provider>
   );

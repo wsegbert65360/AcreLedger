@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-01 (complimentary access metadata, trial dates, PG17 MAINTAIN/search-path hardening, and farm_comps billing audit log).
+> **Last updated:** 2026-11-04 (client-side read-only mode behind `VITE_BILLING_ENFORCE`).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,12 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-04** — Read-only (view-only) mode: `VITE_BILLING_ENFORCE=true` blocks farm-store writes for farms whose trial or subscription has ended. Off by default, fails open, client-side only.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
 - **2026-11-01** — Added PG17 MAINTAIN revocation for public relations and the retired-backfill function search-path pin; disposable focused and full-chain rehearsal commands cover the change. New tables created by supabase_admin must explicitly revoke MAINTAIN from API roles and PUBLIC.
 - **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
-- **2026-10-21** — Trial PR 1 prepares server-owned 3-month farm trial dates, a service-only salted-identity claim ledger, and billing-history deletion protection. Existing farms await rollout backfill; enforcement stays OFF.
-- **2026-10-20** — Reports > Landlord now documents Farm Owner Summary: current-farm fields including owned/unassigned land, season-scoped activity, CSV/Detailed-PDF exports, and a missing-farm export guard.
 
 ## Contents
 
@@ -151,6 +150,7 @@ Rules), then open only the files for that area.
 
 **Billing**
 - [api/create-checkout-session.ts](./api/create-checkout-session.ts), [api/create-portal-session.ts](./api/create-portal-session.ts), [api/billing-eligibility.ts](./api/billing-eligibility.ts), [api/stripe-webhook.ts](./api/stripe-webhook.ts), [server/billing.ts](./server/billing.ts), and [@/lib/billing.ts](./src/lib/billing.ts) — Stripe test-mode-only billing surface, server gates, signed webhook mirror, and client entitlement rules.
+- [@/lib/farmAccess.ts](./src/lib/farmAccess.ts), [@/hooks/useFarmAccessState.ts](./src/hooks/useFarmAccessState.ts), and [@/components/FarmReadOnlyBanner.tsx](./src/components/FarmReadOnlyBanner.tsx) — read-only (view-only) decision, its farm-store data load, and the banner. The guard itself lives in `farmStore.tsx`.
 
 **CI/CD**
 - [codemagic.yaml](./codemagic.yaml) — CodeMagic CI/CD workflow for iOS builds and TestFlight distribution.
@@ -385,6 +385,7 @@ Canonical detail: [BLUEPRINT → Stripe Billing](./BLUEPRINT.md#stripe-billing-t
 - Web-only, and hidden unless `VITE_BILLING_UI_ENABLED === 'true'`. Capacitor renders no billing surface. The rollout allowlist is server-only (`BILLING_ALLOWLIST`): required in Vercel production (the bundle check fails if unset), optional with a warning elsewhere. Empty or unset fails closed at runtime. The Settings card asks `GET /api/billing-eligibility` with the caller's bearer token and never reads `VITE_BILLING_ALLOWLIST`.
 - `BILLING_LIVE_CHARGES` stays absent or exactly `false`, and the server accepts only `sk_test_` keys, until the product owner approves the legal and production rollout.
 - Enforcement is off by default: a missing or soft-deleted subscription row is `unmanaged` with full access. Do not let absent billing data become a paywall.
+- **Read-only mode** turns on only with `VITE_BILLING_ENFORCE === 'true'`. `getFarmAccessState` (`@/lib/farmAccess.ts`) locks a farm only when it has no live comp, no access-granting subscription, and a trial deadline that has passed, or a lapsed subscription. Unknown/failed reads and farms with no trial date keep full access. `FarmProvider` wraps every action in `READ_ONLY_BLOCKED_ACTIONS` to toast and return its failure value; adding a new store mutation means adding it to that list. Reads, exports, backup download, Ask the Book, queued-change sync, sign-out, and account deletion stay available. The native banner states the view-only fact only (no trial, price, or purchase wording). This is a client-side gate; server-side (RLS) enforcement is not built.
 - Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` lives on subscription **items**, not the Subscription; use `resolveCurrentPeriodEnd` (`server/billing.ts`). Build webhook tests from the basil shape.
 - Checkout is refused (409, use the portal) for a live `trialing`/`active`/`past_due`/`unpaid` subscription; only `canceled`/`incomplete` rows may start a new Checkout. Checkout never grants a new trial: it passes the farm's existing `trial_ends_at` as Stripe `trial_end` only when more than 48 hours remain. An existing `stripe_customer_id` is reused.
 - `farm_subscriptions` is written only by the signed webhook (service role). Clients never trust query parameters or client-reported Stripe state.
