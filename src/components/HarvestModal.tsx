@@ -13,6 +13,8 @@ import { parseLocalizedNumber } from '@/lib/locale/numbers';
 import { native } from '@/lib/native';
 import { getLatestForField } from '@/lib/utils';
 import { useFarm } from '@/store/farmStore';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { isFreeTierLocked } from '@/lib/entitlements';
 import { useAppPreferences } from '@/store/useAppPreferences';
 import { Field, GrainMovement, HarvestRecord } from '@/types/farm';
 import { localDateTimeMs, toLocalIsoDate, toLocalTime } from '@/utils/dates';
@@ -63,6 +65,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
   const isDuplicate = mode === 'duplicate' && !!initialData;
   const { addHarvestRecord, addHarvestWithGrain, updateHarvestRecord, addGrainMovement, updateGrainMovementWithVersion, deleteGrainMovements, grainMovements, harvestRecords, bins, getBinTotal, session, viewingSeason } = useFarm();
   const { preferences } = useAppPreferences(session?.user?.id ?? null);
+  const { entitlement } = useEntitlement();
+  const binLocked = isFreeTierLocked(entitlement);
   const [destination, setDestination] = useState<'bin' | 'town' | null>(initialData?.destination || null);
   const [binId, setBinId] = useState(initialData?.binId || '');
   const [moisture, setMoisture] = useState(initialData?.moisturePercent?.toString() || '');
@@ -383,14 +387,22 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
         {!destination ? (
           <div className="space-y-3 py-4">
             <p className="text-muted-foreground font-mono text-xs text-center">SELECT DESTINATION</p>
+            {binLocked && (
+              <p className="text-muted-foreground text-xs text-center">
+                {/* DRAFT copy */}
+                Tracking what goes into each bin is part of the paid plan. You can still log this harvest as Town.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Button
                 onClick={() => setDestination('bin')}
+                disabled={binLocked}
                 className="touch-target h-20 flex-col gap-2 bg-muted hover:bg-harvest/20 text-foreground border border-border hover:border-harvest/50"
                 variant="outline"
               >
                 <Warehouse size={24} />
                 <span className="font-mono text-sm">Bin</span>
+                {binLocked && <span className="text-[10px] text-muted-foreground">Paid plan</span>}
               </Button>
               <Button
                 onClick={() => setDestination('town')}

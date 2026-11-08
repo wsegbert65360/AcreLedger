@@ -27,10 +27,23 @@ export const FREE_LIMITS = {
 
 export const PREMIUM_REQUIRED_ERRCODE = 'P0402';
 
-/** Features gated behind a paid plan; the string is the `premium_required:<feature>` suffix. */
+/** Feature names exactly as the server raises them (premium_required:<feature>). */
 export type PremiumFeature =
-  | 'reports' | 'grain' | 'equipment' | 'landlord_splits' | 'costs' | 'reminders'
-  | 'clu_tract' | 'csv_import' | 'backup_restore';
+  | 'reports' | 'grain' | 'equipment' | 'landlord_split' | 'fsa_tract'
+  | 'backup_restore' | 'field_cap' | 'photo_cap' | 'rainfall';
+
+/**
+ * Report types that need the paid plan (FSA-578, season spray log, fertilizer, landlord
+ * statements). Fall FSA and the hay summary stay free. Enforced in the app only: reports are
+ * built on the device, so this is a display gate, not server enforcement.
+ */
+const PAID_REPORT_TYPES: ReadonlySet<string> = new Set([
+  'fsa-plant', 'spray-audit', 'fertilizer-summary', 'landlord-statement', 'farm-owner-summary',
+]);
+
+export function isPaidReport(reportType: string): boolean {
+  return PAID_REPORT_TYPES.has(reportType);
+}
 
 export function isPremiumPlan(plan: EntitlementPlan): boolean {
   return plan !== 'free';

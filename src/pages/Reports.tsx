@@ -5,6 +5,8 @@ import { FileText, Printer, History as HistoryIcon, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useFarm } from '@/store/farmStore';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { isFreeTierLocked, isPaidReport } from '@/lib/entitlements';
 import SeasonSelect from '@/components/SeasonSelect';
 import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import SprayAuditReport from '@/components/reports/SprayAuditReport';
@@ -300,11 +302,19 @@ export default function Reports() {
     );
   };
 
+  const { entitlement } = useEntitlement();
+  const reportsLocked = isFreeTierLocked(entitlement);
+  const lockedMessage = 'This report is included with the paid plan.'; // DRAFT copy
+
   const runTrackedExport = (
     reportType: ReportExportType,
     fn: () => void | Promise<void>,
     label: string,
   ) => {
+    if (reportsLocked && isPaidReport(reportType)) {
+      toast.info(lockedMessage);
+      return;
+    }
     try {
       Promise.resolve(fn())
         .then(() => {
@@ -348,6 +358,10 @@ export default function Reports() {
   };
 
   const handlePrint = () => {
+    if (reportsLocked && isPaidReport(tab)) {
+      toast.info(lockedMessage);
+      return;
+    }
     if (Capacitor.isNativePlatform()) {
       toast.info('Printing is not supported directly in the mobile app. Please export to PDF and print/share from there.');
       return;
@@ -598,6 +612,13 @@ export default function Reports() {
         </div>
 
         {/* ── FSA Planting Report ─────────────────────────────────────────────── */}
+        {reportsLocked && isPaidReport(tab) && (
+          <div role="status" className="rounded-2xl border border-border bg-muted/40 px-4 py-3 text-sm print:hidden">
+            {/* DRAFT copy */}
+            <p className="font-semibold">This report is part of the paid plan.</p>
+            <p className="text-muted-foreground">You can still view your records, print a single record, and export your raw data.</p>
+          </div>
+        )}
         <TabsContent value="fsa-plant" className="mt-0">
           <FsaPlantReport
             fsaPlantRows={fsaPlantRows}

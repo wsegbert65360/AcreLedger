@@ -4,6 +4,7 @@ import { getDatabase, OFFLINE_DATABASE_UNAVAILABLE } from './offlineStorage';
 import { toast } from 'sonner';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 import { SYNC_QUEUE_KEYS } from './syncQueueKeys';
+import { isPremiumRequiredError } from './entitlements';
 
 export { SYNC_QUEUE_KEYS } from './syncQueueKeys';
 
@@ -26,7 +27,8 @@ export const EQUIPMENT_RPCS = [
 ] as const;
 export type EquipmentRpcName = typeof EQUIPMENT_RPCS[number];
 const EQUIPMENT_RPC_ALLOWLIST = new Set<string>(EQUIPMENT_RPCS);
-const NON_RETRYABLE_EQUIPMENT_SQLSTATE = new Set(['P0002', '23505', '23514']);
+// P0402 = premium_required: a plan limit, parked at once rather than retried.
+const NON_RETRYABLE_EQUIPMENT_SQLSTATE = new Set(['P0002', '23505', '23514', 'P0402']);
 
 export interface EquipmentRpcEnvelope {
   rpc: string;
@@ -996,6 +998,24 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
             console.warn(`Sync queue replay paused due to connection issue:`, response.error);
             return false;
           } else {
+            if (isPremiumRequiredError(response.error)) {
+              // Plan limit, not a bad change: park it at once (no retry burn, nothing deleted)
+              // so the farmer can export or discard it from Settings.
+              console.warn(`Sync queue change parked, premium required (${mutation.table_name}).`);
+              blockRecord(mutation);
+              if (linkedHarvest?.legacyGrainMutation) blockRecord(linkedHarvest.legacyGrainMutation);
+              for (const id of linkedMutationIds) {
+                await syncQueue.parkMutation(id, token);
+                handledMutationIds.add(id);
+              }
+              failedParkedCount++;
+              toast.info('Saved on this device. Premium needed to sync this change.', {
+                id: 'premium-required-sync', // DRAFT copy
+                description: 'Open Settings to export or discard it. Nothing was deleted.',
+              });
+              continue;
+            }
+
             // Permanent error (e.g. RLS failure, constraint error)
             console.error(`Sync queue permanent mutation failure for ${mutation.table_name}:`, response.error);
 

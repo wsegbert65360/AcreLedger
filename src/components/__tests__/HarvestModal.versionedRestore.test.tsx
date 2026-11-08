@@ -9,6 +9,11 @@ import { createSupabaseMock } from '@/test/supabaseMock';
 import { useStatefulArray } from '@/test/hookTestHarness';
 import type { GrainMovement, HarvestRecord, Field } from '@/types/farm';
 
+// The entitlement hook calls Supabase; this test counts Supabase calls, so keep it out.
+vi.mock('@/hooks/useEntitlement', () => ({
+  useEntitlement: () => ({ entitlement: null, loading: false }),
+}));
+
 const mock = createSupabaseMock();
 const updateHarvestRecord = vi.fn();
 const enqueueMutation = vi.fn();
