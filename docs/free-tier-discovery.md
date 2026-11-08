@@ -27,6 +27,12 @@ FSA-578, landlord statement/summary, fertilizer, spray audit/export are generate
 ## 5. Device identity
 Nothing exists: no `device_id`, `user_devices`, or sessions table. Phase 5 device limit needs a new table plus a registration step on sign-in.
 
+**DEFERRED (decision 2026-11-08): the one-device limit for free farms is NOT built on this branch.**
+It is the largest and most disruptive item (device table, register-on-sign-in, refusing a second device) and the other
+free limits already cover the plan. Revisit after the shadow run. If built later: device registry table + register-on-sign-in
+RPC + its own flag in `entitlement_config` (default off), tested before enabling, with a clear refusal message and upgrade
+link, and never locking out a farm's only device. `deviceCap: 1` stays in FREE_LIMITS but nothing enforces it.
+
 ## 6. Season model
 No seasons table found. Season is a client value (`activeSeason`, `viewingSeason` in `farmStore`; `useSeasonManagement.ts`), stamped onto records via mappers. "Current + last season" is derivable as `activeSeason` and `activeSeason - 1`. OPEN: confirm records carry a season/year column server-side.
 

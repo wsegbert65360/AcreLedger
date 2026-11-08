@@ -15,6 +15,7 @@ import { getLatestForField } from '@/lib/utils';
 import { useFarm } from '@/store/farmStore';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { isFreeTierLocked } from '@/lib/entitlements';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import { useAppPreferences } from '@/store/useAppPreferences';
 import { Field, GrainMovement, HarvestRecord } from '@/types/farm';
 import { localDateTimeMs, toLocalIsoDate, toLocalTime } from '@/utils/dates';
@@ -389,8 +390,8 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
             <p className="text-muted-foreground font-mono text-xs text-center">SELECT DESTINATION</p>
             {binLocked && (
               <p className="text-muted-foreground text-xs text-center">
-                {/* DRAFT copy */}
-                Tracking what goes into each bin is part of the paid plan. You can still log this harvest as Town.
+                
+                {ENTITLEMENT_COPY.binLockedNote}
               </p>
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -402,7 +403,7 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
               >
                 <Warehouse size={24} />
                 <span className="font-mono text-sm">Bin</span>
-                {binLocked && <span className="text-[10px] text-muted-foreground">Paid plan</span>}
+                {binLocked && <span className="text-[10px] text-muted-foreground">{ENTITLEMENT_COPY.binLockedLabel}</span>}
               </Button>
               <Button
                 onClick={() => setDestination('town')}

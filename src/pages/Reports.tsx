@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useFarm } from '@/store/farmStore';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { isFreeTierLocked, isPaidReport } from '@/lib/entitlements';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import SeasonSelect from '@/components/SeasonSelect';
 import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import SprayAuditReport from '@/components/reports/SprayAuditReport';
@@ -304,7 +305,7 @@ export default function Reports() {
 
   const { entitlement } = useEntitlement();
   const reportsLocked = isFreeTierLocked(entitlement);
-  const lockedMessage = 'This report is included with the paid plan.'; // DRAFT copy
+  const lockedMessage = ENTITLEMENT_COPY.reportLockedToast;
 
   const runTrackedExport = (
     reportType: ReportExportType,
@@ -614,9 +615,9 @@ export default function Reports() {
         {/* ── FSA Planting Report ─────────────────────────────────────────────── */}
         {reportsLocked && isPaidReport(tab) && (
           <div role="status" className="rounded-2xl border border-border bg-muted/40 px-4 py-3 text-sm print:hidden">
-            {/* DRAFT copy */}
-            <p className="font-semibold">This report is part of the paid plan.</p>
-            <p className="text-muted-foreground">You can still view your records, print a single record, and export your raw data.</p>
+            
+            <p className="font-semibold">{ENTITLEMENT_COPY.reportLockedTitle}</p>
+            <p className="text-muted-foreground">{ENTITLEMENT_COPY.reportLockedBody}</p>
           </div>
         )}
         <TabsContent value="fsa-plant" className="mt-0">

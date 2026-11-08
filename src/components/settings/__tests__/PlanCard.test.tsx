@@ -1,0 +1,58 @@
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import PlanCard from '@/components/settings/PlanCard';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
+import { freeEntitlement, type Entitlement } from '@/lib/entitlements';
+
+let mockEntitlement: Entitlement | null = null;
+let mockBillingUi = true;
+
+vi.mock('@/hooks/useEntitlement', () => ({
+  useEntitlement: () => ({ entitlement: mockEntitlement, loading: false }),
+}));
+vi.mock('@/lib/billing', () => ({ isBillingUiAvailable: () => mockBillingUi }));
+
+const renderCard = () => render(<MemoryRouter><PlanCard /></MemoryRouter>);
+
+describe('PlanCard', () => {
+  beforeEach(() => {
+    mockEntitlement = null;
+    mockBillingUi = true;
+  });
+
+  it('renders nothing while the server is not enforcing', () => {
+    mockEntitlement = freeEntitlement(false);
+    renderCard();
+    expect(screen.queryByTestId('plan-card')).toBeNull();
+  });
+
+  it('renders nothing before the entitlement loads', () => {
+    renderCard();
+    expect(screen.queryByTestId('plan-card')).toBeNull();
+  });
+
+  it('shows the free plan with an upgrade link on web', () => {
+    mockEntitlement = freeEntitlement(true);
+    renderCard();
+    expect(screen.getByText(ENTITLEMENT_COPY.planFreeName)).toBeTruthy();
+    expect(screen.getByRole('link', { name: ENTITLEMENT_COPY.planUpgradeLink }).getAttribute('href'))
+      .toBe('/settings?section=billing');
+  });
+
+  it('shows no link and only the website pointer where billing UI is unavailable (iOS)', () => {
+    mockEntitlement = freeEntitlement(true);
+    mockBillingUi = false;
+    renderCard();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText(ENTITLEMENT_COPY.nativeManageOnWeb)).toBeTruthy();
+  });
+
+  it('shows full access, without upgrade prompts, for a paid farm', () => {
+    mockEntitlement = { ...freeEntitlement(true), plan: 'paid' };
+    renderCard();
+    expect(screen.getByText('Full access to every feature.')).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+});

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 import { SYNC_QUEUE_KEYS } from './syncQueueKeys';
 import { isPremiumRequiredError } from './entitlements';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 
 export { SYNC_QUEUE_KEYS } from './syncQueueKeys';
 
@@ -1009,9 +1010,9 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
                 handledMutationIds.add(id);
               }
               failedParkedCount++;
-              toast.info('Saved on this device. Premium needed to sync this change.', {
-                id: 'premium-required-sync', // DRAFT copy
-                description: 'Open Settings to export or discard it. Nothing was deleted.',
+              toast.info(ENTITLEMENT_COPY.syncParkedTitle, {
+                id: 'premium-required-sync',
+                description: ENTITLEMENT_COPY.syncParkedBody,
               });
               continue;
             }

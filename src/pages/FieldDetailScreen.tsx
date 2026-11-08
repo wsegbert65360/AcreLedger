@@ -15,6 +15,7 @@ import { RainService, type RainfallResult } from '@/services/RainService';
 import { RainfallDailyService } from '@/services/RainfallDailyService';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { isFreeTierLocked, isPremiumRequiredError } from '@/lib/entitlements';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import { getPlantedCropColorStyles } from '@/lib/cropColors';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
@@ -225,7 +226,7 @@ export default function FieldDetailScreen() {
       console.error('[FieldDetail] Rain fetch error:', err);
       setRainError(
         isPremiumRequiredError(err)
-          ? 'Rainfall history for this field is included with the paid plan.' // DRAFT copy
+          ? ENTITLEMENT_COPY.rainfallLocked
           : err.message || 'Could not load rainfall data.',
       );
     } finally {

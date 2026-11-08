@@ -8,6 +8,7 @@ import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManag
 import DisplayManager from '@/components/settings/DisplayManager';
 import RegionManager from '@/components/settings/RegionManager';
 import BillingManager from '@/components/settings/BillingManager';
+import PlanCard from '@/components/settings/PlanCard';
 import { isAuPilotEnabled } from '@/lib/auPilot';
 import { isBillingUiAvailable } from '@/lib/billing';
 import { isEquipmentUiEnabled } from '@/lib/equipment/feature';
@@ -142,6 +143,7 @@ export default function Settings() {
             <AccordionContent>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
                 <div className="space-y-6">
+                  <PlanCard />
                   <AccountManager />
                   <DisplayManager />
                   {auPilotVisible && <RegionManager />}
