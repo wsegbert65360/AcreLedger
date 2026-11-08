@@ -36,6 +36,9 @@ import {
   parseWeatherLocationInput,
 } from '@/lib/weatherHelpers';
 import { RainService } from '@/services/RainService';
+import { RainfallDailyService } from '@/services/RainfallDailyService';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { isFreeTierLocked } from '@/lib/entitlements';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
 import { ExtendedWeatherData } from '@/types/weather';
@@ -59,6 +62,9 @@ export default function Weather() {
   const abortRef = useRef<AbortController | null>(null);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
+  const { entitlement } = useEntitlement();
+  const rainLockedRef = useRef(false);
+  rainLockedRef.current = isFreeTierLocked(entitlement);
 
   const loadWeather = useCallback(async (loc: string) => {
     if (!loc.trim()) return;
@@ -79,19 +85,25 @@ export default function Weather() {
         try {
           const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
 
-          const rainData = await RainService.fetchComprehensiveRainfall({
-            ...(fieldId ? { fieldId } : {}),
-            lat,
-            lng,
-            signal: controller.signal,
-          });
+          // Free plan: no live Rain API. A slot field shows its daily totals;
+          // anything else keeps the plain weather-service numbers.
+          if (!(rainLockedRef.current && !fieldId)) {
+            const rainData = rainLockedRef.current && fieldId
+              ? await RainfallDailyService.fetchRainfallFromDaily({ fieldId })
+              : await RainService.fetchComprehensiveRainfall({
+                  ...(fieldId ? { fieldId } : {}),
+                  lat,
+                  lng,
+                  signal: controller.signal,
+                });
 
-          if (controller.signal.aborted) return;
+            if (controller.signal.aborted) return;
 
-          result.precip24h = rainData['24h'];
-          result.precip72h = rainData['72h'];
-          result.precip168h = rainData['168h'];
-          result.rainfallBasis = 'rolling';
+            result.precip24h = rainData['24h'];
+            result.precip72h = rainData['72h'];
+            result.precip168h = rainData['168h'];
+            result.rainfallBasis = 'rolling';
+          }
         } catch (rainErr) {
           if ((rainErr as { name?: string })?.name === 'AbortError' || controller.signal.aborted) return;
           console.error('[Weather] Failed to fetch high-res radar rainfall:', rainErr);

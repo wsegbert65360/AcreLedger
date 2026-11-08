@@ -69,20 +69,21 @@ export default {
       // 1. Fetch all fields. PostgREST caps one response at max_rows (1,000),
       // so an unpaged select silently omitted farms after the first page.
       const fields: FieldCoord[] = []
-      for (let from = 0; ; from += FIELD_PAGE_SIZE) {
-        const { data, error } = await supabaseClient
-          .from('fields')
-          .select('id, lat, lng')
-          // Skip soft-deleted fields and fields with no coordinates so they don't
-          // receive genuine-looking zero rainfall.
-          .is('deleted_at', null)
-          .not('lat', 'is', null)
-          .not('lng', 'is', null)
-          .order('id', { ascending: true })
-          .range(from, from + FIELD_PAGE_SIZE - 1)
+      // The RPC skips soft-deleted fields and fields with no coordinates (so
+      // they never get genuine-looking zero rainfall) and, once entitlements
+      // are enforced, free-plan farms: they get daily totals from mrms-daily.
+      // Keyset-paged on id so no page exceeds PostgREST max_rows.
+      let after: string | null = null
+      for (;;) {
+        const { data, error } = await supabaseClient.rpc('rainfall_collectable_fields', {
+          p_tier: 'hourly', p_after: after, p_limit: FIELD_PAGE_SIZE,
+        })
         if (error || !data) throw error ?? new Error('Failed to fetch fields')
-        fields.push(...(data as FieldCoord[]))
-        if (data.length < FIELD_PAGE_SIZE) break
+        const page = (data as Array<{ id: string; lat: number | string; lng: number | string }>)
+          .map((r) => ({ id: r.id, lat: Number(r.lat), lng: Number(r.lng) }))
+        fields.push(...page)
+        if (page.length < FIELD_PAGE_SIZE) break
+        after = page[page.length - 1].id
       }
 
       if (!fields.length) {

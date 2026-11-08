@@ -12,6 +12,9 @@ import { useAppPreferences } from '@/store/useAppPreferences';
 import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, FertilizerApplication, TillageRecord } from '@/types/farm';
 import { RainService, type RainfallResult } from '@/services/RainService';
+import { RainfallDailyService } from '@/services/RainfallDailyService';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { isFreeTierLocked, isPremiumRequiredError } from '@/lib/entitlements';
 import { getPlantedCropColorStyles } from '@/lib/cropColors';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { resolveFieldRainfallLocation } from '@/lib/fieldLocation';
@@ -160,6 +163,11 @@ export default function FieldDetailScreen() {
     return Math.floor(diff / (1000 * 60 * 60 * 24));
   }, [latestSpray]);
 
+  const { entitlement } = useEntitlement();
+  const rainLocked = isFreeTierLocked(entitlement);
+  const rainLockedRef = useRef(rainLocked);
+  rainLockedRef.current = rainLocked;
+
   const handleFetchRain = useCallback(async (signal?: AbortSignal, force = false) => {
     const currentField = fieldRef.current;
     if (!currentField?.id || fetchingRainRef.current) return;
@@ -185,20 +193,29 @@ export default function FieldDetailScreen() {
         locationSource: location.source,
         plantDate: latestPlanting?.plantDate || '',
         sprayDate: latestSpray?.sprayDate || '',
+        daily: rainLockedRef.current,
       });
       if (!force && lastSuccessfulRainFetchKeyRef.current === fetchKey) return;
       if (inFlightRainFetchKeyRef.current === fetchKey) return;
       inFlightRainFetchKeyRef.current = fetchKey;
 
-      const data = await RainService.fetchComprehensiveRainfall({
-        fieldId: currentField.id,
-        lat: location.lat,
-        lng: location.lng,
-        boundary: location.boundary,
-        sincePlantingDate: latestPlanting?.plantDate,
-        sinceLastSprayDate: latestSpray?.sprayDate,
-        signal
-      });
+      // Free plan: daily totals from Supabase (server decides which fields);
+      // paid / not enforced: the live Rain API exactly as before.
+      const data = rainLockedRef.current
+        ? await RainfallDailyService.fetchRainfallFromDaily({
+            fieldId: currentField.id,
+            sincePlantingDate: latestPlanting?.plantDate,
+            sinceLastSprayDate: latestSpray?.sprayDate,
+          })
+        : await RainService.fetchComprehensiveRainfall({
+            fieldId: currentField.id,
+            lat: location.lat,
+            lng: location.lng,
+            boundary: location.boundary,
+            sincePlantingDate: latestPlanting?.plantDate,
+            sinceLastSprayDate: latestSpray?.sprayDate,
+            signal
+          });
       if (!signal?.aborted) {
         setRainStats(data);
         lastSuccessfulRainFetchKeyRef.current = fetchKey;
@@ -206,7 +223,11 @@ export default function FieldDetailScreen() {
     } catch (err: any) {
       if (err.name === 'AbortError' || signal?.aborted) return;
       console.error('[FieldDetail] Rain fetch error:', err);
-      setRainError(err.message || 'Could not load rainfall data.');
+      setRainError(
+        isPremiumRequiredError(err)
+          ? 'Rainfall history for this field is included with the paid plan.' // DRAFT copy
+          : err.message || 'Could not load rainfall data.',
+      );
     } finally {
       if (fetchKey && inFlightRainFetchKeyRef.current === fetchKey) {
         inFlightRainFetchKeyRef.current = null;
@@ -227,7 +248,8 @@ export default function FieldDetailScreen() {
     fieldAssignmentLocationKey,
     fsaTractLocationKey,
     latestPlanting?.plantDate,
-    latestSpray?.sprayDate
+    latestSpray?.sprayDate,
+    rainLocked
   ]);
 
   useEffect(() => {

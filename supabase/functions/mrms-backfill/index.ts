@@ -148,25 +148,32 @@ export default {
       const rangeEndUtc = hours[0].toISOString()
 
       const fields: FieldCoord[] = []
-      for (let from = 0; ; from += FIELD_PAGE_SIZE) {
-        let fieldsQuery = supabaseClient
+      if (fieldId) {
+        // Explicit single-field backfill (service-role callers only): honor it.
+        const { data, error } = await supabaseClient
           .from('fields')
           .select('id, lat, lng')
-          // Deleted fields and fields without coordinates must not receive
-          // genuine-looking zero rainfall.
           .is('deleted_at', null)
           .not('lat', 'is', null)
           .not('lng', 'is', null)
-          .order('id', { ascending: true })
-          .range(from, from + FIELD_PAGE_SIZE - 1)
-        fieldsQuery = fieldId
-          ? fieldsQuery.eq('id', fieldId)
-          : fieldsQuery.neq('id', '00000000-0000-0000-0000-000000000000')
-
-        const { data, error } = await fieldsQuery
+          .eq('id', fieldId)
         if (error || !data) throw error ?? new Error('Failed to fetch fields')
         fields.push(...(data as FieldCoord[]))
-        if (data.length < FIELD_PAGE_SIZE) break
+      } else {
+        // Bulk path: same collectable set as mrms-hourly (deleted/no-coordinate
+        // fields skipped; free-plan farms skipped once entitlements enforce).
+        let after: string | null = null
+        for (;;) {
+          const { data, error } = await supabaseClient.rpc('rainfall_collectable_fields', {
+            p_tier: 'hourly', p_after: after, p_limit: FIELD_PAGE_SIZE,
+          })
+          if (error || !data) throw error ?? new Error('Failed to fetch fields')
+          const page = (data as Array<{ id: string; lat: number | string; lng: number | string }>)
+            .map((r) => ({ id: r.id, lat: Number(r.lat), lng: Number(r.lng) }))
+          fields.push(...page)
+          if (page.length < FIELD_PAGE_SIZE) break
+          after = page[page.length - 1].id
+        }
       }
 
       if (!fields.length) {

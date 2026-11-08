@@ -16,6 +16,9 @@ import {
   parseWeatherLocationInput,
 } from '@/lib/weatherHelpers';
 import { RainService } from '@/services/RainService';
+import { RainfallDailyService } from '@/services/RainfallDailyService';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { isFreeTierLocked } from '@/lib/entitlements';
 import { WeatherService } from '@/services/WeatherService';
 import { useFarm } from '@/store/farmStore';
 import { WeatherData } from '@/types/weather';
@@ -44,6 +47,9 @@ export default function WeatherBar() {
   const hasDataRef = useRef(false);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
+  const { entitlement } = useEntitlement();
+  const rainLockedRef = useRef(false);
+  rainLockedRef.current = isFreeTierLocked(entitlement);
 
   const firstFieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
   const fieldCoordsKey = firstFieldWithCoords && firstFieldWithCoords.lat != null && firstFieldWithCoords.lng != null
@@ -149,12 +155,17 @@ export default function WeatherBar() {
 
       try {
         const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
-        const rainData = await RainService.fetchComprehensiveRainfall({
-          ...(fieldId ? { fieldId } : {}),
-          lat,
-          lng,
-          signal: controller.signal,
-        });
+        // Free plan: no live Rain API. A slot field shows its daily total;
+        // anything else keeps the plain weather-service numbers.
+        if (rainLockedRef.current && !fieldId) return;
+        const rainData = rainLockedRef.current && fieldId
+          ? await RainfallDailyService.fetchRainfallFromDaily({ fieldId })
+          : await RainService.fetchComprehensiveRainfall({
+              ...(fieldId ? { fieldId } : {}),
+              lat,
+              lng,
+              signal: controller.signal,
+            });
         if (controller.signal.aborted) return;
         setWeather(prev => ({
           ...prev,
