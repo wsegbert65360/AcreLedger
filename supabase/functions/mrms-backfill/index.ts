@@ -149,7 +149,14 @@ export default {
 
       const fields: FieldCoord[] = []
       if (fieldId) {
-        // Explicit single-field backfill (service-role callers only): honor it.
+        // Explicit single-field backfill (service-role callers only). It follows the same plan rule as the
+        // bulk path: once entitlements enforce, a free-plan farm's field gets no hourly rows.
+        const { data: allowed, error: allowedError } = await supabaseClient
+          .rpc('rainfall_field_hourly_allowed', { p_field_id: fieldId })
+        if (allowedError) throw allowedError
+        if (allowed !== true) {
+          return Response.json({ error: 'Field is not eligible for hourly rainfall' }, { status: 409 })
+        }
         const { data, error } = await supabaseClient
           .from('fields')
           .select('id, lat, lng')

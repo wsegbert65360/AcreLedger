@@ -48,6 +48,8 @@ try {
   await db.exec(await mig('20261107000000_entitlements_core.sql'));
   const tiering = await mig('20261107040000_rainfall_tiering.sql');
   await db.exec(tiering); await db.exec(tiering); // replay
+  const allowedFn = await mig('20261107060000_rainfall_hourly_field_allowed.sql');
+  await db.exec(allowedFn); await db.exec(allowedFn); // replay
 
   // Fields (free farm): coordinates everywhere except f3; f1 deleted.
   await svc(`
@@ -148,7 +150,20 @@ try {
   assert.deepEqual((await readDaily(P[0])).rows, []);
   await db.exec('RESET ROLE; SET ROLE anon');
   await assert.rejects(readDaily(F.f2), /permission denied/);
-  console.log('Rainfall tiering: replay, created_at drift fix, slot order, collectable fields per mode, pagination, read gate, seed passed.');
+  // Single-field backfill guard (review item 6): same rule as the bulk hourly tier. Mode is still 'enforce' here.
+  await db.exec('RESET ROLE');
+  const allowed = async (field) => (await rows(`SELECT public.rainfall_field_hourly_allowed('${field}') AS ok`))[0].ok;
+  assert.equal(await allowed(P[0]), true);        // paid farm
+  assert.equal(await allowed(F.f2), false);       // free farm, enforcing
+  assert.equal(await allowed(F.f1), false);       // deleted
+  assert.equal(await allowed(F.f3), false);       // no coordinates
+  assert.equal(await allowed(uid(999)), false);   // unknown field
+  await mode('shadow'); assert.equal(await allowed(F.f2), true);
+  await mode('off'); assert.equal(await allowed(F.f2), true);
+  await asUser();
+  await assert.rejects(db.query(`SELECT public.rainfall_field_hourly_allowed('${F.f2}')`), /permission denied/);
+  await db.exec('RESET ROLE');
+  console.log('Rainfall tiering: replay, created_at drift fix, slot order, collectable fields per mode, pagination, read gate, seed, single-field guard passed.');
 } finally {
   await db.close();
 }

@@ -57,10 +57,16 @@ vi.mock('@/services/RainService', () => ({
   },
 }));
 
+const entState = vi.hoisted(() => ({ entitlement: null as null | { enforced: boolean; plan: string } }));
+vi.mock('@/hooks/useEntitlement', () => ({
+  useEntitlement: () => ({ entitlement: entState.entitlement, loading: false }),
+}));
+
 import WeatherBar from '../WeatherWidget';
 
 describe('WeatherBar', () => {
   beforeEach(() => {
+    entState.entitlement = null;
     zipState.saved = '64093';
     zipState.native = false;
     zipState.cached = null;
@@ -152,6 +158,24 @@ describe('WeatherBar', () => {
     expect(fetchComprehensiveRainfall).toHaveBeenCalledTimes(1);
     expect(fetchComprehensiveRainfall.mock.calls[0][0].fieldId).toBeUndefined();
     expect(await screen.findByText('0.42"')).toBeTruthy();
+  });
+
+  it('reloads once when the plan resolves as free after a live-path load', async () => {
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 4, temp: 72, humidity: 55, windDirection: 'S', locationName: 'Warrensburg', isError: false,
+      latitude: 40.7128, longitude: -74.006, precip24h: 0, precip72h: 0,
+    });
+
+    const { rerender } = render(<WeatherBar />);
+    await screen.findByText(/72\u00b0F/);
+    const callsBefore = fetchCurrentWeather.mock.calls.length;
+
+    entState.entitlement = { enforced: true, plan: 'free' };
+    rerender(<WeatherBar />);
+
+    await waitFor(() => expect(fetchCurrentWeather.mock.calls.length).toBe(callsBefore + 1));
+    rerender(<WeatherBar />);
+    expect(fetchCurrentWeather.mock.calls.length).toBe(callsBefore + 1);
   });
 
   it('does not commit aborted radar rain as 0.00 success', async () => {

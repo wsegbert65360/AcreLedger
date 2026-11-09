@@ -55,8 +55,10 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
 - **Reports are built on the device**, so the report gate is display-only, not real enforcement. Moving report generation
   to the server is a separate piece of work.
 - **Undoing a pre-season reset goes through `restore_farm_backup`**, so free farms would be blocked once enforced.
-- **Review items documented but not fixed:** (4) the live Rain API is called before the entitlement loads; (5) per-field
-  `_farm_entitlement` calls in enforce mode; (6) single-field backfill can write hourly rows for any field.
+- **Review items:** (4) FIXED: Weather page and widget reload once when the plan resolves as free after a live Rain API load.
+  (6) FIXED: `rainfall_field_hourly_allowed` (migration 20261107060000) gates the explicit-field branch of `mrms-backfill`
+  (409 for free farms in enforce). (5) LEFT ON PURPOSE: per-field `_farm_entitlement` calls in enforce mode only matter at
+  thousands of farms; if that happens, add a cached plan column rather than optimizing now.
 - The open Rain API (Vercel Hobby, IEM-based) cannot be server-gated. Check Vercel Hobby's commercial-use terms.
 - `farm_rainfall_daily` rollup stops updating for free farms.
 - Prod `fields.created_at` nulls were not checked (the field cap picks editable fields by `created_at`, then `id`).

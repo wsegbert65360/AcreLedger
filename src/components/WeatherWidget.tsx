@@ -48,8 +48,11 @@ export default function WeatherBar() {
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
   const { entitlement } = useEntitlement();
+  const rainLocked = isFreeTierLocked(entitlement);
   const rainLockedRef = useRef(false);
-  rainLockedRef.current = isFreeTierLocked(entitlement);
+  rainLockedRef.current = rainLocked;
+  // Whether the last load already used the free-plan (daily) path.
+  const loadedLockedRef = useRef(false);
 
   const firstFieldWithCoords = fields.find(f => f.lat != null && f.lng != null);
   const fieldCoordsKey = firstFieldWithCoords && firstFieldWithCoords.lat != null && firstFieldWithCoords.lng != null
@@ -126,6 +129,7 @@ export default function WeatherBar() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    loadedLockedRef.current = rainLockedRef.current;
 
     setLoading(true);
     try {
@@ -200,6 +204,12 @@ export default function WeatherBar() {
       abortRef.current?.abort();
     };
   }, [zip, load]);
+
+  // The plan can resolve after the first load already ran on the live Rain API path (review item 4).
+  // Reload once when it turns out to be a free farm so it does not keep live hourly numbers.
+  useEffect(() => {
+    if (rainLocked && !loadedLockedRef.current && zip) void load(zip);
+  }, [rainLocked, zip, load]);
 
   const submitLocation = (raw: string) => {
     const parsed = parseWeatherLocationInput(raw);
