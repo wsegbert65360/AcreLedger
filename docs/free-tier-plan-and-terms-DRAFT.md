@@ -623,3 +623,15 @@ AcreLedger is for adults running farm businesses. We don't knowingly collect dat
 
 ## Changes
 We'll post updates here and tell you in the app or by email about important changes.
+
+---
+
+## Part 6 — Remaining work (not built yet)
+
+This is the ordered list of free-tier and Premium work still to do on `feat/free-tier`, as of November 9, 2026, and nothing here is merged or live.
+
+1. Remove the photo button from the code. Take out the "Capture Photo / Ticket" button in `SprayWizardCoreStep.tsx` and the base64 photo saving in `useSprayForm.ts`, plus any photo cap on `feat/free-tier`. Photos are removed from the current build entirely, and Premium-only photos are under Future improvements. Live data has no spray records with a photo, so nothing needs migrating.
+2. Daily rainfall for free farms and hourly rainfall for Premium. Free farms get daily rainfall totals on their two oldest, locked fields, and Premium farms get hourly rainfall. Enforce it on the server, not only in the app.
+3. Real-data test. After all code is ready, run the plan against real farm data, including sprays, grain bins, and FSA tracts, on a copy or in shadow mode, so the Premium gates and the free record book are checked before anything goes live.
+4. Copy approval. Will approves the plan wording and the draft terms, refund, and privacy text. The draft legal text also needs attorney review before anything is published.
+5. Open a pull request for review. Open a PR from `feat/free-tier` to main for review. Merging and going live still need Will's OK.
