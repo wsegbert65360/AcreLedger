@@ -8,11 +8,14 @@ import { freeEntitlement, type Entitlement } from '@/lib/entitlements';
 
 let mockEntitlement: Entitlement | null = null;
 let mockBillingUi = true;
+let mockIosUrl: string | null = null;
+const mockOpen = vi.fn();
 
 vi.mock('@/hooks/useEntitlement', () => ({
   useEntitlement: () => ({ entitlement: mockEntitlement, loading: false }),
 }));
 vi.mock('@/lib/billing', () => ({ isBillingUiAvailable: () => mockBillingUi }));
+vi.mock('@/hooks/useIosUpgradeLink', () => ({ useIosUpgradeLink: () => ({ url: mockIosUrl, open: mockOpen }) }));
 
 const renderCard = () => render(<MemoryRouter><PlanCard /></MemoryRouter>);
 
@@ -20,6 +23,8 @@ describe('PlanCard', () => {
   beforeEach(() => {
     mockEntitlement = null;
     mockBillingUi = true;
+    mockIosUrl = null;
+    mockOpen.mockClear();
   });
 
   it('renders nothing while the server is not enforcing', () => {
@@ -47,6 +52,18 @@ describe('PlanCard', () => {
     renderCard();
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByText(ENTITLEMENT_COPY.nativeManageOnWeb)).toBeTruthy();
+  });
+
+  it('on iOS shows a website button (not a router link) only when the US-storefront link resolved', () => {
+    mockEntitlement = freeEntitlement(true);
+    mockBillingUi = false;
+    mockIosUrl = 'https://acreledger.com/plans';
+    renderCard();
+    const button = screen.getByRole('button', { name: ENTITLEMENT_COPY.planUpgradeLinkWebsite });
+    button.click();
+    expect(mockOpen).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.queryByText(ENTITLEMENT_COPY.nativeManageOnWeb)).toBeNull();
   });
 
   it('shows full access, without upgrade prompts, for a paid farm', () => {

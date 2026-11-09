@@ -1,7 +1,8 @@
 // All free-tier / upgrade wording lives here so it can be reviewed and changed in one place.
 // DRAFT: every string below is placeholder copy for William to approve before `enforce` ships.
-// iOS note: on the native app, never link to or name a purchase path (App Store rules);
-// use `ENTITLEMENT_COPY.nativeManageOnWeb` there. Confirm the exact wording before an iOS release.
+// iOS note: the native app links to the website only on the US App Store storefront
+// (planUpgradeLinkWebsite); everywhere else use `nativeManageOnWeb` and no link. See
+// docs/ios-storefront-link.md and confirm the exact wording before an iOS release.
 
 import { FREE_LIMITS, type EntitlementPlan } from '@/lib/entitlements';
 
@@ -30,6 +31,7 @@ export const ENTITLEMENT_COPY = {
   planTrialName: 'Free trial',
   planFreeSummary: 'Everything you need to keep your records, free. The paid plan adds reports and extra tools.',
   planUpgradeLink: 'See the paid plan',
+  planUpgradeLinkWebsite: 'See the paid plan on our website',
   nativeManageOnWeb: 'Plans are managed on the AcreLedger website.',
   planNothingDeleted: 'Nothing you have entered is ever deleted if your plan changes, and you can always export your data.',
 } as const;
