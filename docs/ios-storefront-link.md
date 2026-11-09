@@ -24,9 +24,11 @@ Open risks (recheck at submission):
 - Without the link the card says: "Plans are managed on the AcreLedger website."
 - Android and web are unchanged.
 
-## One-time Xcode steps (needed before the link can ever appear on iOS)
-The two Swift files are in `ios/App/App/` but are NOT yet in the Xcode project (not built or tested on
-Windows):
+## Xcode steps: DONE on a Mac (2026-11-08, commit bebc1dd)
+Both Swift files are in the App target and the storyboard uses `MainViewController`. Verified: simulator build with
+no warnings in the two files, app launches, and `Storefront.getCountryCode()` answers `USA` on the simulator.
+NOT yet verified: the link on the real Settings screen (needs a signed-in session), a non-US account (link must
+stay hidden), and a real device or TestFlight build. Original steps, kept for reference:
 1. `npx cap sync ios`, then open `ios/App/App.xcworkspace` in Xcode.
 2. Right-click the App group, "Add Files to App...", select `StorefrontPlugin.swift` and
    `MainViewController.swift`, tick the **App** target.

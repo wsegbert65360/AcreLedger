@@ -36,7 +36,8 @@ the real farms. That needs a branch (costs money and touches your Supabase proje
    - `src/components/settings/BillingManager.tsx` (the 3-month trial lines and status text) and its tests.
    - `src/components/FarmTrialBanners.tsx:80` stays correct for legacy trials.
    - The Project description still says "122-day free trial": the real signup trial is 3 months.
-5. iOS: finish the Xcode steps in `docs/ios-storefront-link.md`, set `VITE_UPGRADE_URL`, test US and non-US accounts.
+5. iOS: Xcode part is done (commit bebc1dd). Still to do: set `VITE_UPGRADE_URL`, look at the link on the real Settings
+   screen, test a non-US account and a TestFlight build (`docs/ios-storefront-link.md`).
    App Review may still ask for in-app purchase; fallback is in that doc.
 
 ## Decisions made
