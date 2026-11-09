@@ -1,5 +1,7 @@
 # App Review acceptance — screenshots and sample farm
 
+> **Update 2026-11-08:** historical record. The signup trial is actually 3 months (see `docs/free-tier-discovery.md` section 1), not 122 days, and the planned free tier changes the offer (`docs/free-tier-handoff.md`). The iOS no-link rule below is superseded for the US storefront by `docs/ios-storefront-link.md`.
+
 Decision date: September 27, 2026. Launch target: October 1. This file is the
 acceptance bar for the review account, the 10 final screenshots, and the
 separate October 1 public-web rollout promise. Listing copy, privacy answers,

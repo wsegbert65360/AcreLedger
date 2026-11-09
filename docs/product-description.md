@@ -10,9 +10,9 @@ movements as the work happens — from the cab, with or without a signal — and
 later export the PDFs and CSVs their landlords, applicators, co-ops, and FSA
 office visits demand.
 
-Business model in one line: **a per-farm SaaS subscription (web-billed, Stripe),
-preceded by a 4-month full-product trial, with a free iOS companion app that
-contains no purchase flow.**
+Business model in one line: **a free tier for everyday record keeping plus a per-farm paid
+subscription (web-billed, Stripe) for reports and extra tools, with a free iOS
+companion app that has no in-app purchase flow.**
 
 ---
 
@@ -101,14 +101,17 @@ records, exports, and all signed-in devices on that farm. The product is sold as
 an **annual subscription (currently priced at $299/year on the web landing
 page)**.
 
-### The funnel: trial → subscribe
+### The funnel: free to paid
 
-- **Free sign-up, full product.** New farms get the complete product for a
-  **4-month (122-day) full-product trial** — a locked product decision. There is
-  no crippled free tier during trial; the entire feature set (reports, exports,
-  FSA, grain) is available.
-- **Conversion at trial end.** After trial, continued access requires an active
-  subscription. Checkout happens through **Stripe Checkout** (annual price),
+- **Free sign-up.** Under the planned free tier (server flag `ENTITLEMENTS_MODE`,
+  see `docs/free-tier-handoff.md`), new farms start free: daily logging, offline
+  use, single-record print and CSV export of their own data stay free. Reports
+  (FSA-578, spray log, fertilizer, landlord), grain bins, equipment, FSA
+  tract/CLU, landlord splits and full rainfall history need the paid plan. Until
+  the flag is turned on, new farms still get today's 3-month full-product trial.
+- **Existing farms.** Farms already on a trial keep full access until their
+  `trial_ends_at`, then become free. Complimentary farms stay on full access.
+- **Upgrade.** Checkout happens through **Stripe Checkout** (annual price),
   subscription management through the **Stripe Customer Portal**.
 
 ### Web-billed, free native app
@@ -116,9 +119,10 @@ page)**.
 Billing is deliberately **web-only for v1**:
 
 - The iOS app is a free, stand-alone companion client: it contains **no
-  purchase flow, no subscription price, and no link or call to purchase
-  outside the app** (Apple's rule for a free companion to a paid web tool).
-- Sign-up, trial, and payment happen on the web; the signed-in app then unlocks
+  purchase flow and no subscription price**. On the US App Store storefront only,
+  Settings links to the website's plans page (see `docs/ios-storefront-link.md`);
+  everywhere else it shows no link.
+- Sign-up and payment happen on the web; the signed-in app then unlocks
   the farm. This keeps App Store review clean and avoids 30% in-app-purchase
   economics while the core product is validated.
 
@@ -148,10 +152,10 @@ Billing is deliberately **web-only for v1**:
   report engine, FSA acreage wiring, and grain tracking deliver. An annual,
   per-farm price matches how they already spend (seed, chemical, custom work
   are all annual cycles) and is simple enough for a small operation to approve.
-- **The trial is the demo.** A 4-month trial covers a full season arc (plant
-  through harvest), so a farmer who logs a real year in AcreLedger has their
-  entire field book in the product before they are asked to pay — conversion
-  happens when the book becomes irreplaceable.
+- **The free tier is the demo.** A farmer can log a real season for free, so
+  their whole field book is in the product before they are asked to pay;
+  conversion happens when they need the reports and the book has become
+  irreplaceable.
 - **Offline and native build product trust.** Free iOS app + offline-first
   design remove the two biggest adoption objections in ag tech (connectivity in
   the cab, and downloading software onto the one device that works in the
@@ -169,7 +173,7 @@ Billing is deliberately **web-only for v1**:
   contains no purchase or pricing surface.
 - Production Go-live of charging requires: approved legal copy, flipping live
   charges on, and the product owner deciding when to enable paywall
-  enforcement and the public trial-to-paid funnel.
+  enforcement and the public free-to-paid funnel.
 
 ---
 

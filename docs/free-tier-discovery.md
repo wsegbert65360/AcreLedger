@@ -50,3 +50,8 @@ Stored as **base64 inside spray `notes`** as `[ATTACHMENT:data:image/...;base64,
 - `docs/app-store/2026-10-01-review-acceptance.md:66` (says avoid fixed free periods)
 - `CODE_REVIEW_2026-09-29_FullReview.md:27,54` (historical record, leave)
 - Project description (William to update). Public pages: OPEN, grep `Landing.tsx`/legal pages for "free trial".
+
+## Update 2026-11-08
+- **Rain API** (`C:\Projects\Rain api`, separate Vercel Hobby project, IEM-based) is open and cannot be gated by the server entitlement. Free-tier rainfall limits are enforced on the Supabase side (collection and `get_field_rainfall_daily`). Check Vercel Hobby commercial-use terms.
+- **Section 9 wording cleanup:** done for `.env.example`, `docs/product-description.md`, and dated notes on the two historical docs. Public-page lines are listed in `docs/free-tier-handoff.md`, not edited.
+- Hand-off summary: `docs/free-tier-handoff.md`.

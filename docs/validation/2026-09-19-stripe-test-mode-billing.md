@@ -1,5 +1,7 @@
 # Stripe test-mode billing validation — 2026-09-19
 
+> **Update 2026-11-08:** historical record. The signup trial is actually 3 months (see `docs/free-tier-discovery.md` section 1), not 122 days, and the planned free tier changes the offer (`docs/free-tier-handoff.md`). The iOS no-link rule below is superseded for the US storefront by `docs/ios-storefront-link.md`.
+
 ## Decision
 
 The local AcreLedger billing flow is ready for a credentialed Stripe/Supabase
