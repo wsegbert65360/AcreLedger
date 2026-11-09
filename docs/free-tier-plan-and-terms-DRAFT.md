@@ -22,7 +22,7 @@ Will decided the following on November 9, 2026. Where an earlier part of this dr
 
 1. There is no trial, and no users are on one. Trial code is being removed on `feat/free-tier`. Do not plan a wind-down for existing trial farms, an in-app note for trial farms, or a conversion from a stored trial end date onto the free record book.
 2. A free farm gets rainfall on its two oldest fields. Those two are locked, and the farmer cannot change them. Premium unlocks rainfall on all remaining fields. That unlock is a main upgrade hook.
-3. Photos move to file storage with a 25 MB cap. This is a from-scratch build, because photos live today as text inside spray record notes.
+3. Photos are removed from the current build entirely. There are no photos in the Free tier. Photo support moves to Future improvements as a Premium-only feature to be built later.
 4. Paid reports get a preview that the server enforces.
 5. Backup restore is a Premium feature. The server still backs up free farms’ data.
 6. Say Premium, not “paid plan” or “Free trial,” everywhere except the attorney-reviewed legal pages (landing, terms, refund, privacy). Those stay untouched until the attorney reviews them.
@@ -54,7 +54,7 @@ Will decided the following on November 9, 2026. Where an earlier part of this dr
 | After a cancel or downgrade | Premium lasts through the paid-through date. After that, grain, equipment, landlord records, extra fields, and attachments stay readable and exportable. New Premium edits stop. Entries already queued offline finish syncing. The farm returns to the free record book, not a locked book. |
 | Default rainfall slots | A free farm gets rainfall on its two oldest fields. Those fields are locked, and the farmer cannot change them. Premium unlocks rainfall on all remaining fields, and that is a main upgrade hook. |
 | Unused farms | Pause rainfall only for unused free farms after 60 days with no sign-in, app open, or saved record. Background collection and silent or automatic sync do not reset the clock. Paying and Premium farms keep collecting. Returning users should see when collection stopped and where coverage is incomplete (labeled gaps, not silent zeros). |
-| Photos | Move photos to file storage with a 25 MB cap. This is a from-scratch build, because photos live today as text inside spray record notes. Enforce the cap against what is actually stored. Do not raise the cap or advertise 100 MB or 2 GB. Do not invent an unlimited Premium photo allowance until that is decided. |
+| Photos | Removed from the current build entirely. The Free tier has no photos. Photo support is a Premium-only feature to build later. See Future improvements. |
 | Where rainfall is promised | Do not promise automatic field rainfall outside the contiguous United States (MRMS). |
 | Headline | Keep: “Keep field work and FSA paperwork in one place.” Social headline remains “Field records in. FSA paperwork out.” Free recordkeeping, with prepared FSA reports in Premium. Do not imply that prepared FSA worksheets are free. |
 | Cost language | Treat about $45 to $70 a month as an initial budget to test, not a promise through 1,000 farms. Upgrade hosting from measured usage. |
@@ -72,7 +72,7 @@ Will decided the following on November 9, 2026. Where an earlier part of this dr
 
 - The code on main sets `trial_ends_at` to now plus 3 months (about 92 days) via `ensure_user_farm()` on farm create, and checkout copies that farm deadline into Stripe. It does not start a 122-day Stripe trial. 122 days is leftover from the old 4-month trial and still appears in some docs. There is no trial and no users are on one. Trial code is being removed on `feat/free-tier`.
 - There is no trial, and no farms are on one. Say Premium, not “paid plan” or “Free trial,” in the app, signup, docs, and marketing. Leave the attorney-reviewed landing page, Terms, Refund Policy, and Privacy Policy untouched until the attorney reviews them.
-- Photos live today as text inside spray record notes, not in file storage. Moving them to file storage with a 25 MB cap is a from-scratch build. As of the last Ops check there were 46 current spray records and none with an embedded photo.
+- Photos live today as text inside spray record notes. They are removed from the current build entirely. There are no photos in the Free tier. As of the last Ops check there were 46 current spray records and none with an embedded photo.
 - As of the last Ops check the database was about 27 MB of the 500 MB free limit, with 8 farms and 46 active fields out of 52. No live farm was over 50 fields.
 - Supabase is still on the free plan, which has no automatic platform backups. Recovery is the nightly copies on Will’s PC plus Google Drive, keeping the last 14, with a monthly test restore.
 - PR #89 is a client-only whole-farm view-only gate behind `VITE_BILLING_ENFORCE`. It would block planting, spraying, harvesting, fields, and recipes, and it also blocks backup restore. Do not enable `VITE_BILLING_ENFORCE` or merge #89 as a lock on the whole record book. Feature-level Free/Premium entitlements are needed instead. Backup restore is a Premium feature on its own.
@@ -84,7 +84,6 @@ Will decided the following on November 9, 2026. Where an earlier part of this dr
 - A new 30-day money-back marketing promise is held out of the adopted plan. Keep the existing 30-day refund on a paid charge as already approved.
 - Specific upsell tactics beyond the hooks above are not all locked yet. Do not cripple the free record book to create them.
 - If a free farm is already over 50 active fields, do not silently pick which 50 stay writable. The working recommendation is to tell the farmer and let them choose; extras stay readable and are never deleted. This is not yet locked by Will. The two rainfall fields stay the two oldest fields and stay locked.
-- An unlimited Premium photo allowance is not decided. Do not invent one.
 - Live billing remains a later January decision and still needs Will’s explicit OK.
 
 ### Standing rules that still apply
@@ -110,12 +109,16 @@ Will decided the following on November 9, 2026. Where an earlier part of this dr
 - Free rainfall on the two oldest fields, locked, with Premium unlocking rainfall on all remaining fields.
 - Backup restore as a Premium feature, while the server still backs up free farms’ data.
 - Complimentary Premium wording without naming a farm.
-- The privacy photo sentence: photos move to file storage with a 25 MB cap, as a from-scratch build. The privacy draft below was updated on November 9, 2026, and still needs attorney review.
+- The privacy photo sentences: photos are removed from the current build entirely. There are no photos in the Free tier. Photo support is a later Premium-only feature. The privacy draft below was updated on November 9, 2026, and still needs attorney review.
 - Grain bins, equipment, FSA tract entry, and landlord splits described as Premium.
 - The US-only iPhone upgrade link staying as it is (legality outside the US is uncertain after a court decision, and most customers are in the US).
 - Leave the AI “Ask” wording and the cookie-free Vercel analytics sentences as they are.
 - GST stays out.
 - The published landing page, Terms, Refund Policy, and Privacy Policy stay untouched until this review. Say Premium, not “paid plan” or “Free trial,” everywhere else.
+
+### Future improvements
+
+- Photo support is a Premium-only feature to be built later. The current build does not include photos, and the Free tier has no photos.
 
 ---
 
@@ -142,7 +145,7 @@ Will decided the following on November 9, 2026. Where an earlier part of this dr
 - Ask the Book stays out of public marketing.
 - Do not say the iPhone app is available until Will releases it himself.
 - GST wording stays out.
-- Photos move to file storage with a 25 MB cap. This is a from-scratch build, because photos live today as text inside spray record notes. Do not advertise 100 MB or 2 GB.
+- Photos are removed from the current build entirely. There are no photos in the Free tier. Photo support is a Premium-only feature to be built later. See Future improvements.
 - Automatic rainfall is for fields in the contiguous United States. Do not promise it outside that area, including Australia.
 - No ads. No mass email unless Will asks.
 
@@ -353,7 +356,7 @@ Review these changes:
 2. **Terms §5 (Failed payments and read-only mode)** — a farm that is not on Premium stays on the free record book. It is not locked read-only. Extra fields over the cap stay readable and are never deleted. After someone cancels Premium they keep it through the paid-through date, then return to free. The 14-day grace period after a failed renewal can stay. Backup restore is Premium. The server still backs up free farms’ data. The draft below was updated for that and still needs attorney review.
 3. **Terms §6–7 and the Refund Policy** — wherever they say the farm becomes read-only after a trial ends or a paid year ends, say it returns to the free record book instead. There is no current trial to end. Keep the existing 30-day full refund on any charge (already attorney-approved). Do not present that refund as a new marketing promise. Flag the risk that someone could take a finished Premium report and then ask for a 30-day refund; paid reports get a preview that the server enforces, so a free or just-refunded farm cannot download the finished file.
 4. **Privacy, “Keeping and deleting data”** — it now says unpaid farms stay read-only and that a trial ending never deletes data, it only makes the farm read-only. Unpaid farms should be described as staying on the free record book. A subscription lapsing still never deletes data. The draft below no longer describes a current trial, and that edit still needs attorney review.
-5. **Privacy, photos** — the published page still says spray photos are saved in the database, not a separate file store. Photos move to file storage with a 25 MB cap. This is a from-scratch build, because photos live today as text inside spray record notes. The privacy draft below was updated on November 9, 2026, and still needs attorney review. The published Privacy Policy stays untouched until that review.
+5. **Privacy, photos** — the published page still says spray photos are saved in the database, not a separate file store. Photos are removed from the current build entirely. There are no photos in the Free tier. Photo support is a later Premium-only feature. The privacy draft below was updated on November 9, 2026, and still needs attorney review. The published Privacy Policy stays untouched until that review.
 6. **Signup agreement line** if we change it.
 7. **Unused-farm rainfall pause (60 days)** — new operational practice. Decide whether it needs a sentence in Terms (weather/outside data) or Privacy.
 8. **Complimentary Premium** — described without naming a farm. Confirm that wording.
@@ -544,7 +547,7 @@ Email **acreledgerapp@gmail.com** with your farm name and the email address on y
 >
 > **What changed from the Oct 25 / Nov 1 FINAL:** The data-retention bullets no longer say a trial ending or a lapsed subscription makes the farm read-only. They now say the farm stays on or returns to the free record book, and that this never deletes data. The Vercel analytics sentences and the AI “Ask” section are unchanged.
 >
-> **November 9, 2026 update — still needs attorney review:** There is no trial and no users are on one, so this draft no longer describes a current trial ending. Photos move to file storage with a 25 MB cap. This is a from-scratch build, because photos live today as text inside spray record notes. The photo sentences below were updated for that.
+> **November 9, 2026 update — still needs attorney review:** There is no trial and no users are on one, so this draft no longer describes a current trial ending. Photos are removed from the current build entirely. There are no photos in the Free tier. Photo support is a later Premium-only feature and is not part of this version. The photo sentences below were updated for that and still need attorney review.
 
 Last updated: [effective date, set when published]
 
@@ -566,7 +569,7 @@ AcreLedger is provided by **Egbert Farms, LLC** ("we"), which runs it from Henry
 
 **Voice (optional):** if you use "ask by voice," your device's speech recognition (Apple, or your browser) turns speech into text. We receive the text, not the audio.
 
-**Photos (optional):** if you allow camera or photo-library access, you can take or attach photos of spray tickets and product labels. The photos are stored in file storage, with a 25 MB cap. They are not kept as text inside the spray record. They are included in your backups and exports. You can turn off camera and photo access in your device settings.
+**Photos:** This version does not include photos. We do not collect spray-ticket or product-label photos. The free record book has no photos. A later Premium-only photo feature is not part of this version.
 
 **Error logs:** when something goes wrong, the app logs the error on your device only. We don't send crash reports to anyone. If we ever add a crash-reporting provider, we'll update this policy first.
 
@@ -577,7 +580,7 @@ AcreLedger is provided by **Egbert Farms, LLC** ("we"), which runs it from Henry
 ## Who helps us run AcreLedger
 | Service | What it does | What it receives |
 |---|---|---|
-| Supabase | Login and database where your records are stored (hosted on Amazon Web Services in Oregon, USA). Spray photos are stored in file storage. | Account info, farm records, and spray photos in file storage |
+| Supabase | Login and database where your records are stored (hosted on Amazon Web Services in Oregon, USA) | Account info and farm records |
 | Vercel | Hosts the website and app servers; counts website page views (cookie-free Vercel Web Analytics) | Normal web request data (e.g. IP address); for analytics, cleaned page addresses with no user IDs, emails, or farm data |
 | Stripe | Payments and billing | Email, payment details, farm/user ID |
 | Visual Crossing | Weather forecasts and history | Field or device location (coordinates) |
@@ -604,19 +607,19 @@ We share data only with the services above, with people you invite to your farm,
 - You can export your data any time.
 
 ## Where your data is stored
-Your account and farm records are stored in the United States, in a database hosted on Amazon Web Services in Oregon (us-west-2) by Supabase. Spray photos are stored in file storage, with a 25 MB cap.
+Your account and farm records are stored in the United States, in a database hosted on Amazon Web Services in Oregon (us-west-2) by Supabase.
 
 ## Security
 Your data travels over encrypted connections. In the database, each farm's data is walled off from every other farm. No system is perfect. If a breach affects you, we'll tell you as the law requires.
 
 ## Your choices and rights
-You can view, export, correct or delete your data in the app, or email us. You can turn off location, camera, photo and microphone access in your device settings. Residents of some US states may have extra rights; email us and we'll honor them.
+You can view, export, correct or delete your data in the app, or email us. You can turn off location and microphone access in your device settings. Residents of some US states may have extra rights; email us and we'll honor them.
 
 ## Children
 AcreLedger is for adults running farm businesses. We don't knowingly collect data from children under 13.
 
 ## Australia
-**If you are in Australia.** We handle your personal information in line with the Australian Privacy Principles where they apply to us. Your information, including your farm records, is stored overseas in the United States, in a database hosted on Amazon Web Services in Oregon (us-west-2). Spray photos are stored in file storage, with a 25 MB cap. That information is also processed in the United States by the other service providers listed in this policy. You can ask to see or correct your personal information, or complain about how we've handled it, by emailing acreledgerapp@gmail.com. We will reply within 30 days. If you ask us to delete your account, your personal and farm data is removed within 30 days and is gone from backups within 90 days. Billing records are kept for 7 years for tax purposes. If you use the optional AI assistant, your question and the farm records it needs are sent through OpenRouter to AI model providers, which may be outside Australia and may log them or use them to improve their models. If you're not satisfied, you can contact the Office of the Australian Information Commissioner (oaic.gov.au).
+**If you are in Australia.** We handle your personal information in line with the Australian Privacy Principles where they apply to us. Your information, including your farm records, is stored overseas in the United States, in a database hosted on Amazon Web Services in Oregon (us-west-2). That information is also processed in the United States by the other service providers listed in this policy. You can ask to see or correct your personal information, or complain about how we've handled it, by emailing acreledgerapp@gmail.com. We will reply within 30 days. If you ask us to delete your account, your personal and farm data is removed within 30 days and is gone from backups within 90 days. Billing records are kept for 7 years for tax purposes. If you use the optional AI assistant, your question and the farm records it needs are sent through OpenRouter to AI model providers, which may be outside Australia and may log them or use them to improve their models. If you're not satisfied, you can contact the Office of the Australian Information Commissioner (oaic.gov.au).
 
 ## Changes
 We'll post updates here and tell you in the app or by email about important changes.
