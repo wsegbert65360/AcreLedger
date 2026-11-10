@@ -45,8 +45,8 @@ acreage, crop, season, and FSA data. Every activity type — planting (with FSA
 status and planting patterns), spraying (multi-product tank mixes with EPA
 registration numbers, per-product rates, and weather at application), custom
 (outside-applicator) sprays, fertilizing, tillage, harvest, hay — is logged one
-field at a time, so dates, rates, products, weather, applicator details, and
-photos (spray tickets, product labels) stay with the right acres.
+field at a time, so dates, rates, products, weather, applicator details,
+and equipment stay with the right acres.
 
 **Works offline first.** Records save without a signal into an encrypted local
 store (encrypted SQLite on native iOS, encrypted local storage on web) and sync
@@ -59,7 +59,7 @@ actually hand to people:
 - **FSA-578 acreage worksheet** — a cropland-entry table per farm/tract/CLU
   with reconciliation totals, built to be handed to an FSA employee for entry,
   plus a Fall FSA production worksheet.
-- **Spray audit log** — a universal spray-log PDF including photo attachments,
+- **Spray audit log** — a universal spray-log PDF,
   the record used to answer applicator and compliance questions.
 - **Fertilizer, hay, and landlord reports** — per-field and per-landlord
   summaries with crop-share math, activity timelines, and CSV/PDF exports.
@@ -107,10 +107,9 @@ page)**.
   see `docs/free-tier-handoff.md`), new farms start free: daily logging, offline
   use, single-record print and CSV export of their own data stay free. Reports
   (FSA-578, spray log, fertilizer, landlord), grain bins, equipment, FSA
-  tract/CLU, landlord splits and full rainfall history need the paid plan. Until
-  the flag is turned on, new farms still get today's 3-month full-product trial.
-- **Existing farms.** Farms already on a trial keep full access until their
-  `trial_ends_at`, then become free. Complimentary farms stay on full access.
+  tract/CLU, landlord splits and rainfall on every field need the Pro plan ($299 per farm
+  per year). There is no trial: every new farm starts free. The owner farm is complimentary.
+- **Existing farms.** A leftover trial date grants nothing. Those farms are free unless complimentary or subscribed.
 - **Upgrade.** Checkout happens through **Stripe Checkout** (annual price),
   subscription management through the **Stripe Customer Portal**.
 

@@ -33,7 +33,7 @@ export type PremiumFeature =
   | 'backup_restore' | 'field_cap' | 'photo_cap' | 'rainfall';
 
 /**
- * Report types that need the paid plan (FSA-578, season spray log, fertilizer, landlord
+ * Report types that need Pro (FSA-578, season spray log, fertilizer, landlord
  * statements). Fall FSA and the hay summary stay free. Enforced in the app only: reports are
  * built on the device, so this is a display gate, not server enforcement.
  */

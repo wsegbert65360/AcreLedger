@@ -8,7 +8,7 @@ move it to `shadow`, then `enforce`. Design: Project doc `claude/free-tier-imple
 |---|---|
 | One server flag (`off` / `shadow` / `enforce`), plan function, `assert_premium`, shadow log | `supabase/migrations/20261107000000_entitlements_core.sql` |
 | New farms start free (only when flag is not `off`) | `20261107010000_new_farms_start_free.sql` |
-| Field cap 50 and photo cap 20 (existing data grandfathered) | `20261107020000_field_cap_guard.sql`, `...030000_photo_cap_guard.sql` |
+| Field cap 50 (existing data grandfathered). A photo-cap guard exists but is unused: photos were removed from the app | `20261107020000_field_cap_guard.sql`, `...030000_photo_cap_guard.sql` |
 | Rainfall: free farms get daily totals on their 2 oldest fields | `20261107040000_rainfall_tiering.sql`, `supabase/functions/mrms-daily`, `docs/free-tier-rainfall.md` |
 | Paid-only writes: grain, equipment, FSA/CLU, landlord splits, backup restore | `20261107050000_paid_feature_guards.sql` |
 | App: plan hook, report gate, harvest bin lock, sync "premium needed" outcome, Settings plan card | `src/lib/entitlements.ts`, `src/hooks/useEntitlement.ts`, `src/components/settings/PlanCard.tsx` |
@@ -27,27 +27,26 @@ Full table: `docs/free-tier-shadow-report.md`. **Not yet done:** a shadow run on
 the real farms. That needs a branch (costs money and touches your Supabase project), so I did not create one.
 
 ## Before you turn on `enforce`
-1. Insert `farm_comps` rows in prod for Egbert Farm and the 3 legacy trial farms, so they stay on full access.
+1. Insert one `farm_comps` row in prod for the owner farm (Egbert Farm), no expiry. The 3 old trial farms are owner test accounts and now resolve to the free plan, which is what you want for testing the free tier.
 2. Run `shadow` on staging first and check `entitlement_shadow_log` (query in `docs/free-tier-metrics.md`).
 3. Approve or edit every string in `src/copy/entitlements.ts` (all marked DRAFT).
 4. Edit the public pages (not touched by me), they will be wrong once new farms start free:
    - `src/pages/Landing.tsx` lines 147, 246, 372, 382, 392, 409, 458: "3-month free trial, no card needed."
    - `src/pages/Terms.tsx` lines 12-13 ("3. Free trial", "3 months free"), `src/pages/Refund.tsx` line 9.
-   - `src/components/settings/BillingManager.tsx` (the 3-month trial lines and status text) and its tests.
-   - `src/components/FarmTrialBanners.tsx:80` stays correct for legacy trials.
-   - The Project description still says "122-day free trial": the real signup trial is 3 months.
+   - Already done in the app: `BillingManager` wording, trial banners removed (see "Trial removal" below).
+   - The Project description still says "122-day free trial": there is no trial now.
 5. iOS: Xcode part is done (commit bebc1dd). Still to do: set `VITE_UPGRADE_URL`, look at the link on the real Settings
    screen, test a non-US account and a TestFlight build (`docs/ios-storefront-link.md`).
    App Review may still ask for in-app purchase; fallback is in that doc.
 
 ## Decisions made
-Field cap 50. Photo cap 20 per farm. Rainfall on 2 fields (the oldest two, fixed). Existing farms stay complimentary.
+Field cap 50. No photos (removed from the app). Rainfall on 2 fields (the oldest two, fixed). Complimentary is the owner farm only. The paid plan is named Pro.
 New farms start free. Existing data grandfathered. History limit skipped. One-device limit deferred (see below). No ads.
 
 ## Deferred or not done
 - **One-device limit:** not built (largest and most disruptive piece). Notes in `docs/free-tier-discovery.md` section 5.
 - **History limit (current + last season):** skipped by decision.
-- **Photos:** still base64 inside spray notes. Moving them to file storage is a separate piece of work.
+- **Photos:** removed from the app on 2026-11-09 (no photo button, no photo cap). Pro-only photos are a later feature. Legacy attachments in old notes are preserved on re-save.
 - **Not gated because the feature doesn't exist or isn't a paid feature:** input costs/cost per acre, CSV import from other
   apps, `todos`, client-computed REI/PHI and rain-alert reminders.
 

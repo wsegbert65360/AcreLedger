@@ -2,7 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 
 /**
  * App Store storefront detection, used to decide whether the iOS app may show a link to
- * the website's paid plan. Apple allows such links only on the US storefront (Guidelines
+ * the website's Pro plan. Apple allows such links only on the US storefront (Guidelines
  * 3.1.1(a) / 3.1.3), so everything here FAILS CLOSED: any doubt means no link.
  *
  * The native side is ios/App/App/StorefrontPlugin.swift (see docs/ios-storefront-link.md).

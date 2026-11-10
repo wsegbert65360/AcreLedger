@@ -815,6 +815,8 @@ Product access enforcement is off by default. A missing or soft-deleted subscrip
 `unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
 passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
 
+SUPERSEDED 2026-11-09 on `feat/free-tier`: there is no trial. New farms never get trial dates, the `legacy_trial` plan is gone, and Checkout never passes `trial_end`. The paragraph below is history.
+
 Trial PR 1 prepares a 3-month free trial, no card needed, stamped once by the server
 with `now() + interval '3 months'`. Each farm and normalized email identity gets one claim in service-only
 `trial_claims`; members inherit the farm deadline. Claims use a unique SHA-256 hash of a

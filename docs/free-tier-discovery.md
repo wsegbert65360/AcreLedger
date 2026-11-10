@@ -55,3 +55,8 @@ Stored as **base64 inside spray `notes`** as `[ATTACHMENT:data:image/...;base64,
 - **Rain API** (`C:\Projects\Rain api`, separate Vercel Hobby project, IEM-based) is open and cannot be gated by the server entitlement. Free-tier rainfall limits are enforced on the Supabase side (collection and `get_field_rainfall_daily`). Check Vercel Hobby commercial-use terms.
 - **Section 9 wording cleanup:** done for `.env.example`, `docs/product-description.md`, and dated notes on the two historical docs. Public-page lines are listed in `docs/free-tier-handoff.md`, not edited.
 - Hand-off summary: `docs/free-tier-handoff.md`.
+
+## Update 2026-11-09 (decisions that supersede parts of this file)
+- No trial, and no customer is on one. Trial code removed (migration 20261109210000_remove_trial.sql). Sections 1 and 9 describe the old state.
+- Photos removed from the app (section 7 is history). The paid plan is named Pro.
+- Complimentary is the owner farm only. See docs/free-tier-handoff.md.

@@ -1,6 +1,6 @@
 # iOS: website upgrade link (US storefront only)
 
-Decision (2026-11-08): the iOS app keeps a link to the website's paid plan, shown only to users on the
+Decision (2026-11-08): the iOS app keeps a link to the website's Pro plan, shown only to users on the
 US App Store storefront. No in-app purchase for now (see "Later" below).
 
 ## Why this is allowed
@@ -42,7 +42,7 @@ stay hidden), and a real device or TestFlight build. Original steps, kept for re
    shown one.
 
 ## Draft App Review notes (paste into App Store Connect, edit as needed)
-> AcreLedger is a free farm record-keeping app. A paid plan, sold on our website, adds reports and extra
+> AcreLedger is a free farm record-keeping app. A Pro plan, sold on our website, adds reports and extra
 > tools. The app offers no purchase flow. On the US storefront only, the Settings screen includes a link
 > that opens our website in Safari, as permitted by Guideline 3.1.1(a) for US-storefront apps. On all other
 > storefronts the app shows no link and no pricing. Free-plan users keep full access to record keeping and to

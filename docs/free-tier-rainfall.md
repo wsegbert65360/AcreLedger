@@ -31,7 +31,7 @@ growth and Edge Function time.
 nothing changes in `off` / `shadow`.
 
 - `FieldDetailScreen`: locked farms read `RainfallDailyService.fetchRainfallFromDaily` (same `RainfallResult`
-  shape, so the existing cards work). A non-slot field shows the "included with the paid plan" message (DRAFT copy).
+  shape, so the existing cards work). A non-slot field shows the "included with Pro" message (DRAFT copy).
 - `WeatherWidget` / `Weather`: locked farms never call the Rain API; a slot field shows its daily totals, any
   other location keeps the plain weather-service numbers.
 
@@ -39,7 +39,7 @@ nothing changes in `off` / `shadow`.
 
 - The Rain API (`C:\Projects\Rain api`, Vercel Hobby) is open (no auth, IEM-based). Live-rain gating there is
   **not server-enforceable**; tiering is enforced by what we collect and by our own read RPCs, plus client display.
-- Vercel Hobby terms restrict commercial use; moving the Rain API to a paid plan (or into Supabase) is a
+- Vercel Hobby terms restrict commercial use; moving the Rain API to a paid Vercel plan (or into Supabase) is a
   hand-off decision.
 - Free farms' farm-level `farm_rainfall_daily` rollup (pg_cron) is built from hourly data, so it stops updating
   for free farms once hourly collection stops. Decide whether to feed it from `field_rainfall_daily`.
