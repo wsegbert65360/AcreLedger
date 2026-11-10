@@ -1,3 +1,4 @@
+import { PREMIUM_REQUIRED_ERRCODE } from '@/lib/entitlements';
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 import { getCentroid, hasValidGeometry } from '@/lib/geoHelpers';
 import { supabase } from '@/lib/supabase';
@@ -12,8 +13,40 @@ export type RainfallResult = {
   periodEndUtc: string;
   dataWarning?: string;
 };
-// The Rain API checks the caller's Supabase login (RAIN_API_AUTH, off by default on the server), so an
-// old or new app works against either server setting. No session or any error: send no header.
+
+/** High-res rainfall was requested without a field. The Rain API is not called. */
+export class RainfallFieldRequiredError extends Error {
+  readonly code = 'rainfall_field_required';
+  constructor() {
+    super('High-resolution rainfall requires a field.');
+    this.name = 'RainfallFieldRequiredError';
+  }
+}
+
+/**
+ * Rain API 403 `premium_required:rainfall`.
+ * Field detail treats this like the other premium-required errors and shows the Pro rainfall lock.
+ */
+export class PremiumRainfallRequiredError extends Error {
+  readonly code = PREMIUM_REQUIRED_ERRCODE;
+  constructor() {
+    super('premium_required:rainfall');
+    this.name = 'PremiumRainfallRequiredError';
+  }
+}
+
+/** Rain API 401 or 503. Callers show this as a normal rainfall load failure. */
+export class RainfallUnavailableError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super('Could not load rainfall data.');
+    this.name = 'RainfallUnavailableError';
+    this.status = status;
+  }
+}
+
+// RAIN_API_AUTH=enforce requires the caller's Supabase access token on every request.
+// No session, or any session error: send no Authorization header.
 async function rainAuthHeaders(): Promise<Record<string, string>> {
   try {
     const { data } = await supabase.auth.getSession();
@@ -22,6 +55,27 @@ async function rainAuthHeaders(): Promise<Record<string, string>> {
   } catch {
     return {};
   }
+}
+
+function rainfallErrorText(body: unknown): string {
+  if (typeof body === 'string') return body;
+  if (!body || typeof body !== 'object') return '';
+  const record = body as Record<string, unknown>;
+  return [record.error, record.message, record.code]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ');
+}
+
+async function rainfallHttpError(response: Response): Promise<Error> {
+  const body = await response.json().catch(() => null);
+  const text = rainfallErrorText(body);
+  if (response.status === 403 && text.includes('premium_required:rainfall')) {
+    return new PremiumRainfallRequiredError();
+  }
+  if (response.status === 401 || response.status === 503) {
+    return new RainfallUnavailableError(response.status);
+  }
+  return new Error(`RAIN_API_ERROR: ${response.status} - ${text || 'Unknown error'}`);
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -70,7 +124,12 @@ export const RainService = {
     const { fieldId, lat, lng, boundary, sincePlantingDate, sinceLastSprayDate, signal } = args;
 
     throwIfAborted(signal);
-    const cacheKey = `${fieldId ?? ''}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
+    // Coordinate-only requests are refused once RAIN_API_AUTH=enforce. Never call the API without a field.
+    const normalizedFieldId = typeof fieldId === 'string' ? fieldId.trim() : '';
+    if (!normalizedFieldId) {
+      throw new RainfallFieldRequiredError();
+    }
+    const cacheKey = `${normalizedFieldId}-${lat}-${lng}-${sincePlantingDate || ''}-${sinceLastSprayDate || ''}`;
 
     const existing = promiseCache.get(cacheKey);
     if (existing) {
@@ -101,18 +160,15 @@ export const RainService = {
       const mainParams = new URLSearchParams({
         lat: String(tLat),
         lon: String(tLng),
+        field_id: normalizedFieldId,
       });
-      if (fieldId) {
-        mainParams.set('field_id', fieldId);
-      }
       const mainResponse = await fetch(
         `${baseUrl}/rain?${mainParams.toString()}`,
         { signal, headers: await rainAuthHeaders() }
       );
 
       if (!mainResponse.ok) {
-        const err = await mainResponse.json().catch(() => ({}));
-        throw new Error(`RAIN_API_ERROR: ${mainResponse.status} - ${err.error || 'Unknown error'}`);
+        throw await rainfallHttpError(mainResponse);
       }
 
       const mainData = await mainResponse.json();
@@ -121,13 +177,10 @@ export const RainService = {
 
       // --- Custom range via Rain API (field-based historical lookup) ---
       const fetchCustomRange = async (startDate: string): Promise<{ total: number | null; dataWarning?: string }> => {
-        if (!fieldId) {
-          return { total: null, dataWarning: 'Historical rainfall unavailable: no field selected.' };
-        }
         try {
           const today = new Date().toISOString().split('T')[0];
           const rangeParams = new URLSearchParams({
-            field_id: fieldId,
+            field_id: normalizedFieldId,
             lat: String(tLat),
             lon: String(tLng),
             start_date: startDate,

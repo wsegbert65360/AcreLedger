@@ -1,10 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchExtendedWeather = vi.hoisted(() => vi.fn());
+const fetchComprehensiveRainfall = vi.hoisted(() => vi.fn());
 const getCurrentPosition = vi.hoisted(() => vi.fn());
 
 const farmState = vi.hoisted(() => ({
@@ -59,7 +60,7 @@ vi.mock('@/services/WeatherService', () => ({
 }));
 
 vi.mock('@/services/RainService', () => ({
-  RainService: { fetchComprehensiveRainfall: vi.fn() },
+  RainService: { fetchComprehensiveRainfall },
 }));
 
 vi.mock('@/components/weather/ForecastGrid', () => ({ default: () => null }));
@@ -171,6 +172,10 @@ describe('Weather page location fallback', () => {
   beforeEach(() => {
     fetchExtendedWeather.mockReset();
     fetchExtendedWeather.mockResolvedValue(loadedWeather);
+    fetchComprehensiveRainfall.mockReset();
+    fetchComprehensiveRainfall.mockResolvedValue({
+      '24h': 0, '72h': 0, '168h': 0, '7d': 0, sincePlanting: 0, sinceLastSpray: 0, periodEndUtc: '2026-09-02T00:00:00Z',
+    });
     getCurrentPosition.mockReset();
     farmState.fields = [];
     farmState.initialFetchComplete = true;
@@ -290,5 +295,55 @@ describe('Weather page location fallback', () => {
     expect(screen.queryByText('Set your zip code to see weather')).toBeNull();
     expect(weatherHelpersMock.resolveCoords).not.toHaveBeenCalled();
     expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('skips the Rain API when the location is not a farm field and keeps weather precipitation', async () => {
+    weatherHelpersMock.loadZip.mockReturnValue('64093');
+    farmState.fields = [{ id: 'f1', lat: 39.1, lng: -93.5 }];
+    fetchExtendedWeather.mockResolvedValue({
+      ...loadedWeather,
+      latitude: 40.7128,
+      longitude: -74.006,
+      precip24h: 0.33,
+      precip72h: 0.5,
+      precip168h: 0.8,
+    });
+
+    render(<Weather />);
+
+    expect(await screen.findByText("Lee's Summit")).toBeTruthy();
+    expect(screen.getByText('24h').parentElement?.textContent).toContain('0.33');
+    expect(fetchComprehensiveRainfall).not.toHaveBeenCalled();
+  });
+
+  it('requests high-res rainfall with the matching field id', async () => {
+    weatherHelpersMock.loadZip.mockReturnValue('64093');
+    farmState.fields = [{ id: 'field-9', lat: 40.7128, lng: -74.006 }];
+    fetchExtendedWeather.mockResolvedValue({
+      ...loadedWeather,
+      latitude: 40.7128,
+      longitude: -74.006,
+      precip24h: 0.1,
+      precip72h: 0.2,
+      precip168h: 0.3,
+    });
+    fetchComprehensiveRainfall.mockResolvedValue({
+      '24h': 0.42,
+      '72h': 1.1,
+      '168h': 2.2,
+      '7d': 2.2,
+      sincePlanting: 0,
+      sinceLastSpray: 0,
+      periodEndUtc: '2026-09-02T00:00:00Z',
+    });
+
+    render(<Weather />);
+
+    await waitFor(() => expect(fetchComprehensiveRainfall).toHaveBeenCalledWith(expect.objectContaining({
+      fieldId: 'field-9',
+      lat: 40.7128,
+      lng: -74.006,
+    })));
+    expect(screen.getByText('24h').parentElement?.textContent).toContain('0.42');
   });
 });

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { RainService } from '../RainService';
+
+import { isPremiumRequiredError } from '@/lib/entitlements';
+
+import { PremiumRainfallRequiredError, RainfallFieldRequiredError, RainfallUnavailableError, RainService } from '../RainService';
 
 describe('RainService', () => {
   const mockFieldId = 'test-field-id';
@@ -46,6 +49,7 @@ describe('RainService', () => {
     });
 
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect((fetch as any).mock.calls[0][0]).toContain(`field_id=${mockFieldId}`);
     expect(result['24h']).toBe(0.4);
     expect(result['72h']).toBe(0.9);
     expect(result['7d']).toBe(1.0);
@@ -72,8 +76,9 @@ describe('RainService', () => {
     expect(result.sincePlanting).toBe(2.5);
     expect(result.sinceLastSpray).toBe(0.75);
 
-    // Verify custom range calls use field_id and date params
+    // Verify every call, including the rolling windows, sends field_id.
     const calls = (fetch as any).mock.calls;
+    expect(calls[0][0]).toContain(`field_id=${mockFieldId}`);
     expect(calls[1][0]).toContain(`field_id=${mockFieldId}`);
     expect(calls[1][0]).toContain(`lat=38.4627`);
     expect(calls[1][0]).toContain(`lon=-93.5374`);
@@ -290,20 +295,68 @@ describe('RainService', () => {
     expect(calledUrl).toContain('lon=-93.5375');
   });
 
-  it('omits field_id when no field matches on weather overview', async () => {
+  it('does not call the Rain API when fieldId is missing', async () => {
     (fetch as any).mockResolvedValue(buildApiResponse({
       '12h': 0.1, '24h': 0.2, '72h': 0.3, '168h': 0.4
     }));
 
-    await RainService.fetchComprehensiveRainfall({
+    await expect(RainService.fetchComprehensiveRainfall({
       lat: 38.4627,
       lng: -93.5374,
+    })).rejects.toBeInstanceOf(RainfallFieldRequiredError);
+    await expect(RainService.fetchComprehensiveRainfall({
+      fieldId: null,
+      lat: 38.46,
+      lng: -93.53,
+    })).rejects.toBeInstanceOf(RainfallFieldRequiredError);
+    await expect(RainService.fetchComprehensiveRainfall({
+      fieldId: '   ',
+      lat: 38.46,
+      lng: -93.53,
+    })).rejects.toBeInstanceOf(RainfallFieldRequiredError);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('maps a 403 premium_required:rainfall response onto the Pro lock error', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: 'premium_required:rainfall' }),
     });
 
-    const calledUrl = (fetch as any).mock.calls[0][0];
-    expect(calledUrl).toContain('lat=38.4627');
-    expect(calledUrl).toContain('lon=-93.5374');
-    expect(calledUrl).not.toContain('field_id=');
+    const error = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId,
+      lat: 38.46,
+      lng: -93.53,
+    }).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(PremiumRainfallRequiredError);
+    expect(isPremiumRequiredError(error as PremiumRainfallRequiredError)).toBe(true);
+    expect((error as Error).message).toBe('premium_required:rainfall');
+    expect((fetch as any).mock.calls[0][0]).toContain(`field_id=${mockFieldId}`);
+  });
+
+  it('maps 401 and 503 onto a normal rainfall load error', async () => {
+    for (const status of [401, 503]) {
+      RainService.__test_clearCache();
+      (fetch as any).mockResolvedValueOnce({
+        ok: false,
+        status,
+        json: async () => ({ error: 'unavailable' }),
+      });
+
+      const error = await RainService.fetchComprehensiveRainfall({
+        fieldId: mockFieldId,
+        lat: 38.46 + status / 1000,
+        lng: -93.53,
+      }).catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(RainfallUnavailableError);
+      expect(error).toMatchObject({ status, message: 'Could not load rainfall data.' });
+      expect(isPremiumRequiredError(error as RainfallUnavailableError)).toBe(false);
+      expect((fetch as any).mock.calls.at(-1)[0]).toContain(`field_id=${mockFieldId}`);
+    }
   });
 
   it('still sends a real field UUID for field detail requests', async () => {

@@ -123,7 +123,7 @@ describe('WeatherBar', () => {
     expect(fetchCurrentWeather).toHaveBeenCalledTimes(callsBeforeSpace);
   });
 
-  it('uses resolved ZIP coordinates even when unrelated fields arrive later', async () => {
+  it('keeps weather precipitation when the location is not a farm field', async () => {
     farmState.fields = [];
     fetchCurrentWeather.mockResolvedValue({
       wind: 8,
@@ -134,8 +134,35 @@ describe('WeatherBar', () => {
       isError: false,
       latitude: 40.7128,
       longitude: -74.006,
-      precip24h: 0,
-      precip72h: 0,
+      precip24h: 0.33,
+      precip72h: 0.4,
+    });
+
+    const { rerender } = render(<WeatherBar />);
+    await screen.findByText(/72\u00b0F/);
+    expect(await screen.findByText('0.33"')).toBeTruthy();
+    expect(fetchComprehensiveRainfall).not.toHaveBeenCalled();
+
+    farmState.fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
+    rerender(<WeatherBar />);
+
+    expect(fetchComprehensiveRainfall).not.toHaveBeenCalled();
+    expect(screen.getByText('0.33"')).toBeTruthy();
+  });
+
+  it('requests rainfall for the field that matches the location', async () => {
+    farmState.fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
+    fetchCurrentWeather.mockResolvedValue({
+      wind: 8,
+      temp: 72,
+      humidity: 55,
+      windDirection: 'S',
+      locationName: 'Warrensburg',
+      isError: false,
+      latitude: 39.1234,
+      longitude: -93.5678,
+      precip24h: 0.1,
+      precip72h: 0.2,
     });
     fetchComprehensiveRainfall.mockResolvedValue({
       '24h': 0.42,
@@ -147,17 +174,14 @@ describe('WeatherBar', () => {
       periodEndUtc: '2026-09-02T00:00:00Z',
     });
 
-    const { rerender } = render(<WeatherBar />);
-    await screen.findByText(/72\u00b0F/);
-    await screen.findByText('0.42"');
-    expect(fetchComprehensiveRainfall).toHaveBeenCalledWith(expect.objectContaining({ lat: 40.7128, lng: -74.006 }));
+    render(<WeatherBar />);
 
-    farmState.fields = [{ id: 'f1', lat: 39.1234, lng: -93.5678 }];
-    rerender(<WeatherBar />);
-
-    expect(fetchComprehensiveRainfall).toHaveBeenCalledTimes(1);
-    expect(fetchComprehensiveRainfall.mock.calls[0][0].fieldId).toBeUndefined();
     expect(await screen.findByText('0.42"')).toBeTruthy();
+    expect(fetchComprehensiveRainfall).toHaveBeenCalledWith(expect.objectContaining({
+      fieldId: 'f1',
+      lat: 39.1234,
+      lng: -93.5678,
+    }));
   });
 
   it('reloads once when the plan resolves as free after a live-path load', async () => {
@@ -179,6 +203,7 @@ describe('WeatherBar', () => {
   });
 
   it('does not commit aborted radar rain as 0.00 success', async () => {
+    farmState.fields = [{ id: 'f1', lat: 40.7128, lng: -74.006 }];
     fetchCurrentWeather.mockResolvedValue({
       wind: 8,
       temp: 72,
@@ -198,6 +223,7 @@ describe('WeatherBar', () => {
     await screen.findByText(/72\u00b0F/);
     expect(await screen.findByText('0.25"')).toBeTruthy();
     expect(screen.queryByText('0.00"')).toBeNull();
+    expect(fetchComprehensiveRainfall).toHaveBeenCalledWith(expect.objectContaining({ fieldId: 'f1' }));
   });
 });
 

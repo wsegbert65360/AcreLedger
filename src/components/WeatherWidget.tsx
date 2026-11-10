@@ -159,13 +159,14 @@ export default function WeatherBar() {
 
       try {
         const fieldId = matchFieldByCoords(fieldsRef.current, lat, lng);
-        // Free plan: no live Rain API. A slot field shows its daily total;
-        // anything else keeps the plain weather-service numbers.
-        if (rainLockedRef.current && !fieldId) return;
-        const rainData = rainLockedRef.current && fieldId
+        // The Rain API refuses coordinate-only requests. An unmatched location
+        // keeps the weather-service precipitation totals (no error toast).
+        // Free plan: daily totals for a matched slot field; no live Rain API.
+        if (!fieldId) return;
+        const rainData = rainLockedRef.current
           ? await RainfallDailyService.fetchRainfallFromDaily({ fieldId })
           : await RainService.fetchComprehensiveRainfall({
-              ...(fieldId ? { fieldId } : {}),
+              fieldId,
               lat,
               lng,
               signal: controller.signal,

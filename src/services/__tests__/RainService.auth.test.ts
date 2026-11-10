@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const getSessionMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/supabase', () => ({ supabase: { auth: { getSession: getSessionMock } } }));
 
-import { RainService } from '../RainService';
+import { RainfallFieldRequiredError, RainService } from '../RainService';
 
 const FIELD = '11111111-1111-4111-8111-111111111111';
 const okBody = { periodEndUtc: '2026-03-17T14:00:00Z', rain: { '12h': 0, '24h': 0, '72h': 0, '168h': 0 } };
@@ -23,8 +23,16 @@ describe('RainService sends the Supabase login to the Rain API', () => {
   it('adds a bearer token when signed in', async () => {
     getSessionMock.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } });
     await RainService.fetchComprehensiveRainfall({ fieldId: FIELD, lat: 38.46, lng: -93.53 });
-    const init = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain(`field_id=${FIELD}`);
     expect(init.headers).toEqual({ Authorization: 'Bearer tok-123' });
+  });
+
+  it('does not call the Rain API without a field id, even when a session exists', async () => {
+    getSessionMock.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } });
+    await expect(RainService.fetchComprehensiveRainfall({ lat: 38.46, lng: -93.53 }))
+      .rejects.toBeInstanceOf(RainfallFieldRequiredError);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('sends no Authorization header without a session or when the lookup throws', async () => {
