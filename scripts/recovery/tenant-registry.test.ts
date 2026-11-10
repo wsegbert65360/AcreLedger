@@ -12,6 +12,7 @@ const KNOWN_FARM_OWNED = [
   "public.farms",
   "public.profiles",
   "public.fields",
+  "public.farm_rainfall_slots",
   "public.bins",
   "public.plant_records",
   "public.spray_records",

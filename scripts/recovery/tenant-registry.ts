@@ -32,7 +32,7 @@ export interface TenantTable {
   notes: string;
 }
 
-export const TENANT_REGISTRY_VERSION = 4;
+export const TENANT_REGISTRY_VERSION = 5;
 
 export function userIdColumns(entry: TenantTable): string[] {
   if (entry.userColumns && entry.userColumns.length > 0) return entry.userColumns;
@@ -99,6 +99,17 @@ export const TENANT_REGISTRY: TenantTable[] = [
     primaryKeys: ["id"],
     includeInTenantBundle: true,
     notes: "Farm-owned field rows, including soft-deleted tombstones.",
+  },
+  {
+    schema: "public",
+    table: "farm_rainfall_slots",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: false,
+    restoreOrder: 31,
+    primaryKeys: ["farm_id", "slot"],
+    includeInTenantBundle: true,
+    notes: "Locked rainfall slots. Restore after fields. Not recomputed from current field age after a slot has been refilled.",
   },
   {
     schema: "public",
