@@ -51,7 +51,7 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
   apps, `todos`, client-computed REI/PHI and rain-alert reminders.
 
 ## Known risks and loose ends
-- **Reports are built on the device**, so the report gate is display-only, not real enforcement. Moving report generation
+- **Reports are built on the device.** Saving, sharing or printing a Pro report now asks the server first (`authorize_report_export` in `src/lib/authorizeReportExport.ts` calls `assert_premium(farm, 'reports')`: audited in `shadow`, refused in `enforce`, fails open offline). A modified app could still skip the check; full protection means moving report generation
   to the server is a separate piece of work.
 - **Undoing a pre-season reset goes through `restore_farm_backup`**, so free farms would be blocked once enforced.
 - **Review items:** (4) FIXED: Weather page and widget reload once when the plan resolves as free after a live Rain API load.
@@ -64,7 +64,7 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
 - Apple's commission on website links is 0% only while the Epic case is unresolved.
 
 ## Still to build (from the plan draft, Part 1)
-- Report preview that the server enforces (reports are built on the device today).
+- (Done as a server check on export, not server rendering.) Full server-rendered report preview remains optional.
 - Server gating of the separate Rain API (auth header, farm and plan checks).
 - Pause rainfall for unused free farms after 60 days, with labeled coverage gaps.
 - In-app reminder before the July 15 FSA deadline (US only), after the preview exists.

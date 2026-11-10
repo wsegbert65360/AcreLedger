@@ -34,8 +34,8 @@ export type PremiumFeature =
 
 /**
  * Report types that need Pro (FSA-578, season spray log, fertilizer, landlord
- * statements). Fall FSA and the hay summary stay free. Enforced in the app only: reports are
- * built on the device, so this is a display gate, not server enforcement.
+ * statements). Fall FSA and the hay summary stay free. The app also asks the server before export
+ * (authorizeReportExport). Reports are still built on the device.
  */
 const PAID_REPORT_TYPES: ReadonlySet<string> = new Set([
   'fsa-plant', 'spray-audit', 'fertilizer-summary', 'landlord-statement', 'farm-owner-summary',

@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { useFarm } from '@/store/farmStore';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { isFreeTierLocked, isPaidReport } from '@/lib/entitlements';
+import { authorizeReportExport } from '@/lib/authorizeReportExport';
+import { supabase } from '@/lib/supabase';
 import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import SeasonSelect from '@/components/SeasonSelect';
 import FsaPlantReport from '@/components/reports/FsaPlantReport';
@@ -317,8 +319,13 @@ export default function Reports() {
       return;
     }
     try {
-      Promise.resolve(fn())
-        .then(() => {
+      authorizeReportExport(supabase, farm_id, reportType)
+        .then((allowed) => {
+          if (!allowed) {
+            toast.info(lockedMessage);
+            return undefined;
+          }
+          return Promise.resolve(fn()).then(() => {
           if (session?.user.id && farm_id) {
             recordReportExport(
               { userId: session.user.id, farmId: farm_id, seasonYear: viewingSeason, reportType },
@@ -326,6 +333,7 @@ export default function Reports() {
             );
             setExportHistoryVersion(version => version + 1);
           }
+          });
         })
         .catch((err) => {
           console.error(`Export failed (${label}):`, err);
@@ -367,7 +375,10 @@ export default function Reports() {
       toast.info('Printing is not supported directly in the mobile app. Please export to PDF and print/share from there.');
       return;
     }
-    window.print();
+    void authorizeReportExport(supabase, farm_id, tab).then((allowed) => {
+      if (allowed) window.print();
+      else toast.info(lockedMessage);
+    });
   };
 
   const handleExportLandlordCSV = () => {
