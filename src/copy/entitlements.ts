@@ -8,30 +8,30 @@ import { FREE_LIMITS, type EntitlementPlan } from '@/lib/entitlements';
 
 export const ENTITLEMENT_COPY = {
   // Reports
-  reportLockedToast: 'This report is included with Premium.',
-  reportLockedTitle: 'This report is part of Premium.',
+  reportLockedToast: 'This report is included with Pro.',
+  reportLockedTitle: 'This report is part of Pro.',
   reportLockedBody: 'You can still view your records, print a single record, and export your raw data.',
 
   // Harvest bin
-  binLockedNote: 'Tracking what goes into each bin is part of Premium. You can still log this harvest as Town.',
-  binLockedLabel: 'Premium',
+  binLockedNote: 'Tracking what goes into each bin is part of Pro. You can still log this harvest as Town.',
+  binLockedLabel: 'Pro',
 
   // Rainfall
-  rainfallLocked: 'Rainfall history for this field is included with Premium.',
+  rainfallLocked: 'Rainfall history for this field is included with Pro.',
 
   // Sync queue (change refused for plan reasons, parked on the device)
-  syncParkedTitle: 'Saved on this device. Premium needed to sync this change.',
+  syncParkedTitle: 'Saved on this device. Pro needed to sync this change.',
   syncParkedBody: 'Open Settings to export or discard it. Nothing was deleted.',
 
   // Settings plan card
   planCardTitle: 'Your plan',
   planFreeName: 'Free plan',
-  planPaidName: 'Premium',
+  planPaidName: 'Pro',
   planComplimentaryName: 'Complimentary access',
   planTrialName: 'Free trial',
-  planFreeSummary: 'Everything you need to keep your records, free. Premium adds reports and extra tools.',
-  planUpgradeLink: 'See Premium',
-  planUpgradeLinkWebsite: 'See Premium on our website',
+  planFreeSummary: 'Everything you need to keep your records, free. Pro adds reports and extra tools.',
+  planUpgradeLink: 'See Pro',
+  planUpgradeLinkWebsite: 'See Pro on our website',
   nativeManageOnWeb: 'Plans are managed on the AcreLedger website.',
   planNothingDeleted: 'Nothing you have entered is ever deleted if your plan changes, and you can always export your data.',
 } as const;
@@ -56,7 +56,7 @@ export function freePlanIncluded(): string[] {
   ];
 }
 
-/** What Premium adds. */
+/** What Pro adds. */
 export function paidPlanAdds(): string[] {
   return [
     'FSA-578, spray log, fertilizer and landlord reports',
