@@ -734,7 +734,7 @@ the full Auth restore path.
 
 ### Data API Access (Mandatory)
 
-Migration `20261101000000_db_hardening_maintain_search_path.sql` revokes only PG17
+Migration `20261102020303_db_hardening_maintain_search_path.sql` revokes only PG17
 MAINTAIN from anon, authenticated and PUBLIC on every public table, partitioned
 table, view and materialized view. It revokes schema-local postgres default
 MAINTAIN grants to API roles where authorized. Global default grants are additive:

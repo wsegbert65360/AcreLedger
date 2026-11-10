@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
-export const migrationName = '20261101000000_db_hardening_maintain_search_path';
+export const migrationName = '20261102020303_db_hardening_maintain_search_path';
+// Rollback file was not renamed. The migration header cites this path and stays byte-identical.
+export const rollbackName = '20261101000000_db_hardening_maintain_search_path_rollback';
 export const schemas = "'public','acreage_backfill_private','ai_assistant_private','trial_private','usage_private'";
 export async function snapshot(db) {
   return {

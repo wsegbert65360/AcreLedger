@@ -20,7 +20,7 @@ WHERE id = '28e107ba-3384-4b6e-9917-8a694803cb82';
 
 Stop if that row is missing or the name is not Egbert Farm.
 
-3. [ ] Read the live comp. Columns are `id`, `farm_id`, `reason`, `granted_by`, `created_at`, `expires_at`, `deleted_at` (`supabase/migrations/20261101120000_farm_comps.sql`). A row counts only when `deleted_at` is null and `expires_at` is null or still in the future.
+3. [ ] Read the live comp. Columns are `id`, `farm_id`, `reason`, `granted_by`, `created_at`, `expires_at`, `deleted_at` (`supabase/migrations/20261102014611_farm_comps.sql`). A row counts only when `deleted_at` is null and `expires_at` is null or still in the future.
 
 ```sql
 SELECT id, farm_id, reason, granted_by, created_at, expires_at, deleted_at
@@ -43,45 +43,17 @@ VALUES (
 
 `granted_by` is optional. Complimentary wins over a Stripe subscription in `_farm_entitlement`.
 
-## 2. Migration version mismatch
+## 2. Migration versions
 
-Prod already applied the same three changes under different version numbers. The repo files are:
+The rename is done in the repo. Prod versions were confirmed read-only. `supabase db push` matches the filename prefix to `supabase_migrations.schema_migrations`, so on prod these three are already applied and the push does not run them again.
 
-- `20261101000000_db_hardening_maintain_search_path.sql`
-- `20261101120000_farm_comps.sql`
-- `20261101130000_billing_audit_log.sql`
+- `20261101120000_farm_comps.sql` -> `20261102014611_farm_comps.sql`
+- `20261101000000_db_hardening_maintain_search_path.sql` -> `20261102020303_db_hardening_maintain_search_path.sql`
+- `20261101130000_billing_audit_log.sql` -> `20261102041847_billing_audit_log.sql`
 
-`supabase_migrations.schema_migrations` on prod records them as `20261102*` versions. Two of those versions are known: `20261102014611` and `20261102020303`. The third is not known in this repo. Do not invent it.
+That order matches prod: `farm_comps` (`20261102014611`), then hardening (`20261102020303`), then `billing_audit_log` (`20261102041847`). They sit after `20261022210000_profiles_id_fkey_cascade.sql` and before `20261107000000_entitlements_core.sql`.
 
-`supabase db push` compares filenames to that table. It would try to run the three repo files again (their versions are absent on prod) and it would report drift for the prod versions (those versions are absent from the repo). The hardening file revokes `MAINTAIN` across public relations. Do not push until the versions match. This section does not change prod by itself.
-
-5. [ ] On prod, read-only, run `supabase migration list`. If the remote rows do not show which file is which, run this read-only query (if `name` is not a column, use the Dashboard history for that version and stop rather than guessing):
-
-```sql
-SELECT version, name
-FROM supabase_migrations.schema_migrations
-WHERE version >= '20261101' AND version < '20261107'
-ORDER BY version;
-```
-
-Match each prod version to a file by `name`. Write the three pairs down. Repeat the same read on staging and on any local database you push to.
-
-6. [ ] Preferred option, (a). After the names match, rename the three repo files so the 14-digit prefix is the prod version, in a **separate commit**. Keep each file's suffix (`_db_hardening_maintain_search_path.sql`, `_farm_comps.sql`, `_billing_audit_log.sql`).
-
-   Order check against the files that exist today: the previous file is `20261022210000_profiles_id_fkey_cascade.sql`. The next file is `20261107000000_entitlements_core.sql`. There is no `20261102*` file in the repo. `20261102014611` and `20261102020303` both sort after `20261022210000` and before `20261107000000`. The unknown third version must sort in that same gap, and the three new names must stay in the order prod applied them. Then run `npm run verify:migrations` (filename shape, unique timestamps, full replay on a disposable database). It does not touch prod.
-
-   A database that already recorded `20261101000000`, `20261101120000`, and `20261101130000` will show the opposite mismatch after the rename. Settle that in the same plan before you push.
-
-7. [ ] Option (b), only if you reject the rename, and only after you have reviewed the pairs. This **writes** prod's migration history. It does not undo SQL. For each pair, with the real versions filled in:
-
-```text
-supabase migration repair --status applied <repo version>
-supabase migration repair --status reverted <prod version>
-```
-
-Repo versions are `20261101000000`, `20261101120000`, and `20261101130000`. A wrong pair marks a file applied that prod never ran (a later push skips it) or drops a version prod did run (a later push can apply it again).
-
-Recommend (a). The rename leaves prod's history table alone, so the next push sees those three as already applied. Repair rewrites the live table, and a bad pair is hard to see afterward.
+Any other database (staging or local) that recorded the old `20261101000000`, `20261101120000`, and `20261101130000` versions needs its migration history reconciled before push. Will decides. Nothing in this file runs automatically.
 
 ## 3. Apply migrations
 
@@ -240,7 +212,7 @@ Each step undoes that section only. Do not drop tables or delete farm rows.
 
 29. [ ] Section 1. Keep the backup. To undo a comp you inserted, set `deleted_at = now()` on that `farm_comps` row. Do not `DELETE` it. The audit trigger records `soft_delete`.
 
-30. [ ] Section 2. If you only renamed files and have not pushed, revert that commit. If you ran option (b), write down the exact repair commands you used before you repair them back. Do not guess the reverse pair.
+30. [ ] Section 2. The rename is already in the repo and matches the versions prod recorded. Do not revert those filenames, and do not repair prod's history back to `20261101000000`, `20261101120000`, or `20261101130000`. A staging or local database that still has the old versions is the note in section 2. Will decides how to reconcile it. Nothing runs automatically. Do not guess a repair pair.
 
 31. [ ] Section 3. If a migration errors, stop. Fix forward. Do not delete rows to force the next file through, and do not drop the new tables. User data stays.
 

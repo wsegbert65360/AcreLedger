@@ -19,7 +19,7 @@ try {
     INSERT INTO public.profiles VALUES ('${user}', '${farm}');
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO authenticated, anon, service_role;
   `);
-  const sql = await readFile(new URL('../supabase/migrations/20261101120000_farm_comps.sql', import.meta.url), 'utf8');
+  const sql = await readFile(new URL('../supabase/migrations/20261102014611_farm_comps.sql', import.meta.url), 'utf8');
   await db.exec(sql);
   await db.exec(sql);
   assert.equal((await db.query("SELECT has_table_privilege('service_role', 'public.farm_comps', 'DELETE') AS allowed")).rows[0].allowed, false);

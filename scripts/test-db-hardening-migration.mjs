@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
-import { migrationName, snapshot, printSnapshot, assertHardened } from './db-hardening-fixture.mjs';
+import { migrationName, rollbackName, snapshot, printSnapshot, assertHardened } from './db-hardening-fixture.mjs';
 
 const sql = await readFile(new URL(`../supabase/migrations/${migrationName}.sql`, import.meta.url), 'utf8');
-const rollback = await readFile(new URL(`../supabase/rollbacks/${migrationName}_rollback.sql`, import.meta.url), 'utf8');
+const rollback = await readFile(new URL(`../supabase/rollbacks/${rollbackName}.sql`, import.meta.url), 'utf8');
 const observedTables = [
   'bins', 'farm_rainfall_daily', 'farm_subscriptions', 'farms',
   'fertilizer_applications', 'fertilizer_recipes', 'field_clu_assignments',
