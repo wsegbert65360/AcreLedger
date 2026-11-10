@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PlanCard from '@/components/settings/PlanCard';
-import { ENTITLEMENT_COPY } from '@/copy/entitlements';
+import { ENTITLEMENT_COPY, freePlanIncluded, paidPlanAdds } from '@/copy/entitlements';
 import { freeEntitlement, type Entitlement } from '@/lib/entitlements';
 
 let mockEntitlement: Entitlement | null = null;
@@ -42,6 +42,14 @@ describe('PlanCard', () => {
     mockEntitlement = freeEntitlement(true);
     renderCard();
     expect(screen.getByText(ENTITLEMENT_COPY.planFreeName)).toBeTruthy();
+    expect(screen.getByText(ENTITLEMENT_COPY.planFreeSummary)).toBeTruthy();
+    for (const line of [...freePlanIncluded(), ...paidPlanAdds()]) {
+      expect(screen.getByText(line)).toBeTruthy();
+    }
+    expect(screen.getByText(/Daily rainfall on your two oldest fields/)).toBeTruthy();
+    expect(screen.getByText('Prepared FSA-578, spray log, fertilizer, and landlord reports')).toBeTruthy();
+    expect(screen.getByText('Rainfall on all remaining fields, hourly')).toBeTruthy();
+    expect(screen.queryByText(/photo/i)).toBeNull();
     expect(screen.getByRole('link', { name: ENTITLEMENT_COPY.planUpgradeLink }).getAttribute('href'))
       .toBe('/settings?section=billing');
   });
@@ -69,6 +77,7 @@ describe('PlanCard', () => {
   it('shows full access, without upgrade prompts, for a paid farm', () => {
     mockEntitlement = { ...freeEntitlement(true), plan: 'paid' };
     renderCard();
+    expect(screen.getByText('Pro')).toBeTruthy();
     expect(screen.getByText('Full access to every feature.')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });

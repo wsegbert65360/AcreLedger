@@ -10,17 +10,17 @@ export const ENTITLEMENT_COPY = {
   // Reports
   reportLockedToast: 'This report is included with Pro.',
   reportLockedTitle: 'This report is part of Pro.',
-  reportLockedBody: 'You can still view your records, print a single record, and export your raw data.',
+  reportLockedBody: 'You can still see your records, print a single record, and export what you logged.',
 
   // Harvest bin
   binLockedNote: 'Tracking what goes into each bin is part of Pro. You can still log this harvest as Town.',
   binLockedLabel: 'Pro',
 
   // Rainfall
-  rainfallLocked: 'Rainfall history for this field is included with Pro.',
+  rainfallLocked: 'Automatic rainfall for this field is part of Pro.',
 
   // Sync queue (change refused for plan reasons, parked on the device)
-  syncParkedTitle: 'Saved on this device. Pro needed to sync this change.',
+  syncParkedTitle: 'Saved on this device. You need Pro to sync this change.',
   syncParkedBody: 'Open Settings to export or discard it. Nothing was deleted.',
 
   // Settings plan card
@@ -28,7 +28,7 @@ export const ENTITLEMENT_COPY = {
   planFreeName: 'Free plan',
   planPaidName: 'Pro',
   planComplimentaryName: 'Complimentary access',
-  planFreeSummary: 'Everything you need to keep your records, free. Pro adds reports and extra tools.',
+  planFreeSummary: 'The free record book keeps your field records. Pro adds rainfall on all remaining fields, prepared reports, and the business tools.',
   planUpgradeLink: 'See Pro',
   planUpgradeLinkWebsite: 'See Pro on our website',
   nativeManageOnWeb: 'Plans are managed on the AcreLedger website.',
@@ -43,24 +43,24 @@ export function planDisplayName(plan: EntitlementPlan): string {
   }
 }
 
-/** What the free plan includes, built from FREE_LIMITS so the numbers never drift from the server. */
+/** What the free plan includes. The field cap comes from FREE_LIMITS. "Two" matches rainfallSlotCap (locked at 2). */
 export function freePlanIncluded(): string[] {
   return [
-    `Up to ${FREE_LIMITS.fieldCap} fields`,
-    `Rainfall history on ${FREE_LIMITS.rainfallSlotCap} fields, daily totals on the rest`,
+    `Up to ${FREE_LIMITS.fieldCap} active fields`,
+    'Daily rainfall on your two oldest fields in the contiguous US. Those two are locked, and you can\u2019t change them.',
     'Planting, spraying, fertilizing and harvest records',
-    'CSV export of your own data',
+    'Export what you logged',
   ];
 }
 
 /** What Pro adds. */
 export function paidPlanAdds(): string[] {
   return [
-    'FSA-578, spray log, fertilizer and landlord reports',
+    'Prepared FSA-578, spray log, fertilizer, and landlord reports',
     'Grain bins and grain movement',
     'Equipment and maintenance',
     'Landlord splits and FSA tract details',
-    'Hourly rainfall history for every field',
+    'Rainfall on all remaining fields, hourly',
     'Backup restore',
   ];
 }
