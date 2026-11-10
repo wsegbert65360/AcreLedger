@@ -483,8 +483,6 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 equipmentId={form.equipmentId}
                 rei={form.rei}
                 notes={form.notes}
-                photoBase64={form.photoBase64}
-                photoType={form.photoType}
                 sensitiveAreaCheck={form.sensitiveAreaCheck}
                 sensitiveAreaNotes={form.sensitiveAreaNotes}
                 showValidation={form.showValidation}
@@ -502,8 +500,6 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 setEquipmentId={form.setEquipmentId}
                 setRei={form.setRei}
                 setNotes={form.setNotes}
-                setPhotoBase64={form.setPhotoBase64}
-                setPhotoType={form.setPhotoType}
                 setSensitiveAreaCheck={form.setSensitiveAreaCheck}
                 setSensitiveAreaNotes={form.setSensitiveAreaNotes}
               />}
@@ -571,8 +567,6 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 isFullyCompliant={isFullyCompliant}
                 missingComplianceFields={missingComplianceFields}
                 notes={form.notes}
-                photoBase64={form.photoBase64}
-                photoType={form.photoType}
               />}
             </WizardStepLayout>
 

@@ -49,7 +49,6 @@ export function planDisplayName(plan: EntitlementPlan): string {
 export function freePlanIncluded(): string[] {
   return [
     `Up to ${FREE_LIMITS.fieldCap} fields`,
-    `Up to ${FREE_LIMITS.photoCap} photos`,
     `Rainfall history on ${FREE_LIMITS.rainfallSlotCap} fields, daily totals on the rest`,
     'Planting, spraying, fertilizing and harvest records',
     'CSV export of your own data',

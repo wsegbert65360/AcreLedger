@@ -4,8 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { Clock, MapPin, User, FileText, Camera, Trash2 } from 'lucide-react';
+import { Clock, MapPin, User, FileText } from 'lucide-react';
 
 interface SprayWizardCoreStepProps {
   // State
@@ -23,8 +22,6 @@ interface SprayWizardCoreStepProps {
   equipmentId: string;
   rei: string;
   notes: string;
-  photoBase64: string;
-  photoType: string;
   sensitiveAreaCheck: boolean;
   sensitiveAreaNotes: string;
   showValidation: boolean;
@@ -44,8 +41,6 @@ interface SprayWizardCoreStepProps {
   setEquipmentId: (v: string) => void;
   setRei: (v: string) => void;
   setNotes: (v: string) => void;
-  setPhotoBase64: (v: string) => void;
-  setPhotoType: (v: string) => void;
   setSensitiveAreaCheck: (v: boolean) => void;
   setSensitiveAreaNotes: (v: string) => void;
 }
@@ -56,57 +51,15 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
     applicatorName, licenseNumber, targetPest,
     cropOrSiteTreated, applicationMethod, siteAddress,
     involvedTechnicians, equipmentId, rei, notes,
-    photoBase64, photoType, sensitiveAreaCheck, sensitiveAreaNotes, showValidation,
+    sensitiveAreaCheck, sensitiveAreaNotes, showValidation,
     setSprayDate, setStartTime, setEndTime, setIsEndTimeManual,
     setApplicatorName, setLicenseNumber, setTargetPest,
     setCropOrSiteTreated, setApplicationMethod, setSiteAddress,
     setInvolvedTechnicians, setEquipmentId, setRei, setNotes,
-    setPhotoBase64, setPhotoType, setSensitiveAreaCheck, setSensitiveAreaNotes
+    setSensitiveAreaCheck, setSensitiveAreaNotes
   } = props;
 
   const inputError = (missing: boolean) => missing && showValidation ? 'border-destructive ring-1 ring-destructive' : '';
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          const base64 = dataUrl.split(',')[1];
-          setPhotoBase64(base64);
-          setPhotoType('image/jpeg');
-        }
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
@@ -337,54 +290,6 @@ export function SprayWizardCoreStep(props: SprayWizardCoreStepProps) {
           />
         </div>
 
-        {/* Ticket/Label Photo attachment */}
-        <div className="space-y-2 mt-2 pt-2 border-t border-border/40">
-          <Label className="text-xs font-semibold text-muted-foreground">Attach Ticket / Label Photo</Label>
-          <div className="flex items-center gap-3">
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              id="spray-ticket-photo"
-              name="spray-ticket-photo"
-              onChange={handlePhotoUpload}
-              className="hidden"
-            />
-            {photoBase64 ? (
-              <div className="flex items-center gap-2 bg-muted p-2 rounded-xl border border-border w-full justify-between">
-                <div className="flex items-center gap-2">
-                  <img
-                    src={`data:${photoType || 'image/jpeg'};base64,${photoBase64}`}
-                    alt="Ticket Preview"
-                    className="w-12 h-12 object-cover rounded-lg border border-border"
-                  />
-                  <span className="text-xs font-semibold text-foreground">Photo attached</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setPhotoBase64(''); setPhotoType(''); }}
-                  className="h-8 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 size={14} className="mr-1" /> Remove
-                </Button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 w-full border-dashed border-spray/30 text-spray text-xs font-bold hover:bg-spray/5"
-                asChild
-              >
-                <Label htmlFor="spray-ticket-photo" className="cursor-pointer flex items-center justify-center gap-2 w-full h-full">
-                  <Camera size={16} />
-                  Capture Photo / Ticket
-                </Label>
-              </Button>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

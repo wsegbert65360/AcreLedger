@@ -27,8 +27,6 @@ const baseProps = {
   isFullyCompliant: false,
   missingComplianceFields: ['Product rate'],
   notes: '',
-  photoBase64: '',
-  photoType: '',
 };
 
 describe('SprayWizardReviewStep', () => {

@@ -11,10 +11,7 @@ function expectUsageDescription(key: string) {
 }
 
 describe('iOS capability usage descriptions', () => {
-  it('declares camera and photo-library access for the spray photo input', () => {
-    const wizard = read('src/components/spray/SprayWizardCoreStep.tsx');
-    expect(wizard).toMatch(/accept="image\/\*"/);
-    expect(wizard).toMatch(/capture="environment"/);
+  it('keeps the camera and photo-library descriptions for future photo support', () => {
     expectUsageDescription('NSCameraUsageDescription');
     expectUsageDescription('NSPhotoLibraryUsageDescription');
   });
