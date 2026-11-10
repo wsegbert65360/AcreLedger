@@ -11,7 +11,10 @@ import type { FarmSubscription, FarmSubscriptionStatus } from '@/types/farm';
  * subscription row keeps full access until the product owner says enforce.
  */
 
-/** Locked product decision: past_due farms keep access for a 14-day grace window. */
+/**
+ * Locked product decision: after a renewal payment fails, Pro lasts 14 days
+ * from `past_due_since`, not from `current_period_end`.
+ */
 export const PAST_DUE_GRACE_DAYS = 14;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,13 +52,14 @@ export interface FarmBillingAccessOptions {
 /**
  * Entitlement rule for a farm's subscription row (source of truth is the
  * `farm_subscriptions` mirror, never client-reported state):
- * - `trialing` / `active`: full access.
- * - `past_due`: full access through a 14-day grace window anchored at
- *   `current_period_end` (falling back to `trial_ends_at`); fails closed when
- *   no anchor exists.
- * - `canceled` / `unpaid`: access continues until `current_period_end`.
- * - `incomplete` (checkout abandoned): locked.
- * - Soft-deleted row or missing row: access follows `enforce`.
+ * - `active`: full access. `current_period_end` is the paid-through bound.
+ * - `trialing`: reported as its own phase. The free-tier plan treats it as free.
+ * - Payment failure (`past_due`, `unpaid`, or `canceled` with `past_due_since`):
+ *   full access for `graceDays` after `past_due_since`. `current_period_end`
+ *   does not extend it. A missing anchor fails closed.
+ * - `canceled` with no failure anchor: access through `current_period_end`.
+ * - `incomplete`: locked.
+ * - Soft-deleted or missing row: access follows `enforce`.
  */
 export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBillingAccess {
   const { subscription } = options;
@@ -78,11 +82,15 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
     return { hasAccess: true, inGrace: false, phase: 'active', status };
   }
 
-  if (status === 'past_due') {
-    const anchorMs =
-      parseInstantMs(subscription.current_period_end) ?? parseInstantMs(subscription.trial_ends_at);
+  const hasFailureStamp =
+    typeof subscription.past_due_since === 'string' && subscription.past_due_since.length > 0;
+  const failedPayment =
+    status === 'past_due' || status === 'unpaid' || (status === 'canceled' && hasFailureStamp);
+
+  if (failedPayment) {
+    const anchorMs = parseInstantMs(subscription.past_due_since);
     if (anchorMs === null) {
-      // Unknown recovery deadline: fail closed rather than grant silently.
+      // Unknown failure start: do not fall back to current_period_end.
       return { hasAccess: false, inGrace: false, phase: 'locked', status };
     }
     const graceEndMs = anchorMs + graceDays * DAY_MS;
@@ -92,7 +100,7 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
     return { hasAccess: false, inGrace: false, phase: 'locked', status };
   }
 
-  if (status === 'canceled' || status === 'unpaid') {
+  if (status === 'canceled') {
     const periodEndMs = parseInstantMs(subscription.current_period_end);
     if (periodEndMs !== null && nowMs <= periodEndMs) {
       return { hasAccess: true, inGrace: true, phase: 'grace', status };

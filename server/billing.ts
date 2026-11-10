@@ -9,7 +9,11 @@
  * until Will approves legal copy (BILLING_LIVE_CHARGES must stay false).
  */
 
-/** Locked product decision: past_due farms keep access for a 14-day grace window. */
+/**
+ * Locked product decision: after a renewal payment fails, Pro lasts 14 days
+ * from `past_due_since` — not from Stripe's `current_period_end`, which moves
+ * forward when the renewal invoice is created.
+ */
 export const PAST_DUE_GRACE_DAYS = 14;
 
 export type BillingStatus =
@@ -346,6 +350,53 @@ export function readSubscriptionMetadata(
   return { farmId, userId };
 }
 
+/**
+ * Why a webhook write is touching `past_due_since`.
+ * `subscription` is a subscription snapshot (created / updated / deleted / checkout).
+ */
+export type PastDueSignal = 'payment_failed' | 'payment_succeeded' | 'subscription';
+
+/**
+ * Next `farm_subscriptions.past_due_since` value for one webhook write.
+ *
+ * The anchor is set the first time a payment failure is seen and is never
+ * moved while it is already set. It is cleared when Stripe's current status
+ * is `active`, or when a payment-success event is at or after the stored
+ * anchor. An older success does not clear a newer failure, and a failure
+ * event does not re-arm the anchor once the live subscription is `active`
+ * (replay and out-of-order delivery). A normal cancel leaves a null anchor
+ * null. When the event has no timestamp, `now` is the anchor clock.
+ */
+export function resolvePastDueSince(input: {
+  existingPastDueSince: string | null | undefined;
+  status: BillingStatus;
+  signal: PastDueSignal;
+  /** Stripe `event.created` or an invoice timestamp, unix seconds. */
+  eventEpochSeconds?: number | null;
+  /** Clock used when the event has no usable timestamp. */
+  now?: Date;
+}): string | null {
+  const existing =
+    typeof input.existingPastDueSince === 'string' && input.existingPastDueSince.length > 0
+      ? input.existingPastDueSince
+      : null;
+  const eventIso = stripeEpochToIso(input.eventEpochSeconds) ?? (input.now ?? new Date()).toISOString();
+
+  // Live `active` means the failure is over, even if this event is a late failure.
+  if (input.status === 'active') return null;
+
+  if (input.signal === 'payment_succeeded') {
+    if (existing && Date.parse(existing) > Date.parse(eventIso)) return existing;
+    return null;
+  }
+
+  const failure =
+    input.signal === 'payment_failed' ||
+    (input.signal === 'subscription' && (input.status === 'past_due' || input.status === 'unpaid'));
+  if (!failure) return existing;
+  return existing ?? eventIso;
+}
+
 /** Webhook event types this handler upserts entitlements for. */
 export const HANDLED_WEBHOOK_EVENT_TYPES: ReadonlySet<string> = new Set([
   'checkout.session.completed',
@@ -353,6 +404,7 @@ export const HANDLED_WEBHOOK_EVENT_TYPES: ReadonlySet<string> = new Set([
   'customer.subscription.updated',
   'customer.subscription.deleted',
   'invoice.paid',
+  'invoice.payment_succeeded',
   'invoice.payment_failed',
 ]);
 

@@ -428,6 +428,8 @@ export interface FarmSubscription {
   status: FarmSubscriptionStatus;
   trial_ends_at: string | null;
   current_period_end: string | null;
+  /** First renewal-payment failure. Pro grace ends 14 days later. Null when the failure is cleared. Service role writes only. */
+  past_due_since: string | null;
   cancel_at_period_end: boolean;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;

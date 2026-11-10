@@ -246,6 +246,134 @@ describe('Stripe webhook delivery recovery', () => {
       status: 'active',
       stripe_subscription_id: 'sub_current',
       stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+      past_due_since: null,
+    });
+  });
+
+  it('sets past_due_since from the first payment failure and does not move it', async () => {
+    const failedAt = 1799366400;
+    mocks.constructEvent
+      .mockReturnValueOnce({
+        id: 'evt_payment_failed_1',
+        type: 'invoice.payment_failed',
+        created: failedAt,
+        data: { object: { subscription: 'sub_current' } },
+      })
+      .mockReturnValueOnce({
+        id: 'evt_payment_failed_2',
+        type: 'invoice.payment_failed',
+        created: failedAt + 86_400,
+        data: { object: { subscription: 'sub_current' } },
+      });
+    mocks.retrieveSubscription.mockResolvedValue({
+      ...currentSubscription,
+      status: 'past_due',
+      items: { data: [{ price: { id: 'price_1' }, current_period_end: failedAt + 365 * 86_400 }] },
+    });
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    const row = {
+      id: 'row-1',
+      owner_user_id: 'user-1',
+      stripe_subscription_id: 'sub_current',
+      stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+      updated_at: '2026-09-09T11:59:00.000Z',
+      past_due_since: null as string | null,
+    };
+    supabase.queue('billing_webhook_events', result(), result(), result(), result());
+    supabase.queue(
+      'farm_subscriptions',
+      result({ data: row, count: null }),
+      result(),
+      result({ data: { ...row, past_due_since: '2027-01-08T00:00:00.000Z' }, count: null }),
+      result(),
+    );
+
+    expect((await invoke()).status).toBe(200);
+    expect((await invoke()).status).toBe(200);
+    const updates = supabase.calls.filter(
+      call => call.table === 'farm_subscriptions' && call.operation === 'update',
+    );
+    expect(updates).toHaveLength(2);
+    expect(updates[0]?.payload).toMatchObject({
+      status: 'past_due',
+      past_due_since: '2027-01-08T00:00:00.000Z',
+    });
+    expect(updates[1]?.payload).toMatchObject({
+      past_due_since: '2027-01-08T00:00:00.000Z',
+    });
+    expect((updates[0]?.payload as { current_period_end: string }).current_period_end)
+      .not.toBe('2027-01-08T00:00:00.000Z');
+  });
+
+  it('clears past_due_since when a later invoice is paid', async () => {
+    mocks.constructEvent.mockReturnValueOnce({
+      id: 'evt_invoice_paid_clear',
+      type: 'invoice.paid',
+      created: 1799452800,
+      data: { object: { subscription: 'sub_current', status_transitions: { paid_at: 1799452800 } } },
+    });
+    mocks.retrieveSubscription.mockResolvedValueOnce({ ...currentSubscription, status: 'active' });
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result(), result());
+    supabase.queue(
+      'farm_subscriptions',
+      result({
+        data: {
+          id: 'row-1',
+          owner_user_id: 'user-1',
+          stripe_subscription_id: 'sub_current',
+          stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+          updated_at: '2026-09-09T11:59:00.000Z',
+          past_due_since: '2027-01-08T00:00:00.000Z',
+        },
+        count: null,
+      }),
+      result(),
+    );
+
+    expect((await invoke()).status).toBe(200);
+    const update = supabase.calls.find(
+      call => call.table === 'farm_subscriptions' && call.operation === 'update',
+    );
+    expect(update?.payload).toMatchObject({ status: 'active', past_due_since: null });
+  });
+
+  it('keeps a newer failure anchor when an older invoice.paid is delivered late', async () => {
+    mocks.constructEvent.mockReturnValueOnce({
+      id: 'evt_invoice_paid_old',
+      type: 'invoice.paid',
+      created: 1799000000,
+      data: { object: { subscription: 'sub_current' } },
+    });
+    mocks.retrieveSubscription.mockResolvedValueOnce({ ...currentSubscription, status: 'past_due' });
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result(), result());
+    supabase.queue(
+      'farm_subscriptions',
+      result({
+        data: {
+          id: 'row-1',
+          owner_user_id: 'user-1',
+          stripe_subscription_id: 'sub_current',
+          stripe_subscription_created_at: '2026-09-09T12:00:00.000Z',
+          updated_at: '2026-09-09T11:59:00.000Z',
+          past_due_since: '2027-01-08T00:00:00.000Z',
+        },
+        count: null,
+      }),
+      result(),
+    );
+
+    expect((await invoke()).status).toBe(200);
+    const update = supabase.calls.find(
+      call => call.table === 'farm_subscriptions' && call.operation === 'update',
+    );
+    expect(update?.payload).toMatchObject({
+      status: 'past_due',
+      past_due_since: '2027-01-08T00:00:00.000Z',
     });
   });
 

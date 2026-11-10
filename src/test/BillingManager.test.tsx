@@ -64,6 +64,7 @@ function makeSubscription(overrides: Partial<FarmSubscription> = {}): FarmSubscr
     status: 'active',
     trial_ends_at: '2027-01-08T00:00:00.000Z',
     current_period_end: '2027-01-08T00:00:00.000Z',
+    past_due_since: null,
     cancel_at_period_end: false,
     stripe_customer_id: 'cus_test_1',
     stripe_subscription_id: 'sub_stripe_1',

@@ -5,7 +5,9 @@ import {
   buildSubscriptionUpsert,
   isUniqueViolation,
   readSubscriptionMetadata,
+  resolvePastDueSince,
   shouldApplySubscriptionSnapshot,
+  type PastDueSignal,
   type StripeSubscriptionLike,
 } from '../server/billing.js';
 
@@ -62,11 +64,19 @@ async function readRawBody(req: WebhookRequest): Promise<Buffer> {
  * retries; returns false when the payload cannot be attributed to a farm
  * (a permanent condition the handler acknowledges as ignored).
  */
+export interface EntitlementUpsertOptions {
+  checkoutCompleted?: boolean;
+  /** Defaults to a subscription snapshot when the caller does not say. */
+  pastDueSignal?: PastDueSignal;
+  /** Stripe event or invoice timestamp (unix seconds). Omitted → processing time. */
+  eventEpochSeconds?: number | null;
+}
+
 export async function upsertFarmSubscriptionEntitlement(
   supabase: SupabaseClient,
   subscription: StripeSubscriptionLike,
   metadata: Record<string, string> | null | undefined,
-  options: { checkoutCompleted?: boolean } = {},
+  options: EntitlementUpsertOptions = {},
 ): Promise<boolean> {
   const { farmId, userId } = readSubscriptionMetadata(
     metadata ?? subscription.metadata ?? null,
@@ -78,7 +88,7 @@ export async function upsertFarmSubscriptionEntitlement(
 
   const { data: existing, error: selectError } = await supabase
     .from('farm_subscriptions')
-    .select('id, owner_user_id, stripe_subscription_id, stripe_subscription_created_at, updated_at')
+    .select('id, owner_user_id, stripe_subscription_id, stripe_subscription_created_at, updated_at, past_due_since')
     .eq('farm_id', farmId)
     .is('deleted_at', null)
     .maybeSingle();
@@ -125,8 +135,15 @@ export async function upsertFarmSubscriptionEntitlement(
     return false;
   }
 
+  const mapped = buildSubscriptionUpsert(subscription);
   const payload = {
-    ...buildSubscriptionUpsert(subscription),
+    ...mapped,
+    past_due_since: resolvePastDueSince({
+      existingPastDueSince: existing?.past_due_since ?? null,
+      status: mapped.status,
+      signal: options.pastDueSignal ?? 'subscription',
+      eventEpochSeconds: options.eventEpochSeconds,
+    }),
     updated_at: new Date().toISOString(),
   };
 
@@ -167,7 +184,7 @@ async function retrieveAndUpsertSubscription(
   supabase: SupabaseClient,
   subscriptionId: string,
   metadata: Record<string, string> | null | undefined,
-  options: { checkoutCompleted?: boolean } = {},
+  options: EntitlementUpsertOptions = {},
 ): Promise<boolean> {
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   return upsertFarmSubscriptionEntitlement(supabase, subscription, metadata, options);
@@ -187,6 +204,23 @@ function readInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   }).subscription;
   if (typeof legacy === 'string' && legacy) return legacy;
   if (legacy && typeof legacy === 'object' && legacy.id) return legacy.id;
+  return null;
+}
+
+/** Prefer the Stripe event time, then the invoice's paid or created time. */
+function readBillingEventEpoch(
+  event: { created?: number | null },
+  invoice?: {
+    created?: number | null;
+    status_transitions?: { paid_at?: number | null } | null;
+  } | null,
+): number | null {
+  if (typeof event.created === 'number' && Number.isFinite(event.created)) return event.created;
+  const paidAt = invoice?.status_transitions?.paid_at;
+  if (typeof paidAt === 'number' && Number.isFinite(paidAt)) return paidAt;
+  if (invoice && typeof invoice.created === 'number' && Number.isFinite(invoice.created)) {
+    return invoice.created;
+  }
   return null;
 }
 
@@ -279,7 +313,11 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
             supabase,
             subscriptionId,
             session.metadata ?? null,
-            { checkoutCompleted: true },
+            {
+              checkoutCompleted: true,
+              pastDueSignal: 'subscription',
+              eventEpochSeconds: event.created,
+            },
           );
         } else {
           console.warn('Ignoring completed Checkout session without matching AcreLedger farm evidence.');
@@ -289,25 +327,32 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
-        // Deleted subscriptions map to status "canceled"; the row is kept as
-        // history (soft state) and access is denied by status, not by deletion.
+        // Deleted subscriptions map to status "canceled"; the row is kept.
+        // A normal cancel leaves past_due_since null (Pro through the paid
+        // period). A cancel after a failed payment keeps the failure anchor.
         const subscription = event.data.object as Stripe.Subscription;
         await retrieveAndUpsertSubscription(
           stripe,
           supabase,
           subscription.id,
           subscription.metadata,
+          { pastDueSignal: 'subscription', eventEpochSeconds: event.created },
         );
         break;
       }
       case 'invoice.paid':
+      case 'invoice.payment_succeeded':
       case 'invoice.payment_failed': {
         // Renewals and dunning also emit customer.subscription.updated; this
         // re-sync guarantees the mirror stays correct if that event was missed.
+        // The invoice event itself arms or clears past_due_since.
         const invoice = event.data.object as Stripe.Invoice;
         const subscriptionId = readInvoiceSubscriptionId(invoice);
         if (subscriptionId) {
-          await retrieveAndUpsertSubscription(stripe, supabase, subscriptionId, null);
+          await retrieveAndUpsertSubscription(stripe, supabase, subscriptionId, null, {
+            pastDueSignal: event.type === 'invoice.payment_failed' ? 'payment_failed' : 'payment_succeeded',
+            eventEpochSeconds: readBillingEventEpoch(event, invoice),
+          });
         }
         break;
       }

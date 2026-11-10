@@ -822,8 +822,12 @@ The app is a permanent free record book; the paid plan is **Pro** ($299 per farm
 web-only purchase; iOS shows a US-storefront-only website link that fails closed). One server
 flag `ENTITLEMENTS_MODE = off | shadow | enforce` (default `off`) lives in `entitlement_config`.
 The server is the source of truth: `_farm_entitlement` resolves `free | paid | complimentary`
-(comp row wins; subscription `active`/`trialing`, or `past_due`/`canceled` before period end, is
-`paid`; anything else is `free`), `farm_entitlement` returns it to farm members with `enforced`,
+(comp row wins). `active` is `paid` until `current_period_end`. A failed renewal is `paid` for
+14 days from `farm_subscriptions.past_due_since` (`20261110160000_billing_past_due_since.sql`),
+then `free`, whether the row is `past_due`, `unpaid`, or `canceled`. `current_period_end` does
+not extend that grace. A normal cancel (`past_due_since` null) stays `paid` through
+`current_period_end`. `trialing`, `incomplete`, and a failure with no anchor are `free`.
+`farm_entitlement` returns the plan to farm members with `enforced`,
 and `assert_premium(farm, feature)` raises `P0402 premium_required:<feature>` (a no-op in `off`,
 logged to `entitlement_shadow_log` in `shadow`). The client `useEntitlement()` only displays
 (`isFreeTierLocked` = enforced and plan `free`) and never decides access.
@@ -876,8 +880,9 @@ for no row, `canceled`, or `incomplete`; `past_due`/`unpaid` owners see Manage b
 
 Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` is a property of each
 subscription item, not the Subscription. `resolveCurrentPeriodEnd` uses the latest item end and
-falls back to the legacy top-level field. Entitlement grace for `canceled`/`unpaid`/`past_due`
-depends on this value, so webhook tests should use the basil payload shape.
+falls back to the legacy top-level field. A normal cancel still ends Pro at that instant.
+Pro after a failed payment ends 14 days after `past_due_since`, so webhook tests should use
+the basil payload shape and must not treat an advanced `current_period_end` as grace.
 
 `api/stripe-webhook.ts` verifies the Stripe raw-body signature, claims `billing_webhook_events` as
 an idempotency ledger, fetches complete subscription state when needed, ignores stale replacement

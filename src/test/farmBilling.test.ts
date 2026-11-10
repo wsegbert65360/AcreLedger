@@ -5,14 +5,24 @@ import type { FarmSubscription } from '@/types/farm';
 
 const now = Date.parse('2026-10-25T12:00:00Z');
 describe('payment grace display math', () => {
-  it('adds 14 days to payment period end without changing entitlement rules', () => {
-    const subscription = { status: 'past_due', deleted_at: null, current_period_end: '2026-10-25T12:00:00Z' } as FarmSubscription;
-    expect(getPaymentGraceDays(subscription, now)).toBe(14);
-    expect(getPaymentGraceDays({ ...subscription, status: 'unpaid' }, now)).toBe(14);
-    expect(getPaymentGraceDays(subscription, now + 14 * 86400000)).toBe(0);
+  it('counts 14 days from past_due_since and ignores an advanced period end', () => {
+    const subscription = {
+      status: 'past_due',
+      deleted_at: null,
+      past_due_since: '2026-10-22T12:00:00Z',
+      current_period_end: '2027-10-25T12:00:00Z',
+    } as FarmSubscription;
+    expect(getPaymentGraceDays(subscription, now)).toBe(11);
+    expect(getPaymentGraceDays({ ...subscription, status: 'unpaid' }, now)).toBe(11);
+    expect(getPaymentGraceDays({ ...subscription, status: 'canceled' }, now)).toBe(11);
+    expect(getPaymentGraceDays({ ...subscription, past_due_since: '2026-10-25T12:00:00Z' }, now)).toBe(14);
+    expect(getPaymentGraceDays({ ...subscription, past_due_since: '2026-10-12T12:00:00Z' }, now)).toBe(1);
+    expect(getPaymentGraceDays(subscription, Date.parse('2026-11-05T12:00:00Z'))).toBe(0);
     expect(getPaymentGraceDays({ ...subscription, status: 'active' }, now)).toBe(0);
-    expect(getPaymentGraceDays({ ...subscription, current_period_end: null }, now)).toBe(0);
+    expect(getPaymentGraceDays({ ...subscription, past_due_since: null }, now)).toBe(0);
+    expect(getPaymentGraceDays({ ...subscription, past_due_since: null, current_period_end: null }, now)).toBe(0);
     expect(getPaymentGraceDays({ ...subscription, deleted_at: 'deleted' }, now)).toBe(0);
+    expect(getPaymentGraceDays(null, now)).toBe(0);
   });
 });
 

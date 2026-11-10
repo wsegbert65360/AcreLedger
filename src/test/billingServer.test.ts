@@ -16,6 +16,7 @@ import {
   parseBillingAllowlist,
   readSubscriptionMetadata,
   resolveCurrentPeriodEnd,
+  resolvePastDueSince,
   shouldApplySubscriptionSnapshot,
 } from '../../server/billing';
 
@@ -321,6 +322,145 @@ describe('current period end (Stripe basil API: field lives on items)', () => {
   });
 });
 
+describe('resolvePastDueSince', () => {
+  const anchor = '2027-01-08T00:00:00.000Z';
+  const anchorEpoch = 1799366400;
+  const laterEpoch = anchorEpoch + 3 * 24 * 60 * 60;
+  const earlierEpoch = anchorEpoch - 3 * 24 * 60 * 60;
+
+  it('sets the anchor once from a payment failure and does not overwrite it', () => {
+    const first = resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'past_due',
+      signal: 'payment_failed',
+      eventEpochSeconds: anchorEpoch,
+    });
+    expect(first).toBe(anchor);
+    expect(resolvePastDueSince({
+      existingPastDueSince: first,
+      status: 'past_due',
+      signal: 'payment_failed',
+      eventEpochSeconds: laterEpoch,
+    })).toBe(anchor);
+    expect(resolvePastDueSince({
+      existingPastDueSince: first,
+      status: 'unpaid',
+      signal: 'subscription',
+      eventEpochSeconds: laterEpoch,
+    })).toBe(anchor);
+    expect(resolvePastDueSince({
+      existingPastDueSince: first,
+      status: 'canceled',
+      signal: 'payment_failed',
+      eventEpochSeconds: laterEpoch,
+    })).toBe(anchor);
+  });
+
+  it('sets a missing anchor from a past_due or unpaid subscription update', () => {
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'past_due',
+      signal: 'subscription',
+      eventEpochSeconds: anchorEpoch,
+    })).toBe(anchor);
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'unpaid',
+      signal: 'subscription',
+      eventEpochSeconds: anchorEpoch,
+    })).toBe(anchor);
+  });
+
+  it('arms a dunning cancel from the failure event and leaves a normal cancel unset', () => {
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'canceled',
+      signal: 'payment_failed',
+      eventEpochSeconds: anchorEpoch,
+    })).toBe(anchor);
+    expect(resolvePastDueSince({
+      existingPastDueSince: anchor,
+      status: 'canceled',
+      signal: 'subscription',
+      eventEpochSeconds: laterEpoch,
+    })).toBe(anchor);
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'canceled',
+      signal: 'subscription',
+      eventEpochSeconds: laterEpoch,
+    })).toBeNull();
+  });
+
+  it('clears the anchor when payment succeeds or the live subscription is active', () => {
+    expect(resolvePastDueSince({
+      existingPastDueSince: anchor,
+      status: 'past_due',
+      signal: 'payment_succeeded',
+      eventEpochSeconds: laterEpoch,
+    })).toBeNull();
+    expect(resolvePastDueSince({
+      existingPastDueSince: anchor,
+      status: 'active',
+      signal: 'subscription',
+      eventEpochSeconds: laterEpoch,
+    })).toBeNull();
+    expect(resolvePastDueSince({
+      existingPastDueSince: anchor,
+      status: 'active',
+      signal: 'payment_succeeded',
+      eventEpochSeconds: laterEpoch,
+    })).toBeNull();
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'active',
+      signal: 'payment_failed',
+      eventEpochSeconds: laterEpoch,
+    })).toBeNull();
+  });
+
+  it('does not let an older paid event clear a newer failure anchor', () => {
+    expect(resolvePastDueSince({
+      existingPastDueSince: anchor,
+      status: 'past_due',
+      signal: 'payment_succeeded',
+      eventEpochSeconds: earlierEpoch,
+    })).toBe(anchor);
+    expect(resolvePastDueSince({
+      existingPastDueSince: anchor,
+      status: 'canceled',
+      signal: 'payment_succeeded',
+      eventEpochSeconds: earlierEpoch,
+    })).toBe(anchor);
+  });
+
+  it('uses now when Stripe did not send a timestamp', () => {
+    const now = new Date('2027-02-01T00:00:00.000Z');
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'past_due',
+      signal: 'payment_failed',
+      eventEpochSeconds: null,
+      now,
+    })).toBe(now.toISOString());
+  });
+
+  it('does not invent an anchor for trialing or incomplete subscription snapshots', () => {
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'trialing',
+      signal: 'subscription',
+      eventEpochSeconds: anchorEpoch,
+    })).toBeNull();
+    expect(resolvePastDueSince({
+      existingPastDueSince: null,
+      status: 'incomplete',
+      signal: 'subscription',
+      eventEpochSeconds: anchorEpoch,
+    })).toBeNull();
+  });
+});
+
 describe('shouldApplySubscriptionSnapshot', () => {
   const current = {
     stripe_subscription_id: 'sub_current',
@@ -376,6 +516,7 @@ describe('webhook plumbing helpers', () => {
       'customer.subscription.updated',
       'invoice.paid',
       'invoice.payment_failed',
+      'invoice.payment_succeeded',
     ]);
   });
 

@@ -61,7 +61,7 @@ export default function BillingNotices() {  const { farm_id, session } = useFarm
   return (
     <aside aria-label="Billing notices" className="mx-auto max-w-lg space-y-3 px-4 py-3 lg:max-w-5xl lg:px-8 print:hidden">
       <p role="status" className="rounded-2xl border border-harvest/30 bg-harvest/10 p-4 text-sm text-foreground">
-        Your payment didn't go through. Update your card in the next {graceDays} days to keep adding records. Your records stay safe either way.
+        Your payment didn't go through. Update your card in the next {graceDays} {graceDays === 1 ? 'day' : 'days'} to keep Pro. After that your farm moves to the free record book, and your records stay safe.
       </p>
     </aside>
   );

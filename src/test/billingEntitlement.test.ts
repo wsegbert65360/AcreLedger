@@ -20,6 +20,7 @@ function makeSubscription(overrides: Partial<FarmSubscription> = {}): FarmSubscr
     status: 'trialing',
     trial_ends_at: '2027-01-08T00:00:00.000Z',
     current_period_end: '2027-01-08T00:00:00.000Z',
+    past_due_since: null,
     cancel_at_period_end: false,
     stripe_customer_id: 'cus_test_1',
     stripe_subscription_id: 'sub_stripe_1',
@@ -34,6 +35,9 @@ function makeSubscription(overrides: Partial<FarmSubscription> = {}): FarmSubscr
 
 const BEFORE_PERIOD_END = '2027-01-01T00:00:00.000Z'; // 7 days before 2027-01-08
 const AFTER_PERIOD_END = '2027-01-20T00:00:00.000Z';
+const FAILURE_AT = '2027-01-08T00:00:00.000Z';
+/** A renewal invoice can move period end a year out before the charge fails. */
+const ADVANCED_PERIOD_END = '2028-01-08T00:00:00.000Z';
 
 describe('getFarmBillingAccess', () => {
   it('grants full access for trialing and active subscriptions', () => {
@@ -74,70 +78,123 @@ describe('getFarmBillingAccess', () => {
   });
 
   it('keeps past_due access on day 13 and at the exact +14-day grace edge', () => {
-    // Period ends 2027-01-08. Day 13 is inside the window. The inclusive edge
-    // matches the old +3-day rule: exactly graceDays later is still in grace.
+    // Failure started 2027-01-08. Day 13 is inside the window. The inclusive
+    // edge matches the old rule: exactly graceDays later is still in grace.
+    // A year-ahead current_period_end must not extend it.
+    const subscription = makeSubscription({
+      status: 'past_due',
+      past_due_since: FAILURE_AT,
+      current_period_end: ADVANCED_PERIOD_END,
+    });
     for (const iso of ['2027-01-21T00:00:00.000Z', '2027-01-22T00:00:00.000Z']) {
-      const access = getFarmBillingAccess({
-        subscription: makeSubscription({ status: 'past_due' }),
-        nowMs: Date.parse(iso),
-      });
+      const access = getFarmBillingAccess({ subscription, nowMs: Date.parse(iso) });
       expect(access).toEqual({ hasAccess: true, inGrace: true, phase: 'grace', status: 'past_due' });
     }
   });
 
   it('locks past_due one millisecond after the +14-day edge and on day 15', () => {
+    const subscription = makeSubscription({
+      status: 'past_due',
+      past_due_since: FAILURE_AT,
+      current_period_end: ADVANCED_PERIOD_END,
+    });
     for (const iso of ['2027-01-22T00:00:00.001Z', '2027-01-23T00:00:00.000Z']) {
-      const access = getFarmBillingAccess({
-        subscription: makeSubscription({ status: 'past_due' }),
-        nowMs: Date.parse(iso),
-      });
+      const access = getFarmBillingAccess({ subscription, nowMs: Date.parse(iso) });
       expect(access.hasAccess).toBe(false);
       expect(access.phase).toBe('locked');
     }
   });
 
-  it('honors a custom grace window for past_due', () => {
-    const nowMs = Date.parse('2027-01-13T00:00:00.000Z'); // +5 days past period end
+  it('honors a custom grace window measured from past_due_since', () => {
+    const nowMs = Date.parse('2027-01-13T00:00:00.000Z'); // +5 days after the failure
     const options = {
-      subscription: makeSubscription({ status: 'past_due' }),
+      subscription: makeSubscription({
+        status: 'past_due',
+        past_due_since: FAILURE_AT,
+        current_period_end: ADVANCED_PERIOD_END,
+      }),
       nowMs,
     };
     expect(getFarmBillingAccess({ ...options, graceDays: 7 }).hasAccess).toBe(true);
     expect(getFarmBillingAccess({ ...options, graceDays: 3 }).hasAccess).toBe(false);
   });
 
-  it('anchors past_due grace on trial_ends_at when current_period_end is missing', () => {
-    const nowMs = Date.parse('2027-01-08T00:00:00.000Z'); // exactly trial end
+  it('does not anchor a payment failure on trial_ends_at or current_period_end', () => {
     const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due', current_period_end: null }),
-      nowMs,
+      subscription: makeSubscription({
+        status: 'past_due',
+        past_due_since: null,
+        current_period_end: ADVANCED_PERIOD_END,
+        trial_ends_at: '2027-06-01T00:00:00.000Z',
+      }),
+      nowMs: Date.parse(FAILURE_AT),
     });
-    expect(access.hasAccess).toBe(true);
+    expect(access.hasAccess).toBe(false);
+    expect(access.phase).toBe('locked');
   });
 
   it('fails closed for past_due with no recoverable time anchor', () => {
     const access = getFarmBillingAccess({
-      subscription: makeSubscription({ status: 'past_due', current_period_end: null, trial_ends_at: null }),
+      subscription: makeSubscription({
+        status: 'past_due',
+        current_period_end: ADVANCED_PERIOD_END,
+        past_due_since: null,
+        trial_ends_at: null,
+      }),
       nowMs: Date.now(),
     });
     expect(access.hasAccess).toBe(false);
     expect(access.phase).toBe('locked');
   });
 
-  it('keeps canceled and unpaid access until the paid period ends', () => {
-    for (const status of ['canceled', 'unpaid'] as const) {
+  it('keeps a normal cancel through the paid period and does not do that for unpaid', () => {
+    const within = getFarmBillingAccess({
+      subscription: makeSubscription({ status: 'canceled', past_due_since: null }),
+      nowMs: Date.parse(BEFORE_PERIOD_END),
+    });
+    expect(within).toEqual({ hasAccess: true, inGrace: true, phase: 'grace', status: 'canceled' });
+
+    const after = getFarmBillingAccess({
+      subscription: makeSubscription({ status: 'canceled', past_due_since: null }),
+      nowMs: Date.parse(AFTER_PERIOD_END),
+    });
+    expect(after.hasAccess).toBe(false);
+    expect(after.phase).toBe('locked');
+
+    const unpaid = getFarmBillingAccess({
+      subscription: makeSubscription({
+        status: 'unpaid',
+        past_due_since: null,
+        current_period_end: ADVANCED_PERIOD_END,
+      }),
+      nowMs: Date.parse(BEFORE_PERIOD_END),
+    });
+    expect(unpaid.hasAccess).toBe(false);
+    expect(unpaid.phase).toBe('locked');
+  });
+
+  it('ends failed-payment access at past_due_since + 14 days for unpaid and canceled', () => {
+    for (const status of ['unpaid', 'canceled'] as const) {
       const within = getFarmBillingAccess({
-        subscription: makeSubscription({ status }),
-        nowMs: Date.parse(BEFORE_PERIOD_END),
+        subscription: makeSubscription({
+          status,
+          past_due_since: FAILURE_AT,
+          current_period_end: ADVANCED_PERIOD_END,
+        }),
+        nowMs: Date.parse('2027-01-21T00:00:00.000Z'),
       });
       expect(within).toEqual({ hasAccess: true, inGrace: true, phase: 'grace', status });
 
-      const after = getFarmBillingAccess({
-        subscription: makeSubscription({ status }),
-        nowMs: Date.parse(AFTER_PERIOD_END),
+      const expired = getFarmBillingAccess({
+        subscription: makeSubscription({
+          status,
+          past_due_since: FAILURE_AT,
+          current_period_end: ADVANCED_PERIOD_END,
+        }),
+        nowMs: Date.parse('2027-01-23T00:00:00.000Z'),
       });
-      expect(after.hasAccess).toBe(false);
-      expect(after.phase).toBe('locked');
+      expect(expired.hasAccess).toBe(false);
+      expect(expired.phase).toBe('locked');
     }
   });
 
@@ -156,7 +213,8 @@ describe('getFarmBillingAccess', () => {
     const access = getFarmBillingAccess({
       subscription: makeSubscription({
         status: 'past_due',
-        current_period_end: 'not-a-date',
+        past_due_since: 'not-a-date',
+        current_period_end: ADVANCED_PERIOD_END,
         trial_ends_at: null,
       }),
       nowMs: Date.now(),
