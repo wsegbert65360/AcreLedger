@@ -3,7 +3,7 @@
 // in supabase/migrations/20261107000000_entitlements_core.sql; src/test/entitlementsConstants.test.ts
 // fails if they drift. null = unlimited.
 
-export type EntitlementPlan = 'free' | 'paid' | 'complimentary' | 'legacy_trial';
+export type EntitlementPlan = 'free' | 'paid' | 'complimentary';
 
 export interface Entitlement {
   plan: EntitlementPlan;
@@ -63,7 +63,7 @@ export function parseEntitlementRow(row: unknown): Entitlement | null {
   if (!row || typeof row !== 'object') return null;
   const r = row as Record<string, unknown>;
   const plan = r.plan;
-  if (plan !== 'free' && plan !== 'paid' && plan !== 'complimentary' && plan !== 'legacy_trial') return null;
+  if (plan !== 'free' && plan !== 'paid' && plan !== 'complimentary') return null;
   const num = (v: unknown) => (typeof v === 'number' ? v : null);
   return {
     plan,

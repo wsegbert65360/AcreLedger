@@ -186,14 +186,6 @@ function fingerprint(value: string): string {
   return hash.toString(36);
 }
 
-/** Reuse only the server-stamped farm deadline; never create a new Stripe trial. */
-export function getCheckoutTrialEnd(trialEndsAt: string | null | undefined, now = Date.now()): number | undefined {
-  if (!trialEndsAt || !Number.isFinite(now)) return undefined;
-  const trialEnd = Math.floor(Date.parse(trialEndsAt) / 1000);
-  return Number.isFinite(trialEnd) && trialEnd > Math.floor(now / 1000) + 48 * 60 * 60
-    ? trialEnd : undefined;
-}
-
 /**
  * Reuse the farm's existing Stripe customer on re-checkout so payment methods
  * and invoices stay on one customer; otherwise seed a new one from the email.

@@ -67,3 +67,11 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
 ## Rough remaining effort
 Xcode steps and device test: about an hour. Staging shadow run: half a day. Copy and public-page edits: your call on
 wording, then about an hour. Flip `shadow`, watch the log for a few days, then `enforce`.
+## Trial removal (2026-11-09)
+
+There is no trial and no customer is on one. Done on `feat/free-tier`:
+- Migration `20261109210000_remove_trial.sql`: `ensure_user_farm()` never sets trial dates or a trial claim, and `_farm_entitlement` no longer has a `legacy_trial` plan. Trial columns and `trial_claims` stay (nothing deleted).
+- Stripe checkout never starts a trial (`api/create-checkout-session.ts`; `getCheckoutTrialEnd` removed).
+- The trial banners are gone. `BillingNotices` keeps only the failed-payment notice. The billing screen shows "Free record book. No card needed. Pro is $299 per farm per year."
+- Manual production step (not done): clear `trial_ends_at` on the owner and test farms that still carry one. They already resolve to the free plan, so this is cleanup only.
+- Still to edit after attorney review: Landing.tsx, Terms.tsx, Refund.tsx trial wording, and the "122-day" text in the Project description.

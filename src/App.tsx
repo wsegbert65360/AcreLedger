@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 
 import { Auth } from "@/components/Auth";
-import FarmTrialBanners from "@/components/FarmTrialBanners";
+import BillingNotices from "@/components/BillingNotices";
 import BottomNav from "@/components/BottomNav";
 import CoachmarkOverlay from "@/components/CoachmarkOverlay";
 import DeletionPending from "@/components/DeletionPending";
@@ -365,7 +365,7 @@ const AppContent = () => {
       <OfflineBanner />
       <Sidebar />
       <div className="lg:pl-60 print:pl-0">
-        <FarmTrialBanners />
+        <BillingNotices />
         <AnimatedRoutes />
       </div>
       <BottomNav />

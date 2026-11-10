@@ -37,21 +37,22 @@ try {
   const trial = await mig('20261021194611_farm_trial_columns.sql');
   const core = await mig('20261107000000_entitlements_core.sql');
   const free = await mig('20261107010000_new_farms_start_free.sql');
+  const noTrial = await mig('20261109210000_remove_trial.sql');
   await db.exec(trial); await db.exec(core); await db.exec(free); await db.exec(free); // replay
+  await db.exec(noTrial); await db.exec(noTrial); // replay
 
-  // Mode off (default): exactly today's behavior, a 3-month trial plus a claim.
+  // Mode off: there is no trial in any mode. Free farm, no trial dates, no claim.
   const offFarm = await signup(offUser);
-  const off = (await db.query(`SELECT trial_ends_at = trial_started_at + interval '3 months' AS months, trial_started_at IS NOT NULL AS stamped FROM public.farms WHERE id = '${offFarm}'`)).rows[0];
-  assert.deepEqual(off, { months: true, stamped: true });
-  assert.equal(await plan(offFarm), 'legacy_trial');
-  assert.equal(await claims(), 1);
+  assert.deepEqual(await farmRow(offFarm), { trial_started_at: null, trial_ends_at: null });
+  assert.equal(await plan(offFarm), 'free');
+  assert.equal(await claims(), 0);
 
   // Shadow: new farm starts free, no trial, no claim.
   await mode('shadow');
   const shadowFarm = await signup(shadowUser);
   assert.deepEqual(await farmRow(shadowFarm), { trial_started_at: null, trial_ends_at: null });
   assert.equal(await plan(shadowFarm), 'free');
-  assert.equal(await claims(), 1);
+  assert.equal(await claims(), 0);
 
   // Enforce: same, and a user with no email can still create a farm (no trial identity needed).
   await mode('enforce');
@@ -60,20 +61,21 @@ try {
   assert.equal(await plan(enforceFarm), 'free');
   const noEmailFarm = await signup(noEmailUser);
   assert.equal(await plan(noEmailFarm), 'free');
-  assert.equal(await claims(), 1);
+  assert.equal(await claims(), 0);
 
   // Idempotent for an existing farm; active_season still initialized.
   assert.equal(await signup(enforceUser), enforceFarm);
   assert.equal((await db.query(`SELECT active_season = extract(year FROM now())::int AS ok FROM public.profiles WHERE id = '${enforceUser}'`)).rows[0].ok, true);
 
-  // Existing trial farm is untouched by the mode change (still legacy_trial until its date).
-  assert.equal(await plan(offFarm), 'legacy_trial');
+  // A farm that still carries a future trial date (old owner/test farms) is free: the date grants nothing.
+  await db.exec(`UPDATE public.farms SET trial_ends_at = now() + interval '30 days' WHERE id = '${offFarm}'`);
+  assert.equal(await plan(offFarm), 'free');
   // Auth is still required; non-owner execution grants unchanged.
   await db.exec(`RESET ROLE; SELECT set_config('request.uid', '', false)`);
   await assert.rejects(db.query('SELECT public.ensure_user_farm()'), /Authentication required/);
   await db.exec('SET ROLE anon');
   await assert.rejects(db.query('SELECT public.ensure_user_farm()'), /permission denied/);
-  console.log('New-farm free start: replay, mode off legacy trial, shadow/enforce free start, no-email signup passed.');
+  console.log('New-farm free start: replay, no trial in any mode, stale trial date grants nothing, no-email signup passed.');
 } finally {
   await db.close();
 }

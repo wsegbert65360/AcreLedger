@@ -74,7 +74,7 @@ vi.mock('@/context/AskAcreLedgerContext', () => ({
 // Chrome components are irrelevant to routing; keep the tree light.
 vi.mock('@/components/Sidebar', () => ({ default: () => null }));
 vi.mock('@/components/BottomNav', () => ({ default: () => null }));
-vi.mock('@/components/FarmTrialBanners', () => ({ default: () => null }));
+vi.mock('@/components/BillingNotices', () => ({ default: () => null }));
 vi.mock('@/components/OfflineBanner', () => ({ default: () => null }));
 vi.mock('@/components/SeasonRolloverModal', () => ({ default: () => null }));
 vi.mock('@/components/QuickAddDialog', () => ({ default: () => null }));

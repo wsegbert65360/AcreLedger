@@ -6,14 +6,14 @@ import { CreditCard } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useFarmTrial, useTrialClock } from '@/hooks/useFarmTrial';
+import { useFarmComp, useNowClock } from '@/hooks/useFarmComp';
 import {
   fetchBillingEligibility,
   getCachedBillingEligibility,
   isBillingUiAvailable,
   requestBillingSession,
 } from '@/lib/billing';
-import { formatFarmTrialDate, getFarmTrialStatus, isFarmComped } from '@/lib/farmTrial';
+import { formatBillingDate, isFarmComped } from '@/lib/farmBilling';
 import { freshAccessToken } from '@/lib/freshAccessToken';
 import { native } from '@/lib/native';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +28,6 @@ function getStatusBadge(subscription: FarmSubscription | null, { allowlisted }: 
   }
   switch (subscription.status) {
     case 'trialing':
-      return { label: 'Free trial', className: 'bg-plant/10 text-plant border-plant/20' };
     case 'active':
       return { label: 'Active', className: 'bg-plant/10 text-plant border-plant/20' };
     case 'past_due':
@@ -47,7 +46,6 @@ function getStatusLine(subscription: FarmSubscription | null): string {
   }
   switch (subscription.status) {
     case 'trialing':
-      return `Full access on your free trial through ${formatIsoDate(subscription.trial_ends_at) || 'your trial end date'}. $299/year starts after the trial.`;
     case 'active':
       return subscription.cancel_at_period_end
         ? `Active through ${formatIsoDate(subscription.current_period_end) || 'your period end date'}, then cancels.`
@@ -63,10 +61,9 @@ function getStatusLine(subscription: FarmSubscription | null): string {
 }
 
 export default function BillingManager() {
-  const farmTrial = useFarmTrial();
-  const now = useTrialClock();
-  const comped = isFarmComped(farmTrial?.comp, now);
-  const trialActive = getFarmTrialStatus(farmTrial?.trial_ends_at, now).phase === 'active';
+  const farmComp = useFarmComp();
+  const now = useNowClock();
+  const comped = isFarmComped(farmComp, now);
   const billingUiEnabled = isBillingUiAvailable();
 
   const { session, farm_id } = useFarm();
@@ -224,17 +221,11 @@ export default function BillingManager() {
       </CardHeader>
       <CardContent className="space-y-3">
         {comped ? (
-          <p className="text-sm text-foreground">Complimentary access{farmTrial?.comp?.expires_at ? ` until ${formatFarmTrialDate(farmTrial.comp.expires_at)}` : ''}</p>
-        ) : trialActive && (
-          <section aria-label="Farm free trial" className="space-y-2">
-            <p className="text-sm text-foreground">Free trial: full access until {formatFarmTrialDate(farmTrial?.trial_ends_at)}. No card needed.</p>
-            {farmTrial?.trial_started_at && <p className="text-sm text-muted-foreground">Trial started {formatFarmTrialDate(farmTrial.trial_started_at)} · ends {formatFarmTrialDate(farmTrial.trial_ends_at)}</p>}
-            <p className="text-sm text-muted-foreground">Your free trial started when you set up this farm. Each farm gets one.</p>
-          </section>
-        )}
+          <p className="text-sm text-foreground">Complimentary access{farmComp?.expires_at ? ` until ${formatBillingDate(farmComp.expires_at)}` : ''}</p>
+        ) : null}
         {!eligibilityKnown ? null : !allowlisted ? (
           <p className="text-sm text-muted-foreground">
-            3-month free trial, no card needed. Then $299 per farm per year.
+            Free record book. No card needed. Pro is $299 per farm per year.
           </p>
         ) : (
           <>
@@ -271,7 +262,7 @@ export default function BillingManager() {
             )}
             {canManage && subscription == null && (
               <p className="text-xs text-muted-foreground">
-                3-month free trial, no card needed. Then $299 per farm per year.
+                Free record book. No card needed. Pro is $299 per farm per year.
               </p>
             )}
           </>

@@ -40,7 +40,7 @@ describe('entitlement helpers', () => {
   });
 
   it('treats every non-free plan as premium', () => {
-    expect(['free', 'paid', 'complimentary', 'legacy_trial'].map(p => isPremiumPlan(p as never))).toEqual([false, true, true, true]);
+    expect(['free', 'paid', 'complimentary'].map(p => isPremiumPlan(p as never))).toEqual([false, true, true]);
   });
 
   it('expires a cached premium plan once premiumUntil passes (offline safety)', () => {

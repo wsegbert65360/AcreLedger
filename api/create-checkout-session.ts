@@ -5,7 +5,6 @@ import {
   buildCheckoutCustomerParams,
   buildCheckoutIdempotencyKey,
   canStartCheckout,
-  getCheckoutTrialEnd,
   hasLiveStripeSubscription,
   isBillingAllowlisted,
 } from '../server/billing.js';
@@ -163,18 +162,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       });
     }
 
-    // Resolve the existing trial deadline using this caller's RLS-scoped farm.
-    const { data: farm, error: farmError } = await supabase
-      .from('farms')
-      .select('trial_ends_at')
-      .eq('id', farmId)
-      .maybeSingle();
-    if (farmError || !farm) {
-      console.error('Failed to resolve farm trial:', farmError?.message ?? 'Farm not found');
-      return res.status(500).json({ error: 'Could not verify farm trial' });
-    }
-    const trialEnd = getCheckoutTrialEnd(farm.trial_ends_at);
-
     // ---------- Hosted Checkout ----------
     if (!origin) {
       return res.status(400).json({ error: 'Missing origin header' });
@@ -208,12 +195,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'subscription',
-          // Checkout collects a card without extending the existing farm trial.
+          // There is no trial: checkout charges the card for Pro right away.
           payment_method_collection: 'always',
           line_items: [{ price: billing.config.priceId, quantity: 1 }],
           subscription_data: {
-            // Stripe needs more than 48 hours remaining for a trial.
-            ...(trialEnd === undefined ? {} : { trial_end: trialEnd }),
             metadata: { farm_id: farmId, user_id: user.id },
           },
           metadata: { farm_id: farmId, user_id: user.id },
@@ -223,7 +208,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           success_url: `${origin}/settings?billing=success`,
           cancel_url: `${origin}/settings?billing=cancelled`,
         },
-        { idempotencyKey: buildCheckoutIdempotencyKey(farmId, existing, `${origin}|${email ?? ''}|${trialEnd ?? 'no-trial'}`) },
+        { idempotencyKey: buildCheckoutIdempotencyKey(farmId, existing, `${origin}|${email ?? ''}`) },
       );
       if (!session.url) {
         return res.status(502).json({ error: 'Stripe did not return a checkout URL' });

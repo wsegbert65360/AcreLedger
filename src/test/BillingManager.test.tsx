@@ -177,26 +177,26 @@ describe('BillingManager', () => {
     expect(screen.queryByRole('button', { name: /subscribe|reactivate subscription/i })).toBeNull();
   });
 
-  it('shows approved trial copy without any checkout action for non-allowlisted users', async () => {
+  it('shows the free record book copy without any checkout action for non-allowlisted users', async () => {
     stubBillingFetch({ allowlisted: false });
     renderBilling();
 
-    expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
-  it('treats a fetch error or non-2xx eligibility response as unavailable billing with trial copy', async () => {
+  it('treats a fetch error or non-2xx eligibility response as unavailable billing with the free record book copy', async () => {
     stubBillingFetch({ eligibilityError: new Error('network down') });
     const { unmount } = renderBilling();
-    expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     unmount();
 
     clearBillingEligibilityCache();
     stubBillingFetch({ eligibilityStatus: 500, allowlisted: true });
     renderBilling();
-    expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
@@ -209,7 +209,7 @@ describe('BillingManager', () => {
 
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
-    expect(screen.queryByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeNull();
+    expect(screen.queryByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeNull();
   });
 
   it('does not show another user\'s cached allowlisted answer', async () => {
@@ -251,7 +251,7 @@ describe('BillingManager', () => {
     );
 
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
-    expect(screen.queryByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeNull();
+    expect(screen.queryByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeNull();
   });
 
   it('ignores a late in-flight eligibility result from a previous user', async () => {
@@ -295,13 +295,13 @@ describe('BillingManager', () => {
     await act(async () => {
       for (const resolve of resolvers) resolve(eligibilityResponse(false));
     });
-    expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
 
     await act(async () => {
       for (const resolve of previousResolvers) resolve(eligibilityResponse(true));
     });
 
-    expect(screen.getByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
@@ -335,7 +335,7 @@ describe('BillingManager', () => {
     });
     renderBilling();
 
-    expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/billing-eligibility'))).toHaveLength(2);
   });
@@ -375,15 +375,15 @@ describe('BillingManager', () => {
     });
     renderBilling();
 
-    expect(await screen.findByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
-  it('offers the trial checkout to an allowlisted farm without a subscription', async () => {
+  it('offers checkout to an allowlisted farm without a subscription', async () => {
     renderBilling();
 
     expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
-    expect(screen.getByText('3-month free trial, no card needed. Then $299 per farm per year.')).toBeInTheDocument();
+    expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 

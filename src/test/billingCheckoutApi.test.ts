@@ -89,7 +89,7 @@ describe('create checkout session API', () => {
     vi.clearAllMocks();
   });
 
-  it('creates the configured annual checkout with the existing farm deadline and farm-scoped idempotency', async () => {
+  it('creates the configured annual checkout with no trial and farm-scoped idempotency', async () => {
     const request: RequestInput = {
       method: 'POST',
       headers: {
@@ -109,7 +109,6 @@ describe('create checkout session API', () => {
         payment_method_collection: 'always',
         line_items: [{ price: 'price_test', quantity: 1 }],
         subscription_data: {
-          trial_end: Date.parse(farmTrialEndsAt!) / 1000,
           metadata: { farm_id: 'farm-1', user_id: 'user-1' },
         },
         metadata: { farm_id: 'farm-1', user_id: 'user-1' },
@@ -122,7 +121,7 @@ describe('create checkout session API', () => {
     );
   });
 
-  it.each(['2026-10-27T12:00:00Z', '2026-10-26T12:00:00Z', '2026-10-24T12:00:00Z', null])('creates no trial when the server deadline is %s', async deadline => {
+  it.each(['2026-10-27T12:00:00Z', '2026-10-26T12:00:00Z', '2026-10-24T12:00:00Z', null])('creates no trial even when the farm still carries a stored date (%s)', async deadline => {
     farmTrialEndsAt = deadline;
     const result = createResponse();
     await handler({ method: 'POST', headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' }, query: {} }, result.response);
@@ -130,13 +129,6 @@ describe('create checkout session API', () => {
     const params = mocks.createCheckoutSession.mock.calls[0][0];
     expect(params.subscription_data).not.toHaveProperty('trial_end');
     expect(params.subscription_data).not.toHaveProperty('trial_period_days');
-  });
-  it('fails closed when the farm deadline cannot be read', async () => {
-    farmLookupError = { message: 'read failed' };
-    const result = createResponse();
-    await handler({ method: 'POST', headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' }, query: {} }, result.response);
-    expect(result.state.status).toBe(500);
-    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('cleans quoted or padded Supabase env values before creating the client', async () => {

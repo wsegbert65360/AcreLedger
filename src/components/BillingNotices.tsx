@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-
-import { Button } from '@/components/ui/button';
-import { useFarmTrial, useTrialClock } from '@/hooks/useFarmTrial';
+import { useNowClock } from '@/hooks/useFarmComp';
 import { fetchBillingEligibility, getCachedBillingEligibility, isBillingUiAvailable } from '@/lib/billing';
-import { isFarmComped, getFarmTrialStatus, getPaymentGraceDays, getTrialBannerThreshold, getTrialDaysLeftOverride } from '@/lib/farmTrial';
+import { getPaymentGraceDays } from '@/lib/farmBilling';
 import { freshAccessToken } from '@/lib/freshAccessToken';
 import * as native from '@/lib/native';
 import { supabase } from '@/lib/supabase';
@@ -12,16 +9,12 @@ import { useFarm } from '@/store/farmStore';
 import type { BillingEligibility } from '@/lib/billing';
 import type { FarmSubscription } from '@/types/farm';
 
-export default function FarmTrialBanners() {
-  const { search } = useLocation();
-  const { farm_id, session } = useFarm();
-  const farm = useFarmTrial();
-  const now = useTrialClock();
+export default function BillingNotices() {  const { farm_id, session } = useFarm();
+  const now = useNowClock();
   const userId = session?.user?.id;
   const billingAvailable = !native.isNativePlatform() && isBillingUiAvailable();
   const [eligibility, setEligibility] = useState<{ userId: string; capabilities: BillingEligibility } | null>(null);
   const [payment, setPayment] = useState<{ farmId: string; userId: string; subscription: FarmSubscription | null } | null>(null);
-  const [dismissed, setDismissed] = useState<string | null>(null);
 
   useEffect(() => {
     if (!billingAvailable || !userId) return;
@@ -59,34 +52,17 @@ export default function FarmTrialBanners() {
     return () => { cancelled = true; };
   }, [liveCharges, farm_id, userId]);
 
-  // The native app is a free companion (App Review 3.1.3(f)): no trial or payment wording.
+  // The native app is a free companion (App Review 3.1.3(f)): no payment wording.
   if (native.isNativePlatform() || !farm_id || !userId) return null;
-  const daysOverride = getTrialDaysLeftOverride(import.meta.env.VITE_VERCEL_ENV, search);
-  const trial = daysOverride === null
-    ? getFarmTrialStatus(farm?.trial_ends_at, now)
-    : { phase: daysOverride > 0 ? 'active' : 'ended', daysLeft: daysOverride };
-  const threshold = trial.phase === 'active' ? getTrialBannerThreshold(trial.daysLeft) : null;
-  const reminderKey = `${userId}:${farm_id}:${farm?.trial_ends_at}:${threshold}`;
-  const canSubscribe = billingAvailable && eligibility?.userId === userId && eligibility.capabilities.allowlisted && eligibility.capabilities.checkoutEnabled;
   const graceDays = liveCharges && payment?.farmId === farm_id && payment?.userId === userId
     ? getPaymentGraceDays(payment.subscription, now) : 0;
-  const showTrial = !isFarmComped(farm?.comp, now) && threshold !== null && dismissed !== reminderKey;
-  if (!showTrial && graceDays <= 0) return null;
+  if (graceDays <= 0) return null;
 
   return (
-    <aside aria-label="Farm trial notices" className="mx-auto max-w-lg space-y-3 px-4 py-3 lg:max-w-5xl lg:px-8 print:hidden">
-      {showTrial && (
-        <div role="status" className="flex flex-wrap items-center gap-3 rounded-2xl border border-plant/30 bg-plant/10 p-4 text-foreground">
-          <p className="flex-1 text-sm">{trial.daysLeft} days left in your free trial.</p>
-          {canSubscribe && <Button asChild className="min-h-11"><Link to="/settings?section=billing">Subscribe</Link></Button>}
-          <Button variant="ghost" className="min-h-11" aria-label="Dismiss trial reminder" onClick={() => setDismissed(reminderKey)}>Dismiss</Button>
-        </div>
-      )}
-      {graceDays > 0 && (
-        <p role="status" className="rounded-2xl border border-harvest/30 bg-harvest/10 p-4 text-sm text-foreground">
-          Your payment didn't go through. Update your card in the next {graceDays} days to keep adding records. Your records stay safe either way.
-        </p>
-      )}
+    <aside aria-label="Billing notices" className="mx-auto max-w-lg space-y-3 px-4 py-3 lg:max-w-5xl lg:px-8 print:hidden">
+      <p role="status" className="rounded-2xl border border-harvest/30 bg-harvest/10 p-4 text-sm text-foreground">
+        Your payment didn't go through. Update your card in the next {graceDays} days to keep adding records. Your records stay safe either way.
+      </p>
     </aside>
   );
 }

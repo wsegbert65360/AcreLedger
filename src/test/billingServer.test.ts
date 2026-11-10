@@ -17,7 +17,6 @@ import {
   readSubscriptionMetadata,
   resolveCurrentPeriodEnd,
   shouldApplySubscriptionSnapshot,
-  getCheckoutTrialEnd,
 } from '../../server/billing';
 
 const TEST_ENV = {
@@ -185,16 +184,6 @@ describe('buildCheckoutIdempotencyKey request fingerprint', () => {
     expect(a).toMatch(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/);
     expect(a).not.toBe(b);
     expect(buildCheckoutIdempotencyKey('farm-1', null, 'https://a.example|x@y.com')).toBe(a);
-  });
-});
-
-describe('getCheckoutTrialEnd', () => {
-  const now = Date.parse('2026-10-25T12:00:00Z');
-  it('keeps the exact server deadline when more than 48 hours remain', () => {
-    expect(getCheckoutTrialEnd('2026-11-01T12:00:00Z', now)).toBe(Date.parse('2026-11-01T12:00:00Z') / 1000);
-  });
-  it.each(['2026-10-27T12:00:00Z', '2026-10-26T12:00:00Z', '2026-10-24T12:00:00Z', null, undefined, 'invalid'])('grants no fresh trial for %s', deadline => {
-    expect(getCheckoutTrialEnd(deadline, now)).toBeUndefined();
   });
 });
 

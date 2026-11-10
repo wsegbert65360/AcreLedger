@@ -28,7 +28,6 @@ export const ENTITLEMENT_COPY = {
   planFreeName: 'Free plan',
   planPaidName: 'Pro',
   planComplimentaryName: 'Complimentary access',
-  planTrialName: 'Free trial',
   planFreeSummary: 'Everything you need to keep your records, free. Pro adds reports and extra tools.',
   planUpgradeLink: 'See Pro',
   planUpgradeLinkWebsite: 'See Pro on our website',
@@ -40,7 +39,6 @@ export function planDisplayName(plan: EntitlementPlan): string {
   switch (plan) {
     case 'paid': return ENTITLEMENT_COPY.planPaidName;
     case 'complimentary': return ENTITLEMENT_COPY.planComplimentaryName;
-    case 'legacy_trial': return ENTITLEMENT_COPY.planTrialName;
     default: return ENTITLEMENT_COPY.planFreeName;
   }
 }
