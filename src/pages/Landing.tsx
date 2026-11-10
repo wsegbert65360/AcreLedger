@@ -70,7 +70,7 @@ const features = [
     accent: ACCENTS.red,
     title: 'Your records stay yours',
     copy:
-      'Export what you logged on the free book or on Pro. We still back up a free farm\u2019s data. Restoring a backup is part of Pro.',
+      'Export what you logged on the free book or on Pro. We back up a free farm\u2019s data too. Restoring a backup is part of Pro.',
   },
 ];
 
@@ -84,17 +84,17 @@ const gallery = [
   },
   {
     src: reportsShot,
-    alt: 'AcreLedger reports screen showing the FSA-578 acreage worksheet ready to export, with all fields ready',
+    alt: 'AcreLedger Pro reports screen showing the FSA-578 acreage worksheet ready to export',
     frame: 'landing-phone--sky',
-    caption: 'Office-ready, season-long',
+    caption: 'Prepared FSA reports (Pro)',
     detail: 'See missing details before you drive to the FSA office.',
   },
   {
     src: activityShot,
-    alt: 'AcreLedger activity feed listing grain movements into a grain bin and harvested corn records with the season selector',
+    alt: 'AcreLedger activity feed (Pro grain movement shown) listing grain going into a bin and harvested corn records',
     frame: 'landing-phone--red',
     caption: 'The whole season, one feed',
-    detail: 'Grain, harvest, and everything in between, ready when you need it.',
+    detail: 'Harvest stays on the free book. Grain bins are part of Pro, and that\u2019s what\u2019s shown here.',
   },
 ];
 
@@ -115,7 +115,7 @@ const steps = [
     accent: ACCENTS.sky,
     title: 'Print what the office needs',
     copy:
-      'Export your records any time. Pro adds prepared FSA acreage worksheets, spray logs, and landlord summaries as a PDF or CSV when the co-op, landlord, or FSA office asks.',
+      'Export your records any time. Pro adds prepared FSA acreage worksheets, prepared spray logs, and landlord summaries as a PDF or CSV when the co-op, landlord, or FSA office asks.',
   },
 ];
 
@@ -124,7 +124,7 @@ const includedFree = [
   'Add fields by hand. FSA tract entry is part of Pro',
   'Automatic rainfall on your two oldest fields in the contiguous US. Those two are locked, and you can\u2019t change them',
   'History, offline entry, and cloud sync',
-  'Export your records. We still back up a free farm\u2019s data. Restoring a backup is part of Pro',
+  'Export your records. We back up a free farm\u2019s data too. Restoring a backup is part of Pro',
   'No ads, and no card needed',
 ];
 
@@ -149,12 +149,12 @@ const faqs = [
   {
     question: 'What does AcreLedger cost?',
     answer:
-      'Each farm starts on the free record book. You can keep records on up to 50 active fields, with automatic rainfall on your two oldest fields. You can\u2019t change those two, and no card is needed. Pro is $299 per farm per year (A$299 in Australia) for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, FSA tract entry, and landlord splits). If you never upgrade, you keep the free record book. You can export your records any time, and skipping Pro never deletes anything. We still back up a free farm\u2019s data.',
+      'Each farm starts on the free record book. You can keep records on up to 50 active fields, with automatic rainfall on your two oldest fields. You can\u2019t change those two, and no card is needed. Pro is $299 per farm per year (A$299 in Australia) for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, FSA tract entry, and landlord splits). If you never upgrade, you keep the free record book. You can export your records any time, and skipping Pro never deletes anything. We back up a free farm\u2019s data too.',
   },
   {
     question: 'Who owns the records I keep here?',
     answer:
-      'You do. Export PDFs and CSVs whenever you need them. We still back up a free farm\u2019s data. Restoring a backup is part of Pro. AcreLedger keeps the book; the records stay yours.',
+      'You do. Export PDFs and CSVs whenever you need them. We back up a free farm\u2019s data too. Restoring a backup is part of Pro. AcreLedger keeps the book; the records stay yours.',
   },
   {
     question: 'Does automatic rainfall work everywhere?',
@@ -284,8 +284,8 @@ const Landing = () => {
             <p data-reveal>
               Every farm already keeps a book: a notebook in the truck,
               receipts in the drawer, yields in your head.{' '}
-              <strong>AcreLedger is that book</strong>, kept current, that also
-              finishes the paperwork.
+              <strong>AcreLedger is that book</strong>, kept current. Prepared
+              FSA reports and landlord summaries are part of Pro.
             </p>
           </section>
         </div>
@@ -377,7 +377,7 @@ const Landing = () => {
             <section className="landing-section" id="pricing">
               <span className="landing-entry-no">Entry 006</span>
               <h2 className="landing-h2" data-reveal>
-                Terms of the book.
+                What it costs.
               </h2>
               <p className="landing-lede" data-reveal style={revealDelay(80)}>
                 Free record book. No card needed. Pro is $299 per farm per year.
@@ -477,7 +477,7 @@ const Landing = () => {
             )}
             <div className="landing-stamp" data-reveal="stamp" style={revealDelay(320)}>
               FIELD NOTES IN
-              <small>REPORTS READY</small>
+              <small>WHEN YOU NEED THEM</small>
             </div>
           </section>
         </div>

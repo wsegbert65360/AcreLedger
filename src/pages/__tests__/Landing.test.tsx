@@ -120,7 +120,7 @@ describe('Landing', () => {
     expect(screen.getByRole('main')).not.toHaveTextContent(
       /\$299|limited rollout|billing|trial|sign ?up|subscribe|checkout|purchase/i
     );
-    expect(screen.queryByRole('heading', { name: /terms of the book/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /what it costs/i })).not.toBeInTheDocument();
     expect(
       screen.queryByText(/what does acreledger cost/i)
     ).not.toBeInTheDocument();
