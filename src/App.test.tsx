@@ -314,7 +314,7 @@ describe('signed-out routing (ticket C)', () => {
     navigate(path);
     renderApp();
     expect(screen.getByText(title)).toBeInTheDocument();
-    expect(screen.getByText('Last updated: November 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Last updated: November 10, 2026')).toBeInTheDocument();
   });
 
   it('keeps /privacy publicly readable', () => {

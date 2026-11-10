@@ -32,10 +32,10 @@ const ACCENTS = {
 const features = [
   {
     no: 'NO. 001',
-    accent: ACCENTS.red,
-    title: 'An FSA-578 worksheet built for the office',
+    accent: ACCENTS.green,
+    title: 'The field book, kept current',
     copy:
-      'Acreage by tract and CLU, crops, planting dates, and reconciliation totals, laid out for your FSA appointment.',
+      'Planting, spraying, fertilizer, harvest, and hay stay with each field instead of in a notebook and a camera roll.',
   },
   {
     no: 'NO. 002',
@@ -46,31 +46,31 @@ const features = [
   },
   {
     no: 'NO. 003',
-    accent: ACCENTS.green,
-    title: 'One book for the whole season',
+    accent: ACCENTS.sky,
+    title: 'Works where signal doesn\u2019t',
     copy:
-      'Planting, spraying, fertilizer, harvest, hay, and grain movements stay organized by field instead of scattered across notebooks and camera rolls.',
+      'Save the entry on your phone. It syncs when you\u2019re back in range.',
   },
   {
     no: 'NO. 004',
     accent: ACCENTS.pumpkin,
-    title: 'Bin inventory without the spreadsheet math',
+    title: 'Rainfall on two fields, free',
     copy:
-      'Every movement and sale adjusts the bin total, season-long. You know what is actually in each bin before you price a load.',
+      'A free farm gets automatic rainfall on its two oldest fields in the contiguous US. Those two are locked, and you can\u2019t change them. Pro unlocks rainfall on all remaining fields.',
   },
   {
     no: 'NO. 005',
-    accent: ACCENTS.sky,
-    title: 'Works where signal doesn’t',
+    accent: ACCENTS.red,
+    title: 'Paperwork for the office',
     copy:
-      'No signal at the back forty? Save the entry on your phone. It syncs when you’re back in range.',
+      'Prepared FSA reports and landlord summaries are built from your own records. The finished worksheet is part of Pro.',
   },
   {
     no: 'NO. 006',
     accent: ACCENTS.red,
-    title: 'Landlord summaries in two clicks',
+    title: 'Your records stay yours',
     copy:
-      'Get each landlord’s activity, yields, and crop-share math in a clean PDF or CSV when the lease conversation comes up.',
+      'Export what you logged on the free book or on Pro. We still back up a free farm\u2019s data. Restoring a backup is part of Pro.',
   },
 ];
 
@@ -115,26 +115,31 @@ const steps = [
     accent: ACCENTS.sky,
     title: 'Print what the office needs',
     copy:
-      'Print FSA acreage worksheets, spray logs, and landlord summaries as a PDF or CSV when the co-op, landlord, or FSA office asks.',
+      'Export your records any time. Pro adds prepared FSA acreage worksheets, spray logs, and landlord summaries as a PDF or CSV when the co-op, landlord, or FSA office asks.',
   },
 ];
 
-const included = [
-  'Unlimited field activity records',
-  'Field boundaries and FSA CLU assignments',
-  'Grain bin and movement tracking',
-  'Weather and rainfall views',
-  'PDF and CSV compliance exports',
-  'Landlord summaries and work requests',
-  'Offline record entry and cloud sync',
-  'Downloadable farm backup',
+const includedFree = [
+  'Field records on up to 50 active fields',
+  'Add fields by hand. FSA tract entry is part of Pro',
+  'Automatic rainfall on your two oldest fields in the contiguous US. Those two are locked, and you can\u2019t change them',
+  'History, offline entry, and cloud sync',
+  'Export your records. We still back up a free farm\u2019s data. Restoring a backup is part of Pro',
+  'No ads, and no card needed',
+];
+
+const includedPro = [
+  'Automatic rainfall on all remaining fields',
+  'Prepared FSA reports',
+  'Backup restore',
+  'Landlord summaries and the business tools, including grain bins, equipment, FSA tract entry, and landlord splits',
 ];
 
 const faqs = [
   {
     question: 'Do I need FSA boundary files before I start?',
     answer:
-      'No. Add fields by hand and start recording the same day. Import FSA tract and CLU boundary files whenever your office provides them. Your earlier records stay with their fields.',
+      'No. Add fields by hand and start recording the same day. FSA tract entry is part of Pro. Your earlier records stay with their fields.',
   },
   {
     question: 'Does AcreLedger replace official USDA or product-label requirements?',
@@ -144,7 +149,17 @@ const faqs = [
   {
     question: 'What does AcreLedger cost?',
     answer:
-      '3-month free trial, no card needed. Then $299 per farm per year.',
+      'Each farm starts on the free record book. You can keep records on up to 50 active fields, with automatic rainfall on your two oldest fields. You can\u2019t change those two, and no card is needed. Pro is $299 per farm per year (A$299 in Australia) for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, FSA tract entry, and landlord splits). If you never upgrade, you keep the free record book. You can export your records any time, and skipping Pro never deletes anything. We still back up a free farm\u2019s data.',
+  },
+  {
+    question: 'Who owns the records I keep here?',
+    answer:
+      'You do. Export PDFs and CSVs whenever you need them. We still back up a free farm\u2019s data. Restoring a backup is part of Pro. AcreLedger keeps the book; the records stay yours.',
+  },
+  {
+    question: 'Does automatic rainfall work everywhere?',
+    answer:
+      'Automatic rainfall is for fields in the contiguous United States. It isn\u2019t available for fields outside that area, including Australia. You can still log weather by hand.',
   },
   {
     question: 'Does it work without cell service?',
@@ -224,11 +239,12 @@ const Landing = () => {
                 Keep field work and FSA paperwork in one place
               </h1>
               <p className="landing-hero-sub" data-reveal style={revealDelay(160)}>
-                AcreLedger keeps planting, spraying, harvest, grain, and reports
-                in one farm book. Log each field from the truck cab, even without
-                signal, then print the paperwork you need.
+                AcreLedger is the field book that rides in the truck. Log planting,
+                spraying, fertilizer, harvest, and hay by field, even with no
+                signal. Prepared FSA reports, landlord summaries, and rainfall on
+                all remaining fields are part of Pro.
               </p>
-              <p className="landing-hero-sub">iPhone and any web browser</p>
+              <p className="landing-hero-sub">Works in any web browser.</p>
               <div className="landing-hero-actions" data-reveal style={revealDelay(240)}>
                 <Link
                   className="landing-btn"
@@ -243,7 +259,7 @@ const Landing = () => {
               {!isNative && (
                 <>
                   <p className="landing-hero-terms" data-reveal style={revealDelay(320)}>
-                    3-month free trial, no card needed. Then $299 per farm per year.
+                    Free record book. No card needed. Pro is $299 per farm per year.
                   </p>
                 </>
               )}
@@ -369,7 +385,7 @@ const Landing = () => {
                 Terms of the book.
               </h2>
               <p className="landing-lede" data-reveal style={revealDelay(80)}>
-                3-month free trial, no card needed. Then $299 per farm per year.
+                Free record book. No card needed. Pro is $299 per farm per year.
               </p>
               <div className="landing-ticket-wrap">
                 <dl className="landing-ticket" data-reveal>
@@ -379,7 +395,7 @@ const Landing = () => {
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.green)}>
                     <dt>Farm subscription</dt>
-                    <dd>3-month free trial, no card needed. Then $299 per farm per year.</dd>
+                    <dd>Free record book. Pro is $299.00 per farm / year, billed annually.</dd>
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.gold)}>
                     <dt>Your records</dt>
@@ -389,14 +405,20 @@ const Landing = () => {
                     </dd>
                   </div>
                   <p className="landing-ticket-note">
-                    3-month free trial, no card needed. Then $299 per farm per year.
+                    Your farm starts on the free record book the day you set it up, and you don’t need a card. Pro is $299 per farm per year, billed annually, for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools. Internet service, third-party services, and professional or government filing fees cost extra.
                   </p>
                 </dl>
 
                 <div data-reveal style={revealDelay(120)}>
-                  <p className="landing-included-title">Included in every book</p>
+                  <p className="landing-included-title">The free record book</p>
                   <ul className="landing-included">
-                    {included.map((item) => (
+                    {includedFree.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  <p className="landing-included-title">Pro — $299 per farm per year</p>
+                  <ul className="landing-included">
+                    {includedPro.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
@@ -406,7 +428,7 @@ const Landing = () => {
                     </Link>
                   </div>
                   <p className="landing-hero-terms">
-                    3-month free trial, no card needed. Then $299 per farm per year.
+                    Free record book. No card needed. Pro is $299 per farm per year.
                   </p>
                 </div>
               </div>
@@ -455,7 +477,7 @@ const Landing = () => {
             </div>
             {!isNative && (
               <p className="landing-final-terms" data-reveal style={revealDelay(200)}>
-                3-month free trial, no card needed. Then $299 per farm per year.
+                Free record book. No card needed. Pro is $299 per farm per year.
               </p>
             )}
             <div className="landing-stamp" data-reveal="stamp" style={revealDelay(320)}>

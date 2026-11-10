@@ -47,7 +47,7 @@ describe('Privacy', () => {
 
   it('publishes the approved date without draft or internal notes', () => {
     const { container } = renderPrivacy();
-    expect(screen.getByText('Last updated: November 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Last updated: November 10, 2026')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/DRAFT|internal|GST|set the final date|Source notes/i);
   });
 
@@ -57,5 +57,10 @@ describe('Privacy', () => {
     expect(screen.getByRole('cell', { name: 'Rain API (rain-api.vercel.app)' })).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: 'Google Fonts' })).toBeInTheDocument();
     expect(container).toHaveTextContent('That provider may log your question and records, or use them to improve its AI models.');
+  });
+  it('says photos are not part of this version and has no trial or read-only wording', () => {
+    const { container } = renderPrivacy();
+    expect(container).toHaveTextContent('This version does not include photos.');
+    expect(container.textContent).not.toMatch(/trial|read-only|Premium/i);
   });
 });

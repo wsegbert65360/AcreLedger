@@ -30,11 +30,7 @@ the real farms. That needs a branch (costs money and touches your Supabase proje
 1. Insert one `farm_comps` row in prod for the owner farm (Egbert Farm), no expiry. The 3 old trial farms are owner test accounts and now resolve to the free plan, which is what you want for testing the free tier.
 2. Run `shadow` on staging first and check `entitlement_shadow_log` (query in `docs/free-tier-metrics.md`).
 3. Approve or edit every string in `src/copy/entitlements.ts` (all marked DRAFT).
-4. Edit the public pages (not touched by me), they will be wrong once new farms start free:
-   - `src/pages/Landing.tsx` lines 147, 246, 372, 382, 392, 409, 458: "3-month free trial, no card needed."
-   - `src/pages/Terms.tsx` lines 12-13 ("3. Free trial", "3 months free"), `src/pages/Refund.tsx` line 9.
-   - Already done in the app: `BillingManager` wording, trial banners removed (see "Trial removal" below).
-   - The Project description still says "122-day free trial": there is no trial now.
+4. Public pages: DONE 2026-11-10 (attorney signed off, William confirmed). Landing, Terms, Refund and Privacy now use the approved draft wording with Pro in place of Premium, dated November 10, 2026. Left out on purpose: the draft's report-preview sentences (feature not built; the draft says hold them) and the iPhone line (Landing says "Works in any web browser." until the iPhone app is released). Still to change by hand: the Project description's "122-day free trial" text.
 5. iOS: Xcode part is done (commit bebc1dd). Still to do: set `VITE_UPGRADE_URL`, look at the link on the real Settings
    screen, test a non-US account and a TestFlight build (`docs/ios-storefront-link.md`).
    App Review may still ask for in-app purchase; fallback is in that doc.
@@ -80,4 +76,4 @@ There is no trial and no customer is on one. Done on `feat/free-tier`:
 - Stripe checkout never starts a trial (`api/create-checkout-session.ts`; `getCheckoutTrialEnd` removed).
 - The trial banners are gone. `BillingNotices` keeps only the failed-payment notice. The billing screen shows "Free record book. No card needed. Pro is $299 per farm per year."
 - Manual production step (not done): clear `trial_ends_at` on the owner and test farms that still carry one. They already resolve to the free plan, so this is cleanup only.
-- Still to edit after attorney review: Landing.tsx, Terms.tsx, Refund.tsx trial wording, and the "122-day" text in the Project description.
+- Public pages were updated 2026-11-10. Still to edit: the "122-day" text in the Project description.
