@@ -166,11 +166,6 @@ const faqs = [
     answer:
       'Yes. Entries save on your phone first and sync when you are back in range.',
   },
-  {
-    question: 'Who owns the records I keep here?',
-    answer:
-      'You do. Export PDFs and CSVs whenever you need them, or download a complete backup of your farm’s data. AcreLedger keeps the book; the records stay yours.',
-  },
 ];
 
 const Landing = () => {

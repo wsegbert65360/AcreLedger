@@ -68,6 +68,12 @@ describe('Landing', () => {
     ).toBeInTheDocument();
   });
 
+  it('asks who owns the records exactly once', () => {
+    renderLanding();
+
+    expect(screen.getAllByText('Who owns the records I keep here?')).toHaveLength(1);
+  });
+
   it('routes account actions to auth modes', () => {
     renderLanding();
 
