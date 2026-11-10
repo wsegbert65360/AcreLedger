@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-01 (complimentary access metadata, trial dates, PG17 MAINTAIN/search-path hardening, and farm_comps billing audit log).
+> **Last updated:** 2026-11-09 (free record book + Pro plan on `feat/free-tier`: entitlement core, no trial, no photos).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,6 +25,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year). Server flag `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`. The trial is removed (no farm gets trial dates; Checkout never sets `trial_end`). Spray photo capture is removed from the app. See the Free tier bullet in the billing section and `docs/free-tier-handoff.md`.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
 - **2026-11-01** — Added PG17 MAINTAIN revocation for public relations and the retired-backfill function search-path pin; disposable focused and full-chain rehearsal commands cover the change. New tables created by supabase_admin must explicitly revoke MAINTAIN from API roles and PUBLIC.
@@ -386,7 +387,8 @@ Canonical detail: [BLUEPRINT → Stripe Billing](./BLUEPRINT.md#stripe-billing-t
 - `BILLING_LIVE_CHARGES` stays absent or exactly `false`, and the server accepts only `sk_test_` keys, until the product owner approves the legal and production rollout.
 - Enforcement is off by default: a missing or soft-deleted subscription row is `unmanaged` with full access. Do not let absent billing data become a paywall.
 - Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` lives on subscription **items**, not the Subscription; use `resolveCurrentPeriodEnd` (`server/billing.ts`). Build webhook tests from the basil shape.
-- Checkout is refused (409, use the portal) for a live `trialing`/`active`/`past_due`/`unpaid` subscription; only `canceled`/`incomplete` rows may start a new Checkout. Checkout never grants a new trial: it passes the farm's existing `trial_ends_at` as Stripe `trial_end` only when more than 48 hours remain. An existing `stripe_customer_id` is reused.
+- Free tier (branch `feat/free-tier`, enforcement OFF by default): the app is a permanent free record book; the paid plan is called **Pro** ($299/farm/year). Say "Pro" in app strings (`src/copy/entitlements.ts`). One server flag `ENTITLEMENTS_MODE = off | shadow | enforce`; the server decides (`farm_entitlement`, `assert_premium` raising `P0402 premium_required:<feature>`), the client (`useEntitlement`) only displays. Plans are `free | paid | complimentary`; complimentary is the owner farm only. Free limits: 50 fields, rainfall daily totals on the two oldest fields (`rainfall_field_hourly_allowed` gates explicit-field `mrms-backfill`; deploy that migration before the function). Pro: all-field hourly rainfall, grain bins, equipment, FSA tract entry, landlord splits, backup restore, prepared reports. Nothing is deleted on downgrade and free never blocks CSV export. No trial exists (`ensure_user_farm` stamps no trial dates; trial columns and `trial_claims` remain untouched). No photo capture in the app. Handoff and remaining work: `docs/free-tier-handoff.md`.
+- Checkout is refused (409, use the portal) for a live `trialing`/`active`/`past_due`/`unpaid` subscription; only `canceled`/`incomplete` rows may start a new Checkout. Checkout never sets a Stripe `trial_end` (the old farm-deadline pass-through was removed 2026-11-09). An existing `stripe_customer_id` is reused.
 - `farm_subscriptions` is written only by the signed webhook (service role). Clients never trust query parameters or client-reported Stripe state.
 - Billing tables stay out of the customer JSON backup and stay classified in the owner recovery registry.
 

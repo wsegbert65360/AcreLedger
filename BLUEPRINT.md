@@ -26,6 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
 - **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
@@ -815,6 +816,32 @@ Product access enforcement is off by default. A missing or soft-deleted subscrip
 `unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
 passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
 
+#### Free tier and Pro (branch `feat/free-tier`, enforcement OFF)
+
+The app is a permanent free record book; the paid plan is **Pro** ($299 per farm per year,
+web-only purchase; iOS shows a US-storefront-only website link that fails closed). One server
+flag `ENTITLEMENTS_MODE = off | shadow | enforce` (default `off`) lives in `entitlement_config`.
+The server is the source of truth: `_farm_entitlement` resolves `free | paid | complimentary`
+(comp row wins; subscription `active`/`trialing`, or `past_due`/`canceled` before period end, is
+`paid`; anything else is `free`), `farm_entitlement` returns it to farm members with `enforced`,
+and `assert_premium(farm, feature)` raises `P0402 premium_required:<feature>` (a no-op in `off`,
+logged to `entitlement_shadow_log` in `shadow`). The client `useEntitlement()` only displays
+(`isFreeTierLocked` = enforced and plan `free`) and never decides access.
+
+Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
+(`20261107040000_rainfall_tiering.sql`), with `rainfall_field_hourly_allowed(field_id)`
+(service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
+edge function. Pro: all-field hourly rainfall, grain bins and movement, equipment, FSA tract
+entry, landlord splits, backup restore, prepared reports. Complimentary is the owner farm only.
+Nothing is deleted on downgrade and free never blocks CSV export. There are no photos in the
+current build (Pro-only photos are a later feature); the iOS camera/photo usage strings stay.
+
+There is no trial: `ensure_user_farm()` stamps no trial dates (`20261109210000_remove_trial.sql`),
+the trial columns and `trial_claims` table remain unused, and a stale `trial_ends_at` grants
+nothing. Not built yet: server-enforced report preview, Rain API gating, 60-day unused-farm
+rainfall pause, US-only July 15 reminder, over-50-field chooser, one-device limit. Hand-off:
+`docs/free-tier-handoff.md`.
+
 SUPERSEDED 2026-11-09 on `feat/free-tier`: there is no trial. New farms never get trial dates, the `legacy_trial` plan is gone, and Checkout never passes `trial_end`. The paragraph below is history.
 
 Trial PR 1 prepares a 3-month free trial, no card needed, stamped once by the server
@@ -840,12 +867,10 @@ accept only HTTPS Stripe URLs.
 Checkout rules (`server/billing.ts`, `api/create-checkout-session.ts`): a live subscription
 (`trialing`, `active`, `past_due`, `unpaid`) returns 409 and the owner manages payment in the
 Customer Portal, because a second Checkout would create a parallel subscription; only a `canceled`
-or `incomplete` row may start a new Checkout. Checkout reads the current farm's server-stamped
-`trial_ends_at` through the caller's RLS-scoped client and passes it as Stripe `trial_end` only
-when more than 48 hours remain. Missing/invalid/expired/near-expiry deadlines grant no trial,
-and a failed farm lookup refuses checkout. No fresh trial duration is created. An existing `stripe_customer_id` is reused
+or `incomplete` row may start a new Checkout. As of 2026-11-09 Checkout never reads the farm's
+trial date and never sets Stripe `trial_end` (there is no trial). An existing `stripe_customer_id` is reused
 (`buildCheckoutCustomerParams`), otherwise the customer is seeded from the caller's email. The
-idempotency key is state-derived and also carries a fingerprint of the request origin, email, and trial deadline,
+idempotency key is state-derived and also carries a fingerprint of the request origin and email,
 since Stripe rejects a reused key whose parameters differ. The Settings card offers Checkout only
 for no row, `canceled`, or `incomplete`; `past_due`/`unpaid` owners see Manage billing.
 
