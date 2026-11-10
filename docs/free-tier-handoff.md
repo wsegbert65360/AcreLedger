@@ -17,8 +17,8 @@ move it to `shadow`, then `enforce`. Design: Project doc `claude/free-tier-imple
 | Shadow simulation (runs in `test:db-integrity`) | `scripts/shadow-report.mjs`, result in `docs/free-tier-shadow-report.md` |
 | Cost queries | `docs/free-tier-metrics.md` |
 
-With the flag `off` the app behaves exactly as before (full test suite green). Nothing is ever deleted on downgrade;
-CSV export of a farm's own data is never blocked.
+With the flag `off` the app behaves exactly as before (full test suite green). Nothing is ever deleted on downgrade.
+CSV export of a farm's own logged data is never blocked. Prepared Pro report files go through `assert_premium`.
 
 ## Shadow result
 Offline simulation (disposable Postgres, real migrations): Egbert Farm (complimentary) and a paid farm are
@@ -47,8 +47,7 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
   apps, `todos`, client-computed REI/PHI and rain-alert reminders.
 
 ## Known risks and loose ends
-- **Reports are built on the device.** Saving, sharing or printing a Pro report now asks the server first (`authorize_report_export` in `src/lib/authorizeReportExport.ts` calls `assert_premium(farm, 'reports')`: audited in `shadow`, refused in `enforce`, fails open offline). A modified app could still skip the check; full protection means moving report generation
-  to the server is a separate piece of work.
+- **Pro reports: server check vs on-device preview.** Server-enforced: saving, sharing, printing, or exporting a Pro report (including its CSV and native share) calls `assert_premium(farm, 'reports')` from `authorizeReportExport` in `src/lib/authorizeReportExport.ts`. That call is logged in `shadow` and refused with `P0402` for a free farm in `enforce`. The client allows the action only when the call returns with no error. Any error, thrown exception, or offline result is denied. Client-only: preview rendering. While the plan is enforced and the farm is free, the full report component is not mounted. The page shows the report title, a short sample of at most the first three rows, a visible Preview watermark, and the See Pro link, so a normal browser print can only print that preview. Reports are still built on the device from the farm's own data, so a modified client could still assemble its own report from data the farmer already owns.
 - **Undoing a pre-season reset goes through `restore_farm_backup`**, so free farms would be blocked once enforced.
 - **Review items:** (4) FIXED: Weather page and widget reload once when the plan resolves as free after a live Rain API load.
   (6) FIXED: `rainfall_field_hourly_allowed` (migration 20261107060000) gates the explicit-field branch of `mrms-backfill`
@@ -60,7 +59,7 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
 - Apple's commission on website links is 0% only while the Epic case is unresolved.
 
 ## Still to build (from the plan draft, Part 1)
-- (Done as a server check on export, not server rendering.) Full server-rendered report preview remains optional.
+- Client preview of a Pro report is in the app and is not server-rendered. Full server-rendered reports remain optional. The export, print, and share check fails closed.
 - (Built, not deployed) Rain API gate: app sends the Supabase token (`src/services/RainService.ts`); the Rain API repo (`C:\Projects\Rain api`, branch `feat/rain-api-auth`, not pushed) checks it behind `RAIN_API_AUTH = off | log | enforce`. Deploy order: Rain API with `log`, then this app, watch logs, then `enforce`. Coordinate-only requests need only a login.
 - Pause rainfall for unused free farms after 60 days, with labeled coverage gaps.
 - In-app reminder before the July 15 FSA deadline (US only), after the preview exists.

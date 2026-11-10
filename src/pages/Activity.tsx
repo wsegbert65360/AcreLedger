@@ -12,9 +12,11 @@ import {
   ACTIVITY_ICONS,
   ACTIVITY_TEXT_COLORS,
 } from '@/lib/activityIcons';
+import { withAuthorizedReportExport } from '@/lib/authorizeReportExport';
 import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
 import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
+import { supabase } from '@/lib/supabase';
 import { useAppPreferences } from '@/store/useAppPreferences';
 import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
@@ -362,10 +364,12 @@ export default function Activity() {
               {tab === 'spray' && (
                 <button
                   onClick={() => {
-                    const toExport = selected.size > 0
-                      ? filteredSpray.filter(r => selected.has(r.id))
-                      : filteredSpray;
-                    generateSprayPDF(toExport, farmName, { fields, cluAssignments, profile: complianceProfile });
+                    void withAuthorizedReportExport(supabase, farm_id, 'spray-audit', () => {
+                      const toExport = selected.size > 0
+                        ? filteredSpray.filter(r => selected.has(r.id))
+                        : filteredSpray;
+                      generateSprayPDF(toExport, farmName, { fields, cluAssignments, profile: complianceProfile });
+                    });
                   }}
                   className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-spray/10 p-2.5 text-xs font-bold text-spray transition-colors hover:bg-spray/20"
                   title="Export Universal Spray Log PDF"
@@ -378,17 +382,20 @@ export default function Activity() {
               {(tab === 'plant' || tab === 'harvest') && (
                 <button
                   onClick={() => {
-                    const exportPromise = tab === 'plant'
-                      ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {
-                        farmName: farmName ?? undefined,
-                        cropYear: viewingSeason,
-                        reportDate: new Date().toISOString().split('T')[0],
-                      }))
-                      : exportHarvestData(filteredHarvest, fields);
+                    const reportType = tab === 'plant' ? 'fsa-plant' : 'fsa-harvest';
+                    void withAuthorizedReportExport(supabase, farm_id, reportType, () => {
+                      const exportPromise = tab === 'plant'
+                        ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {
+                          farmName: farmName ?? undefined,
+                          cropYear: viewingSeason,
+                          reportDate: new Date().toISOString().split('T')[0],
+                        }))
+                        : exportHarvestData(filteredHarvest, fields);
 
-                    exportPromise.catch((error) => {
-                      console.error('FSA export failed:', error);
-                      toast.error('Failed to export FSA data. Please try again.');
+                      return exportPromise.catch((error) => {
+                        console.error('FSA export failed:', error);
+                        toast.error('Failed to export FSA data. Please try again.');
+                      });
                     });
                   }}
                   className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-plant/10 p-2.5 text-xs font-bold text-plant transition-colors hover:bg-plant/20"

@@ -19,7 +19,7 @@ Open risks (recheck at submission):
 - `src/lib/storefront.ts` + `src/hooks/useIosUpgradeLink.ts`: the link shows only when ALL are true:
   platform is iOS, `Storefront.current.countryCode` is `USA`, and `VITE_UPGRADE_URL` is a valid https URL.
   Anything else (plugin missing, error, unknown storefront, non-US, URL unset) means no link. Fail closed.
-- The link lives in one place: the Settings "Your plan" card (`PlanCard`). It opens the system browser
+- The link uses one helper (`PlanUpgradeLink`): the Settings "Your plan" card (`PlanCard`) and the free-farm report preview. It opens the system browser
   (Safari). Nothing is bought or entered inside the app, and no price is shown in the app.
 - Without the link the card says: "Plans are managed on the AcreLedger website."
 - Android and web are unchanged.

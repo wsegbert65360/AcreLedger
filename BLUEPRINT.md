@@ -837,12 +837,12 @@ Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 (service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
 edge function. Pro: all-field hourly rainfall, grain bins and movement, equipment, FSA tract
 entry, landlord splits, backup restore, prepared reports. Complimentary is the owner farm only.
-Nothing is deleted on downgrade and free never blocks CSV export. There are no photos in the
+Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. There are no photos in the
 current build (Pro-only photos are a later feature); the iOS camera/photo usage strings stay.
 
 There is no trial: `ensure_user_farm()` stamps no trial dates (`20261109210000_remove_trial.sql`),
 the trial columns and `trial_claims` table remain unused, and a stale `trial_ends_at` grants
-nothing. Not built yet: server-enforced report preview, Rain API gating, 60-day unused-farm
+nothing. The free-farm report preview is client-only (the full report component is not mounted). Not built yet: server-rendered reports, Rain API gating, 60-day unused-farm
 rainfall pause, US-only July 15 reminder, over-50-field chooser, one-device limit. Hand-off:
 `docs/free-tier-handoff.md`.
 

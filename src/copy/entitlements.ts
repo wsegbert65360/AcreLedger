@@ -11,6 +11,9 @@ export const ENTITLEMENT_COPY = {
   reportLockedToast: 'This report is included with Pro.',
   reportLockedTitle: 'This report is part of Pro.',
   reportLockedBody: 'You can still see your records, print a single record, and export what you logged.',
+  reportCheckFailedToast: 'Couldn\'t check your plan. Connect to the internet and try again.',
+  reportPreviewLabel: 'Preview',
+  reportPlanLoading: 'Checking your plan…',
 
   // Harvest bin
   binLockedNote: 'Tracking what goes into each bin is part of Pro. You can still log this harvest as Town.',

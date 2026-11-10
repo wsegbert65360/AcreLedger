@@ -41,6 +41,11 @@ describe('entitlement plan copy', () => {
     expect(ENTITLEMENT_COPY.reportLockedBody).toBe(
       'You can still see your records, print a single record, and export what you logged.',
     );
+    expect(ENTITLEMENT_COPY.reportCheckFailedToast).toBe(
+      'Couldn\'t check your plan. Connect to the internet and try again.',
+    );
+    expect(ENTITLEMENT_COPY.reportPreviewLabel).toBe('Preview');
+    expect(ENTITLEMENT_COPY.reportPlanLoading).toBe('Checking your plan…');
     expect(ENTITLEMENT_COPY.syncParkedTitle).toBe(
       'Saved on this device. You need Pro to sync this change.',
     );

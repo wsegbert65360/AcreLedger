@@ -1,12 +1,10 @@
-import { Link } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 
+import { PlanUpgradeLink } from '@/components/settings/PlanUpgradeLink';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ENTITLEMENT_COPY, freePlanIncluded, paidPlanAdds, planDisplayName } from '@/copy/entitlements';
 import { useEntitlement } from '@/hooks/useEntitlement';
-import { useIosUpgradeLink } from '@/hooks/useIosUpgradeLink';
-import { isBillingUiAvailable } from '@/lib/billing';
 import { isFreeTierLocked } from '@/lib/entitlements';
 
 /**
@@ -17,12 +15,9 @@ import { isFreeTierLocked } from '@/lib/entitlements';
  */
 export default function PlanCard() {
   const { entitlement } = useEntitlement();
-  // iOS: a website link only on the US storefront (fails closed); never an in-app checkout.
-  const iosLink = useIosUpgradeLink();
   if (!entitlement || !entitlement.enforced) return null;
 
   const free = isFreeTierLocked(entitlement);
-  const canLinkToBilling = isBillingUiAvailable();
 
   return (
     <Card className="border-border/30" data-testid="plan-card">
@@ -48,24 +43,7 @@ export default function PlanCard() {
             <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
               {paidPlanAdds().map((line) => <li key={line}>{line}</li>)}
             </ul>
-            {canLinkToBilling ? (
-              <Link
-                to="/settings?section=billing"
-                className="inline-block font-medium text-primary underline underline-offset-2"
-              >
-                {ENTITLEMENT_COPY.planUpgradeLink}
-              </Link>
-            ) : iosLink.url ? (
-              <button
-                type="button"
-                onClick={iosLink.open}
-                className="inline-block font-medium text-primary underline underline-offset-2"
-              >
-                {ENTITLEMENT_COPY.planUpgradeLinkWebsite}
-              </button>
-            ) : (
-              <p className="text-muted-foreground">{ENTITLEMENT_COPY.nativeManageOnWeb}</p>
-            )}
+            <PlanUpgradeLink />
           </>
         ) : (
           <p className="text-foreground">Full access to every feature.</p>

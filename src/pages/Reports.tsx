@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { FileText, Printer, History as HistoryIcon, Send } from 'lucide-react';
@@ -6,10 +6,9 @@ import { toast } from 'sonner';
 
 import { useFarm } from '@/store/farmStore';
 import { useEntitlement } from '@/hooks/useEntitlement';
-import { isFreeTierLocked, isPaidReport } from '@/lib/entitlements';
-import { authorizeReportExport } from '@/lib/authorizeReportExport';
+import { isFreeTierLocked, isPaidReport, type Entitlement } from '@/lib/entitlements';
+import { withAuthorizedReportExport } from '@/lib/authorizeReportExport';
 import { supabase } from '@/lib/supabase';
-import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import SeasonSelect from '@/components/SeasonSelect';
 import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import SprayAuditReport from '@/components/reports/SprayAuditReport';
@@ -17,6 +16,7 @@ import FertilizerReport from '@/components/reports/FertilizerReport';
 import FallFsaReport from '@/components/reports/FallFsaReport';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
 import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
+import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/components/reports/ReportPreview';
 import WorkRequestsTab from './workRequests/WorkRequestsTab';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
@@ -74,6 +74,43 @@ function fmtDate(d?: string): string {
 
 function buildFieldMap(fields: Field[]): Map<string, Field> {
   return new Map(fields.map(f => [f.id, f]));
+}
+
+type PaidReportView = 'full' | 'preview' | 'loading';
+
+/**
+ * Paid reports stay off the full component until the farm is known not to be
+ * free-tier-locked. A cached answer that is not locked may render immediately
+ * (including offline). No cache, or a cached free enforced plan, stays on the
+ * loading shell. A failed request with no cache fails closed to the preview so
+ * the page does not spin forever. Free report types are not gated.
+ */
+function paidReportView(
+  reportType: string,
+  entitlement: Entitlement | null,
+  cachedEntitlement: Entitlement | null,
+  failed: boolean,
+): PaidReportView {
+  if (!isPaidReport(reportType)) return 'full';
+  if (entitlement == null) {
+    if (cachedEntitlement && !isFreeTierLocked(cachedEntitlement)) return 'full';
+    return failed ? 'preview' : 'loading';
+  }
+  return isFreeTierLocked(entitlement) ? 'preview' : 'full';
+}
+
+function paidReportNode(
+  reportType: string,
+  entitlement: Entitlement | null,
+  cachedEntitlement: Entitlement | null,
+  failed: boolean,
+  preview: ReactNode,
+  full: ReactNode,
+) {
+  const view = paidReportView(reportType, entitlement, cachedEntitlement, failed);
+  if (view === 'preview') return preview;
+  if (view === 'loading') return <ReportPlanLoading />;
+  return full;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -305,44 +342,28 @@ export default function Reports() {
     );
   };
 
-  const { entitlement } = useEntitlement();
-  const reportsLocked = isFreeTierLocked(entitlement);
-  const lockedMessage = ENTITLEMENT_COPY.reportLockedToast;
+  const { entitlement, cachedEntitlement, failed } = useEntitlement();
 
   const runTrackedExport = (
     reportType: ReportExportType,
     fn: () => void | Promise<void>,
     label: string,
   ) => {
-    if (reportsLocked && isPaidReport(reportType)) {
-      toast.info(lockedMessage);
-      return;
-    }
-    try {
-      authorizeReportExport(supabase, farm_id, reportType)
-        .then((allowed) => {
-          if (!allowed) {
-            toast.info(lockedMessage);
-            return undefined;
-          }
-          return Promise.resolve(fn()).then(() => {
-          if (session?.user.id && farm_id) {
-            recordReportExport(
-              { userId: session.user.id, farmId: farm_id, seasonYear: viewingSeason, reportType },
-              exportFingerprints[reportType] ?? '',
-            );
-            setExportHistoryVersion(version => version + 1);
-          }
-          });
-        })
-        .catch((err) => {
-          console.error(`Export failed (${label}):`, err);
-          toast.error(`Failed to export ${label}. Please try again.`);
-        });
-    } catch (err) {
-      console.error(`Export failed (${label}):`, err);
-      toast.error(`Failed to export ${label}. Please try again.`);
-    }
+    void withAuthorizedReportExport(supabase, farm_id, reportType, async () => {
+      try {
+        await Promise.resolve(fn());
+        if (session?.user.id && farm_id) {
+          recordReportExport(
+            { userId: session.user.id, farmId: farm_id, seasonYear: viewingSeason, reportType },
+            exportFingerprints[reportType] ?? '',
+          );
+          setExportHistoryVersion(version => version + 1);
+        }
+      } catch (err) {
+        console.error(`Export failed (${label}):`, err);
+        toast.error(`Failed to export ${label}. Please try again.`);
+      }
+    });
   };
 
   const handleIssueAction = (issue: ReportReadinessIssue) => {
@@ -367,17 +388,13 @@ export default function Reports() {
   };
 
   const handlePrint = () => {
-    if (reportsLocked && isPaidReport(tab)) {
-      toast.info(lockedMessage);
-      return;
-    }
-    if (Capacitor.isNativePlatform()) {
-      toast.info('Printing is not supported directly in the mobile app. Please export to PDF and print/share from there.');
-      return;
-    }
-    void authorizeReportExport(supabase, farm_id, tab).then((allowed) => {
-      if (allowed) window.print();
-      else toast.info(lockedMessage);
+    const reportType = tab === 'landlord-statement' ? summaryExportType : tab;
+    void withAuthorizedReportExport(supabase, farm_id, reportType, () => {
+      if (Capacitor.isNativePlatform()) {
+        toast.info('Printing is not supported directly in the mobile app. Please export to PDF and print/share from there.');
+        return;
+      }
+      window.print();
     });
   };
 
@@ -553,6 +570,59 @@ export default function Reports() {
     }, `${summaryTitle} PDF`);
   };
 
+  const showLandlordPreview = tab === 'landlord-statement'
+    && paidReportView(summaryExportType, entitlement, cachedEntitlement, failed) === 'preview';
+  const landlordPreviewRows = useMemo((): ReportPreviewRow[] => {
+    if (!showLandlordPreview) return [];
+    const landlordName = uniqueLandlords[0];
+    const summary = generateLandlordSummary({
+      landlordName: landlordName || 'Farm Owner',
+      scope: landlordName ? 'landlord' : 'farm',
+      farmId: farm_id ?? undefined,
+      fields,
+      cluAssignments,
+      plantRecords,
+      sprayRecords,
+      customSprayRecords,
+      fertilizerApplications: fertilizerRecords,
+      tillageRecords,
+      harvestRecords,
+      hayHarvestRecords: hayRecords,
+      seasonYear: viewingSeason,
+    });
+    return summary.fields.map((field) => ({
+      id: field.fieldId,
+      cells: [field.fieldName, field.crop ?? '—', field.acres.toLocaleString()],
+    }));
+  }, [
+    showLandlordPreview,
+    uniqueLandlords,
+    farm_id,
+    fields,
+    cluAssignments,
+    plantRecords,
+    sprayRecords,
+    customSprayRecords,
+    fertilizerRecords,
+    tillageRecords,
+    harvestRecords,
+    hayRecords,
+    viewingSeason,
+  ]);
+
+  const fsaPreviewRows: ReportPreviewRow[] = fsaPlantRows.map((row) => ({
+    id: row.id,
+    cells: [row.fieldName, row.crop || '—', String(row.acreage)],
+  }));
+  const sprayPreviewRows: ReportPreviewRow[] = sprayRows.map((row) => ({
+    id: row._rowKey,
+    cells: [row.fieldName, row.product, row.amountDisplay],
+  }));
+  const fertilizerPreviewRows: ReportPreviewRow[] = fertilizerRecords.map((record) => ({
+    id: record.id,
+    cells: [fmtDate(record.date), fieldMap.get(record.fieldId)?.name || record.fieldName, record.fertilizer_formula, String(record.acres)],
+  }));
+
   return (
     <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border pb-0 print:bg-background print:border-0">
@@ -624,61 +694,87 @@ export default function Reports() {
         </div>
 
         {/* ── FSA Planting Report ─────────────────────────────────────────────── */}
-        {reportsLocked && isPaidReport(tab) && (
-          <div role="status" className="rounded-2xl border border-border bg-muted/40 px-4 py-3 text-sm print:hidden">
-            
-            <p className="font-semibold">{ENTITLEMENT_COPY.reportLockedTitle}</p>
-            <p className="text-muted-foreground">{ENTITLEMENT_COPY.reportLockedBody}</p>
-          </div>
-        )}
         <TabsContent value="fsa-plant" className="mt-0">
-          <FsaPlantReport
-            fsaPlantRows={fsaPlantRows}
-            totalPlantAcres={totalPlantAcres}
-            plantedAcresByField={plantedAcresByField}
-            fsaReadinessIssues={fsaReadinessIssues}
-            readinessSummary={fsaReadinessSummary}
-            exportStatus={getExportStatus('fsa-plant')}
-            farmName={farmName}
-            viewingSeason={viewingSeason}
-            reportDate={reportDate}
-            onExportCsv={() => runTrackedExport('fsa-plant', async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
-              farmName: knownFarmName(farmName),
-              cropYear: viewingSeason,
-              reportDate: toLocalIsoDate(Date.now()),
-            }), 'FSA-578 worksheet data')}
-            onExportPdf={handleExportFsaPlantPdf}
-            onIssueAction={handleIssueAction}
-          />
+          {paidReportNode(
+            'fsa-plant',
+            entitlement,
+            cachedEntitlement,
+            failed,
+            <ReportPreview
+              title="FSA-578 Acreage Certification Worksheet"
+              headers={['Field', 'Crop', 'Acres']}
+              rows={fsaPreviewRows}
+            />,
+            <FsaPlantReport
+              fsaPlantRows={fsaPlantRows}
+              totalPlantAcres={totalPlantAcres}
+              plantedAcresByField={plantedAcresByField}
+              fsaReadinessIssues={fsaReadinessIssues}
+              readinessSummary={fsaReadinessSummary}
+              exportStatus={getExportStatus('fsa-plant')}
+              farmName={farmName}
+              viewingSeason={viewingSeason}
+              reportDate={reportDate}
+              onExportCsv={() => runTrackedExport('fsa-plant', async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
+                farmName: knownFarmName(farmName),
+                cropYear: viewingSeason,
+                reportDate: toLocalIsoDate(Date.now()),
+              }), 'FSA-578 worksheet data')}
+              onExportPdf={handleExportFsaPlantPdf}
+              onIssueAction={handleIssueAction}
+            />,
+          )}
         </TabsContent>
 
         {/* ── Spray Audit ─────────────────────────────────────────────────────── */}
         <TabsContent value="spray-audit" className="mt-0">
-          <SprayAuditReport
-            sprayRows={sprayRows}
-            readinessSummary={sprayReadinessSummary}
-            exportStatus={getExportStatus('spray-audit')}
-            reportDate={reportDate}
-            complianceProfile={complianceProfile}
-            onExportCsv={() => runTrackedExport('spray-audit', () => generateMissouriLog(sprayRecords, fields, cluAssignments), 'spray log')}
-            onExportPdf={handleExportSprayAuditPdf}
-            onIssueAction={handleIssueAction}
-          />
+          {paidReportNode(
+            'spray-audit',
+            entitlement,
+            cachedEntitlement,
+            failed,
+            <ReportPreview
+              title="Pesticide Application Record"
+              headers={['Field', 'Product', 'Total']}
+              rows={sprayPreviewRows}
+            />,
+            <SprayAuditReport
+              sprayRows={sprayRows}
+              readinessSummary={sprayReadinessSummary}
+              exportStatus={getExportStatus('spray-audit')}
+              reportDate={reportDate}
+              complianceProfile={complianceProfile}
+              onExportCsv={() => runTrackedExport('spray-audit', () => generateMissouriLog(sprayRecords, fields, cluAssignments), 'spray log')}
+              onExportPdf={handleExportSprayAuditPdf}
+              onIssueAction={handleIssueAction}
+            />,
+          )}
         </TabsContent>
 
         {/* ── Fertilizer Summary ──────────────────────────────────────────────── */}
         <TabsContent value="fertilizer-summary" className="mt-0">
-          <FertilizerReport
-            fertilizerRecords={fertilizerRecords}
-            fieldMap={fieldMap}
-            totalFertAcres={totalFertAcres}
-            reportDate={reportDate}
-            onExportCsv={() => runTrackedExport('fertilizer-summary', () => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
-            onExportPdf={handleExportFertilizerPdf}
-            readinessSummary={fertilizerReadinessSummary}
-            exportStatus={getExportStatus('fertilizer-summary')}
-            onIssueAction={handleIssueAction}
-          />
+          {paidReportNode(
+            'fertilizer-summary',
+            entitlement,
+            cachedEntitlement,
+            failed,
+            <ReportPreview
+              title="Fertilizer Application Summary"
+              headers={['Date', 'Field', 'Formula', 'Acres']}
+              rows={fertilizerPreviewRows}
+            />,
+            <FertilizerReport
+              fertilizerRecords={fertilizerRecords}
+              fieldMap={fieldMap}
+              totalFertAcres={totalFertAcres}
+              reportDate={reportDate}
+              onExportCsv={() => runTrackedExport('fertilizer-summary', () => exportFertilizerData(fertilizerRecords, fields), 'fertilizer data')}
+              onExportPdf={handleExportFertilizerPdf}
+              readinessSummary={fertilizerReadinessSummary}
+              exportStatus={getExportStatus('fertilizer-summary')}
+              onIssueAction={handleIssueAction}
+            />,
+          )}
         </TabsContent>
 
         {/* ── FSA Fall Harvest / Production Report ───────────────────────────── */}
@@ -724,20 +820,31 @@ export default function Reports() {
 
         {/* ── Landlord Summary ──────────────────────────────────────────────── */}
         <TabsContent value="landlord-statement" className="mt-0">
-          <LandlordSummaryReport
-            wholeFarm={wholeFarm}
-            onWholeFarmChange={setWholeFarm}
-            selectedLandlord={selectedLandlord}
-            setSelectedLandlord={setSelectedLandlord}
-            uniqueLandlords={uniqueLandlords}
-            landlordSummary={landlordSummary}
-            reportDate={reportDate}
-            onExportCsv={handleExportLandlordCSV}
-            onExportPdf={handleExportLandlordPdf}
-            readinessSummary={landlordReadinessSummary}
-            exportStatus={getExportStatus(summaryExportType)}
-            onIssueAction={handleIssueAction}
-          />
+          {paidReportNode(
+            summaryExportType,
+            entitlement,
+            cachedEntitlement,
+            failed,
+            <ReportPreview
+              title={uniqueLandlords[0] ? 'Landlord Summary' : 'Farm Owner Summary'}
+              headers={['Field', 'Crop', 'Acres']}
+              rows={landlordPreviewRows}
+            />,
+            <LandlordSummaryReport
+              wholeFarm={wholeFarm}
+              onWholeFarmChange={setWholeFarm}
+              selectedLandlord={selectedLandlord}
+              setSelectedLandlord={setSelectedLandlord}
+              uniqueLandlords={uniqueLandlords}
+              landlordSummary={landlordSummary}
+              reportDate={reportDate}
+              onExportCsv={handleExportLandlordCSV}
+              onExportPdf={handleExportLandlordPdf}
+              readinessSummary={landlordReadinessSummary}
+              exportStatus={getExportStatus(summaryExportType)}
+              onIssueAction={handleIssueAction}
+            />,
+          )}
         </TabsContent>
 
         {/* ── Work Requests ─────────────────────────────────────────────────── */}
