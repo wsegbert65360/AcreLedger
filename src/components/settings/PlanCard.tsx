@@ -44,7 +44,7 @@ export default function PlanCard() {
             <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
               {freePlanIncluded().map((line) => <li key={line}>{line}</li>)}
             </ul>
-            <p className="font-medium text-foreground">Paid plan adds</p>
+            <p className="font-medium text-foreground"></p>
             <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
               {paidPlanAdds().map((line) => <li key={line}>{line}</li>)}
             </ul>
