@@ -65,7 +65,7 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
 
 ## Still to build (from the plan draft, Part 1)
 - (Done as a server check on export, not server rendering.) Full server-rendered report preview remains optional.
-- Server gating of the separate Rain API (auth header, farm and plan checks).
+- (Built, not deployed) Rain API gate: app sends the Supabase token (`src/services/RainService.ts`); the Rain API repo (`C:\Projects\Rain api`, branch `feat/rain-api-auth`, not pushed) checks it behind `RAIN_API_AUTH = off | log | enforce`. Deploy order: Rain API with `log`, then this app, watch logs, then `enforce`. Coordinate-only requests need only a login.
 - Pause rainfall for unused free farms after 60 days, with labeled coverage gaps.
 - In-app reminder before the July 15 FSA deadline (US only), after the preview exists.
 - Farms over 50 fields: let the farmer choose which stay writable (not locked by you yet).

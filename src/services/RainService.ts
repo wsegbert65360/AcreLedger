@@ -1,5 +1,6 @@
 import type { GeoJSONGeometry } from '@/lib/geoHelpers';
 import { getCentroid, hasValidGeometry } from '@/lib/geoHelpers';
+import { supabase } from '@/lib/supabase';
 
 export type RainfallResult = {
   '24h': number;
@@ -11,6 +12,18 @@ export type RainfallResult = {
   periodEndUtc: string;
   dataWarning?: string;
 };
+// The Rain API checks the caller's Supabase login (RAIN_API_AUTH, off by default on the server), so an
+// old or new app works against either server setting. No session or any error: send no header.
+async function rainAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 }
@@ -94,7 +107,7 @@ export const RainService = {
       }
       const mainResponse = await fetch(
         `${baseUrl}/rain?${mainParams.toString()}`,
-        { signal }
+        { signal, headers: await rainAuthHeaders() }
       );
 
       if (!mainResponse.ok) {
@@ -122,7 +135,7 @@ export const RainService = {
           });
           const response = await fetch(
             `${baseUrl}/rain?${rangeParams.toString()}`,
-            { signal }
+            { signal, headers: await rainAuthHeaders() }
           );
           if (!response.ok) throw new Error('Range lookup failed');
           const data = await response.json();
