@@ -1,7 +1,8 @@
 // Free tier entitlements. Display-only on the client: the server (farm_entitlement /
-// assert_premium) is the source of truth. FREE_LIMITS mirrors entitlement_free_limits()
-// in supabase/migrations/20261107000000_entitlements_core.sql; src/test/entitlementsConstants.test.ts
-// fails if they drift. null = unlimited.
+// assert_premium) is the source of truth. FREE_LIMITS mirrors the numeric caps in
+// entitlement_free_limits(); src/test/entitlementsConstants.test.ts fails if they drift.
+// photo_cap stays in the SQL return type and is NULL (photos are not in the product).
+// null = unlimited.
 
 export type EntitlementPlan = 'free' | 'paid' | 'complimentary';
 
@@ -10,7 +11,6 @@ export interface Entitlement {
   premiumUntil: string | null;
   fieldCap: number | null;
   rainfallSlotCap: number | null;
-  photoCap: number | null;
   historySeasons: number | null;
   deviceCap: number | null;
   /** True only when the server is in enforce mode. Never lock features unless this is true. */
@@ -20,7 +20,6 @@ export interface Entitlement {
 export const FREE_LIMITS = {
   fieldCap: 50,
   rainfallSlotCap: 2,
-  photoCap: 20,
   historySeasons: 2,
   deviceCap: 1,
 } as const;
@@ -30,7 +29,7 @@ export const PREMIUM_REQUIRED_ERRCODE = 'P0402';
 /** Feature names exactly as the server raises them (premium_required:<feature>). */
 export type PremiumFeature =
   | 'reports' | 'grain' | 'equipment' | 'landlord_split' | 'fsa_tract'
-  | 'backup_restore' | 'field_cap' | 'photo_cap' | 'rainfall';
+  | 'backup_restore' | 'field_cap' | 'rainfall';
 
 /**
  * Report types that need Pro (FSA-578, season spray log, fertilizer, landlord
@@ -66,12 +65,12 @@ export function parseEntitlementRow(row: unknown): Entitlement | null {
   const plan = r.plan;
   if (plan !== 'free' && plan !== 'paid' && plan !== 'complimentary') return null;
   const num = (v: unknown) => (typeof v === 'number' ? v : null);
+  // photo_cap may still be present on the server row. It is ignored.
   return {
     plan,
     premiumUntil: typeof r.premium_until === 'string' ? r.premium_until : null,
     fieldCap: num(r.field_cap),
     rainfallSlotCap: num(r.rainfall_slot_cap),
-    photoCap: num(r.photo_cap),
     historySeasons: num(r.history_seasons),
     deviceCap: num(r.device_cap),
     enforced: r.enforced === true,
@@ -84,7 +83,7 @@ export function parseCachedEntitlement(value: unknown): Entitlement | null {
   const v = value as Record<string, unknown>;
   return parseEntitlementRow({
     plan: v.plan, premium_until: v.premiumUntil, field_cap: v.fieldCap, rainfall_slot_cap: v.rainfallSlotCap,
-    photo_cap: v.photoCap, history_seasons: v.historySeasons, device_cap: v.deviceCap,
+    history_seasons: v.historySeasons, device_cap: v.deviceCap,
     enforced: v.enforced,
   });
 }

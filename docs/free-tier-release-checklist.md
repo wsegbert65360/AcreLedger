@@ -94,13 +94,15 @@ There are no `20261103*` through `20261106*` files. Do not re-apply the three se
    1. `20261107000000_entitlements_core.sql`
    2. `20261107010000_new_farms_start_free.sql`
    3. `20261107020000_field_cap_guard.sql`
-   4. `20261107030000_photo_cap_guard.sql` (the app no longer takes photos; apply it so history matches the repo)
+   4. `20261107030000_photo_cap_guard.sql` (history only; `20261110190000_entitlements_hardening.sql` drops this photo cap guard)
    5. `20261107040000_rainfall_tiering.sql`
    6. `20261107050000_paid_feature_guards.sql`
    7. `20261107060000_rainfall_hourly_field_allowed.sql` (`mrms-backfill` calls `rainfall_field_hourly_allowed`)
    8. `20261109210000_remove_trial.sql`
    9. `20261110160000_billing_past_due_since.sql`
    10. `20261110170000_rainfall_locked_slots.sql` (`farm_rainfall_slots`; replaces `rainfall_collectable_fields`)
+   11. `20261110180000_pre_season_reset_undo.sql`
+   12. `20261110190000_entitlements_hardening.sql` (drops `guard_photo_cap()` and its `spray_records` triggers; `photo_cap` stays in the entitlement return type and is NULL)
 
 9. [ ] Read `public.entitlement_config`. Expect one row, `mode` `off`, `device_limit_enabled` false. Do not update it here.
 

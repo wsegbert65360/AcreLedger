@@ -29,6 +29,8 @@ try {
     CREATE TABLE public.farm_comps (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), farm_id uuid NOT NULL REFERENCES public.farms,
       reason text NOT NULL, expires_at timestamptz, deleted_at timestamptz);
+    CREATE TABLE public.spray_records (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(), farm_id uuid, notes text, deleted_at timestamptz);
     INSERT INTO public.farms VALUES ('${farm}'), ('${other}');
     INSERT INTO public.profiles VALUES ('${user}', '${farm}');
     GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
@@ -37,13 +39,18 @@ try {
   const sql = await readFile(new URL('../supabase/migrations/20261107000000_entitlements_core.sql', import.meta.url), 'utf8');
   await db.exec(sql);
   await db.exec(sql); // replay
+  // Original file still selects photo_cap 20. Hardening keeps the column and returns NULL.
+  assert.match(sql, /20 AS photo_cap/);
+  const hardening = await readFile(new URL('../supabase/migrations/20261110190000_entitlements_hardening.sql', import.meta.url), 'utf8');
+  await db.exec(hardening);
+  await db.exec(hardening);
 
-  // Defaults: mode off, free limits.
+  // Defaults: mode off, free limits. photo_cap is NULL after hardening.
   assert.equal((await db.query('SELECT public.entitlements_mode() AS m')).rows[0].m, 'off');
   let e = await plan();
   assert.deepEqual(
     { plan: e.plan, field_cap: e.field_cap, rainfall_slot_cap: e.rainfall_slot_cap, photo_cap: e.photo_cap, history_seasons: e.history_seasons, device_cap: e.device_cap },
-    { plan: 'free', field_cap: 50, rainfall_slot_cap: 2, photo_cap: 20, history_seasons: 2, device_cap: 1 });
+    { plan: 'free', field_cap: 50, rainfall_slot_cap: 2, photo_cap: null, history_seasons: 2, device_cap: 1 });
 
   // Plan states and transitions.
   const sub = (status, end) => asService(`INSERT INTO public.farm_subscriptions (farm_id, status, current_period_end) VALUES ('${farm}', '${status}', ${end})`);

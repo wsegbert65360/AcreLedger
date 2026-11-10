@@ -13,22 +13,30 @@ import {
   premiumRequiredFeature,
 } from '@/lib/entitlements';
 
-const sql = readFileSync('supabase/migrations/20261107000000_entitlements_core.sql', 'utf8');
+const coreSql = readFileSync('supabase/migrations/20261107000000_entitlements_core.sql', 'utf8');
+const hardeningSql = readFileSync('supabase/migrations/20261110190000_entitlements_hardening.sql', 'utf8');
 
 describe('entitlement constants', () => {
-  it('match entitlement_free_limits() in the migration', () => {
-    const m = /SELECT (\d+) AS field_cap, (\d+) AS rainfall_slot_cap, (\d+) AS photo_cap, (\d+) AS history_seasons, (\d+) AS device_cap/.exec(sql);
+  it('match entitlement_free_limits() numeric caps; photo_cap is not a client limit', () => {
+    const m = /SELECT (\d+) AS field_cap, (\d+) AS rainfall_slot_cap, \d+ AS photo_cap, (\d+) AS history_seasons, (\d+) AS device_cap/.exec(coreSql);
     expect(m).not.toBeNull();
-    const [fieldCap, rainfallSlotCap, photoCap, historySeasons, deviceCap] = m!.slice(1).map(Number);
-    expect(FREE_LIMITS).toEqual({ fieldCap, rainfallSlotCap, photoCap, historySeasons, deviceCap });
+    const [fieldCap, rainfallSlotCap, historySeasons, deviceCap] = m!.slice(1).map(Number);
+    expect(FREE_LIMITS).toEqual({ fieldCap, rainfallSlotCap, historySeasons, deviceCap });
+    expect(FREE_LIMITS).not.toHaveProperty('photoCap');
+    expect(hardeningSql).toMatch(/NULL::int AS photo_cap/);
   });
 });
 
 describe('entitlement helpers', () => {
   it('parses server rows and rejects unknown plans', () => {
-    expect(parseEntitlementRow({ plan: 'paid', premium_until: '2027-01-01T00:00:00Z', field_cap: null })).toMatchObject({
+    const parsed = parseEntitlementRow({
+      plan: 'paid', premium_until: '2027-01-01T00:00:00Z', field_cap: null, photo_cap: 20,
+    });
+    expect(parsed).toMatchObject({
       plan: 'paid', premiumUntil: '2027-01-01T00:00:00Z', fieldCap: null,
     });
+    expect(parsed).not.toHaveProperty('photoCap');
+    expect(parseEntitlementRow({ plan: 'free', photo_cap: 'nope' })).toMatchObject({ plan: 'free', fieldCap: null });
     expect(parseEntitlementRow({ plan: 'platinum' })).toBeNull();
     expect(parseEntitlementRow(null)).toBeNull();
   });
@@ -36,6 +44,10 @@ describe('entitlement helpers', () => {
   it('round-trips the cached shape and drops malformed cache', () => {
     const free = freeEntitlement();
     expect(parseCachedEntitlement(JSON.parse(JSON.stringify(free)))).toEqual(free);
+    expect(parseCachedEntitlement({ plan: 'free', photoCap: 20, fieldCap: 50, enforced: false })).toMatchObject({
+      plan: 'free', fieldCap: 50,
+    });
+    expect(parseCachedEntitlement({ plan: 'free', photoCap: 20, enforced: false })).not.toHaveProperty('photoCap');
     expect(parseCachedEntitlement({ plan: 'nope' })).toBeNull();
   });
 
