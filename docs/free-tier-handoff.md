@@ -7,7 +7,7 @@ move it to `shadow`, then `enforce`. Design: Project doc `claude/free-tier-imple
 | Area | Where |
 |---|---|
 | One server flag (`off` / `shadow` / `enforce`), plan function, `assert_premium`, shadow log | `supabase/migrations/20261107000000_entitlements_core.sql` |
-| New farms start free (only when flag is not `off`) | `20261107010000_new_farms_start_free.sql` |
+| New farms start free, no trial, in every mode | `20261107010000_new_farms_start_free.sql`, `20261109210000_remove_trial.sql` |
 | Field cap 50 (existing data grandfathered). A photo-cap guard exists but is unused: photos were removed from the app | `20261107020000_field_cap_guard.sql`, `...030000_photo_cap_guard.sql` |
 | Rainfall: free farms get daily totals on their 2 oldest fields | `20261107040000_rainfall_tiering.sql`, `supabase/functions/mrms-daily`, `docs/free-tier-rainfall.md` |
 | Paid-only writes: grain, equipment, FSA/CLU, landlord splits, backup restore | `20261107050000_paid_feature_guards.sql` |
@@ -21,8 +21,8 @@ With the flag `off` the app behaves exactly as before (full test suite green). N
 CSV export of a farm's own data is never blocked.
 
 ## Shadow result
-Offline simulation (disposable Postgres, real migrations): Egbert Farm, three legacy trial farms and a paid farm are
-never blocked; a new free farm is blocked only on grain, equipment, FSA tract/CLU, landlord split and backup restore.
+Offline simulation (disposable Postgres, real migrations): Egbert Farm (complimentary) and a paid farm are
+never blocked; free farms (new farms and the three old test farms) are blocked only on grain, equipment, FSA tract/CLU, landlord split and backup restore.
 Full table: `docs/free-tier-shadow-report.md`. **Not yet done:** a shadow run on a staging Supabase branch with copies of
 the real farms. That needs a branch (costs money and touches your Supabase project), so I did not create one.
 
@@ -62,6 +62,13 @@ New farms start free. Existing data grandfathered. History limit skipped. One-de
 - `farm_rainfall_daily` rollup stops updating for free farms.
 - Prod `fields.created_at` nulls were not checked (the field cap picks editable fields by `created_at`, then `id`).
 - Apple's commission on website links is 0% only while the Epic case is unresolved.
+
+## Still to build (from the plan draft, Part 1)
+- Report preview that the server enforces (reports are built on the device today).
+- Server gating of the separate Rain API (auth header, farm and plan checks).
+- Pause rainfall for unused free farms after 60 days, with labeled coverage gaps.
+- In-app reminder before the July 15 FSA deadline (US only), after the preview exists.
+- Farms over 50 fields: let the farmer choose which stay writable (not locked by you yet).
 
 ## Rough remaining effort
 Xcode steps and device test: about an hour. Staging shadow run: half a day. Copy and public-page edits: your call on
