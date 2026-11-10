@@ -8,8 +8,10 @@ const farm = vi.hoisted(() => ({
   current: {
     session: { user: { id: 'user-1' } },
     activeSeason: 2026,
+    farm_id: 'farm-1',
     rolloverToNewSeason: vi.fn(),
     restoreFromBackup: vi.fn().mockResolvedValue(true),
+    undoPreSeasonReset: vi.fn().mockResolvedValue(true),
     loading: false,
     initialFetchComplete: true,
     fetchError: false,
@@ -58,11 +60,14 @@ async function openRollover() {
 describe('SeasonRolloverModal restore confirmation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     farm.current.initialFetchComplete = true;
     farm.current.fetchError = false;
     farm.current.pendingSyncCount = 0;
     farm.current.activeSeason = 2026;
+    farm.current.farm_id = 'farm-1';
     farm.current.restoreFromBackup.mockResolvedValue(true);
+    farm.current.undoPreSeasonReset.mockResolvedValue(true);
     farm.current.farmRole = 'owner';
   });
 
@@ -114,6 +119,33 @@ describe('SeasonRolloverModal restore confirmation', () => {
       preSeasonReset: true,
       rollbackTables: expect.arrayContaining(['fields', 'spray_records']),
     }));
+  });
+
+  it('hides the server undo until this device has a snapshot for the farm', async () => {
+    await openRollover();
+    expect(screen.queryByRole('button', { name: 'Undo pre-season reset' })).not.toBeInTheDocument();
+  });
+
+  it('undoes a stored server snapshot without using file restore', async () => {
+    farm.current.undoPreSeasonReset.mockImplementation(async () => {
+      localStorage.removeItem('user-1_farm-1_al_pre_season_snapshot');
+      return true;
+    });
+    localStorage.setItem(
+      'user-1_farm-1_al_pre_season_snapshot',
+      JSON.stringify({
+        id: '11111111-1111-4111-8111-111111111111',
+        fromSeason: 2025,
+        toSeason: 2026,
+      }),
+    );
+    await openRollover();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo pre-season reset' }));
+    expect(screen.getByText('Undo pre-season reset?')).toBeInTheDocument();
+    expect(screen.getByText(/On a free farm, Pro data is left as it is/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo reset' }));
+    await waitFor(() => expect(farm.current.undoPreSeasonReset).toHaveBeenCalled());
+    expect(farm.current.restoreFromBackup).not.toHaveBeenCalled();
   });
 
   it('hides restore from a worker', async () => {

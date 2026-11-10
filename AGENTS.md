@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-09 (free record book + Pro plan on `feat/free-tier`: entitlement core, no trial, no photos).
+> **Last updated:** 2026-11-10 (free farms can undo the latest pre-season reset; file backup restore stays Pro).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,13 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-10** - Free farms undo the latest pre-season reset with `undo_pre_season_reset` (server snapshot, 30 days, no Pro check). Uploading a backup file still uses `restore_farm_backup` and stays Pro. Rollover calls `start_pre_season_reset` after the JSON download.
 - **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year). Server flag `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`. The trial is removed (no farm gets trial dates; Checkout never sets `trial_end`). Spray photo capture is removed from the app. See the Free tier bullet in the billing section and `docs/free-tier-handoff.md`.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
 - **2026-11-01** — Added PG17 MAINTAIN revocation for public relations and the retired-backfill function search-path pin; disposable focused and full-chain rehearsal commands cover the change. New tables created by supabase_admin must explicitly revoke MAINTAIN from API roles and PUBLIC.
-- **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
-- **2026-10-21** — Trial PR 1 prepares server-owned 3-month farm trial dates, a service-only salted-identity claim ledger, and billing-history deletion protection. Existing farms await rollout backfill; enforcement stays OFF.
-- **2026-10-20** — Reports > Landlord now documents Farm Owner Summary: current-farm fields including owned/unassigned land, season-scoped activity, CSV/Detailed-PDF exports, and a missing-farm export guard.
 
 ## Contents
 
@@ -361,7 +359,7 @@ Canonical detail: [BLUEPRINT → Backup / Restore Farm Ownership](./BLUEPRINT.md
 - Backups include `backupVersion`, `fsaTracts`, and `cluAssignments`. Unversioned backups pass through `normalizeBackupForRestore` before strict validation. Settings and pre-rollover backups must pass `backupSchema` before download.
 - Restore helpers write only JSON-present columns; never enumerate every column through `jsonb_populate_record(set)`.
 - Never hydrate React state from raw backup arrays. If the restore RPC fails, do not mutate state.
-- Season rollover requires a completed cloud load and an empty sync queue, advances exactly one year up to `currentYear + 1`, verifies exactly one profile row changed, and stops if its backup is not restorable. `profiles` must stay in the `supabase_realtime` publication.
+- Season rollover requires a completed cloud load and an empty sync queue, advances exactly one year up to `currentYear + 1`, downloads the JSON backup, then calls `start_pre_season_reset`. The new season is shown immediately and rolled back if that call fails. The latest server snapshot is undone with `undo_pre_season_reset` (free farms included). Uploading a backup file still uses `restore_farm_backup`. `profiles` must stay in the `supabase_realtime` publication.
 
 ### Owner Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)
 

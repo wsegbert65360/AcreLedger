@@ -55,6 +55,7 @@ describe('season rollover safety', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     supabaseMock.reset();
+    localStorage.clear();
     clearQueue.mockResolvedValue(undefined);
     offlineStore.unavailable = false;
   });
@@ -65,23 +66,35 @@ describe('season rollover safety', () => {
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
     expect(exportDataAsJson).not.toHaveBeenCalled();
     expect(supabaseMock.fns.update).not.toHaveBeenCalled();
+    expect(supabaseMock.fns.rpc).not.toHaveBeenCalled();
   });
 
-  it('uses season CAS and refreshes a competing rollover without applying its target', async () => {
+  it('uses season CAS and refreshes a competing rollover without keeping its target', async () => {
     const { toast } = await import('sonner');
+    supabaseMock.setRpcResult({
+      data: null,
+      error: { message: 'Active season changed elsewhere', code: '22023' },
+    });
     supabaseMock.setTablePages('profiles', [
-      { error: null, count: 0 }, { data: { active_season: 2027 }, error: null },
+      { data: { active_season: 2027 }, error: null },
     ]);
     const args = makeArgs();
     const { result } = renderHook(() => useSeasonManagement(args));
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
-    expect(supabaseMock.fns.eq).toHaveBeenCalledWith('active_season', 2025);
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith('start_pre_season_reset', {
+      p_from_season: 2025,
+      p_to_season: 2026,
+    });
+    expect(supabaseMock.fns.update).not.toHaveBeenCalled();
     expect(supabaseMock.fns.eq).toHaveBeenCalledWith('farm_id', 'farm-1');
-    expect(args.setActiveSeason).toHaveBeenCalledWith(2027);
-    expect(args.setActiveSeason).not.toHaveBeenCalledWith(2026);
-    expect(args.setViewingSeason.mock.calls[0][0](2025)).toBe(2027);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(1, 2026);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(2, 2025);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(3, 2027);
+    const viewingUpdater = args.setViewingSeason.mock.calls.find((call: unknown[]) => typeof call[0] === 'function')?.[0];
+    expect(viewingUpdater(2025)).toBe(2027);
     expect(toast.error).toHaveBeenCalledWith('Season changed elsewhere');
     expect(toast.success).not.toHaveBeenCalled();
+    expect(localStorage.getItem('user-1_farm-1_al_pre_season_snapshot')).toBeNull();
   });
 
   it.each([2025, 2027])('plain cache clear reloads active season %s and retains valid viewing/storage', async (season) => {
@@ -133,6 +146,8 @@ describe('season rollover safety', () => {
   });
 
   it('downloads a versioned backup before changing both seasons', async () => {
+    const snapshotId = '11111111-1111-4111-8111-111111111111';
+    supabaseMock.setRpcResult({ data: snapshotId, error: null });
     const args = makeArgs();
     const { result } = renderHook(() => useSeasonManagement(args));
 
@@ -141,27 +156,55 @@ describe('season rollover safety', () => {
       expect.objectContaining({ backupVersion: 3, activeSeason: 2025 }),
       expect.any(String),
     );
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith('start_pre_season_reset', {
+      p_from_season: 2025,
+      p_to_season: 2026,
+    });
+    expect(supabaseMock.fns.update).not.toHaveBeenCalled();
+    const downloadOrder = vi.mocked(exportDataAsJson).mock.invocationCallOrder[0];
+    const rpcOrder = supabaseMock.fns.rpc.mock.invocationCallOrder[0];
+    expect(downloadOrder).toBeLessThan(rpcOrder);
     expect(args.setActiveSeason).toHaveBeenCalledWith(2026);
     expect(args.setViewingSeason).toHaveBeenCalledWith(2026);
+    expect(localStorage.getItem('user-1_farm-1_al_pre_season_snapshot')).toContain(snapshotId);
   });
 
-  it('does not change local seasons when the cloud update affects zero rows', async () => {
-    supabaseMock.setResult({ error: null, count: 0 });
+  it('does not change the season when the backup file is not downloaded', async () => {
+    vi.mocked(exportDataAsJson).mockResolvedValueOnce(false);
     const args = makeArgs();
     const { result } = renderHook(() => useSeasonManagement(args));
 
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(supabaseMock.fns.rpc).not.toHaveBeenCalled();
     expect(args.setActiveSeason).not.toHaveBeenCalled();
-    expect(args.setViewingSeason).not.toHaveBeenCalled();
+  });
+
+  it('rolls back the optimistic season when the cloud update fails', async () => {
+    const { toast } = await import('sonner');
+    supabaseMock.setRpcResult({ data: null, error: { message: 'permission denied' } });
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(1, 2026);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(2, 2025);
+    expect(args.setViewingSeason).toHaveBeenNthCalledWith(1, 2026);
+    expect(args.setViewingSeason).toHaveBeenNthCalledWith(2, 2025);
+    expect(toast.error).toHaveBeenCalledWith(
+      'Failed to save new season to cloud. Season was NOT changed; your backup was downloaded.',
+    );
   });
 
   it('returns false instead of throwing on an unexpected network failure', async () => {
-    supabaseMock.setThrow(new Error('network'));
-    const args = makeArgs();
+    supabaseMock.setRpcThrow(new Error('network'));
+    const args = makeArgs({ viewingSeason: 2024 });
     const { result } = renderHook(() => useSeasonManagement(args));
 
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
-    expect(args.setActiveSeason).not.toHaveBeenCalled();
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(1, 2026);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(2, 2025);
+    expect(args.setViewingSeason).toHaveBeenNthCalledWith(1, 2026);
+    expect(args.setViewingSeason).toHaveBeenNthCalledWith(2, 2024);
   });
 
   it('blocks rollover while local changes are waiting to sync', async () => {
@@ -320,5 +363,92 @@ describe('restore from backup gates', () => {
     await expect(result.current.restoreFromBackup(restoreBackup)).resolves.toBe(true);
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('2 grain movements kept deleted'));
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('1 work request kept deleted'));
+  });
+});
+
+const snapshotId = '11111111-1111-4111-8111-111111111111';
+
+describe('pre-season server undo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    supabaseMock.reset();
+    localStorage.clear();
+    localStorage.setItem(
+      'user-1_farm-1_al_pre_season_snapshot',
+      JSON.stringify({ id: snapshotId, fromSeason: 2025, toSeason: 2026 }),
+    );
+  });
+
+  it('undoes through undo_pre_season_reset and clears the device pointer', async () => {
+    const { toast } = await import('sonner');
+    supabaseMock.setRpcResult({ data: { active_season: 2025 }, error: null });
+    const args = makeArgs({ activeSeason: 2026, viewingSeason: 2026 });
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.undoPreSeasonReset()).resolves.toBe(true);
+    expect(args.setActiveSeason).toHaveBeenCalledWith(2025);
+    expect(supabaseMock.fns.rpc).toHaveBeenCalledWith('undo_pre_season_reset', {
+      p_snapshot_id: snapshotId,
+    });
+    expect(supabaseMock.fns.rpc).not.toHaveBeenCalledWith('restore_farm_backup', expect.anything());
+    expect(localStorage.getItem('user-1_farm-1_al_pre_season_snapshot')).toBeNull();
+    expect(args.refetchFarmData).toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('Pre-season reset undone.');
+  });
+
+  it('rolls the season back and keeps the pointer when undo fails for a transient error', async () => {
+    supabaseMock.setRpcResult({ data: null, error: { message: 'network down' } });
+    const args = makeArgs({ activeSeason: 2026, viewingSeason: 2026 });
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.undoPreSeasonReset()).resolves.toBe(false);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(1, 2025);
+    expect(args.setActiveSeason).toHaveBeenNthCalledWith(2, 2026);
+    expect(localStorage.getItem('user-1_farm-1_al_pre_season_snapshot')).toContain(snapshotId);
+  });
+
+  it('clears the pointer when the snapshot can never be undone', async () => {
+    supabaseMock.setRpcResult({
+      data: null,
+      error: { message: 'This pre-season reset was already undone.' },
+    });
+    const args = makeArgs({ activeSeason: 2026, viewingSeason: 2027 });
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.undoPreSeasonReset()).resolves.toBe(false);
+    expect(args.setViewingSeason).toHaveBeenNthCalledWith(1, 2025);
+    expect(args.setViewingSeason).toHaveBeenNthCalledWith(2, 2027);
+    expect(localStorage.getItem('user-1_farm-1_al_pre_season_snapshot')).toBeNull();
+  });
+
+  it('does not roll the season back when the server undo succeeded but reload failed', async () => {
+    const { toast } = await import('sonner');
+    supabaseMock.setRpcResult({ data: { active_season: 2025 }, error: null });
+    const args = makeArgs({
+      activeSeason: 2026,
+      viewingSeason: 2026,
+      refetchFarmData: vi.fn().mockResolvedValue(false),
+    });
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.undoPreSeasonReset()).resolves.toBe(false);
+    expect(args.setActiveSeason.mock.calls.map((call: unknown[]) => call[0])).toEqual([2025, 2025]);
+    expect(toast.error).toHaveBeenCalledWith(
+      'The pre-season reset was undone, but reload failed. Refresh the page to sync your data.',
+    );
+  });
+
+  it('does not call the server when this device has no snapshot', async () => {
+    const { toast } = await import('sonner');
+    localStorage.clear();
+    const args = makeArgs();
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.undoPreSeasonReset()).resolves.toBe(false);
+    expect(supabaseMock.fns.rpc).not.toHaveBeenCalled();
+    expect(args.setActiveSeason).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'No pre-season reset on this device can be undone. Upload the downloaded JSON file instead.',
+    );
   });
 });

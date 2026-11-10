@@ -21,6 +21,13 @@ import { ZodError } from 'zod';
 import { exportDataAsJson } from '@/utils/backup';
 import { backupSchema } from '@/lib/backupSchema';
 import { canRestoreFarmBackup, RESTORE_ROLE_DENIED } from '@/lib/backupRestorePolicy';
+import {
+  clearPreSeasonSnapshot,
+  isPreSeasonSnapshotId,
+  isTerminalPreSeasonUndoError,
+  readPreSeasonSnapshot,
+  writePreSeasonSnapshot,
+} from '@/lib/preSeasonSnapshot';
 import { CURRENT_BACKUP_VERSION, assertSupportedBackupVersion, normalizeBackupForRestore } from '@/lib/backupCompatibility';
 import { resolveRestoredBoundaryAcres } from '@/lib/fieldAcreage';
 import {
@@ -106,6 +113,16 @@ export function formatRestoreFailure(err: unknown): string {
   return 'Unknown error during restore.';
 }
 
+function seasonChangedElsewhere(error: { message?: string } | null | undefined): boolean {
+  return !!error && /active season changed elsewhere/i.test(error.message ?? '');
+}
+
+function readRestoredSeason(data: unknown): number | null {
+  if (!data || typeof data !== 'object') return null;
+  const value = (data as { active_season?: unknown }).active_season;
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
 function restoreConflictSummary(result: unknown): string {
   if (!result || typeof result !== 'object') return '';
   const row = result as Record<string, unknown>;
@@ -142,6 +159,7 @@ interface UseSeasonManagementArgs {
   maintenanceSchedules: MaintenanceSchedule[];
   maintenanceLogs: MaintenanceLog[];
   activeSeason: number;
+  viewingSeason?: number;
   setActiveSeason: React.Dispatch<React.SetStateAction<number>>;
   setViewingSeason: React.Dispatch<React.SetStateAction<number>>;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
@@ -187,7 +205,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     hayHarvestRecords, customSprayRecords, fertilizerApplications, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords,
     fsaTracts, cluAssignments, workRequests,
-    equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
+    equipment, maintenanceSchedules, maintenanceLogs, activeSeason, viewingSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
@@ -257,6 +275,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
+    const previousActive = activeSeason;
+    const previousViewing = viewingSeason ?? activeSeason;
+    let appliedOptimistic = false;
+    let committed = false;
     setLoading(true);
     try {
       // 1. Attempt backup FIRST — do not proceed if it fails
@@ -278,31 +300,47 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         return false;
       }
 
-      // 2. Update Supabase first — if this fails, don't update local state
-      const { error, count } = await supabase
-        .from('profiles')
-        .update({ active_season: year }, { count: 'exact' })
-        .eq('id', session.user.id)
-        .eq('farm_id', farm_id)
-        .eq('active_season', activeSeason);
+      // 2. Show the new season immediately. The server compare-and-sets it.
+      setActiveSeason(year);
+      setViewingSeason(year);
+      appliedOptimistic = true;
 
-      if (!error && count === 0) {
-        await refreshActiveSeason();
-        toast.error('Season changed elsewhere');
-        return false;
-      }
-      if (error || count !== 1) {
-        console.error('Error updating active season:', error ?? `Expected 1 profile, updated ${count ?? 0}`);
+      const { data, error } = await supabase.rpc('start_pre_season_reset', {
+        p_from_season: activeSeason,
+        p_to_season: year,
+      });
+
+      if (error || !isPreSeasonSnapshotId(data)) {
+        setActiveSeason(previousActive);
+        setViewingSeason(previousViewing);
+        if (seasonChangedElsewhere(error)) {
+          await refreshActiveSeason();
+          toast.error('Season changed elsewhere');
+          return false;
+        }
+        console.error('Error updating active season:', error ?? 'Missing snapshot id');
         toast.error('Failed to save new season to cloud. Season was NOT changed; your backup was downloaded.');
         return false;
       }
 
-      // 3. Both backup and DB succeeded — now update local state
-      setActiveSeason(year);
-      setViewingSeason(year);
+      committed = true;
+      try {
+        writePreSeasonSnapshot(session.user.id, farm_id, {
+          id: data,
+          fromSeason: activeSeason,
+          toSeason: year,
+        });
+      } catch (storageError) {
+        // The season is already committed. Losing the device pointer must not undo it.
+        console.error('Could not store pre-season snapshot id:', storageError);
+      }
       toast.success(`Season rolled over to ${year}. Backup downloaded.`);
       return true;
     } catch (err) {
+      if (appliedOptimistic && !committed) {
+        setActiveSeason(previousActive);
+        setViewingSeason(previousViewing);
+      }
       console.error('Unexpected season rollover failure:', err);
       toast.error('Season was NOT changed because the backup or cloud update failed.');
       return false;
@@ -313,7 +351,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     session, fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
-    equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
+    equipment, maintenanceSchedules, maintenanceLogs, activeSeason, viewingSeason,
     isOnline, farm_id, initialFetchComplete, fetchError, pendingSyncCount,
     setActiveSeason, setViewingSeason, setLoading, refreshActiveSeason,
   ]);
@@ -618,9 +656,92 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     refetchFarmData, refreshActiveSeason,
   ]);
 
+  const undoPreSeasonReset = useCallback(async (): Promise<boolean> => {
+    if (!farm_id) {
+      toast.error('No farm selected.');
+      return false;
+    }
+    if (!isOnline) {
+      toast.error('Undoing a pre-season reset is not available offline. Please connect to the internet.');
+      return false;
+    }
+    if (!session?.user?.id) {
+      toast.error('Undoing a pre-season reset requires a signed-in user.');
+      return false;
+    }
+    if (!initialFetchComplete || fetchError || pendingSyncCount > 0) {
+      toast.error('Wait for cloud data and pending changes to finish syncing before restore.');
+      return false;
+    }
+
+    const stored = readPreSeasonSnapshot(session.user.id, farm_id);
+    if (!stored) {
+      toast.error('No pre-season reset on this device can be undone. Upload the downloaded JSON file instead.');
+      return false;
+    }
+
+    const previousActive = activeSeason;
+    const previousViewing = viewingSeason ?? activeSeason;
+    let appliedOptimistic = false;
+    let committed = false;
+    setLoading(true);
+    try {
+      setActiveSeason(stored.fromSeason);
+      setViewingSeason(stored.fromSeason);
+      appliedOptimistic = true;
+
+      const { data, error } = await supabase.rpc('undo_pre_season_reset', {
+        p_snapshot_id: stored.id,
+      });
+
+      if (error) {
+        setActiveSeason(previousActive);
+        setViewingSeason(previousViewing);
+        if (isTerminalPreSeasonUndoError(error.message ?? '')) {
+          clearPreSeasonSnapshot(session.user.id, farm_id);
+        }
+        toast.error(`Undo failed: ${error.message}`);
+        return false;
+      }
+
+      committed = true;
+      clearPreSeasonSnapshot(session.user.id, farm_id);
+      const restoredSeason = readRestoredSeason(data);
+      if (restoredSeason != null) {
+        setActiveSeason(restoredSeason);
+        setViewingSeason(restoredSeason);
+      } else if (!appliedOptimistic) {
+        await refreshActiveSeason();
+      }
+
+      const reloaded = await refetchFarmData();
+      if (!reloaded) {
+        toast.error('The pre-season reset was undone, but reload failed. Refresh the page to sync your data.');
+        return false;
+      }
+      toast.success('Pre-season reset undone.');
+      return true;
+    } catch (err) {
+      if (appliedOptimistic && !committed) {
+        setActiveSeason(previousActive);
+        setViewingSeason(previousViewing);
+      }
+      console.error('Unexpected pre-season undo failure:', err);
+      toast.error(`Undo failed: ${formatRestoreFailure(err)}`);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    session, farm_id, isOnline, initialFetchComplete, fetchError, pendingSyncCount,
+    activeSeason, viewingSeason, setActiveSeason, setViewingSeason, setLoading,
+    refetchFarmData, refreshActiveSeason,
+  ]);
+
   return useMemo(() => ({
     rolloverToNewSeason,
     restoreFromBackup,
+    undoPreSeasonReset,
     clearLocalCache
-  }), [rolloverToNewSeason, restoreFromBackup, clearLocalCache]);
+  }), [rolloverToNewSeason, restoreFromBackup, undoPreSeasonReset, clearLocalCache]);
 }

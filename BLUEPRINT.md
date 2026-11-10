@@ -638,8 +638,9 @@ older exports or pre-fix local cache data. Restore must always treat the current
 - Never hydrate React state directly from raw backup arrays after a restore. Normalize records
   first so localStorage, in-memory state, and Supabase stay aligned.
 - Restore must fail without mutating state if the RPC returns an error.
-- Season rollover requires a completed cloud load, no pending sync mutations, and exactly one
-  farm-scoped profile update before local active/viewing seasons change.
+- Season rollover requires a completed cloud load and no pending sync mutations. It downloads
+  the pre-season JSON backup, then calls `start_pre_season_reset`. The new season is shown
+  immediately and rolled back if that call fails. The server compare-and-sets `profiles.active_season`.
 - Manual rollover advances exactly one year from the active season, up to the allowed
   `currentYear + 1` ceiling. The store rejects no-op and backwards requests before backup creation.
 - `profiles.active_season` is constrained in Postgres to `[2000, currentYear + 1]`, and the
@@ -652,7 +653,8 @@ older exports or pre-fix local cache data. Restore must always treat the current
 - Only the farm owner or an admin may restore a backup. Workers may still download backups. The database function is the real gate. Until the role column exists, the app treats a missing role as allowed so profile load and restore stay usable, and the migration must be deployed before relying on the button gate.
 - The restore confirmation says records deleted after the backup come back, newer edits to those same records are replaced, and records that are not in the file stay in the book.
 - `restore_farm_backup` sets `statement_timeout` to 120 seconds for that call.
-- A pre-season reset file (name starting with `Pre_Season_Reset_`, or a non-empty `rolloverDate`) is an explicit undo of season rollover. The warning says everything entered since gets rolled back. Only when that undo flag is sent, rows in collections present in the file and absent from the snapshot are soft-deleted. An ordinary restore still leaves rows that are not in the file in place.
+- A pre-season reset file (name starting with `Pre_Season_Reset_`, or a non-empty `rolloverDate`) is an explicit undo of season rollover. The warning says everything entered since gets rolled back. Only when that undo flag is sent, rows in collections present in the file and absent from the snapshot are soft-deleted. An ordinary restore still leaves rows that are not in the file in place. Uploading that file still uses `restore_farm_backup`, which stays Pro.
+- The latest server pre-season snapshot can be undone with `undo_pre_season_reset` without a Pro plan. That RPC restores only the caller's newest snapshot from the last 30 days and does not call `assert_premium`. On a free farm in enforce mode the undo does not rewrite Pro-only tables or gated field and harvest columns.
 - Owner snapshot recovery requires the farm name and then the word `RESTORE`. Merge still uses one confirmation, `MERGE-MISSING-DATA`.
 
 ### Owner Whole-Project Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)

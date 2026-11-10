@@ -116,6 +116,8 @@ interface FarmState {
   setViewingSeason: (year: number) => void;
   /** Method to transition the entire farm state to a new season */
   rolloverToNewSeason: (year: number) => Promise<boolean>;
+  /** Undo the latest server pre-season snapshot. Free farms can use this path. */
+  undoPreSeasonReset: () => Promise<boolean>;
   /** Operations for managing planting records */
   addPlantRecord: (r: Omit<PlantRecord, 'id' | 'timestamp' | 'deleted_at' | 'seasonYear' | 'farm_id'>) => Promise<boolean>;
   updatePlantRecord: (r: PlantRecord) => Promise<boolean>;
@@ -908,7 +910,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
-    equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
+    equipment, maintenanceSchedules, maintenanceLogs, activeSeason, viewingSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
@@ -1091,6 +1093,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       maintenanceLogs: maintenanceLogs.filter(item => !item.deleted_at),
       activeSeason, viewingSeason, seasonOptions, setViewingSeason: selectViewingSeason,
       rolloverToNewSeason: seasonOps.rolloverToNewSeason,
+      undoPreSeasonReset: seasonOps.undoPreSeasonReset,
       ...plantOps,
       ...sprayOps,
       ...harvestOps,

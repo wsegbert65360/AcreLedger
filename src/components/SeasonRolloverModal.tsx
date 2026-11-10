@@ -27,6 +27,7 @@ import {
   RESTORE_RESURRECT_WARNING,
   RESTORE_ROLE_DENIED,
 } from '@/lib/backupRestorePolicy';
+import { readPreSeasonSnapshot, type PreSeasonSnapshotRef } from '@/lib/preSeasonSnapshot';
 import { useFarm } from '@/store/farmStore';
 import {
   clearRolloverDismiss,
@@ -37,10 +38,12 @@ import {
 
 export default function SeasonRolloverModal() {
   const {
-    session, activeSeason, rolloverToNewSeason, restoreFromBackup, loading,
-    initialFetchComplete, fetchError, pendingSyncCount, farmRole,
+    session, activeSeason, rolloverToNewSeason, restoreFromBackup, undoPreSeasonReset, loading,
+    initialFetchComplete, fetchError, pendingSyncCount, farmRole, farm_id,
   } = useFarm();
   const [open, setOpen] = useState(false);
+  const [serverSnapshot, setServerSnapshot] = useState<PreSeasonSnapshotRef | null>(null);
+  const [undoConfirmOpen, setUndoConfirmOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreSuccess, setRestoreSuccess] = useState(false);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
@@ -67,6 +70,11 @@ export default function SeasonRolloverModal() {
   }, []);
 
   useEffect(() => {
+    if (!open) return;
+    setServerSnapshot(readPreSeasonSnapshot(userId, farm_id));
+  }, [open, userId, farm_id]);
+
+  useEffect(() => {
     if (activeSeason >= currentYear) return;
     if (targetSeason == null || isRolloverDismissed(userId, targetSeason)) return;
     setOpen(true);
@@ -83,6 +91,19 @@ export default function SeasonRolloverModal() {
     if (success) {
       native.haptic.success();
       clearRolloverDismiss(userId, targetSeason);
+      setServerSnapshot(readPreSeasonSnapshot(userId, farm_id));
+      setOpen(false);
+    } else {
+      native.haptic.error();
+    }
+  };
+
+  const handleUndo = async () => {
+    const success = await undoPreSeasonReset();
+    setServerSnapshot(readPreSeasonSnapshot(userId, farm_id));
+    setUndoConfirmOpen(false);
+    if (success) {
+      native.haptic.success();
       setOpen(false);
     } else {
       native.haptic.error();
@@ -284,6 +305,23 @@ export default function SeasonRolloverModal() {
                 )}
               </div>
             </div>
+
+            {serverSnapshot && (
+              <div className="space-y-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full min-h-[44px] text-xs font-mono"
+                  disabled={busy || restoreBlocked}
+                  onClick={() => setUndoConfirmOpen(true)}
+                >
+                  Undo pre-season reset
+                </Button>
+                <p className="text-xs font-mono text-muted-foreground/70">
+                  Puts the active season back to {serverSnapshot.fromSeason} using the latest reset stored for this farm.
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
@@ -372,6 +410,32 @@ export default function SeasonRolloverModal() {
               disabled={restoring}
             >
               {restoring ? 'Restoring…' : 'Restore backup'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={undoConfirmOpen} onOpenChange={setUndoConfirmOpen}>
+        <AlertDialogContent className="bg-card border-amber-500/30 max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Undo pre-season reset?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground font-mono text-xs">
+              This puts the active season back to {serverSnapshot?.fromSeason ?? 'the previous year'} and rolls the records from that reset back to the snapshot. Records added after the reset are hidden. On a free farm, Pro data is left as it is. Uploading a backup file is a separate Pro restore.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="touch-target border-border text-muted-foreground min-h-[44px]" disabled={busy}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleUndo();
+              }}
+              className="touch-target bg-amber-500 text-amber-950 hover:bg-amber-600 min-h-[44px]"
+              disabled={busy}
+            >
+              Undo reset
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
