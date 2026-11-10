@@ -26,10 +26,9 @@ describe('Privacy', () => {
 
   it('names acreledgerapp@gmail.com as the contact address', () => {
     renderPrivacy();
-    expect(screen.getByRole('link', { name: 'acreledgerapp@gmail.com' })).toHaveAttribute(
-      'href',
-      'mailto:acreledgerapp@gmail.com'
-    );
+    for (const link of screen.getAllByRole('link', { name: 'acreledgerapp@gmail.com' })) {
+      expect(link).toHaveAttribute('href', 'mailto:acreledgerapp@gmail.com');
+    }
   });
 
   it('renders the approved error logging and offline storage wording', () => {

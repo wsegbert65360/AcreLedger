@@ -321,10 +321,9 @@ describe('signed-out routing (ticket C)', () => {
     navigate('/privacy');
     renderApp();
     expect(screen.getByText('AcreLedger Privacy Policy')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'acreledgerapp@gmail.com' })).toHaveAttribute(
-      'href',
-      'mailto:acreledgerapp@gmail.com'
-    );
+    for (const link of screen.getAllByRole('link', { name: 'acreledgerapp@gmail.com' })) {
+      expect(link).toHaveAttribute('href', 'mailto:acreledgerapp@gmail.com');
+    }
     expect(screen.queryByRole('link', { name: 'Create account' })).not.toBeInTheDocument();
   });
 
