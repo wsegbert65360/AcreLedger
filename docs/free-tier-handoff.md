@@ -2,6 +2,7 @@
 
 Status: built and tested, **nothing deployed to production**, flag `ENTITLEMENTS_MODE` is `off`. You decide when to
 move it to `shadow`, then `enforce`. Design: Project doc `claude/free-tier-implementation-plan.md`.
+Release order (backup, migration versions, functions, Stripe, app, Rain API, then the flag): [free-tier release checklist](./free-tier-release-checklist.md).
 
 ## What exists
 | Area | Where |
