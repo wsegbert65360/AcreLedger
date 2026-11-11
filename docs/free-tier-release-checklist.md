@@ -155,6 +155,8 @@ Handler: `api/stripe-webhook.ts` (Vercel path `/api/stripe-webhook`). The event 
 
 ## 6. App release
 
+**Pre-ship gate (before item 17, before PR #92 / app `3.6.1` ships):** [ ] RainAPI `main` at `58d7ed5` or later is deployed to production on Vercel (deployment shows Ready). Confirm with a preflight: `curl -si -X OPTIONS https://rain-api.vercel.app/rain -H "Origin: https://acreledger.vercel.app" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: authorization"` must return `Access-Control-Allow-Headers` that includes `Authorization`. This build sends `Authorization: Bearer` on Rain API calls whenever there is a session; an older RainAPI build only allows `Content-Type`, so the browser blocks those calls.
+
 17. [ ] Ship the build that sends `field_id` on Rain API requests (`src/services/RainService.ts`). Marketing version in `package.json` is `3.6.1`. CodeMagic reads that version for the store builds. Ship it to the web app and to the iOS and Android stores.
 
 18. [ ] Wait until the farms you care about are on `3.6.1` before section 7 goes to `enforce`. Older builds can call the Rain API without `field_id`.
@@ -163,9 +165,9 @@ Handler: `api/stripe-webhook.ts` (Vercel path `/api/stripe-webhook`). The event 
 
 ## 7. Rain API
 
-Separate repo: `wsegbert65360/RainAPI`, branch `feat/rain-api-auth-enforce`. This AcreLedger repo only sends the token and `field_id`.
+Separate repo: `wsegbert65360/RainAPI`, `main` (`feat/rain-api-auth-enforce` merged as PR #2; `58d7ed5` or later). This AcreLedger repo only sends the token and `field_id`.
 
-20. [ ] Deploy that branch with `RAIN_API_AUTH=off` (allowed values `off`, `log`, `enforce`; default `off`).
+20. [ ] Deploy RainAPI `main` with `RAIN_API_AUTH=off` (allowed values `off`, `log`, `enforce`; default `off`).
 
 21. [ ] Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on that project. `log` and `enforce` need the service role key. `off` does not check the farm.
 
