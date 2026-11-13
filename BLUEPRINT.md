@@ -27,10 +27,10 @@ only after checking that section’s implementation, recording the date, commit,
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
 - **2026-11-13** - Ask the Book stays in the app only for the owner's own farm, stays out of marketing, and is not deleted. Removal inventory is under Ask the Book Read Registry.
-- **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
+- **2026-11-09** - Free and Pro are on main. Leave `ENTITLEMENTS_MODE` off. Permanent free record book plus **Pro** ($299/farm/year). Code plans are `free | paid | complimentary` (complimentary is the owner farm only). There is no trial. Spray photo capture is removed. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
-- **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
-- **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
+- **2026-11-01** — Added service-managed farm comps and membership-checked status RPC. The trial start/end line from this change was removed with the trial. Enforcement remains OFF.
+- **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. The checkout trial pass-through described here was removed on 2026-11-09 (Checkout never sets `trial_end`). Allowlist, native purchase suppression, and access enforcement staying off are unchanged.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). `VITE_BILLING_ALLOWLIST` is unused; the client caches `{ userId, allowlisted }` in memory and only uses it when the cached user id matches. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere; empty or unset fails closed to "Billing coming soon".
 - **2026-10-17** — Documented compliance profiles (`us-epa` / `au-apvma`), region preferences, the `auPilot` allowlist gate, locale terminology, and the area-unit boundary in a new [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot) section; `SprayRecord` now shows the real `complianceProfile` union plus `pic` / `waterRate` / `waterRateUnit`. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration, not a gate. Service Worker rewritten for the network-first navigation route, the 3 s timeout, the precache fallback, and the single-retry reload guard.
 - **2026-10-16** — AU pilot card gated by `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141_add_spray_water_rate_unit_pic.sql`; root clutter gitignored; parked equipment mutations overlaid onto the retained cache on a fail-soft fetch.
@@ -804,10 +804,12 @@ The live auth integration suite verifies forbidden operations by asserting Postg
 
 ### Stripe Billing (Test Mode, Web Only)
 
-`farm_comps` is service-managed billing infrastructure, soft-deleted through `deleted_at`, with no client table grants. `get_farm_comp_status` exposes only live status/expiry to the caller's current farm membership. No comp IDs are seeded. `billing_audit_log` is a service-role-only append table (RLS enabled, no client policies, grants match `farm_comps`) with an AFTER INSERT OR UPDATE trigger on `farm_comps`: action `insert` on insert, `soft_delete` when `deleted_at` first becomes set, otherwise `update`. There is no DELETE trigger. Comps and the audit log are excluded from customer backup/restore and Ask the Book (private billing metadata), and classified separately in owner recovery. This status changes display only: live comps replace the Settings trial line and suppress countdown reminders; Settings otherwise shows local trial start/end dates. No access enforcement, settings flag, or native purchase UI is added.
+`farm_comps` is service-managed billing infrastructure, soft-deleted through `deleted_at`, with no client table grants. `get_farm_comp_status` exposes only live status/expiry to the caller's current farm membership. No comp IDs are seeded. `billing_audit_log` is a service-role-only append table (RLS enabled, no client policies, grants match `farm_comps`) with an AFTER INSERT OR UPDATE trigger on `farm_comps`: action `insert` on insert, `soft_delete` when `deleted_at` first becomes set, otherwise `update`. There is no DELETE trigger. Comps and the audit log are excluded from customer backup/restore and Ask the Book (private billing metadata), and classified separately in owner recovery. This status changes display only: a live comp is complimentary access for the owner farm. Settings does not show a trial. Do not turn on access enforcement. There is no in-app purchase. The US-storefront website link is separate and must stay.
 
-Billing is implemented but intentionally restricted to Stripe test mode. The Settings card is
-web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and remains hidden in Capacitor. Internal
+Billing is implemented but intentionally restricted to Stripe test mode. The Stripe Settings card is
+web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and stays hidden on Capacitor
+(`isBillingUiAvailable`). The US-storefront website link in `PlanUpgradeLink` is deliberate and
+must stay; the plan card renders only when entitlements are enforced, and `ENTITLEMENTS_MODE` stays `off`. Internal
 rollout is gated by the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs).
 `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and
 optional with a warning elsewhere; empty or unset means billing is unavailable at runtime. The
@@ -816,15 +818,14 @@ client asks `GET /api/billing-eligibility` with the caller's bearer token and ne
 remain absent or exactly `false`, and the server accepts only `sk_test_` keys until the owner
 explicitly approves a production/legal rollout.
 
-Product access enforcement is off by default. A missing or soft-deleted subscription row is
-`unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
-passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
+`ENTITLEMENTS_MODE` stays `off`. While it is off, a missing or soft-deleted subscription row is
+`unmanaged` and retains full access. Do not set the flag to `shadow` or `enforce`. Absence of billing data must not become a paywall.
 
-#### Free tier and Pro (branch `feat/free-tier`, enforcement OFF)
+#### Free tier and Pro
 
-The app is a permanent free record book; the paid plan is **Pro** ($299 per farm per year,
-web-only purchase; iOS shows a US-storefront-only website link that fails closed). One server
-flag `ENTITLEMENTS_MODE = off | shadow | enforce` (default `off`) lives in `entitlement_config`.
+Customer tiers are Free and Pro. The app is a permanent free record book; Pro is **$299 per farm per year**,
+bought on the web. The iOS US-storefront website link fails closed and must not change. One account per farm. No ads.
+`ENTITLEMENTS_MODE` stays `off` (`off | shadow | enforce` exist in `entitlement_config`).
 The server is the source of truth: `_farm_entitlement` resolves `free | paid | complimentary`
 (comp row wins). `active` is `paid` until `current_period_end`. A failed renewal is `paid` for
 14 days from `farm_subscriptions.past_due_since` (`20261110160000_billing_past_due_since.sql`),
@@ -840,13 +841,13 @@ Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 (`20261107040000_rainfall_tiering.sql`), with `rainfall_field_hourly_allowed(field_id)`
 (service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
 edge function. Pro: all-field hourly rainfall, grain bins and movement, equipment, FSA tract
-entry, landlord splits, backup restore, prepared reports. Complimentary is the owner farm only.
+entry, landlord splits, backup restore, prepared reports. Terms call those reports landlord summaries. Complimentary is the owner farm only, not a sold tier. SQL still returns `photo_cap` 20, `history_seasons` 2, and `device_cap` 1; those are not live limits.
 Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. Photo capture is not in this build (a later Pro photo feature is only a possibility). Legacy spray-note attachment tokens are still parsed on edit and in the spray PDF, as described in AGENTS under Spray Wizard Pattern. The iOS camera and photo-library usage strings stay.
 
 There is no trial: `ensure_user_farm()` stamps no trial dates (`20261109210000_remove_trial.sql`),
 the trial columns and `trial_claims` table remain unused, and a stale `trial_ends_at` grants
-nothing. The free-farm report preview is client-only (the full report component is not mounted). Not built yet: server-rendered reports, Rain API gating, 60-day unused-farm
-rainfall pause, US-only July 15 reminder, over-50-field chooser, one-device limit. Hand-off:
+nothing. The free-farm report preview is client-only (the full report component is not mounted). The app sends a Supabase bearer token to the Rain API (`RainService`). `RAIN_API_AUTH` is not enforcing; do not set it to `enforce`. Not built yet: server-rendered reports, the 60-day unused-farm
+rainfall pause, the US-only July 15 reminder, the over-50-field chooser, and the one-device limit. Hand-off:
 `docs/free-tier-handoff.md`.
 
 SUPERSEDED 2026-11-09 on `feat/free-tier`: there is no trial. New farms never get trial dates, the `legacy_trial` plan is gone, and Checkout never passes `trial_end`. The paragraph below is history.
@@ -860,9 +861,9 @@ the postgres-owned `ensure_user_farm` reads it. Claims retain their hash after A
 (`user_id ON DELETE SET NULL`), preventing another trial for the same email. A different
 email is a different identity; this is not real-person identity verification. Preserve the
 salt and claims together in full-project recovery, never tenant/customer exports. Existing farms are not stamped by
-onboarding and await rollout backfill. Enforcement stays OFF. Trial metadata and
-claims are excluded from customer backup/restore. Stripe checkout reuses the server-stamped farm trial deadline only when more than 48 hours remain.
-The existing 14-day `past_due` access rule is unchanged by this checkout update.
+onboarding and were never backfilled. Trial metadata and
+claims stay out of customer backup and restore. Checkout no longer reads a farm trial date; see the checkout rules below.
+The 14-day `past_due` access rule is separate from this removed trial.
 `farm_subscriptions` is the authoritative local entitlement mirror; the client never treats query
 parameters or client-reported Stripe state as authoritative. Farm members may select their
 farm's active row, but only service-role server paths write it. The eligibility, checkout, and
