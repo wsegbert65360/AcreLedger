@@ -335,9 +335,11 @@ export default function FieldDetailScreen() {
               </div>
             )}
           </div>
-          <p className="text-xs font-medium text-muted-foreground italic">
-            Rainfall updated daily at 8:00 AM
-          </p>
+          {rainLocked && (
+            <p className="text-xs font-medium text-muted-foreground italic">
+              Rainfall updated daily at 8:00 AM
+            </p>
+          )}
         </section>
 
         {hasFieldMapData && (

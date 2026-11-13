@@ -241,6 +241,19 @@ describe('RainService', () => {
     expect(result.dataWarning).toBe('IEM Stage IV data — 1-2 hour lag from real-time');
   });
 
+  it('shows a radar warning repeated by all three requests only once', async () => {
+    const warning = 'Radar data unavailable for 1 day(s): 2026-11-13.';
+    (fetch as any)
+      .mockResolvedValueOnce(buildApiResponse({ '12h': 0, '24h': 0, '72h': 0, '168h': 0 }, { dataWarning: warning }))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rain: { total: 2.5 }, dataWarning: warning }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ rain: { total: 0.75 }, dataWarning: warning }) });
+    const result = await RainService.fetchComprehensiveRainfall({
+      fieldId: mockFieldId, lat: 38.46, lng: -93.53,
+      sincePlantingDate: daysAgo(30), sinceLastSprayDate: daysAgo(14)
+    });
+    expect(result.dataWarning).toBe(warning);
+  });
+
   it('no dataWarning when not provided by API', async () => {
     (fetch as any).mockResolvedValue(buildApiResponse({
       '12h': 0.1, '24h': 0.1, '72h': 0.5, '168h': 0.8
