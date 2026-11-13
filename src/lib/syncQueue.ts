@@ -866,6 +866,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
                 ? 'farm_id,tract_key,clu_number'
                 : null;
             const query = supabase.from(mutation.table_name);
+            // farm-write-allowlist: upsert — conflictColumns is set only for fsa_tract_imports and field_clu_assignments, so this replay upsert cannot target another table.
             response = conflictColumns
               ? await query.upsert(
                 [{ ...mutation.payload, farm_id: farmId }],
