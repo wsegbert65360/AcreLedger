@@ -292,6 +292,40 @@ export function findUpsertViolations(source, file) {
   return violations;
 }
 
+export function findUpdateSelectViolations(source, file) {
+  const { code, allow } = maskSource(source);
+  const violations = [];
+  for (const chain of fromChains(code)) {
+    const updateAt = chain.methods.findIndex((method) => method.name === 'update');
+    if (updateAt < 0) continue;
+    const select = chain.methods.slice(updateAt + 1).find((method) => method.name === 'select');
+    if (select) {
+      if (!allowed(allow, select.index, source, 'update-select')) {
+        violations.push({
+          file,
+          line: lineAt(source, select.index),
+          rule: 'update-select',
+          message: '.select() chained after .update() (deleted_at SELECT policy hides the row and the client rolls back)',
+        });
+      }
+      continue;
+    }
+    const name = assignedFromName(code, chain.fromIndex);
+    if (!name) continue;
+    const callRe = new RegExp(`\\b${name}\\s*\\.\\s*select\\s*\\(`, 'g');
+    for (const match of code.matchAll(callRe)) {
+      if (allowed(allow, match.index, source, 'update-select')) continue;
+      violations.push({
+        file,
+        line: lineAt(source, match.index),
+        rule: 'update-select',
+        message: `.select() after .update() via ${name} (deleted_at SELECT policy hides the row and the client rolls back)`,
+      });
+    }
+  }
+  return violations;
+}
+
 export function scanDeleteText(source, file, tables) {
   return findDeleteViolations(source, file, tables);
 }
@@ -318,6 +352,7 @@ export function scanSrcWrites(srcDir = resolve(root, 'src'), tables = loadFarmOw
     const file = relative(root, path);
     violations.push(...findDeleteViolations(source, file, tables));
     violations.push(...findUpsertViolations(source, file));
+    violations.push(...findUpdateSelectViolations(source, file));
   }
   return violations;
 }
