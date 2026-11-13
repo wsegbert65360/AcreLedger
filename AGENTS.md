@@ -100,7 +100,7 @@ Rules), then open only the files for that area.
 - [@/lib/complianceReports/fsa578PdfExport.ts](./src/lib/complianceReports/fsa578PdfExport.ts) — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
 - [@/lib/complianceReports/generateLandlordSummary.ts](./src/lib/complianceReports/generateLandlordSummary.ts) — Landlord Summary and farm-wide Farm Owner Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
 - [@/components/reports/LandlordSummaryReport.tsx](./src/components/reports/LandlordSummaryReport.tsx) — Landlord tab UI for Landlord Summary and Farm Owner Summary (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
-- [@/lib/sprayExport.ts](./src/lib/sprayExport.ts) — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
+- [@/lib/sprayExport.ts](./src/lib/sprayExport.ts) — universal spray log PDF export. Legacy `[ATTACHMENT:…]` note tokens are stripped from the text and embedded as images. There is no photo-capture control.
 
 **FSA tracts & CLU**
 - [@/types/fsaTract.ts](./src/types/fsaTract.ts) — canonical FSA tract import and CLU assignment types.
@@ -594,7 +594,7 @@ Keep each step component under ~150 lines. All form state lives in `useSprayForm
 
 Spray also has an in-cab quick mode controlled by `useSprayForm.isQuickMode`; preserve both the quick path and full wizard path when changing validation, save behavior, or field prefills. Quick mode is optimized for glove-friendly spray logging and still writes through the same `handleSubmit` path.
 
-Spray photo/ticket attachments are stored in `notes` as `[ATTACHMENT:data:image/...;base64,...]` tokens. UI and exports must parse/strip this token and render the image separately; never display or export raw base64 attachment text. `sprayExport.ts` is responsible for embedding the attachment image in PDF exports.
+Spray photo capture is gone. The form has no camera or photo-library control, and nothing in the wizard renders an attachment image. Legacy `notes` may still contain one `[ATTACHMENT:data:image/<type>;base64,<payload>]` token. `useSprayForm` parses that token when a record is opened, keeps the bytes in component state (not shown), and writes the same token back on save so an edit does not drop it. Duplicate mode clears those bytes and does not copy the token. `src/lib/sprayExport.ts` strips the token from PDF note text and embeds the image. Ask the Book replaces it with `[image attachment present; binary omitted]` before the model sees the note. Do not display or export the raw token or base64 text. iOS camera and photo-library usage strings stay for a possible later Pro photo feature; this build does not collect photos. Do not add a capture control.
 
 After a successful new spray with a novel mix, `useSprayForm` may prompt to save the mix as a spray recipe. Keep that recipe dialog mounted until the user confirms or cancels, even if the spray record itself has already saved. Recipe duplicate checks should compare product name, rate, rate unit, and EPA registration number, not product names alone.
 

@@ -676,8 +676,9 @@ Implemented design:
 - The package covers roles, schema, all application and private data (including soft-deleted
   rows), Supabase Auth, Storage metadata, actual Storage object bytes, and a non-secret project
   configuration inventory. Database backups alone do not contain Storage object bytes.
-- Current spray image attachments live as base64 tokens in database rows and must remain intact in
-  the owner archive; AI-boundary data minimization does not apply to disaster recovery.
+- Legacy spray notes may still hold one `[ATTACHMENT:data:image/…;base64,…]` token. New capture
+  is gone. Those tokens must remain intact in the owner archive; AI-boundary data minimization
+  does not apply to disaster recovery.
 - The complete package is checksummed, compressed, and public-key encrypted before Drive upload.
   Runtime credentials stay in Google Secret Manager; the worker receives only the encryption
   public key, while the owner keeps the private recovery key offline in two locations.
@@ -840,8 +841,7 @@ Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 (service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
 edge function. Pro: all-field hourly rainfall, grain bins and movement, equipment, FSA tract
 entry, landlord splits, backup restore, prepared reports. Complimentary is the owner farm only.
-Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. There are no photos in the
-current build (Pro-only photos are a later feature); the iOS camera/photo usage strings stay.
+Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. Photo capture is not in this build (a later Pro photo feature is only a possibility). Legacy spray-note attachment tokens are still parsed on edit and in the spray PDF, as described in AGENTS under Spray Wizard Pattern. The iOS camera and photo-library usage strings stay.
 
 There is no trial: `ensure_user_farm()` stamps no trial dates (`20261109210000_remove_trial.sql`),
 the trial columns and `trial_claims` table remain unused, and a stale `trial_ends_at` grants
