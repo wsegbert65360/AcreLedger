@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-11-01 (farm_comps billing audit log).
+> **Last updated:** 2026-11-13 (Ask the Book stays on only for the owner's farm and out of marketing).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-13** - Ask the Book stays in the app only for the owner's own farm, stays out of marketing, and is not deleted. Removal inventory is under Ask the Book Read Registry.
 - **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
@@ -927,6 +928,23 @@ the reset UI. Keep
 the Supabase redirect allowlist, `Info.plist` URL registration, app listener, and tests synchronized.
 
 ### Ask the Book Read Registry
+
+**Status (owner, 2026-10-31, PR #81):** Ask the Book stays in the repo and stays on only for the owner's own farm. `isAskBookEnabled` (`src/lib/askBookAccess.ts`) allowlists one farm id. `src/App.tsx`, `src/components/Sidebar.tsx`, `src/pages/Index.tsx`, and `src/context/AskAcreLedgerContext.tsx` hide the drawer unless that check passes. `api/ai-assistant.ts` returns 403 for every other farm. Do not add farms, do not remove the gate, and do not copy that farm id into docs or marketing. It is not a marketed feature. Do not delete the code unless the owner says to remove it. The privacy policy still discloses the assistant, because the allowlisted farm can still send a question.
+
+**Full removal would touch (do not do this unless the owner asks):**
+
+Code: `src/lib/askBookAccess.ts`, `src/lib/askBookAccess.test.ts`, `src/lib/askSuggestions.ts`, `src/lib/askSuggestions.test.ts`, `src/lib/speech.ts`, `src/lib/__tests__/speech.test.ts`, `src/hooks/useAskVoice.ts`, `src/context/AskAcreLedgerContext.tsx`, `src/context/__tests__/AskAcreLedgerContext.test.tsx`, `src/components/AskAcreLedger.tsx`, `src/components/__tests__/AskAcreLedger.test.tsx`, `src/services/aiAssistantService.ts`, `src/services/__tests__/aiAssistantService.test.ts`, `src/test/aiAssistant.test.ts`, `src/test/aiAssistantTools.test.ts`, `api/ai-assistant.ts`, `server/ai-assistant-tools.ts`, the Ask mounts in `src/App.tsx`, `src/components/Sidebar.tsx`, and `src/pages/Index.tsx`, plus Ask mocks in `src/components/__tests__/Sidebar.test.tsx` and `src/pages/Index.test.tsx`, and the Ask read in `src/lib/__tests__/auth.integration.test.ts`. Voice packages used only here: `@capacitor-community/speech-recognition` and `@capacitor-community/text-to-speech`.
+
+Shared with weather — do not delete the weather half: `server/providerDailyUsage.ts`, `src/test/providerDailyUsage.test.ts`, `usage_private.provider_daily_usage`, and `supabase/migrations/20261015180814_review_09_provider_caps_and_finalize.sql`.
+
+Tables and functions: schema `ai_assistant_private`; tables `ai_assistant_private.rate_limits` and `ai_assistant_private.turns` (also `scripts/recovery/tenant-registry.ts`); `public.consume_ai_assistant_request`; `public.finalize_ai_assistant_turn`; `ai_assistant_private.purge_old_turns`; cron job `ai-assistant-turns-retention`. Migrations: `supabase/migrations/20260827002849_ai_assistant_quota.sql` and the grant list in `supabase/migrations/20261013035852_db_access_review_02_m3_m4.sql`.
+
+Env vars: `OPENROUTER_API_KEY`, `AI_MODEL`, `AI_DAILY_CAP`, `VITE_AI_ASSISTANT_URL` (also `codemagic.yaml` and `vercel.json` `api/ai-assistant.ts`).
+
+Doc sections: this section, [AGENTS.md](./AGENTS.md) AI Assistant / Ask the Book, `README.md` (the `/api/ai-assistant` paragraph), `docs/plans/2026-08-26-ai-assistant.md`, `IOS_RELEASE.md`, `docs/app-store/2026-10-01-submission-package.md`, `docs/plans/2026-10-08-android-capacitor-play-store.md`, `docs/plans/2026-10-09-capacitor-8-upgrade.md`, `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`, `src/pages/Privacy.tsx`, and `docs/free-tier-release-checklist.md` (that checklist currently names the farm id; do not copy the id).
+
+Open owner question: remove Ask the Book entirely, or keep this one-farm gate?
+
 `server/ai-assistant-tools.ts` is the only database read catalog exposed to the AI assistant. It uses the authenticated caller's JWT and publishable/anon key, keeps RLS as the primary tenant boundary, and adds the authoritative current `farm_id` to every direct or joined query. It must never use a service-role/secret key, raw SQL, caller-provided table names, or mutation methods.
 
 The registry covers all active user-facing farm records across every season: farm/profile context, fields, bins, planting, spray/custom spray, fertilizer, tillage, harvest, hay, grain movements, saved seeds, spray/fertilizer recipes, FSA tracts, CLU assignments, work requests, and stored rainfall. Soft-deleted records, other farms, `auth`, and private operational schemas are excluded. Binary image payloads and raw geometry coordinate arrays are summarized before model exposure; the rest of each permitted record remains readable.

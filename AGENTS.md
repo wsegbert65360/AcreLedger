@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-10 (free farms can undo the latest pre-season reset; file backup restore stays Pro).
+> **Last updated:** 2026-11-13 (Ask the Book stays on only for the owner's farm and out of marketing).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,6 +25,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-13** - Ask the Book stays in the app only for the owner's own farm (`isAskBookEnabled`), stays out of marketing, and is not deleted. See [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
 - **2026-11-10** - Free farms undo the latest pre-season reset with `undo_pre_season_reset` (server snapshot, 30 days, no Pro check). Uploading a backup file still uses `restore_farm_backup` and stays Pro. Rollover calls `start_pre_season_reset` after the JSON download.
 - **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year). Server flag `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`. The trial is removed (no farm gets trial dates; Checkout never sets `trial_end`). Spray photo capture is removed from the app. See the Free tier bullet in the billing section and `docs/free-tier-handoff.md`.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
@@ -89,7 +90,7 @@ Rules), then open only the files for that area.
 - [@/lib/fieldLocation.ts](./src/lib/fieldLocation.ts) — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
 
 **AI assistant (Ask the Book)**
-- [api/ai-assistant.ts](./api/ai-assistant.ts) + [server/ai-assistant-tools.ts](./server/ai-assistant-tools.ts) — read-only Ask the Book Vercel Function and its allowlisted named-tool read catalog. Rules: [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
+- [src/lib/askBookAccess.ts](./src/lib/askBookAccess.ts) — one-farm gate. [api/ai-assistant.ts](./api/ai-assistant.ts) + [server/ai-assistant-tools.ts](./server/ai-assistant-tools.ts) — read-only Vercel Function and named-tool catalog, used only when that gate passes. Not a marketed feature. Rules: [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
 
 **Reports & exports**
 - [@/lib/complianceReports](./src/lib/complianceReports) — report generation.
@@ -246,6 +247,10 @@ Canonical detail: [BLUEPRINT → Database Conventions](./BLUEPRINT.md#5-database
 - Do not bypass RLS assumptions in client code.
 
 ### AI Assistant / Ask the Book
+
+**Status (owner, 2026-10-31, PR #81):** Ask the Book stays in the repo. It is on only for the owner's own farm. `isAskBookEnabled` in [src/lib/askBookAccess.ts](./src/lib/askBookAccess.ts) is the allowlist (one farm id). The same check gates the drawer in `src/App.tsx`, `src/components/Sidebar.tsx`, `src/pages/Index.tsx`, and `src/context/AskAcreLedgerContext.tsx`. `api/ai-assistant.ts` returns 403 for every other farm. Do not add farms, do not remove the gate, and do not name that farm or its id in docs or marketing. It is not a marketed feature: do not add it to Landing, the product description, or store listing copy. The privacy policy still discloses it, because the allowlisted farm can still send a question. Do not delete this code unless the owner says to remove it.
+
+A full removal would touch the files, tables, env vars, and doc sections listed under [BLUEPRINT → Ask the Book Read Registry](./BLUEPRINT.md#ask-the-book-read-registry). Open owner question: remove Ask the Book entirely, or keep this one-farm gate?
 
 Canonical detail: [BLUEPRINT → Ask the Book Read Registry](./BLUEPRINT.md#ask-the-book-read-registry).
 
