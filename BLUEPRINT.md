@@ -792,7 +792,7 @@ Also add the table to the sync queue `ALLOWED_TABLES`, backup schema and `restor
 Every farm-owned table has RLS enabled with policies that restrict access to the caller's `farm_id` through `public.profiles`. Current state:
 
 - **Core tables** (`fields`, `bins`, `plant_records`, `spray_records`, `harvest_records`, `hay_harvest_records`, `fertilizer_applications`, `tillage_records`, `grain_movements`, `saved_seeds`, `fertilizer_recipes`, `spray_recipes`), plus `custom_spray_records` and `work_requests`: no `DELETE` grant for `authenticated`, a SELECT policy with `deleted_at IS NULL`, and the restrictive "Restrict updates on deleted rows" policy. Soft-deleted rows are therefore invisible and immutable to clients; restores go through `restore_farm_backup`.
-- **`fsa_tract_imports` and `field_clu_assignments`**: no `DELETE` grant, but the SELECT policy intentionally omits `deleted_at IS NULL` and there is no restrictive update policy, so their conflict-key upserts can resurrect tombstones. Client code must filter soft-deleted rows for these two tables.
+- **`fsa_tract_imports` and `field_clu_assignments`**: no `DELETE` grant, but the SELECT policy intentionally omits `deleted_at IS NULL` and there is no restrictive update policy, so their conflict-key upserts can resurrect tombstones. Client code must filter soft-deleted rows for these two tables. A new table must not copy that omission: `npm run verify:migrations` (`scripts/farm-table-migration-guard.mjs`) requires `deleted_at IS NULL` on a client SELECT policy.
 - **Legacy grant:** the core tables still carry a `GRANT SELECT ... TO anon` from `20260628100000`. It exposes no rows because every policy targets `authenticated`, but new tables must not copy it. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` revokes those grants and applies the unique-active-grain and tenant-FK guards.
 
 Restore works through the authenticated `restore_farm_backup` `SECURITY DEFINER` wrapper; its internal restore helpers must not be granted to `anon` or `authenticated`.
@@ -983,8 +983,7 @@ inject the authoritative current `farmId` before mapper validation, then omit it
 payload.
 
 ### FSA / CLU Upsert Exception
-The default rule remains no `upsert` for updates. The only farm-owned exception is insert/replay
-for `fsa_tract_imports` and `field_clu_assignments`:
+`npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` except these two tables. `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` for the same pair. Insert, replay, and backup restore still use:
 - `fsa_tract_imports`: upsert on `farm_id,tract_key`.
 - `field_clu_assignments`: upsert on `farm_id,tract_key,clu_number`.
 - Normal update and soft-delete paths still use `.update().eq('id', id).eq('farm_id', farm_id)`.
@@ -992,10 +991,7 @@ for `fsa_tract_imports` and `field_clu_assignments`:
 
 ### Soft Delete
 `.update({ deleted_at: new Date().toISOString() }, { count: 'exact' }).in('id', ids).eq('farm_id', farm_id)`
-Never use Supabase `.delete()` on user records (clients have no `DELETE` grant on farm tables).
-Do not chain `.select()` to confirm a soft delete: the `deleted_at IS NULL` SELECT policy hides the
-updated row from the returning clause, so the client would see 0 rows and falsely roll back. Check
-the exact count instead (`count === ids.length`).
+`npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/`, and rejects `.select()` chained after `.update()`. Check the exact count instead (`count === ids.length`).
 
 ---
 

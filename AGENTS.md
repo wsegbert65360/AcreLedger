@@ -164,8 +164,7 @@ Rules), then open only the files for that area.
 
 ### Data Safety
 
-- Never hard-delete user farm records.
-- Use soft delete by setting `deleted_at` to an ISO timestamp.
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/`. Soft-delete by setting `deleted_at` to an ISO timestamp.
 - Active records always have `deleted_at === null`.
 - Client logic must exclude soft-deleted records.
 - Supabase RLS must also exclude or protect soft-deleted records where applicable.
@@ -234,12 +233,12 @@ Offline and cascading mutations:
 
 Canonical detail: [BLUEPRINT → Database Conventions](./BLUEPRINT.md#5-database-conventions).
 
-- Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
-- **Do not use `.select()` in update or soft-delete mutations** to verify success. The `deleted_at IS NULL` SELECT policy hides a just-soft-deleted row from the returning clause, so the client sees 0 rows and falsely rolls back. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
-- Sole exception to the upsert rule: inserts, offline replay, and backup restore for `fsa_tract_imports` (`farm_id,tract_key`) and `field_clu_assignments` (`farm_id,tract_key,clu_number`) must upsert on those conflict keys so soft-deleted rows are resurrected. Do not "fix" them into plain inserts. Details: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` except `fsa_tract_imports` and `field_clu_assignments`. The replay call in `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` because it runs only for those two tables. Conflict keys: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.select()` chained after `.update()` in `src/`. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
 - Public tables/views/materialized views must not grant PG17 MAINTAIN to anon, authenticated, or PUBLIC. See [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory) for default-privilege limits and rollback scope.
 - New migrations use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql` (checked by `npm run verify:migrations`).
-- New farm-owned tables follow the strict template in [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory): RLS enabled, farm-scoped policies through `public.profiles`, `SELECT, INSERT, UPDATE` (no `DELETE`) for `authenticated`, no `anon` grant, `deleted_at IS NULL` in the SELECT policy, and the restrictive "no updates on deleted rows" policy. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` consolidates the unique-active-grain index, farm-scoped harvest/grain FK, and anon revoke on the 12 core tables.
+- `npm run verify:migrations` (`scripts/farm-table-migration-guard.mjs`) rejects a new public table with `farm_id` (migrations after `20261110190000`) that skips RLS, grants DELETE to anon, authenticated, or PUBLIC, grants anything to anon, or has a client SELECT policy without `deleted_at IS NULL`.
+- Also keep the restrictive "no updates on deleted rows" policy from [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory). The migration guard does not check that policy. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` consolidates the unique-active-grain index, farm-scoped harvest/grain FK, and anon revoke on the 12 core tables.
 - New `public` tables, functions, and sequences need explicit `GRANT`s to `authenticated` and/or `service_role`. Default privileges no longer give client roles (or PUBLIC) access.
 - `profiles` is a security boundary: clients may update only `active_season` and `onboarding_complete`; farm membership is assigned only through `ensure_user_farm`. `active_season` stays within `[2000, currentYear + 1]`, including inside any `SECURITY DEFINER` RPC such as `restore_farm_backup`. Details: [BLUEPRINT → Profile Membership Protection](./BLUEPRINT.md#profile-membership-protection).
 - Live profile-security tests assert PostgreSQL `42501` using non-mutating probes only (see [Testing](#testing)).
@@ -325,7 +324,7 @@ Canonical detail: [BLUEPRINT → FsaTractImport](./BLUEPRINT.md#fsatractimport),
 
 Data and assignments:
 
-- FSA tract imports and CLU assignments are farm-owned: farm scoping, mapper discipline (`mapFsaTractFromDb`/`mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`/`mapFieldCluAssignmentToDb`), optimistic updates, and soft delete all apply. Never hard-delete assignments.
+- FSA tract imports and CLU assignments are farm-owned: farm scoping, mapper discipline (`mapFsaTractFromDb`/`mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`/`mapFieldCluAssignmentToDb`), optimistic updates, and soft delete all apply. `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.delete()` on these tables in `src/`.
 - Changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup schema, bundled tract helpers, assignment UI, and FSA reports/tests.
 - CLU parsing, map rendering, and centroids must support `Polygon` and `MultiPolygon`; use `@/lib/geoHelpers.ts`.
 - `parseCluFile` is the only import entry point (GeoJSON and ESRI shapefile ZIP). Do not add a component-only parser or unzip path.
