@@ -211,7 +211,8 @@ export const RainService = {
       ]);
 
       const rangeWarnings = [plantingResult.dataWarning, sprayResult.dataWarning].filter(Boolean);
-      const combinedWarning = [mainData.dataWarning, ...rangeWarnings].filter(Boolean).join(' ') || undefined;
+      // The three requests often hit the same missing radar day; say it once.
+      const combinedWarning = [...new Set([mainData.dataWarning, ...rangeWarnings].filter(Boolean))].join(' ') || undefined;
 
       return {
         '24h': Math.round(Number(rain['24h'] || 0) * 1000) / 1000,

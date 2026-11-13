@@ -48,10 +48,12 @@ let subscriptionResult: SubscriptionResult = { data: null, error: null };
 const fromMock = vi.hoisted(() => vi.fn());
 const getSessionMock = vi.hoisted(() => vi.fn());
 const refreshSessionMock = vi.hoisted(() => vi.fn());
+const rpcMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: fromMock,
+    rpc: rpcMock,
     auth: { getSession: getSessionMock, refreshSession: refreshSessionMock },
   },
 }));
@@ -115,6 +117,7 @@ beforeEach(() => {
   farmState.session = { ...defaultSession, user: { ...defaultSession.user } };
   farmState.farm_id = 'farm-1';
   subscriptionResult = { data: null, error: null };
+  rpcMock.mockResolvedValue({ data: [], error: null });
   clearBillingEligibilityCache();
   getSessionMock.mockResolvedValue({
     data: {
@@ -386,6 +389,17 @@ describe('BillingManager', () => {
     expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
     expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
+  });
+
+  it('shows a complimentary farm without a subscription as Complimentary, with nothing to buy', async () => {
+    rpcMock.mockResolvedValue({ data: [{ is_comped: true, expires_at: null }], error: null });
+    renderBilling();
+
+    expect(await screen.findByText('Complimentary access')).toBeInTheDocument();
+    expect(await screen.findByText('Complimentary')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
+    expect(screen.queryByText('Not subscribed')).toBeNull();
+    expect(screen.queryByText('No billing subscription for this farm yet.')).toBeNull();
   });
 
   it('always refreshes and posts the refreshed token, not the stale store snapshot', async () => {

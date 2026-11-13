@@ -195,7 +195,11 @@ export default function BillingManager() {
   const isOwner = hasActiveRow && subscription.owner_user_id === userId;
   // No row yet: the first allowlisted member to check out becomes the owner.
   const canManage = !hasActiveRow || isOwner;
-  const badge = getStatusBadge(subscription, { allowlisted: allowlisted === true });
+  // A complimentary farm with no live subscription has nothing to buy or manage.
+  const compOnly = comped && !hasActiveRow;
+  const badge = compOnly
+    ? { label: 'Complimentary', className: 'bg-plant/10 text-plant border-plant/20' }
+    : getStatusBadge(subscription, { allowlisted: allowlisted === true });
   // past_due/unpaid subscriptions are still live in Stripe, so those owners fix
   // payment in the portal; a second Checkout would create a parallel subscription.
   const needsCheckout =
@@ -214,7 +218,7 @@ export default function BillingManager() {
             <CreditCard size={18} className="text-primary" />
             Billing
           </span>
-          {eligibilityKnown && (!allowlisted || subscriptionLoaded) && <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
+          {(compOnly || (eligibilityKnown && (!allowlisted || subscriptionLoaded))) && <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
             {badge.label}
           </Badge>}
         </CardTitle>
@@ -223,7 +227,7 @@ export default function BillingManager() {
         {comped ? (
           <p className="text-sm text-foreground">Complimentary access{farmComp?.expires_at ? ` until ${formatBillingDate(farmComp.expires_at)}` : ''}</p>
         ) : null}
-        {!eligibilityKnown ? null : !allowlisted ? (
+        {!eligibilityKnown || compOnly ? null : !allowlisted ? (
           <p className="text-sm text-muted-foreground">
             Free record book. No card needed. Pro is $299 per farm per year.
           </p>
