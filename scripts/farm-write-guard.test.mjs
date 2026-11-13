@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { farmOwnedTables, findDeleteViolations, loadFarmOwnedTables } from './farm-write-guard.mjs';
+import { farmOwnedTables, findDeleteViolations, findUpsertViolations, loadFarmOwnedTables } from './farm-write-guard.mjs';
 
 const registry = `
   { schema: "public", table: "fields", ownership: "direct", farmColumn: "farm_id" },
@@ -43,6 +43,20 @@ test('flags a non-literal .from().delete() and honors the allowlist comment', ()
   assert.equal(findDeleteViolations(bad, 'src/example.ts', tables).length, 1);
   const allowed = `// farm-write-allowlist: delete — not a farm record\nconst query = supabase.from(tableName);\nawait query.delete();`;
   assert.deepEqual(findDeleteViolations(allowed, 'src/example.ts', tables), []);
+});
+
+test('allows upsert only on the two FSA and CLU tables', () => {
+  const ok = `
+    await supabase.from('fsa_tract_imports').upsert(row, { onConflict: 'farm_id,tract_key' }).select().single();
+    await supabase.from('field_clu_assignments').upsert(row, { onConflict: 'farm_id,tract_key,clu_number' });
+  `;
+  assert.deepEqual(findUpsertViolations(ok, 'src/example.ts'), []);
+  const bad = `await supabase.from('fields').upsert(row);`;
+  assert.equal(findUpsertViolations(bad, 'src/example.ts').length, 1);
+  const dynamic = `const query = supabase.from(mutation.table_name);\nawait query.upsert(row);`;
+  assert.equal(findUpsertViolations(dynamic, 'src/example.ts').length, 1);
+  const allowed = `// farm-write-allowlist: upsert — conflict key is one of the two tables\nconst query = supabase.from(mutation.table_name);\nawait query.upsert(row);`;
+  assert.deepEqual(findUpsertViolations(allowed, 'src/example.ts'), []);
 });
 
 test('does not flag a delete mentioned only in a comment or string', () => {

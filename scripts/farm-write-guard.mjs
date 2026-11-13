@@ -254,6 +254,44 @@ export function findDeleteViolations(source, file, tables) {
   return violations;
 }
 
+const UPSERT_TABLES = new Set(['fsa_tract_imports', 'field_clu_assignments']);
+
+function upsertReason(table) {
+  return table
+    ? `.upsert() on ${table} (only fsa_tract_imports and field_clu_assignments may upsert)`
+    : '.upsert() on a non-literal .from() (only fsa_tract_imports and field_clu_assignments may upsert)';
+}
+
+export function findUpsertViolations(source, file) {
+  const { code, allow } = maskSource(source);
+  const violations = [];
+  for (const chain of fromChains(code)) {
+    const table = chainTable(source, chain);
+    const permitted = table !== null && UPSERT_TABLES.has(table);
+    const hit = chain.methods.find((method) => method.name === 'upsert');
+    if (hit) {
+      if (!permitted && !allowed(allow, hit.index, source, 'upsert')) {
+        violations.push({ file, line: lineAt(source, hit.index), rule: 'upsert', message: upsertReason(table) });
+      }
+      continue;
+    }
+    if (permitted) continue;
+    const name = assignedFromName(code, chain.fromIndex);
+    if (!name) continue;
+    const callRe = new RegExp(`\\b${name}\\s*\\.\\s*upsert\\s*\\(`, 'g');
+    for (const match of code.matchAll(callRe)) {
+      if (allowed(allow, match.index, source, 'upsert')) continue;
+      violations.push({
+        file,
+        line: lineAt(source, match.index),
+        rule: 'upsert',
+        message: `${upsertReason(table)} (via ${name})`,
+      });
+    }
+  }
+  return violations;
+}
+
 export function scanDeleteText(source, file, tables) {
   return findDeleteViolations(source, file, tables);
 }
@@ -271,13 +309,19 @@ function walk(dir, out) {
   }
 }
 
-export function scanSrcDeletes(srcDir = resolve(root, 'src'), tables = loadFarmOwnedTables()) {
+export function scanSrcWrites(srcDir = resolve(root, 'src'), tables = loadFarmOwnedTables()) {
   const files = [];
   walk(srcDir, files);
   const violations = [];
   for (const path of files) {
     const source = readFileSync(path, 'utf8');
-    violations.push(...findDeleteViolations(source, relative(root, path), tables));
+    const file = relative(root, path);
+    violations.push(...findDeleteViolations(source, file, tables));
+    violations.push(...findUpsertViolations(source, file));
   }
   return violations;
+}
+
+export function scanSrcDeletes(srcDir = resolve(root, 'src'), tables = loadFarmOwnedTables()) {
+  return scanSrcWrites(srcDir, tables).filter((hit) => hit.rule === 'delete');
 }
