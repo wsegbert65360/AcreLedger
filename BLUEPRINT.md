@@ -132,7 +132,7 @@ Navigation checks and editorial changes do not constitute verification of archit
 ## 1. Application Overview
 
 AcreLedger is a mobile-first, PWA-ready agricultural record-keeping and compliance reporting
-application for row-crop farmers and licensed commercial applicators. It solves the problem of
+application for individual farmers and small operations. It solves the problem of
 tracking complex, multi-year farm operations — planting, spraying, fertilizing, harvesting, and
 grain movement — while generating strict regulatory compliance logs including FSA 578 Acreage
 Reports and MDA/state private applicator audit trails. Data is stored per-farm in Supabase with
