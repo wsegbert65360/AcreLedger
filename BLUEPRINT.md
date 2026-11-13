@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-11-01 (farm_comps billing audit log).
+> **Last updated:** 2026-11-13 (Ask the Book stays on only for the owner's farm and out of marketing).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,10 +26,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
-- **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
+- **2026-11-13** - Ask the Book stays in the app only for the owner's own farm, stays out of marketing, and is not deleted. Removal inventory is under Ask the Book Read Registry.
+- **2026-11-09** - Free and Pro are on main. Leave `ENTITLEMENTS_MODE` off. Permanent free record book plus **Pro** ($299/farm/year). Code plans are `free | paid | complimentary` (complimentary is the owner farm only). There is no trial. Spray photo capture is removed. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
-- **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
-- **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
+- **2026-11-01** — Added service-managed farm comps and membership-checked status RPC. The trial start/end line from this change was removed with the trial. Enforcement remains OFF.
+- **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. The checkout trial pass-through described here was removed on 2026-11-09 (Checkout never sets `trial_end`). Allowlist, native purchase suppression, and access enforcement staying off are unchanged.
 - **2026-10-19** — Billing rollout allowlist is server-only (`BILLING_ALLOWLIST` via `GET /api/billing-eligibility`). `VITE_BILLING_ALLOWLIST` is unused; the client caches `{ userId, allowlisted }` in memory and only uses it when the cached user id matches. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere; empty or unset fails closed to "Billing coming soon".
 - **2026-10-17** — Documented compliance profiles (`us-epa` / `au-apvma`), region preferences, the `auPilot` allowlist gate, locale terminology, and the area-unit boundary in a new [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot) section; `SprayRecord` now shows the real `complianceProfile` union plus `pic` / `waterRate` / `waterRateUnit`. **Corrected:** the equipment UI is live for every user — `VITE_EQUIPMENT_UI_ENABLED` is an unread declaration, not a gate. Service Worker rewritten for the network-first navigation route, the 3 s timeout, the precache fallback, and the single-retry reload guard.
 - **2026-10-16** — AU pilot card gated by `VITE_AU_PILOT_ENABLED` / `VITE_AU_PILOT_ALLOWLIST`; failed-sync export routed through `native.shareFile` on iOS and Android; the spray AU migration committed as `20261005162141_add_spray_water_rate_unit_pic.sql`; root clutter gitignored; parked equipment mutations overlaid onto the retained cache on a fail-soft fetch.
@@ -131,7 +132,7 @@ Navigation checks and editorial changes do not constitute verification of archit
 ## 1. Application Overview
 
 AcreLedger is a mobile-first, PWA-ready agricultural record-keeping and compliance reporting
-application for row-crop farmers and licensed commercial applicators. It solves the problem of
+application for individual farmers and small operations. It solves the problem of
 tracking complex, multi-year farm operations — planting, spraying, fertilizing, harvesting, and
 grain movement — while generating strict regulatory compliance logs including FSA 578 Acreage
 Reports and MDA/state private applicator audit trails. Data is stored per-farm in Supabase with
@@ -675,8 +676,9 @@ Implemented design:
 - The package covers roles, schema, all application and private data (including soft-deleted
   rows), Supabase Auth, Storage metadata, actual Storage object bytes, and a non-secret project
   configuration inventory. Database backups alone do not contain Storage object bytes.
-- Current spray image attachments live as base64 tokens in database rows and must remain intact in
-  the owner archive; AI-boundary data minimization does not apply to disaster recovery.
+- Legacy spray notes may still hold one `[ATTACHMENT:data:image/…;base64,…]` token. New capture
+  is gone. Those tokens must remain intact in the owner archive; AI-boundary data minimization
+  does not apply to disaster recovery.
 - The complete package is checksummed, compressed, and public-key encrypted before Drive upload.
   Runtime credentials stay in Google Secret Manager; the worker receives only the encryption
   public key, while the owner keeps the private recovery key offline in two locations.
@@ -790,7 +792,7 @@ Also add the table to the sync queue `ALLOWED_TABLES`, backup schema and `restor
 Every farm-owned table has RLS enabled with policies that restrict access to the caller's `farm_id` through `public.profiles`. Current state:
 
 - **Core tables** (`fields`, `bins`, `plant_records`, `spray_records`, `harvest_records`, `hay_harvest_records`, `fertilizer_applications`, `tillage_records`, `grain_movements`, `saved_seeds`, `fertilizer_recipes`, `spray_recipes`), plus `custom_spray_records` and `work_requests`: no `DELETE` grant for `authenticated`, a SELECT policy with `deleted_at IS NULL`, and the restrictive "Restrict updates on deleted rows" policy. Soft-deleted rows are therefore invisible and immutable to clients; restores go through `restore_farm_backup`.
-- **`fsa_tract_imports` and `field_clu_assignments`**: no `DELETE` grant, but the SELECT policy intentionally omits `deleted_at IS NULL` and there is no restrictive update policy, so their conflict-key upserts can resurrect tombstones. Client code must filter soft-deleted rows for these two tables.
+- **`fsa_tract_imports` and `field_clu_assignments`**: no `DELETE` grant, but the SELECT policy intentionally omits `deleted_at IS NULL` and there is no restrictive update policy, so their conflict-key upserts can resurrect tombstones. Client code must filter soft-deleted rows for these two tables. A new table must not copy that omission: `npm run verify:migrations` (`scripts/farm-table-migration-guard.mjs`) requires `deleted_at IS NULL` on a client SELECT policy.
 - **Legacy grant:** the core tables still carry a `GRANT SELECT ... TO anon` from `20260628100000`. It exposes no rows because every policy targets `authenticated`, but new tables must not copy it. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` revokes those grants and applies the unique-active-grain and tenant-FK guards.
 
 Restore works through the authenticated `restore_farm_backup` `SECURITY DEFINER` wrapper; its internal restore helpers must not be granted to `anon` or `authenticated`.
@@ -802,10 +804,12 @@ The live auth integration suite verifies forbidden operations by asserting Postg
 
 ### Stripe Billing (Test Mode, Web Only)
 
-`farm_comps` is service-managed billing infrastructure, soft-deleted through `deleted_at`, with no client table grants. `get_farm_comp_status` exposes only live status/expiry to the caller's current farm membership. No comp IDs are seeded. `billing_audit_log` is a service-role-only append table (RLS enabled, no client policies, grants match `farm_comps`) with an AFTER INSERT OR UPDATE trigger on `farm_comps`: action `insert` on insert, `soft_delete` when `deleted_at` first becomes set, otherwise `update`. There is no DELETE trigger. Comps and the audit log are excluded from customer backup/restore and Ask the Book (private billing metadata), and classified separately in owner recovery. This status changes display only: live comps replace the Settings trial line and suppress countdown reminders; Settings otherwise shows local trial start/end dates. No access enforcement, settings flag, or native purchase UI is added.
+`farm_comps` is service-managed billing infrastructure, soft-deleted through `deleted_at`, with no client table grants. `get_farm_comp_status` exposes only live status/expiry to the caller's current farm membership. No comp IDs are seeded. `billing_audit_log` is a service-role-only append table (RLS enabled, no client policies, grants match `farm_comps`) with an AFTER INSERT OR UPDATE trigger on `farm_comps`: action `insert` on insert, `soft_delete` when `deleted_at` first becomes set, otherwise `update`. There is no DELETE trigger. Comps and the audit log are excluded from customer backup/restore and Ask the Book (private billing metadata), and classified separately in owner recovery. This status changes display only: a live comp is complimentary access for the owner farm. Settings does not show a trial. Do not turn on access enforcement. There is no in-app purchase. The US-storefront website link is separate and must stay.
 
-Billing is implemented but intentionally restricted to Stripe test mode. The Settings card is
-web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and remains hidden in Capacitor. Internal
+Billing is implemented but intentionally restricted to Stripe test mode. The Stripe Settings card is
+web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and stays hidden on Capacitor
+(`isBillingUiAvailable`). The US-storefront website link in `PlanUpgradeLink` is deliberate and
+must stay; the plan card renders only when entitlements are enforced, and `ENTITLEMENTS_MODE` stays `off`. Internal
 rollout is gated by the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs).
 `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and
 optional with a warning elsewhere; empty or unset means billing is unavailable at runtime. The
@@ -814,15 +818,14 @@ client asks `GET /api/billing-eligibility` with the caller's bearer token and ne
 remain absent or exactly `false`, and the server accepts only `sk_test_` keys until the owner
 explicitly approves a production/legal rollout.
 
-Product access enforcement is off by default. A missing or soft-deleted subscription row is
-`unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
-passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
+`ENTITLEMENTS_MODE` stays `off`. While it is off, a missing or soft-deleted subscription row is
+`unmanaged` and retains full access. Do not set the flag to `shadow` or `enforce`. Absence of billing data must not become a paywall.
 
-#### Free tier and Pro (branch `feat/free-tier`, enforcement OFF)
+#### Free tier and Pro
 
-The app is a permanent free record book; the paid plan is **Pro** ($299 per farm per year,
-web-only purchase; iOS shows a US-storefront-only website link that fails closed). One server
-flag `ENTITLEMENTS_MODE = off | shadow | enforce` (default `off`) lives in `entitlement_config`.
+Customer tiers are Free and Pro. The app is a permanent free record book; Pro is **$299 per farm per year**,
+bought on the web. The iOS US-storefront website link fails closed and must not change. One account per farm. No ads.
+`ENTITLEMENTS_MODE` stays `off` (`off | shadow | enforce` exist in `entitlement_config`).
 The server is the source of truth: `_farm_entitlement` resolves `free | paid | complimentary`
 (comp row wins). `active` is `paid` until `current_period_end`. A failed renewal is `paid` for
 14 days from `farm_subscriptions.past_due_since` (`20261110160000_billing_past_due_since.sql`),
@@ -838,14 +841,13 @@ Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 (`20261107040000_rainfall_tiering.sql`), with `rainfall_field_hourly_allowed(field_id)`
 (service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
 edge function. Pro: all-field hourly rainfall, grain bins and movement, equipment, FSA tract
-entry, landlord splits, backup restore, prepared reports. Complimentary is the owner farm only.
-Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. There are no photos in the
-current build (Pro-only photos are a later feature); the iOS camera/photo usage strings stay.
+entry, landlord splits, backup restore, prepared reports. Terms call those reports landlord summaries. Complimentary is the owner farm only, not a sold tier. SQL still returns `photo_cap` 20, `history_seasons` 2, and `device_cap` 1; those are not live limits.
+Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. Photo capture is not in this build (a later Pro photo feature is only a possibility). Legacy spray-note attachment tokens are still parsed on edit and in the spray PDF, as described in AGENTS under Spray Wizard Pattern. The iOS camera and photo-library usage strings stay.
 
 There is no trial: `ensure_user_farm()` stamps no trial dates (`20261109210000_remove_trial.sql`),
 the trial columns and `trial_claims` table remain unused, and a stale `trial_ends_at` grants
-nothing. The free-farm report preview is client-only (the full report component is not mounted). Not built yet: server-rendered reports, Rain API gating, 60-day unused-farm
-rainfall pause, US-only July 15 reminder, over-50-field chooser, one-device limit. Hand-off:
+nothing. The free-farm report preview is client-only (the full report component is not mounted). The app sends a Supabase bearer token to the Rain API (`RainService`). `RAIN_API_AUTH` is not enforcing; do not set it to `enforce`. Not built yet: server-rendered reports, the 60-day unused-farm
+rainfall pause, the US-only July 15 reminder, the over-50-field chooser, and the one-device limit. Hand-off:
 `docs/free-tier-handoff.md`.
 
 SUPERSEDED 2026-11-09 on `feat/free-tier`: there is no trial. New farms never get trial dates, the `legacy_trial` plan is gone, and Checkout never passes `trial_end`. The paragraph below is history.
@@ -859,9 +861,9 @@ the postgres-owned `ensure_user_farm` reads it. Claims retain their hash after A
 (`user_id ON DELETE SET NULL`), preventing another trial for the same email. A different
 email is a different identity; this is not real-person identity verification. Preserve the
 salt and claims together in full-project recovery, never tenant/customer exports. Existing farms are not stamped by
-onboarding and await rollout backfill. Enforcement stays OFF. Trial metadata and
-claims are excluded from customer backup/restore. Stripe checkout reuses the server-stamped farm trial deadline only when more than 48 hours remain.
-The existing 14-day `past_due` access rule is unchanged by this checkout update.
+onboarding and were never backfilled. Trial metadata and
+claims stay out of customer backup and restore. Checkout no longer reads a farm trial date; see the checkout rules below.
+The 14-day `past_due` access rule is separate from this removed trial.
 `farm_subscriptions` is the authoritative local entitlement mirror; the client never treats query
 parameters or client-reported Stripe state as authoritative. Farm members may select their
 farm's active row, but only service-role server paths write it. The eligibility, checkout, and
@@ -927,6 +929,23 @@ the reset UI. Keep
 the Supabase redirect allowlist, `Info.plist` URL registration, app listener, and tests synchronized.
 
 ### Ask the Book Read Registry
+
+**Status (owner, 2026-10-31, PR #81):** Ask the Book stays in the repo and stays on only for the owner's own farm. `isAskBookEnabled` (`src/lib/askBookAccess.ts`) allowlists one farm id. `src/App.tsx`, `src/components/Sidebar.tsx`, `src/pages/Index.tsx`, and `src/context/AskAcreLedgerContext.tsx` hide the drawer unless that check passes. `api/ai-assistant.ts` returns 403 for every other farm. Do not add farms, do not remove the gate, and do not copy that farm id into docs or marketing. It is not a marketed feature. Do not delete the code unless the owner says to remove it. The privacy policy still discloses the assistant, because the allowlisted farm can still send a question.
+
+**Full removal would touch (do not do this unless the owner asks):**
+
+Code: `src/lib/askBookAccess.ts`, `src/lib/askBookAccess.test.ts`, `src/lib/askSuggestions.ts`, `src/lib/askSuggestions.test.ts`, `src/lib/speech.ts`, `src/lib/__tests__/speech.test.ts`, `src/hooks/useAskVoice.ts`, `src/context/AskAcreLedgerContext.tsx`, `src/context/__tests__/AskAcreLedgerContext.test.tsx`, `src/components/AskAcreLedger.tsx`, `src/components/__tests__/AskAcreLedger.test.tsx`, `src/services/aiAssistantService.ts`, `src/services/__tests__/aiAssistantService.test.ts`, `src/test/aiAssistant.test.ts`, `src/test/aiAssistantTools.test.ts`, `api/ai-assistant.ts`, `server/ai-assistant-tools.ts`, the Ask mounts in `src/App.tsx`, `src/components/Sidebar.tsx`, and `src/pages/Index.tsx`, plus Ask mocks in `src/components/__tests__/Sidebar.test.tsx` and `src/pages/Index.test.tsx`, and the Ask read in `src/lib/__tests__/auth.integration.test.ts`. Voice packages used only here: `@capacitor-community/speech-recognition` and `@capacitor-community/text-to-speech`.
+
+Shared with weather — do not delete the weather half: `server/providerDailyUsage.ts`, `src/test/providerDailyUsage.test.ts`, `usage_private.provider_daily_usage`, and `supabase/migrations/20261015180814_review_09_provider_caps_and_finalize.sql`.
+
+Tables and functions: schema `ai_assistant_private`; tables `ai_assistant_private.rate_limits` and `ai_assistant_private.turns` (also `scripts/recovery/tenant-registry.ts`); `public.consume_ai_assistant_request`; `public.finalize_ai_assistant_turn`; `ai_assistant_private.purge_old_turns`; cron job `ai-assistant-turns-retention`. Migrations: `supabase/migrations/20260827002849_ai_assistant_quota.sql` and the grant list in `supabase/migrations/20261013035852_db_access_review_02_m3_m4.sql`.
+
+Env vars: `OPENROUTER_API_KEY`, `AI_MODEL`, `AI_DAILY_CAP`, `VITE_AI_ASSISTANT_URL` (also `codemagic.yaml` and `vercel.json` `api/ai-assistant.ts`).
+
+Doc sections: this section, [AGENTS.md](./AGENTS.md) AI Assistant / Ask the Book, `README.md` (the `/api/ai-assistant` paragraph), `docs/plans/2026-08-26-ai-assistant.md`, `IOS_RELEASE.md`, `docs/app-store/2026-10-01-submission-package.md`, `docs/plans/2026-10-08-android-capacitor-play-store.md`, `docs/plans/2026-10-09-capacitor-8-upgrade.md`, `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`, `src/pages/Privacy.tsx`, and `docs/free-tier-release-checklist.md` (that checklist currently names the farm id; do not copy the id).
+
+Open owner question: remove Ask the Book entirely, or keep this one-farm gate?
+
 `server/ai-assistant-tools.ts` is the only database read catalog exposed to the AI assistant. It uses the authenticated caller's JWT and publishable/anon key, keeps RLS as the primary tenant boundary, and adds the authoritative current `farm_id` to every direct or joined query. It must never use a service-role/secret key, raw SQL, caller-provided table names, or mutation methods.
 
 The registry covers all active user-facing farm records across every season: farm/profile context, fields, bins, planting, spray/custom spray, fertilizer, tillage, harvest, hay, grain movements, saved seeds, spray/fertilizer recipes, FSA tracts, CLU assignments, work requests, and stored rainfall. Soft-deleted records, other farms, `auth`, and private operational schemas are excluded. Binary image payloads and raw geometry coordinate arrays are summarized before model exposure; the rest of each permitted record remains readable.
@@ -964,8 +983,7 @@ inject the authoritative current `farmId` before mapper validation, then omit it
 payload.
 
 ### FSA / CLU Upsert Exception
-The default rule remains no `upsert` for updates. The only farm-owned exception is insert/replay
-for `fsa_tract_imports` and `field_clu_assignments`:
+`npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` except these two tables. `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` for the same pair. Insert, replay, and backup restore still use:
 - `fsa_tract_imports`: upsert on `farm_id,tract_key`.
 - `field_clu_assignments`: upsert on `farm_id,tract_key,clu_number`.
 - Normal update and soft-delete paths still use `.update().eq('id', id).eq('farm_id', farm_id)`.
@@ -973,10 +991,7 @@ for `fsa_tract_imports` and `field_clu_assignments`:
 
 ### Soft Delete
 `.update({ deleted_at: new Date().toISOString() }, { count: 'exact' }).in('id', ids).eq('farm_id', farm_id)`
-Never use Supabase `.delete()` on user records (clients have no `DELETE` grant on farm tables).
-Do not chain `.select()` to confirm a soft delete: the `deleted_at IS NULL` SELECT policy hides the
-updated row from the returning clause, so the client would see 0 rows and falsely roll back. Check
-the exact count instead (`count === ids.length`).
+`npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/`, and rejects `.select()` chained after `.update()`. Check the exact count instead (`count === ids.length`).
 
 ---
 

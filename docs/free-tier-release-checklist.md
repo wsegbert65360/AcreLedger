@@ -10,12 +10,12 @@ Production project ref (already recorded in `docs/runbooks/full-project-recovery
 
 1. [ ] Take a fresh backup of production and confirm the file is on disk before any SQL change. The owner Cloud Run job `acreledger-owner-backup` is not a proven nightly backup yet (`docs/runbooks/owner-backup-operations.md`). A Settings backup from the app is one farm's JSON. This step is a whole-project copy. If you ever have to restore, use `docs/runbooks/full-project-recovery.md` and restore into an isolated project.
 
-2. [ ] Confirm the owner farm, then the complimentary row, **before** `ENTITLEMENTS_MODE` is ever set to `enforce`. The farm id in this repo is `28e107ba-3384-4b6e-9917-8a694803cb82` (`src/lib/askBookAccess.ts`, the only Ask the Book farm). In the Supabase SQL editor (postgres; the app role `authenticated` cannot read or write `public.farm_comps`):
+2. [ ] Confirm the owner farm (id held privately), then the complimentary row, **before** `ENTITLEMENTS_MODE` is ever set to `enforce`. That farm is the only Ask the Book farm (`src/lib/askBookAccess.ts`). In the Supabase SQL editor (postgres; the app role `authenticated` cannot read or write `public.farm_comps`):
 
 ```sql
 SELECT id, name
 FROM public.farms
-WHERE id = '28e107ba-3384-4b6e-9917-8a694803cb82';
+WHERE id = '<the owner farm (id held privately)>';
 ```
 
 Stop if that row is missing or the name is not Egbert Farm.
@@ -25,7 +25,7 @@ Stop if that row is missing or the name is not Egbert Farm.
 ```sql
 SELECT id, farm_id, reason, granted_by, created_at, expires_at, deleted_at
 FROM public.farm_comps
-WHERE farm_id = '28e107ba-3384-4b6e-9917-8a694803cb82'
+WHERE farm_id = '<the owner farm (id held privately)>'
   AND deleted_at IS NULL
   AND (expires_at IS NULL OR expires_at > now());
 ```
@@ -35,7 +35,7 @@ WHERE farm_id = '28e107ba-3384-4b6e-9917-8a694803cb82'
 ```sql
 INSERT INTO public.farm_comps (farm_id, reason, expires_at)
 VALUES (
-  '28e107ba-3384-4b6e-9917-8a694803cb82',
+  '<the owner farm (id held privately)>',
   'Egbert Farm owner complimentary',
   NULL
 );

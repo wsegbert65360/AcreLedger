@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-10 (free farms can undo the latest pre-season reset; file backup restore stays Pro).
+> **Last updated:** 2026-11-13 (Ask the Book stays on only for the owner's farm and out of marketing).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,10 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-13** - Ask the Book stays in the app only for the owner's own farm (`isAskBookEnabled`), stays out of marketing, and is not deleted. See [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
 - **2026-11-10** - Free farms undo the latest pre-season reset with `undo_pre_season_reset` (server snapshot, 30 days, no Pro check). Uploading a backup file still uses `restore_farm_backup` and stays Pro. Rollover calls `start_pre_season_reset` after the JSON download.
-- **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year). Server flag `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`. The trial is removed (no farm gets trial dates; Checkout never sets `trial_end`). Spray photo capture is removed from the app. See the Free tier bullet in the billing section and `docs/free-tier-handoff.md`.
+- **2026-11-09** - Free and Pro are on main. Leave `ENTITLEMENTS_MODE` off. Permanent free record book plus **Pro** ($299/farm/year). Plans in code are `free | paid | complimentary` (complimentary is the owner farm only). There is no trial (no farm gets trial dates; Checkout never sets `trial_end`). Spray photo capture is removed. See the Free tier bullet in the billing section and `docs/free-tier-handoff.md`.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
-- **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
+- **2026-11-01** — Added service-managed farm comps and membership-checked status RPC. Trial start/end display from this change was removed with the trial; Settings no longer shows a trial. Enforcement remains OFF.
 - **2026-11-01** — Added PG17 MAINTAIN revocation for public relations and the retired-backfill function search-path pin; disposable focused and full-chain rehearsal commands cover the change. New tables created by supabase_admin must explicitly revoke MAINTAIN from API roles and PUBLIC.
 
 ## Contents
@@ -89,7 +90,7 @@ Rules), then open only the files for that area.
 - [@/lib/fieldLocation.ts](./src/lib/fieldLocation.ts) — rainfall coordinate resolver that falls back from field coordinates to drawn boundaries, assigned CLU polygons, and legacy CLU numbers.
 
 **AI assistant (Ask the Book)**
-- [api/ai-assistant.ts](./api/ai-assistant.ts) + [server/ai-assistant-tools.ts](./server/ai-assistant-tools.ts) — read-only Ask the Book Vercel Function and its allowlisted named-tool read catalog. Rules: [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
+- [src/lib/askBookAccess.ts](./src/lib/askBookAccess.ts) — one-farm gate. [api/ai-assistant.ts](./api/ai-assistant.ts) + [server/ai-assistant-tools.ts](./server/ai-assistant-tools.ts) — read-only Vercel Function and named-tool catalog, used only when that gate passes. Not a marketed feature. Rules: [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
 
 **Reports & exports**
 - [@/lib/complianceReports](./src/lib/complianceReports) — report generation.
@@ -99,7 +100,7 @@ Rules), then open only the files for that area.
 - [@/lib/complianceReports/fsa578PdfExport.ts](./src/lib/complianceReports/fsa578PdfExport.ts) — dedicated FSA employee-facing acreage worksheet PDF (cropland entry table, reconciliation totals, readiness review, and all-CLU reference appendix).
 - [@/lib/complianceReports/generateLandlordSummary.ts](./src/lib/complianceReports/generateLandlordSummary.ts) — Landlord Summary and farm-wide Farm Owner Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
 - [@/components/reports/LandlordSummaryReport.tsx](./src/components/reports/LandlordSummaryReport.tsx) — Landlord tab UI for Landlord Summary and Farm Owner Summary (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
-- [@/lib/sprayExport.ts](./src/lib/sprayExport.ts) — universal spray log PDF export, including spray attachment image rendering from encoded note tokens.
+- [@/lib/sprayExport.ts](./src/lib/sprayExport.ts) — universal spray log PDF export. Legacy `[ATTACHMENT:…]` note tokens are stripped from the text and embedded as images. There is no photo-capture control.
 
 **FSA tracts & CLU**
 - [@/types/fsaTract.ts](./src/types/fsaTract.ts) — canonical FSA tract import and CLU assignment types.
@@ -163,8 +164,7 @@ Rules), then open only the files for that area.
 
 ### Data Safety
 
-- Never hard-delete user farm records.
-- Use soft delete by setting `deleted_at` to an ISO timestamp.
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/`. Soft-delete by setting `deleted_at` to an ISO timestamp.
 - Active records always have `deleted_at === null`.
 - Client logic must exclude soft-deleted records.
 - Supabase RLS must also exclude or protect soft-deleted records where applicable.
@@ -233,12 +233,12 @@ Offline and cascading mutations:
 
 Canonical detail: [BLUEPRINT → Database Conventions](./BLUEPRINT.md#5-database-conventions).
 
-- Do not use `upsert` for updates. Use `.update().eq('id', id).eq('farm_id', farm_id)`.
-- **Do not use `.select()` in update or soft-delete mutations** to verify success. The `deleted_at IS NULL` SELECT policy hides a just-soft-deleted row from the returning clause, so the client sees 0 rows and falsely rolls back. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
-- Sole exception to the upsert rule: inserts, offline replay, and backup restore for `fsa_tract_imports` (`farm_id,tract_key`) and `field_clu_assignments` (`farm_id,tract_key,clu_number`) must upsert on those conflict keys so soft-deleted rows are resurrected. Do not "fix" them into plain inserts. Details: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` except `fsa_tract_imports` and `field_clu_assignments`. The replay call in `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` because it runs only for those two tables. Conflict keys: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.select()` chained after `.update()` in `src/`. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
 - Public tables/views/materialized views must not grant PG17 MAINTAIN to anon, authenticated, or PUBLIC. See [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory) for default-privilege limits and rollback scope.
 - New migrations use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql` (checked by `npm run verify:migrations`).
-- New farm-owned tables follow the strict template in [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory): RLS enabled, farm-scoped policies through `public.profiles`, `SELECT, INSERT, UPDATE` (no `DELETE`) for `authenticated`, no `anon` grant, `deleted_at IS NULL` in the SELECT policy, and the restrictive "no updates on deleted rows" policy. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` consolidates the unique-active-grain index, farm-scoped harvest/grain FK, and anon revoke on the 12 core tables.
+- `npm run verify:migrations` (`scripts/farm-table-migration-guard.mjs`) rejects a new public table with `farm_id` (migrations after `20261110190000`) that skips RLS, grants DELETE to anon, authenticated, or PUBLIC, grants anything to anon, or has a client SELECT policy without `deleted_at IS NULL`.
+- Also keep the restrictive "no updates on deleted rows" policy from [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory). The migration guard does not check that policy. Pending production apply (owner approval): `20261017041928_apply_missing_safeguards.sql` consolidates the unique-active-grain index, farm-scoped harvest/grain FK, and anon revoke on the 12 core tables.
 - New `public` tables, functions, and sequences need explicit `GRANT`s to `authenticated` and/or `service_role`. Default privileges no longer give client roles (or PUBLIC) access.
 - `profiles` is a security boundary: clients may update only `active_season` and `onboarding_complete`; farm membership is assigned only through `ensure_user_farm`. `active_season` stays within `[2000, currentYear + 1]`, including inside any `SECURITY DEFINER` RPC such as `restore_farm_backup`. Details: [BLUEPRINT → Profile Membership Protection](./BLUEPRINT.md#profile-membership-protection).
 - Live profile-security tests assert PostgreSQL `42501` using non-mutating probes only (see [Testing](#testing)).
@@ -246,6 +246,10 @@ Canonical detail: [BLUEPRINT → Database Conventions](./BLUEPRINT.md#5-database
 - Do not bypass RLS assumptions in client code.
 
 ### AI Assistant / Ask the Book
+
+**Status (owner, 2026-10-31, PR #81):** Ask the Book stays in the repo. It is on only for the owner's own farm. `isAskBookEnabled` in [src/lib/askBookAccess.ts](./src/lib/askBookAccess.ts) is the allowlist (one farm id). The same check gates the drawer in `src/App.tsx`, `src/components/Sidebar.tsx`, `src/pages/Index.tsx`, and `src/context/AskAcreLedgerContext.tsx`. `api/ai-assistant.ts` returns 403 for every other farm. Do not add farms, do not remove the gate, and do not name that farm or its id in docs or marketing. It is not a marketed feature: do not add it to Landing, the product description, or store listing copy. The privacy policy still discloses it, because the allowlisted farm can still send a question. Do not delete this code unless the owner says to remove it.
+
+A full removal would touch the files, tables, env vars, and doc sections listed under [BLUEPRINT → Ask the Book Read Registry](./BLUEPRINT.md#ask-the-book-read-registry). Open owner question: remove Ask the Book entirely, or keep this one-farm gate?
 
 Canonical detail: [BLUEPRINT → Ask the Book Read Registry](./BLUEPRINT.md#ask-the-book-read-registry).
 
@@ -320,7 +324,7 @@ Canonical detail: [BLUEPRINT → FsaTractImport](./BLUEPRINT.md#fsatractimport),
 
 Data and assignments:
 
-- FSA tract imports and CLU assignments are farm-owned: farm scoping, mapper discipline (`mapFsaTractFromDb`/`mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`/`mapFieldCluAssignmentToDb`), optimistic updates, and soft delete all apply. Never hard-delete assignments.
+- FSA tract imports and CLU assignments are farm-owned: farm scoping, mapper discipline (`mapFsaTractFromDb`/`mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`/`mapFieldCluAssignmentToDb`), optimistic updates, and soft delete all apply. `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.delete()` on these tables in `src/`.
 - Changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup schema, bundled tract helpers, assignment UI, and FSA reports/tests.
 - CLU parsing, map rendering, and centroids must support `Polygon` and `MultiPolygon`; use `@/lib/geoHelpers.ts`.
 - `parseCluFile` is the only import entry point (GeoJSON and ESRI shapefile ZIP). Do not add a component-only parser or unzip path.
@@ -375,17 +379,17 @@ Canonical detail: [BLUEPRINT → Owner Whole-Project Disaster Recovery](./BLUEPR
 
 ### Stripe Billing (Test Mode Only)
 
-- `farm_comps` is service-managed, soft-delete-only billing metadata with a membership-checked status RPC. Live comps replace trial dates and suppress countdowns; RPC errors fall back to trial display. No access enforcement or native purchase UI is added. Comp grants are excluded from customer restore and Ask the Book; owner recovery classifies them separately. `billing_audit_log` is service-role-only (RLS on, no client policies) and records farm_comps insert, update, and soft_delete via a SECURITY DEFINER trigger; there is no DELETE trigger. See BLUEPRINT below for schema/audit details.
+- `farm_comps` is service-managed, soft-delete-only billing metadata with a membership-checked status RPC. A live comp is the owner farm's complimentary access. There is no trial countdown. Do not turn on access enforcement. There is no in-app purchase. The US-storefront website link in `PlanUpgradeLink` is separate and must stay. Comp grants are excluded from customer restore and Ask the Book; owner recovery classifies them separately. `billing_audit_log` is service-role-only (RLS on, no client policies) and records farm_comps insert, update, and soft_delete via a SECURITY DEFINER trigger; there is no DELETE trigger. See BLUEPRINT below for schema/audit details.
 
-- Trial PR 1 prepares a 3-month free farm trial, no card needed: server-stamped once by `ensure_user_farm`, one per farm and per normalized email identity via service-only `trial_claims`. A private installation salt protects the identity hash; claims survive Auth deletion with a nullable user reference. Members inherit farm dates; existing farms await rollout backfill. Enforcement stays OFF. Stripe checkout now reuses only the server-stamped farm deadline when more than 48 hours remain; otherwise it grants no trial. Trial metadata/claims are excluded from customer backup and restore. SUPERSEDED 2026-11-09 on `feat/free-tier`: there is no trial; new farms never get trial dates and checkout never starts a trial (`20261109210000_remove_trial.sql`, `docs/free-tier-handoff.md`).
+- There is no trial. Do not stamp trial dates or pass Stripe `trial_end`. `20261109210000_remove_trial.sql` stopped `ensure_user_farm` from writing them. The old `trial_claims` table and columns remain unused and stay out of customer backup and restore. History only: a 3-month trial was designed and then removed (`docs/free-tier-handoff.md`).
 
 Canonical detail: [BLUEPRINT → Stripe Billing](./BLUEPRINT.md#stripe-billing-test-mode-web-only).
 
-- Web-only, and hidden unless `VITE_BILLING_UI_ENABLED === 'true'`. Capacitor renders no billing surface. The rollout allowlist is server-only (`BILLING_ALLOWLIST`): required in Vercel production (the bundle check fails if unset), optional with a warning elsewhere. Empty or unset fails closed at runtime. The Settings card asks `GET /api/billing-eligibility` with the caller's bearer token and never reads `VITE_BILLING_ALLOWLIST`.
+- Stripe checkout and the customer portal are web-only, and hidden unless `VITE_BILLING_UI_ENABLED === 'true'`. `isBillingUiAvailable` is false on Capacitor, so the Stripe card does not render there. The US App Store storefront website link (`PlanUpgradeLink`, `docs/ios-storefront-link.md`) is deliberate and must stay; every other storefront has no link. That plan card renders only when `entitlement.enforced` is true, and `ENTITLEMENTS_MODE` stays `off`. The rollout allowlist is server-only (`BILLING_ALLOWLIST`): required in Vercel production (the bundle check fails if unset), optional with a warning elsewhere. Empty or unset fails closed at runtime. The Settings card asks `GET /api/billing-eligibility` with the caller's bearer token and never reads `VITE_BILLING_ALLOWLIST`.
 - `BILLING_LIVE_CHARGES` stays absent or exactly `false`, and the server accepts only `sk_test_` keys, until the product owner approves the legal and production rollout.
-- Enforcement is off by default: a missing or soft-deleted subscription row is `unmanaged` with full access. Do not let absent billing data become a paywall.
+- `ENTITLEMENTS_MODE` stays `off`. While it is off, a missing or soft-deleted subscription row is `unmanaged` with full access. Do not let absent billing data become a paywall, and do not set the flag to `shadow` or `enforce`.
 - Under the installed Stripe SDK (API `2025-08-27.basil`) `current_period_end` lives on subscription **items**, not the Subscription; use `resolveCurrentPeriodEnd` (`server/billing.ts`). Build webhook tests from the basil shape.
-- Free tier (branch `feat/free-tier`, enforcement OFF by default): the app is a permanent free record book; the paid plan is called **Pro** ($299/farm/year). Say "Pro" in app strings (`src/copy/entitlements.ts`). One server flag `ENTITLEMENTS_MODE = off | shadow | enforce`; the server decides (`farm_entitlement`, `assert_premium` raising `P0402 premium_required:<feature>`), the client (`useEntitlement`) only displays. Plans are `free | paid | complimentary`; complimentary is the owner farm only. Free limits: 50 fields, rainfall daily totals on the two oldest fields (`rainfall_field_hourly_allowed` gates explicit-field `mrms-backfill`; deploy that migration before the function). Pro: all-field hourly rainfall, grain bins, equipment, FSA tract entry, landlord splits, backup restore, prepared reports. Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. No trial exists (`ensure_user_farm` stamps no trial dates; trial columns and `trial_claims` remain untouched). No photo capture in the app. Handoff and remaining work: `docs/free-tier-handoff.md`.
+- Customer tiers are Free and Pro. The app is a permanent free record book; Pro is $299 per farm per year. Say "Pro" in app strings (`src/copy/entitlements.ts`). One account per farm. No ads. `ENTITLEMENTS_MODE` stays `off` (`off | shadow | enforce` exist in `entitlement_config`). The server decides (`farm_entitlement`, `assert_premium` raising `P0402 premium_required:<feature>`); the client (`useEntitlement`) only displays. Code plans are `free | paid | complimentary`; complimentary is the owner farm only, not a sold tier. Free limits that are real: 50 active fields, and rainfall daily totals on the farm's two oldest fields, which are locked (`rainfall_field_hourly_allowed` gates explicit-field `mrms-backfill`). SQL still returns `photo_cap` 20, `history_seasons` 2, and `device_cap` 1; those are not live limits (no photo capture, history cap not enforced, one-device limit not built). Pro, once enforced: all-field hourly rainfall, grain bins, equipment, FSA tract entry, landlord splits, backup restore, prepared reports. The customer-facing name in Terms is landlord summaries. Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. `RAIN_API_AUTH` is not enforcing; do not set it to `enforce`. The app may send a Supabase bearer token (`RainService`). Handoff: `docs/free-tier-handoff.md`.
 - Checkout is refused (409, use the portal) for a live `trialing`/`active`/`past_due`/`unpaid` subscription; only `canceled`/`incomplete` rows may start a new Checkout. Checkout never sets a Stripe `trial_end` (the old farm-deadline pass-through was removed 2026-11-09). An existing `stripe_customer_id` is reused.
 - `farm_subscriptions` is written only by the signed webhook (service role). Clients never trust query parameters or client-reported Stripe state.
 - Billing tables stay out of the customer JSON backup and stay classified in the owner recovery registry.
@@ -419,7 +423,7 @@ Canonical detail: [BLUEPRINT → Account Lifecycle and Native Credential Safety]
 - Native builds include `capacitor-secure-storage-plugin`; keep the lockfile, CocoaPods resolution, and iOS Keychain-backed credential migration aligned.
 - **Speech-recognition 7.0.1 on Capacitor 8:** no Capacitor 8.x release exists. Version 7.0.1 has peer `@capacitor/core >=7.0.0` (accepts 8) and uses the Objective-C `CAP_PLUGIN` registration and Android `@ActivityCallback`/`startActivityForResult`. iOS compilation and device tests are pending.
 - Preserve the `com.wsegbert.acreledger` recovery URL scheme in `Info.plist` and the privacy manifest declarations in `ios/App/App/PrivacyInfo.xcprivacy`. Use `IOS_RELEASE.md` as the App Store/TestFlight release checklist.
-- Keep iOS free of subscription prices, trial offers, sign-up/purchase calls to action, Stripe checkout, and external purchase links. Web pricing may remain on web, but Capacitor must show the sign-in-only product path guarded by `Capacitor.isNativePlatform()`; preserve the native coverage in `src/pages/__tests__/Landing.test.tsx` and `src/pages/__tests__/Settings.test.tsx`.
+- Keep iOS free of subscription prices, trial offers, Stripe checkout, and in-app purchase. The US App Store storefront website link (`src/lib/storefront.ts`, `src/hooks/useIosUpgradeLink.ts`, `PlanUpgradeLink`) is deliberate and must not change: it shows only for country code `USA` with a valid `VITE_UPGRADE_URL`, and fails closed otherwise. Other storefronts get no link. Landing on Capacitor stays the sign-in path guarded by `Capacitor.isNativePlatform()`. Preserve `src/pages/__tests__/Landing.test.tsx` and `src/pages/__tests__/Settings.test.tsx`.
 - App Store metadata is sourced from `docs/app-store/metadata.en-US.json` and the matching submission package. Run `npm run verify:app-store` after changing listing copy, URLs, or the marketing version. Keep the privacy manifest, public privacy page, App Store questionnaire answers, and review notes consistent with actual behavior.
 - Final App Store screenshots must come from the exact selected release build using the approved fictional review account/dataset. Simulator or locally staged captures are draft evidence until their build provenance is tied to that release. Required captures must meet Apple's current device-family dimensions and contain no alpha channel. Never commit review-account credentials.
 - Capacitor 8 CLI uses `require("tar")` with a named `extract` export and depends on `tar ^7.5.3`. Keep the nested `overrides["@capacitor/cli"].tar = "7.5.22"` to override any transitive `tar@6` requirement; do not add a global `tar` override.
@@ -589,7 +593,7 @@ Keep each step component under ~150 lines. All form state lives in `useSprayForm
 
 Spray also has an in-cab quick mode controlled by `useSprayForm.isQuickMode`; preserve both the quick path and full wizard path when changing validation, save behavior, or field prefills. Quick mode is optimized for glove-friendly spray logging and still writes through the same `handleSubmit` path.
 
-Spray photo/ticket attachments are stored in `notes` as `[ATTACHMENT:data:image/...;base64,...]` tokens. UI and exports must parse/strip this token and render the image separately; never display or export raw base64 attachment text. `sprayExport.ts` is responsible for embedding the attachment image in PDF exports.
+Spray photo capture is gone. The form has no camera or photo-library control, and nothing in the wizard renders an attachment image. Legacy `notes` may still contain one `[ATTACHMENT:data:image/<type>;base64,<payload>]` token. `useSprayForm` parses that token when a record is opened, keeps the bytes in component state (not shown), and writes the same token back on save so an edit does not drop it. Duplicate mode clears those bytes and does not copy the token. `src/lib/sprayExport.ts` strips the token from PDF note text and embeds the image. Ask the Book replaces it with `[image attachment present; binary omitted]` before the model sees the note. Do not display or export the raw token or base64 text. iOS camera and photo-library usage strings stay for a possible later Pro photo feature; this build does not collect photos. Do not add a capture control.
 
 After a successful new spray with a novel mix, `useSprayForm` may prompt to save the mix as a spray recipe. Keep that recipe dialog mounted until the user confirms or cancels, even if the spray record itself has already saved. Recipe duplicate checks should compare product name, rate, rate unit, and EPA registration number, not product names alone.
 

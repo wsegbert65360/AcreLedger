@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
+import { checkNewFarmMigrations } from './farm-table-migration-guard.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const migrationDir = resolve(root, 'supabase/migrations');
@@ -111,4 +112,14 @@ if (replayFailure || neverCreated.length > 0) {
   );
 }
 
-console.log(`Verified ${files.length} ordered Supabase migrations, deterministic seed configuration, and a disposable PostgreSQL replay.`);
+const farmTableProblems = checkNewFarmMigrations(
+  files.map((file) => ({ name: file, sql: migrationSql.get(file) })),
+);
+if (farmTableProblems.length > 0) {
+  throw new Error(
+    'New farm-owned tables after 20261110190000 must enable RLS, grant no DELETE to client roles, '
+    + `grant nothing to anon, and keep deleted_at IS NULL on client SELECT policies.\n${farmTableProblems.join('\n')}`,
+  );
+}
+
+console.log(`Verified ${files.length} ordered Supabase migrations, deterministic seed configuration, a disposable PostgreSQL replay, and the new-farm-table guard.`);
