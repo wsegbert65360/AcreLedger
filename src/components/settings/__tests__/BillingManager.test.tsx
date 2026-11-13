@@ -29,12 +29,22 @@ describe('BillingManager status', () => {
     expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByText('Not subscribed')).toBeNull();
   });
-  it('shows a trialing Stripe row as Active', async () => {
+  it('shows a legacy trialing Stripe row as Free, never Active', async () => {
     control.allowlisted = true;
     mock.setResult({ data: { status: 'trialing', deleted_at: null, current_period_end: '2026-12-01', owner_user_id: 'user-1' }, error: null });
     mount();
-    expect(await screen.findByText('Active')).toBeInTheDocument();
+    expect(await screen.findByText('Free')).toBeInTheDocument();
+    expect(screen.getByText('This farm is on the free plan. Pro starts when checkout is completed.')).toBeInTheDocument();
+    expect(screen.queryByText('Active')).toBeNull();
+    expect(screen.queryByText(/Renews yearly/)).toBeNull();
     expect(screen.queryByText('Free trial')).toBeNull();
+  });
+  it('shows an active Stripe row as Active', async () => {
+    control.allowlisted = true;
+    mock.setResult({ data: { status: 'active', deleted_at: null, current_period_end: '2026-12-01', cancel_at_period_end: false, owner_user_id: 'user-1' }, error: null });
+    mount();
+    expect(await screen.findByText('Active')).toBeInTheDocument();
+    expect(screen.getByText(/Renews yearly/)).toBeInTheDocument();
   });
   it('shows Not subscribed after loading no row', async () => {
     control.allowlisted = true;

@@ -40,19 +40,26 @@ const FAILURE_AT = '2027-01-08T00:00:00.000Z';
 const ADVANCED_PERIOD_END = '2028-01-08T00:00:00.000Z';
 
 describe('getFarmBillingAccess', () => {
-  it('grants full access for trialing and active subscriptions', () => {
-    for (const status of ['trialing', 'active'] as const) {
+  it('grants full access for an active subscription, with or without enforcement', () => {
+    for (const enforce of [false, true]) {
       const access = getFarmBillingAccess({
-        subscription: makeSubscription({ status }),
+        subscription: makeSubscription({ status: 'active' }),
+        enforce,
         nowMs: Date.parse(BEFORE_PERIOD_END),
       });
-      expect(access).toEqual({
-        hasAccess: true,
-        inGrace: false,
-        phase: status,
-        status,
-      });
+      expect(access).toEqual({ hasAccess: true, inGrace: false, phase: 'active', status: 'active' });
     }
+  });
+
+  it('treats a legacy trialing row as free: allowed only while enforcement is off', () => {
+    const subscription = makeSubscription({ status: 'trialing' });
+    const nowMs = Date.parse(BEFORE_PERIOD_END);
+    expect(getFarmBillingAccess({ subscription, nowMs })).toEqual({
+      hasAccess: true, inGrace: false, phase: 'trialing', status: 'trialing',
+    });
+    expect(getFarmBillingAccess({ subscription, enforce: true, nowMs })).toEqual({
+      hasAccess: false, inGrace: false, phase: 'trialing', status: 'trialing',
+    });
   });
 
   it('treats a missing row as allowed while enforcement is off (BILLING_ENFORCE default)', () => {

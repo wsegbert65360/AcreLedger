@@ -53,7 +53,8 @@ export interface FarmBillingAccessOptions {
  * Entitlement rule for a farm's subscription row (source of truth is the
  * `farm_subscriptions` mirror, never client-reported state):
  * - `active`: full access. `current_period_end` is the paid-through bound.
- * - `trialing`: reported as its own phase. The free-tier plan treats it as free.
+ * - `trialing`: reported as its own phase and treated as free, like a missing
+ *   row: access follows `enforce`. A legacy trial is never Pro.
  * - Payment failure (`past_due`, `unpaid`, or `canceled` with `past_due_since`):
  *   full access for `graceDays` after `past_due_since`. `current_period_end`
  *   does not extend it. A missing anchor fails closed.
@@ -76,7 +77,7 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
   const status = subscription.status;
 
   if (status === 'trialing') {
-    return { hasAccess: true, inGrace: false, phase: 'trialing', status };
+    return { hasAccess: !enforce, inGrace: false, phase: 'trialing', status };
   }
   if (status === 'active') {
     return { hasAccess: true, inGrace: false, phase: 'active', status };
