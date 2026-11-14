@@ -121,6 +121,7 @@ Navigation checks and editorial changes do not constitute verification of archit
   - [PWA & Bundling](#pwa--bundling)
 - [7. Error Handling Standards](#7-error-handling-standards)
   - [Detailed Error Logging](#detailed-error-logging)
+  - [Crash Reporting](#crash-reporting)
   - [Content Security Policy (CSP)](#content-security-policy-csp)
 - [8. Coding Rules & Conventions](#8-coding-rules--conventions)
   - [Verification](#verification)
@@ -1239,8 +1240,23 @@ event to automatically sync content to Supabase.
 ### Detailed Error Logging
 `useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging.
 
+### Crash Reporting
+`src/utils/errorReporting.ts` reports `ErrorBoundary` crashes, `window.onerror`, and unhandled
+rejections. It is inactive unless `VITE_ERROR_REPORTING_DSN` is set, and Settings → Security lets a
+user opt out per device. Every message, name, stack, and component stack is redacted (auth query
+values, bearer tokens, emails, phone numbers, data URIs, long base64 runs) and clipped before sending;
+only the URL path is included. No user id, email, farm data, request bodies, or breadcrumbs are sent.
+Each page load sends each distinct error once and at most `MAX_REPORTS_PER_PAGE` reports.
+
+The DSN may be a plain HTTPS collector (JSON report) or a Sentry DSN, which is sent as a hand-built
+Sentry envelope to `/api/<project>/envelope/` with the public key, release `acreledger@<version>`,
+an environment of the Vercel environment or `ios-app`, and V8/Safari stack frames. No Sentry SDK is
+installed. The published Privacy Policy says no crash reports are sent, so the policy, the App Store
+privacy answers (Diagnostics → Crash Data, not linked), and `PrivacyInfo.xcprivacy` must agree before
+the DSN is set in any production or CodeMagic environment.
+
 ### Content Security Policy (CSP)
-The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, Vercel, and Windy.com.
+The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, Vercel, Sentry ingest (`https://*.sentry.io`, `connect-src` only), and Windy.com.
 Windy.com must be allowed through both `child-src` and `frame-src` because the weather radar is an external iframe.
 
 ---

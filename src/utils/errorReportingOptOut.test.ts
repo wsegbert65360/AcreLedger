@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   isErrorReportingOptedOut,
   reportClientError,
+  resetErrorReportLimits,
   setErrorReportingOptOut,
 } from '@/utils/errorReporting';
 
 describe('crash report opt-out and scrubbing', () => {
   beforeEach(() => {
+    resetErrorReportLimits();
     localStorage.clear();
     vi.stubEnv('VITE_ERROR_REPORTING_DSN', 'https://reports.example.com/ingest');
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
