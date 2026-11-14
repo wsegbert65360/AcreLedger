@@ -68,7 +68,7 @@ describe('SprayDecisionMatrix', () => {
         precipProb={10}
       />
     );
-    expect(screen.getByText(/GO/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Spray conditions: Go' })).toBeInTheDocument();
   });
 
   it('renders WAIT status for high wind', () => {
@@ -81,6 +81,9 @@ describe('SprayDecisionMatrix', () => {
         precipProb={10}
       />
     );
-    expect(screen.getByText(/WAIT/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Spray conditions: Wait' })).toBeInTheDocument();
+    // Only the flagged reading gets an explanation.
+    expect(screen.getByText(/exceeds 10 mph drift warning/)).toBeInTheDocument();
+    expect(screen.queryByText(/chance of rain — acceptable/)).toBeNull();
   });
 });

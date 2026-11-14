@@ -92,7 +92,7 @@ describe('WeatherBar', () => {
 
     render(<WeatherBar />);
 
-    expect(await screen.findByText(/Weather unavailable · tap to retry/i)).toBeTruthy();
+    expect(await screen.findByText(/No weather\. Tap to retry\./i)).toBeTruthy();
     expect(screen.queryByText(/Offline/i)).toBeNull();
 
     const callsBeforeRetry = fetchCurrentWeather.mock.calls.length;
