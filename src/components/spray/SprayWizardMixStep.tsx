@@ -15,7 +15,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { SprayRecipe, SprayRecipeProduct } from '@/types/farm';
 import { Plus, X, BookOpen } from 'lucide-react';
-import { hasValidSprayRate } from '@/utils/unitConversion';
+import {
+  SPRAY_RATE_UNIT_OPTIONS,
+  formatSprayProductTotal,
+  hasValidSprayRate,
+  isDryRateUnit,
+  rateUnitOptionLabel,
+} from '@/utils/unitConversion';
 
 interface SprayWizardMixStepProps {
   sprayRecipes: SprayRecipe[];
@@ -26,6 +32,9 @@ interface SprayWizardMixStepProps {
   updateProduct: (i: number, field: keyof SprayRecipeProduct, value: string) => void;
   addProduct: () => void;
   removeProduct: (i: number) => void;
+  /** Treated area from the form, used to preview each product's total as it is typed. */
+  treatedAreaSize?: string;
+  treatedAreaUnit?: string;
 }
 
 export function SprayWizardMixStep({
@@ -36,8 +45,11 @@ export function SprayWizardMixStep({
   onRecipeSelect,
   updateProduct,
   addProduct,
-  removeProduct
+  removeProduct,
+  treatedAreaSize,
+  treatedAreaUnit,
 }: SprayWizardMixStepProps) {
+  const previewAcres = (treatedAreaUnit || 'ac') === 'ac' ? parseFloat(treatedAreaSize || '') : NaN;
   const [indexToDelete, setIndexToDelete] = useState<number | null>(null);
   const productToDelete = indexToDelete != null ? products[indexToDelete] : null;
 
@@ -146,12 +158,22 @@ export function SprayWizardMixStep({
                         <SelectValue placeholder="Unit" />
                       </SelectTrigger>
                       <SelectContent>
-                        {['fl oz/ac', 'pt/ac', 'qt/ac', 'gal/ac', 'oz/ac', 'lb/ac'].map(u => (
-                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        {SPRAY_RATE_UNIT_OPTIONS.map(u => (
+                          <SelectItem key={u} value={u}>{rateUnitOptionLabel(u)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  {hasValidSprayRate(p) && Number.isFinite(previewAcres) && previewAcres > 0 && (
+                    <p className="mt-1 text-xs font-mono text-foreground">
+                      = <span className="font-bold">{formatSprayProductTotal({ rate: p.rate, rateUnit: p.rateUnit }, previewAcres)}</span> on {previewAcres.toLocaleString()} ac
+                    </p>
+                  )}
+                  {isDryRateUnit(p.rateUnit) && (
+                    <p role="note" className="mt-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      Dry weight unit. For a liquid product, switch to fl oz/ac.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor={`totalProduct-${i}`} className="text-xs font-semibold text-muted-foreground">Total Product Amt</Label>

@@ -170,6 +170,28 @@ export function formatSprayProductTotal(
 }
 
 /**
+ * Default rate unit for a new tank-mix product. Most row-crop herbicides are
+ * liquids, and a liquid entered under dry `oz/ac` gets its total in pounds, so
+ * the default is fluid ounces.
+ */
+export const DEFAULT_SPRAY_RATE_UNIT: SprayUnit = 'fl oz/ac';
+
+/** Rate units offered in US tank-mix pickers, liquids first. */
+export const SPRAY_RATE_UNIT_OPTIONS: SprayUnit[] = ['fl oz/ac', 'pt/ac', 'qt/ac', 'gal/ac', 'oz/ac', 'lb/ac'];
+
+/** True for units measured by weight (dry products). */
+export function isDryRateUnit(unit?: string | null): boolean {
+  return unit === 'oz/ac' || unit === 'oz (dry)/ac' || unit === 'lb/ac';
+}
+
+/** Picker label that says whether a rate unit is liquid volume or dry weight. */
+export function rateUnitOptionLabel(unit: string): string {
+  if (isDryRateUnit(unit)) return `${unit} · dry weight`;
+  if (LIQUID_UNITS.includes(unit as SprayUnit)) return `${unit} · liquid`;
+  return unit;
+}
+
+/**
  * Normalizes unit string for display in the UI.
  */
 export function getUnitLabel(unit: string): string {

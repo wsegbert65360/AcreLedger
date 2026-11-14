@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import type { SprayRecipe, SprayRecipeProduct } from '@/types/farm';
+import { DEFAULT_SPRAY_RATE_UNIT, SPRAY_RATE_UNIT_OPTIONS, rateUnitOptionLabel } from '@/utils/unitConversion';
 
 type RecipeFormValue = Pick<
   SprayRecipe,
@@ -35,7 +36,7 @@ export default function RecipeForm({
   const [products, setProducts] = useState<SprayRecipeProduct[]>(
     initial?.products?.length
       ? initial.products.map(p => ({ ...p, id: p.id ?? crypto.randomUUID() }))
-      : [{ id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac' }]
+      : [{ id: crypto.randomUUID(), product: '', rate: '', rateUnit: DEFAULT_SPRAY_RATE_UNIT }]
   );
   const [applicatorName, setApplicatorName] = useState(initial?.applicatorName ?? localStorage.getItem(`al_applicator_name_${userPrefix}`) ?? '');
   const [licenseNumber, setLicenseNumber] = useState(initial?.licenseNumber ?? localStorage.getItem(`al_license_number_${userPrefix}`) ?? '');
@@ -48,7 +49,7 @@ export default function RecipeForm({
   };
 
   const addProduct = () => {
-    setProducts(prev => [...prev, { id: crypto.randomUUID(), product: '', rate: '', rateUnit: 'oz/ac' }]);
+    setProducts(prev => [...prev, { id: crypto.randomUUID(), product: '', rate: '', rateUnit: DEFAULT_SPRAY_RATE_UNIT }]);
   };
 
   const removeProduct = (i: number) => {
@@ -117,12 +118,9 @@ export default function RecipeForm({
                       <SelectValue placeholder="Unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="fl oz/ac">fl oz/ac</SelectItem>
-                      <SelectItem value="pt/ac">pt/ac</SelectItem>
-                      <SelectItem value="qt/ac">qt/ac</SelectItem>
-                      <SelectItem value="gal/ac">gal/ac</SelectItem>
-                      <SelectItem value="oz/ac">oz/ac</SelectItem>
-                      <SelectItem value="lb/ac">lb/ac</SelectItem>
+                      {SPRAY_RATE_UNIT_OPTIONS.map(u => (
+                        <SelectItem key={u} value={u}>{rateUnitOptionLabel(u)}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

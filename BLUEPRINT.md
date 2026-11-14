@@ -1200,15 +1200,26 @@ without a producer share. Update crop share in the field editor.
 
 Selecting a landlord, or choosing Farm Owner Summary for the entire farm, shows:
 
-- **Fields overview** — one row per field with acres (CLU-aware via `getDisplayFieldAcres`),
-  crop, total bushels, bu/acre, total bales, and landlord crop-share bushels. Grain and bale
-  production remain separate units; the totals row uses a weighted average for overall bu/acre.
+- **Fields overview** — one row per field **per crop** with acres (CLU-aware via
+  `getDisplayFieldAcres`), crop, total bushels, bu/acre, total bales, and landlord crop-share
+  bushels. A double-cropped field, or a field with grain and hay, gets one row per crop. Totals
+  are **per crop** (`LandlordSummary.cropTotals`); bushels of different crops are never added
+  together, and `totals.acres` counts each field once. Harvests with no crop-share percent are
+  counted in `missingShareHarvests` and called out on screen and in the PDF.
 - **Activity Timeline** — all season-scoped activity (plant, spray, custom spray, fertilizer,
   tillage, grain harvest, hay harvest) across the selected scope's fields, sorted by date, with colored
   activity pills. Hay entries show bale count/type and cutting number.
-- **Exports** — CSV (`generateLandlordSummaryCSV`, per-field summary + totals) and a **Detailed
-  PDF** via `exportToPdf` (landscape, fields table + activity timeline in the footer). The PDF
+- **Exports** — CSV (`generateLandlordSummaryCSV`, per-field-per-crop summary + per-crop totals) and a **Detailed
+  PDF** via `exportToPdf` (landscape US Letter, fields table with per-crop totals rows, then the
+  activity timeline as a second table, a tenant signature line, and the AcreLedger note). The PDF
   subtitle includes the farm name, and long footer lines wrap through `doc.splitTextToSize`.
+- **Report PDF branding** — `src/lib/complianceReports/pdfBranding.ts` draws the shared footer
+  ("Made with AcreLedger · acreledger.com", Page X of Y) on every page and the boxed last-page
+  note. It carries no price, trial, or sign-up wording because the PDFs are also generated on iOS.
+  All report PDFs, including the spray log, use US Letter (`REPORT_PAGE_FORMAT`).
+- **Spray log PDF status line** — `sprayExport.ts` uses the same checks as the in-app review queue
+  (`missingComplianceFields`, `sprayProductsNeedReview`) and names what is missing, so it never
+  prints "Complete" for a record the app flags. Detail values wrap instead of being clipped.
 
 Generation lives in `src/lib/complianceReports/generateLandlordSummary.ts` (pure data builder,
 no React). A landlord appears in the selector only if they own at least one non-deleted field

@@ -29,8 +29,7 @@ function renderFall(farmName: string | null) {
   render(
     <FallFsaReport
       fsaFallRows={[]}
-      totalHarvestBu={0}
-      totalFallHayBales={0}
+      cropTotals={[]}
       fsaFallIssues={[]}
       readinessSummary={summary}
       farmName={farmName}
@@ -61,8 +60,7 @@ describe('FSA report farm name header', () => {
     const { unmount } = render(
       <FallFsaReport
         fsaFallRows={[]}
-        totalHarvestBu={0}
-        totalFallHayBales={0}
+        cropTotals={[]}
         fsaFallIssues={[]}
         readinessSummary={summary}
         farmName="QA Test Farm"

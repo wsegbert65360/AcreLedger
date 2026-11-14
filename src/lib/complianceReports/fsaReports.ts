@@ -12,6 +12,7 @@ import { getWorkDateMs, toLocalIsoDate } from '../../utils/dates';
 import { sanitizeCsvValue } from '../../utils/csv';
 import { roundTo } from '../../utils/numbers';
 import { formatSprayProductTotal } from '../../utils/unitConversion';
+import { ACRELEDGER_CSV_LINE } from './pdfBranding';
 
 export interface Fsa578ReportRow {
     id: string;
@@ -678,8 +679,9 @@ export function buildFsa578WorksheetCsv({
     rows: Fsa578ReportRow[];
 }): string {
     const titleRows = [
-        [sanitizeCsvValue('FSA-578 Acreage Certification Worksheet')],
+        [sanitizeCsvValue('FSA-578 Acreage Reporting Worksheet')],
         [sanitizeCsvValue('Not an official USDA form. Verify final acreage certification with your county FSA office.')],
+        [sanitizeCsvValue(ACRELEDGER_CSV_LINE)],
         [],
         [sanitizeCsvValue('Farm Name'), sanitizeCsvValue(metadata.farmName)],
         [sanitizeCsvValue('Producer Name'), sanitizeCsvValue(metadata.producerName || '')],
@@ -789,6 +791,27 @@ export function buildFsaFallProductionRows({
     return { grainRows, hayRows };
 }
 
+export interface FsaFallCropTotal {
+    crop: string;
+    unit: FsaFallProductionRow['productionUnit'];
+    production: number;
+}
+
+/** Production totals per crop and unit; bushels of different crops are never summed together. */
+export function buildFsaFallCropTotals(rows: FsaFallProductionRow[]): FsaFallCropTotal[] {
+    const totals = new Map<string, FsaFallCropTotal>();
+    for (const row of rows) {
+        const crop = row.crop?.trim() || 'Unspecified';
+        const key = `${crop.toLowerCase()}|${row.productionUnit}`;
+        const current = totals.get(key) ?? { crop, unit: row.productionUnit, production: 0 };
+        current.production += row.production || 0;
+        totals.set(key, current);
+    }
+    return [...totals.values()]
+        .map(t => ({ ...t, production: roundTo(t.production, 2) }))
+        .sort((a, b) => a.crop.localeCompare(b.crop) || a.unit.localeCompare(b.unit));
+}
+
 export function validateFsaFallProductionRows(rows: FsaFallProductionRow[]): FsaFallValidationIssue[] {
     const issues: FsaFallValidationIssue[] = [];
     const isBlank = (value: string | null | undefined) => !value || value.trim().length === 0;
@@ -830,6 +853,7 @@ export function buildFsaFallProductionCsv({
     const titleRows = [
         [sanitizeCsvValue('FSA Fall Harvest / Production Evidence Worksheet')],
         [sanitizeCsvValue('Not an official USDA form. Verify program-specific requirements with your county FSA office.')],
+        [sanitizeCsvValue(ACRELEDGER_CSV_LINE)],
         [],
         [sanitizeCsvValue('Farm Name'), sanitizeCsvValue(metadata.farmName)],
         [sanitizeCsvValue('Crop Year'), sanitizeCsvValue(metadata.cropYear)],

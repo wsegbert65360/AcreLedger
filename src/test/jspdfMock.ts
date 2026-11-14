@@ -40,6 +40,8 @@ export interface CapturedImageCall {
 export interface CapturedAutoTableCall {
   head: unknown[][];
   body: unknown[][];
+  foot?: unknown[][];
+  columnStyles?: Record<number, unknown>;
   startY?: number;
 }
 
@@ -47,7 +49,7 @@ type SplitTextBehavior = (text: string, maxWidth: number) => string[];
 
 export interface JsPdfMock {
   /** Fake jsPDF class — register as `{ default: mock.JsPdf }`. */
-  JsPdf: new (options?: { orientation?: 'portrait' | 'landscape' }) => unknown;
+  JsPdf: new (options?: { orientation?: 'portrait' | 'landscape'; format?: string }) => unknown;
   /** Fake autoTable function — register as `{ default: mock.autoTable }`. */
   autoTable: ReturnType<typeof vi.fn>;
   /** Spy standing in for native.sharePdf (web-path tests should never see it called). */
@@ -79,7 +81,7 @@ export function createJsPdfMock(): JsPdfMock {
     private pageCount = 1;
     readonly internal: { pageSize: { width: number; height: number; getWidth: () => number; getHeight: () => number } };
 
-    constructor(options?: { orientation?: 'portrait' | 'landscape' }) {
+    constructor(options?: { orientation?: 'portrait' | 'landscape'; format?: string }) {
       const landscape = options?.orientation === 'landscape';
       const width = landscape ? 297 : 210;
       const height = landscape ? 210 : 297;
@@ -98,6 +100,9 @@ export function createJsPdfMock(): JsPdfMock {
     setTextColor(): void {}
     setDrawColor(): void {}
     line(): void {}
+    rect(): void {}
+    setFillColor(): void {}
+    setLineWidth(): void {}
 
     text(text: string | string[], x: number, y: number): void {
       const lines = Array.isArray(text) ? text : [text];
@@ -142,10 +147,18 @@ export function createJsPdfMock(): JsPdfMock {
   const autoTable = vi.fn((doc: FakeJsPdf, config: {
     head?: unknown[][];
     body?: unknown[][];
+    foot?: unknown[][];
+    columnStyles?: Record<number, unknown>;
     startY?: number;
     didDrawPage?: (data: { cursor: { x: number; y: number }; pageNumber: number; settings: { margin: { left: number } } }) => void;
   }) => {
-    tableCalls.push({ head: config.head ?? [], body: config.body ?? [], startY: config.startY });
+    tableCalls.push({
+      head: config.head ?? [],
+      body: config.body ?? [],
+      foot: config.foot,
+      columnStyles: config.columnStyles,
+      startY: config.startY,
+    });
     const finalY = (config.startY ?? 30) + 10;
     doc.lastAutoTable = { finalY };
     // Fire didDrawPage once so footer callbacks (page numbers, attribution)

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import ReportTable from '@/components/ReportTable';
-import { FsaFallProductionRow, FsaFallValidationIssue } from '@/lib/complianceReports';
+import type { FsaFallCropTotal, FsaFallProductionRow, FsaFallValidationIssue } from '@/lib/complianceReports';
 import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
 import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { complianceFarmSubtitle, farmNameForProse } from '@/lib/farmDisplayName';
@@ -13,8 +13,7 @@ function fmtDate(d?: string): string {
 
 interface FallFsaReportProps {
   fsaFallRows: FsaFallProductionRow[];
-  totalHarvestBu: number;
-  totalFallHayBales: number;
+  cropTotals: FsaFallCropTotal[];
   fsaFallIssues: FsaFallValidationIssue[];
   readinessSummary: ReportReadinessSummary;
   onIssueAction?: (issue: ReportReadinessIssue) => void;
@@ -28,8 +27,7 @@ interface FallFsaReportProps {
 
 export default function FallFsaReport({
   fsaFallRows,
-  totalHarvestBu,
-  totalFallHayBales,
+  cropTotals,
   fsaFallIssues,
   readinessSummary,
   onIssueAction,
@@ -65,16 +63,12 @@ export default function FallFsaReport({
       exportLabel="CSV"
       summary={(
         <div className="flex flex-col gap-1 font-mono text-sm">
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-muted-foreground uppercase">TOTAL GRAIN PRODUCTION</span>
-            <span className="font-bold text-harvest">{totalHarvestBu.toLocaleString()} BU</span>
-          </div>
-          {totalFallHayBales > 0 && (
-            <div className="flex justify-between items-center">
-              <span className="font-bold text-muted-foreground uppercase">TOTAL HAY PRODUCTION</span>
-              <span className="font-bold text-harvest">{totalFallHayBales.toLocaleString()} BALES</span>
+          {cropTotals.map(total => (
+            <div key={`${total.crop}-${total.unit}`} className="flex justify-between items-center">
+              <span className="font-bold text-muted-foreground uppercase">TOTAL {total.crop}</span>
+              <span className="font-bold text-harvest">{total.production.toLocaleString()} {total.unit.toUpperCase()}</span>
             </div>
-          )}
+          ))}
         </div>
       )}
     >

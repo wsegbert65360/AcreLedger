@@ -5,7 +5,7 @@ import { WeatherData } from '@/types/weather';
 import { useFarm } from '@/store/farmStore';
 import { native } from '@/lib/native';
 import { toast } from 'sonner';
-import { calculateSprayProductFields, hasValidSprayRate } from '@/utils/unitConversion';
+import { DEFAULT_SPRAY_RATE_UNIT, calculateSprayProductFields, hasValidSprayRate } from '@/utils/unitConversion';
 import { normalizeAreaForRate, normalizeTreatedArea } from '@/lib/sprayExportFormatters';
 import { getDisplayFieldAcres } from '@/lib/fieldAcreage';
 import { getLatestForField } from '@/lib/utils';
@@ -34,7 +34,7 @@ function createEmptyProduct(): SprayRecipeProduct {
     ui_id: crypto.randomUUID(),
     product: '',
     rate: '',
-    rateUnit: 'oz/ac',
+    rateUnit: DEFAULT_SPRAY_RATE_UNIT,
     epaRegNumber: '',
     activeIngredients: '',
     totalProductAmount: '',

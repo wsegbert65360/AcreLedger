@@ -128,7 +128,7 @@ describe('Reports Pro gate', () => {
 
     const preview = screen.getByTestId('report-preview');
     expect(screen.getAllByTestId('report-preview-row')).toHaveLength(3);
-    expect(preview.textContent).toContain('FSA-578 Acreage Certification Worksheet');
+    expect(preview.textContent).toContain('FSA-578 Acreage Reporting Worksheet');
     expect(preview.textContent).toContain('Alpha Quarter');
     expect(preview.textContent).toContain('Bravo Quarter');
     expect(preview.textContent).toContain('Charlie Quarter');
@@ -276,7 +276,7 @@ describe('Reports Pro gate', () => {
     renderReports('/reports?tab=hay-summary');
     expect(screen.getByText('Hay production summary')).toBeTruthy();
     expect(screen.queryByTestId('report-preview')).toBeNull();
-    expect(document.body.textContent).not.toContain('FSA-578 Acreage Certification Worksheet');
+    expect(document.body.textContent).not.toContain('FSA-578 Acreage Reporting Worksheet');
   });
 
   it('blocks print and CSV export when the server check fails', async () => {

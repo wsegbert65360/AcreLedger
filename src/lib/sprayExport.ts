@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { REPORT_PAGE_FORMAT, drawAcreLedgerNote, drawPageFooters } from '@/lib/complianceReports/pdfBranding';
 import { Field, SprayRecord } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 import {
@@ -19,13 +20,14 @@ import {
   convertMphToKmh
 } from './sprayExportFormatters';
 import { cleanName } from '@/utils/text';
-import { formatSprayProductTotal } from '@/utils/unitConversion';
+import { formatSprayProductTotal, getUnitLabel } from '@/utils/unitConversion';
 import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
 import { farmNameForPdf, knownFarmName } from '@/lib/farmDisplayName';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { resolveComplianceProfileId } from '@/lib/compliance/profiles';
 import type { ComplianceProfileId } from '@/lib/compliance/profiles';
+import { missingComplianceFields, sprayProductsNeedReview } from '@/lib/sprayCompliance';
 
 interface ExportOptions {
   filename?: string;
@@ -58,8 +60,13 @@ export function generateSprayPDF(
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a4'
+    format: REPORT_PAGE_FORMAT
   });
+  // Layout is measured from the page edges so it holds on US Letter.
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const RIGHT = pageWidth - 14;
+  const BOTTOM = pageHeight - 22;
 
   const profileId = resolveComplianceProfileId(options.profile);
   const isAu = profileId === 'au-apvma';
@@ -81,10 +88,10 @@ export function generateSprayPDF(
     const headerTitle = isAu ? 'AcreLedger Spray Record (AU)' : 'AcreLedger Spray Log';
     doc.text(`${headerTitle} - ${displayFarmName}`, 14, 10);
     if (rangeStart || rangeEnd) {
-      doc.text(`${formatReportDate(rangeStart)} to ${formatReportDate(rangeEnd)}`, 196, 10, { align: 'right' });
+      doc.text(`${formatReportDate(rangeStart)} to ${formatReportDate(rangeEnd)}`, RIGHT, 10, { align: 'right' });
     }
     doc.setDrawColor(220, 220, 220);
-    doc.line(14, 13, 196, 13);
+    doc.line(14, 13, RIGHT, 13);
     doc.setTextColor(0, 0, 0);
   };
 
@@ -123,7 +130,7 @@ export function generateSprayPDF(
     const treatedAreaUnit = effectiveTreatedAreaUnit(record);
     const productRows = Math.max(record.products?.length || 0, 1);
     const estimatedRecordHeight = 60 + productRows * 11 + (record.notes ? 12 : 0);
-    if (yPos + estimatedRecordHeight > 275) {
+    if (yPos + estimatedRecordHeight > BOTTOM) {
       yPos = addContentPage();
     }
 
@@ -131,7 +138,7 @@ export function generateSprayPDF(
       // Divider for multi-record
       if (index > 0) {
         doc.setDrawColor(200, 200, 200);
-        doc.line(14, yPos, 196, yPos);
+        doc.line(14, yPos, RIGHT, yPos);
         yPos += 10;
       }
 
@@ -213,12 +220,35 @@ export function generateSprayPDF(
       { items: detailsRight, x: 75, width: 60 },
       { items: detailsFarRight, x: 140, width: 56 },
     ];
-    detailColumns.forEach(({ items, x, width }) => items.forEach((text, i) => {
-      const clipped = doc.splitTextToSize(text, width)[0] || '-';
-      doc.text(clipped, x, detailY + i * 5);
-    }));
+    // Long values wrap inside their column instead of being cut off; a row is
+    // as tall as its longest cell.
+    let rowY = detailY;
+    for (let i = 0; i < detailsLeft.length; i += 1) {
+      const cells = detailColumns.map(({ items, width }) => doc.splitTextToSize(items[i] || '-', width) as string[]);
+      cells.forEach((lines, columnIndex) => doc.text(lines, detailColumns[columnIndex].x, rowY));
+      rowY += 5 + (Math.max(...cells.map(lines => lines.length), 1) - 1) * 4;
+    }
+    yPos = rowY + 5;
 
-    yPos += 25;
+    // 2a. Sprayer setup and end-of-application conditions, when recorded.
+    const setupParts: string[] = [];
+    const nozzle = [record.nozzleType, record.nozzleSize].filter(Boolean).join(' ');
+    if (nozzle) setupParts.push(`Nozzle: ${nozzle}`);
+    if (record.pressurePsi != null) setupParts.push(`Pressure: ${record.pressurePsi} psi`);
+    if (record.windSpeedEnd != null) {
+      setupParts.push(isAu
+        ? `End wind: ${joinParts([convertMphToKmh(record.windSpeedEnd), 'km/h', record.windDirectionEnd])}`
+        : `End wind: ${joinParts([record.windSpeedEnd, 'MPH', record.windDirectionEnd])}`);
+    }
+    if (record.tempEnd != null) {
+      setupParts.push(isAu ? `End temp: ${convertFahrenheitToCelsius(record.tempEnd)} °C` : `End temp: ${record.tempEnd} F`);
+    }
+    if (setupParts.length > 0) {
+      doc.setFontSize(8);
+      const setupLines = doc.splitTextToSize(`Setup & end conditions: ${setupParts.join('  |  ')}`, RIGHT - 14) as string[];
+      doc.text(setupLines, 14, yPos);
+      yPos += setupLines.length * 4 + 3;
+    }
 
     // 2b. Mix & Personnel Details (NEW)
     const hasMixDetails = record.mixtureRate || record.totalMixtureVolume || record.involvedTechnicians || record.sensitiveAreaCheck;
@@ -238,8 +268,9 @@ export function generateSprayPDF(
         mixParts.push(checkStr);
       }
 
-      doc.text(mixParts.join('  |  '), 55, yPos);
-      yPos += 7;
+      const mixLines = doc.splitTextToSize(mixParts.join('  |  '), RIGHT - 55) as string[];
+      doc.text(mixLines, 55, yPos);
+      yPos += 7 + (mixLines.length - 1) * 4;
     }
 
     // 3. Products Table
@@ -255,7 +286,8 @@ export function generateSprayPDF(
               styles: { fontStyle: p.activeIngredients ? 'normal' : 'bold' }
             },
             p.epaRegNumber || '-',
-            `${p.rate || '-'} ${p.rateUnit || ''}`.trim(),
+            // getUnitLabel marks dry oz and fluid oz so the rate cannot be misread.
+            `${p.rate || '-'} ${p.rateUnit ? getUnitLabel(p.rateUnit) : ''}`.trim(),
             formatSprayProductTotal(p, areaForProductTotal(treatedArea, treatedAreaUnit, p.rateUnit, profileId))
           ];
         }),
@@ -281,20 +313,20 @@ export function generateSprayPDF(
 
     // 4. Notes & Compliance
     // Page break safety for notes
-    if (yPos > 260) {
+    if (yPos > BOTTOM - 15) {
       yPos = addContentPage();
     }
 
     doc.setFontSize(8);
     const { cleanNotes, attachmentDataUri } = splitAttachmentFromNotes(record.notes);
     if (cleanNotes) {
-      const splitNotes = doc.splitTextToSize(`Notes: ${cleanNotes}`, 180);
+      const splitNotes = doc.splitTextToSize(`Notes: ${cleanNotes}`, RIGHT - 14);
       doc.text(splitNotes, 14, yPos);
       yPos += (splitNotes.length * 4);
     }
 
     if (attachmentDataUri) {
-      if (yPos > 220) {
+      if (yPos > BOTTOM - 55) {
         yPos = addContentPage();
       }
       doc.text('Attached Ticket / Label:', 14, yPos);
@@ -315,7 +347,14 @@ export function generateSprayPDF(
     }
 
     // Compliance line
-    const omissions = getRecordOmissions(record, treatedArea ?? undefined, profileId, treatedAreaUnit);
+    // Same checks the in-app review queue uses, so the PDF never says
+    // "Complete" for a record the app flags, and it names what is missing.
+    const exportOmissions = getRecordOmissions(record, treatedArea ?? undefined, profileId, treatedAreaUnit);
+    const missingFields = missingComplianceFields(record, profileId).map(label => label.toLowerCase());
+    const productGap = record.products?.length && sprayProductsNeedReview(record.products, profileId)
+      ? [isAu ? 'a product name or rate' : 'a product name, EPA Reg # or rate']
+      : [];
+    const omissions = [...new Set([...exportOmissions, ...missingFields, ...productGap])];
     const needsReview = Boolean(record.nonCompliant || omissions.length);
     doc.setFont('helvetica', needsReview ? 'bold' : 'normal');
     if (needsReview) {
@@ -323,21 +362,21 @@ export function generateSprayPDF(
     } else {
       doc.setTextColor(0, 0, 0);
     }
-    doc.text(getComplianceStatus(record.nonCompliant, omissions), 14, yPos);
+    const statusText = record.nonCompliant && omissions.length > 0
+      ? `${getComplianceStatus(true)} Missing: ${omissions.join(', ')}.`
+      : getComplianceStatus(record.nonCompliant, omissions);
+    const statusLines = doc.splitTextToSize(statusText, RIGHT - 14) as string[];
+    doc.text(statusLines, 14, yPos);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
-    yPos += 12;
+    yPos += 12 + (statusLines.length - 1) * 4;
   });
 
-  // Footer / Page Numbers
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Page ${i} of ${pageCount}`, 196, 285, { align: 'right' });
-    doc.text('Generated by AcreLedger', 14, 285);
-  }
+  // AcreLedger note after the last record, then the shared footer on every page.
+  const pagesBeforeNote = doc.getNumberOfPages();
+  drawAcreLedgerNote(doc, 'spray', yPos);
+  if (doc.getNumberOfPages() > pagesBeforeNote) drawRunningHeader();
+  drawPageFooters(doc);
 
   // Filename Generation (NEW)
   let finalFilename = options.filename;

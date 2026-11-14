@@ -3,3 +3,4 @@ export * from './generateLandlordStatement';
 export * from './generateLandlordSummary';
 export * from './pdfExport';
 export * from './fsa578PdfExport';
+export * from './pdfBranding';
