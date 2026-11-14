@@ -554,3 +554,16 @@ describe('WeatherService', () => {
     });
 
 });
+
+describe('WeatherService rain chance', () => {
+    it('uses today\'s forecast chance when the current-conditions chance is lower', async () => {
+        const { WeatherService } = await import('../WeatherService');
+        const today = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        const mapped = WeatherService._mapCurrentWeather({
+            address: 'Test',
+            currentConditions: { temp: 60, humidity: 50, windspeed: 5, winddir: 90, precipprob: 0 },
+            days: [{ datetime: today, precipprob: 70, precip: 0 }],
+        });
+        expect(mapped.precipProb).toBe(70);
+    });
+});

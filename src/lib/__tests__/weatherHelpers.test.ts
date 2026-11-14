@@ -460,3 +460,29 @@ describe('parseWeatherLocationInput', () => {
     expect(parseWeatherLocationInput('abc')).toEqual({ ok: false, error: 'Enter a valid 5/9-digit zip or lat,lng' });
   });
 });
+
+describe('weather display helpers', () => {
+  it('formats provider clock times as 12-hour', async () => {
+    const { formatClockTime } = await import('@/lib/weatherHelpers');
+    expect(formatClockTime('06:52')).toBe('6:52 AM');
+    expect(formatClockTime('17:03:00')).toBe('5:03 PM');
+    expect(formatClockTime('00:05')).toBe('12:05 AM');
+    expect(formatClockTime('12:00')).toBe('12:00 PM');
+    expect(formatClockTime('')).toBe('');
+    expect(formatClockTime(undefined)).toBe('');
+  });
+
+  it('formats rainfall to two decimals and keeps zero', async () => {
+    const { formatRainInches } = await import('@/lib/weatherHelpers');
+    expect(formatRainInches(1.254)).toBe('1.25"');
+    expect(formatRainInches(0)).toBe('0.00"');
+    expect(formatRainInches(null)).toBe('—');
+  });
+
+  it('points the wind arrow downwind', async () => {
+    const { getDownwindRotation } = await import('@/lib/weatherHelpers');
+    expect(getDownwindRotation('N')).toBe(180);
+    expect(getDownwindRotation('S')).toBe(0);
+    expect(getDownwindRotation('W')).toBe(90);
+  });
+});

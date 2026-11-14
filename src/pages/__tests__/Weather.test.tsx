@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchExtendedWeather = vi.hoisted(() => vi.fn());
@@ -140,17 +140,16 @@ const errorWeather: ExtendedWeatherData = {
   forecastDays: [],
 };
 
-function miniStatText(label: string): string {
-  const labelEl = screen.getByText(label);
-  return labelEl.parentElement?.parentElement?.textContent ?? '';
+function statText(container: HTMLElement, stat: 'wind' | 'gust'): string {
+  return container.querySelector(`[data-stat="${stat}"]`)?.textContent ?? '';
 }
 
 describe('CurrentConditionsCard', () => {
   it('shows wind and gust placeholders instead of 0 when isError', () => {
-    render(<CurrentConditionsCard weather={errorWeather} lastUpdated="" />);
+    const { container } = render(<CurrentConditionsCard weather={errorWeather} />);
 
-    const windText = miniStatText('Wind');
-    const gustText = miniStatText('Gust');
+    const windText = statText(container, 'wind');
+    const gustText = statText(container, 'gust');
 
     expect(windText).toContain(DASH);
     expect(windText).not.toMatch(/0/);
@@ -158,11 +157,11 @@ describe('CurrentConditionsCard', () => {
     expect(gustText).not.toMatch(/0/);
   });
   it('labels calendar fallback and displays unavailable totals without inventing zero', () => {
-    const { rerender } = render(<CurrentConditionsCard weather={{ ...errorWeather, isError: false, rainfallBasis: 'calendar', precip24h: 0.4, precip72h: null, precip168h: null }} lastUpdated="" />);
+    const { rerender } = render(<CurrentConditionsCard weather={{ ...errorWeather, isError: false, rainfallBasis: 'calendar', precip24h: 0.4, precip72h: null, precip168h: null }} />);
     expect(screen.getByText('Yesterday').parentElement?.textContent).toContain('0.4');
     expect(screen.getByText('Last 3 days').parentElement?.textContent).toContain(DASH);
     expect(screen.queryByText('24h')).toBeNull();
-    rerender(<CurrentConditionsCard weather={{ ...errorWeather, isError: false, rainfallBasis: 'rolling' }} lastUpdated="" />);
+    rerender(<CurrentConditionsCard weather={{ ...errorWeather, isError: false, rainfallBasis: 'rolling' }} />);
     expect(screen.getByText('24h').parentElement?.textContent).toContain('0');
     expect(screen.queryByText('Yesterday')).toBeNull();
   });
@@ -255,7 +254,10 @@ describe('Weather page location fallback', () => {
     expect(screen.queryByText('Set your zip code to see weather')).toBeNull();
     expect(screen.queryByText('Locating…')).toBeNull();
     expect(fetchExtendedWeather).toHaveBeenCalledWith('64093', expect.any(AbortSignal));
-    expect(screen.getByPlaceholderText(/Enter zip code/i)).toHaveValue('64093');
+    // The search box stays closed once weather is showing; the header button opens it.
+    expect(screen.queryByLabelText(/Zip code or coordinates/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Change location' }));
+    expect(screen.getByLabelText(/Zip code or coordinates/i)).toHaveValue('64093');
     expect(getCurrentPosition).not.toHaveBeenCalled();
   });
 

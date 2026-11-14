@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ArrowUp, ChevronRight, Loader2, MapPin, Thermometer } from 'lucide-react';
+import { ArrowUp, ChevronRight, Loader2, MapPin } from 'lucide-react';
 
 import WeatherLocationSearch from '@/components/weather/WeatherLocationSearch';
 import WeatherNoLocation from '@/components/weather/WeatherNoLocation';
 import { isNativePlatform } from '@/lib/native';
 import {
-  getWindRotation,
+  formatRainInches,
+  getDownwindRotation,
   loadCachedWeatherCoords,
   loadZip,
   matchFieldByCoords,
@@ -236,6 +237,8 @@ export default function WeatherBar() {
   };
 
   const weatherUnavailable = Boolean(weather.isError && !hasData);
+  const showValues = hasData && !weather.isError;
+  const rainChance = weather.precipProb ?? 0;
 
   const handleBarActivate = () => {
     if (weatherUnavailable) {
@@ -272,87 +275,80 @@ export default function WeatherBar() {
       }}
     >
       <div aria-hidden="true" className="pointer-events-none absolute -left-10 -top-14 h-36 w-36 rounded-full bg-primary/10 blur-2xl" />
-      {/* Left side: Main Temp & Location */}
+
+      {/* Left: temperature and where it is for */}
       <div className="flex min-w-0 flex-1 flex-col justify-center">
-        <div className="flex items-center gap-2">
-          <Thermometer size={24} className="text-orange-500" />
-          <div className="flex min-w-0 flex-col">
-            <span className="font-mono text-2xl font-bold leading-none tracking-tight min-[380px]:text-3xl">
-              {weather.isError || !hasData ? '—' : `${weather.temp}°F`}
-            </span>
-            {weatherUnavailable && (
-              <span className="text-xs font-medium leading-snug text-muted-foreground">
-                Weather unavailable · tap to retry
-              </span>
-            )}
-            {!hasData && !weather.isError && (
-              <span className="text-xs text-muted-foreground font-semibold">Loading…</span>
-            )}
-          </div>
-        </div>
-        <div className="mt-1 flex min-w-0 items-center gap-1.5">
-          <MapPin size={12} className="text-emerald-700 dark:text-emerald-400" />
-          <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className="flex min-w-0 items-center">
+        <span className="font-mono text-3xl font-bold leading-none tracking-tight min-[420px]:text-4xl">
+          {showValues ? `${weather.temp}°F` : '—'}
+        </span>
+        {weatherUnavailable && (
+          <span className="mt-1 whitespace-nowrap text-xs font-medium leading-snug text-muted-foreground">
+            No weather. Tap to retry.
+          </span>
+        )}
+        {!hasData && !weather.isError && (
+          <span className="mt-1 text-xs font-semibold text-muted-foreground">Loading…</span>
+        )}
+        <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+          <MapPin size={12} aria-hidden="true" className="shrink-0 text-muted-foreground" />
+          <form onSubmit={handleSubmit} onClick={e => e.stopPropagation()} className="flex min-w-0 flex-1 items-center">
             <label htmlFor="weatherZip" className="sr-only">Zip code or coordinates</label>
             <input
               id="weatherZip"
               name="weatherZip"
               value={usingCoords ? (locationName || zip) : inputZip}
               onChange={e => { setInputZip(e.target.value); setZipError(''); setUsingCoords(false); }}
-              placeholder={usingCoords ? 'Auto' : 'Zip...'}
-              className="bg-transparent border-none p-0 text-emerald-800 dark:text-emerald-300 font-mono text-xs placeholder:text-muted-foreground/60 w-24 truncate focus:outline-none focus:ring-0 min-[380px]:w-32"
+              placeholder={usingCoords ? 'Auto' : 'Zip code'}
+              className="w-full min-w-0 max-w-36 truncate border-none bg-transparent p-0 font-mono text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-0"
               maxLength={40}
             />
           </form>
         </div>
       </div>
 
-      {/* Right side: Secondary Stats */}
-      <div className="flex shrink-0 items-center gap-2 min-[420px]:gap-3 sm:gap-8">
-        {/* Wind */}
+      {/* Right: the numbers that decide field work */}
+      <dl className="flex shrink-0 items-start gap-2.5 min-[380px]:gap-3.5 sm:gap-8">
         <div className="flex flex-col items-center">
-          <div className="flex items-center gap-1 whitespace-nowrap">
-            <span className="font-mono text-base font-bold min-[380px]:text-lg">
-              {weather.isError || !hasData ? '—' : weather.wind}
-            </span>
-            {hasData && !weather.isError && <span className="text-xs text-muted-foreground/60 font-sans">mph</span>}
-            {hasData && !weather.isError && weather.windDirection && weather.windDirection !== '—' && (
-              <span className="flex items-center gap-0.5 text-xs text-foreground/80 ml-0.5">
-                <ArrowUp
-                  size={11}
-                  className="text-emerald-500/80 transition-transform duration-500"
-                  style={{ transform: `rotate(${getWindRotation(weather.windDirection)}deg)` }}
-                />
-                <span className="font-mono font-semibold text-xs">{weather.windDirection}</span>
-              </span>
+          <dd className="order-1 flex items-center gap-1 whitespace-nowrap">
+            <span className="font-mono text-lg font-bold">{showValues ? weather.wind : '—'}</span>
+            {showValues && <span className="text-xs text-muted-foreground">mph</span>}
+            {showValues && weather.windDirection && weather.windDirection !== '—' && weather.windDirection !== 'CALM' && (
+              <ArrowUp
+                size={13}
+                aria-hidden="true"
+                className="text-primary transition-transform duration-500 motion-reduce:transition-none"
+                style={{ transform: `rotate(${getDownwindRotation(weather.windDirection)}deg)` }}
+              />
             )}
-          </div>
-          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Wind</span>
+          </dd>
+          <dt className="order-2 text-xs text-muted-foreground">
+            {showValues && weather.windDirection && weather.windDirection !== '—'
+              ? (weather.windDirection === 'CALM' ? 'Calm' : <>From <span className="font-mono font-semibold text-foreground">{weather.windDirection}</span></>)
+              : 'Wind'}
+          </dt>
         </div>
 
-        {/* Humidity */}
-        <div className="hidden flex-col items-center min-[380px]:flex">
-          <span className="font-mono text-lg font-bold">
-            {weather.isError || !hasData ? '—' : `${weather.humidity}%`}
-          </span>
-          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">Humidity</span>
+        <div className="hidden flex-col items-center sm:flex">
+          <dd className="order-1 font-mono text-lg font-bold">{showValues ? `${weather.humidity}%` : '—'}</dd>
+          <dt className="order-2 text-xs text-muted-foreground">Humidity</dt>
         </div>
 
-        {/* Rain Amount */}
+        <div className="flex flex-col items-center max-[359px]:hidden">
+          <dd className="order-1 font-mono text-lg font-bold">
+            {showValues ? formatRainInches(weather.precip24h) : '—'}
+          </dd>
+          <dt className="order-2 text-xs text-muted-foreground">{weather.rainfallBasis === 'calendar' ? 'Yesterday' : 'Rain 24h'}</dt>
+        </div>
+
         <div className="flex flex-col items-center">
-          <span className="font-mono text-base font-bold min-[380px]:text-lg">
-            {weather.isError || !hasData
-              ? '—'
-              : weather.precip24h != null
-                ? `${weather.precip24h.toFixed(2)}"`
-                : '—'}
-          </span>
-          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">{weather.rainfallBasis === 'calendar' ? 'Yesterday' : 'Rain · 24h'}</span>
+          <dd className={`order-1 font-mono text-lg font-bold ${showValues && rainChance >= 40 ? 'text-secondary' : ''}`}>
+            {showValues ? `${rainChance}%` : '—'}
+          </dd>
+          <dt className="order-2 text-xs text-muted-foreground">Rain chance</dt>
         </div>
+      </dl>
 
-        {/* Navigate hint */}
-        <ChevronRight size={16} className="text-muted-foreground/20 group-hover:text-muted-foreground/40 transition-colors hidden sm:block" />
-      </div>
+      <ChevronRight size={16} aria-hidden="true" className="hidden shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground sm:block" />
 
       {loading && (
         <div className="absolute top-2 right-2">
@@ -361,7 +357,7 @@ export default function WeatherBar() {
       )}
 
       {zipError && (
-        <div className="absolute bottom-1 left-4 text-xs text-destructive">
+        <div className="absolute bottom-1 left-4 text-xs font-medium text-destructive" role="alert">
           {zipError}
         </div>
       )}

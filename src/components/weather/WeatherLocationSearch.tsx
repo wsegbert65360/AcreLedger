@@ -20,16 +20,18 @@ export default function WeatherLocationSearch({ value, onChange, onSubmit, error
           <label htmlFor={inputId} className="sr-only">Zip code or coordinates</label>
           <input
             type="text"
-            placeholder="Enter zip code (e.g. 72301) or lat,lng..."
+            placeholder="Zip code or lat,lng"
+            inputMode="text"
+            autoComplete="postal-code"
             id={inputId} name={inputId} value={value}
             onChange={e => onChange(e.target.value)}
-            className="w-full bg-muted/30 border border-border rounded-xl pl-9 pr-4 py-2 text-xs font-mono placeholder:text-muted-foreground/60 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+            className="h-11 w-full bg-muted/30 border border-border rounded-lg pl-9 pr-3 text-base font-mono placeholder:text-muted-foreground/60 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
         <button
           type="submit"
           disabled={disabled}
-          className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-xl text-xs transition-colors shrink-0 disabled:opacity-50"
+          className="h-11 px-4 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold rounded-lg text-sm transition-colors shrink-0 disabled:opacity-50"
         >
           Search
         </button>
@@ -38,16 +40,16 @@ export default function WeatherLocationSearch({ value, onChange, onSubmit, error
             type="button"
             onClick={onUseGps}
             disabled={disabled}
-            title="Use Current Location"
-            aria-label="Use Current Location"
-            className="p-2 border border-border hover:bg-muted/40 text-muted-foreground rounded-xl flex items-center justify-center shrink-0 transition-colors disabled:opacity-50"
+            title="Use current location"
+            aria-label="Use current location"
+            className="h-11 w-11 border border-border hover:bg-muted/40 text-muted-foreground rounded-lg flex items-center justify-center shrink-0 transition-colors disabled:opacity-50"
           >
-            <Crosshair size={16} className={usingGps ? 'animate-pulse text-primary' : ''} />
+            <Crosshair size={18} className={usingGps ? 'animate-pulse text-primary' : ''} />
           </button>
         )}
       </div>
       {error && (
-        <p className="text-xs font-semibold text-destructive mt-0.5 ml-1 uppercase tracking-wider">
+        <p className="text-sm font-medium text-destructive" role="alert">
           {error}
         </p>
       )}

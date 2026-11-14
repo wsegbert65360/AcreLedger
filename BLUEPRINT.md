@@ -543,12 +543,15 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 
 #### Route & Navigation
 - **Path**: `/weather` — registered in `App.tsx` alongside other page routes.
+- **WeatherBar contents**: temperature, wind (arrow points downwind), rain total, and today's rain chance, in one row at the original 96px minimum height (no extra provider call; no spray verdict here by owner decision 2026-11-13). Humidity shows from the `sm` breakpoint up; the rain total hides below 360px.
 - **Entry**: WeatherBar (Index page) is wrapped as a clickable element with `useNavigate('/weather')`. The zip-code form inside uses `stopPropagation` so editing still works.
 - **Location sharing**: Reads from the same `localStorage` key (`${userId}_al_zip`) as WeatherBar. Uses saved coordinate strings or first field coordinates before requesting browser GPS; saved zip codes are used directly for weather without prompting for GPS.
 
 #### Data Flow
 - `WeatherService.fetchExtendedWeather(location)` - single Visual Crossing call requesting `/last7days/next10days` with elements: `datetime`, `tempmax`, `tempmin`, `temp`, `feelslike`, `humidity`, `dew`, `windspeed`, `windgusts`, `winddir`, `precip`, `precipprob`, `cloudcover`. Returns current conditions, 7-day rainfall history, and 10-day forecast.
-- Auto-refreshes every 5 minutes (matches WeatherBar polling interval).
+- Auto-refreshes every 15 minutes, and only while the page is visible (`AUTO_REFRESH_MS` in `Weather.tsx`); a tab that was hidden longer than that reloads when shown again. The WeatherBar does not poll.
+- `precipProb` is the higher of the provider's current-conditions chance and today's forecast chance (`rainChanceToday` in `WeatherService`), because the current-conditions value describes observed weather.
+- Section order: current conditions (temperature, wind dial, rainfall totals), spray conditions, radar preview, 10-day forecast. The location search is hidden behind the header's Change location button once weather is showing. The radar preview ignores touches so the page scrolls; tapping it opens the full-screen radar. Wind arrows point where the wind is blowing to (`getDownwindRotation`).
 - Uses its own `extendedCache` promise cache, separate from the WeatherBar's `promiseCache`.
 - Aborts in-flight weather requests on unmount so leaving `/weather` does not update state after navigation.
 

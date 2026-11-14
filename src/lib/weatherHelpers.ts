@@ -313,6 +313,29 @@ export function getWindRotation(dir: string): number {
   return angles[dir] ?? 0;
 }
 
+/**
+ * Rotation for an arrow that points where the wind is blowing TO (the drift
+ * direction). A north wind points the arrow south.
+ */
+export function getDownwindRotation(dir: string): number {
+  return (getWindRotation(dir) + 180) % 360;
+}
+
+/** '17:03' (24-hour, from the weather provider) to '5:03 PM'. Returns '' when unparseable. */
+export function formatClockTime(hhmm: string | undefined | null): string {
+  const match = (hhmm ?? '').match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return '';
+  const hour = Number(match[1]);
+  if (hour > 23) return '';
+  const suffix = hour >= 12 ? 'PM' : 'AM';
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${suffix}`;
+}
+
+/** Rainfall for display: two decimals plus the inch mark, or an em dash when missing. */
+export function formatRainInches(value: number | null | undefined): string {
+  return value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(2)}"`;
+}
+
 export type SprayStatus = 'go' | 'caution' | 'wait';
 
 /**

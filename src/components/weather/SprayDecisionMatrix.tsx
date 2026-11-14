@@ -11,31 +11,40 @@ interface SprayDecisionMatrixProps {
   className?: string;
 }
 
-const STATUS_CONFIG: Record<SprayStatus, { label: string; color: string; bg: string; border: string; icon: React.ElementType; subtext: string }> = {
+const STATUS_CONFIG: Record<SprayStatus, { label: string; color: string; bg: string; border: string; dot: string; icon: React.ElementType; subtext: string }> = {
   go: {
-    label: 'GO',
-    color: 'text-green-600',
+    label: 'Go',
+    color: 'text-green-800 dark:text-green-300',
     bg: 'bg-green-500/10',
-    border: 'border-green-500/30',
+    border: 'border-green-600/30',
+    dot: 'bg-green-600 dark:bg-green-400',
     icon: CheckCircle2,
     subtext: 'Conditions are favorable for spraying.'
   },
   caution: {
-    label: 'CAUTION',
-    color: 'text-yellow-600',
-    bg: 'bg-yellow-500/10',
-    border: 'border-yellow-500/30',
+    label: 'Caution',
+    color: 'text-amber-800 dark:text-amber-300',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-600/40',
+    dot: 'bg-amber-500 dark:bg-amber-400',
     icon: AlertTriangle,
-    subtext: 'Check specific factors before spraying.'
+    subtext: 'Check the flagged items before spraying.'
   },
   wait: {
-    label: 'WAIT',
-    color: 'text-red-600',
+    label: 'Wait',
+    color: 'text-red-800 dark:text-red-300',
     bg: 'bg-red-500/10',
-    border: 'border-red-500/30',
+    border: 'border-red-600/40',
+    dot: 'bg-red-600 dark:bg-red-400',
     icon: XCircle,
     subtext: 'Delay spraying until conditions improve.'
   }
+};
+
+/** Short labels so four readings fit across a phone. */
+const SHORT_LABEL: Record<string, string> = {
+  'Wind Speed': 'Wind',
+  'Rain Chance': 'Rain',
 };
 
 export function SprayDecisionMatrix({
@@ -49,64 +58,65 @@ export function SprayDecisionMatrix({
   const { overall, factors } = evaluateSprayConditions({ tempF, humidity, windSpeed, precipProb });
   const status = STATUS_CONFIG[overall];
   const StatusIcon = status.icon;
+  const flagged = factors.filter(factor => factor.status !== 'go');
 
   return (
-    <div className={cn('rounded-2xl border bg-card overflow-hidden', status.border, className)}>
-      <div className={cn('px-4 py-3 border-b flex items-center justify-between', status.bg, status.border)}>
-        <div className="flex items-center gap-2">
-          <StatusIcon size={20} className={status.color} />
-          <div>
-            <h3 className={cn('text-sm font-bold uppercase tracking-wider', status.color)}>
-              Spray Conditions: {status.label}
-            </h3>
-            <p className={cn('text-xs font-medium', status.color, 'opacity-80')}>
-              {status.subtext}
-            </p>
-          </div>
+    <section className={cn('overflow-hidden rounded-2xl border bg-card', status.border, className)}>
+      {/* Verdict */}
+      <div className={cn('flex items-center gap-3 px-4 py-3', status.bg)}>
+        <StatusIcon size={28} className={cn('shrink-0', status.color)} aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <h3 className={cn('text-base font-bold leading-tight', status.color)}>
+            Spray conditions: {status.label}
+          </h3>
+          <p className="mt-0.5 text-xs text-foreground/80">{status.subtext}</p>
         </div>
         {windDirection && windDirection !== '—' && (
-          <div className="text-right">
-            <div className="text-xs font-mono text-muted-foreground uppercase">Wind Dir</div>
-            <div className={cn('text-xs font-mono font-bold', status.color)}>{windDirection}</div>
+          <div className="shrink-0 text-right">
+            <div className="text-xs text-muted-foreground">Wind from</div>
+            <div className="font-mono text-sm font-bold text-foreground">{windDirection}</div>
           </div>
         )}
       </div>
 
-      <div className="p-3 space-y-2">
+      {/* The four readings, each with its own status */}
+      <dl className="grid grid-cols-4 divide-x divide-border/60 border-t border-border/60">
         {factors.map((factor) => {
-          const Icon = factor.icon;
           const factorStatus = STATUS_CONFIG[factor.status];
           return (
-            <div
-              key={factor.label}
-              className="flex items-start gap-2 rounded-lg border border-border/50 bg-muted/20 p-2"
-            >
-              <div className={cn('mt-0.5', factorStatus.color)}>
-                <Icon size={14} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-mono font-bold text-muted-foreground uppercase">
-                    {factor.label}
-                  </span>
-                  <span className={cn('text-xs font-mono font-bold', factorStatus.color)}>
-                    {factor.value}
-                  </span>
-                </div>
-                <p className={cn('text-xs leading-tight mt-0.5', factorStatus.color, 'opacity-90')}>
-                  {factor.note}
-                </p>
-              </div>
+            <div key={factor.label} className="flex min-w-0 flex-col items-center px-1 py-2.5 text-center">
+              <dt className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', factorStatus.dot)} aria-hidden="true" />
+                <span className="truncate">{SHORT_LABEL[factor.label] ?? factor.label}</span>
+              </dt>
+              <dd className={cn('mt-0.5 font-mono text-base font-bold', factor.status === 'go' ? 'text-foreground' : factorStatus.color)}>
+                {factor.value}
+                <span className="sr-only">, {factorStatus.label}</span>
+              </dd>
             </div>
           );
         })}
-      </div>
+      </dl>
 
-      <div className="px-4 py-2 border-t border-border/30 bg-muted/10">
-        <p className="text-xs text-muted-foreground/70 leading-tight">
-          Delta-T (ΔT) is an estimate based on temperature and humidity. Always follow label directions and local regulations; this guidance is advisory only.
-        </p>
-      </div>
-    </div>
+      {/* Only the readings that need attention get an explanation */}
+      {flagged.length > 0 && (
+        <ul className="space-y-1.5 border-t border-border/60 px-4 py-2.5">
+          {flagged.map((factor) => {
+            const Icon = factor.icon;
+            const factorStatus = STATUS_CONFIG[factor.status];
+            return (
+              <li key={factor.label} className={cn('flex items-start gap-2 text-sm leading-snug', factorStatus.color)}>
+                <Icon size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span>{factor.note}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <p className="border-t border-border/40 px-4 py-2 text-xs leading-snug text-muted-foreground">
+        Delta-T is estimated from temperature and humidity. Advisory only: follow the label and local regulations.
+      </p>
+    </section>
   );
 }
