@@ -61,9 +61,9 @@ export function ThemeProvider({
             }
 
             if (resolved === "dark") {
-                native.statusBar.setLight();
+                native.statusBar.lightText();
             } else {
-                native.statusBar.setDark();
+                native.statusBar.darkText();
             }
         };
 

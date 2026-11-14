@@ -39,8 +39,9 @@ export const native = {
     error:   () => { if (isNative) Haptics.notification({ type: NotificationType.Error }).catch(() => {}); },
   },
   statusBar: {
-    setDark:  () => { if (isNative) StatusBar.setStyle({ style: Style.Dark }).catch(() => {}); },
-    setLight: () => { if (isNative) StatusBar.setStyle({ style: Style.Light }).catch(() => {}); },
+    // Named for the text color. The plugin's Style.Dark means light text for dark backgrounds.
+    lightText: () => { if (isNative) StatusBar.setStyle({ style: Style.Dark }).catch(() => {}); },
+    darkText:  () => { if (isNative) StatusBar.setStyle({ style: Style.Light }).catch(() => {}); },
   },
   geolocation: {
     getCurrentPosition: async (options?: PositionOptions): Promise<{ coords: { latitude: number; longitude: number } }> => {
