@@ -8,7 +8,7 @@ import type { ForecastDay } from '@/types/weather';
 
 import ForecastGrid from '../ForecastGrid';
 
-function forecastDay(date: string, rainChance: number): ForecastDay {
+function forecastDay(date: string, rainChance: number | null): ForecastDay {
   return {
     date,
     tempHighF: 78,
@@ -22,6 +22,21 @@ function forecastDay(date: string, rainChance: number): ForecastDay {
 }
 
 describe('ForecastGrid', () => {
+  it('renders a zero rain chance as 0%', () => {
+    render(<ForecastGrid days={[forecastDay('2026-08-27', 0)]} />);
+
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText('No rain expected')).toBeInTheDocument();
+  });
+
+  it('renders a missing rain chance as a dash instead of 0%', () => {
+    render(<ForecastGrid days={[forecastDay('2026-08-27', null)]} />);
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    expect(screen.getByText('Rain chance unavailable')).toBeInTheDocument();
+  });
+
   it('uses distinct rain treatments below and at the 40 percent threshold', () => {
     render(
       <ForecastGrid

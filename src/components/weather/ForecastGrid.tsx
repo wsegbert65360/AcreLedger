@@ -38,6 +38,7 @@ function ForecastDayRow({
 }) {
   const isToday = index === 0;
   const rainChance = day.rainChance ?? 0;
+  const hasRainReading = day.rainChance != null;
   const precipIn = day.precipIn ?? 0;
   const windSpeed = day.windSpeed;
   const isHighWind = (windSpeed ?? 0) >= WIND_ALERT_MPH;
@@ -91,8 +92,8 @@ function ForecastDayRow({
                 : 'text-muted-foreground'
           }`}
         >
-          {hasRainChance ? `${rainChance}%` : '—'}
-          <span className="sr-only">{hasRainChance ? ' chance of rain' : 'No rain expected'}</span>
+          {hasRainReading ? `${rainChance}%` : '—'}
+          <span className="sr-only">{hasRainReading ? (rainChance === 0 ? 'No rain expected' : ' chance of rain') : 'Rain chance unavailable'}</span>
         </span>
         {precipIn > 0 && (
           <span className="mt-0.5 font-mono text-xs leading-none text-muted-foreground">
