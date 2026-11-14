@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-10 (free farms can undo the latest pre-season reset; file backup restore stays Pro).
+> **Last updated:** 2026-11-13 (field cap guard lets a restore replay stored fields; rainfall read follows the stored slot).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,11 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-13** - Review fixes (`20261113120000`): `guard_field_cap` no longer counts a stored field replayed by a restore (`acreledger.restoring`) or an upsert of an already-active field, so a free farm at or over 50 fields can undo a pre-season reset; a new field id is still capped. `assert_field_capacity` shadow rows are limited to one per farm per minute. `get_field_rainfall_daily` checks the stored slot row, so a slot field with cleared lat/lng reads empty instead of raising `premium_required:rainfall`. A legacy `trialing` Stripe row shows as Free in Billing.
 - **2026-11-10** - Free farms undo the latest pre-season reset with `undo_pre_season_reset` (server snapshot, 30 days, no Pro check). Uploading a backup file still uses `restore_farm_backup` and stays Pro. Rollover calls `start_pre_season_reset` after the JSON download.
 - **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year). Server flag `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`. The trial is removed (no farm gets trial dates; Checkout never sets `trial_end`). Spray photo capture is removed from the app. See the Free tier bullet in the billing section and `docs/free-tier-handoff.md`.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
-- **2026-11-01** — Added PG17 MAINTAIN revocation for public relations and the retired-backfill function search-path pin; disposable focused and full-chain rehearsal commands cover the change. New tables created by supabase_admin must explicitly revoke MAINTAIN from API roles and PUBLIC.
 
 ## Contents
 
