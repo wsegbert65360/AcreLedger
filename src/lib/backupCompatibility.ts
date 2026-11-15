@@ -1,7 +1,7 @@
 import { calculateAcreage } from '@/lib/gisService';
 import type { Field } from '@/types/farm';
 
-export const CURRENT_BACKUP_VERSION = 3;
+export const CURRENT_BACKUP_VERSION = 4;
 
 export function assertSupportedBackupVersion(version: unknown): void {
   if (version == null) return;

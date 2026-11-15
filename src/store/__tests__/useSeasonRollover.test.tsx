@@ -36,7 +36,8 @@ function makeArgs(overrides: Record<string, unknown> = {}) {
     hayHarvestRecords: [], customSprayRecords: [], fertilizerApplications: [], grainMovements: [],
     savedSeeds: [], fertilizerRecipes: [], sprayRecipes: [], tillageRecords: [],
     fsaTracts: [], cluAssignments: [], workRequests: [],
-    equipment: [], maintenanceSchedules: [], maintenanceLogs: [], activeSeason: 2025,
+    equipment: [], maintenanceSchedules: [], maintenanceLogs: [],
+    cattleGroups: [], cattleMoves: [], cattleEvents: [], activeSeason: 2025,
     setActiveSeason, setViewingSeason, setLoading: vi.fn(),
     setFields: vi.fn(), setBins: vi.fn(), setPlantRecords: vi.fn(), setSprayRecords: vi.fn(),
     setHarvestRecords: vi.fn(), setHayHarvestRecords: vi.fn(), setCustomSprayRecords: vi.fn(),
@@ -44,6 +45,7 @@ function makeArgs(overrides: Record<string, unknown> = {}) {
     setFertilizerRecipes: vi.fn(), setSprayRecipes: vi.fn(), setTillageRecords: vi.fn(),
     setFsaTracts: vi.fn(), setCluAssignments: vi.fn(), setWorkRequests: vi.fn(),
     setEquipment: vi.fn(), setMaintenanceSchedules: vi.fn(), setMaintenanceLogs: vi.fn(),
+    setCattleGroups: vi.fn(), setCattleMoves: vi.fn(), setCattleEvents: vi.fn(),
     setFarmId: vi.fn(),
     refetchFarmData: vi.fn().mockResolvedValue(true),
     isOnline: true, initialFetchComplete: true, fetchError: false, pendingSyncCount: 0,
@@ -153,7 +155,7 @@ describe('season rollover safety', () => {
 
     await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(true);
     expect(exportDataAsJson).toHaveBeenCalledWith(
-      expect.objectContaining({ backupVersion: 3, activeSeason: 2025 }),
+      expect.objectContaining({ backupVersion: 4, activeSeason: 2025 }),
       expect.any(String),
     );
     expect(supabaseMock.fns.rpc).toHaveBeenCalledWith('start_pre_season_reset', {

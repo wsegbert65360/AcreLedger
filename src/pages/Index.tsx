@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, Settings, Tractor, Search, Plus, X } from 'lucide-react';
+import { Beef, MessageCircle, Settings, Tractor, Search, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SeasonSelect from '@/components/SeasonSelect';
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,8 @@ const Index = () => {
     viewingSeason,
     equipment,
     maintenanceSchedules,
+    runsCattle,
+    cattleGroups,
   } = useFarm();
   const { openAsk } = useAskAcreLedger();
 
@@ -147,6 +149,12 @@ const Index = () => {
     summarizeEquipmentStatus(maintenanceSchedules, machine, localTodayIso()).status !== 'ok'
   ).length, [equipment, maintenanceSchedules]);
   const showEquipmentCard = isEquipmentUiEnabled() && equipment.length > 0;
+  const showCattleCard = runsCattle;
+  const cattleSummary = useMemo(() => {
+    if (!runsCattle) return { groups: 0, head: 0 };
+    const live = cattleGroups.filter(group => !group.deleted_at);
+    return { groups: live.length, head: live.reduce((sum, group) => sum + group.headCount, 0) };
+  }, [cattleGroups, runsCattle]);
 
   const { filteredRowCrops, filteredPastureHay } = useMemo(() => {
     let rc = rowCrops;
@@ -237,20 +245,50 @@ const Index = () => {
         <ErrorBoundary>
           <WeatherBar />
         </ErrorBoundary>
-        {showEquipmentCard && (
-          <Link
-            to="/equipment"
-            className="flex min-h-14 items-center justify-between rounded-2xl border border-border/70 bg-card/75 px-4 py-3 shadow-sm transition hover:border-primary/30"
-          >
-            <span className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Tractor size={21} /></span>
-              <span><span className="block text-sm font-bold">Equipment</span><span className="block text-xs text-muted-foreground">{equipment.length} machine{equipment.length === 1 ? '' : 's'}</span></span>
-            </span>
-            <span className={dueEquipmentCount ? 'text-sm font-bold text-amber-700 dark:text-amber-300' : 'text-sm font-semibold text-emerald-700 dark:text-emerald-300'}>
-              {dueEquipmentCount ? `${dueEquipmentCount} due` : 'All current'}
-            </span>
-          </Link>
-        )}
+        {showCattleCard ? (
+          // Two tiles share a row; a lone Cattle tile takes the full width.
+          <div className={showEquipmentCard ? 'grid grid-cols-2 gap-3' : ''}>
+            {showEquipmentCard && (
+              <Link
+                to="/equipment"
+                className="flex min-h-[4.5rem] min-w-0 flex-col justify-between gap-2 rounded-2xl border border-border/70 bg-card/75 px-3 py-3 shadow-sm transition hover:border-primary/30"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Tractor size={20} /></span>
+                  <span className="min-w-0"><span className="block truncate text-sm font-bold">Equipment</span><span className="block truncate text-xs text-muted-foreground">{equipment.length} machine{equipment.length === 1 ? '' : 's'}</span></span>
+                </span>
+                <span className={dueEquipmentCount ? 'text-xs font-bold text-amber-700 dark:text-amber-300' : 'text-xs font-semibold text-emerald-700 dark:text-emerald-300'}>
+                  {dueEquipmentCount ? `${dueEquipmentCount} due` : 'All current'}
+                </span>
+              </Link>
+            )}
+            <Link
+              to="/cattle"
+              className={showEquipmentCard
+                ? 'flex min-h-[4.5rem] min-w-0 flex-col justify-between gap-2 rounded-2xl border border-border/70 bg-card/75 px-3 py-3 shadow-sm transition hover:border-primary/30'
+                : 'flex min-h-14 items-center justify-between rounded-2xl border border-border/70 bg-card/75 px-4 py-3 shadow-sm transition hover:border-primary/30'}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Beef size={20} /></span>
+                <span className="min-w-0"><span className="block truncate text-sm font-bold">Cattle</span><span className="block truncate text-xs text-muted-foreground">{cattleSummary.groups} group{cattleSummary.groups === 1 ? '' : 's'}</span></span>
+              </span>
+              <span className="text-xs font-semibold text-muted-foreground">{cattleSummary.head} head</span>
+            </Link>
+          </div>
+        ) : showEquipmentCard ? (
+            <Link
+              to="/equipment"
+              className="flex min-h-14 items-center justify-between rounded-2xl border border-border/70 bg-card/75 px-4 py-3 shadow-sm transition hover:border-primary/30"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Tractor size={21} /></span>
+                <span><span className="block text-sm font-bold">Equipment</span><span className="block text-xs text-muted-foreground">{equipment.length} machine{equipment.length === 1 ? '' : 's'}</span></span>
+              </span>
+              <span className={dueEquipmentCount ? 'text-sm font-bold text-amber-700 dark:text-amber-300' : 'text-sm font-semibold text-emerald-700 dark:text-emerald-300'}>
+                {dueEquipmentCount ? `${dueEquipmentCount} due` : 'All current'}
+              </span>
+            </Link>
+        ) : null}
           <>
             {allFields.length > 0 && (
               <section className="rounded-2xl border border-border/70 bg-card/75 p-3.5 shadow-sm backdrop-blur-sm space-y-3">

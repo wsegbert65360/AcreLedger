@@ -1,4 +1,4 @@
-import { LINKED_GRAIN_MUTATION_KEY, readEquipmentRpcEnvelope, type QueuedMutation } from '@/lib/syncQueue';
+import { LINKED_GRAIN_MUTATION_KEY, readCattleRpcEnvelope, readEquipmentRpcEnvelope, type QueuedMutation } from '@/lib/syncQueue';
 
 /** Overlay in FIFO order before mapping and caching the authoritative snapshot.
  * Include parked work: it still belongs to the farmer until explicitly discarded. */
@@ -10,7 +10,7 @@ export function overlayQueuedRows<T extends { id?: unknown }>(
 ): T[] {
   const result = new Map<unknown, T>(rows.map(row => [row.id, row]));
   for (const mutation of queue) {
-    if (mutation.farm_id !== farmId || readEquipmentRpcEnvelope(mutation.payload)) continue;
+    if (mutation.farm_id !== farmId || readEquipmentRpcEnvelope(mutation.payload) || readCattleRpcEnvelope(mutation.payload)) continue;
     const payload = mutation.table_name === table
       ? mutation.payload
       : table === 'grain_movements' && mutation.table_name === 'harvest_records'

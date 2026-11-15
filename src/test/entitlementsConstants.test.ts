@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   FREE_LIMITS,
+  PREMIUM_FEATURES,
   freeEntitlement,
   isEntitlementStale,
   isFreeTierLocked,
@@ -24,6 +25,26 @@ describe('entitlement constants', () => {
     expect(FREE_LIMITS).toEqual({ fieldCap, rainfallSlotCap, historySeasons, deviceCap });
     expect(FREE_LIMITS).not.toHaveProperty('photoCap');
     expect(hardeningSql).toMatch(/NULL::int AS photo_cap/);
+  });
+});
+
+describe('premium feature allowlist', () => {
+  // The newest migration that redefines assert_premium is the one that counts.
+  const gateSql = readFileSync('supabase/migrations/20261115120000_cattle_events_pro_gate.sql', 'utf8');
+  const sqlAllowlist = (sql: string) => {
+    const body = /NOT IN \(([^)]*)\)/.exec(sql)?.[1] ?? '';
+    return [...body.matchAll(/'([a-z_]+)'/g)].map(match => match[1]);
+  };
+
+  it('matches the client list exactly, including cattle_events', () => {
+    expect(sqlAllowlist(gateSql).sort()).toEqual([...PREMIUM_FEATURES].sort());
+    expect(PREMIUM_FEATURES).toContain('cattle_events');
+  });
+
+  it('only adds to the hardening allowlist', () => {
+    const previous = sqlAllowlist(hardeningSql);
+    expect(previous.length).toBeGreaterThan(0);
+    for (const feature of previous) expect(sqlAllowlist(gateSql)).toContain(feature);
   });
 });
 
