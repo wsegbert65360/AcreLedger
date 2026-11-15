@@ -1,4 +1,4 @@
-import type { CattleClass, CattleEventType, CattleGroup, CattleRemovalReason } from '@/types/cattle';
+import type { CattleClass, CattleEvent, CattleEventType, CattleGroup, CattleRemovalReason } from '@/types/cattle';
 
 export const CATTLE_CLASS_LABELS: Record<CattleClass, string> = {
   cows: 'Cows',
@@ -75,4 +75,36 @@ export function pastureLabel(fieldId: string | undefined, fields: PickerField[])
   if (!fieldId) return OFF_PASTURE_LABEL;
   const field = fields.find(item => item.id === fieldId);
   return field && !field.deleted_at ? field.name : PASTURE_REMOVED_LABEL;
+}
+
+
+/** Head-change rule per event type, mirroring the database CHECK on cattle_events. */
+export type EventHeadRule = 'positive' | 'negative' | 'none';
+export const CATTLE_EVENT_HEAD_RULE: Record<CattleEventType, EventHeadRule> = {
+  calving: 'positive',
+  head_added: 'positive',
+  death: 'negative',
+  head_removed: 'negative',
+  weaning: 'none',
+  working: 'none',
+  preg_check: 'none',
+};
+
+export const CATTLE_EVENT_TYPES = Object.keys(CATTLE_EVENT_LABELS) as CattleEventType[];
+
+/** Timeline wording; a head transfer names the group on the other side. */
+export function describeEvent(
+  event: Pick<CattleEvent, 'id' | 'eventType' | 'headDelta' | 'transferId' | 'reason'>,
+  allEvents: Pick<CattleEvent, 'id' | 'groupId' | 'transferId' | 'deleted_at'>[],
+  groups: Pick<CattleGroup, 'id' | 'name'>[],
+): string {
+  if (event.transferId) {
+    const other = allEvents.find(item => item.transferId === event.transferId && item.id !== event.id && !item.deleted_at);
+    const otherName = other ? groups.find(group => group.id === other.groupId)?.name : undefined;
+    const head = Math.abs(event.headDelta);
+    if (event.headDelta < 0) return `Moved ${head} head${otherName ? ` to ${otherName}` : ' to another group'}`;
+    return `Received ${head} head${otherName ? ` from ${otherName}` : ' from another group'}`;
+  }
+  const label = CATTLE_EVENT_LABELS[event.eventType];
+  return event.headDelta === 0 ? label : `${label} (${event.headDelta > 0 ? '+' : ''}${event.headDelta})`;
 }

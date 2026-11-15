@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildCattleCsv } from '../report';
 import {
-  findDuplicateGroupName, isFutureDate, orderFieldsForPicker, parseHeadCount, pastureLabel,
+  describeEvent, findDuplicateGroupName, isFutureDate, orderFieldsForPicker, parseHeadCount, pastureLabel,
 } from '../ui';
 import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 
@@ -67,5 +67,22 @@ describe('buildCattleCsv', () => {
     const groups = [group({ deleted_at: '2026-02-01' })];
     const moves: CattleMove[] = [{ ...base, id: 'm1', groupId: 'g1', movedOn: '2026-03-01', headCount: 10 }];
     expect(buildCattleCsv(groups, moves, [], []).split('\r\n')).toHaveLength(1);
+  });
+});
+
+
+describe('describeEvent', () => {
+  const groups = [{ id: 'g1', name: 'Cows' }, { id: 'g2', name: 'Calves' }];
+  const halves = [
+    { id: 'a', groupId: 'g1', transferId: 'a', deleted_at: null },
+    { id: 'b', groupId: 'g2', transferId: 'a', deleted_at: null },
+  ];
+  it('names the other group for both halves of a transfer', () => {
+    expect(describeEvent({ id: 'a', eventType: 'head_removed', headDelta: -4, transferId: 'a' }, halves, groups)).toBe('Moved 4 head to Calves');
+    expect(describeEvent({ id: 'b', eventType: 'head_added', headDelta: 4, transferId: 'a' }, halves, groups)).toBe('Received 4 head from Cows');
+  });
+  it('labels plain events with their head change', () => {
+    expect(describeEvent({ id: 'x', eventType: 'death', headDelta: -1 }, [], groups)).toBe('Death (-1)');
+    expect(describeEvent({ id: 'y', eventType: 'working', headDelta: 0 }, [], groups)).toBe('Worked cattle');
   });
 });

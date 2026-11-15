@@ -5,13 +5,14 @@ import { toast } from 'sonner';
 
 import BottomNav from '@/components/BottomNav';
 import CattleGroupDialog from '@/components/cattle/CattleGroupDialog';
+import CattleEventsSection from '@/components/cattle/CattleEventsSection';
 import CattleMoveDialog from '@/components/cattle/CattleMoveDialog';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
 import { daysOnCurrentPasture } from '@/lib/cattle/derived';
 import { buildCattleCsv, exportCattleCsv } from '@/lib/cattle/report';
 import {
-  CATTLE_CLASS_LABELS, CATTLE_EVENT_LABELS, CATTLE_REMOVAL_LABELS, PASTURE_REMOVED_LABEL, pastureLabel,
+  CATTLE_CLASS_LABELS, PASTURE_REMOVED_LABEL, pastureLabel,
 } from '@/lib/cattle/ui';
 import { localTodayIso } from '@/lib/equipment';
 import { formatIsoDate } from '@/utils/dates';
@@ -91,16 +92,13 @@ function CattleList() {
 
 function GroupDetail({ group }: { group: CattleGroup }) {
   const navigate = useNavigate();
-  const { cattleMoves, cattleEvents, fields, deleteCattleGroup, deleteCattleMove, deleteCattleEvent } = useFarm();
+  const { cattleMoves, fields, deleteCattleGroup, deleteCattleMove } = useFarm();
   const [editing, setEditing] = useState(false);
   const [moving, setMoving] = useState(false);
   const today = localTodayIso();
   const moves = useMemo(() => cattleMoves
     .filter(move => move.groupId === group.id && !move.deleted_at)
     .sort((a, b) => b.movedOn.localeCompare(a.movedOn) || b.createdAt.localeCompare(a.createdAt)), [cattleMoves, group.id]);
-  const events = useMemo(() => cattleEvents
-    .filter(event => event.groupId === group.id && !event.deleted_at)
-    .sort((a, b) => b.eventDate.localeCompare(a.eventDate) || b.createdAt.localeCompare(a.createdAt)), [cattleEvents, group.id]);
   const pasture = pastureLabel(group.currentFieldId, fields);
 
   const remove = async () => {
@@ -149,28 +147,7 @@ function GroupDetail({ group }: { group: CattleGroup }) {
         ))}
       </section>
 
-      <section className="space-y-2">
-        <h2 className="font-bold">Events</h2>
-        {events.length === 0 && <p className="text-sm text-muted-foreground">No events yet.</p>}
-        {events.map(event => (
-          <div key={event.id} className="flex min-h-14 items-center gap-3 rounded-xl border bg-card px-3 py-2">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">
-                {CATTLE_EVENT_LABELS[event.eventType]}
-                {event.headDelta !== 0 && ` (${event.headDelta > 0 ? '+' : ''}${event.headDelta})`}
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                {formatIsoDate(event.eventDate)}{event.reason ? ` · ${CATTLE_REMOVAL_LABELS[event.reason]}` : ''}
-              </span>
-              {event.notes && <span className="block truncate text-xs text-muted-foreground">{event.notes}</span>}
-            </span>
-            <Button
-              variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label={`Delete event on ${event.eventDate}`}
-              onClick={() => { if (window.confirm('Delete this event? The head count change is reversed.')) void deleteCattleEvent(event.id); }}
-            ><Trash2 className="h-4 w-4" /></Button>
-          </div>
-        ))}
-      </section>
+      <CattleEventsSection group={group} />
 
       <Button variant="destructive" className="h-11 w-full" onClick={() => void remove()}><Trash2 className="mr-2 h-4 w-4" />Delete group</Button>
       {editing && <CattleGroupDialog group={group} onClose={() => setEditing(false)} />}
