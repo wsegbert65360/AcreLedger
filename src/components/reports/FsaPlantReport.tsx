@@ -57,7 +57,7 @@ export default function FsaPlantReport({
       />
       <div className="hidden lg:block print:block">
       <ReportTable
-      title="FSA-578 Acreage Certification Worksheet"
+      title="FSA-578 Acreage Reporting Worksheet"
       subtitle={complianceFarmSubtitle(farmName, viewingSeason, reportDate)}
       headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'SEQ', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
       onExport={onExportCsv}

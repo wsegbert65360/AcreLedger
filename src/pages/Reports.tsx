@@ -19,7 +19,7 @@ import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
 import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/components/reports/ReportPreview';
 import WorkRequestsTab from './workRequests/WorkRequestsTab';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
+import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, buildFsa578Rows, buildFsaFallCropTotals, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -262,7 +262,6 @@ export default function Reports() {
     () => buildFsa578Readiness(fsaPlantRows, fsaReadinessIssues),
     [fsaPlantRows, fsaReadinessIssues],
   );
-  const totalHarvestBu   = useMemo(() => roundTo(harvestRecords.reduce((s, r) => s + r.bushels, 0), 2), [harvestRecords]);
   const fsaFallReport = useMemo(
     () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields }),
     [harvestRecords, hayRecords, fields],
@@ -276,7 +275,7 @@ export default function Reports() {
     () => buildFsaFallReadiness(fsaFallRows, fsaFallIssues),
     [fsaFallRows, fsaFallIssues],
   );
-  const totalFallHayBales = useMemo(() => fsaFallReport.hayRows.reduce((s, row) => s + row.production, 0), [fsaFallReport]);
+  const fallCropTotals = useMemo(() => buildFsaFallCropTotals(fsaFallRows), [fsaFallRows]);
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
   const fertilizerReadinessSummary = useMemo(
@@ -467,6 +466,7 @@ export default function Reports() {
           r.fertilizer_formula,
           r.acres
         ]),
+        rightAlignColumns: [3],
         fileName: `Fertilizer_Summary_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
         summaryText: 'Grand Total Applied',
         summaryValue: `${totalFertAcres} AC`
@@ -479,7 +479,9 @@ export default function Reports() {
       exportToPdf({
         title: 'FSA Fall Harvest / Production Evidence Worksheet',
         subtitle: complianceFarmSubtitle(farmName, viewingSeason, reportDate, 'pdf'),
-        headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #'],
+        orientation: 'landscape',
+        headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #', 'LANDLORD', 'LL %'],
+        rightAlignColumns: [3, 5, 11],
         rows: fsaFallRows.map(row => [
           fmtDate(row.harvestDate) || '—',
           row.fieldName,
@@ -491,12 +493,14 @@ export default function Reports() {
           row.evidenceReference || '—',
           row.farmNumber || '—',
           row.tractNumber || '—',
+          row.landlordName || '—',
+          row.landlordSplitPercent != null ? `${row.landlordSplitPercent}%` : '—',
+        ]),
+        // One total per crop and unit; bushels of different crops are never summed together.
+        footRows: fallCropTotals.map(total => [
+          'TOTAL', '', total.crop, total.production.toLocaleString(), total.unit, '', '', '', '', '', '', '',
         ]),
         fileName: `FSA_Fall_Production_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
-        summaryText: totalFallHayBales > 0 ? 'Total Production' : 'Total Grain Production',
-        summaryValue: totalFallHayBales > 0
-          ? `${totalHarvestBu.toLocaleString()} BU / ${totalFallHayBales.toLocaleString()} BALES`
-          : `${totalHarvestBu.toLocaleString()} BU`,
         footerText: [
           'Production Evidence Worksheet',
           'I certify that the production information shown above is accurate to the best of my knowledge.',
@@ -505,7 +509,8 @@ export default function Reports() {
           'FSA Office Notes / Corrections:',
           '__________________________________________________',
           '__________________________________________________',
-        ]
+        ],
+        brandNote: 'fsa',
       });
     }, 'fall production PDF');
   };
@@ -528,6 +533,7 @@ export default function Reports() {
         subtitle: `Total bale production across all cuttings. Generated ${reportDate}.`,
         headers: ['FIELD', 'CUTTING #1', 'CUTTING #2', 'CUTTING #3+', 'TOTAL'],
         rows: records,
+        rightAlignColumns: [1, 2, 3, 4],
         fileName: `Hay_Summary_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
         summaryText: 'Season Grand Total',
         summaryValue: `${totalHayBales.toLocaleString()} BALES`
@@ -543,29 +549,53 @@ export default function Reports() {
     if (!landlordSummary) return;
     const printableFarmName = knownFarmName(farmName);
     runTrackedExport(summaryExportType, () => {
+      const fmt = (n: number) => n.toLocaleString();
       exportToPdf({
         title: summaryTitle,
         subtitle: `${printableFarmName ? printableFarmName + ' — ' : ''}Prepared for: ${wholeFarm ? 'Farm Owner' : selectedLandlord} · ${viewingSeason} crop year · Generated ${reportDate}`,
         orientation: 'landscape',
         headers: ['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'BALES', 'LANDLORD SHARE'],
+        rightAlignColumns: [2, 3, 4, 5, 6],
         rows: landlordSummary.fields.map(f => [
           f.fieldName,
           f.crop ?? '—',
-          f.acres.toLocaleString(),
-          f.totalBushels.toLocaleString(),
-          f.buPerAcre != null ? f.buPerAcre.toLocaleString() : '—',
-          f.totalBales.toLocaleString(),
-          f.landlordShareBushels.toLocaleString(),
+          fmt(f.acres),
+          isBaleOnly(f) ? '—' : fmt(f.totalBushels),
+          f.buPerAcre != null ? fmt(f.buPerAcre) : '—',
+          f.totalBales > 0 ? fmt(f.totalBales) : '—',
+          isBaleOnly(f) ? '—' : fmt(f.landlordShareBushels),
         ]),
-        fileName: sanitizeNativeFileName(`${summaryFilePrefix}_${viewingSeason}.pdf`),
-        summaryText: 'Production / Landlord Share',
-        summaryValue: `${landlordSummary.totals.totalBushels.toLocaleString()} BU · ${landlordSummary.totals.totalBales.toLocaleString()} BALES · ${landlordSummary.totals.landlordShareBushels.toLocaleString()} BU SHARE`,
-        footerText: landlordSummary.activity.length > 0
-          ? [
-              'Activity Timeline:',
-              ...landlordSummary.activity.map(a => `${a.date} · ${a.fieldName} · ${a.activityType}${a.crop ? ' (' + a.crop + ')' : ''} — ${a.detail}`),
-            ]
+        // One totals row per crop; bushels of different crops are never summed together.
+        footRows: landlordSummary.cropTotals.map(t => [
+          `TOTAL - ${t.crop}`,
+          '',
+          fmt(t.acres),
+          isBaleOnly(t) ? '—' : fmt(t.totalBushels),
+          t.buPerAcre != null ? fmt(t.buPerAcre) : '—',
+          t.totalBales > 0 ? fmt(t.totalBales) : '—',
+          isBaleOnly(t) ? '—' : fmt(t.landlordShareBushels),
+        ]),
+        noticeLines: landlordSummary.missingShareHarvests > 0
+          ? [`${landlordSummary.missingShareHarvests} harvest record(s) have no crop-share percent and are counted as 0 share.`]
           : undefined,
+        secondaryTable: {
+          title: 'Activity Timeline',
+          headers: ['DATE', 'FIELD', 'TYPE', 'CROP', 'DETAIL'],
+          rows: landlordSummary.activity.map(a => [
+            a.date,
+            a.fieldName,
+            LANDLORD_ACTIVITY_LABELS[a.activityType],
+            a.crop ?? '—',
+            a.detail,
+          ]),
+        },
+        footerText: [
+          'Shares are computed from harvest records logged in AcreLedger; scale tickets are not shown.',
+          '',
+          'Tenant signature: _______________________________     Date: ___________________',
+        ],
+        brandNote: wholeFarm ? 'report' : 'landlord',
+        fileName: sanitizeNativeFileName(`${summaryFilePrefix}_${viewingSeason}.pdf`),
       });
     }, `${summaryTitle} PDF`);
   };
@@ -701,7 +731,7 @@ export default function Reports() {
             cachedEntitlement,
             failed,
             <ReportPreview
-              title="FSA-578 Acreage Certification Worksheet"
+              title="FSA-578 Acreage Reporting Worksheet"
               headers={['Field', 'Crop', 'Acres']}
               rows={fsaPreviewRows}
             />,
@@ -781,8 +811,7 @@ export default function Reports() {
         <TabsContent value="fsa-harvest" className="mt-0">
           <FallFsaReport
             fsaFallRows={fsaFallRows}
-            totalHarvestBu={totalHarvestBu}
-            totalFallHayBales={totalFallHayBales}
+            cropTotals={fallCropTotals}
             fsaFallIssues={fsaFallIssues}
             readinessSummary={fsaFallReadinessSummary}
             exportStatus={getExportStatus('fsa-harvest')}

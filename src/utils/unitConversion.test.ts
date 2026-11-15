@@ -113,3 +113,21 @@ describe('metric spray ladders (AU pilot)', () => {
     expect(formatSprayProductTotal({ rate: '2', rateUnit: 'lb/ac' }, 10)).toBe('20 lb');
   });
 });
+
+describe('rate unit defaults and labels', () => {
+  it('defaults new products to fluid ounces', async () => {
+    const { DEFAULT_SPRAY_RATE_UNIT } = await import('./unitConversion');
+    expect(DEFAULT_SPRAY_RATE_UNIT).toBe('fl oz/ac');
+  });
+
+  it('labels liquid and dry units in the picker and detects dry units', async () => {
+    const { isDryRateUnit, rateUnitOptionLabel } = await import('./unitConversion');
+    expect(rateUnitOptionLabel('fl oz/ac')).toBe('fl oz/ac · liquid');
+    expect(rateUnitOptionLabel('oz/ac')).toBe('oz/ac · dry weight');
+    expect(rateUnitOptionLabel('lb/ac')).toBe('lb/ac · dry weight');
+    expect(rateUnitOptionLabel('L/ha')).toBe('L/ha');
+    expect(isDryRateUnit('oz/ac')).toBe(true);
+    expect(isDryRateUnit('fl oz/ac')).toBe(false);
+    expect(isDryRateUnit(undefined)).toBe(false);
+  });
+});

@@ -931,7 +931,7 @@ describe('FSA 578 report rows', () => {
             }]
         });
 
-        expect(csv).toContain('FSA-578 Acreage Certification Worksheet');
+        expect(csv).toContain('FSA-578 Acreage Reporting Worksheet');
         expect(csv).toContain('Not an official USDA form');
         expect(csv).toContain('Crop Year');
         expect(csv).toContain('"2026"');

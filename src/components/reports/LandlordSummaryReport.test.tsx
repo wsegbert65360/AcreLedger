@@ -11,7 +11,10 @@ const props = {
   landlordSummary: {
     landlordName: 'Farm Owner', generatedAt: '', seasonYear: 2026,
     fields: [{ fieldId: 'owned', fieldName: 'Owned Field', acres: 50, crop: 'Corn', totalBushels: 5000, buPerAcre: 100, totalBales: 0, landlordShareBushels: 0 }],
-    activity: [], totals: { acres: 50, totalBushels: 5000, totalBales: 0, landlordShareBushels: 0 },
+    activity: [],
+    cropTotals: [{ crop: 'Corn', acres: 50, totalBushels: 5000, buPerAcre: 100, totalBales: 0, landlordShareBushels: 0 }],
+    missingShareHarvests: 0,
+    totals: { acres: 50, totalBales: 0 },
   },
 };
 

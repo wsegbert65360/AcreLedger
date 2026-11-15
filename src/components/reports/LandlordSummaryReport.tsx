@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ReportTable from '@/components/ReportTable';
 import { ACTIVITY_BG_COLORS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
-import type { LandlordActivityType, LandlordSummary } from '@/lib/complianceReports';
+import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, type LandlordSummary } from '@/lib/complianceReports';
 import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
 import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { MobileReportExportPanel } from './MobileReportExportPanel';
@@ -23,16 +23,6 @@ interface LandlordSummaryReportProps {
   onIssueAction?: (issue: ReportReadinessIssue) => void;
   exportStatus?: ReportExportStatus;
 }
-
-const ACTIVITY_LABEL: Record<LandlordActivityType, string> = {
-  plant: 'Plant',
-  spray: 'Spray',
-  customSpray: 'Custom Spray',
-  fertilizer: 'Fertilizer',
-  tillage: 'Tillage',
-  harvest: 'Harvest',
-  hay: 'Hay Harvest',
-};
 
 export default function LandlordSummaryReport({
   wholeFarm = false,
@@ -135,19 +125,36 @@ export default function LandlordSummaryReport({
               subtitle={`Per-field grain yield, bale production, and landlord crop share · ${seasonLabel}`}
               headers={['FIELD', 'CROP', 'ACRES', 'TOTAL BU.', 'BU/ACRE', 'BALES', 'LANDLORD SHARE']}
               summary={landlordSummary.fields.length > 0 ? (
-                <div className="flex items-center justify-between gap-4">
-                  <span className="font-mono text-sm font-bold text-muted-foreground uppercase">Total</span>
-                  <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 font-mono">
+                <div className="space-y-1 font-mono">
+                  {landlordSummary.cropTotals.map(t => (
+                    <div key={t.crop} className="flex items-center justify-between gap-4">
+                      <span className="text-sm font-bold text-muted-foreground uppercase">Total {t.crop}</span>
+                      <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1">
+                        <span className="text-sm font-bold text-foreground">{t.acres.toLocaleString()} ac</span>
+                        {!isBaleOnly(t) && (
+                          <>
+                            <span className="text-sm font-bold text-foreground">{t.totalBushels.toLocaleString()} bu</span>
+                            <span className="text-sm font-bold text-foreground">
+                              {t.buPerAcre != null ? `${t.buPerAcre.toLocaleString()} bu/ac` : '—'}
+                            </span>
+                            <span className="text-base font-black text-blue-600">{t.landlordShareBushels.toLocaleString()} bu share</span>
+                          </>
+                        )}
+                        {t.totalBales > 0 && (
+                          <span className="text-sm font-bold text-foreground">{t.totalBales.toLocaleString()} bales</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between gap-4 border-t border-border pt-1">
+                    <span className="text-xs font-bold text-muted-foreground uppercase">Field acres (each field once)</span>
                     <span className="text-sm font-bold text-foreground">{landlordSummary.totals.acres.toLocaleString()} ac</span>
-                    <span className="text-sm font-bold text-foreground">{landlordSummary.totals.totalBushels.toLocaleString()} bu</span>
-                    <span className="text-sm font-bold text-foreground">
-                      {landlordSummary.totals.acres > 0
-                        ? (landlordSummary.totals.totalBushels / landlordSummary.totals.acres).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                        : '—'}
-                    </span>
-                    <span className="text-sm font-bold text-foreground">{landlordSummary.totals.totalBales.toLocaleString()} bales</span>
-                    <span className="text-base font-black text-blue-600">{landlordSummary.totals.landlordShareBushels.toLocaleString()} bu</span>
                   </div>
+                  {landlordSummary.missingShareHarvests > 0 && (
+                    <p className="pt-1 text-xs font-sans font-semibold text-amber-600">
+                      {landlordSummary.missingShareHarvests} harvest record(s) have no crop-share percent and are counted as 0 share.
+                    </p>
+                  )}
                 </div>
               ) : undefined}
             >
@@ -159,14 +166,14 @@ export default function LandlordSummaryReport({
                 </tr>
               ) : (
                 landlordSummary.fields.map(f => (
-                  <tr key={f.fieldId} className="hover:bg-muted/30 transition-colors">
+                  <tr key={`${f.fieldId}-${f.crop ?? 'none'}`} className="hover:bg-muted/30 transition-colors">
                     <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{f.fieldName}</td>
                     <td data-label="CROP" className="px-4 py-3 font-mono text-xs text-harvest font-bold">{f.crop ?? '—'}</td>
                     <td data-label="ACRES" className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.acres.toLocaleString()}</td>
-                    <td data-label="TOTAL BU." className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.totalBushels.toLocaleString()}</td>
+                    <td data-label="TOTAL BU." className="px-4 py-3 font-mono text-xs text-foreground text-right">{isBaleOnly(f) ? '—' : f.totalBushels.toLocaleString()}</td>
                     <td data-label="BU/ACRE" className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.buPerAcre != null ? f.buPerAcre.toLocaleString() : '—'}</td>
-                    <td data-label="BALES" className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.totalBales.toLocaleString()}</td>
-                    <td data-label="LANDLORD SHARE" className="px-4 py-3 font-mono text-xs text-blue-600 font-bold text-right">{f.landlordShareBushels.toLocaleString()}</td>
+                    <td data-label="BALES" className="px-4 py-3 font-mono text-xs text-foreground text-right">{f.totalBales > 0 ? f.totalBales.toLocaleString() : '—'}</td>
+                    <td data-label="LANDLORD SHARE" className="px-4 py-3 font-mono text-xs text-blue-600 font-bold text-right">{isBaleOnly(f) ? '—' : f.landlordShareBushels.toLocaleString()}</td>
                   </tr>
                 ))
               )}
@@ -193,7 +200,7 @@ export default function LandlordSummaryReport({
                       <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{a.fieldName}</td>
                       <td data-label="TYPE" className="px-4 py-3">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-mono text-xs font-bold border ${ACTIVITY_BG_COLORS[typeKey]} ${ACTIVITY_TEXT_COLORS[typeKey]} border-current/20`}>
-                          {ACTIVITY_LABEL[a.activityType]}
+                          {LANDLORD_ACTIVITY_LABELS[a.activityType]}
                         </span>
                       </td>
                       <td data-label="CROP" className="px-4 py-3 font-mono text-xs text-foreground">{a.crop ?? '—'}</td>

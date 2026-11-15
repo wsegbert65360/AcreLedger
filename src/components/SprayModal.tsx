@@ -25,6 +25,7 @@ import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { type Field, type SprayRecord } from '@/types/farm';
 import { native } from '@/lib/native';
 import { formatCarryForwardTime } from '@/lib/carryForward';
+import { DEFAULT_SPRAY_RATE_UNIT, getUnitLabel, isDryRateUnit } from '@/utils/unitConversion';
 interface SprayModalProps {
   field: Field;
   open: boolean;
@@ -201,7 +202,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
             <button
               type="button"
               onClick={() => {
-                form.setProducts([{ product: '', epaRegNumber: '', activeIngredients: '', rate: '', rateUnit: 'oz/ac', totalProductAmount: '', totalProductUnit: 'gal', ui_id: crypto.randomUUID() }]);
+                form.setProducts([{ product: '', epaRegNumber: '', activeIngredients: '', rate: '', rateUnit: DEFAULT_SPRAY_RATE_UNIT, totalProductAmount: '', totalProductUnit: 'gal', ui_id: crypto.randomUUID() }]);
                 form.setNotes('');
                 form.setTargetPest('');
                 native.haptic.light();
@@ -222,7 +223,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 <button
                   type="button"
                   onClick={() => {
-                    form.setProducts([{ product: '', epaRegNumber: '', activeIngredients: '', rate: '', rateUnit: 'oz/ac', totalProductAmount: '', totalProductUnit: 'gal', ui_id: crypto.randomUUID() }]);
+                    form.setProducts([{ product: '', epaRegNumber: '', activeIngredients: '', rate: '', rateUnit: DEFAULT_SPRAY_RATE_UNIT, totalProductAmount: '', totalProductUnit: 'gal', ui_id: crypto.randomUUID() }]);
                     form.setNotes('');
                     form.setTargetPest('');
                     native.haptic.light();
@@ -282,7 +283,7 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                       placeholder="Rate"
                       className="h-11 bg-background text-center px-1 font-mono w-14"
                     />
-                    <span className="text-xs font-mono text-muted-foreground">{p.rateUnit}</span>
+                    <span className={`text-xs font-mono ${isDryRateUnit(p.rateUnit) ? 'font-bold text-amber-600' : 'text-muted-foreground'}`}>{getUnitLabel(p.rateUnit)}</span>
                   </div>
                 </div>
               ))}
@@ -513,6 +514,8 @@ function SprayModal({ field, open, onClose, initialData, mode = 'edit' }: SprayM
                 updateProduct={form.updateProduct}
                 addProduct={form.addProduct}
                 removeProduct={form.removeProduct}
+                treatedAreaSize={form.treatedAreaSize}
+                treatedAreaUnit={form.treatedAreaUnit}
               />}
 
               {step === 'conditions' && <SprayWizardConditionsStep

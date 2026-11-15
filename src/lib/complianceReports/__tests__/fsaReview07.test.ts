@@ -143,13 +143,13 @@ describe('review-07 owner decisions', () => {
       harvestRecords: [harvest], plantRecords: [], sprayRecords: [], customSprayRecords: [],
       fertilizerApplications: [], tillageRecords: [], hayHarvestRecords: [] });
     expect(getLandlordSplitPercent(ownerField, 90)).toBeCloseTo(100 - producerShare);
-    expect(summary.totals.landlordShareBushels).toBeCloseTo(1000 * (100 - producerShare) / 100);
+    expect(summary.cropTotals[0].landlordShareBushels).toBeCloseTo(1000 * (100 - producerShare) / 100);
     expect(buildLandlordReadiness(summary, [{ ...harvest, landlordSplitPercent: undefined }]).issues.filter(issue => issue.category === 'Crop share')).toEqual([]);
     expect(buildFsaFallProductionRows({ harvestRecords: [harvest], hayRecords: [], fields: [ownerField] }).grainRows[0].landlordSplitPercent).toBeCloseTo(100 - producerShare);
     const legacy = generateLandlordSummary({ landlordName: 'Owner', fields: [{ ...ownerField, producerShare: undefined }],
       cluAssignments: [], harvestRecords: [harvest], plantRecords: [], sprayRecords: [], customSprayRecords: [],
       fertilizerApplications: [], tillageRecords: [], hayHarvestRecords: [] });
-    expect(legacy.totals.landlordShareBushels).toBe(900);
+    expect(legacy.cropTotals[0].landlordShareBushels).toBe(900);
     expect(buildLandlordReadiness(legacy, [{ ...harvest, landlordSplitPercent: undefined }]).issues.some(issue => issue.category === 'Crop share')).toBe(true);
     expect(buildLandlordReadiness({ ...summary, fields: summary.fields.map(row => ({ ...row, producerShare: 101 })) }, [harvest]).issues.some(issue => issue.category === 'Crop share')).toBe(true);
   });

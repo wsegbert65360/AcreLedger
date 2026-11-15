@@ -104,7 +104,7 @@ interface HayReadinessRecord {
 
 interface LandlordReadinessSummary {
   fields: Array<{ fieldId: string; fieldName: string; acres: number; producerShare?: number }>;
-  activity: Array<{ fieldName: string }>;
+  activity: Array<{ fieldId: string }>;
 }
 
 interface LandlordReadinessHarvest {
@@ -462,11 +462,12 @@ export function buildLandlordReadiness(
   if (!summary) return buildReportReadinessSummary({ totalItems: 0, issues: [] });
 
   const issues: ReportReadinessIssue[] = [];
-  const activityFieldNames = new Set(summary.activity.map(activity => activity.fieldName));
+  const activityFieldIds = new Set(summary.activity.map(activity => activity.fieldId));
+  // Summary rows are per field per crop; check each field once.
   const fieldById = new Map(summary.fields.map(field => [field.fieldId, field]));
 
-  for (const field of summary.fields) {
-    if (!activityFieldNames.has(field.fieldName)) {
+  for (const field of fieldById.values()) {
+    if (!activityFieldIds.has(field.fieldId)) {
       issues.push({
         id: `landlord-${field.fieldId}-activity`, itemId: field.fieldId, fieldId: field.fieldId,
         severity: 'warning', category: 'Season activity', message: `${field.fieldName} has no activity in this season.`, actionLabel: 'Open field',
@@ -498,5 +499,5 @@ export function buildLandlordReadiness(
     }
   }
 
-  return buildReportReadinessSummary({ totalItems: summary.fields.length, issues });
+  return buildReportReadinessSummary({ totalItems: fieldById.size, issues });
 }

@@ -22,7 +22,8 @@ import { roundTo } from '@/utils/numbers';
  * season-scoped activity on those fields (plant, spray, custom spray,
  * fertilizer, tillage, grain harvest, hay harvest) is aggregated into an
  * activity timeline, and each field gets a per-field production summary
- * (bushels + bu/acre + bales + landlord crop-share from grain harvests).
+ * (bushels + bu/acre + bales + landlord crop-share from grain harvests), one
+ * row per crop so crops are never blended.
  */
 
 export type LandlordActivityType =
@@ -34,6 +35,21 @@ export type LandlordActivityType =
   | 'harvest'
   | 'hay';
 
+export const LANDLORD_ACTIVITY_LABELS: Record<LandlordActivityType, string> = {
+  plant: 'Plant',
+  spray: 'Spray',
+  customSpray: 'Custom Spray',
+  fertilizer: 'Fertilizer',
+  tillage: 'Tillage',
+  harvest: 'Harvest',
+  hay: 'Hay Harvest',
+};
+
+/**
+ * One row per field per crop. A field with two crops in a season (double-crop,
+ * or corn plus hay) has two rows; `acres` is the field's acreage on each row
+ * because each crop is produced on those acres.
+ */
 export type LandlordFieldSummary = {
   fieldId: string;
   fieldName: string;
@@ -47,6 +63,7 @@ export type LandlordFieldSummary = {
 };
 
 export type LandlordActivityRow = {
+  fieldId: string;
   /** Sort key — epoch ms. */
   sortKey: number;
   /** Display date formatted MM/DD/YYYY. */
@@ -58,17 +75,30 @@ export type LandlordActivityRow = {
   detail: string;
 };
 
+export type LandlordCropTotal = {
+  crop: string;
+  /** Sum of acres across this crop's rows. */
+  acres: number;
+  totalBushels: number;
+  buPerAcre: number | null;
+  totalBales: number;
+  landlordShareBushels: number;
+};
+
 export type LandlordSummary = {
   landlordName: string;
   generatedAt: string; // ISO timestamp
   seasonYear: number | null;
   fields: LandlordFieldSummary[];
   activity: LandlordActivityRow[];
+  /** Per-crop totals. Bushels of different crops are never added together. */
+  cropTotals: LandlordCropTotal[];
+  /** Grain harvests on these fields with no crop-share percent (counted as 0 share). */
+  missingShareHarvests: number;
   totals: {
+    /** Unique field acres (each field counted once). */
     acres: number;
-    totalBushels: number;
     totalBales: number;
-    landlordShareBushels: number;
   };
 };
 
@@ -130,6 +160,13 @@ function dateSortKey(iso: string | undefined, fallbackTimestamp?: number): numbe
   return getWorkDateMs({ date: iso, timestamp: fallbackTimestamp });
 }
 
+const HAY_LABEL = 'Hay';
+
+/** True for a row or total that has bales but no grain, so bushel cells print blank instead of 0. */
+export function isBaleOnly(item: { totalBushels: number; totalBales: number }): boolean {
+  return item.totalBales > 0 && item.totalBushels === 0;
+}
+
 function buildFieldSummaries(
   landlordFields: Field[],
   cluAssignments: FieldCluAssignment[],
@@ -137,45 +174,123 @@ function buildFieldSummaries(
   hayHarvestRecords: HayHarvestRecord[],
   plantRecords: PlantRecord[],
 ): LandlordFieldSummary[] {
-  return landlordFields.map(field => {
+  const rows: LandlordFieldSummary[] = [];
+
+  for (const field of landlordFields) {
     const acres = getDisplayFieldAcres(field, cluAssignments);
     const fieldHarvests = harvestRecords.filter(h => h.fieldId === field.id);
     const fieldHayHarvests = hayHarvestRecords.filter(h => h.fieldId === field.id);
-    const totalBushels = roundTo(
-      fieldHarvests.reduce((sum, h) => sum + (h.bushels || 0), 0),
-      2,
-    );
-    const landlordShareBushels = roundTo(
-      fieldHarvests.reduce((sum, h) => sum + (h.bushels || 0) * ((getLandlordSplitPercent(field, h.landlordSplitPercent) ?? 0) / 100), 0),
-      2,
-    );
-    const buPerAcre = acres > 0 ? roundTo(totalBushels / acres, 2) : null;
     const totalBales = fieldHayHarvests.reduce((sum, h) => sum + (h.baleCount || 0), 0);
 
-    // Crop: prefer the latest harvest crop, then the latest plant crop.
-    const latestHarvestCrop = [...fieldHarvests]
-      .sort((a, b) => dateSortKey(b.harvestDate, b.timestamp) - dateSortKey(a.harvestDate, a.timestamp))
-      .map(h => h.crop?.trim())
-      .find(c => !!c);
     const latestPlantCrop = [...plantRecords]
       .filter(p => p.fieldId === field.id)
       .sort((a, b) => dateSortKey(b.plantDate, b.timestamp) - dateSortKey(a.plantDate, a.timestamp))
       .map(p => p.crop?.trim())
-      .find(c => !!c);
-    const crop = latestHarvestCrop || latestPlantCrop || (totalBales > 0 ? 'Hay' : null);
+      .find(c => !!c) || null;
 
-    return {
-      fieldId: field.id,
-      fieldName: field.name,
-      producerShare: field.producerShare,
-      acres,
-      crop,
-      totalBushels,
-      buPerAcre,
-      totalBales,
-      landlordShareBushels,
+    // Group grain harvests by crop so crops are never blended. A harvest with
+    // no crop falls back to the field's latest planted crop.
+    const groups = new Map<string, { label: string | null; harvests: HarvestRecord[]; latest: number }>();
+    for (const h of fieldHarvests) {
+      const label = h.crop?.trim() || latestPlantCrop;
+      const key = (label ?? '').toLowerCase();
+      const group = groups.get(key) ?? { label, harvests: [], latest: 0 };
+      group.harvests.push(h);
+      group.latest = Math.max(group.latest, dateSortKey(h.harvestDate, h.timestamp));
+      groups.set(key, group);
+    }
+
+    const cropRows: LandlordFieldSummary[] = [...groups.values()]
+      .sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
+      .map(group => {
+        const totalBushels = roundTo(group.harvests.reduce((sum, h) => sum + (h.bushels || 0), 0), 2);
+        const landlordShareBushels = roundTo(
+          group.harvests.reduce((sum, h) => sum + (h.bushels || 0) * ((getLandlordSplitPercent(field, h.landlordSplitPercent) ?? 0) / 100), 0),
+          2,
+        );
+        return {
+          fieldId: field.id,
+          fieldName: field.name,
+          producerShare: field.producerShare,
+          acres,
+          crop: group.label,
+          totalBushels,
+          buPerAcre: acres > 0 ? roundTo(totalBushels / acres, 2) : null,
+          totalBales: 0,
+          landlordShareBushels,
+        };
+      });
+
+    rows.push(...cropRows);
+
+    // Bales go on their own Hay row, or onto a grain row already labelled Hay.
+    const existingHayRow = cropRows.find(row => row.crop?.toLowerCase() === HAY_LABEL.toLowerCase());
+    if (totalBales > 0 && existingHayRow) {
+      existingHayRow.totalBales = totalBales;
+    } else if (totalBales > 0) {
+      rows.push({
+        fieldId: field.id,
+        fieldName: field.name,
+        producerShare: field.producerShare,
+        acres,
+        crop: HAY_LABEL,
+        totalBushels: 0,
+        buPerAcre: null,
+        totalBales,
+        landlordShareBushels: 0,
+      });
+    }
+
+    // Field with no production at all: keep one row so the field still appears.
+    if (cropRows.length === 0 && totalBales === 0) {
+      rows.push({
+        fieldId: field.id,
+        fieldName: field.name,
+        producerShare: field.producerShare,
+        acres,
+        crop: latestPlantCrop,
+        totalBushels: 0,
+        buPerAcre: null,
+        totalBales: 0,
+        landlordShareBushels: 0,
+      });
+    }
+  }
+
+  return rows;
+}
+
+function buildCropTotals(rows: LandlordFieldSummary[]): LandlordCropTotal[] {
+  const totals = new Map<string, LandlordCropTotal>();
+  for (const row of rows) {
+    if (!row.crop) continue;
+    const key = row.crop.toLowerCase();
+    const current = totals.get(key) ?? {
+      crop: row.crop, acres: 0, totalBushels: 0, buPerAcre: null, totalBales: 0, landlordShareBushels: 0,
     };
-  });
+    current.acres += row.acres || 0;
+    current.totalBushels += row.totalBushels;
+    current.totalBales += row.totalBales;
+    current.landlordShareBushels += row.landlordShareBushels;
+    totals.set(key, current);
+  }
+  return [...totals.values()]
+    .map(t => {
+      const acres = roundTo(t.acres, 2);
+      const totalBushels = roundTo(t.totalBushels, 2);
+      return {
+        ...t,
+        acres,
+        totalBushels,
+        landlordShareBushels: roundTo(t.landlordShareBushels, 2),
+        buPerAcre: totalBushels > 0 && acres > 0 ? roundTo(totalBushels / acres, 2) : null,
+      };
+    })
+    .sort((a, b) => {
+      if (a.crop === HAY_LABEL) return 1;
+      if (b.crop === HAY_LABEL) return -1;
+      return a.crop.localeCompare(b.crop);
+    });
 }
 
 function summarizeProducts(products: SprayRecord['products']): string {
@@ -204,6 +319,7 @@ function buildActivityRows(
   for (const r of plantRecords) {
     if (!landlordFieldIds.has(r.fieldId)) continue;
     rows.push({
+      fieldId: r.fieldId,
       sortKey: dateSortKey(r.plantDate, r.timestamp),
       date: formatDate(r.plantDate),
       fieldName: fieldNameById.get(r.fieldId) || r.fieldName,
@@ -216,6 +332,7 @@ function buildActivityRows(
   for (const r of sprayRecords) {
     if (!landlordFieldIds.has(r.fieldId)) continue;
     rows.push({
+      fieldId: r.fieldId,
       sortKey: dateSortKey(r.sprayDate, r.timestamp),
       date: formatDate(r.sprayDate),
       fieldName: fieldNameById.get(r.fieldId) || r.fieldName,
@@ -228,6 +345,7 @@ function buildActivityRows(
   for (const r of customSprayRecords) {
     if (!landlordFieldIds.has(r.fieldId)) continue;
     rows.push({
+      fieldId: r.fieldId,
       sortKey: dateSortKey(r.date, r.timestamp),
       date: formatDate(r.date),
       fieldName: fieldNameById.get(r.fieldId) || r.fieldName,
@@ -240,6 +358,7 @@ function buildActivityRows(
   for (const r of fertilizerApplications) {
     if (!landlordFieldIds.has(r.fieldId)) continue;
     rows.push({
+      fieldId: r.fieldId,
       sortKey: dateSortKey(r.date, r.timestamp),
       date: formatDate(r.date),
       fieldName: fieldNameById.get(r.fieldId) || r.fieldName,
@@ -252,6 +371,7 @@ function buildActivityRows(
   for (const r of tillageRecords) {
     if (!landlordFieldIds.has(r.fieldId)) continue;
     rows.push({
+      fieldId: r.fieldId,
       sortKey: dateSortKey(r.date, r.timestamp),
       date: formatDate(r.date),
       fieldName: fieldNameById.get(r.fieldId) || r.fieldName,
@@ -264,6 +384,7 @@ function buildActivityRows(
   for (const r of harvestRecords) {
     if (!landlordFieldIds.has(r.fieldId)) continue;
     rows.push({
+      fieldId: r.fieldId,
       sortKey: dateSortKey(r.harvestDate, r.timestamp),
       date: formatDate(r.harvestDate),
       fieldName: fieldNameById.get(r.fieldId) || r.fieldName,
@@ -277,6 +398,7 @@ function buildActivityRows(
     if (!landlordFieldIds.has(r.fieldId)) continue;
     const baleLabel = r.baleCount === 1 ? 'bale' : 'bales';
     rows.push({
+      fieldId: r.fieldId,
       sortKey: dateSortKey(r.date, r.timestamp),
       date: formatDate(r.date),
       fieldName: fieldNameById.get(r.fieldId) || r.fieldName,
@@ -340,10 +462,19 @@ export function generateLandlordSummary(params: GenerateLandlordSummaryParams): 
     fieldNameById,
   );
 
-  const totalAcres = roundTo(fieldSummaries.reduce((sum, f) => sum + (f.acres || 0), 0), 2);
-  const totalBushels = roundTo(fieldSummaries.reduce((sum, f) => sum + f.totalBushels, 0), 2);
+  const totalAcres = roundTo(
+    landlordFields.reduce((sum, f) => sum + (getDisplayFieldAcres(f, cluAssignments) || 0), 0),
+    2,
+  );
   const totalBales = fieldSummaries.reduce((sum, f) => sum + f.totalBales, 0);
-  const totalLandlordShareBushels = roundTo(fieldSummaries.reduce((sum, f) => sum + f.landlordShareBushels, 0), 2);
+  // Uses the same field-level fallback as the share math and the readiness check.
+  const landlordFieldById = new Map(landlordFields.map(f => [f.id, f]));
+  const missingShareHarvests = harvestRecords.filter(h => {
+    const field = landlordFieldById.get(h.fieldId);
+    if (!field) return false;
+    const split = getLandlordSplitPercent(field, h.landlordSplitPercent);
+    return split == null || !Number.isFinite(split);
+  }).length;
 
   return {
     landlordName,
@@ -351,18 +482,19 @@ export function generateLandlordSummary(params: GenerateLandlordSummaryParams): 
     seasonYear: typeof seasonYear === 'number' ? seasonYear : null,
     fields: fieldSummaries,
     activity,
+    cropTotals: buildCropTotals(fieldSummaries),
+    missingShareHarvests,
     totals: {
       acres: totalAcres,
-      totalBushels,
       totalBales,
-      landlordShareBushels: totalLandlordShareBushels,
     },
   };
 }
 
 
 /**
- * Flat per-field CSV with a totals row. Each row is one field; the activity
+ * Flat per-field-per-crop CSV with one totals row per crop (crops are never
+ * summed together). Each row is one field and crop; the activity
  * timeline is intentionally not flattened here (it lives in the on-screen UI
  * and the PDF), keeping the CSV a clean numeric summary a landlord can read.
  */
@@ -387,18 +519,16 @@ export function generateLandlordSummaryCSV(summary: LandlordSummary): string {
     String(f.landlordShareBushels),
   ]);
 
-  const totalsRow = [
+  const totalsRows = summary.cropTotals.map(t => [
     'TOTAL',
-    '',
-    String(summary.totals.acres),
-    String(summary.totals.totalBushels),
-    summary.totals.acres > 0
-      ? String(roundTo(summary.totals.totalBushels / summary.totals.acres, 2))
-      : '',
-    String(summary.totals.totalBales),
-    String(summary.totals.landlordShareBushels),
-  ];
+    t.crop,
+    String(t.acres),
+    isBaleOnly(t) ? '' : String(t.totalBushels),
+    t.buPerAcre != null ? String(t.buPerAcre) : '',
+    t.totalBales > 0 ? String(t.totalBales) : '',
+    isBaleOnly(t) ? '' : String(t.landlordShareBushels),
+  ]);
 
-  const allRows = [headers, ...dataRows, totalsRow];
+  const allRows = [headers, ...dataRows, ...totalsRows];
   return allRows.map(row => row.map(cell => sanitizeCsvValue(cell)).join(',')).join('\n');
 }
