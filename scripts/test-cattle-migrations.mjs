@@ -26,6 +26,11 @@ const renameMigration = await readFile(
   'utf8',
 );
 
+const gateMigration = await readFile(
+  new URL('../supabase/migrations/20261115120000_cattle_events_pro_gate.sql', import.meta.url),
+  'utf8',
+);
+
 const ids = {
   farm: '10000000-0000-4000-8000-000000000001',
   otherFarm: '10000000-0000-4000-8000-000000000002',
@@ -513,6 +518,71 @@ try {
   const again = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify({ cattle_groups: [{ ...groupPayload(clash.back, 'heifers (restored 2)') }] })]);
   assert.equal(again.rows[0].value.cattle_group_name_conflicts, 0);
 
+  // ---- 20261115120000_cattle_events_pro_gate ----
+  // Minimal stand-ins for the entitlement plumbing; the real mode/plan functions are
+  // covered by test-entitlements-*. Everything above ran with the no-op assert_premium stub.
+  await db.exec('RESET ROLE');
+  await db.exec(`
+    CREATE TABLE public.test_entitlement (mode text NOT NULL, plan text NOT NULL);
+    INSERT INTO public.test_entitlement VALUES ('off', 'free');
+    CREATE TABLE public.entitlement_shadow_log (
+      id bigserial PRIMARY KEY, farm_id uuid, feature text, plan text, user_id uuid,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE FUNCTION public.entitlements_mode() RETURNS text LANGUAGE sql STABLE AS $$ SELECT mode FROM public.test_entitlement $$;
+    CREATE FUNCTION public._farm_entitlement(p_farm_id uuid) RETURNS TABLE (plan text) LANGUAGE sql STABLE AS $$ SELECT plan FROM public.test_entitlement $$;
+  `);
+  await db.exec(gateMigration);
+  const setPlan = async (mode, plan) => { await db.query('UPDATE public.test_entitlement SET mode = $1, plan = $2', [mode, plan]); };
+  await db.exec(`SELECT set_config('request.uid', '${ids.user}', false); SET ROLE authenticated;`);
+  const g = i => `10000000-0000-4000-8000-0000000002${String(i).padStart(2, '0')}`;
+  const gateLog = (id, groupId = fx.gB) => event(id, 'head_added', '2026-11-09', 1, null, null, ids.farm, groupId);
+  const gateXfer = (a, b) => xfer(a, b, fx.gB, fx.gA, 1, '2026-11-09', null);
+
+  // Enforce + free: new event writes need Pro, with the stable error code and feature name.
+  await db.exec('RESET ROLE'); await setPlan('enforce', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+  const headBefore = await headOf(fx.gB);
+  await assert.rejects(gateLog(g(1)), error => error.code === 'P0402' && /premium_required:cattle_events/.test(error.message), 'log_cattle_event needs Pro on a free farm');
+  await assert.rejects(gateXfer(g(2), g(3)), error => error.code === 'P0402' && /premium_required:cattle_events/.test(error.message), 'transfer_cattle_head needs Pro on a free farm');
+  assert.equal(await headOf(fx.gB), headBefore, 'a refused gated write changes no head count');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_events WHERE id IN ($1,$2,$3)', [g(1), g(2), g(3)])).rows[0].c, 0, 'a refused gated write leaves no rows');
+
+  // Free stays free: groups, pasture moves and deleting an event are not gated.
+  const freeMove = await db.query('SELECT public.move_cattle_group($1,$2,$3,$4,$5,$6) AS value', [ids.farm, g(10), fx.gB, ids.fieldA, dbToday, null]);
+  assert.ok(freeMove.rows[0].value, 'a pasture move still works on a free farm');
+  await db.exec('RESET ROLE'); await setPlan('off', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+  await gateLog(g(4));
+  await db.exec('RESET ROLE'); await setPlan('enforce', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+  const freeDelete = await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3) AS value', [ids.farm, 'event', g(4)]);
+  assert.ok(freeDelete.rows[0].value, 'deleting an event stays allowed on a free farm');
+  await db.exec('RESET ROLE'); await setPlan('off', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+  await gateLog(g(5));
+  await db.exec('RESET ROLE'); await setPlan('enforce', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+  const savedReplay = await db.query('SELECT public.log_cattle_event($1,$2,$3,$4,$5,$6,$7,$8) AS value', [ids.farm, g(5), fx.gB, 'head_added', '2026-11-09', 1, null, null]);
+  assert.equal(savedReplay.rows[0].value.already_applied, true, 'replaying a change that is already saved never parks, even on a free farm');
+
+  // Shadow mode records the attempt and lets it through; paid and off pass.
+  await db.exec('RESET ROLE'); await setPlan('shadow', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+  await gateLog(g(6));
+  await db.exec('RESET ROLE');
+  assert.equal((await db.query("SELECT count(*)::int AS c FROM public.entitlement_shadow_log WHERE feature = 'cattle_events'")).rows[0].c, 1, 'shadow mode logs cattle_events');
+  await setPlan('enforce', 'paid');
+  await db.exec(`SET ROLE authenticated;`);
+  await gateLog(g(7));
+  await gateXfer(g(8), g(9));
+  await db.exec('RESET ROLE'); await setPlan('enforce', 'complimentary');
+  await db.exec(`SET ROLE authenticated;`);
+  await gateLog(g(11));
+
+  // The allowlist still refuses unknown names.
+  await assert.rejects(db.query("SELECT public.assert_premium($1, 'cattle_groups')", [ids.farm]), error => error.code === '22023', 'unknown feature names are still refused');
+
   await db.exec('RESET ROLE');
   const fnProps = (await db.query(`
     SELECT p.prosecdef AS secdef, p.proconfig::text AS config,
@@ -522,7 +592,7 @@ try {
   `)).rows[0];
   assert.deepEqual(fnProps, { secdef: true, config: '{"search_path=\\"\\""}', anon_exec: false, auth_exec: true }, 'transfer_cattle_head is SECURITY DEFINER, empty search_path, explicit grants');
 
-  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, and renamed name collisions.');
+  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, and the Pro gate on events.');
 } finally {
   await db.close();
 }

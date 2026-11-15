@@ -79,11 +79,13 @@ vi.mock('sonner', () => ({
     error: vi.fn(),
     success: vi.fn(),
     warning: vi.fn(),
+    info: vi.fn(),
   }),
 }));
 
 import { CATTLE_RPCS, MAX_SYNC_RETRIES, cattleEnvelopeGroupIds, syncQueue, WebSyncQueueUnreadableError } from '../syncQueue';
 import { toast } from 'sonner';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 
 describe('syncQueue web queue management', () => {
   beforeEach(() => {
@@ -937,6 +939,18 @@ describe('syncQueue web queue management', () => {
     await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
     const [parked] = await syncQueue.getFailed('farm-1');
     expect(parked).toMatchObject({ table_name: 'cattle_events', retry_count: MAX_SYNC_RETRIES });
+  });
+
+  it('parks a gated cattle event at once as "Pro needed to sync", without burning retries', async () => {
+    await syncQueue.enqueueMutation('cattle_events', 'insert', {
+      id: 'e-pro',
+      __cattle_rpc: { rpc: 'log_cattle_event', args: { p_event_id: 'e-pro', p_group_id: 'g1', p_event_type: 'working', p_event_date: '2026-01-01', p_head_delta: 0 } },
+    }, 'farm-1');
+    supabaseControl.rpcResponses.push({ data: null, error: { code: 'P0402', message: 'premium_required:cattle_events' }, status: 400 });
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    const [parked] = await syncQueue.getFailed('farm-1');
+    expect(parked).toMatchObject({ table_name: 'cattle_events', retry_count: MAX_SYNC_RETRIES });
+    expect(toast.info).toHaveBeenCalledWith(ENTITLEMENT_COPY.syncParkedTitle, expect.anything());
   });
 
   it('keeps a transfer retryable while either group insert is still queued', async () => {
