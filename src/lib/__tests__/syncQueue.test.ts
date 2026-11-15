@@ -790,6 +790,7 @@ describe('syncQueue web queue management', () => {
       'tillage_records', 'grain_movements', 'saved_seeds',
       'fertilizer_recipes', 'spray_recipes',
       'equipment', 'maintenance_schedules', 'maintenance_logs',
+      'cattle_groups', 'cattle_moves', 'cattle_events',
     ];
 
     for (const table of tables) {
@@ -869,6 +870,23 @@ describe('syncQueue web queue management', () => {
     }));
     const [parked] = await syncQueue.getFailed('farm-1');
     expect(parked).toMatchObject({ retry_count: MAX_SYNC_RETRIES });
+  });
+
+  it('keeps a cattle move retryable while its group insert is still queued', async () => {
+    await syncQueue.enqueueMutation('cattle_moves', 'insert', {
+      id: 'm1', group_id: 'g1',
+      __cattle_rpc: {
+        rpc: 'move_cattle_group',
+        args: { p_move_id: 'm1', p_group_id: 'g1', p_field_id: null, p_moved_on: '2026-01-01' },
+      },
+    }, 'farm-1');
+    await syncQueue.enqueueMutation('cattle_groups', 'insert', { id: 'g1', name: 'Cows' }, 'farm-1');
+    supabaseControl.rpcResponses.push({ data: null, error: { code: 'P0002', message: 'Cattle group not found' }, status: 404 });
+
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    const remaining = await syncQueue.getQueue('farm-1');
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toMatchObject({ table_name: 'cattle_moves', retry_count: 0 });
   });
 
   // ─── Persistence Failure Propagation ─────────────────────────────────────

@@ -20,6 +20,7 @@ export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
 export const MAINTENANCE_RPC_KEY = '__maintenance_rpc';
 export const READING_FORCE_KEY = '__force_lower_reading';
 export const EQUIPMENT_RPC_KEY = '__equipment_rpc';
+export const CATTLE_RPC_KEY = '__cattle_rpc';
 export const EQUIPMENT_RPCS = [
   'log_maintenance',
   'update_equipment_reading',
@@ -28,6 +29,9 @@ export const EQUIPMENT_RPCS = [
 ] as const;
 export type EquipmentRpcName = typeof EQUIPMENT_RPCS[number];
 const EQUIPMENT_RPC_ALLOWLIST = new Set<string>(EQUIPMENT_RPCS);
+export const CATTLE_RPCS = ['move_cattle_group', 'log_cattle_event', 'soft_delete_cattle_row'] as const;
+export type CattleRpcName = typeof CATTLE_RPCS[number];
+const CATTLE_RPC_ALLOWLIST = new Set<string>(CATTLE_RPCS);
 // P0402 = premium_required: a plan limit, parked at once rather than retried.
 const NON_RETRYABLE_EQUIPMENT_SQLSTATE = new Set(['P0002', '23505', '23514', 'P0402']);
 
@@ -56,6 +60,17 @@ export function readEquipmentRpcEnvelope(payload: unknown): EquipmentRpcEnvelope
   return null;
 }
 
+export function readCattleRpcEnvelope(payload: unknown): EquipmentRpcEnvelope | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const envelope = (payload as Record<string, unknown>)[CATTLE_RPC_KEY];
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return null;
+  const rpc = (envelope as { rpc?: unknown }).rpc;
+  const args = (envelope as { args?: unknown }).args;
+  return typeof rpc === 'string' && args && typeof args === 'object' && !Array.isArray(args)
+    ? { rpc, args: args as Record<string, unknown> }
+    : null;
+}
+
 function isNonRetryableEquipmentRpcError(error: { code?: string } | null | undefined): boolean {
   const code = typeof error?.code === 'string' ? error.code.toUpperCase() : '';
   return NON_RETRYABLE_EQUIPMENT_SQLSTATE.has(code);
@@ -75,6 +90,7 @@ const ALLOWED_TABLES = new Set([
   'fsa_tract_imports', 'field_clu_assignments',
   'work_requests',
   'equipment', 'maintenance_schedules', 'maintenance_logs',
+  'cattle_groups', 'cattle_moves', 'cattle_events',
 ]);
 
 export interface QueuedMutation {
@@ -233,6 +249,8 @@ function mutationRecordKeys(mutation: QueuedMutation): string[] {
   const rpc = readEquipmentRpcEnvelope(mutation.payload);
   if (rpc?.args.p_equipment_id) keys.push(`equipment:${rpc.args.p_equipment_id}`);
   if (rpc?.args.p_schedule_id) keys.push(`maintenance_schedules:${rpc.args.p_schedule_id}`);
+  const cattleRpc = readCattleRpcEnvelope(mutation.payload);
+  if (cattleRpc?.args.p_group_id) keys.push(`cattle_groups:${cattleRpc.args.p_group_id}`);
   return keys;
 }
 
@@ -810,7 +828,9 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
       
       let response: MutationResponse = { error: null };
       let usedEquipmentRpc = false;
+      let usedCattleRpc = false;
       const equipmentRpc = readEquipmentRpcEnvelope(mutation.payload);
+      const cattleRpc = readCattleRpcEnvelope(mutation.payload);
       const legacyEquipmentReading = !equipmentRpc
         && mutation.table_name === 'equipment'
         && mutation.operation === 'update'
@@ -834,7 +854,15 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
       }
 
       try {
-        if (equipmentRpc || legacyEquipmentReading) {
+        if (cattleRpc) {
+          usedCattleRpc = true;
+          response = CATTLE_RPC_ALLOWLIST.has(cattleRpc.rpc)
+            ? await supabase.rpc(cattleRpc.rpc, { ...cattleRpc.args, p_farm_id: farmId })
+            : {
+              error: { code: '23514', message: `Cattle RPC ${cattleRpc.rpc} is not allowlisted` },
+              status: 400,
+            };
+        } else if (equipmentRpc || legacyEquipmentReading) {
           usedEquipmentRpc = true;
           const rpcName = equipmentRpc?.rpc ?? 'update_equipment_reading';
           const rpcArgs = equipmentRpc
@@ -882,6 +910,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
             __expected_version: expectedVersion,
             [READING_FORCE_KEY]: _forceLowerReading,
             [EQUIPMENT_RPC_KEY]: _equipmentRpc,
+            [CATTLE_RPC_KEY]: _cattleRpc,
             [MAINTENANCE_RPC_KEY]: _maintenanceRpc,
             ...payload
           } = mutation.payload;
@@ -909,6 +938,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
         if (
           !response.error
           && !usedEquipmentRpc
+          && !usedCattleRpc
           && mutation.operation !== 'insert'
           && response.count !== 1
         ) {
@@ -947,6 +977,31 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
               description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
             });
             continue;
+          }
+          if (usedCattleRpc) {
+            const code = typeof response.error.code === 'string' ? response.error.code.toUpperCase() : '';
+            const groupId = cattleRpc?.args.p_group_id;
+            const groupInsertPending = code === 'P0002' && typeof groupId === 'string'
+              && queue.some(item => item !== mutation
+                && item.table_name === 'cattle_groups'
+                && item.operation === 'insert'
+                && !handledMutationIds.has(item.id)
+                && item.payload?.id === groupId);
+            if (groupInsertPending) {
+              blockedRecords.add(`${mutation.table_name}:${String(mutation.payload?.id ?? mutation.id)}`);
+              pendingRetryCount++;
+              continue;
+            }
+            if (code === '23505' || code === '23514') {
+              blockRecord(mutation);
+              await syncQueue.parkMutation(mutation.id, token);
+              handledMutationIds.add(mutation.id);
+              failedParkedCount++;
+              toast.error('An offline cattle change could not be synced.', {
+                description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
+              });
+              continue;
+            }
           }
 
           if (isAuthExpiredError(response)) {

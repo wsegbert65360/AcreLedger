@@ -5,6 +5,7 @@ import {
   WorkRequest
 } from '@/types/farm';
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
+import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import {
   mapBinToDbForRestore, mapCustomSprayToDbForRestore, mapEquipmentToDbForRestore,
@@ -13,6 +14,7 @@ import {
   mapHayToDbForRestore, mapMaintenanceLogToDbForRestore, mapMaintenanceScheduleToDbForRestore,
   mapPlantToDbForRestore, mapRecipeToDbForRestore, mapSeedToDbForRestore, mapSprayToDbForRestore,
   mapTillageToDbForRestore, mapWorkRequestToDbForRestore,
+  mapCattleEventToDbForRestore, mapCattleGroupToDbForRestore, mapCattleMoveToDbForRestore,
 } from '@/lib/restoreMappers';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -130,9 +132,11 @@ function restoreConflictSummary(result: unknown): string {
   const grain = Number(row.grain_harvest_link_conflicts ?? 0);
   const work = Number(row.work_request_number_conflicts ?? 0);
   const schedules = Number(row.maintenance_schedule_name_conflicts ?? 0);
+  const cattleGroups = Number(row.cattle_group_name_conflicts ?? 0);
   if (grain > 0) parts.push(`${grain} grain movement${grain === 1 ? '' : 's'} kept deleted to protect a newer harvest link`);
   if (work > 0) parts.push(`${work} work request${work === 1 ? '' : 's'} kept deleted to protect a newer request number`);
   if (schedules > 0) parts.push(`${schedules} maintenance task${schedules === 1 ? '' : 's'} kept deleted to protect a live task name`);
+  if (cattleGroups > 0) parts.push(`${cattleGroups} cattle group${cattleGroups === 1 ? '' : 's'} kept deleted to protect a live group name`);
   return parts.length > 0 ? ` ${parts.join('; ')}.` : '';
 }
 
@@ -158,6 +162,9 @@ interface UseSeasonManagementArgs {
   equipment: Equipment[];
   maintenanceSchedules: MaintenanceSchedule[];
   maintenanceLogs: MaintenanceLog[];
+  cattleGroups: CattleGroup[];
+  cattleMoves: CattleMove[];
+  cattleEvents: CattleEvent[];
   activeSeason: number;
   viewingSeason?: number;
   setActiveSeason: React.Dispatch<React.SetStateAction<number>>;
@@ -182,6 +189,9 @@ interface UseSeasonManagementArgs {
   setEquipment: React.Dispatch<React.SetStateAction<Equipment[]>>;
   setMaintenanceSchedules: React.Dispatch<React.SetStateAction<MaintenanceSchedule[]>>;
   setMaintenanceLogs: React.Dispatch<React.SetStateAction<MaintenanceLog[]>>;
+  setCattleGroups: React.Dispatch<React.SetStateAction<CattleGroup[]>>;
+  setCattleMoves: React.Dispatch<React.SetStateAction<CattleMove[]>>;
+  setCattleEvents: React.Dispatch<React.SetStateAction<CattleEvent[]>>;
   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
   /** Reload all farm entities from Supabase after restore (source of truth). */
   refetchFarmData: () => Promise<boolean>;
@@ -205,13 +215,15 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     hayHarvestRecords, customSprayRecords, fertilizerApplications, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords,
     fsaTracts, cluAssignments, workRequests,
-    equipment, maintenanceSchedules, maintenanceLogs, activeSeason, viewingSeason,
+    equipment, maintenanceSchedules, maintenanceLogs,
+    cattleGroups, cattleMoves, cattleEvents, activeSeason, viewingSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setTillageRecords, setFsaTracts, setCluAssignments, setWorkRequests,
-    setEquipment, setMaintenanceSchedules, setMaintenanceLogs, setFarmId,
+    setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
+    setCattleGroups, setCattleMoves, setCattleEvents, setFarmId,
     refetchFarmData,
     isOnline, initialFetchComplete, fetchError, pendingSyncCount, farmRole,
   } = args;
@@ -287,7 +299,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         fields, bins, plantRecords, sprayRecords, harvestRecords,
         hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
         savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
-        equipment, maintenanceSchedules, maintenanceLogs, activeSeason,
+        equipment, maintenanceSchedules, maintenanceLogs,
+        cattleGroups, cattleMoves, cattleEvents, activeSeason,
         rolloverDate: new Date().toISOString(),
       };
       const validatedBackup = backupSchema.parse(backupData);
@@ -351,7 +364,8 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     session, fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
-    equipment, maintenanceSchedules, maintenanceLogs, activeSeason, viewingSeason,
+    equipment, maintenanceSchedules, maintenanceLogs,
+    cattleGroups, cattleMoves, cattleEvents, activeSeason, viewingSeason,
     isOnline, farm_id, initialFetchComplete, fetchError, pendingSyncCount,
     setActiveSeason, setViewingSeason, setLoading, refreshActiveSeason,
   ]);
@@ -433,6 +447,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const equipmentToDb = (backupData.equipment ?? []).map((row) => mapEquipmentToDbForRestore({ ...row, farm_id } as Equipment));
       const schedulesToDb = (backupData.maintenanceSchedules ?? []).map((row) => mapMaintenanceScheduleToDbForRestore({ ...row, farm_id } as MaintenanceSchedule));
       const logsToDb = (backupData.maintenanceLogs ?? []).map((row) => mapMaintenanceLogToDbForRestore({ ...row, farm_id } as MaintenanceLog));
+      const cattleGroupsToDb = (backupData.cattleGroups ?? []).map((row) => mapCattleGroupToDbForRestore({ ...row, farm_id } as CattleGroup));
+      const cattleMovesToDb = (backupData.cattleMoves ?? []).map((row) => mapCattleMoveToDbForRestore({ ...row, farm_id } as CattleMove));
+      const cattleEventsToDb = (backupData.cattleEvents ?? []).map((row) => mapCattleEventToDbForRestore({ ...row, farm_id } as CattleEvent));
 
       const switchActiveSeason = options?.switchActiveSeason === true
         && backupData.activeSeason !== undefined
@@ -464,6 +481,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         equipment: equipmentToDb,
         maintenance_schedules: schedulesToDb,
         maintenance_logs: logsToDb,
+        cattle_groups: cattleGroupsToDb,
+        cattle_moves: cattleMovesToDb,
+        cattle_events: cattleEventsToDb,
       };
       if (switchActiveSeason) {
         payload._expected_active_season = activeSeason;
@@ -623,6 +643,9 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setEquipment([]);
     setMaintenanceSchedules([]);
     setMaintenanceLogs([]);
+    setCattleGroups([]);
+    setCattleMoves([]);
+    setCattleEvents([]);
     if (isSignOut) {
       setActiveSeason(getCurrentYear());
       setViewingSeason(getCurrentYear());
@@ -652,6 +675,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setFsaTracts, setCluAssignments, setWorkRequests,
     setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
+    setCattleGroups, setCattleMoves, setCattleEvents,
     setFarmId, setActiveSeason, setViewingSeason,
     refetchFarmData, refreshActiveSeason,
   ]);

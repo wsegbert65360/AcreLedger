@@ -99,6 +99,7 @@ vi.doMock('@/lib/syncQueue', () => ({
   MAX_SYNC_RETRIES: 10,
   LINKED_GRAIN_MUTATION_KEY: '__linked_grain_movement',
   readEquipmentRpcEnvelope: () => null,
+  readCattleRpcEnvelope: () => null,
   syncQueue: {
     getQueue: getQueueMock,
     getFailed: getFailedMock,
@@ -477,6 +478,34 @@ describe('farmStore composed behaviors', () => {
       expect(ok).toBe(true);
       expect(result.current.fetchError).toBe(false);
       expect(result.current.farmName).toBe('Cloud Farm');
+    });
+
+    it('does not query cattle tables while the farm setting is off', async () => {
+      control.isOnline = true;
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: false }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.runsCattle).toBe(false);
+      expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_groups');
+      expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_moves');
+      expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_events');
+    });
+
+    it('keeps cached cattle when one enabled cattle query fails without blocking core data', async () => {
+      control.isOnline = true;
+      cacheControl.data.cattle_groups = [{
+        id: 'g-cache', farm_id: 'farm-1', name: 'Cached Cows', class: 'cows', headCount: 9,
+        createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', deleted_at: null,
+      }];
+      cacheControl.data.farm_settings = [{ farmId: 'farm-1', runsCattle: true }];
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: true }, error: null });
+      cloud.setTableHandler('cattle_groups', { data: null, error: { message: 'cattle unavailable' } });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.fetchError).toBe(false);
+      expect(result.current.cattleLoadFailed).toBe(true);
+      expect(result.current.cattleGroups).toEqual([expect.objectContaining({ id: 'g-cache' })]);
+      expect(cloud.fns.from).toHaveBeenCalledWith('fields');
     });
 
     it('still hydrates from cloud when the phone offline store cannot be opened', async () => {

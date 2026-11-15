@@ -2,13 +2,15 @@ import { createContext, useContext, useState, useEffect, ReactNode, useMemo, use
 import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord, WorkRequest } from '@/types/farm';
 import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
+import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPages } from '@/lib/fetchAllPages';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
   mapHarvestFromDb, mapHayFromDb, mapCustomSprayFromDb, mapGrainFromDb, mapSeedFromDb, mapRecipeFromDb,
   mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb,
   mapFsaTractFromDb, mapFieldCluAssignmentFromDb, mapWorkRequestFromDb,
-  mapEquipmentFromDb, mapMaintenanceScheduleFromDb, mapMaintenanceLogFromDb
+  mapEquipmentFromDb, mapMaintenanceScheduleFromDb, mapMaintenanceLogFromDb,
+  mapCattleEventFromDb, mapCattleGroupFromDb, mapCattleMoveFromDb
 } from '../lib/mappers';
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
@@ -31,10 +33,12 @@ import { useSeasonManagement, type ClearLocalCacheOptions } from './useSeasonMan
 import { useTillageRecords } from './useTillageRecords';
 import { useWorkRequests } from './useWorkRequests';
 import { useEquipment } from './useEquipment';
+import { useCattle } from './useCattle';
 import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
+import { applyParkedCattleMutations } from '@/lib/cattle/parked';
 import { syncQueue, WebSyncQueueUnreadableError, type QueuedMutation } from '../lib/syncQueue';
 import { overlayQueuedRows } from '@/lib/queuedSnapshot';
 
@@ -66,6 +70,8 @@ interface FarmState {
   fetchError: boolean;
   /** True when equipment/maintenance queries failed and cached equipment was kept. */
   equipmentLoadFailed: boolean;
+  /** True when one or more enabled cattle queries failed and cached cattle was kept. */
+  cattleLoadFailed: boolean;
   /** Whether the records currently shown came from the last successful cloud fetch or local cache. */
   dataLoadSource: 'cloud' | 'cache';
   /** ISO timestamp of the last cache hydrate or cloud fetch that populated records. */
@@ -106,6 +112,11 @@ interface FarmState {
   equipment: Equipment[];
   maintenanceSchedules: MaintenanceSchedule[];
   maintenanceLogs: MaintenanceLog[];
+  /** Farm-level feature setting. Defaults false until cache/cloud metadata loads. */
+  runsCattle: boolean;
+  cattleGroups: CattleGroup[];
+  cattleMoves: CattleMove[];
+  cattleEvents: CattleEvent[];
   /** The current chronological season year */
   activeSeason: number;
   /** The season year currently being viewed/edited */
@@ -237,12 +248,20 @@ interface FarmState {
   logMaintenance: (record: Omit<MaintenanceLog, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>, forceLower?: boolean) => Promise<boolean>;
   updateMaintenanceLog: (record: MaintenanceLog) => Promise<boolean>;
   deleteMaintenanceLog: (id: string) => Promise<boolean>;
+  addCattleGroup: (record: Omit<CattleGroup, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at' | 'currentFieldId' | 'currentSince'>) => Promise<boolean>;
+  updateCattleGroup: (record: CattleGroup) => Promise<boolean>;
+  moveCattleGroup: (record: Pick<CattleMove, 'groupId' | 'fieldId' | 'movedOn' | 'notes'>) => Promise<boolean>;
+  logCattleEvent: (record: Omit<CattleEvent, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
+  deleteCattleGroup: (id: string) => Promise<boolean>;
+  deleteCattleMove: (id: string) => Promise<boolean>;
+  deleteCattleEvent: (id: string) => Promise<boolean>;
 }
 
 const FarmContext = createContext<FarmState | null>(null);
 
 /** User-scoped offline cache table for the current farm's display name. */
 const FARM_NAME_CACHE_TABLE = 'farm_name';
+const FARM_SETTINGS_CACHE_TABLE = 'farm_settings';
 
 function farmIdFromIdentityKey(identity: string): string {
   const splitAt = identity.indexOf(':');
@@ -263,6 +282,14 @@ function farmNameCacheValue(farmId: string, name: string): { farmId: string; nam
   return [{ farmId, name }];
 }
 
+function readCachedRunsCattle(data: unknown, farmId: string): boolean | null {
+  if (!farmId || !Array.isArray(data) || data.length === 0) return null;
+  const entry = data[0];
+  if (!entry || typeof entry !== 'object') return null;
+  const record = entry as { farmId?: unknown; runsCattle?: unknown };
+  return record.farmId === farmId && typeof record.runsCattle === 'boolean' ? record.runsCattle : null;
+}
+
 export function FarmProvider({ children }: { children: ReactNode }) {
   // --- Auth & Session ---
   const auth = useAuth();
@@ -281,6 +308,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const identityKey = sessionUserId && farm_id ? `${sessionUserId}:${farm_id}` : null;
 
   const [farmName, setFarmName] = useState<string | null>(null);
+  const [runsCattle, setRunsCattle] = useState(false);
 
   // --- Data State ---
   const [fields, setFields] = useState<Field[]>([]);
@@ -302,6 +330,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [maintenanceSchedules, setMaintenanceSchedules] = useState<MaintenanceSchedule[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
+  const [cattleGroups, setCattleGroups] = useState<CattleGroup[]>([]);
+  const [cattleMoves, setCattleMoves] = useState<CattleMove[]>([]);
+  const [cattleEvents, setCattleEvents] = useState<CattleEvent[]>([]);
 
   // --- Network & Offline State ---
   const { isOnline } = useNetworkStatus();
@@ -316,6 +347,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   // Online: set when fetchData resolves. Offline: set when cache hydration resolves.
   const [initialFetchComplete, setInitialFetchComplete] = useState(false);
   const [equipmentLoadFailed, setEquipmentLoadFailed] = useState(false);
+  const [cattleLoadFailed, setCattleLoadFailed] = useState(false);
   const [dataLoadSource, setDataLoadSource] = useState<'cloud' | 'cache'>('cache');
   const [dataLoadedAt, setDataLoadedAt] = useState<string | null>(null);
   // Mirror isOnline in a ref so effects that must NOT re-run on network changes
@@ -332,6 +364,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const farmNameGenerationRef = useRef(0);
   const equipmentStateRef = useRef({ equipment, maintenanceSchedules, maintenanceLogs });
   useEffect(() => { equipmentStateRef.current = { equipment, maintenanceSchedules, maintenanceLogs }; });
+  const cattleStateRef = useRef({ cattleGroups, cattleMoves, cattleEvents });
+  useEffect(() => { cattleStateRef.current = { cattleGroups, cattleMoves, cattleEvents }; });
+  const runsCattleRef = useRef(runsCattle);
+  useEffect(() => { runsCattleRef.current = runsCattle; }, [runsCattle]);
 
   const clearFarmData = useCallback(() => {
     setFields([]);
@@ -353,7 +389,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setEquipment([]);
     setMaintenanceSchedules([]);
     setMaintenanceLogs([]);
+    setCattleGroups([]);
+    setCattleMoves([]);
+    setCattleEvents([]);
     setFarmName(null);
+    setRunsCattle(false);
   }, []);
 
   const updatePendingSyncCount = useCallback(async () => {
@@ -418,6 +458,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setCacheHydrated(false);
     setInitialFetchComplete(false);
     setEquipmentLoadFailed(false);
+    setCattleLoadFailed(false);
     setDataLoadSource('cache');
     setDataLoadedAt(null);
     setStateOwnerKey(null);
@@ -449,7 +490,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           fieldsData, binsData, plantData, sprayData, harvestData, hayData, customSprayData,
           fertilizerData, tillageData, grainData, seedsData, fertilizerRecipesData, recipesData,
           tractsData, assignmentsData, workRequestsData, equipmentData,
-          maintenanceSchedulesData, maintenanceLogsData, farmNameData,
+          maintenanceSchedulesData, maintenanceLogsData, cattleGroupsData,
+          cattleMovesData, cattleEventsData, farmNameData, farmSettingsData,
         ] = await Promise.all([
           offlineStorage.loadCache('fields', userId),
           offlineStorage.loadCache('bins', userId),
@@ -470,7 +512,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           offlineStorage.loadCache('equipment', userId),
           offlineStorage.loadCache('maintenance_schedules', userId),
           offlineStorage.loadCache('maintenance_logs', userId),
+          offlineStorage.loadCache('cattle_groups', userId),
+          offlineStorage.loadCache('cattle_moves', userId),
+          offlineStorage.loadCache('cattle_events', userId),
           offlineStorage.loadCache(FARM_NAME_CACHE_TABLE, userId),
+          offlineStorage.loadCache(FARM_SETTINGS_CACHE_TABLE, userId),
         ]);
 
         if (cancelled || identityRef.current !== hydrationIdentity) return;
@@ -499,9 +545,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         if (equipmentData) setEquipment(equipmentData);
         if (maintenanceSchedulesData) setMaintenanceSchedules(maintenanceSchedulesData);
         if (maintenanceLogsData) setMaintenanceLogs(maintenanceLogsData);
+        if (cattleGroupsData) setCattleGroups(cattleGroupsData);
+        if (cattleMovesData) setCattleMoves(cattleMovesData);
+        if (cattleEventsData) setCattleEvents(cattleEventsData);
         const hydratedFarmName = readCachedFarmName(farmNameData, farmIdFromIdentityKey(hydrationIdentity));
+        const hydratedRunsCattle = readCachedRunsCattle(farmSettingsData, farmIdFromIdentityKey(hydrationIdentity));
         const renameStillCurrent = farmNameGenerationRef.current === farmNameGeneration;
         if (hydratedFarmName && renameStillCurrent) setFarmName(hydratedFarmName);
+        if (hydratedRunsCattle !== null) setRunsCattle(hydratedRunsCattle);
         setStateOwnerKey(hydrationIdentity);
       } catch (err) {
         if (!cancelled && identityRef.current === hydrationIdentity) {
@@ -578,23 +629,21 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       // persist that stale name. Skipping setFarmName skips that cache write.
       const farmNameGeneration = farmNameGenerationRef.current;
       const farmsRead = Promise.resolve(
-        supabase.from('farms').select('name').eq('id', farm_id).single(),
+        supabase.from('farms').select('name, runs_cattle').eq('id', farm_id).single(),
       ).then((result) => {
         const name = !result.error && typeof result.data?.name === 'string'
           ? result.data.name.trim()
           : '';
         const renameStillCurrent = farmNameGenerationRef.current === farmNameGeneration;
         if (name && isCurrentRequest() && renameStillCurrent) setFarmName(name);
+        if (!result.error && typeof result.data?.runs_cattle === 'boolean' && isCurrentRequest()) {
+          setRunsCattle(result.data.runs_cattle);
+          runsCattleRef.current = result.data.runs_cattle;
+        }
         return result;
       }).catch((error: unknown) => ({ data: null, error }));
 
-      const [
-        fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
-        hayPages, customSprayPages, fertilizerPages, tillagePages, grainPages,
-        seedsPages, fertilizerRecipesPages, recipesPages, tractsPages,
-        assignmentsPages, workRequestsPages, equipmentPages,
-        maintenanceSchedulesPages, maintenanceLogsPages,
-      ] = await Promise.all([
+      const coreReads = Promise.all([
         pagedQuery('fields'),
         pagedQuery('bins'),
         pagedSeasonQuery('plant_records'),
@@ -640,8 +689,35 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         ),
       ]);
 
+      const farmResult = await farmsRead;
       if (!isCurrentRequest()) return false;
-      const { error: farmErr } = await farmsRead;
+      const shouldFetchCattle = !farmResult.error && farmResult.data?.runs_cattle === true;
+      const failSoftCattleQuery = async (table: string) => {
+        try {
+          return await pagedQuery(table);
+        } catch (error) {
+          console.warn(`Cattle table ${table} did not load; keeping its cache.`, error);
+          return { rows: [], error: { message: error instanceof Error ? error.message : String(error) } };
+        }
+      };
+      const cattleReads = shouldFetchCattle
+        ? Promise.all([
+          failSoftCattleQuery('cattle_groups'),
+          failSoftCattleQuery('cattle_moves'),
+          failSoftCattleQuery('cattle_events'),
+        ])
+        : null;
+
+      const [[
+        fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
+        hayPages, customSprayPages, fertilizerPages, tillagePages, grainPages,
+        seedsPages, fertilizerRecipesPages, recipesPages, tractsPages,
+        assignmentsPages, workRequestsPages, equipmentPages,
+        maintenanceSchedulesPages, maintenanceLogsPages,
+      ], cattlePages] = await Promise.all([coreReads, cattleReads]);
+
+      if (!isCurrentRequest()) return false;
+      const { error: farmErr } = farmResult;
       if (!isCurrentRequest()) return false;
 
       // Equipment is fail-soft: a missing or failing equipment table must not
@@ -658,6 +734,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         });
       }
       setEquipmentLoadFailed(!equipmentLoaded);
+
+      const cattleFailures = shouldFetchCattle
+        ? (cattlePages ?? []).map(pages => pages.error).filter(Boolean)
+        : [];
+      if (cattleFailures.length > 0) {
+        console.warn('Cattle data did not fully load; keeping cached rows for failed tables.', cattleFailures);
+      }
+      setCattleLoadFailed(cattleFailures.length > 0);
 
       const pagedErrors = [
         fieldsPages, binsPages, plantPages, sprayPages, harvestPages,
@@ -726,6 +810,25 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             logsMapped = merged.logs;
           }
 
+          const retainedCattle = cattleStateRef.current;
+          let cattleGroupsMapped = retainedCattle.cattleGroups;
+          let cattleMovesMapped = retainedCattle.cattleMoves;
+          let cattleEventsMapped = retainedCattle.cattleEvents;
+          if (shouldFetchCattle && cattlePages) {
+            if (!cattlePages[0].error) {
+              cattleGroupsMapped = overlayQueuedRows('cattle_groups', cattlePages[0].rows, queued, farm_id).map(mapCattleGroupFromDb);
+            }
+            if (!cattlePages[1].error) {
+              cattleMovesMapped = overlayQueuedRows('cattle_moves', cattlePages[1].rows, queued, farm_id).map(mapCattleMoveFromDb);
+            }
+            if (!cattlePages[2].error) {
+              cattleEventsMapped = overlayQueuedRows('cattle_events', cattlePages[2].rows, queued, farm_id).map(mapCattleEventFromDb);
+            }
+          }
+          const cattleMerged = applyParkedCattleMutations(
+            cattleGroupsMapped, cattleMovesMapped, cattleEventsMapped, queued, true,
+          );
+
           setFields(fieldsData.map(mapFieldFromDb));
           setBins(binsData.map(mapBinFromDb));
           setPlantRecords(plantData.map(mapPlantFromDb));
@@ -746,6 +849,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             setEquipment(equipmentMapped);
             setMaintenanceSchedules(schedulesMapped);
             setMaintenanceLogs(logsMapped);
+          }
+          if (shouldFetchCattle) {
+            setCattleGroups(cattleMerged.groups);
+            setCattleMoves(cattleMerged.moves);
+            setCattleEvents(cattleMerged.events);
           }
           setStateOwnerKey(requestIdentity);
 
@@ -839,12 +947,19 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('equipment', cacheOwnerUserId, equipment); } }, [equipment, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('maintenance_schedules', cacheOwnerUserId, maintenanceSchedules); } }, [maintenanceSchedules, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('maintenance_logs', cacheOwnerUserId, maintenanceLogs); } }, [maintenanceLogs, cacheOwnerUserId]);
+  useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('cattle_groups', cacheOwnerUserId, cattleGroups); } }, [cattleGroups, cacheOwnerUserId]);
+  useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('cattle_moves', cacheOwnerUserId, cattleMoves); } }, [cattleMoves, cacheOwnerUserId]);
+  useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('cattle_events', cacheOwnerUserId, cattleEvents); } }, [cattleEvents, cacheOwnerUserId]);
   useEffect(() => {
     if (!cacheOwnerUserId || !farm_id) return;
     const name = farmName?.trim();
     if (!name) return;
     void offlineStorage.saveCache(FARM_NAME_CACHE_TABLE, cacheOwnerUserId, farmNameCacheValue(farm_id, name));
   }, [farmName, farm_id, cacheOwnerUserId]);
+  useEffect(() => {
+    if (!cacheOwnerUserId || !farm_id) return;
+    void offlineStorage.saveCache(FARM_SETTINGS_CACHE_TABLE, cacheOwnerUserId, [{ farmId: farm_id, runsCattle }]);
+  }, [runsCattle, farm_id, cacheOwnerUserId]);
   useEffect(() => { saveToStorage('al_active_season', activeSeason, session?.user?.id); }, [activeSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_viewing_season', viewingSeason, session?.user?.id); }, [viewingSeason, session?.user?.id]);
   useEffect(() => { saveToStorage('al_farm_id', farm_id, session?.user?.id); }, [farm_id, session?.user?.id]);
@@ -865,6 +980,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const equipmentOps = useEquipment({
     farm_id, equipment, maintenanceSchedules, maintenanceLogs,
     setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
+    isOnline, onMutation: updatePendingSyncCount,
+  });
+  const cattleOps = useCattle({
+    farm_id, cattleGroups, cattleMoves, cattleEvents,
+    setCattleGroups, setCattleMoves, setCattleEvents,
     isOnline, onMutation: updatePendingSyncCount,
   });
 
@@ -910,13 +1030,15 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     fields, bins, plantRecords, sprayRecords, harvestRecords,
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
-    equipment, maintenanceSchedules, maintenanceLogs, activeSeason, viewingSeason,
+    equipment, maintenanceSchedules, maintenanceLogs,
+    cattleGroups, cattleMoves, cattleEvents, activeSeason, viewingSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes, setFarmId,
     setFsaTracts, setCluAssignments, setWorkRequests,
     setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
+    setCattleGroups, setCattleMoves, setCattleEvents,
     refetchFarmData: fetchData,
     isOnline,
     initialFetchComplete,
@@ -1075,7 +1197,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   return (
     <FarmContext.Provider value={{
       deletionStatus: auth.deletionStatus,
-      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, syncQueueReadFailed, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError, equipmentLoadFailed, dataLoadSource, dataLoadedAt,
+      session, isOnline, pendingSyncCount, failedSyncCount, syncQueueLocked, syncQueueReadFailed, lastSync, retryFailedSyncChanges, getFailedSyncChanges, discardFailedSyncChanges, loading: loading || signingOut, initialFetchComplete, fetchError, equipmentLoadFailed, cattleLoadFailed, dataLoadSource, dataLoadedAt,
       fields: sortedFields,
       bins: filteredBins,
       plantRecords, sprayRecords, harvestRecords, hayHarvestRecords, customSprayRecords,
@@ -1091,6 +1213,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       equipment: equipment.filter(item => !item.deleted_at),
       maintenanceSchedules: maintenanceSchedules.filter(item => !item.deleted_at),
       maintenanceLogs: maintenanceLogs.filter(item => !item.deleted_at),
+      runsCattle,
+      cattleGroups: cattleGroups.filter(item => !item.deleted_at),
+      cattleMoves: cattleMoves.filter(item => !item.deleted_at),
+      cattleEvents: cattleEvents.filter(item => !item.deleted_at),
       activeSeason, viewingSeason, seasonOptions, setViewingSeason: selectViewingSeason,
       rolloverToNewSeason: seasonOps.rolloverToNewSeason,
       undoPreSeasonReset: seasonOps.undoPreSeasonReset,
@@ -1104,6 +1230,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       ...grainOps,
       ...workRequestOps,
       ...equipmentOps,
+      ...cattleOps,
       getBinTotal,
       ...entityOps,
       signOut,
