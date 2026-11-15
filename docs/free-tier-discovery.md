@@ -48,7 +48,7 @@ Stored as **base64 inside spray `notes`** as `[ATTACHMENT:data:image/...;base64,
 - `docs/product-description.md:14,107,151`
 - `docs/validation/2026-09-19-stripe-test-mode-billing.md:7,107`
 - `docs/app-store/2026-10-01-review-acceptance.md:66` (says avoid fixed free periods)
-- `CODE_REVIEW_2026-09-29_FullReview.md:27,54` (historical record, leave)
+- `docs/archive/CODE_REVIEW_2026-09-29_FullReview.md:27,54` (historical record, leave)
 - Project description (William to update). Public pages: OPEN, grep `Landing.tsx`/legal pages for "free trial".
 
 ## Update 2026-11-08

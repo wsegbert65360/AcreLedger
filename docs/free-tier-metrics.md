@@ -61,4 +61,4 @@ FROM public.entitlement_shadow_log
 GROUP BY 1, 2, 3
 ORDER BY would_block DESC;
 ```
-Expected: nothing for Egbert Farm or the legacy trial farms (once their `farm_comps` rows exist).
+Expected: nothing for the owner's farm or the legacy trial farms (once their `farm_comps` rows exist).

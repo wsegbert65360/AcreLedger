@@ -30,6 +30,7 @@ export default {
       errorMessage?: string | null
     }) => {
       if (!targetHourIso) return
+      // farm-write-allowlist: upsert — rainfall hour ledger, one row per target hour
       const { error } = await supabaseClient
         .from('mrms_ingestion_runs')
         .upsert({
@@ -147,6 +148,7 @@ export default {
 
       // 4. Save
       if (records.length) {
+        // farm-write-allowlist: upsert — hourly rainfall totals (field_id, timestamp_utc)
         const { error: saveError } = await supabaseClient
           .from('field_rainfall_hourly')
           .upsert(records, { onConflict: 'field_id, timestamp_utc' })
