@@ -5,6 +5,9 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: no single enforcer; naming checked against src/ layout. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Coding Style](#coding-style-1)
+- [File Naming](#file-naming)
+- [Import Order](#import-order)
 <!-- contents:end -->
 
 ## Coding Style

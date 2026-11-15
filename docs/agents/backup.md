@@ -5,6 +5,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: src/lib/backupSchema.ts. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Backup and Restore](#backup-and-restore-1)
 <!-- contents:end -->
 
 ## Backup and Restore

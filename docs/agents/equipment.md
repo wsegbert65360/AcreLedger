@@ -5,6 +5,7 @@ Moved from the AGENTS.md routing index. This file is the agent rule. Architectur
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: `src/pages/Equipment.tsx`, `src/store/useEquipment.ts`, `supabase/migrations/20261006214500_equipment_maintenance.sql`, `supabase/migrations/20261006233000_equipment_meter_rpcs.sql`. The equipment UI is mounted with no feature flag. This is not a line-by-line audit.
 
 <!-- contents:start -->
+- [Equipment](#equipment)
 <!-- contents:end -->
 
 ## Equipment

@@ -5,6 +5,12 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: scripts/check-farm-writes.mjs, scripts/farm-write-guard.mjs, scripts/farm-table-migration-guard.mjs, src/lib/syncQueue.ts. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Data Safety](#data-safety-1)
+- [Farm Scoping](#farm-scoping)
+- [Season Scoping](#season-scoping)
+- [Mapper Discipline](#mapper-discipline)
+- [Optimistic Update Pattern](#optimistic-update-pattern)
+- [Supabase and Database](#supabase-and-database)
 <!-- contents:end -->
 
 ## Data Safety

@@ -5,6 +5,8 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: codemagic.yaml, package.json. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [CI/CD (CodeMagic)](#cicd-codemagic)
+- [Git Remotes and Push Hygiene](#git-remotes-and-push-hygiene)
 <!-- contents:end -->
 
 ## CI/CD (CodeMagic)

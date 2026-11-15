@@ -1286,7 +1286,7 @@ Coding rules, file naming, import order, and the change workflow are maintained 
 ### Verification
 
 Documentation navigation is checked by `npm run verify:docs` as part of `npm test`. It validates
-generated contents and local inline Markdown links in AGENTS and BLUEPRINT, including linked
+generated contents and local inline Markdown links in AGENTS, BLUEPRINT, and docs/agents, including linked
 reference files. After changing headings, run `npm run docs:toc` and review the generated diff.
 This check does not verify external URLs or the accuracy of architecture claims.
 

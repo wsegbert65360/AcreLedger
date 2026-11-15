@@ -5,6 +5,9 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: src/components/PlantModal.tsx, src/hooks/useUndoDelete.ts, src/lib/utils.ts. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Activity Record Acreage Defaults](#activity-record-acreage-defaults)
+- [Activity Record Modals](#activity-record-modals)
+- [Undo-Delete Pattern](#undo-delete-pattern)
 <!-- contents:end -->
 
 ## Activity Record Acreage Defaults

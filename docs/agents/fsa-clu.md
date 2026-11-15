@@ -5,6 +5,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: src/lib/complianceReports/fsaReports.ts, src/lib/complianceReports/fsa578PdfExport.ts, src/lib/complianceReports/pdfBranding.ts, src/components/HarvestModal.tsx. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [FSA Tracts and CLU Assignments](#fsa-tracts-and-clu-assignments)
 <!-- contents:end -->
 
 ## FSA Tracts and CLU Assignments

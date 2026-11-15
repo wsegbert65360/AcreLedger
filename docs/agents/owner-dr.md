@@ -5,6 +5,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: scripts/recovery/tenant-registry.ts, docs/runbooks/full-project-recovery.md. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Owner Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)](#owner-disaster-recovery-implemented-tooling-deploymentdrills-pending)
 <!-- contents:end -->
 
 ## Owner Disaster Recovery (Implemented Tooling; Deployment/Drills Pending)

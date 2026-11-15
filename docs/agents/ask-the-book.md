@@ -5,6 +5,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: src/lib/askBookAccess.ts, api/ai-assistant.ts, server/ai-assistant-tools.ts. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [AI Assistant / Ask the Book](#ai-assistant--ask-the-book)
 <!-- contents:end -->
 
 ## AI Assistant / Ask the Book

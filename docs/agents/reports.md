@@ -5,6 +5,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: src/lib/complianceReports/generateLandlordSummary.ts. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Landlord Summary](#landlord-summary)
 <!-- contents:end -->
 
 ## Landlord Summary

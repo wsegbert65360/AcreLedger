@@ -5,6 +5,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: supabase/migrations/20261110190000_entitlements_hardening.sql, supabase/migrations/20261107000000_entitlements_core.sql, src/copy/entitlements.ts, src/lib/billing.ts. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Stripe Billing (Test Mode Only)](#stripe-billing-test-mode-only)
 <!-- contents:end -->
 
 ## Stripe Billing (Test Mode Only)

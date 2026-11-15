@@ -5,6 +5,22 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: src/index.css, src/components/ErrorBoundary.tsx. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [UI and Component Rules](#ui-and-component-rules)
+- [Accessibility](#accessibility)
+- [Light Mode Theme](#light-mode-theme)
+- [Color Mode Theme](#color-mode-theme)
+- [Typography](#typography)
+- [Numeric Display](#numeric-display)
+- [Date Parsing and Sorting](#date-parsing-and-sorting)
+- [Text Case](#text-case)
+- [Layout](#layout)
+- [Responsive Tables](#responsive-tables)
+- [Icons](#icons)
+- [Leaflet Maps](#leaflet-maps)
+- [Error Handling](#error-handling)
+- [React and Performance Rules](#react-and-performance-rules)
+- [Activity Icons](#activity-icons)
+- [Coachmarks (Onboarding Overlay)](#coachmarks-onboarding-overlay)
 <!-- contents:end -->
 
 ## UI and Component Rules

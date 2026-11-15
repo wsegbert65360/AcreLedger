@@ -1,11 +1,15 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Deliberately scoped to the two operating guides, using ATX headings and inline
+// Deliberately scoped to the operating guides, using ATX headings and inline
 // Markdown links. This is not a general Markdown parser or an external URL check.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const guides = ['AGENTS.md', 'BLUEPRINT.md'];
+const agentDocs = readdirSync(resolve(root, 'docs/agents'))
+  .filter((name) => name.endsWith('.md'))
+  .sort()
+  .map((name) => `docs/agents/${name}`);
+const guides = ['AGENTS.md', 'BLUEPRINT.md', ...agentDocs];
 const start = '<!-- contents:start -->';
 const end = '<!-- contents:end -->';
 const write = process.argv.includes('--write');

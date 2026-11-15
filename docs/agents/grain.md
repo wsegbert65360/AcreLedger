@@ -5,6 +5,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: `src/store/farmStore.tsx` (`getBinTotal` takes an optional season and is all-season when omitted). This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Grain Movement](#grain-movement-1)
 <!-- contents:end -->
 
 ## Grain Movement

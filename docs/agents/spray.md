@@ -5,6 +5,10 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 > **Verified against code:** 2026-11-15, `4831fed`. Files opened: src/utils/unitConversion.ts, src/hooks/useSprayForm.ts, src/lib/sprayExport.ts, src/lib/compliance/profiles.ts. Rules below were kept because that code still depends on them. This is not a line-by-line audit of every historical date.
 
 <!-- contents:start -->
+- [Spray Compliance](#spray-compliance)
+- [Regional Settings and the Australia Pilot](#regional-settings-and-the-australia-pilot)
+- [Custom (Outside-Party) Spray Records](#custom-outside-party-spray-records)
+- [Spray Wizard Pattern](#spray-wizard-pattern)
 <!-- contents:end -->
 
 ## Spray Compliance
