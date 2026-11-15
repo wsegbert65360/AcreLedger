@@ -136,7 +136,7 @@ function restoreConflictSummary(result: unknown): string {
   if (grain > 0) parts.push(`${grain} grain movement${grain === 1 ? '' : 's'} kept deleted to protect a newer harvest link`);
   if (work > 0) parts.push(`${work} work request${work === 1 ? '' : 's'} kept deleted to protect a newer request number`);
   if (schedules > 0) parts.push(`${schedules} maintenance task${schedules === 1 ? '' : 's'} kept deleted to protect a live task name`);
-  if (cattleGroups > 0) parts.push(`${cattleGroups} cattle group${cattleGroups === 1 ? '' : 's'} kept deleted to protect a live group name`);
+  if (cattleGroups > 0) parts.push(`${cattleGroups} cattle group${cattleGroups === 1 ? '' : 's'} restored with a new name because the old one was taken`);
   return parts.length > 0 ? ` ${parts.join('; ')}.` : '';
 }
 

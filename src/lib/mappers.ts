@@ -156,6 +156,7 @@ export const mapCattleEventFromDb = (db: CattleEventRow): CattleEvent => ({
     eventDate: db.event_date,
     headDelta: safeNum(db.head_delta),
     reason: db.reason ?? undefined,
+    transferId: optionalString(db.transfer_id),
     notes: optionalString(db.notes),
     createdAt: db.created_at,
     updatedAt: db.updated_at,
@@ -640,13 +641,21 @@ export const mapCattleGroupToDb = (group: CattleGroup): Record<string, unknown> 
     };
 };
 
-export const mapCattleGroupUpdateToDb = (group: CattleGroup): Record<string, unknown> => {
+/**
+ * head_count is sent only when the user changed it. Events and transfers own the
+ * count through RPCs, so a stale offline edit of a name or note must not
+ * overwrite a count an event just changed.
+ */
+export const mapCattleGroupUpdateToDb = (
+    group: CattleGroup,
+    options: { headCountChanged?: boolean } = {},
+): Record<string, unknown> => {
     validateRequired(group, ['id', 'name', 'class'], 'mapCattleGroupUpdateToDb');
     return {
         id: group.id,
         name: group.name,
         class: group.class,
-        head_count: group.headCount,
+        ...(options.headCountChanged ? { head_count: group.headCount } : {}),
         notes: nullableString(group.notes),
         updated_at: group.updatedAt,
         deleted_at: group.deleted_at ?? null,
@@ -679,6 +688,7 @@ export const mapCattleEventToDb = (event: CattleEvent): Record<string, unknown> 
         event_date: event.eventDate,
         head_delta: event.headDelta,
         reason: nullableString(event.reason),
+        transfer_id: nullableString(event.transferId),
         notes: nullableString(event.notes),
         created_at: event.createdAt,
         updated_at: event.updatedAt,

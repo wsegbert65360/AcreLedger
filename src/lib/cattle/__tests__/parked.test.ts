@@ -33,4 +33,27 @@ describe('parked cattle overlays', () => {
     expect(result.groups[0].headCount).toBe(12);
     expect(result.events).toHaveLength(1);
   });
+
+  it('applies a queued transfer as two linked events and moves head between groups', () => {
+    const calves: CattleGroup = { ...group, id: 'g2', name: 'Calves', headCount: 3 };
+    const transfer: QueuedMutation = {
+      ...queued, id: 'q2',
+      payload: {
+        id: 'ta', farm_id: 'farm-1', group_id: 'g1', event_type: 'head_removed', event_date: '2026-01-03',
+        head_delta: -4, reason: 'moved_to_another_group', transfer_id: 'ta',
+        created_at: '2026-01-03T00:00:00Z', updated_at: '2026-01-03T00:00:00Z', deleted_at: null,
+        __cattle_rpc: { rpc: 'transfer_cattle_head', args: {
+          p_from_event_id: 'ta', p_to_event_id: 'tb', p_from_group_id: 'g1', p_to_group_id: 'g2',
+          p_head: 4, p_event_date: '2026-01-03', p_notes: null,
+        } },
+      },
+    };
+    const result = applyParkedCattleMutations([group, calves], [], [], [transfer], true);
+    expect(result.groups.map(g => g.headCount)).toEqual([8, 7]);
+    expect(result.events.map(e => e.id).sort()).toEqual(['ta', 'tb']);
+    expect(result.events.every(e => e.transferId === 'ta')).toBe(true);
+    // Replaying over a snapshot that already holds the transfer does not double-apply.
+    const again = applyParkedCattleMutations(result.groups, [], result.events, [transfer], true);
+    expect(again.groups.map(g => g.headCount)).toEqual([8, 7]);
+  });
 });

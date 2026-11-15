@@ -106,4 +106,64 @@ describe('useCattle', () => {
     expect(result.current.groups.value.find(item => item.id === 'g1')).toEqual(group);
     expect(result.current.groups.value.find(item => item.id === 'g2')?.name).toBe('Edited');
   });
+
+  it('sends head_count on a group edit only when the user changed it', async () => {
+    const { result } = renderCattle({ groups: [group] });
+    await act(async () => { expect(await result.current.ops.updateCattleGroup('g1', { name: 'Cows 2' })).toBe(true); });
+    expect(enqueueMutation.mock.calls[0][2]).not.toHaveProperty('head_count');
+    enqueueMutation.mockClear();
+    await act(async () => { expect(await result.current.ops.updateCattleGroup('g1', { headCount: 25 })).toBe(true); });
+    expect(enqueueMutation.mock.calls[0][2]).toMatchObject({ head_count: 25 });
+    expect(result.current.groups.value[0].headCount).toBe(25);
+  });
+
+  it('rejects an invalid head count or empty name on edit', async () => {
+    const { result } = renderCattle({ groups: [group] });
+    await act(async () => {
+      expect(await result.current.ops.updateCattleGroup('g1', { headCount: -1 })).toBe(false);
+      expect(await result.current.ops.updateCattleGroup('g1', { headCount: 1.5 })).toBe(false);
+      expect(await result.current.ops.updateCattleGroup('g1', { name: '  ' })).toBe(false);
+    });
+    expect(enqueueMutation).not.toHaveBeenCalled();
+  });
+
+  it('a failed group edit reverts only its own fields', async () => {
+    let reject!: (error: Error) => void;
+    enqueueMutation.mockReturnValue(new Promise<void>((_r, fail) => { reject = fail; }));
+    const { result } = renderCattle({ groups: [group] });
+    let edit!: Promise<boolean>;
+    act(() => { edit = result.current.ops.updateCattleGroup('g1', { name: 'Renamed' }); });
+    act(() => { result.current.groups.setValue(rows => rows.map(r => ({ ...r, headCount: 30 }))); });
+    await act(async () => { reject(new Error('queue locked')); expect(await edit).toBe(false); });
+    expect(result.current.groups.value[0]).toMatchObject({ name: 'Cows', headCount: 30 });
+  });
+
+  it('transfers head as one queued RPC with two linked events', async () => {
+    const calf = { ...group, id: 'g2', name: 'Calves', headCount: 5 };
+    const { result } = renderCattle({ groups: [group, calf] });
+    await act(async () => {
+      expect(await result.current.ops.transferCattleHead({
+        fromGroupId: 'g1', toGroupId: 'g2', head: 4, eventDate: '2026-03-11',
+      })).toBe(true);
+    });
+    expect(enqueueMutation).toHaveBeenCalledTimes(1);
+    expect(enqueueMutation.mock.calls[0][2].__cattle_rpc.rpc).toBe('transfer_cattle_head');
+    expect(result.current.groups.value.map(g => g.headCount)).toEqual([16, 9]);
+    const [a, b] = result.current.events.value;
+    expect(a.transferId).toBeTruthy();
+    expect(b.transferId).toBe(a.transferId);
+  });
+
+  it('deleting one half of a transfer reverses both and floors at zero', async () => {
+    const calf = { ...group, id: 'g2', name: 'Calves', headCount: 1 };
+    const base = { farm_id: 'farm-1', eventDate: '2026-03-11', createdAt: 'x', updatedAt: 'x', deleted_at: null };
+    const events = [
+      { ...base, id: 'e1', groupId: 'g1', eventType: 'head_removed', headDelta: -4, removedReason: 'moved_to_another_group', transferId: 'e1' },
+      { ...base, id: 'e2', groupId: 'g2', eventType: 'head_added', headDelta: 4, transferId: 'e1' },
+    ] as unknown as CattleEvent[];
+    const { result } = renderCattle({ groups: [{ ...group, headCount: 16 }, calf], events });
+    await act(async () => { expect(await result.current.ops.deleteCattleEvent('e1')).toBe(true); });
+    expect(result.current.events.value.every(e => e.deleted_at)).toBe(true);
+    expect(result.current.groups.value.map(g => g.headCount)).toEqual([20, 0]);
+  });
 });

@@ -29,7 +29,10 @@ export const EQUIPMENT_RPCS = [
 ] as const;
 export type EquipmentRpcName = typeof EQUIPMENT_RPCS[number];
 const EQUIPMENT_RPC_ALLOWLIST = new Set<string>(EQUIPMENT_RPCS);
-export const CATTLE_RPCS = ['move_cattle_group', 'log_cattle_event', 'soft_delete_cattle_row'] as const;
+export const CATTLE_RPCS = [
+  'move_cattle_group', 'log_cattle_event', 'soft_delete_cattle_row',
+  'transfer_cattle_head', 'set_runs_cattle',
+] as const;
 export type CattleRpcName = typeof CATTLE_RPCS[number];
 const CATTLE_RPC_ALLOWLIST = new Set<string>(CATTLE_RPCS);
 // P0402 = premium_required: a plan limit, parked at once rather than retried.
@@ -71,6 +74,19 @@ export function readCattleRpcEnvelope(payload: unknown): EquipmentRpcEnvelope | 
     : null;
 }
 
+/**
+ * Every cattle group an envelope touches. Group edits, moves, events,
+ * transfers and deletes all claim these ids so they replay in the order they
+ * were made.
+ */
+export function cattleEnvelopeGroupIds(payload: unknown): string[] {
+  const envelope = readCattleRpcEnvelope(payload);
+  if (!envelope) return [];
+  const ids = [envelope.args.p_group_id, envelope.args.p_from_group_id, envelope.args.p_to_group_id,
+    (payload as Record<string, unknown>).group_id];
+  return [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+}
+
 function isNonRetryableEquipmentRpcError(error: { code?: string } | null | undefined): boolean {
   const code = typeof error?.code === 'string' ? error.code.toUpperCase() : '';
   return NON_RETRYABLE_EQUIPMENT_SQLSTATE.has(code);
@@ -91,6 +107,9 @@ const ALLOWED_TABLES = new Set([
   'work_requests',
   'equipment', 'maintenance_schedules', 'maintenance_logs',
   'cattle_groups', 'cattle_moves', 'cattle_events',
+  // Farm-level settings ride the sync queue only as an allowlisted cattle RPC
+  // envelope (set_runs_cattle); a plain farms mutation is discarded on replay.
+  'farms',
 ]);
 
 export interface QueuedMutation {
@@ -250,7 +269,8 @@ function mutationRecordKeys(mutation: QueuedMutation): string[] {
   if (rpc?.args.p_equipment_id) keys.push(`equipment:${rpc.args.p_equipment_id}`);
   if (rpc?.args.p_schedule_id) keys.push(`maintenance_schedules:${rpc.args.p_schedule_id}`);
   const cattleRpc = readCattleRpcEnvelope(mutation.payload);
-  if (cattleRpc?.args.p_group_id) keys.push(`cattle_groups:${cattleRpc.args.p_group_id}`);
+  for (const groupId of cattleEnvelopeGroupIds(mutation.payload)) keys.push(`cattle_groups:${groupId}`);
+  if (cattleRpc?.rpc === 'set_runs_cattle') keys.push(`farms:${String(cattleRpc.args.p_farm_id ?? mutation.farm_id)}`);
   return keys;
 }
 
@@ -826,6 +846,14 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
         continue;
       }
       
+      if (mutation.table_name === 'farms' && !readCattleRpcEnvelope(mutation.payload)) {
+        console.warn('Discarding sync mutation: farms may only change through a cattle RPC');
+        try {
+          await syncQueue.dequeueMutation(mutation.id, token);
+        } catch { return false; }
+        continue;
+      }
+
       let response: MutationResponse = { error: null };
       let usedEquipmentRpc = false;
       let usedCattleRpc = false;
@@ -980,19 +1008,22 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
           }
           if (usedCattleRpc) {
             const code = typeof response.error.code === 'string' ? response.error.code.toUpperCase() : '';
-            const groupId = cattleRpc?.args.p_group_id;
-            const groupInsertPending = code === 'P0002' && typeof groupId === 'string'
-              && queue.some(item => item !== mutation
+            const groupIds = cattleEnvelopeGroupIds(mutation.payload);
+            const groupInsertPending = code === 'P0002' && groupIds.some(groupId =>
+              queue.some(item => item !== mutation
                 && item.table_name === 'cattle_groups'
                 && item.operation === 'insert'
                 && !handledMutationIds.has(item.id)
-                && item.payload?.id === groupId);
+                && item.payload?.id === groupId));
             if (groupInsertPending) {
               blockedRecords.add(`${mutation.table_name}:${String(mutation.payload?.id ?? mutation.id)}`);
               pendingRetryCount++;
               continue;
             }
-            if (code === '23505' || code === '23514') {
+            // P0002 with no group insert still queued means the group or field is
+            // really gone; retrying cannot help, so park it like the other
+            // permanent outcomes.
+            if (code === '23505' || code === '23514' || code === 'P0002') {
               blockRecord(mutation);
               await syncQueue.parkMutation(mutation.id, token);
               handledMutationIds.add(mutation.id);

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mapCattleEventToDb, mapCattleGroupFromDb, mapCattleGroupToDb, mapCattleMoveToDb } from '@/lib/mappers';
+import {
+  mapCattleEventFromDb, mapCattleEventToDb, mapCattleGroupFromDb, mapCattleGroupToDb,
+  mapCattleGroupUpdateToDb, mapCattleMoveToDb,
+} from '@/lib/mappers';
 import { mapCattleGroupToDbForRestore } from '@/lib/restoreMappers';
 import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 
@@ -13,6 +16,38 @@ describe('cattle mappers', () => {
     expect(mapCattleGroupToDb(group)).toMatchObject({ deleted_at: null, current_field_id: null, notes: null });
     expect(mapCattleMoveToDb(move)).toMatchObject({ deleted_at: null, field_id: null, notes: null });
     expect(mapCattleEventToDb(event)).toMatchObject({ deleted_at: null, reason: null, notes: null });
+  });
+
+  it('sends a tombstone value when one is set, on every mapper', () => {
+    const deleted = '2026-02-01T00:00:00Z';
+    const group: CattleGroup = { id: 'g1', farm_id: 'f1', name: 'Cows', class: 'cows', headCount: 10, ...timestamps, deleted_at: deleted };
+    const move: CattleMove = { id: 'm1', farm_id: 'f1', groupId: 'g1', movedOn: '2026-01-01', headCount: 10, ...timestamps, deleted_at: deleted };
+    const event: CattleEvent = { id: 'e1', farm_id: 'f1', groupId: 'g1', eventType: 'working', eventDate: '2026-01-01', headDelta: 0, ...timestamps, deleted_at: deleted };
+    expect(mapCattleGroupToDb(group).deleted_at).toBe(deleted);
+    expect(mapCattleGroupUpdateToDb(group).deleted_at).toBe(deleted);
+    expect(mapCattleMoveToDb(move).deleted_at).toBe(deleted);
+    expect(mapCattleEventToDb(event).deleted_at).toBe(deleted);
+    const noTombstone = { ...group, deleted_at: undefined } as unknown as CattleGroup;
+    expect(mapCattleGroupUpdateToDb(noTombstone)).toHaveProperty('deleted_at', null);
+  });
+
+  it('sends head_count on a group update only when the user changed it', () => {
+    const group: CattleGroup = { id: 'g1', farm_id: 'f1', name: 'Cows', class: 'cows', headCount: 10, ...timestamps, deleted_at: null };
+    expect(mapCattleGroupUpdateToDb(group)).not.toHaveProperty('head_count');
+    expect(mapCattleGroupUpdateToDb(group, { headCountChanged: false })).not.toHaveProperty('head_count');
+    expect(mapCattleGroupUpdateToDb(group, { headCountChanged: true })).toMatchObject({ head_count: 10 });
+    expect(mapCattleGroupUpdateToDb(group, { headCountChanged: true })).not.toHaveProperty('farm_id');
+  });
+
+  it('round-trips transfer_id and never emits the retired died reason type', () => {
+    const event: CattleEvent = {
+      id: 'e1', farm_id: 'f1', groupId: 'g1', eventType: 'head_removed', eventDate: '2026-01-01', headDelta: -3,
+      reason: 'moved_to_another_group', transferId: 'e1', ...timestamps, deleted_at: null,
+    };
+    const row = mapCattleEventToDb(event);
+    expect(row).toMatchObject({ transfer_id: 'e1', reason: 'moved_to_another_group' });
+    expect(mapCattleEventFromDb(row as never)).toMatchObject({ transferId: 'e1', reason: 'moved_to_another_group' });
+    expect(mapCattleEventToDb({ ...event, transferId: undefined })).toHaveProperty('transfer_id', null);
   });
 
   it('restores a tombstone as active when deleted_at is omitted', () => {

@@ -82,7 +82,7 @@ vi.mock('sonner', () => ({
   }),
 }));
 
-import { MAX_SYNC_RETRIES, syncQueue, WebSyncQueueUnreadableError } from '../syncQueue';
+import { CATTLE_RPCS, MAX_SYNC_RETRIES, cattleEnvelopeGroupIds, syncQueue, WebSyncQueueUnreadableError } from '../syncQueue';
 import { toast } from 'sonner';
 
 describe('syncQueue web queue management', () => {
@@ -870,6 +870,85 @@ describe('syncQueue web queue management', () => {
     }));
     const [parked] = await syncQueue.getFailed('farm-1');
     expect(parked).toMatchObject({ retry_count: MAX_SYNC_RETRIES });
+  });
+
+  it('registers every cattle RPC the app queues, including transfers and the farm setting', () => {
+    expect([...CATTLE_RPCS].sort()).toEqual([
+      'log_cattle_event', 'move_cattle_group', 'set_runs_cattle', 'soft_delete_cattle_row', 'transfer_cattle_head',
+    ]);
+  });
+
+  it('claims every group an envelope touches, including deletes and both transfer groups', () => {
+    const ids = (rpc: string, args: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+      cattleEnvelopeGroupIds({ id: 'x', ...extra, __cattle_rpc: { rpc, args } });
+    expect(ids('log_cattle_event', { p_group_id: 'g1' })).toEqual(['g1']);
+    expect(ids('transfer_cattle_head', { p_from_group_id: 'g1', p_to_group_id: 'g2' })).toEqual(['g1', 'g2']);
+    expect(ids('soft_delete_cattle_row', { p_row_type: 'event', p_row_id: 'e1' }, { group_id: 'g3' })).toEqual(['g3']);
+    expect(ids('set_runs_cattle', { p_runs_cattle: true })).toEqual([]);
+    expect(cattleEnvelopeGroupIds({ id: 'x' })).toEqual([]);
+  });
+
+  it('replays a group edit and a later event RPC for the same group in order', async () => {
+    await syncQueue.enqueueMutation('cattle_groups', 'update', { id: 'g1', name: 'Renamed' }, 'farm-1');
+    await syncQueue.enqueueMutation('cattle_events', 'insert', {
+      id: 'e1',
+      __cattle_rpc: { rpc: 'log_cattle_event', args: { p_event_id: 'e1', p_group_id: 'g1', p_event_type: 'death', p_event_date: '2026-01-01', p_head_delta: -1 } },
+    }, 'farm-1');
+    supabaseControl.updateResponses.push({ error: { code: '500', message: 'server error' }, count: null, status: 500 });
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    expect(supabaseControl.rpc).not.toHaveBeenCalled();
+    expect(await syncQueue.getQueue('farm-1')).toHaveLength(2);
+    expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+    expect(supabaseControl.update.mock.invocationCallOrder[0]).toBeLessThan(supabaseControl.rpc.mock.invocationCallOrder[0]);
+  });
+
+  it('replays a transfer as one RPC with both groups and the farm id', async () => {
+    await syncQueue.enqueueMutation('cattle_events', 'insert', {
+      id: 'ev-from',
+      __cattle_rpc: { rpc: 'transfer_cattle_head', args: { p_from_event_id: 'ev-from', p_to_event_id: 'ev-to', p_from_group_id: 'g1', p_to_group_id: 'g2', p_head: 4, p_event_date: '2026-01-02', p_notes: null } },
+    }, 'farm-1');
+    expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+    expect(supabaseControl.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('transfer_cattle_head', expect.objectContaining({
+      p_farm_id: 'farm-1', p_from_group_id: 'g1', p_to_group_id: 'g2', p_head: 4,
+    }));
+  });
+
+  it('replays set_runs_cattle as an RPC and discards a plain farms mutation', async () => {
+    await syncQueue.enqueueMutation('farms', 'update', { id: 'farm-1', runs_cattle: true }, 'farm-1');
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    expect(supabaseControl.update).not.toHaveBeenCalled();
+    expect(supabaseControl.rpc).not.toHaveBeenCalled();
+    expect(await syncQueue.getQueue('farm-1')).toHaveLength(0);
+
+    await syncQueue.enqueueMutation('farms', 'update', {
+      id: 'farm-1', __cattle_rpc: { rpc: 'set_runs_cattle', args: { p_runs_cattle: true } },
+    }, 'farm-1');
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(true);
+    expect(supabaseControl.rpc).toHaveBeenCalledWith('set_runs_cattle', { p_runs_cattle: true, p_farm_id: 'farm-1' });
+  });
+
+  it('parks a cattle RPC whose group is really gone (P0002 with no group insert queued)', async () => {
+    await syncQueue.enqueueMutation('cattle_events', 'insert', {
+      id: 'e9',
+      __cattle_rpc: { rpc: 'log_cattle_event', args: { p_event_id: 'e9', p_group_id: 'gone', p_event_type: 'working', p_event_date: '2026-01-01', p_head_delta: 0 } },
+    }, 'farm-1');
+    supabaseControl.rpcResponses.push({ data: null, error: { code: 'P0002', message: 'Cattle group not found' }, status: 404 });
+    await expect(syncQueue.replayQueue('farm-1')).resolves.toBe(false);
+    const [parked] = await syncQueue.getFailed('farm-1');
+    expect(parked).toMatchObject({ table_name: 'cattle_events', retry_count: MAX_SYNC_RETRIES });
+  });
+
+  it('keeps a transfer retryable while either group insert is still queued', async () => {
+    await syncQueue.enqueueMutation('cattle_events', 'insert', {
+      id: 'ev-from',
+      __cattle_rpc: { rpc: 'transfer_cattle_head', args: { p_from_event_id: 'ev-from', p_to_event_id: 'ev-to', p_from_group_id: 'g1', p_to_group_id: 'g2', p_head: 1, p_event_date: '2026-01-02', p_notes: null } },
+    }, 'farm-1');
+    await syncQueue.enqueueMutation('cattle_groups', 'insert', { id: 'g2', name: 'Calves' }, 'farm-1');
+    supabaseControl.rpcResponses.push({ data: null, error: { code: 'P0002', message: 'Cattle group not found' }, status: 404 });
+    await syncQueue.replayQueue('farm-1');
+    const remaining = await syncQueue.getQueue('farm-1');
+    expect(remaining.find(item => item.table_name === 'cattle_events')).toMatchObject({ retry_count: 0 });
   });
 
   it('keeps a cattle move retryable while its group insert is still queued', async () => {

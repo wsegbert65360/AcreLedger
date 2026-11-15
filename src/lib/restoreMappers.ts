@@ -23,6 +23,7 @@ const SOURCE_KEY_ALIASES: Record<string, string[]> = {
   bin_id: ['binId', 'bin_id'],
   equipment_id: ['equipmentId', 'equipment_id'],
   group_id: ['groupId', 'group_id'],
+  transfer_id: ['transferId', 'transfer_id'],
   schedule_id: ['scheduleId', 'schedule_id'],
   harvest_record_id: ['harvestRecordId', 'harvest_record_id'],
   tract_key: ['tractKey', 'tract_key'],

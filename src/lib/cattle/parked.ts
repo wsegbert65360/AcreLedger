@@ -91,6 +91,28 @@ export function applyParkedCattleMutations(
       continue;
     }
 
+    if (rpc?.rpc === 'transfer_cattle_head') {
+      const fromId = String(rpc.args.p_from_event_id ?? '');
+      const toId = String(rpc.args.p_to_event_id ?? '');
+      const head = Number(rpc.args.p_head);
+      if (!fromId || !toId || !Number.isInteger(head) || head <= 0) continue;
+      const alreadyPresent = nextEvents.some(item => item.id === fromId && !item.deleted_at);
+      const stamp = typeof payload.created_at === 'string' ? payload.created_at : new Date().toISOString();
+      const notes = typeof rpc.args.p_notes === 'string' ? rpc.args.p_notes : null;
+      nextEvents = overlayEvent(nextEvents, payload);
+      nextEvents = overlayEvent(nextEvents, {
+        id: toId, farm_id: payload.farm_id, group_id: rpc.args.p_to_group_id, event_type: 'head_added',
+        event_date: rpc.args.p_event_date, head_delta: head, reason: null, notes, transfer_id: fromId,
+        created_at: stamp, updated_at: stamp, deleted_at: null,
+      });
+      if (!alreadyPresent) {
+        nextGroups = nextGroups.map(group => group.id === rpc.args.p_from_group_id
+          ? { ...group, headCount: Math.max(0, group.headCount - head) }
+          : group.id === rpc.args.p_to_group_id ? { ...group, headCount: group.headCount + head } : group);
+      }
+      continue;
+    }
+
     if (rpc?.rpc === 'soft_delete_cattle_row') {
       const rowType = rpc.args.p_row_type;
       const rowId = String(rpc.args.p_row_id ?? payload.id ?? '');
@@ -109,12 +131,17 @@ export function applyParkedCattleMutations(
         }
       } else if (rowType === 'event') {
         const event = nextEvents.find(item => item.id === rowId);
-        const alreadyDeleted = !!event?.deleted_at;
-        nextEvents = nextEvents.map(item => item.id === rowId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
-        if (event && !alreadyDeleted) {
-          nextGroups = nextGroups.map(group => group.id === event.groupId
-            ? { ...group, headCount: group.headCount - event.headDelta }
-            : group);
+        if (event && !event.deleted_at) {
+          // Either half of a transfer takes both halves with it; counts floor at zero.
+          const halves = event.transferId
+            ? nextEvents.filter(item => item.transferId === event.transferId && !item.deleted_at)
+            : [event];
+          const halfIds = new Set(halves.map(item => item.id));
+          nextEvents = nextEvents.map(item => halfIds.has(item.id) ? { ...item, deleted_at: deletedAt } : item);
+          nextGroups = nextGroups.map(group => {
+            const delta = halves.filter(item => item.groupId === group.id).reduce((sum, item) => sum + item.headDelta, 0);
+            return delta === 0 ? group : { ...group, headCount: Math.max(0, group.headCount - delta) };
+          });
         }
       }
       continue;

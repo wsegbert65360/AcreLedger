@@ -42,7 +42,8 @@ export function grazingTotalsByField(
     groupMoves.sort((a, b) => a.movedOn.localeCompare(b.movedOn) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
     for (let index = 0; index < groupMoves.length; index += 1) {
       const move = groupMoves[index];
-      if (!move.fieldId) continue;
+      // A move dated after the as-of date has not happened yet.
+      if (!move.fieldId || move.movedOn > through) continue;
       const nextDate = groupMoves[index + 1]?.movedOn ?? through;
       const days = elapsedDays(move.movedOn, nextDate > through ? through : nextDate);
       const current = totals[move.fieldId] ?? { grazingDays: 0, headDays: 0 };

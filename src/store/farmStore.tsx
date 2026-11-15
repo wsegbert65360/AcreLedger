@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useMemo, use
 import { Field, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord, Bin, GrainMovement, SavedSeed, SprayRecipe, FertilizerApplication, FertilizerRecipe, TillageRecord, WorkRequest } from '@/types/farm';
 import { CluLandUse, FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
-import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
+import type { CattleEvent, CattleGroup, CattleGroupEdit, CattleMove } from '@/types/cattle';
 import { supabase } from '@/lib/supabase';
 import { fetchAllPages } from '@/lib/fetchAllPages';
 import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
@@ -249,9 +249,10 @@ interface FarmState {
   updateMaintenanceLog: (record: MaintenanceLog) => Promise<boolean>;
   deleteMaintenanceLog: (id: string) => Promise<boolean>;
   addCattleGroup: (record: Omit<CattleGroup, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at' | 'currentFieldId' | 'currentSince'>) => Promise<boolean>;
-  updateCattleGroup: (record: CattleGroup) => Promise<boolean>;
+  updateCattleGroup: (id: string, changes: CattleGroupEdit) => Promise<boolean>;
   moveCattleGroup: (record: Pick<CattleMove, 'groupId' | 'fieldId' | 'movedOn' | 'notes'>) => Promise<boolean>;
   logCattleEvent: (record: Omit<CattleEvent, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
+  transferCattleHead: (input: { fromGroupId: string; toGroupId: string; head: number; eventDate: string; notes?: string }) => Promise<boolean>;
   deleteCattleGroup: (id: string) => Promise<boolean>;
   deleteCattleMove: (id: string) => Promise<boolean>;
   deleteCattleEvent: (id: string) => Promise<boolean>;

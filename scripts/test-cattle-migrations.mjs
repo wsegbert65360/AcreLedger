@@ -21,6 +21,11 @@ const fixesMigration = await readFile(
   'utf8',
 );
 
+const renameMigration = await readFile(
+  new URL('../supabase/migrations/20261114150000_cattle_restore_rename_conflicts.sql', import.meta.url),
+  'utf8',
+);
+
 const ids = {
   farm: '10000000-0000-4000-8000-000000000001',
   otherFarm: '10000000-0000-4000-8000-000000000002',
@@ -89,6 +94,7 @@ try {
   `);
   await db.exec(restoreMigration);
   await db.exec(fixesMigration);
+  await db.exec(renameMigration);
 
   assert.equal(
     (await db.query(`SELECT runs_cattle FROM public.farms WHERE id = '${ids.farm}'`)).rows[0].runs_cattle,
@@ -461,6 +467,52 @@ try {
   assert.equal(await headOf(fx.gB), 0, 'transfer delete floors the destination at zero');
   assert.equal(await headOf(fx.gA), 6, 'and still restores the source (1 + 5)');
 
+  // ---- backup -> delete a group -> restore brings back the group, moves and events ----
+  const backupRows = async table => (await db.query(
+    `SELECT to_jsonb(t) AS row FROM public.${table} t WHERE farm_id = $1 AND (group_id = $2 OR id = $2) AND deleted_at IS NULL ORDER BY id`.replace('(group_id = $2 OR id = $2)', table === 'cattle_groups' ? 'id = $2' : 'group_id = $2'),
+    [ids.farm, fx.gB],
+  )).rows.map(r => r.row);
+  await move(n(40), ids.fieldA, '2026-11-09', 'backup move', ids.farm, fx.gB);
+  const backup = {
+    cattle_groups: await backupRows('cattle_groups'),
+    cattle_moves: await backupRows('cattle_moves'),
+    cattle_events: await backupRows('cattle_events'),
+  };
+  assert.equal(backup.cattle_groups.length, 1);
+  assert.ok(backup.cattle_moves.length >= 2 && backup.cattle_events.length >= 2, 'backup captured moves and events');
+  assert.ok(backup.cattle_events.some(e => e.transfer_id), 'backup keeps transfer_id');
+  const gBBefore = (await db.query('SELECT head_count, current_field_id FROM public.cattle_groups WHERE id = $1', [fx.gB])).rows[0];
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'group', fx.gB]);
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_groups WHERE id = $1', [fx.gB])).rows[0].c, 0, 'deleted group is hidden');
+  const restored = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify(backup)]);
+  assert.equal(restored.rows[0].value.cattle_group_name_conflicts, 0);
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_groups WHERE id = $1', [fx.gB])).rows[0].c, 1, 'restore brings the group back');
+  assert.deepEqual((await db.query('SELECT head_count, current_field_id FROM public.cattle_groups WHERE id = $1', [fx.gB])).rows[0], gBBefore, 'restored head count and pasture match the backup');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_moves WHERE group_id = $1', [fx.gB])).rows[0].c, backup.cattle_moves.length, 'restore brings back every move');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_events WHERE group_id = $1', [fx.gB])).rows[0].c, backup.cattle_events.length, 'restore brings back every event');
+  assert.ok((await db.query('SELECT 1 FROM public.cattle_events WHERE group_id = $1 AND transfer_id IS NOT NULL', [fx.gB])).rows.length > 0, 'restored events keep transfer_id');
+
+  // ---- a restored group whose name collides with a live group is renamed, never dropped ----
+  const clash = { live: '10000000-0000-4000-8000-000000000071', back: '10000000-0000-4000-8000-000000000072', back2: '10000000-0000-4000-8000-000000000073' };
+  await db.query('INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1,$2,$3,$4,$5)', [clash.live, ids.farm, 'Heifers', 'replacement_heifers', 12]);
+  await db.query('INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1,$2,$3,$4,$5)', [clash.back2, ids.farm, 'Heifers (restored)', 'replacement_heifers', 1]);
+  const groupPayload = (id, name) => ({ id, farm_id: ids.farm, name, class: 'replacement_heifers', head_count: 7, current_field_id: null, current_since: null, notes: null, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z', deleted_at: null });
+  const collide = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify({
+    cattle_groups: [groupPayload(clash.back, 'heifers')],
+    cattle_moves: [{ id: n(41), farm_id: ids.farm, group_id: clash.back, field_id: ids.fieldA, moved_on: '2026-11-02', head_count: 7, notes: null, created_at: '2026-11-02T00:00:00Z', updated_at: '2026-11-02T00:00:00Z', deleted_at: null }],
+    cattle_events: [{ id: n(42), farm_id: ids.farm, group_id: clash.back, event_type: 'working', event_date: '2026-11-02', head_delta: 0, reason: null, notes: null, created_at: '2026-11-02T00:00:00Z', updated_at: '2026-11-02T00:00:00Z', deleted_at: null }],
+  })]);
+  assert.equal(collide.rows[0].value.cattle_group_name_conflicts, 1, 'the collision is reported, not fatal');
+  const collided = (await db.query('SELECT name, deleted_at FROM public.cattle_groups WHERE id = $1', [clash.back])).rows[0];
+  assert.equal(collided.deleted_at, null, 'the restored group is active, not a hidden tombstone');
+  assert.equal(collided.name, 'heifers (restored 2)', "a taken suffix falls through to '(restored 2)'");
+  assert.equal((await db.query('SELECT name FROM public.cattle_groups WHERE id = $1', [clash.live])).rows[0].name, 'Heifers', 'the live group keeps its name');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_moves WHERE group_id = $1 AND deleted_at IS NULL', [clash.back])).rows[0].c, 1, 'its moves restore');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_events WHERE group_id = $1 AND deleted_at IS NULL', [clash.back])).rows[0].c, 1, 'its events restore');
+  // Restoring the same payload again is not a conflict with itself.
+  const again = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify({ cattle_groups: [{ ...groupPayload(clash.back, 'heifers (restored 2)') }] })]);
+  assert.equal(again.rows[0].value.cattle_group_name_conflicts, 0);
+
   await db.exec('RESET ROLE');
   const fnProps = (await db.query(`
     SELECT p.prosecdef AS secdef, p.proconfig::text AS config,
@@ -470,7 +522,7 @@ try {
   `)).rows[0];
   assert.deepEqual(fnProps, { secdef: true, config: '{"search_path=\\"\\""}', anon_exec: false, auth_exec: true }, 'transfer_cattle_head is SECURITY DEFINER, empty search_path, explicit grants');
 
-  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers.');
+  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, and renamed name collisions.');
 } finally {
   await db.close();
 }

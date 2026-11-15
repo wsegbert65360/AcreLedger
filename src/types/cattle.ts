@@ -15,7 +15,8 @@ export type CattleEventType =
   | 'head_added'
   | 'head_removed';
 
-export type CattleRemovalReason = 'shipped' | 'died' | 'moved_to_another_group';
+/** A death is logged with the death event, not as a removal reason. */
+export type CattleRemovalReason = 'shipped' | 'moved_to_another_group';
 
 interface CattleRowBase {
   id: string;
@@ -34,6 +35,17 @@ export interface CattleGroup extends CattleRowBase {
   notes?: string;
 }
 
+/**
+ * A partial group edit. headCount is optional on purpose: leave it out unless the
+ * user changed it, so events and transfers keep ownership of the count.
+ */
+export interface CattleGroupEdit {
+  name?: string;
+  class?: CattleClass;
+  notes?: string;
+  headCount?: number;
+}
+
 export interface CattleMove extends CattleRowBase {
   groupId: string;
   fieldId?: string;
@@ -48,6 +60,8 @@ export interface CattleEvent extends CattleRowBase {
   eventDate: string;
   headDelta: number;
   reason?: CattleRemovalReason;
+  /** Shared by both halves of a head transfer; deleting either half reverses both. */
+  transferId?: string;
   notes?: string;
 }
 
@@ -86,6 +100,7 @@ export interface CattleEventRow {
   event_date: string;
   head_delta: number;
   reason?: CattleRemovalReason | null;
+  transfer_id?: string | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
