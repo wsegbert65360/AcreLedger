@@ -26,6 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-15** — Branch `feat/cattle` (not merged, not deployed): optional **Cattle** feature behind `farms.runs_cattle` (default off). Free: groups, pasture moves, editing a group's head count. Pro: events (`assert_premium(..., 'cattle_events')`). See [Cattle](#cattle).
 - **2026-11-14** — Harvest scale ticket is asked only for town loads and a blank ticket is never a fall-worksheet warning. See [HarvestRecord](#harvestrecord).
 - **2026-11-13** — Version 3.6.3: Landlord and Farm Owner Summary are per field per crop with per-crop totals; report PDFs are US Letter with shared AcreLedger branding; the FSA-578 PDF adds Type/Variety; the fall production PDF is landscape with per-crop totals; the spray log PDF names missing details; new tank-mix products default to `fl oz/ac`. See [Landlord Summary Report](#landlord-summary-report) and [SprayRecord](#sprayrecord-2026-standards).
 - **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
@@ -77,6 +78,7 @@ Navigation checks and editorial changes do not constitute verification of archit
   - [FertilizerApplication](#fertilizerapplication)
   - [GrainMovement](#grainmovement)
   - [Equipment and Maintenance](#equipment-and-maintenance)
+  - [Cattle](#cattle)
   - [SavedSeed](#savedseed)
   - [SprayRecipe](#sprayrecipe)
   - [FertilizerRecipe](#fertilizerrecipe)
@@ -453,6 +455,40 @@ Meter state is concurrency-sensitive and must never use a client read-then-compa
 Offline calls store one allowlisted RPC envelope. Replay re-stamps `p_farm_id` from the active queue scope, parks missing/deleted targets immediately, and preserves failed equipment work over the next cloud snapshot. Parked work from unrelated tables must not freeze all cloud refreshes. New reading-based schedules snapshot the machine's current reading on creation. Due-day calculations use the user's local calendar date, not UTC midnight.
 
 The `/equipment` route, dashboard card, and Settings link are **live for every user** (enabled in `65bcda4`). No flag gates them; `VITE_EQUIPMENT_UI_ENABLED` survives only as an unread declaration in `src/vite-env.d.ts` and must not be treated as a kill switch. Because `fetchData` loads `equipment`, `maintenance_schedules`, and `maintenance_logs` in the same pass as every other table, the three equipment migrations (`20261006214500`, `20261006233000`, `20261007090000`) must be applied in production before a build ships. Those three fetches are fail-soft, so a missing table keeps the cached equipment copy instead of failing the whole load. The tables participate in strict customer backup/restore, owner recovery, test data, and the read-only Ask the Book registry.
+
+### Cattle
+
+Optional, off by default. `farms.runs_cattle` (set by the Settings "I run cattle" switch through the `set_runs_cattle` RPC and the offline queue) turns on the Cattle home tile, the `/cattle` and `/cattle/:groupId` routes and the "Cattle here now / Last grazed" lines on a field. With it off the app behaves as before and `fetchData` does not query the cattle tables. The setting is read in its own fail-soft query (a database without the column leaves cattle as it was and never fails the load), a switch still waiting in the offline queue wins over the server value, a load that started before a switch cannot overwrite it, and switching on while online reloads so existing cattle rows appear. Not season-scoped. Single account. No dollar fields, no hay tracking, no individual animals, and the AI / Ask the Book tools cannot read these tables.
+
+Tables (all `farm_id`-scoped with RLS, soft delete via `deleted_at`): `cattle_groups` (name unique among live groups per farm, class, `head_count`, current field and date), `cattle_moves` (group, optional field, `moved_on`, head at the time) and `cattle_events` (type, date, `head_delta`, `reason`, `transfer_id`).
+
+```ts
+CattleGroup { id, farm_id, name, class: 'cows'|'bulls'|'calves'|'replacement_heifers'|'stockers'|'mixed', headCount, currentFieldId?, currentSince?, notes?, deleted_at }
+CattleMove  { id, farm_id, groupId, fieldId?, movedOn, headCount, notes?, deleted_at }
+CattleEvent { id, farm_id, groupId, eventType: 'calving'|'weaning'|'working'|'preg_check'|'death'|'head_added'|'head_removed', eventDate, headDelta, reason?: 'shipped'|'moved_to_another_group', transferId?, notes?, deleted_at }
+```
+
+Head-change rules (also a table CHECK): calving and head_added are positive, death and head_removed negative, weaning, working and preg_check zero. `head_removed` needs a reason; a death is logged as a death event, never as a removal reason. Dates may be at most one day ahead of the database date (time-zone slack); the UI blocks any date after the device's today.
+
+Writes that touch more than one row are SECURITY DEFINER RPCs (`search_path = ''`, explicit REVOKE/GRANT, farm check through `profiles`):
+
+- `move_cattle_group` writes the move and updates the group's current pasture only when the move is not back-dated.
+- `log_cattle_event` writes the event and applies the head delta under a group lock; a retry-stable id makes replay idempotent. **Pro**: calls `assert_premium(farm, 'cattle_events')` after the already-applied return.
+- `transfer_cattle_head` writes both halves of a head transfer (a `head_removed` / `moved_to_another_group` and a `head_added`, sharing `transfer_id`) and both counts in one transaction, groups locked in id order. **Pro**, same gate. Weaning's "move N head" uses it.
+- `soft_delete_cattle_row` removes a group (cascade), move or event. Deleting an event reverses its head delta but floors the count at zero and never refuses; deleting either half of a transfer reverses both. Not gated: delete stays allowed on a free farm.
+- `set_runs_cattle` flips the farm setting.
+
+Free versus Pro: a free farm can add and edit groups (including the head count) and move groups between pastures. Logging events and transfers needs Pro, and so does the cattle CSV export (gated on the client with `isFreeTierLocked`, like the other reports; the locked card uses `cattleCsvLocked`). On a free, enforced farm the Events section shows the upgrade prompt (strings in `src/copy/entitlements.ts`, approved 2026-11-15) and no entry controls; existing events stay visible and deletable. A gated write that reaches the offline queue is parked with the existing "Pro needed to sync this change" outcome. A live save the server refuses with `P0402` shows the Pro wording in the event dialog (`CattleSaveOptions.onPremiumRequired`).
+
+Offline: every write goes through `syncQueue` as an RPC envelope (`__cattle_rpc`). Replay re-stamps `p_farm_id`; group edits and the RPCs for the same group share record keys so they replay in order; P0002 ("group not found") is retried while that group's insert is still queued and parked otherwise. A plain `farms` mutation without a cattle envelope is discarded on replay. Optimistic updates use functional setters and roll back only the ids and fields they touched. A group edit sends `head_count` only when the user changed it, so a stale offline rename cannot overwrite a count an event changed.
+
+Backup and restore include the three tables. A restored active group whose name collides with a live group that is not in the backup is restored renamed (`name (restored)`, then `(restored 2)`...), and the count is reported as `cattle_group_name_conflicts`. Before the upsert the restore parks the name of every live group that is in the backup, so a name that moved from one backed-up group to another since the backup cannot hit the live-name unique index and abort the whole restore (`20261115130000`). Account deletion and the recovery tenant registry include the three tables.
+
+Derived values (`src/lib/cattle/derived.ts`): days on the current pasture, grazing days and head-days per field, and rest days since a field was last grazed. Moves dated after the as-of day are ignored.
+
+CSV: one "Export cattle CSV" action on the Cattle screen writes groups, moves and events with the shared formula-safe quoting (`src/lib/cattle/report.ts`). `src/lib/cattle/export.ts` holds the raw per-table builder (including `transfer_id`); it and `grazingTotalsByField` are plan items that no screen uses yet.
+
+Migrations (apply in order): `20261114120000_cattle_schema_and_rpcs`, `20261114130000_cattle_restore_and_reconciliation`, `20261114140000_cattle_db_fixes`, `20261114150000_cattle_restore_rename_conflicts`, `20261115120000_cattle_events_pro_gate`, `20261115130000_cattle_restore_name_reuse`. They must be live in production before a build that contains cattle is deployed.
 
 ### SavedSeed
 Seed inventory reference. Not season-scoped.

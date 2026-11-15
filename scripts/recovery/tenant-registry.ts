@@ -32,7 +32,7 @@ export interface TenantTable {
   notes: string;
 }
 
-export const TENANT_REGISTRY_VERSION = 5;
+export const TENANT_REGISTRY_VERSION = 6;
 
 export function userIdColumns(entry: TenantTable): string[] {
   if (entry.userColumns && entry.userColumns.length > 0) return entry.userColumns;
@@ -352,6 +352,39 @@ export const TENANT_REGISTRY: TenantTable[] = [
     primaryKeys: ["id"],
     includeInTenantBundle: true,
     notes: "Service and repair history. Restore after schedules.",
+  },
+  {
+    schema: "public",
+    table: "cattle_groups",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: true,
+    restoreOrder: 42,
+    primaryKeys: ["id"],
+    includeInTenantBundle: true,
+    notes: "Herd groups and current pasture state. Restore after fields.",
+  },
+  {
+    schema: "public",
+    table: "cattle_moves",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: true,
+    restoreOrder: 43,
+    primaryKeys: ["id"],
+    includeInTenantBundle: true,
+    notes: "Pasture movement history. Restore after cattle groups and fields.",
+  },
+  {
+    schema: "public",
+    table: "cattle_events",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: true,
+    restoreOrder: 43,
+    primaryKeys: ["id"],
+    includeInTenantBundle: true,
+    notes: "Count-based cattle event history. Restore after cattle groups.",
   },
   {
     schema: "public",

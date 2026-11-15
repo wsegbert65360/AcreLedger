@@ -54,10 +54,15 @@ export default function BackupManager() {
     equipment,
     maintenanceSchedules,
     maintenanceLogs,
+    cattleGroups,
+    cattleMoves,
+    cattleEvents,
+    runsCattle,
     activeSeason,
     initialFetchComplete,
     fetchError,
     equipmentLoadFailed,
+    cattleLoadFailed,
     dataLoadSource,
     dataLoadedAt,
     farmRole,
@@ -84,7 +89,10 @@ export default function BackupManager() {
     (workRequests?.length ?? 0) +
     (equipment?.length ?? 0) +
     (maintenanceSchedules?.length ?? 0) +
-    (maintenanceLogs?.length ?? 0);
+    (maintenanceLogs?.length ?? 0) +
+    (runsCattle
+      ? (cattleGroups?.length ?? 0) + (cattleMoves?.length ?? 0) + (cattleEvents?.length ?? 0)
+      : 0);
 
   const hasData = recordCount > 0;
   const backupIsStale = lastBackup
@@ -93,8 +101,8 @@ export default function BackupManager() {
 
   const backupBlocked = !initialFetchComplete;
   const restoreAllowed = canRestoreFarmBackup(farmRole);
-  const backupWarned = fetchError || equipmentLoadFailed;
-  const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed)
+  const backupWarned = fetchError || equipmentLoadFailed || cattleLoadFailed;
+  const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed || cattleLoadFailed)
     ? 'cache'
     : (dataLoadSource ?? 'cloud');
 
@@ -134,6 +142,9 @@ export default function BackupManager() {
         equipment,
         maintenanceSchedules,
         maintenanceLogs,
+        cattleGroups,
+        cattleMoves,
+        cattleEvents,
         activeSeason,
         backupDate: new Date().toISOString(),
         source: backupSource,
@@ -231,6 +242,17 @@ export default function BackupManager() {
             <div className="flex justify-between">
               <span>Service & Repairs</span><span className="text-foreground">{maintenanceLogs?.length ?? 0}</span>
             </div>
+            {runsCattle && <>
+              <div className="flex justify-between">
+                <span>Cattle Groups</span><span className="text-foreground">{cattleGroups?.length ?? 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Cattle Moves</span><span className="text-foreground">{cattleMoves?.length ?? 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Cattle Events</span><span className="text-foreground">{cattleEvents?.length ?? 0}</span>
+              </div>
+            </>}
             <div className="flex justify-between pt-1 border-t border-border font-bold">
               <span>Total Records</span><span className="text-foreground">{recordCount}</span>
             </div>
@@ -261,6 +283,8 @@ export default function BackupManager() {
               ? 'Wait for farm records to finish loading before backing up.'
               : equipmentLoadFailed
                 ? 'Equipment records did not load. A backup now may omit current equipment.'
+                : cattleLoadFailed
+                  ? 'Cattle records did not fully load. A backup now may omit current cattle data.'
                 : 'Some records failed to load from the cloud. A backup now is a cache copy and may be incomplete.'}
           </div>
         )}

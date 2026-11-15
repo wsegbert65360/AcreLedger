@@ -40,6 +40,7 @@ import SprayTypeChooser from '@/components/SprayTypeChooser';
 import Logo from '@/components/Logo';
 import ActivityFeed from '@/components/ActivityFeed';
 import FieldNotes from '@/components/FieldNotes';
+import FieldCattleSummary from '@/components/cattle/FieldCattleSummary';
 import FieldBoundaryMap from '@/components/FieldBoundaryMap';
 
 export type ModalType = 'plant' | 'spray' | 'customSpray' | 'harvest' | 'hay' | 'fertilizer' | 'tillage' | null;
@@ -709,6 +710,8 @@ export default function FieldDetailScreen() {
               <div className="font-bold text-foreground">{field.producerShare ?? 100}% Producer</div>
             </div>
           </div>
+
+          <FieldCattleSummary fieldId={field.id} />
 
           <div className="pt-4 border-t border-border/70">
             <FieldNotes key={field.id} field={field} />

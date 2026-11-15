@@ -20,6 +20,7 @@ export const LINKED_GRAIN_MUTATION_KEY = '__linked_grain_movement';
 export const MAINTENANCE_RPC_KEY = '__maintenance_rpc';
 export const READING_FORCE_KEY = '__force_lower_reading';
 export const EQUIPMENT_RPC_KEY = '__equipment_rpc';
+export const CATTLE_RPC_KEY = '__cattle_rpc';
 export const EQUIPMENT_RPCS = [
   'log_maintenance',
   'update_equipment_reading',
@@ -28,6 +29,12 @@ export const EQUIPMENT_RPCS = [
 ] as const;
 export type EquipmentRpcName = typeof EQUIPMENT_RPCS[number];
 const EQUIPMENT_RPC_ALLOWLIST = new Set<string>(EQUIPMENT_RPCS);
+export const CATTLE_RPCS = [
+  'move_cattle_group', 'log_cattle_event', 'soft_delete_cattle_row',
+  'transfer_cattle_head', 'set_runs_cattle',
+] as const;
+export type CattleRpcName = typeof CATTLE_RPCS[number];
+const CATTLE_RPC_ALLOWLIST = new Set<string>(CATTLE_RPCS);
 // P0402 = premium_required: a plan limit, parked at once rather than retried.
 const NON_RETRYABLE_EQUIPMENT_SQLSTATE = new Set(['P0002', '23505', '23514', 'P0402']);
 
@@ -56,6 +63,30 @@ export function readEquipmentRpcEnvelope(payload: unknown): EquipmentRpcEnvelope
   return null;
 }
 
+export function readCattleRpcEnvelope(payload: unknown): EquipmentRpcEnvelope | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const envelope = (payload as Record<string, unknown>)[CATTLE_RPC_KEY];
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return null;
+  const rpc = (envelope as { rpc?: unknown }).rpc;
+  const args = (envelope as { args?: unknown }).args;
+  return typeof rpc === 'string' && args && typeof args === 'object' && !Array.isArray(args)
+    ? { rpc, args: args as Record<string, unknown> }
+    : null;
+}
+
+/**
+ * Every cattle group an envelope touches. Group edits, moves, events,
+ * transfers and deletes all claim these ids so they replay in the order they
+ * were made.
+ */
+export function cattleEnvelopeGroupIds(payload: unknown): string[] {
+  const envelope = readCattleRpcEnvelope(payload);
+  if (!envelope) return [];
+  const ids = [envelope.args.p_group_id, envelope.args.p_from_group_id, envelope.args.p_to_group_id,
+    (payload as Record<string, unknown>).group_id];
+  return [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+}
+
 function isNonRetryableEquipmentRpcError(error: { code?: string } | null | undefined): boolean {
   const code = typeof error?.code === 'string' ? error.code.toUpperCase() : '';
   return NON_RETRYABLE_EQUIPMENT_SQLSTATE.has(code);
@@ -75,6 +106,10 @@ const ALLOWED_TABLES = new Set([
   'fsa_tract_imports', 'field_clu_assignments',
   'work_requests',
   'equipment', 'maintenance_schedules', 'maintenance_logs',
+  'cattle_groups', 'cattle_moves', 'cattle_events',
+  // Farm-level settings ride the sync queue only as an allowlisted cattle RPC
+  // envelope (set_runs_cattle); a plain farms mutation is discarded on replay.
+  'farms',
 ]);
 
 export interface QueuedMutation {
@@ -233,6 +268,9 @@ function mutationRecordKeys(mutation: QueuedMutation): string[] {
   const rpc = readEquipmentRpcEnvelope(mutation.payload);
   if (rpc?.args.p_equipment_id) keys.push(`equipment:${rpc.args.p_equipment_id}`);
   if (rpc?.args.p_schedule_id) keys.push(`maintenance_schedules:${rpc.args.p_schedule_id}`);
+  const cattleRpc = readCattleRpcEnvelope(mutation.payload);
+  for (const groupId of cattleEnvelopeGroupIds(mutation.payload)) keys.push(`cattle_groups:${groupId}`);
+  if (cattleRpc?.rpc === 'set_runs_cattle') keys.push(`farms:${String(cattleRpc.args.p_farm_id ?? mutation.farm_id)}`);
   return keys;
 }
 
@@ -808,9 +846,19 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
         continue;
       }
       
+      if (mutation.table_name === 'farms' && !readCattleRpcEnvelope(mutation.payload)) {
+        console.warn('Discarding sync mutation: farms may only change through a cattle RPC');
+        try {
+          await syncQueue.dequeueMutation(mutation.id, token);
+        } catch { return false; }
+        continue;
+      }
+
       let response: MutationResponse = { error: null };
       let usedEquipmentRpc = false;
+      let usedCattleRpc = false;
       const equipmentRpc = readEquipmentRpcEnvelope(mutation.payload);
+      const cattleRpc = readCattleRpcEnvelope(mutation.payload);
       const legacyEquipmentReading = !equipmentRpc
         && mutation.table_name === 'equipment'
         && mutation.operation === 'update'
@@ -834,7 +882,15 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
       }
 
       try {
-        if (equipmentRpc || legacyEquipmentReading) {
+        if (cattleRpc) {
+          usedCattleRpc = true;
+          response = CATTLE_RPC_ALLOWLIST.has(cattleRpc.rpc)
+            ? await supabase.rpc(cattleRpc.rpc, { ...cattleRpc.args, p_farm_id: farmId })
+            : {
+              error: { code: '23514', message: `Cattle RPC ${cattleRpc.rpc} is not allowlisted` },
+              status: 400,
+            };
+        } else if (equipmentRpc || legacyEquipmentReading) {
           usedEquipmentRpc = true;
           const rpcName = equipmentRpc?.rpc ?? 'update_equipment_reading';
           const rpcArgs = equipmentRpc
@@ -882,6 +938,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
             __expected_version: expectedVersion,
             [READING_FORCE_KEY]: _forceLowerReading,
             [EQUIPMENT_RPC_KEY]: _equipmentRpc,
+            [CATTLE_RPC_KEY]: _cattleRpc,
             [MAINTENANCE_RPC_KEY]: _maintenanceRpc,
             ...payload
           } = mutation.payload;
@@ -909,6 +966,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
         if (
           !response.error
           && !usedEquipmentRpc
+          && !usedCattleRpc
           && mutation.operation !== 'insert'
           && response.count !== 1
         ) {
@@ -947,6 +1005,34 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
               description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
             });
             continue;
+          }
+          if (usedCattleRpc) {
+            const code = typeof response.error.code === 'string' ? response.error.code.toUpperCase() : '';
+            const groupIds = cattleEnvelopeGroupIds(mutation.payload);
+            const groupInsertPending = code === 'P0002' && groupIds.some(groupId =>
+              queue.some(item => item !== mutation
+                && item.table_name === 'cattle_groups'
+                && item.operation === 'insert'
+                && !handledMutationIds.has(item.id)
+                && item.payload?.id === groupId));
+            if (groupInsertPending) {
+              blockedRecords.add(`${mutation.table_name}:${String(mutation.payload?.id ?? mutation.id)}`);
+              pendingRetryCount++;
+              continue;
+            }
+            // P0002 with no group insert still queued means the group or field is
+            // really gone; retrying cannot help, so park it like the other
+            // permanent outcomes.
+            if (code === '23505' || code === '23514' || code === 'P0002') {
+              blockRecord(mutation);
+              await syncQueue.parkMutation(mutation.id, token);
+              handledMutationIds.add(mutation.id);
+              failedParkedCount++;
+              toast.error('An offline cattle change could not be synced.', {
+                description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
+              });
+              continue;
+            }
           }
 
           if (isAuthExpiredError(response)) {

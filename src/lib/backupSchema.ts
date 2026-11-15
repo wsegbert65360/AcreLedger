@@ -390,6 +390,48 @@ export const maintenanceLogSchema = z.object({
   deleted_at: z.string().nullable().optional(),
 }).strict();
 
+export const cattleGroupSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  name: z.string(),
+  class: z.enum(['cows', 'bulls', 'calves', 'replacement_heifers', 'stockers', 'mixed']),
+  headCount: z.number().int().nonnegative(),
+  currentFieldId: z.string().optional(),
+  currentSince: z.string().optional(),
+  notes: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
+export const cattleMoveSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  groupId: z.string(),
+  fieldId: z.string().optional(),
+  movedOn: z.string(),
+  headCount: z.number().int().nonnegative(),
+  notes: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
+export const cattleEventSchema = z.object({
+  id: z.string(),
+  farm_id: z.string(),
+  groupId: z.string(),
+  eventType: z.enum(['calving', 'weaning', 'working', 'preg_check', 'death', 'head_added', 'head_removed']),
+  eventDate: z.string(),
+  headDelta: z.number().int(),
+  reason: z.enum(['shipped', 'moved_to_another_group']).optional(),
+  transferId: z.string().optional(),
+  notes: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  deleted_at: z.string().nullable().optional(),
+}).strict();
+
 export const workRequestSchema = z.object({
   id: z.string(),
   farm_id: z.string(),
@@ -436,6 +478,9 @@ export const BACKUP_COLLECTION_LABELS = [
   ['equipment', 'Equipment'],
   ['maintenanceSchedules', 'Maintenance tasks'],
   ['maintenanceLogs', 'Service & repairs'],
+  ['cattleGroups', 'Cattle groups'],
+  ['cattleMoves', 'Cattle moves'],
+  ['cattleEvents', 'Cattle events'],
 ] as const;
 
 export const backupSchema = z.object({
@@ -459,6 +504,9 @@ export const backupSchema = z.object({
   equipment: z.array(equipmentSchema).optional(),
   maintenanceSchedules: z.array(maintenanceScheduleSchema).optional(),
   maintenanceLogs: z.array(maintenanceLogSchema).optional(),
+  cattleGroups: z.array(cattleGroupSchema).optional(),
+  cattleMoves: z.array(cattleMoveSchema).optional(),
+  cattleEvents: z.array(cattleEventSchema).optional(),
   activeSeason: z.number().optional(),
   backupDate: z.string().optional(),
   rolloverDate: z.string().optional(),

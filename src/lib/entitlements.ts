@@ -27,9 +27,11 @@ export const FREE_LIMITS = {
 export const PREMIUM_REQUIRED_ERRCODE = 'P0402';
 
 /** Feature names exactly as the server raises them (premium_required:<feature>). */
-export type PremiumFeature =
-  | 'reports' | 'grain' | 'equipment' | 'landlord_split' | 'fsa_tract'
-  | 'backup_restore' | 'field_cap' | 'rainfall';
+export const PREMIUM_FEATURES = [
+  'reports', 'grain', 'equipment', 'landlord_split', 'fsa_tract',
+  'backup_restore', 'field_cap', 'rainfall', 'cattle_events',
+] as const;
+export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
 /**
  * Report types that need Pro (FSA-578, season spray log, fertilizer, landlord
