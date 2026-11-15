@@ -3,13 +3,13 @@ import LegalPolicyPage from "@/components/LegalPolicyPage";
 export default function Privacy({ withBottomNav = false }: { withBottomNav?: boolean }) {
     return (
         <LegalPolicyPage title="Privacy Policy" policyTitle="AcreLedger Privacy Policy" withBottomNav={withBottomNav}>
-            <p>{"Last updated: November 10, 2026"}</p>
+            <p>{"Last updated: November 15, 2026"}</p>
             <p>{"AcreLedger is provided by "}<strong>{"Egbert Farms, LLC"}</strong>{" (\"we\"), which runs it from Henry County, Missouri, USA. This policy explains what we collect, why we collect it, and who helps us run the service. Questions: "}<strong><a href="mailto:acreledgerapp@gmail.com" className="underline">acreledgerapp@gmail.com</a></strong>{"."}</p>
             <h2 className="text-lg font-bold text-foreground pt-4">{"The short version"}</h2>
             <ul className="list-disc space-y-3 pl-5"><li>{"Your farm records are yours. We use them only to run AcreLedger for you."}</li><li><strong>{"We don't sell your data and we don't show ads. On the website only (not the iPhone app), we use Vercel Web Analytics to count page views. It doesn't use cookies, we don't send user IDs, emails, or farm data, and page addresses are cleaned before they're sent."}</strong></li><li>{"A few outside services help us run the app (listed below). They get only what they need."}</li></ul>
             <h2 className="text-lg font-bold text-foreground pt-4">{"What we collect"}</h2>
             <p><strong>{"Account info:"}</strong>{" your email address, your login details (handled by our login provider), and your name if you enter it."}</p>
-            <p><strong>{"Farm records you enter:"}</strong>{" farms, fields and boundaries, crops, planting, spraying, fertilizer and input records, harvest and grain bin records, equipment, work requests, and notes."}</p>
+            <p><strong>{"Farm records you enter:"}</strong>{" farms, fields and boundaries, crops, planting, spraying, fertilizer and input records, harvest and grain bin records, equipment, work requests, notes, cattle groups, head counts, pasture moves, and cattle events."}</p>
             <p><strong>{"FSA and land data you import:"}</strong>{" FSA tract and CLU information, farm/tract/field numbers, acreage, and FSA-578-style planting report details that you enter or import (including shapefiles, which are read on your device)."}</p>
             <p><strong>{"Location:"}</strong>{" field locations and boundaries you draw or import. If you allow it, your device's current location "}<em>{"while the app is open"}</em>{", to set field coordinates and get local weather. We don't track your location in the background."}</p>
             <p><strong>{"Voice (optional):"}</strong>{" if \"ask by voice\" is used on the owner's farm, the device's speech recognition (Apple, or the browser) turns speech into text. We receive the text, not the audio."}</p>
