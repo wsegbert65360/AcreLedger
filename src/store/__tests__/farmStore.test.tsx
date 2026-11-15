@@ -94,13 +94,20 @@ vi.doMock('@/store/useSeasonManagement', () => ({
   }),
 }));
 
+const shouldQueueWriteMock = vi.hoisted(() => vi.fn());
+const enqueueMutationMock = vi.hoisted(() => vi.fn());
+
 vi.doMock('@/lib/syncQueue', () => ({
   WebSyncQueueUnreadableError: class WebSyncQueueUnreadableError extends Error {},
   MAX_SYNC_RETRIES: 10,
   LINKED_GRAIN_MUTATION_KEY: '__linked_grain_movement',
   readEquipmentRpcEnvelope: () => null,
   readCattleRpcEnvelope: () => null,
+  CATTLE_RPC_KEY: '__cattle_rpc',
   syncQueue: {
+    shouldQueueWrite: shouldQueueWriteMock,
+    enqueueMutation: enqueueMutationMock,
+    kickReplay: vi.fn(),
     getQueue: getQueueMock,
     getFailed: getFailedMock,
     retryFailed: retryFailedMock,
@@ -207,6 +214,40 @@ describe('farmStore composed behaviors', () => {
       await act(async () => expect(await result.current.updateFarmName('Oak Creek')).toBe(true));
       expect(ensureFarmMock).toHaveBeenCalledTimes(1);
       expect(cloud.fns.rpc).toHaveBeenCalledWith('update_farm_name', { p_name: 'Oak Creek' });
+    });
+
+    it('turns cattle on online through set_runs_cattle and off again', async () => {
+      control.isOnline = true;
+      shouldQueueWriteMock.mockResolvedValue(false);
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: false }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      await act(async () => expect(await result.current.updateRunsCattle(true)).toBe(true));
+      expect(cloud.fns.rpc).toHaveBeenCalledWith('set_runs_cattle', { p_runs_cattle: true, p_farm_id: expect.any(String) });
+      expect(result.current.runsCattle).toBe(true);
+      await act(async () => expect(await result.current.updateRunsCattle(false)).toBe(true));
+      expect(result.current.runsCattle).toBe(false);
+    });
+
+    it('queues the cattle setting through the sync queue when offline', async () => {
+      control.isOnline = false;
+      shouldQueueWriteMock.mockResolvedValue(true);
+      enqueueMutationMock.mockResolvedValue(undefined);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await act(async () => expect(await result.current.updateRunsCattle(true)).toBe(true));
+      expect(enqueueMutationMock).toHaveBeenCalledWith('farms', 'update', expect.objectContaining({
+        __cattle_rpc: { rpc: 'set_runs_cattle', args: { p_runs_cattle: true } },
+      }), expect.any(String));
+      expect(result.current.runsCattle).toBe(true);
+    });
+
+    it('puts the cattle setting back when it cannot be saved', async () => {
+      control.isOnline = false;
+      shouldQueueWriteMock.mockResolvedValue(true);
+      enqueueMutationMock.mockRejectedValue(new Error('queue locked'));
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await act(async () => expect(await result.current.updateRunsCattle(true)).toBe(false));
+      expect(result.current.runsCattle).toBe(false);
     });
 
     it('keeps onboarding incomplete if farm initialization still fails', async () => {

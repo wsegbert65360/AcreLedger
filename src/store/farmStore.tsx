@@ -39,7 +39,8 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
 import { applyParkedCattleMutations } from '@/lib/cattle/parked';
-import { syncQueue, WebSyncQueueUnreadableError, type QueuedMutation } from '../lib/syncQueue';
+import { CATTLE_RPC_KEY, syncQueue, WebSyncQueueUnreadableError, type QueuedMutation } from '../lib/syncQueue';
+import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import { overlayQueuedRows } from '@/lib/queuedSnapshot';
 
 /**
@@ -205,6 +206,8 @@ interface FarmState {
   farmRole: 'owner' | 'admin' | 'worker' | null;
   /** Update display name of the current farm */
   updateFarmName: (name: string) => Promise<boolean>;
+  /** Turns the cattle feature on or off for the farm; saved through the offline queue. */
+  updateRunsCattle: (value: boolean) => Promise<boolean>;
   /** Whether the user has completed the onboarding flow */
   onboardingComplete: boolean;
   /** False until a cached or profile onboarding flag has actually been read. */
@@ -1164,6 +1167,44 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     }
   }, [ensureFarm, farm_id, session]);
 
+  const updateRunsCattle = useCallback(async (value: boolean): Promise<boolean> => {
+    if (!farm_id) { toast.error('No farm selected.'); return false; }
+    const previous = runsCattleRef.current;
+    if (previous === value) return true;
+    setRunsCattle(value);
+    runsCattleRef.current = value;
+    const args = { p_runs_cattle: value };
+    const payload = { id: farm_id, [CATTLE_RPC_KEY]: { rpc: 'set_runs_cattle', args } };
+    const revert = () => {
+      // Only undo our own change; a newer toggle keeps its value.
+      if (runsCattleRef.current === value) { setRunsCattle(previous); runsCattleRef.current = previous; }
+    };
+    const enqueue = async (): Promise<boolean> => {
+      try {
+        await syncQueue.enqueueMutation('farms', 'update', payload, farm_id);
+        if (isOnline) syncQueue.kickReplay(farm_id, updatePendingSyncCount);
+        return true;
+      } catch (error) {
+        console.error('Failed to queue the cattle setting:', error);
+        return false;
+      }
+    };
+    let ok: boolean;
+    if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'farms', id: farm_id }])) {
+      ok = await enqueue();
+    } else {
+      try {
+        const { error } = await supabase.rpc('set_runs_cattle', { ...args, p_farm_id: farm_id });
+        ok = error ? (isUnknownMutationOutcome(error) ? await enqueue() : false) : true;
+        if (error && !ok) console.error('Failed to save the cattle setting:', error);
+      } catch (error) {
+        ok = isUnknownMutationOutcome(error) ? await enqueue() : false;
+      }
+    }
+    if (!ok) { revert(); toast.error('Could not save the cattle setting.'); }
+    return ok;
+  }, [farm_id, isOnline, updatePendingSyncCount]);
+
   const completeOnboarding = useCallback(async (): Promise<boolean> => {
     const userId = session?.user?.id;
     if (!userId) {
@@ -1240,6 +1281,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       farmName,
       farmRole,
       updateFarmName,
+      updateRunsCattle,
       onboardingComplete,
       onboardingStatusKnown,
       completeOnboarding,

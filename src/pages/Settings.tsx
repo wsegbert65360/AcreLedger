@@ -14,6 +14,7 @@ import { isBillingUiAvailable } from '@/lib/billing';
 import { isEquipmentUiEnabled } from '@/lib/equipment/feature';
 import { useFarm } from '@/store/farmStore';
 import { useAppPreferences } from '@/store/useAppPreferences';
+import CattleToggle from '@/components/settings/CattleToggle';
 import SyncStatus from '@/components/settings/SyncStatus';
 import BackupManager from '@/components/settings/BackupManager';
 import SecurityManager from '@/components/settings/SecurityManager';
@@ -79,6 +80,7 @@ export default function Settings() {
             <ChevronRight size={18} className="text-muted-foreground" />
           </Link>
         )}
+        <CattleToggle />
         <Accordion key={requestedSection ?? 'default'} type="multiple" defaultValue={openSections} className="space-y-4">
           <AccordionItem id="settings-section-farm-data" value="farm-data" className="scroll-mt-24 border border-border rounded-2xl bg-card px-4">
             <AccordionTrigger className="hover:no-underline py-4">
