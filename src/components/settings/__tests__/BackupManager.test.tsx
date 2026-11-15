@@ -77,7 +77,7 @@ describe('BackupManager load gates', () => {
     fireEvent.click(screen.getByRole('button', { name: /Download Backup JSON/i }));
     await waitFor(() => expect(exportDataAsJson).toHaveBeenCalled());
     expect(exportDataAsJson.mock.calls[0][0]).toEqual(expect.objectContaining({
-      backupVersion: 3,
+      backupVersion: 4,
       source: 'cache',
       loadedAt: '2026-10-13T00:00:00.000Z',
     }));
@@ -90,7 +90,7 @@ describe('BackupManager load gates', () => {
     expect(exportDataAsJson.mock.calls[0][0]).toEqual(expect.objectContaining({
       source: 'cloud',
       loadedAt: '2026-10-13T00:00:00.000Z',
-      backupVersion: 3,
+      backupVersion: 4,
     }));
   });
 

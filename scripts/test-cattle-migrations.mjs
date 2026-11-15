@@ -7,6 +7,14 @@ const migration = await readFile(
   new URL('../supabase/migrations/20261114120000_cattle_schema_and_rpcs.sql', import.meta.url),
   'utf8',
 );
+const restoreHelpers = await readFile(
+  new URL('../supabase/migrations/20260716015958_preserve_restore_payload_columns.sql', import.meta.url),
+  'utf8',
+);
+const restoreMigration = await readFile(
+  new URL('../supabase/migrations/20261114130000_cattle_restore_and_reconciliation.sql', import.meta.url),
+  'utf8',
+);
 
 const ids = {
   farm: '10000000-0000-4000-8000-000000000001',
@@ -65,6 +73,16 @@ try {
     GRANT SELECT ON public.farms TO authenticated;
   `);
   await db.exec(migration);
+  await db.exec(`
+    CREATE FUNCTION public.restore_farm_backup(jsonb, integer DEFAULT NULL)
+    RETURNS jsonb LANGUAGE sql AS $$ SELECT '{}'::jsonb $$;
+  `);
+  await db.exec(restoreHelpers);
+  await db.exec(`
+    ALTER FUNCTION public.restore_farm_backup(jsonb, integer) RENAME TO _restore_farm_backup_impl;
+    CREATE FUNCTION public.assert_premium(uuid, text) RETURNS void LANGUAGE sql AS $$ SELECT $$;
+  `);
+  await db.exec(restoreMigration);
 
   assert.equal(
     (await db.query(`SELECT runs_cattle FROM public.farms WHERE id = '${ids.farm}'`)).rows[0].runs_cattle,
@@ -216,6 +234,45 @@ try {
     'SELECT public.soft_delete_cattle_row($1,$2,$3) AS value',
     [ids.farm, 'group', ids.cascadeGroup],
   )).rows[0].value.already_applied, true, 'group delete replay is idempotent');
+  await db.exec('RESET ROLE');
+  assert.deepEqual((await db.query(`
+    SELECT
+      (SELECT deleted_at IS NOT NULL FROM public.cattle_groups WHERE id = '${ids.cascadeGroup}') AS cattle_group,
+      (SELECT deleted_at IS NOT NULL FROM public.cattle_moves WHERE id = '${ids.cascadeMove}') AS cattle_move,
+      (SELECT deleted_at IS NOT NULL FROM public.cattle_events WHERE id = '${ids.cascadeEvent}') AS cattle_event
+  `)).rows[0], { cattle_group: true, cattle_move: true, cattle_event: true });
+  await db.exec('SET ROLE authenticated');
+
+  const restoreResult = await db.query(
+    'SELECT public.restore_farm_backup($1::jsonb, NULL) AS value',
+    [JSON.stringify({
+      cattle_groups: [{
+        id: ids.cascadeGroup, farm_id: ids.farm, name: 'Fall Calves', class: 'calves', head_count: 6,
+        current_field_id: ids.fieldA, current_since: '2026-11-05', notes: null,
+        created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-05T00:00:00Z', deleted_at: null,
+      }],
+      cattle_moves: [{
+        id: ids.cascadeMove, farm_id: ids.farm, group_id: ids.cascadeGroup, field_id: ids.fieldA,
+        moved_on: '2026-11-05', head_count: 6, notes: null,
+        created_at: '2026-11-05T00:00:00Z', updated_at: '2026-11-05T00:00:00Z', deleted_at: null,
+      }],
+      cattle_events: [{
+        id: ids.cascadeEvent, farm_id: ids.farm, group_id: ids.cascadeGroup, event_type: 'working',
+        event_date: '2026-11-05', head_delta: 0, reason: null, notes: null,
+        created_at: '2026-11-05T00:00:00Z', updated_at: '2026-11-05T00:00:00Z', deleted_at: null,
+      }],
+    })],
+  );
+  assert.deepEqual(
+    {
+      groups: restoreResult.rows[0].value.cattle_groups,
+      moves: restoreResult.rows[0].value.cattle_moves,
+      events: restoreResult.rows[0].value.cattle_events,
+    },
+    { groups: 1, moves: 1, events: 1 },
+    'backup restore replays all cattle tables',
+  );
+  assert.equal((await db.query(`SELECT deleted_at FROM public.cattle_groups WHERE id = '${ids.cascadeGroup}'`)).rows[0].deleted_at, null);
 
   await db.exec('RESET ROLE');
   const cascadeRows = (
@@ -226,10 +283,10 @@ try {
         (SELECT deleted_at IS NOT NULL FROM public.cattle_events WHERE id = '${ids.cascadeEvent}') AS cattle_event
     `)
   ).rows[0];
-  assert.deepEqual(cascadeRows, { cattle_group: true, cattle_move: true, cattle_event: true });
+  assert.deepEqual(cascadeRows, { cattle_group: false, cattle_move: false, cattle_event: false });
 
   await db.exec('SET ROLE authenticated');
-  assert.equal((await db.query(`SELECT count(*)::int AS count FROM public.cattle_groups WHERE id = '${ids.cascadeGroup}'`)).rows[0].count, 0, 'RLS hides group tombstones');
+  assert.equal((await db.query(`SELECT count(*)::int AS count FROM public.cattle_groups WHERE id = '${ids.cascadeGroup}'`)).rows[0].count, 1, 'restored cattle rows are visible again');
   await assert.rejects(
     db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.otherFarm, 'group', ids.otherGroup]),
     error => error.code === '42501',

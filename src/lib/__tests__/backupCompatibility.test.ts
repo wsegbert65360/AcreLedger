@@ -54,7 +54,7 @@ describe('normalizeBackupForRestore', () => {
   });
 
   it('accepts the current backup version', () => {
-    expect(backupSchema.parse({ backupVersion: CURRENT_BACKUP_VERSION }).backupVersion).toBe(3);
+    expect(backupSchema.parse({ backupVersion: CURRENT_BACKUP_VERSION }).backupVersion).toBe(4);
   });
 
   it('rejects a backup made by a newer AcreLedger', () => {
