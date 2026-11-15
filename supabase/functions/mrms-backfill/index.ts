@@ -68,6 +68,7 @@ export default {
       // the hour from the nightly retry sweep. Its state lives in
       // field_rainfall_coverage instead.
       if (fieldId) return
+      // farm-write-allowlist: upsert — rainfall hour ledger, one row per target hour
       const { error } = await supabaseClient
         .from('mrms_ingestion_runs')
         .upsert({
@@ -192,6 +193,7 @@ export default {
       }
 
       if (fieldId) {
+        // farm-write-allowlist: upsert — per-field backfill coverage (field_id, range_start_utc)
         const { error: coverageError } = await supabaseClient
           .from('field_rainfall_coverage')
           .upsert({
@@ -266,6 +268,7 @@ export default {
         }
 
         if (records.length) {
+          // farm-write-allowlist: upsert — hourly rainfall totals (field_id, timestamp_utc)
           const { error: saveError } = await supabaseClient
             .from('field_rainfall_hourly')
             .upsert(records, { onConflict: 'field_id, timestamp_utc' })

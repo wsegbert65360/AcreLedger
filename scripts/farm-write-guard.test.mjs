@@ -6,6 +6,7 @@ import {
   findUpdateSelectViolations,
   findUpsertViolations,
   loadFarmOwnedTables,
+  scanFarmWrites,
 } from './farm-write-guard.mjs';
 
 const registry = `
@@ -82,6 +83,10 @@ test('flags .select() chained after .update() and ignores a later separate selec
     await supabase.from('widgets').update(row).select().single();
   `;
   assert.deepEqual(findUpdateSelectViolations(allowed, 'src/example.ts'), []);
+});
+
+test('src and supabase/functions have no banned farm writes', () => {
+  assert.deepEqual(scanFarmWrites(), []);
 });
 
 test('does not flag a delete mentioned only in a comment or string', () => {

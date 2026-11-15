@@ -990,7 +990,7 @@ inject the authoritative current `farmId` before mapper validation, then omit it
 payload.
 
 ### FSA / CLU Upsert Exception
-`npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` except these two tables. `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` for the same pair. Insert, replay, and backup restore still use:
+`npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` and `supabase/functions/` except these two tables. `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` for the same pair. The rainfall upserts in `supabase/functions/mrms-backfill`, `mrms-daily`, and `mrms-hourly` are allowlisted the same way. Insert, replay, and backup restore still use:
 - `fsa_tract_imports`: upsert on `farm_id,tract_key`.
 - `field_clu_assignments`: upsert on `farm_id,tract_key,clu_number`.
 - Normal update and soft-delete paths still use `.update().eq('id', id).eq('farm_id', farm_id)`.
@@ -998,7 +998,7 @@ payload.
 
 ### Soft Delete
 `.update({ deleted_at: new Date().toISOString() }, { count: 'exact' }).in('id', ids).eq('farm_id', farm_id)`
-`npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/`, and rejects `.select()` chained after `.update()`. Check the exact count instead (`count === ids.length`).
+`npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/` and `supabase/functions/`, and rejects `.select()` chained after `.update()` in both trees. Check the exact count instead (`count === ids.length`).
 
 ---
 

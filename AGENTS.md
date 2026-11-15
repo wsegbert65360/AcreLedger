@@ -164,7 +164,7 @@ Rules), then open only the files for that area.
 
 ### Data Safety
 
-- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/`. Soft-delete by setting `deleted_at` to an ISO timestamp.
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects Supabase `.delete()` on farm-owned tables in `src/` and `supabase/functions/`. Soft-delete by setting `deleted_at` to an ISO timestamp.
 - Active records always have `deleted_at === null`.
 - Client logic must exclude soft-deleted records.
 - Supabase RLS must also exclude or protect soft-deleted records where applicable.
@@ -233,8 +233,8 @@ Offline and cascading mutations:
 
 Canonical detail: [BLUEPRINT → Database Conventions](./BLUEPRINT.md#5-database-conventions).
 
-- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` except `fsa_tract_imports` and `field_clu_assignments`. The replay call in `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` because it runs only for those two tables. Conflict keys: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
-- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.select()` chained after `.update()` in `src/`. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.upsert()` in `src/` and `supabase/functions/` except `fsa_tract_imports` and `field_clu_assignments`. The replay call in `src/lib/syncQueue.ts` is `farm-write-allowlist: upsert` because it runs only for those two tables. The rainfall upserts in `mrms-backfill`, `mrms-daily`, and `mrms-hourly` are allowlisted the same way: they write radar rows on a natural key. Conflict keys: [BLUEPRINT → FSA / CLU Upsert Exception](./BLUEPRINT.md#fsa--clu-upsert-exception).
+- `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.select()` chained after `.update()` in `src/` and `supabase/functions/`. Use `.update(payload, { count: 'exact' })` and check `count === 1` or `count === ids.length`.
 - Public tables/views/materialized views must not grant PG17 MAINTAIN to anon, authenticated, or PUBLIC. See [BLUEPRINT → Data API Access](./BLUEPRINT.md#data-api-access-mandatory) for default-privilege limits and rollback scope.
 - New migrations use unique 14-digit timestamp filenames: `YYYYMMDDHHMMSS_name.sql` (checked by `npm run verify:migrations`).
 - `npm run verify:migrations` (`scripts/farm-table-migration-guard.mjs`) rejects a new public table with `farm_id` (migrations after `20261110190000`) that skips RLS, grants DELETE to anon, authenticated, or PUBLIC, grants anything to anon, or has a client SELECT policy without `deleted_at IS NULL`.
@@ -326,7 +326,7 @@ Canonical detail: [BLUEPRINT → FsaTractImport](./BLUEPRINT.md#fsatractimport),
 
 Data and assignments:
 
-- FSA tract imports and CLU assignments are farm-owned: farm scoping, mapper discipline (`mapFsaTractFromDb`/`mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`/`mapFieldCluAssignmentToDb`), optimistic updates, and soft delete all apply. `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.delete()` on these tables in `src/`.
+- FSA tract imports and CLU assignments are farm-owned: farm scoping, mapper discipline (`mapFsaTractFromDb`/`mapFsaTractToDb`, `mapFieldCluAssignmentFromDb`/`mapFieldCluAssignmentToDb`), optimistic updates, and soft delete all apply. `npm run lint` (`scripts/check-farm-writes.mjs`) rejects `.delete()` on these tables in `src/` and `supabase/functions/`.
 - Changes usually touch the whole stack together: `types/fsaTract.ts`, `mappers.ts`, `useFsaTracts.ts`, Supabase services, migrations/RLS, backup schema, bundled tract helpers, assignment UI, and FSA reports/tests.
 - CLU parsing, map rendering, and centroids must support `Polygon` and `MultiPolygon`; use `@/lib/geoHelpers.ts`.
 - `parseCluFile` is the only import entry point (GeoJSON and ESRI shapefile ZIP). Do not add a component-only parser or unzip path.

@@ -357,6 +357,14 @@ export function scanSrcWrites(srcDir = resolve(root, 'src'), tables = loadFarmOw
   return violations;
 }
 
+/** Client `src/` plus the service-role edge functions. */
+export function scanFarmWrites(tables = loadFarmOwnedTables()) {
+  return [
+    ...scanSrcWrites(resolve(root, 'src'), tables),
+    ...scanSrcWrites(resolve(root, 'supabase/functions'), tables),
+  ];
+}
+
 export function scanSrcDeletes(srcDir = resolve(root, 'src'), tables = loadFarmOwnedTables()) {
   return scanSrcWrites(srcDir, tables).filter((hit) => hit.rule === 'delete');
 }
