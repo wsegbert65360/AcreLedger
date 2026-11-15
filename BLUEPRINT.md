@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-11-14 (year-end report, spray log, rate-unit, and harvest scale-ticket changes; Ask the Book stays on only for the owner's farm).
+> **Last updated:** 2026-11-15 (Cattle is on main behind `farms.runs_cattle`; year-end report and harvest scale-ticket rules stand).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,7 +26,7 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
-- **2026-11-15** — Branch `feat/cattle` (not merged, not deployed): optional **Cattle** feature behind `farms.runs_cattle` (default off). Free: groups, pasture moves, editing a group's head count. Pro: events (`assert_premium(..., 'cattle_events')`). See [Cattle](#cattle).
+- **2026-11-15** — Cattle is on main behind `farms.runs_cattle` (default off). Free: groups, pasture moves, and a group's head count. Pro: events and head transfers (`assert_premium(..., 'cattle_events')`); the cattle CSV is a client lock. The migrations must be live before a build that contains cattle is deployed. See [Cattle](#cattle).
 - **2026-11-14** — Harvest scale ticket is asked only for town loads and a blank ticket is never a fall-worksheet warning. See [HarvestRecord](#harvestrecord).
 - **2026-11-13** — Version 3.6.3: Landlord and Farm Owner Summary are per field per crop with per-crop totals; report PDFs are US Letter with shared AcreLedger branding; the FSA-578 PDF adds Type/Variety; the fall production PDF is landscape with per-crop totals; the spray log PDF names missing details; new tank-mix products default to `fl oz/ac`. See [Landlord Summary Report](#landlord-summary-report) and [SprayRecord](#sprayrecord-2026-standards).
 - **2026-11-13** - Ask the Book stays in the app only for the owner's own farm, stays out of marketing, and is not deleted. Removal inventory is under Ask the Book Read Registry.

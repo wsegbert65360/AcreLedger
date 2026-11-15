@@ -2,6 +2,8 @@
 
 One line each: the date, the decision, and why. Newer first. This log is seeded from Recent Changes and from `docs/plans/`. A plan that has not been built says so.
 
+- **2026-11-15** — Cattle events and head transfers call `assert_premium(..., 'cattle_events')`. The cattle CSV is locked only in the client, because the file is built on the device from rows the farm already has. Deleting an event stays available on a free farm.
+- **2026-11-14** — Cattle is optional and off by default (`farms.runs_cattle`). Groups, pasture moves, and an explicit head-count edit stay free. Multi-row writes are RPCs so a move or a transfer cannot leave the head count half-updated.
 - **2026-11-15** — The farm-write guard also scans `supabase/functions/`. The seven rainfall upserts in `mrms-backfill`, `mrms-daily`, and `mrms-hourly` stay, with an allowlist comment, because they write radar rows on a natural key. No other banned write was found there.
 - **2026-11-15** — Ask the Book stays on for the owner's farm only and stays out of marketing. The owner said keep it.
 - **2026-11-14** — A harvest scale ticket is asked only for a town load, and a blank ticket is never a fall-worksheet warning. A bin harvest has no ticket to collect (`12450cd`).

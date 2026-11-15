@@ -15,7 +15,7 @@ Read this file first. Then open only the topic file in the [routing index](#rout
 
 Keep the five most recent substantive entries, newest first. Git holds the full history. Reasons are in [docs/decisions.md](./docs/decisions.md).
 
-- **2026-11-15** — Cattle is optional and off unless `farms.runs_cattle` is on. Groups, pasture moves, and head-count edits are free. Events, head transfers, and the cattle CSV export are Pro. Multi-row writes go through RPCs. See [BLUEPRINT → Cattle](./BLUEPRINT.md#cattle).
+- **2026-11-15** — Cattle is optional and off unless `farms.runs_cattle` is on. Groups, pasture moves, and head-count edits are free. Events, head transfers, and the cattle CSV export are Pro. See [docs/agents/cattle.md](./docs/agents/cattle.md).
 - **2026-11-14** — Harvest scale ticket is shown only for town loads, and a blank ticket is never a fall-worksheet warning.
 - **2026-11-13** — Year-end reports: one landlord row per field per crop, US Letter PDFs with shared AcreLedger branding, spray log names missing details, and new tank-mix products default to `fl oz/ac`. Shipped as 3.6.3.
 - **2026-11-13** — Review fixes: a free farm at the field cap can undo a pre-season reset; a rainfall slot with cleared coordinates reads empty; a legacy `trialing` row shows as Free.
@@ -120,7 +120,7 @@ Topic file, then the code it names:
 - Weather and rainfall — [docs/agents/weather-rainfall.md](./docs/agents/weather-rainfall.md)
 - Billing, Free, and Pro — [docs/agents/billing.md](./docs/agents/billing.md)
 - Equipment (live for every user; do not replace the meter RPCs) — [docs/agents/equipment.md](./docs/agents/equipment.md)
-- Cattle (off unless `runs_cattle`; groups and moves are free; events, transfers, and CSV are Pro) — [src/store/useCattle.ts](./src/store/useCattle.ts), [src/pages/Cattle.tsx](./src/pages/Cattle.tsx), [BLUEPRINT → Cattle](./BLUEPRINT.md#cattle)
+- Cattle (off unless `runs_cattle`; groups and moves are free; events, transfers, and CSV are Pro) — [docs/agents/cattle.md](./docs/agents/cattle.md)
 - Offline, native, and accounts — [docs/agents/offline-native.md](./docs/agents/offline-native.md)
 - Owner disaster recovery (tooling exists; drills are not done) — [docs/agents/owner-dr.md](./docs/agents/owner-dr.md)
 - UI, accessibility, and React — [docs/agents/ui.md](./docs/agents/ui.md)
