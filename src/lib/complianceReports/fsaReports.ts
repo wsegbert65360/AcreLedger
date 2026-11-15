@@ -835,9 +835,8 @@ export function validateFsaFallProductionRows(rows: FsaFallProductionRow[]): Fsa
         if (isBlank(row.destination)) {
             issues.push({ rowId: row.id, severity: 'warning', field: 'destination', message: `${row.fieldName} is missing destination/storage.` });
         }
-        if (isBlank(row.evidenceReference)) {
-            issues.push({ rowId: row.id, severity: 'warning', field: 'evidenceReference', message: `${row.fieldName} is missing ticket/evidence reference.` });
-        }
+        // A scale ticket is optional: bin loads never get one and town loads may not, so a blank
+        // ticket/evidence reference is not flagged.
     }
 
     return issues;

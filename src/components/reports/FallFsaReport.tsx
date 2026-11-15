@@ -103,7 +103,7 @@ export default function FallFsaReport({
       {fsaFallRows.length > 0 && fsaFallWarnings.length > 0 && (
         <tr className="full-width-row print:hidden">
           <td colSpan={10} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-600 dark:text-amber-400 font-semibold">
-            ⚠ {fsaFallWarnings.length} warning(s) — missing destination or evidence references will show as gaps
+            ⚠ {fsaFallWarnings.length} warning(s) — missing details will show as gaps
           </td>
         </tr>
       )}

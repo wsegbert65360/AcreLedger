@@ -1319,8 +1319,17 @@ describe('FSA fall harvest production report rows', () => {
             expect.objectContaining({ severity: 'error', field: 'harvestDate' }),
             expect.objectContaining({ severity: 'error', field: 'production' }),
             expect.objectContaining({ severity: 'warning', field: 'destination' }),
-            expect.objectContaining({ severity: 'warning', field: 'evidenceReference' }),
         ]));
+        expect(issues.some(issue => issue.field === 'evidenceReference')).toBe(false);
+    });
+
+    it('never flags a blank scale ticket, for bin or town grain', () => {
+        const base = {
+            id: 'row-bin', recordType: 'grain' as const, fieldName: 'Bin Beans', crop: 'Soybeans', farmNumber: '1', tractNumber: '2',
+            harvestDate: '2026-10-08', production: 200, productionUnit: 'bu' as const, evidenceReference: '', notes: '',
+        };
+        expect(validateFsaFallProductionRows([{ ...base, destination: 'On-Farm Bin' }])).toEqual([]);
+        expect(validateFsaFallProductionRows([{ ...base, destination: 'Elevator/Sale' }])).toEqual([]);
     });
 
     it('builds fall production CSV with grain and hay rows', () => {

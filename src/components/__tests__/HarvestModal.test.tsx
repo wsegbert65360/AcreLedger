@@ -574,3 +574,25 @@ it('uses the current field share on edit and duplicate instead of the stored spl
   fireEvent.click(screen.getByRole('button', { name: /log duplicate/i }));
   await waitFor(() => expect(state.addHarvestWithGrain).toHaveBeenCalledWith(expect.objectContaining({ harvest: expect.objectContaining({ landlordSplitPercent: 0 }) })));
 });
+
+describe('HarvestModal scale ticket field', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    state.grainMovements = [];
+  });
+
+  it('hides the scale ticket field for a bin harvest', () => {
+    render(<HarvestModal field={field} open onClose={() => {}} initialData={binHarvest()} />);
+    expect(screen.queryByLabelText('SCALE TICKET #')).not.toBeInTheDocument();
+  });
+
+  it('shows the scale ticket field for a town harvest', () => {
+    render(<HarvestModal field={field} open onClose={() => {}} initialData={townHarvest()} />);
+    expect(screen.getByLabelText('SCALE TICKET #')).toBeInTheDocument();
+  });
+
+  it('keeps showing a ticket already saved on a bin harvest', () => {
+    render(<HarvestModal field={field} open onClose={() => {}} initialData={binHarvest({ scaleTicketNumber: 'TKT-1' })} />);
+    expect(screen.getByLabelText('SCALE TICKET #')).toHaveValue('TKT-1');
+  });
+});
