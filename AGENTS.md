@@ -6,7 +6,7 @@ This file is the cross-agent operating guide. It holds the summary, the context-
 
 Read this file first. Then open only the topic file in the [routing index](#routing-index) and the [BLUEPRINT.md](./BLUEPRINT.md) sections the task touches. Feature rules live under `docs/agents/`, one rule in one file. BLUEPRINT holds architecture detail.
 
-> **Last updated:** 2026-11-15 (agent rules moved under docs/agents/; Free and Pro; harvest scale ticket; report PDFs).
+> **Last updated:** 2026-11-15 (Cattle is on main behind `farms.runs_cattle`; agent rules live under docs/agents/).
 > **Verification scope:** This is not a whole-document code audit. A topic file's **Verified against code** note lists what was checked and the commit. Use `git log -- AGENTS.md` for edit history.
 >
 > **Where detail lives:** The topic file is the agent rule. [BLUEPRINT.md](./BLUEPRINT.md) is the architecture write-up. If they disagree, follow the stricter data-safety reading and fix the drift.
@@ -15,11 +15,11 @@ Read this file first. Then open only the topic file in the [routing index](#rout
 
 Keep the five most recent substantive entries, newest first. Git holds the full history. Reasons are in [docs/decisions.md](./docs/decisions.md).
 
+- **2026-11-15** — Cattle is optional and off unless `farms.runs_cattle` is on. Groups, pasture moves, and head-count edits are free. Events, head transfers, and the cattle CSV export are Pro. Multi-row writes go through RPCs. See [BLUEPRINT → Cattle](./BLUEPRINT.md#cattle).
 - **2026-11-14** — Harvest scale ticket is shown only for town loads, and a blank ticket is never a fall-worksheet warning.
 - **2026-11-13** — Year-end reports: one landlord row per field per crop, US Letter PDFs with shared AcreLedger branding, spray log names missing details, and new tank-mix products default to `fl oz/ac`. Shipped as 3.6.3.
 - **2026-11-13** — Review fixes: a free farm at the field cap can undo a pre-season reset; a rainfall slot with cleared coordinates reads empty; a legacy `trialing` row shows as Free.
 - **2026-11-13** — Ask the Book stays on only for the owner's farm, stays out of marketing, and is not removed.
-- **2026-11-10** — Free farms undo the latest pre-season reset with `undo_pre_season_reset`. Uploading a backup file stays Pro.
 
 ## Contents
 
@@ -120,6 +120,7 @@ Topic file, then the code it names:
 - Weather and rainfall — [docs/agents/weather-rainfall.md](./docs/agents/weather-rainfall.md)
 - Billing, Free, and Pro — [docs/agents/billing.md](./docs/agents/billing.md)
 - Equipment (live for every user; do not replace the meter RPCs) — [docs/agents/equipment.md](./docs/agents/equipment.md)
+- Cattle (off unless `runs_cattle`; groups and moves are free; events, transfers, and CSV are Pro) — [src/store/useCattle.ts](./src/store/useCattle.ts), [src/pages/Cattle.tsx](./src/pages/Cattle.tsx), [BLUEPRINT → Cattle](./BLUEPRINT.md#cattle)
 - Offline, native, and accounts — [docs/agents/offline-native.md](./docs/agents/offline-native.md)
 - Owner disaster recovery (tooling exists; drills are not done) — [docs/agents/owner-dr.md](./docs/agents/owner-dr.md)
 - UI, accessibility, and React — [docs/agents/ui.md](./docs/agents/ui.md)
@@ -143,3 +144,4 @@ Primary source files, after the topic file:
 - Tests — [src/test/supabaseMock.ts](./src/test/supabaseMock.ts), [src/test/hookTestHarness.tsx](./src/test/hookTestHarness.tsx)
 - Dates, numbers, and season years — [src/utils/dates.ts](./src/utils/dates.ts), [src/utils/numbers.ts](./src/utils/numbers.ts), [src/lib/seasonYears.ts](./src/lib/seasonYears.ts)
 - Customer plan copy — [src/copy/entitlements.ts](./src/copy/entitlements.ts)
+- Cattle — [src/types/cattle.ts](./src/types/cattle.ts), [src/store/useCattle.ts](./src/store/useCattle.ts), [src/lib/cattle](./src/lib/cattle), [supabase/migrations/20261114120000_cattle_schema_and_rpcs.sql](./supabase/migrations/20261114120000_cattle_schema_and_rpcs.sql)

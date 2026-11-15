@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     buildFsa578Rows,
     buildFsa578WorksheetCsv,
+    buildFsaFallCropTotals,
     buildFsaFallProductionCsv,
     buildFsaFallProductionRows,
     calculateFsa578PlantedAcreTotals,
@@ -1321,6 +1322,29 @@ describe('FSA fall harvest production report rows', () => {
             expect.objectContaining({ severity: 'warning', field: 'destination' }),
         ]));
         expect(issues.some(issue => issue.field === 'evidenceReference')).toBe(false);
+    });
+
+    it('totals every hay cutting as Hay and never labels hay as a grain crop', () => {
+        const hayField = (id: string, name: string, intendedUse?: string): Field => ({
+            id, name, acreage: 10, lat: null, lng: null, farm_id: 'farm', deleted_at: null, intendedUse,
+        });
+        const cut = (id: string, fieldId: string, baleCount: number): HayHarvestRecord => ({
+            id, fieldId, fieldName: fieldId, date: '2026-07-08', baleCount, cuttingNumber: 1, baleType: 'Round',
+            timestamp: 1, seasonYear: 2026, farm_id: 'farm', deleted_at: null,
+        });
+        const report = buildFsaFallProductionRows({
+            harvestRecords: [],
+            hayRecords: [cut('a', 'corn', 7), cut('b', 'hay', 457), cut('c', 'pasture', 525), cut('d', 'blank', 1)],
+            fields: [hayField('corn', 'Harry Middle', 'Corn'), hayField('hay', 'Timber', 'Hay'), hayField('pasture', 'McCartney', 'Pasture'), hayField('blank', 'Blank')],
+        });
+        expect(report.hayRows.map(row => row.crop)).toEqual(['Hay Ground', 'Hay', 'Pasture', 'Hay Ground']);
+
+        const grain = { id: 'g', recordType: 'grain' as const, fieldName: 'North', crop: 'Corn', farmNumber: '1', tractNumber: '2',
+            harvestDate: '2026-10-01', production: 1000, productionUnit: 'bu' as const, destination: 'On-Farm Bin', evidenceReference: '', notes: '' };
+        expect(buildFsaFallCropTotals([grain, ...report.hayRows])).toEqual([
+            { crop: 'Corn', unit: 'bu', production: 1000 },
+            { crop: 'Hay', unit: 'bales', production: 990 },
+        ]);
     });
 
     it('never flags a blank scale ticket, for bin or town grain', () => {

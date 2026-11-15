@@ -49,6 +49,7 @@ const TillageModal = lazy(() => import("@/components/TillageModal"));
 const CustomSprayModal = lazy(() => import("@/components/CustomSprayModal"));
 const Activity = lazy(() => import("./pages/Activity"));
 const Equipment = lazy(() => import("./pages/Equipment"));
+const Cattle = lazy(() => import("./pages/Cattle"));
 const FieldDetailScreen = lazy(() => import("./pages/FieldDetailScreen"));
 const Index = lazy(() => import("./pages/Index"));
 const Logistics = lazy(() => import("./pages/Logistics"));
@@ -133,6 +134,8 @@ const AnimatedRoutes = () => {
           <Route path="/logistics" element={<ErrorBoundary><Logistics /></ErrorBoundary>} />
           <Route path="/activity" element={<ErrorBoundary><Activity /></ErrorBoundary>} />
           {isEquipmentUiEnabled() && <Route path="/equipment" element={<ErrorBoundary><Equipment /></ErrorBoundary>} />}
+          <Route path="/cattle" element={<ErrorBoundary><Cattle /></ErrorBoundary>} />
+          <Route path="/cattle/:groupId" element={<ErrorBoundary><Cattle /></ErrorBoundary>} />
           <Route path="/reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="/setup" element={<SetupRedirect />} />

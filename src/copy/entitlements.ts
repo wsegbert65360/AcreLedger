@@ -22,6 +22,11 @@ export const ENTITLEMENT_COPY = {
   // Rainfall
   rainfallLocked: 'Automatic rainfall for this field is part of Pro.',
 
+  // Cattle (approved by William 2026-11-15). Groups, pasture moves and editing head count stay free.
+  cattleEventsLockedTitle: 'Cattle events are part of Pro.',
+  cattleCsvLocked: 'The cattle CSV export is part of Pro.',
+  cattleEventsLockedBody: 'You can still keep your groups, move them between pastures, and change a head count by editing the group. Events you already logged stay here.',
+
   // Sync queue (change refused for plan reasons, parked on the device)
   syncParkedTitle: 'Saved on this device. You need Pro to sync this change.',
   syncParkedBody: 'Open Settings to export or discard it. Nothing was deleted.',

@@ -19,9 +19,20 @@ try {
       $$ SELECT jsonb_build_object('email', current_setting('request.email', true)) $$;
     CREATE TABLE public.farms (id uuid PRIMARY KEY);
     CREATE TABLE public.profiles (id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE, farm_id uuid REFERENCES public.farms(id) ON DELETE CASCADE);
+    CREATE TABLE public.fields (id uuid PRIMARY KEY, farm_id uuid NOT NULL REFERENCES public.farms(id) ON DELETE CASCADE, deleted_at timestamptz, UNIQUE (farm_id, id));
     INSERT INTO auth.users VALUES ('${user}', 'farmer@example.com'), ('${other}', 'other@example.com');
     INSERT INTO public.farms VALUES ('${farm}');
     INSERT INTO public.profiles VALUES ('${user}', '${farm}');
+  `);
+  await db.exec(await readFile(new URL('../supabase/migrations/20261114120000_cattle_schema_and_rpcs.sql', import.meta.url), 'utf8'));
+  await db.exec(`
+    SELECT set_config('acreledger.cattle_rpc', 'on', true);
+    INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count)
+      VALUES ('44444444-4444-4444-8444-444444444444', '${farm}', 'Deletion Test', 'cows', 3);
+    INSERT INTO public.cattle_moves (id, farm_id, group_id, moved_on, head_count)
+      VALUES ('55555555-5555-4555-8555-555555555555', '${farm}', '44444444-4444-4444-8444-444444444444', '2026-01-01', 3);
+    INSERT INTO public.cattle_events (id, farm_id, group_id, event_type, event_date, head_delta)
+      VALUES ('66666666-6666-4666-8666-666666666666', '${farm}', '44444444-4444-4444-8444-444444444444', 'working', '2026-01-01', 0);
   `);
   await db.exec(await readFile(new URL('../supabase/migrations/20260910230451_account_deletion_requests.sql', import.meta.url), 'utf8'));
   await db.exec(`INSERT INTO public.account_deletion_requests (user_id, farm_id) VALUES ('${user}', '${farm}')`);
@@ -55,6 +66,12 @@ try {
   assert.equal(rows[0].requested_by, user);
   assert.equal(rows[0].requested_email, 'farmer@example.com');
   await db.exec(`DELETE FROM public.farms WHERE id = '${farm}'; DELETE FROM auth.users WHERE id = '${user}'`);
+  assert.deepEqual((await db.query(`
+    SELECT
+      (SELECT count(*)::int FROM public.cattle_groups) AS groups,
+      (SELECT count(*)::int FROM public.cattle_moves) AS moves,
+      (SELECT count(*)::int FROM public.cattle_events) AS events
+  `)).rows[0], { groups: 0, moves: 0, events: 0 });
   rows = (await db.query('SELECT * FROM public.account_deletion_requests')).rows;
   assert.equal(rows.length, 1);
   assert.equal(rows[0].user_id, null);

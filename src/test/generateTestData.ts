@@ -9,6 +9,7 @@ import type {
   SprayRecipe, FertilizerApplication, SprayRecipeProduct
 } from '@/types/farm';
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
+import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 
 // --- Helpers ---
 
@@ -446,6 +447,29 @@ export function generateEquipment(count = 6): {
   return { equipment, schedules, logs };
 }
 
+export function generateCattle(fields: Field[], count = 4): {
+  groups: CattleGroup[];
+  moves: CattleMove[];
+  events: CattleEvent[];
+} {
+  const now = '2026-03-01T12:00:00.000Z';
+  const classes: CattleGroup['class'][] = ['cows', 'calves', 'replacement_heifers', 'stockers'];
+  const groups = Array.from({ length: count }, (_, index): CattleGroup => ({
+    id: uid(), farm_id: 'test-farm', name: `Herd ${index + 1}`, class: classes[index % classes.length],
+    headCount: 20 + index * 5, currentFieldId: fields[index % fields.length]?.id,
+    currentSince: isoDate(2026, 2, 1 + index), createdAt: now, updatedAt: now, deleted_at: null,
+  }));
+  const moves = groups.map((group): CattleMove => ({
+    id: uid(), farm_id: 'test-farm', groupId: group.id, fieldId: group.currentFieldId,
+    movedOn: group.currentSince!, headCount: group.headCount, createdAt: now, updatedAt: now, deleted_at: null,
+  }));
+  const events = groups.map((group): CattleEvent => ({
+    id: uid(), farm_id: 'test-farm', groupId: group.id, eventType: 'working',
+    eventDate: isoDate(2026, 2, 15), headDelta: 0, createdAt: now, updatedAt: now, deleted_at: null,
+  }));
+  return { groups, moves, events };
+}
+
 // --- Master Seed Function ---
 
 export interface SeedResult {
@@ -462,6 +486,9 @@ export interface SeedResult {
   equipment: Equipment[];
   maintenanceSchedules: MaintenanceSchedule[];
   maintenanceLogs: MaintenanceLog[];
+  cattleGroups: CattleGroup[];
+  cattleMoves: CattleMove[];
+  cattleEvents: CattleEvent[];
 }
 
 export function generateAllTestData(count = 100): SeedResult {
@@ -476,11 +503,13 @@ export function generateAllTestData(count = 100): SeedResult {
   const fertilizerRecords = generateFertilizerRecords(fields, count);
   const grainMovements = generateGrainMovements(bins, fields, count);
   const { equipment, schedules, logs } = generateEquipment(Math.max(3, Math.min(count, 12)));
+  const { groups: cattleGroups, moves: cattleMoves, events: cattleEvents } = generateCattle(fields);
 
   return {
     fields, bins, seeds, recipes,
     plantRecords, sprayRecords, harvestRecords,
     hayRecords, fertilizerRecords, grainMovements,
     equipment, maintenanceSchedules: schedules, maintenanceLogs: logs,
+    cattleGroups, cattleMoves, cattleEvents,
   };
 }
