@@ -144,7 +144,7 @@ describe('exportFsa578WorksheetPdf', () => {
     });
     const blank = pdf.allText();
     expect(blank).toContain('Farm: ________________');
-    expect(blank).toContain('Made with AcreLedger · acreledger.com | ________________ | Crop year 2026');
+    expect(blank).toContain('Made with AcreLedger · acreledger.app | ________________ | Crop year 2026');
     expect(blank).not.toContain('AcreLedger Farm');
   });
 
@@ -183,19 +183,19 @@ describe('exportFsa578WorksheetPdf', () => {
     expect(text).toContain('Producer: ________________');
 
     // Sections 2-4 each add a page: 4 pages total, each with identity + Page X of Y.
-    const footers = pdf.texts().filter(t => t.startsWith('Made with AcreLedger · acreledger.com | Test Farm | Crop year 2026'));
+    const footers = pdf.texts().filter(t => t.startsWith('Made with AcreLedger · acreledger.app | Test Farm | Crop year 2026'));
     expect(footers).toHaveLength(4);
     for (let page = 1; page <= 4; page += 1) {
       expect(text).toContain(`Page ${page} of 4`);
     }
   });
 
-  it('adds the AcreLedger note without price or sign-up wording', () => {
+  it('adds the AcreLedger note with the intentional website line and no price or trial wording', () => {
     generate([row({})]);
 
     const text = pdf.allText();
     expect(text).toContain('This worksheet was made with AcreLedger');
-    expect(text).toContain('acreledger.com');
+    expect(text).toContain('Start your own at acreledger.app');
     expect(text).not.toMatch(/\$|free trial|sign up/i);
   });
 

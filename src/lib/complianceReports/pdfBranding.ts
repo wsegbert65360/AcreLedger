@@ -3,26 +3,24 @@ import type jsPDF from 'jspdf';
 /**
  * Shared "made with AcreLedger" branding for report PDFs.
  *
- * Deliberately has no price, trial, or sign-up wording: the same PDFs are
- * generated inside the iOS app, which must stay free of purchase calls to
- * action (see AGENTS.md → CI/CD). Naming the website matches the existing
- * support-contact line on the FSA office request sheet.
+ * The note carries the acreledger.app line by product decision and has no
+ * price or trial wording.
  */
 
 /** US Letter: county FSA offices and landlords print on Letter, not A4. */
 export const REPORT_PAGE_FORMAT = 'letter' as const;
 
-export const ACRELEDGER_FOOTER = 'Made with AcreLedger · acreledger.com';
+export const ACRELEDGER_FOOTER = 'Made with AcreLedger · acreledger.app';
 /** Plain-ASCII form for CSV title blocks. */
-export const ACRELEDGER_CSV_LINE = 'Made with AcreLedger - acreledger.com';
+export const ACRELEDGER_CSV_LINE = 'Made with AcreLedger - acreledger.app';
 
 export type AcreLedgerNoteVariant = 'fsa' | 'landlord' | 'spray' | 'report';
 
 export const ACRELEDGER_NOTES: Record<AcreLedgerNoteVariant, string> = {
-  fsa: 'This worksheet was made with AcreLedger, a farm record book for your phone. Log planting, spraying, harvest and hay once; get FSA worksheets, spray logs and landlord reports. Start your own at acreledger.com.',
-  spray: 'This spray record was made with AcreLedger, a farm record book for your phone. Log each application from the cab and keep the full spray log in one place. Start your own at acreledger.com.',
-  report: 'This report was made with AcreLedger, a farm record book for your phone. Start your own at acreledger.com.',
-  landlord: 'This report was made with AcreLedger, a farm record book for your phone. Other tenants can send you the same report. acreledger.com',
+  fsa: 'This worksheet was made with AcreLedger, a farm record book for your phone. Log planting, spraying, harvest and hay once; get FSA worksheets, spray logs and landlord reports. Start your own at acreledger.app.',
+  spray: 'This spray record was made with AcreLedger, a farm record book for your phone. Log each application from the cab and keep the full spray log in one place. Start your own at acreledger.app.',
+  report: 'This report was made with AcreLedger, a farm record book for your phone. Start your own at acreledger.app.',
+  landlord: 'This report was made with AcreLedger, a farm record book for your phone. Other tenants can send you the same report. acreledger.app',
 };
 
 const LEFT = 12;

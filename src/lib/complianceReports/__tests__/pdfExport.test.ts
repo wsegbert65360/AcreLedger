@@ -45,7 +45,7 @@ describe('exportToPdf', () => {
     // Footer is drawn on every page after all content exists.
     const text = pdf.allText();
     expect(text).toContain('Page 1 of 1');
-    expect(text).toContain('Made with AcreLedger · acreledger.com');
+    expect(text).toContain('Made with AcreLedger · acreledger.app');
   });
 
   it('draws the footer on pages added after the table', () => {
@@ -83,10 +83,16 @@ describe('exportToPdf', () => {
     const text = pdf.allText();
     expect(text).toContain('counted as 0 share');
     expect(text).toContain('ACTIVITY TIMELINE');
-    expect(text).toContain('This report was made with AcreLedger');
+    expect(text).toContain('This report was made with AcreLedger, a farm record book for your phone. Other tenants can send you the same report. acreledger.app');
     expect(pdf.autoTables()).toHaveLength(2);
-    // No price or sign-up wording in branding (iOS-safe).
+    // The website line is intentional; branding has no price or trial wording.
     expect(text).not.toMatch(/\$|free trial|sign up/i);
+  });
+
+  it('keeps the intentional website invitation in the report note', () => {
+    exportToPdf({ ...baseOptions, brandNote: 'report' });
+
+    expect(pdf.allText()).toContain('Start your own at acreledger.app');
   });
 
   it('renders an uppercased summary label with its value', () => {

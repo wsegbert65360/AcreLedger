@@ -185,7 +185,7 @@ describe('generateSprayPDF', () => {
     expect(text).toContain('End wind: 7 MPH W');
     expect(text).toContain('End temp: 78 F');
     expect(text).toContain('This spray record was made with AcreLedger');
-    expect(text).toContain('acreledger.com');
+    expect(text).toContain('Start your own at acreledger.app');
     expect(text).not.toMatch(/\$|free trial|sign up/i);
   });
 
@@ -257,7 +257,7 @@ describe('generateSprayPDF', () => {
 
     const text = pdf.allText();
     expect(text).toContain('Page 1 of 1');
-    expect(text).toContain('Made with AcreLedger · acreledger.com');
+    expect(text).toContain('Made with AcreLedger · acreledger.app');
   });
 
   it('saves the multi-record export with a sanitized farm and date-range filename', () => {
