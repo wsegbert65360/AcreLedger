@@ -13,7 +13,7 @@ Read this file first. Then open only the topic file in the [routing index](#rout
 
 ## Recent Changes
 
-Keep the five most recent substantive entries, newest first. Git holds the full history.
+Keep the five most recent substantive entries, newest first. Git holds the full history. Reasons are in [docs/decisions.md](./docs/decisions.md).
 
 - **2026-11-14** — Harvest scale ticket is shown only for town loads, and a blank ticket is never a fall-worksheet warning.
 - **2026-11-13** — Year-end reports: one landlord row per field per crop, US Letter PDFs with shared AcreLedger branding, spray log names missing details, and new tank-mix products default to `fl oz/ac`. Shipped as 3.6.3.
@@ -37,7 +37,7 @@ Keep the five most recent substantive entries, newest first. Git holds the full 
 
 ## Project Summary
 
-AcreLedger is a mobile-first, PWA-ready agricultural record book for individual farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports. The customer tiers are Free and Pro. Pro is $299 per farm per year. Limits and non-goals are in [docs/agents/billing.md](./docs/agents/billing.md).
+AcreLedger is a mobile-first, PWA-ready agricultural record book for individual farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports. The customer tiers are Free and Pro. Pro is $299 per farm per year. The one-page product description is [PRODUCT.md](./PRODUCT.md). Agent rules for billing are in [docs/agents/billing.md](./docs/agents/billing.md).
 
 The app uses React 18, TypeScript strict mode, Vite 7, React Router 7, Supabase Postgres/Auth/RLS, React Context, shadcn/ui, Tailwind CSS, Lucide, Sonner, Zod, Visual Crossing weather, IEM Stage IV rainfall, and Capacitor 8.
 
