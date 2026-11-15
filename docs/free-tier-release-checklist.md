@@ -18,7 +18,7 @@ FROM public.farms
 WHERE id = '<the owner farm (id held privately)>';
 ```
 
-Stop if that row is missing or the name is not Egbert Farm.
+Stop if that row is missing or the name is not the owner's farm.
 
 3. [ ] Read the live comp. Columns are `id`, `farm_id`, `reason`, `granted_by`, `created_at`, `expires_at`, `deleted_at` (`supabase/migrations/20261102014611_farm_comps.sql`). A row counts only when `deleted_at` is null and `expires_at` is null or still in the future.
 
@@ -36,7 +36,7 @@ WHERE farm_id = '<the owner farm (id held privately)>'
 INSERT INTO public.farm_comps (farm_id, reason, expires_at)
 VALUES (
   '<the owner farm (id held privately)>',
-  'Egbert Farm owner complimentary',
+  'owner complimentary',
   NULL
 );
 ```
@@ -196,7 +196,7 @@ SET mode = 'shadow', updated_at = now()
 WHERE singleton IS TRUE;
 ```
 
-26. [ ] Watch `public.entitlement_shadow_log` for a few days. Query in `docs/free-tier-metrics.md` (section "After turning on `shadow`"). The table in `docs/free-tier-shadow-report.md` is an offline simulation. Prod is this log. In shadow every write still succeeds. A row means that write would be refused in `enforce`. Egbert Farm should stay out of the log once the section 1 comp row is live. The three old test farms stay on the free plan, so their grain, equipment, FSA, landlord, and backup writes will show up. A row for Egbert Farm means the comp row is missing or expired. Stop. Fix section 1 before `enforce`.
+26. [ ] Watch `public.entitlement_shadow_log` for a few days. Query in `docs/free-tier-metrics.md` (section "After turning on `shadow`"). The table in `docs/free-tier-shadow-report.md` is an offline simulation. Prod is this log. In shadow every write still succeeds. A row means that write would be refused in `enforce`. The owner's farm should stay out of the log once the section 1 comp row is live. The three old test farms stay on the free plan, so their grain, equipment, FSA, landlord, and backup writes will show up. A row for the owner's farm means the comp row is missing or expired. Stop. Fix section 1 before `enforce`.
 
 27. [ ] Set enforce only after that watch, and only after section 10 is decided:
 
