@@ -1,6 +1,6 @@
 # Recurring docs audit
 
-Plan only. No code in this change. Phase 2 (moving rules into `docs/agents/`) has not been done. This audit starts after that directory exists.
+Plan only. Phase 2 has landed: the topic files are in `docs/agents/`. This audit reads one of those files per run.
 
 ## Goal
 

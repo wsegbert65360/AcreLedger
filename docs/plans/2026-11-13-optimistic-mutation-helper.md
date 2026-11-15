@@ -4,7 +4,7 @@ Plan only. No code in this change.
 
 ## Goal
 
-One helper for the eight-step mutation in AGENTS (farm guard, validate, map before state, rollback snapshot from the render closure, functional optimistic update, await Supabase, success count, rollback on error). Return `Promise<boolean>`.
+One helper for the eight-step mutation in `docs/agents/data-safety.md` (farm guard, validate, map before state, rollback snapshot from the render closure, functional optimistic update, await Supabase, success count, rollback on error). Return `Promise<boolean>`.
 
 ## Start here
 
