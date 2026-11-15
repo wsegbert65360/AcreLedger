@@ -1,4 +1,5 @@
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
+import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 import type {
   Bin, CustomSprayRecord, FertilizerApplication, FertilizerRecipe, Field, GrainMovement,
   HarvestRecord, HayHarvestRecord, PlantRecord, SavedSeed, SprayRecipe, SprayRecord,
@@ -10,6 +11,7 @@ import {
   mapFieldCluAssignmentToDb, mapFieldToDb, mapFsaTractToDb, mapGrainToDb, mapHarvestToDb,
   mapHayToDb, mapMaintenanceLogToDb, mapMaintenanceScheduleToDb, mapPlantToDb, mapRecipeToDb,
   mapSeedToDb, mapSprayToDb, mapTillageToDb, mapWorkRequestToDb,
+  mapCattleEventToDb, mapCattleGroupToDb, mapCattleMoveToDb,
 } from '@/lib/mappers';
 
 const IDENTITY_KEYS = new Set(['id', 'farm_id']);
@@ -20,6 +22,7 @@ const SOURCE_KEY_ALIASES: Record<string, string[]> = {
   field_id: ['fieldId', 'field_id'],
   bin_id: ['binId', 'bin_id'],
   equipment_id: ['equipmentId', 'equipment_id'],
+  group_id: ['groupId', 'group_id'],
   schedule_id: ['scheduleId', 'schedule_id'],
   harvest_record_id: ['harvestRecordId', 'harvest_record_id'],
   tract_key: ['tractKey', 'tract_key'],
@@ -111,6 +114,9 @@ export const mapWorkRequestToDbForRestore = wrapRestoreMapper(mapWorkRequestToDb
 export const mapEquipmentToDbForRestore = wrapRestoreMapper(mapEquipmentToDb);
 export const mapMaintenanceScheduleToDbForRestore = wrapRestoreMapper(mapMaintenanceScheduleToDb);
 export const mapMaintenanceLogToDbForRestore = wrapRestoreMapper(mapMaintenanceLogToDb);
+export const mapCattleGroupToDbForRestore = wrapRestoreMapper(mapCattleGroupToDb);
+export const mapCattleMoveToDbForRestore = wrapRestoreMapper(mapCattleMoveToDb);
+export const mapCattleEventToDbForRestore = wrapRestoreMapper(mapCattleEventToDb);
 
 export type RestoreField = Field;
 export type RestoreSpray = SprayRecord;
@@ -129,5 +135,8 @@ export type RestoreWorkRequest = WorkRequest;
 export type RestoreEquipment = Equipment;
 export type RestoreSchedule = MaintenanceSchedule;
 export type RestoreLog = MaintenanceLog;
+export type RestoreCattleGroup = CattleGroup;
+export type RestoreCattleMove = CattleMove;
+export type RestoreCattleEvent = CattleEvent;
 export type RestoreTract = FsaTractImport;
 export type RestoreAssignment = FieldCluAssignment;

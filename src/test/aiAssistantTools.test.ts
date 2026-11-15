@@ -198,6 +198,12 @@ describe('executeNamedTool validation', () => {
 });
 
 describe('full farm read catalog', () => {
+  it('intentionally excludes cattle from Ask the Book', () => {
+    expect(FARM_ENTITY_NAMES).not.toEqual(expect.arrayContaining([
+      'cattle_groups', 'cattle_moves', 'cattle_events',
+    ]));
+  });
+
   it('publishes every active farm record area and no mutation tools', () => {
     expect(FARM_ENTITY_NAMES).toEqual([
       'farm', 'profile', 'fields', 'bins', 'plant_records', 'spray_records',

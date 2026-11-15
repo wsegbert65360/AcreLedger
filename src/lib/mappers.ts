@@ -16,6 +16,9 @@ import type {
     Equipment, EquipmentRow, MaintenanceLog, MaintenanceLogRow,
     MaintenanceSchedule, MaintenanceScheduleRow,
 } from '@/types/equipment';
+import type {
+    CattleEvent, CattleEventRow, CattleGroup, CattleGroupRow, CattleMove, CattleMoveRow,
+} from '@/types/cattle';
 import {
     migrateFsaToPropertyIdentifiers,
     getPropertyIdentifier,
@@ -113,6 +116,47 @@ export const mapMaintenanceLogFromDb = (db: MaintenanceLogRow): MaintenanceLog =
     vendor: optionalString(db.vendor),
     costParts: optionalNumber(db.cost_parts),
     costLabor: optionalNumber(db.cost_labor),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
+export const mapCattleGroupFromDb = (db: CattleGroupRow): CattleGroup => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    name: safeStr(db.name),
+    class: db.class,
+    headCount: safeNum(db.head_count),
+    currentFieldId: optionalString(db.current_field_id),
+    currentSince: optionalString(db.current_since),
+    notes: optionalString(db.notes),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
+export const mapCattleMoveFromDb = (db: CattleMoveRow): CattleMove => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    groupId: db.group_id,
+    fieldId: optionalString(db.field_id),
+    movedOn: db.moved_on,
+    headCount: safeNum(db.head_count),
+    notes: optionalString(db.notes),
+    createdAt: db.created_at,
+    updatedAt: db.updated_at,
+    deleted_at: db.deleted_at ?? null,
+});
+
+export const mapCattleEventFromDb = (db: CattleEventRow): CattleEvent => ({
+    id: db.id,
+    farm_id: db.farm_id,
+    groupId: db.group_id,
+    eventType: db.event_type,
+    eventDate: db.event_date,
+    headDelta: safeNum(db.head_delta),
+    reason: db.reason ?? undefined,
+    notes: optionalString(db.notes),
     createdAt: db.created_at,
     updatedAt: db.updated_at,
     deleted_at: db.deleted_at ?? null,
@@ -577,6 +621,69 @@ export const mapMaintenanceLogToDb = (log: MaintenanceLog): Record<string, unkno
     includeDefined(row, 'cost_labor', log.costLabor);
     row.deleted_at = log.deleted_at ?? null;
     return row;
+};
+
+export const mapCattleGroupToDb = (group: CattleGroup): Record<string, unknown> => {
+    validateRequired(group, ['id', 'farm_id', 'name', 'class'], 'mapCattleGroupToDb');
+    return {
+        id: group.id,
+        farm_id: group.farm_id,
+        name: group.name,
+        class: group.class,
+        head_count: group.headCount,
+        current_field_id: nullableString(group.currentFieldId),
+        current_since: nullableString(group.currentSince),
+        notes: nullableString(group.notes),
+        created_at: group.createdAt,
+        updated_at: group.updatedAt,
+        deleted_at: group.deleted_at ?? null,
+    };
+};
+
+export const mapCattleGroupUpdateToDb = (group: CattleGroup): Record<string, unknown> => {
+    validateRequired(group, ['id', 'name', 'class'], 'mapCattleGroupUpdateToDb');
+    return {
+        id: group.id,
+        name: group.name,
+        class: group.class,
+        head_count: group.headCount,
+        notes: nullableString(group.notes),
+        updated_at: group.updatedAt,
+        deleted_at: group.deleted_at ?? null,
+    };
+};
+
+export const mapCattleMoveToDb = (move: CattleMove): Record<string, unknown> => {
+    validateRequired(move, ['id', 'farm_id', 'groupId', 'movedOn'], 'mapCattleMoveToDb');
+    return {
+        id: move.id,
+        farm_id: move.farm_id,
+        group_id: move.groupId,
+        field_id: nullableString(move.fieldId),
+        moved_on: move.movedOn,
+        head_count: move.headCount,
+        notes: nullableString(move.notes),
+        created_at: move.createdAt,
+        updated_at: move.updatedAt,
+        deleted_at: move.deleted_at ?? null,
+    };
+};
+
+export const mapCattleEventToDb = (event: CattleEvent): Record<string, unknown> => {
+    validateRequired(event, ['id', 'farm_id', 'groupId', 'eventType', 'eventDate'], 'mapCattleEventToDb');
+    return {
+        id: event.id,
+        farm_id: event.farm_id,
+        group_id: event.groupId,
+        event_type: event.eventType,
+        event_date: event.eventDate,
+        head_delta: event.headDelta,
+        reason: nullableString(event.reason),
+        notes: nullableString(event.notes),
+        created_at: event.createdAt,
+        updated_at: event.updatedAt,
+        deleted_at: event.deleted_at ?? null,
+    };
 };
 
 export const mapFieldToDb = (f: Field) => {
