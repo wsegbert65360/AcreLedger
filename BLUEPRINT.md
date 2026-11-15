@@ -848,7 +848,7 @@ Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 (`20261107040000_rainfall_tiering.sql`), with `rainfall_field_hourly_allowed(field_id)`
 (service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
 edge function. Pro: all-field hourly rainfall, grain bins and movement, equipment, FSA tract
-entry, landlord splits, backup restore, prepared reports. Terms call those reports landlord summaries. Complimentary is the owner farm only, not a sold tier. SQL still returns `photo_cap` 20, `history_seasons` 2, and `device_cap` 1; those are not live limits.
+entry, landlord splits, backup restore, prepared reports. Terms call those reports landlord summaries. Complimentary is the owner farm only, not a sold tier. SQL returns `photo_cap` NULL (`20261110190000_entitlements_hardening.sql` replaced 20), `history_seasons` 2, and `device_cap` 1. Those are not live limits.
 Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. Photo capture is not in this build (a later Pro photo feature is only a possibility). Legacy spray-note attachment tokens are still parsed on edit and in the spray PDF, as described in AGENTS under Spray Wizard Pattern. The iOS camera and photo-library usage strings stay.
 
 There is no trial: `ensure_user_farm()` stamps no trial dates (`20261109210000_remove_trial.sql`),
@@ -951,7 +951,7 @@ Env vars: `OPENROUTER_API_KEY`, `AI_MODEL`, `AI_DAILY_CAP`, `VITE_AI_ASSISTANT_U
 
 Doc sections: this section, [AGENTS.md](./AGENTS.md) AI Assistant / Ask the Book, `README.md` (the `/api/ai-assistant` paragraph), `docs/plans/2026-08-26-ai-assistant.md`, `IOS_RELEASE.md`, `docs/app-store/2026-10-01-submission-package.md`, `docs/plans/2026-10-08-android-capacitor-play-store.md`, `docs/plans/2026-10-09-capacitor-8-upgrade.md`, `docs/plans/2026-09-10-owner-disaster-recovery-google-drive.md`, `src/pages/Privacy.tsx`, and `docs/free-tier-release-checklist.md` (that checklist currently names the farm id; do not copy the id).
 
-Open owner question: remove Ask the Book entirely, or keep this one-farm gate?
+Owner decision (2026-11-15): keep this one-farm gate. Do not remove Ask the Book.
 
 `server/ai-assistant-tools.ts` is the only database read catalog exposed to the AI assistant. It uses the authenticated caller's JWT and publishable/anon key, keeps RLS as the primary tenant boundary, and adds the authoritative current `farm_id` to every direct or joined query. It must never use a service-role/secret key, raw SQL, caller-provided table names, or mutation methods.
 
@@ -1280,7 +1280,7 @@ Windy.com must be allowed through both `child-src` and `frame-src` because the w
 ## 8. Coding Rules & Conventions
 
 Coding rules, file naming, import order, and the change workflow are maintained in
-[AGENTS.md](./AGENTS.md#coding-style). Rationale for the component rules is in
+[docs/agents/coding-style.md](./docs/agents/coding-style.md). The change workflow stays in [AGENTS.md](./AGENTS.md#change-workflow). Rationale for the component rules is in
 [§6 Component Patterns](#6-component-patterns).
 
 ### Verification
@@ -1292,6 +1292,6 @@ This check does not verify external URLs or the accuracy of architecture claims.
 
 Test-suite rules (unit vs. integration split, the shared Supabase mock lifecycle, hook harness,
 query-contract suites, and Vercel Function test placement) are maintained in
-[AGENTS → Testing](./AGENTS.md#testing).
+[docs/agents/testing.md](./docs/agents/testing.md).
 
 See [TESTING.md](./TESTING.md) for commands, current coverage measurements, detailed verification protocols, and bot credentials.
