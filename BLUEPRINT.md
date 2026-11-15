@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-11-01 (farm_comps billing audit log).
+> **Last updated:** 2026-11-14 (year-end report, spray log, rate-unit, and harvest scale-ticket changes).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,8 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-14** — Harvest scale ticket is asked only for town loads and a blank ticket is never a fall-worksheet warning. See [HarvestRecord](#harvestrecord).
+- **2026-11-13** — Version 3.6.3: Landlord and Farm Owner Summary are per field per crop with per-crop totals; report PDFs are US Letter with shared AcreLedger branding; the FSA-578 PDF adds Type/Variety; the fall production PDF is landscape with per-crop totals; the spray log PDF names missing details; new tank-mix products default to `fl oz/ac`. See [Landlord Summary Report](#landlord-summary-report) and [SprayRecord](#sprayrecord-2026-standards).
 - **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
@@ -332,6 +334,7 @@ Supports multiple products per application (tank-mix) and advanced environmental
 - **Treated Area Default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`, `sprayExport.ts`) resolve to the FSA crop acreage shown on the field, never a raw `field.acreage` read. Read-time resolution goes through the shared `getEffectiveSprayTreatedAcres(record, field, cluAssignments)` helper: stored `treatedAreaSize` when present and positive, else `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, then boundary, then `field.acreage`). Current form edits preserve an explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray). The one-time migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql` intentionally normalized every active historical treated-area value because legacy automatic defaults could not be distinguished from manual entries. It changes only `treated_area_size` and leaves products, stored totals, weather, wind, temperature, humidity, application times, and notes untouched. This historical one-shot is now retired: guarded history plus `acreage_backfill_private.historical_backfills_retired()` prevents reruns after application, including restores without the migration ledger. It must never be used as data repair; recovery of lost partial areas remains an owner decision. Report/export product totals convert the effective treated area to the rate unit for every profile (including square feet), without mutating stored records.
 - **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
+- **Rate unit default**: a new product starts on `DEFAULT_SPRAY_RATE_UNIT` (`fl oz/ac`). `oz/ac` and `lb/ac` are dry weight units and total in pounds; pickers label each unit as liquid or dry weight, the mix step previews the total as the rate is typed, and a dry weight unit shows an amber note. Stored records keep their unit, and prefill from the last spray copies it forward.
 - **Non-Compliant / Review Status**: Profile-driven — see [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot). Under `us-epa`, triggered if any product is missing an `epaRegNumber` or lacks a positive application rate and rate unit; under `au-apvma` the registration-number check is off and PIC / water rate / treated-area-in-hectares are required instead. Legacy records derive this review status in the UI without a database rewrite. Per-product totals are canonical and are recalculated synchronously from rate × treated acres before saving; the top-level `totalAmountApplied` remains only a legacy first-product numeric compatibility value and must never sum unlike units.
 - **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
 - **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
@@ -365,6 +368,7 @@ Grain harvest event.
   landlordName, scaleTicketNumber, deleted_at }
 ```
 `landlordSplitPercent` is the landlord's crop-share % for this load (pre-suggested from the field's `producerShare` as `100 - producerShare`). `landlordName` here is a harvest-time override of the field-level `Field.landlordName`; new harvests prefill it from the field but the value is editable per record.
+`scaleTicketNumber` is optional. The harvest form asks for it only when `destination` is `'town'`; a bin harvest shows the field only if a ticket is already stored, so it is never dropped silently. Reports never flag a blank ticket.
 
 ### HayHarvestRecord
 Hay cutting event. Tracked by cutting number per field per season.
@@ -1157,9 +1161,11 @@ does not catch continuation-page clipping.
 Status presentation rules are reporting-specific: a dated crop row without an explicit status
 may display as `Planted`; undated hay/pasture cropland may display as `Existing stand`; all other
 undated cropland requires an explicit FSA status and produces a readiness error. A clean report
-still states that county FSA review is required. Type/variety is
-intentionally omitted from the PDF unless requested, while preview and CSV retain it for farmer
-review. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
+still states that county FSA review is required. Type/variety appears in the PDF's Section 1
+as well as in the preview and CSV. The document is titled "FSA-578 Acreage Reporting Worksheet"
+everywhere. The Fall Production worksheet totals production per crop and unit
+(`buildFsaFallCropTotals`), prints landscape with landlord name and share columns, and does not
+flag a blank scale ticket. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
 farm/tract/CLU acreage and reporting facts. Both FSA-578 and Fall Production outputs include the
 farm name in their header subtitles, in the on-screen preview and the PDF.
 
