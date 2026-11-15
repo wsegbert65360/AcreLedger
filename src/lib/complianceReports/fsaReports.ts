@@ -776,7 +776,9 @@ export function buildFsaFallProductionRows({
             id: record.id,
             recordType: 'hay',
             fieldName: record.fieldName || field?.name || '',
-            crop: field?.intendedUse?.trim() || 'Hay Ground',
+            // A hay cutting is labelled by the field's forage use (Hay Ground, Pasture). A field whose
+            // use is a grain crop still produced hay here, so it must not read as that crop.
+            crop: hayRowLabel(field?.intendedUse),
             farmNumber: field?.fsaFarmNumber || '',
             tractNumber: field?.fsaTractNumber || '',
             harvestDate: record.date || toLocalIsoDate(record.timestamp),
@@ -791,6 +793,14 @@ export function buildFsaFallProductionRows({
     return { grainRows, hayRows };
 }
 
+const HAY_TOTAL_LABEL = 'Hay';
+
+/** Row label for a hay cutting: the field's forage use, or "Hay Ground" when the use is blank or a grain crop. */
+function hayRowLabel(intendedUse: string | undefined): string {
+    const use = intendedUse?.trim();
+    return use && isEstablishedForageLabel(use) ? use : 'Hay Ground';
+}
+
 export interface FsaFallCropTotal {
     crop: string;
     unit: FsaFallProductionRow['productionUnit'];
@@ -801,7 +811,8 @@ export interface FsaFallCropTotal {
 export function buildFsaFallCropTotals(rows: FsaFallProductionRow[]): FsaFallCropTotal[] {
     const totals = new Map<string, FsaFallCropTotal>();
     for (const row of rows) {
-        const crop = row.crop?.trim() || 'Unspecified';
+        // All hay cuttings total together as Hay, whatever each field's use label says.
+        const crop = row.recordType === 'hay' ? HAY_TOTAL_LABEL : row.crop?.trim() || 'Unspecified';
         const key = `${crop.toLowerCase()}|${row.productionUnit}`;
         const current = totals.get(key) ?? { crop, unit: row.productionUnit, production: 0 };
         current.production += row.production || 0;
@@ -809,7 +820,10 @@ export function buildFsaFallCropTotals(rows: FsaFallProductionRow[]): FsaFallCro
     }
     return [...totals.values()]
         .map(t => ({ ...t, production: roundTo(t.production, 2) }))
-        .sort((a, b) => a.crop.localeCompare(b.crop) || a.unit.localeCompare(b.unit));
+        .sort((a, b) =>
+            Number(a.crop === HAY_TOTAL_LABEL) - Number(b.crop === HAY_TOTAL_LABEL)
+            || a.crop.localeCompare(b.crop)
+            || a.unit.localeCompare(b.unit));
 }
 
 export function validateFsaFallProductionRows(rows: FsaFallProductionRow[]): FsaFallValidationIssue[] {
