@@ -16,6 +16,11 @@ const restoreMigration = await readFile(
   'utf8',
 );
 
+const fixesMigration = await readFile(
+  new URL('../supabase/migrations/20261114140000_cattle_db_fixes.sql', import.meta.url),
+  'utf8',
+);
+
 const ids = {
   farm: '10000000-0000-4000-8000-000000000001',
   otherFarm: '10000000-0000-4000-8000-000000000002',
@@ -83,6 +88,7 @@ try {
     CREATE FUNCTION public.assert_premium(uuid, text) RETURNS void LANGUAGE sql AS $$ SELECT $$;
   `);
   await db.exec(restoreMigration);
+  await db.exec(fixesMigration);
 
   assert.equal(
     (await db.query(`SELECT runs_cattle FROM public.farms WHERE id = '${ids.farm}'`)).rows[0].runs_cattle,
@@ -309,7 +315,162 @@ try {
     auth_move: true,
   });
 
-  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, and cascade soft delete.');
+  // ---- 20261114140000_cattle_db_fixes ----
+  const fx = {
+    gA: '10000000-0000-4000-8000-000000000061',
+    gB: '10000000-0000-4000-8000-000000000062',
+    gC: '10000000-0000-4000-8000-000000000063',
+    otherFarmGroup: ids.otherGroup,
+  };
+  const n = i => `10000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`;
+  // Use the database's own current_date: PGlite runs in the host time zone.
+  const dbToday = (await db.query("SELECT to_char(current_date, 'YYYY-MM-DD') AS d")).rows[0].d;
+  const plusDays = d => new Date(Date.parse(`${dbToday}T00:00:00Z`) + d * 86400000).toISOString().slice(0, 10);
+  await db.exec(`
+    INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES
+      ('${fx.gA}', '${ids.farm}', 'Fix A', 'cows', 10),
+      ('${fx.gB}', '${ids.farm}', 'Fix B', 'calves', 3),
+      ('${fx.gC}', '${ids.farm}', 'Fix C', 'stockers', 4);
+    SELECT set_config('request.uid', '${ids.user}', false);
+    SET ROLE authenticated;
+  `);
+  const headOf = async id => (await db.query('SELECT head_count FROM public.cattle_groups WHERE id = $1', [id])).rows[0].head_count;
+  const ev = (eventId, type, date, delta, reason, notes, groupId = fx.gA) => event(eventId, type, date, delta, reason, notes, ids.farm, groupId);
+
+  // a. head_removed must carry a valid reason (RPC and table CHECK).
+  for (const [i, reason] of [[1, null], [2, ''], [3, '   '], [4, 'sold']]) {
+    await assert.rejects(ev(n(i), 'head_removed', '2026-11-04', -1, reason), error => error.code === '23514', `head_removed with reason ${JSON.stringify(reason)} is refused`);
+  }
+  assert.equal(await headOf(fx.gA), 10, 'refused removals change nothing');
+  const shipped = await ev(n(5), 'head_removed', '2026-11-04', -1, 'shipped');
+  assert.equal(shipped.rows[0].value.head_count, 9);
+  const moved = await ev(n(6), 'head_removed', '2026-11-04', -1, 'moved_to_another_group');
+  assert.equal(moved.rows[0].value.head_count, 8);
+  await db.exec('RESET ROLE');
+  await db.exec(`SELECT set_config('acreledger.cattle_rpc', 'on', false)`);
+  await assert.rejects(
+    db.query(`INSERT INTO public.cattle_events (farm_id, group_id, event_type, event_date, head_delta, reason)
+      VALUES ('${ids.farm}', '${fx.gA}', 'head_removed', '2026-11-04', -1, NULL)`),
+    error => error.code === '23514', 'table CHECK refuses a NULL removal reason',
+  );
+  // b. 'died' is not a reason any more, in the RPC or the CHECK.
+  await assert.rejects(
+    db.query(`INSERT INTO public.cattle_events (farm_id, group_id, event_type, event_date, head_delta, reason)
+      VALUES ('${ids.farm}', '${fx.gA}', 'head_removed', '2026-11-04', -1, 'died')`),
+    error => error.code === '23514', "table CHECK refuses 'died'",
+  );
+  await db.exec(`SELECT set_config('acreledger.cattle_rpc', 'off', false)`);
+  await db.exec(`SELECT set_config('request.uid', '${ids.user}', false); SET ROLE authenticated;`);
+  await assert.rejects(ev(n(7), 'head_removed', '2026-11-04', -1, 'died'), error => error.code === '23514', "RPC refuses 'died'");
+  const death2 = await ev(n(8), 'death', '2026-11-04', -1, null);
+  assert.equal(death2.rows[0].value.head_count, 7, 'a death is logged with the death event');
+
+  // c. Dates: UTC today + 1 is allowed (farmers ahead of UTC); +2 is not.
+  const tomorrow = plusDays(1);
+  const dayAfter = plusDays(2);
+  assert.equal((await move(n(10), ids.fieldA, tomorrow, null, ids.farm, fx.gA)).rows[0].value.already_applied, false, 'move dated UTC+1 day is accepted');
+  await assert.rejects(move(n(11), ids.fieldA, dayAfter, null, ids.farm, fx.gA), error => error.code === '23514', 'move two days ahead is refused');
+  assert.equal((await ev(n(12), 'working', tomorrow, 0, null, null)).rows[0].value.already_applied, false, 'event dated UTC+1 day is accepted');
+  await assert.rejects(ev(n(13), 'working', dayAfter, 0, null, null), error => error.code === '23514', 'event two days ahead is refused');
+
+  // d. Text is normalised before insert and before the replay comparison.
+  const blankNotes = await move(n(14), ids.fieldB, '2026-11-12', '', ids.farm, fx.gB);
+  assert.equal(blankNotes.rows[0].value.already_applied, false);
+  assert.equal((await db.query('SELECT notes FROM public.cattle_moves WHERE id = $1', [n(14)])).rows[0].notes, null, "'' is stored as NULL");
+  assert.equal((await move(n(14), ids.fieldB, '2026-11-12', null, ids.farm, fx.gB)).rows[0].value.already_applied, true, "replay with NULL after '' is already_applied");
+  assert.equal((await move(n(14), ids.fieldB, '2026-11-12', '   ', ids.farm, fx.gB)).rows[0].value.already_applied, true, 'replay with whitespace is already_applied');
+  await move(n(15), ids.fieldB, '2026-11-13', '  rotated  ', ids.farm, fx.gB);
+  assert.equal((await db.query('SELECT notes FROM public.cattle_moves WHERE id = $1', [n(15)])).rows[0].notes, 'rotated', 'notes are trimmed');
+  assert.equal((await move(n(15), ids.fieldB, '2026-11-13', 'rotated', ids.farm, fx.gB)).rows[0].value.already_applied, true);
+  await assert.rejects(move(n(15), ids.fieldB, '2026-11-13', 'different', ids.farm, fx.gB), error => error.code === '23505', 'a genuinely different replay still conflicts');
+  await ev(n(16), 'calving', '2026-11-05', 2, '', '', fx.gB);
+  const calvingRow = (await db.query('SELECT reason, notes FROM public.cattle_events WHERE id = $1', [n(16)])).rows[0];
+  assert.deepEqual(calvingRow, { reason: null, notes: null }, 'event reason and notes are normalised');
+  assert.equal((await ev(n(16), 'calving', '2026-11-05', 2, null, null, fx.gB)).rows[0].value.already_applied, true, "event replay with NULL after '' is already_applied");
+  assert.equal(await headOf(fx.gB), 5);
+
+  // e. Deleting an event floors the reversed head count at zero; it never refuses.
+  await ev(n(17), 'head_added', '2026-11-06', 5, null, null, fx.gC);
+  assert.equal(await headOf(fx.gC), 9);
+  await db.query('UPDATE public.cattle_groups SET head_count = 2 WHERE id = $1', [fx.gC]);
+  const floored = await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3) AS value', [ids.farm, 'event', n(17)]);
+  assert.equal(floored.rows[0].value.head_count, 0, 'reversing +5 on a group edited down to 2 floors at 0');
+  assert.equal(await headOf(fx.gC), 0);
+  await db.query('UPDATE public.cattle_groups SET head_count = 4 WHERE id = $1', [fx.gC]);
+
+  // f. transfer_cattle_head
+  const xfer = (fromEv, toEv, from, to, head, date = '2026-11-08', notes = null, farmId = ids.farm) => db.query(
+    'SELECT public.transfer_cattle_head($1,$2,$3,$4,$5,$6,$7,$8) AS value',
+    [farmId, fromEv, toEv, from, to, head, date, notes],
+  );
+  assert.equal(await headOf(fx.gA), 7);
+  assert.equal(await headOf(fx.gB), 5);
+  const t1 = await xfer(n(20), n(21), fx.gA, fx.gB, 4, '2026-11-08', 'weaned');
+  assert.equal(t1.rows[0].value.already_applied, false);
+  assert.equal(t1.rows[0].value.from_head_count, 3);
+  assert.equal(t1.rows[0].value.to_head_count, 9);
+  assert.equal(await headOf(fx.gA), 3);
+  assert.equal(await headOf(fx.gB), 9);
+  const halves = (await db.query('SELECT id, group_id, event_type, head_delta, reason, notes, transfer_id FROM public.cattle_events WHERE transfer_id = $1 ORDER BY head_delta', [n(20)])).rows;
+  assert.deepEqual(halves, [
+    { id: n(20), group_id: fx.gA, event_type: 'head_removed', head_delta: -4, reason: 'moved_to_another_group', notes: 'weaned', transfer_id: n(20) },
+    { id: n(21), group_id: fx.gB, event_type: 'head_added', head_delta: 4, reason: null, notes: 'weaned', transfer_id: n(20) },
+  ], 'one removal and one addition share a transfer_id');
+  const t1Replay = await xfer(n(20), n(21), fx.gA, fx.gB, 4, '2026-11-08', ' weaned ');
+  assert.equal(t1Replay.rows[0].value.already_applied, true, 'transfer replay is idempotent');
+  assert.equal(await headOf(fx.gA), 3);
+  assert.equal(await headOf(fx.gB), 9);
+  await assert.rejects(xfer(n(20), n(21), fx.gA, fx.gB, 2, '2026-11-08', 'weaned'), error => error.code === '23505', 'same ids with different head conflict');
+  await assert.rejects(xfer(n(22), n(21), fx.gA, fx.gB, 4, '2026-11-08', 'weaned'), error => error.code === '23505', 'a reused to-id conflicts');
+  await assert.rejects(xfer(n(20), n(23), fx.gA, fx.gB, 4, '2026-11-08', 'weaned'), error => error.code === '23505', 'a reused from-id conflicts');
+  await assert.rejects(xfer(n(24), n(25), fx.gA, fx.gB, 99), error => error.code === '23514', 'transfer cannot exceed the source count');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_events WHERE id IN ($1,$2)', [n(24), n(25)])).rows[0].c, 0, 'a refused transfer leaves no rows');
+  await assert.rejects(xfer(n(24), n(25), fx.gA, fx.gA, 1), error => error.code === '23514', 'transfer needs two different groups');
+  await assert.rejects(xfer(n(26), n(26), fx.gA, fx.gB, 1), error => error.code === '23514', 'transfer needs two different event ids');
+  await assert.rejects(xfer(n(24), n(25), fx.gA, fx.gB, 0), error => error.code === '23514', 'transfer head must be positive');
+  await assert.rejects(xfer(n(24), n(25), fx.gA, fx.gB, 1, plusDays(2)), error => error.code === '23514', 'transfer date two days ahead is refused');
+  assert.equal((await xfer(n(27), n(28), fx.gA, fx.gB, 1, plusDays(1))).rows[0].value.already_applied, false, 'transfer dated UTC+1 day is accepted');
+  await assert.rejects(xfer(n(24), n(25), fx.gA, fx.otherFarmGroup, 1), error => error.code === 'P0002', 'a group from another farm is not found');
+  await assert.rejects(xfer(n(24), n(25), fx.gA, fx.gB, 1, '2026-11-08', null, ids.otherFarm), error => error.code === '42501', 'another farm id is denied');
+  // opposite-direction transfer works (locks are taken in id order).
+  const back = await xfer(n(29), n(30), fx.gB, fx.gA, 2);
+  assert.equal(back.rows[0].value.already_applied, false);
+  assert.equal(await headOf(fx.gA), 4);
+  assert.equal(await headOf(fx.gB), 8);
+  // A plain event RPC cannot replay a transfer half as an ordinary event.
+  await assert.rejects(ev(n(20), 'head_removed', '2026-11-08', -4, 'moved_to_another_group', 'weaned'), error => error.code === '23505');
+
+  // g. Deleting either half reverses both halves.
+  const delFrom = await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3) AS value', [ids.farm, 'event', n(20)]);
+  assert.equal(delFrom.rows[0].value.events, 2, 'deleting the from-half deletes both halves');
+  assert.equal(await headOf(fx.gA), 8, 'source count restored (4 + 4)');
+  assert.equal(await headOf(fx.gB), 4, 'destination count reversed (8 - 4)');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_events WHERE transfer_id = $1 AND deleted_at IS NULL', [n(20)])).rows[0].c, 0);
+  assert.equal((await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3) AS value', [ids.farm, 'event', n(21)])).rows[0].value.already_applied, true, 'deleting the other half afterwards is a no-op');
+  assert.equal(await headOf(fx.gA), 8);
+  assert.equal(await headOf(fx.gB), 4);
+  const delTo = await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3) AS value', [ids.farm, 'event', n(30)]);
+  assert.equal(delTo.rows[0].value.events, 2, 'deleting the to-half deletes both halves');
+  assert.equal(await headOf(fx.gA), 6, 'to-half delete reverses the source too (8 - 2)');
+  assert.equal(await headOf(fx.gB), 6, 'and the destination (4 + 2)');
+  // Floor: a transfer half deleted after the destination was edited below the delta.
+  await xfer(n(31), n(32), fx.gA, fx.gB, 5);
+  await db.query('UPDATE public.cattle_groups SET head_count = 1 WHERE id = $1', [fx.gB]);
+  const delFloor = await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3) AS value', [ids.farm, 'event', n(31)]);
+  assert.equal(delFloor.rows[0].value.events, 2);
+  assert.equal(await headOf(fx.gB), 0, 'transfer delete floors the destination at zero');
+  assert.equal(await headOf(fx.gA), 6, 'and still restores the source (1 + 5)');
+
+  await db.exec('RESET ROLE');
+  const fnProps = (await db.query(`
+    SELECT p.prosecdef AS secdef, p.proconfig::text AS config,
+      has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec,
+      has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec
+    FROM pg_proc p WHERE p.proname = 'transfer_cattle_head'
+  `)).rows[0];
+  assert.deepEqual(fnProps, { secdef: true, config: '{"search_path=\\"\\""}', anon_exec: false, auth_exec: true }, 'transfer_cattle_head is SECURITY DEFINER, empty search_path, explicit grants');
+
+  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers.');
 } finally {
   await db.close();
 }
