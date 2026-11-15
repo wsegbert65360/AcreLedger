@@ -50,7 +50,7 @@ describe('CattleEventDialog', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'g1', eventType: 'calving', headDelta: 3, eventDate: localTodayIso(),
-    }));
+    }), expect.anything());
   });
 
   it('requires at least one head and refuses a future date', async () => {
@@ -73,7 +73,7 @@ describe('CattleEventDialog', () => {
     expect(await alertText()).toContain('only has 20 head');
     typeInto('Head lost', '2');
     save();
-    await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'death', headDelta: -2 })));
+    await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'death', headDelta: -2 }), expect.anything()));
   });
 
   it('asks why head were removed, and shipped is a plain removal', async () => {
@@ -86,7 +86,7 @@ describe('CattleEventDialog', () => {
     save();
     await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'head_removed', headDelta: -4, reason: 'shipped',
-    })));
+    }), expect.anything()));
     expect(farm.transferCattleHead).not.toHaveBeenCalled();
   });
 
@@ -102,7 +102,7 @@ describe('CattleEventDialog', () => {
     save();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(farm.transferCattleHead).toHaveBeenCalledTimes(1);
-    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({ fromGroupId: 'g1', toGroupId: 'g2', head: 4 }));
+    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({ fromGroupId: 'g1', toGroupId: 'g2', head: 4 }), expect.anything());
     expect(farm.logCattleEvent).not.toHaveBeenCalled();
   });
 
@@ -113,8 +113,8 @@ describe('CattleEventDialog', () => {
     pick(1, 'g2');
     save();
     await waitFor(() => expect(farm.transferCattleHead).toHaveBeenCalledTimes(1));
-    expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'weaning', headDelta: 0 }));
-    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({ fromGroupId: 'g1', toGroupId: 'g2', head: 6 }));
+    expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'weaning', headDelta: 0 }), expect.anything());
+    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({ fromGroupId: 'g1', toGroupId: 'g2', head: 6 }), expect.anything());
   });
 
   it('weaning without a move is just the event', async () => {
@@ -123,5 +123,22 @@ describe('CattleEventDialog', () => {
     save();
     await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledTimes(1));
     expect(farm.transferCattleHead).not.toHaveBeenCalled();
+  });
+});
+
+describe('CattleEventDialog plan refusal', () => {
+  it('shows the Pro wording when the server refuses the event for plan reasons', async () => {
+    const { toast } = await import('sonner');
+    vi.mocked(toast.error).mockClear();
+    farm.logCattleEvent.mockImplementation((async (_input: unknown, options?: { onPremiumRequired?: () => void }) => {
+      options?.onPremiumRequired?.();
+      return false;
+    }) as never);
+    const onClose = vi.fn();
+    render(<CattleEventDialog group={cows} onClose={onClose} />);
+    typeInto('Calves born', '3');
+    save();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cattle events are part of Pro.'));
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

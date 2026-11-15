@@ -33,10 +33,10 @@ export function buildCattleCsvFiles(
       ])),
     ].join('\r\n'),
     events: [
-      csvRow(['id', 'farm_id', 'group_id', 'event_type', 'event_date', 'head_delta', 'reason', 'notes', 'created_at', 'updated_at', 'deleted_at']),
+      csvRow(['id', 'farm_id', 'group_id', 'event_type', 'event_date', 'head_delta', 'reason', 'transfer_id', 'notes', 'created_at', 'updated_at', 'deleted_at']),
       ...events.map(item => csvRow([
         item.id, item.farm_id, item.groupId, item.eventType, item.eventDate, item.headDelta,
-        item.reason, item.notes, item.createdAt, item.updatedAt, item.deleted_at,
+        item.reason, item.transferId, item.notes, item.createdAt, item.updatedAt, item.deleted_at,
       ])),
     ].join('\r\n'),
   };

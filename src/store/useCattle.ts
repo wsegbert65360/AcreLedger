@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
+import { isPremiumRequiredError } from '@/lib/entitlements';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import {
   mapCattleEventToDb, mapCattleGroupToDb, mapCattleGroupUpdateToDb, mapCattleMoveToDb,
@@ -22,6 +23,11 @@ interface UseCattleArgs {
 
 type CattleTable = 'cattle_groups' | 'cattle_moves' | 'cattle_events';
 type Operation = 'insert' | 'update' | 'soft_delete';
+
+/** Lets a form show the Pro wording when the server refuses a save for plan reasons. */
+export interface CattleSaveOptions {
+  onPremiumRequired?: () => void;
+}
 
 function stripIdentity(payload: Record<string, unknown>): Record<string, unknown> {
   const { id: _id, farm_id: _farmId, ...update } = payload;
@@ -88,7 +94,7 @@ export function useCattle({
     table: CattleTable,
     operation: Operation,
     payload: Record<string, unknown>,
-  ): Promise<{ ok: boolean; data: unknown }> => {
+  ): Promise<{ ok: boolean; data: unknown; premiumRequired?: boolean }> => {
     if (!farm_id) return { ok: false, data: null };
     const queuedPayload = { ...payload, [CATTLE_RPC_KEY]: { rpc, args } };
     const recordKeys = [{ tableName: table, id: payload.id }];
@@ -105,7 +111,7 @@ export function useCattle({
       if (!response.error) return { ok: true, data: response.data };
       if (isUnknownMutationOutcome(response.error)) return { ok: await enqueue(table, operation, queuedPayload), data: null };
       console.error(`Failed cattle RPC ${rpc}:`, response.error);
-      return { ok: false, data: null };
+      return { ok: false, data: null, premiumRequired: isPremiumRequiredError(response.error) };
     } catch (error) {
       return isUnknownMutationOutcome(error)
         ? { ok: await enqueue(table, operation, queuedPayload), data: null }
@@ -216,6 +222,7 @@ export function useCattle({
 
   const logCattleEvent = useCallback(async (
     input: Omit<CattleEvent, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>,
+    options?: CattleSaveOptions,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
     const previousGroup = cattleGroups.find(item => item.id === input.groupId && !item.deleted_at);
@@ -236,6 +243,7 @@ export function useCattle({
       p_reason: event.reason ?? null, p_notes: event.notes ?? null,
     }, 'cattle_events', 'insert', mapped);
     if (!result.ok) {
+      if (result.premiumRequired) options?.onPremiumRequired?.();
       setCattleEvents(current => current.filter(item => item.id !== event.id));
       // Undo this event's own delta rather than restoring a whole-group snapshot.
       setCattleGroups(current => current.map(group => group.id === event.groupId
@@ -255,6 +263,7 @@ export function useCattle({
 
   const transferCattleHead = useCallback(async (
     input: { fromGroupId: string; toGroupId: string; head: number; eventDate: string; notes?: string },
+    options?: CattleSaveOptions,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
     const from = cattleGroups.find(item => item.id === input.fromGroupId && !item.deleted_at);
@@ -280,6 +289,7 @@ export function useCattle({
       p_head: input.head, p_event_date: input.eventDate, p_notes: input.notes ?? null,
     }, 'cattle_events', 'insert', mapped);
     if (!result.ok) {
+      if (result.premiumRequired) options?.onPremiumRequired?.();
       setCattleEvents(current => current.filter(item => item.id !== fromId && item.id !== toId));
       setCattleGroups(current => current.map(group => group.id === from.id
         ? { ...group, headCount: group.headCount + input.head }

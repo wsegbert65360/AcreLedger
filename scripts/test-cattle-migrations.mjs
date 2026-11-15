@@ -26,6 +26,11 @@ const renameMigration = await readFile(
   'utf8',
 );
 
+const nameReuseMigration = await readFile(
+  new URL('../supabase/migrations/20261115130000_cattle_restore_name_reuse.sql', import.meta.url),
+  'utf8',
+);
+
 const gateMigration = await readFile(
   new URL('../supabase/migrations/20261115120000_cattle_events_pro_gate.sql', import.meta.url),
   'utf8',
@@ -100,6 +105,7 @@ try {
   await db.exec(restoreMigration);
   await db.exec(fixesMigration);
   await db.exec(renameMigration);
+  await db.exec(nameReuseMigration);
 
   assert.equal(
     (await db.query(`SELECT runs_cattle FROM public.farms WHERE id = '${ids.farm}'`)).rows[0].runs_cattle,
@@ -518,6 +524,32 @@ try {
   const again = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify({ cattle_groups: [{ ...groupPayload(clash.back, 'heifers (restored 2)') }] })]);
   assert.equal(again.rows[0].value.cattle_group_name_conflicts, 0);
 
+  // ---- 20261115130000: a name that moved between two groups in the backup does not abort the restore ----
+  const reuse = { cows: '10000000-0000-4000-8000-000000000081', heifers: '10000000-0000-4000-8000-000000000082' };
+  await db.query('INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1,$2,$3,$4,$5), ($6,$2,$7,$8,$9)',
+    [reuse.cows, ids.farm, 'Reuse Cows', 'cows', 30, reuse.heifers, 'Reuse Heifers', 'replacement_heifers', 12]);
+  const reuseBackup = {
+    cattle_groups: (await db.query('SELECT to_jsonb(t) AS row FROM public.cattle_groups t WHERE id IN ($1,$2) ORDER BY id', [reuse.cows, reuse.heifers])).rows.map(r => r.row),
+    cattle_moves: [], cattle_events: [],
+  };
+  assert.deepEqual(reuseBackup.cattle_groups.map(row => row.name), ['Reuse Cows', 'Reuse Heifers'], 'the old owner of the name restores first');
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'group', reuse.cows]);
+  await db.query('UPDATE public.cattle_groups SET name = $1 WHERE id = $2', ['Reuse Cows', reuse.heifers]);
+  const reused = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify(reuseBackup)]);
+  assert.equal(reused.rows[0].value.cattle_group_name_conflicts, 0);
+  assert.deepEqual(
+    (await db.query('SELECT name FROM public.cattle_groups WHERE id IN ($1,$2) ORDER BY id', [reuse.cows, reuse.heifers])).rows.map(row => row.name),
+    ['Reuse Cows', 'Reuse Heifers'],
+    'both groups are live again under their backed-up names',
+  );
+  assert.equal((await db.query("SELECT count(*)::int AS c FROM public.cattle_groups WHERE name LIKE '\\_\\_restoring\\_\\_%'")).rows[0].c, 0, 'no parked name is left behind');
+  // A live group outside the backup still wins its name; the restored one is renamed.
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'group', reuse.cows]);
+  await db.query('INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1,$2,$3,$4,$5)', ['10000000-0000-4000-8000-000000000083', ids.farm, 'reuse cows', 'cows', 3]);
+  const reusedAgain = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify(reuseBackup)]);
+  assert.equal(reusedAgain.rows[0].value.cattle_group_name_conflicts, 1);
+  assert.equal((await db.query('SELECT name FROM public.cattle_groups WHERE id = $1', [reuse.cows])).rows[0].name, 'Reuse Cows (restored)');
+
   // ---- 20261115120000_cattle_events_pro_gate ----
   // Minimal stand-ins for the entitlement plumbing; the real mode/plan functions are
   // covered by test-entitlements-*. Everything above ran with the no-op assert_premium stub.
@@ -592,7 +624,7 @@ try {
   `)).rows[0];
   assert.deepEqual(fnProps, { secdef: true, config: '{"search_path=\\"\\""}', anon_exec: false, auth_exec: true }, 'transfer_cattle_head is SECURITY DEFINER, empty search_path, explicit grants');
 
-  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, and the Pro gate on events.');
+  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, reused names, and the Pro gate on events.');
 } finally {
   await db.close();
 }

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import CattleEventDialog from '@/components/cattle/CattleEventDialog';
 import { PlanUpgradeLink } from '@/components/settings/PlanUpgradeLink';
@@ -56,7 +57,8 @@ export default function CattleEventsSection({ group }: { group: CattleGroup }) {
               const message = event.transferId
                 ? 'Delete this move? Both groups go back to their earlier head counts.'
                 : 'Delete this event? The head count change is reversed.';
-              if (window.confirm(message)) void deleteCattleEvent(event.id);
+              if (!window.confirm(message)) return;
+              void deleteCattleEvent(event.id).then(ok => { if (!ok) toast.error('Could not delete the event.'); });
             }}
           ><Trash2 className="h-4 w-4" /></Button>
         </div>

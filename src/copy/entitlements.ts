@@ -24,6 +24,7 @@ export const ENTITLEMENT_COPY = {
 
   // Cattle events (DRAFT: groups, pasture moves and editing head count stay free)
   cattleEventsLockedTitle: 'Cattle events are part of Pro.',
+  cattleCsvLocked: 'The cattle CSV export is part of Pro.',
   cattleEventsLockedBody: 'You can still keep your groups, move them between pastures, and change a head count by editing the group. Events you already logged stay here.',
 
   // Sync queue (change refused for plan reasons, parked on the device)

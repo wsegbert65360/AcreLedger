@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyParkedCattleMutations } from '../parked';
+import { applyParkedCattleMutations, queuedRunsCattle } from '../parked';
 import type { QueuedMutation } from '@/lib/syncQueue';
 import type { CattleEvent, CattleGroup } from '@/types/cattle';
 
@@ -55,5 +55,21 @@ describe('parked cattle overlays', () => {
     // Replaying over a snapshot that already holds the transfer does not double-apply.
     const again = applyParkedCattleMutations(result.groups, [], result.events, [transfer], true);
     expect(again.groups.map(g => g.headCount)).toEqual([8, 7]);
+  });
+});
+
+describe('queued cattle setting', () => {
+  const toggle = (id: string, value: boolean, retry_count = 0, farm_id = 'farm-1'): QueuedMutation => ({
+    id, table_name: 'farms', operation: 'update', farm_id, created_at: '2026-01-02T00:00:00Z', retry_count,
+    payload: { id: farm_id, __cattle_rpc: { rpc: 'set_runs_cattle', args: { p_runs_cattle: value } } },
+  });
+
+  it('returns the newest waiting switch for the farm', () => {
+    expect(queuedRunsCattle([toggle('a', true), toggle('b', false)], 'farm-1')).toBe(false);
+    expect(queuedRunsCattle([toggle('a', true)], 'farm-1')).toBe(true);
+  });
+
+  it('ignores other farms, parked switches and other queued changes', () => {
+    expect(queuedRunsCattle([queued, toggle('a', true, 0, 'farm-2'), toggle('b', true, 99)], 'farm-1')).toBeNull();
   });
 });
