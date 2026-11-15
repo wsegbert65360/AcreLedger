@@ -6,6 +6,7 @@ import { native } from '@/lib/native';
 import { formatIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { isEstablishedForageLabel, isSupplementalCrop } from './fsaReports';
+import { REPORT_PAGE_FORMAT, drawAcreLedgerNote, drawPageFooters } from './pdfBranding';
 import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata } from './fsaReports';
 
 interface Fsa578PdfOptions {
@@ -64,7 +65,7 @@ function displayStatus(row: Fsa578ReportRow): string {
 }
 
 export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: Fsa578PdfOptions): void {
-  const doc = new jsPDF({ orientation: 'landscape' });
+  const doc = new jsPDF({ orientation: 'landscape', format: REPORT_PAGE_FORMAT });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const reportingRows = rows.filter(row => row.landUse === 'Cropland');
@@ -102,25 +103,25 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     ...tableDefaults,
     startY: 36,
     margin: { ...tableDefaults.margin, top: 26 },
-    head: [['FARM', 'TRACT', 'CLU', 'FIELD', 'CROP', 'STATUS', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE', 'SEQ', 'PRACTICE / NOTES']],
+    head: [['FARM', 'TRACT', 'CLU', 'FIELD', 'CROP', 'TYPE / VARIETY', 'STATUS', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE', 'SEQ', 'PRACTICE / NOTES']],
     body: reportingRows.map(row => [
       display(row.farmNumber), display(row.tractNumber), display(row.fieldNumber), row.fieldName,
-      display(row.crop), displayStatus(row), row.acreage, formatDate(row.date), display(row.intendedUse),
+      display(row.crop), display(row.seedVariety), displayStatus(row), row.acreage, formatDate(row.date), display(row.intendedUse),
       display(row.irrigationCode), display(row.producerShare), display(row.cropSequence),
       [row.plantingPattern, row.notes].filter(Boolean).join(' - ') || '-',
     ]),
     columnStyles: {
-      0: { cellWidth: 14 }, 1: { cellWidth: 16 }, 2: { cellWidth: 13 }, 3: { cellWidth: 31 },
-      4: { cellWidth: 20 }, 5: { cellWidth: 22 }, 6: { cellWidth: 14, halign: 'right' },
-      7: { cellWidth: 22 }, 8: { cellWidth: 19 }, 9: { cellWidth: 10 }, 10: { cellWidth: 14, halign: 'right' },
-      11: { cellWidth: 19 }, 12: { cellWidth: 57 },
+      0: { cellWidth: 12 }, 1: { cellWidth: 14 }, 2: { cellWidth: 11 }, 3: { cellWidth: 28 },
+      4: { cellWidth: 18 }, 5: { cellWidth: 22 }, 6: { cellWidth: 20 }, 7: { cellWidth: 13, halign: 'right' },
+      8: { cellWidth: 20 }, 9: { cellWidth: 17 }, 10: { cellWidth: 9 }, 11: { cellWidth: 12, halign: 'right' },
+      12: { cellWidth: 17 }, // last column takes the remaining width
     },
     willDrawPage: data => {
       if (data.pageNumber > 1) drawHeader('SECTION 1 - CROPLAND REPORTING ROWS (continued)');
     },
   });
 
-  doc.addPage('a4', 'landscape');
+  doc.addPage(REPORT_PAGE_FORMAT, 'landscape');
   const reconciliationStartPage = doc.getNumberOfPages();
   drawHeader('SECTION 2 - RECONCILIATION TOTALS');
   autoTable(doc, {
@@ -151,7 +152,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     },
   });
 
-  doc.addPage('a4', 'landscape');
+  doc.addPage(REPORT_PAGE_FORMAT, 'landscape');
   const reviewStartPage = doc.getNumberOfPages();
   drawHeader('SECTION 3 - ITEMS TO REVIEW BEFORE FSA ENTRY');
   autoTable(doc, {
@@ -164,7 +165,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
           return [issue.severity.toUpperCase(), row ? `${row.fieldName} / CLU ${display(row.fieldNumber)}` : '-', issue.message];
         })
       : [['READY', '-', 'No missing required reporting data was detected. FSA office review is still required.']],
-    columnStyles: { 0: { cellWidth: 24 }, 1: { cellWidth: 65 }, 2: { cellWidth: 180 } },
+    columnStyles: { 0: { cellWidth: 24 }, 1: { cellWidth: 60 } },
     willDrawPage: () => {
       if (doc.getCurrentPageInfo().pageNumber > reviewStartPage) {
         drawHeader('SECTION 3 - ITEMS TO REVIEW BEFORE FSA ENTRY (continued)');
@@ -173,7 +174,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
   });
   let reviewY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 26) + 10;
   if (reviewY > pageHeight - 55) {
-    doc.addPage('a4', 'landscape');
+    doc.addPage(REPORT_PAGE_FORMAT, 'landscape');
     drawHeader('SECTION 3 - FSA OFFICE REVIEW NOTES');
     reviewY = 30;
   }
@@ -183,7 +184,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
   for (let i = 1; i <= 4; i += 1) doc.line(12, reviewY + i * 9, pageWidth - 12, reviewY + i * 9);
   doc.text('Reviewed with: ______________________________   Review date: ______________   Producer initials: __________', 12, reviewY + 48);
 
-  doc.addPage('a4', 'landscape');
+  doc.addPage(REPORT_PAGE_FORMAT, 'landscape');
   const cluReferenceStartPage = doc.getNumberOfPages();
   drawHeader('SECTION 4 - ALL CLU REFERENCE (cropland and non-cropland boundary reconciliation)');
   autoTable(doc, {
@@ -197,10 +198,19 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
       row.landUse === 'Cropland' ? 'Included in Section 1' : 'Reference only - do not report as planted crop',
     ]),
     columnStyles: {
-      0: { cellWidth: 18 }, 1: { cellWidth: 20 }, 2: { cellWidth: 16 }, 3: { cellWidth: 27 },
-      4: { cellWidth: 18, halign: 'right' }, 5: { cellWidth: 58 }, 6: { cellWidth: 50 }, 7: { cellWidth: 70 },
+      0: { cellWidth: 16 }, 1: { cellWidth: 18 }, 2: { cellWidth: 14 }, 3: { cellWidth: 24 },
+      4: { cellWidth: 16, halign: 'right' }, 5: { cellWidth: 50 }, 6: { cellWidth: 45 },
     },
   });
+
+  // AcreLedger note under the last table. Placed on a fresh page (below the
+  // continuation header) when it will not fit above the footer.
+  let noteY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 26) + 6;
+  if (noteY + 20 > pageHeight - 16) {
+    doc.addPage(REPORT_PAGE_FORMAT, 'landscape');
+    noteY = 30;
+  }
+  drawAcreLedgerNote(doc, 'fsa', noteY);
 
   const cluReferenceEndPage = doc.getNumberOfPages();
   for (let page = cluReferenceStartPage + 1; page <= cluReferenceEndPage; page += 1) {
@@ -208,17 +218,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     drawHeader('SECTION 4 - ALL CLU REFERENCE (continued)');
   }
 
-  const pageCount = doc.getNumberOfPages();
-  for (let page = 1; page <= pageCount; page += 1) {
-    doc.setPage(page);
-    doc.setDrawColor(190);
-    doc.line(12, pageHeight - 11, pageWidth - 12, pageHeight - 11);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(110);
-    doc.text(`AcreLedger | ${farmNameForPdf(metadata.farmName)} | Crop year ${metadata.cropYear} | Generated ${metadata.reportDate}`, 12, pageHeight - 6);
-    doc.text(`Page ${page} of ${pageCount}`, pageWidth - 12, pageHeight - 6, { align: 'right' });
-  }
+  drawPageFooters(doc, `${farmNameForPdf(metadata.farmName)} | Crop year ${metadata.cropYear} | Generated ${metadata.reportDate}`);
 
   if (Capacitor.isNativePlatform()) native.sharePdf(fileName, doc);
   else doc.save(fileName);

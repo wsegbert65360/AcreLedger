@@ -27,7 +27,9 @@ function getStatusBadge(subscription: FarmSubscription | null, { allowlisted }: 
     return { label: 'Not subscribed', className: 'bg-muted text-muted-foreground border-border' };
   }
   switch (subscription.status) {
+    // A legacy trialing row is not Pro: the server plan for it is free.
     case 'trialing':
+      return { label: 'Free', className: 'bg-plant/10 text-plant border-plant/20' };
     case 'active':
       return { label: 'Active', className: 'bg-plant/10 text-plant border-plant/20' };
     case 'past_due':
@@ -46,6 +48,7 @@ function getStatusLine(subscription: FarmSubscription | null): string {
   }
   switch (subscription.status) {
     case 'trialing':
+      return 'This farm is on the free plan. Pro starts when checkout is completed.';
     case 'active':
       return subscription.cancel_at_period_end
         ? `Active through ${formatIsoDate(subscription.current_period_end) || 'your period end date'}, then cancels.`

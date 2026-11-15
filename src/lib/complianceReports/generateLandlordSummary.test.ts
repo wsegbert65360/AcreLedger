@@ -90,7 +90,7 @@ describe('getFieldLandlordNames', () => {
 describe('generateLandlordSummary', () => {
   test('groups only the selected landlord\'s active fields', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
-    const fieldNames = summary.fields.map(f => f.fieldName).sort();
+    const fieldNames = [...new Set(summary.fields.map(f => f.fieldName))].sort();
     expect(fieldNames).toEqual(['North 40', 'South Field']);
     // East Quarter (Mary) and No-Landlord and Deleted excluded
     expect(summary.fields.find(f => f.fieldName === 'East Quarter')).toBeUndefined();
@@ -99,16 +99,21 @@ describe('generateLandlordSummary', () => {
 
   test('case-insensitive landlord match', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'john smith' });
-    expect(summary.fields).toHaveLength(2);
+    expect(new Set(summary.fields.map(f => f.fieldId)).size).toBe(2);
   });
 
-  test('computes bushels, bu/acre, and landlord share per field', () => {
+  test('computes bushels, bu/acre, and landlord share per field and crop', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
-    const north = summary.fields.find(f => f.fieldName === 'North 40')!;
+    // North 40 has corn and hay, so it gets one row per crop.
+    const north = summary.fields.find(f => f.fieldName === 'North 40' && f.crop === 'Corn')!;
     expect(north.totalBushels).toBe(4000);
     expect(north.buPerAcre).toBe(100); // 4000 / 40
-    expect(north.totalBales).toBe(125);
+    expect(north.totalBales).toBe(0);
     expect(north.landlordShareBushels).toBe(1000); // 4000 * 0.25
+    const northHay = summary.fields.find(f => f.fieldName === 'North 40' && f.crop === 'Hay')!;
+    expect(northHay.totalBales).toBe(125);
+    expect(northHay.totalBushels).toBe(0);
+    expect(northHay.buPerAcre).toBeNull();
     const south = summary.fields.find(f => f.fieldName === 'South Field')!;
     expect(south.totalBushels).toBe(6000);
     expect(south.buPerAcre).toBe(100); // 6000 / 60
@@ -116,12 +121,58 @@ describe('generateLandlordSummary', () => {
     expect(south.landlordShareBushels).toBe(0);
   });
 
-  test('aggregates totals across fields', () => {
+  test('totals acres once per field and bushels per crop, never across crops', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
-    expect(summary.totals.acres).toBe(100); // 40 + 60
-    expect(summary.totals.totalBushels).toBe(10000); // 4000 + 6000
+    expect(summary.totals.acres).toBe(100); // 40 + 60, North 40 counted once despite two rows
     expect(summary.totals.totalBales).toBe(125); // excludes Mary Jones's 200 bales
-    expect(summary.totals.landlordShareBushels).toBe(1000);
+    expect(summary.cropTotals).toEqual([
+      { crop: 'Corn', acres: 40, totalBushels: 4000, buPerAcre: 100, totalBales: 0, landlordShareBushels: 1000 },
+      { crop: 'Soybeans', acres: 60, totalBushels: 6000, buPerAcre: 100, totalBales: 0, landlordShareBushels: 0 },
+      { crop: 'Hay', acres: 40, totalBushels: 0, buPerAcre: null, totalBales: 125, landlordShareBushels: 0 },
+    ]);
+  });
+
+  test('a field with two grain crops gets one row per crop with its own bu/acre', () => {
+    const summary = generateLandlordSummary({
+      ...baseParams,
+      landlordName: 'John Smith',
+      harvestRecords: [
+        { id: 'w1', fieldId: 'f2', fieldName: 'South Field', destination: 'bin', moisturePercent: 14, landlordSplitPercent: 50, bushels: 3000, crop: 'Wheat', harvestDate: '2026-07-01', timestamp: 1, seasonYear: 2026, farm_id: 'farm1', deleted_at: null },
+        { id: 'w2', fieldId: 'f2', fieldName: 'South Field', destination: 'bin', moisturePercent: 14, landlordSplitPercent: 50, bushels: 1800, crop: 'Soybeans', harvestDate: '2026-11-01', timestamp: 2, seasonYear: 2026, farm_id: 'farm1', deleted_at: null },
+      ],
+    });
+    const south = summary.fields.filter(f => f.fieldName === 'South Field');
+    expect(south.map(f => f.crop)).toEqual(['Soybeans', 'Wheat']);
+    expect(south.find(f => f.crop === 'Wheat')).toMatchObject({ totalBushels: 3000, buPerAcre: 50, landlordShareBushels: 1500 });
+    expect(south.find(f => f.crop === 'Soybeans')).toMatchObject({ totalBushels: 1800, buPerAcre: 30, landlordShareBushels: 900 });
+  });
+
+  test('a harvest with no crop falls back to the field\'s planted crop', () => {
+    const summary = generateLandlordSummary({
+      ...baseParams,
+      landlordName: 'John Smith',
+      hayHarvestRecords: [],
+      harvestRecords: [
+        { id: 'h-nocrop', fieldId: 'f1', fieldName: 'North 40', destination: 'bin', moisturePercent: 15, landlordSplitPercent: 25, bushels: 400, harvestDate: '2026-10-01', timestamp: 5, seasonYear: 2026, farm_id: 'farm1', deleted_at: null },
+      ],
+    });
+    const north = summary.fields.filter(f => f.fieldName === 'North 40');
+    expect(north).toHaveLength(1);
+    expect(north[0].crop).toBe('Corn'); // from plant record p1
+    expect(north[0].totalBushels).toBe(400);
+  });
+
+  test('counts harvests on the landlord\'s fields that have no crop-share percent', () => {
+    const noShare = { ...harvestRecords[0], id: 'h-noshare', landlordSplitPercent: undefined } as unknown as HarvestRecord;
+    const summary = generateLandlordSummary({
+      ...baseParams,
+      landlordName: 'John Smith',
+      harvestRecords: [...harvestRecords, noShare],
+    });
+    expect(summary.missingShareHarvests).toBe(1);
+    // Mary Jones's harvest never counts toward John's summary.
+    const clean = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
+    expect(clean.missingShareHarvests).toBe(0);
   });
 
   test('bu/acre is null when field has no acreage', () => {
@@ -134,9 +185,10 @@ describe('generateLandlordSummary', () => {
     });
     expect(summary.fields[0].buPerAcre).toBeNull();
     expect(summary.fields[0].totalBushels).toBe(500);
+    expect(summary.cropTotals[0].buPerAcre).toBeNull(); // crop falls back to the planted crop; no acreage, no yield
   });
 
-  test('latest crop uses the work date, not a later save timestamp', () => {
+  test('different crops on one field stay on separate rows instead of blending', () => {
     const summary = generateLandlordSummary({
       ...baseParams,
       landlordName: 'John Smith',
@@ -172,7 +224,8 @@ describe('generateLandlordSummary', () => {
         },
       ],
     });
-    expect(summary.fields.find(f => f.fieldName === 'North 40')?.crop).toBe('Corn');
+    const north = summary.fields.filter(f => f.fieldName === 'North 40' && f.totalBushels > 0);
+    expect(north.map(f => [f.crop, f.totalBushels])).toEqual([['Corn', 100], ['Soybeans', 50]]);
   });
 
   test('aggregates activity across types and sorts by date ascending', () => {
@@ -217,7 +270,7 @@ describe('generateLandlordSummary', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'Nobody' });
     expect(summary.fields).toHaveLength(0);
     expect(summary.activity).toHaveLength(0);
-    expect(summary.totals.totalBushels).toBe(0);
+    expect(summary.cropTotals).toEqual([]);
     expect(summary.totals.totalBales).toBe(0);
     expect(summary.totals.acres).toBe(0);
   });
@@ -233,7 +286,7 @@ describe('generateLandlordSummary', () => {
       ],
     });
     // f5 is soft-deleted so its harvest must not count toward John's totals.
-    expect(summary.totals.totalBushels).toBe(10000);
+    expect(summary.cropTotals.map(t => [t.crop, t.totalBushels])).toEqual([['Corn', 4000], ['Soybeans', 6000], ['Hay', 0]]);
     expect(summary.activity.find(a => a.fieldName === 'Deleted')).toBeUndefined();
   });
 });
@@ -248,17 +301,21 @@ describe('generateLandlordSummaryCSV', () => {
     expect(csv).toContain('Total Bales');
     expect(csv).toContain('North 40');
     expect(csv).toContain('Corn');
-    expect(csv).toContain('TOTAL');
+    expect(csv).toContain('"TOTAL","Corn"');
+    expect(csv).toContain('"TOTAL","Soybeans"');
+    expect(csv).toContain('"TOTAL","Hay"');
     // landlord share total (1000) should be present
     expect(csv).toContain('1000');
     expect(csv).toContain('125');
   });
 
-  test('weighted-average bu/acre in totals row when acres > 0', () => {
+  test('per-crop totals rows carry that crop\'s bu/acre, never a cross-crop figure', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'John Smith' });
     const csv = generateLandlordSummaryCSV(summary);
-    // 10000 bu / 100 ac = 100 bu/ac overall
-    expect(csv).toContain('100');
+    expect(csv).toContain('"TOTAL","Corn","40","4000","100","","1000"');
+    expect(csv).toContain('"TOTAL","Soybeans","60","6000","100","","0"');
+    expect(csv).toContain('"TOTAL","Hay","40","","","125",""');
+    expect(csv).not.toContain('10000');
   });
 });
 
@@ -266,8 +323,14 @@ describe('generateLandlordSummaryCSV', () => {
 describe('Farm Owner Summary', () => {
   test('includes owned land and all landlords with the same totals and activity sections', () => {
     const summary = generateLandlordSummary({ ...baseParams, scope: 'farm', farmId: 'farm1', landlordName: 'Farm Owner' });
-    expect(summary.fields.map(field => field.fieldId)).toEqual(['f1', 'f2', 'f3', 'f4']);
-    expect(summary.totals).toEqual({ acres: 250, totalBushels: 19000, totalBales: 325, landlordShareBushels: 3970 });
+    expect([...new Set(summary.fields.map(field => field.fieldId))]).toEqual(['f1', 'f2', 'f3', 'f4']);
+    expect(summary.totals).toEqual({ acres: 250, totalBales: 325 });
+    // Per-crop totals replace the old cross-crop 19,000 bu / 3,970 bu share figures.
+    expect(summary.cropTotals.map(t => [t.crop, t.totalBushels, t.landlordShareBushels, t.totalBales])).toEqual([
+      ['Corn', 13000, 3970, 0],
+      ['Soybeans', 6000, 0, 0],
+      ['Hay', 0, 0, 325],
+    ]);
     expect(new Set(summary.activity.map(row => row.activityType))).toEqual(new Set(['plant', 'spray', 'customSpray', 'fertilizer', 'tillage', 'harvest', 'hay']));
     expect(generateLandlordSummaryCSV(summary)).toContain('No-Landlord Field');
   });
@@ -285,8 +348,9 @@ describe('Farm Owner Summary', () => {
         { ...harvestRecords[0], id: 'deleted-field', fieldId: 'f5' },
       ],
     });
-    expect(summary.fields).toHaveLength(4);
-    expect(summary.totals.totalBushels).toBe(19000);
+    expect(new Set(summary.fields.map(row => row.fieldId)).size).toBe(4);
+    // 19,000 bu in all, reported per crop and never as one cross-crop figure.
+    expect(summary.cropTotals.filter(t => t.totalBushels > 0).map(t => [t.crop, t.totalBushels])).toEqual([['Corn', 13000], ['Soybeans', 6000]]);
     expect(summary.activity.filter(row => row.activityType === 'harvest')).toHaveLength(3);
   });
 

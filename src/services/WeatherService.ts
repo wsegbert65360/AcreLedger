@@ -118,6 +118,22 @@ async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> 
     return res.json();
 }
 
+/**
+ * Chance of rain for "now". The provider's current-conditions block describes
+ * observed weather, so its chance is usually 0 on a dry hour even when rain is
+ * forecast later today. Use the higher of that and today's forecast chance.
+ */
+function rainChanceToday(data: any): number {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: data.timezone || undefined, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+    const today = (data.days || []).find((day: any) => day?.datetime === parts);
+    const current = Number(data.currentConditions?.precipprob);
+    const daily = Number(today?.precipprob);
+    const best = Math.max(Number.isFinite(current) ? current : 0, Number.isFinite(daily) ? daily : 0);
+    return Math.round(Math.min(100, Math.max(0, best)));
+}
+
 /** Completed local calendar days only; today's daily total can contain forecast rain. */
 function calendarRainfall(data: any): { precip24h: number | null; precip72h: number | null; precip168h: number | null } {
     const today = new Intl.DateTimeFormat('en-CA', {
@@ -237,7 +253,7 @@ export const WeatherService = {
             isError: false,
             ...calendarRainfall(data),
             rainfallBasis: 'calendar' as const,
-            precipProb: Math.round(current.precipprob || 0)
+            precipProb: rainChanceToday(data)
         };
     },
 
@@ -380,7 +396,7 @@ export const WeatherService = {
             gusts: Math.round(Number.isFinite(gustsSource) ? gustsSource : wind),
             windDirection: Number.isFinite(dirDeg as number) ? this.degreesToDirection(dirDeg as number) : (wind === 0 ? 'CALM' : '—'),
             dewPoint: Math.round(Number.isFinite(finiteOrNaN(current.dew)) ? finiteOrNaN(current.dew) : 0),
-            precipProb: Math.round(current.precipprob || 0),
+            precipProb: rainChanceToday(data),
             ...calendarRainfall(data),
             rainfallBasis: 'calendar' as const,
             isRainingNow: (current.precip || 0) > 0,

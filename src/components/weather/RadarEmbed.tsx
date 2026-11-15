@@ -8,12 +8,15 @@ interface RadarEmbedProps {
   lastUpdated?: string;
 }
 
+/** Wide enough to see rain a county or two away, which is what the radar is for. */
+const RADAR_ZOOM = 8;
+
 function buildRadarUrl(lat: number, lon: number): string {
   return [
     'https://www.windy.com/embed2.html',
     `?lat=${lat}`,
     `&lon=${lon}`,
-    '&zoom=12',
+    `&zoom=${RADAR_ZOOM}`,
     '&level=surface',
     '&overlay=radar',
     '&menu=&message=&marker=&calendar=now',
@@ -67,75 +70,56 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
 
   if (iframeError) {
     return (
-      <div className="bg-card border border-border rounded-2xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-destructive rounded-full" />
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
-          </div>
-          <span className="text-xs font-bold text-destructive/80 uppercase tracking-wider">Unavailable</span>
+      <section className="rounded-2xl border border-border bg-card">
+        <h2 className="px-4 pt-3.5 text-base font-bold text-foreground">Radar</h2>
+        <div className="flex h-40 flex-col items-center justify-center gap-1 px-4 text-center">
+          <p className="text-sm font-semibold text-foreground">Radar did not load</p>
+          <p className="text-xs text-muted-foreground">Check your connection, then refresh.</p>
         </div>
-        <div className="h-48 flex flex-col items-center justify-center gap-2">
-          <p className="text-xs font-semibold text-muted-foreground">Radar unavailable</p>
-          <p className="text-xs text-muted-foreground/60">Check your connection and try again</p>
-        </div>
-      </div>
+      </section>
     );
   }
 
   return (
     <>
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Radar</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {lastUpdated ? (
-              <span className="hidden min-[380px]:inline text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider font-mono">
-                Loaded {lastUpdated}
-              </span>
-            ) : null}
-            <button
-              onClick={handleExpand}
-              aria-label="Open full-screen radar"
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400 transition-colors hover:bg-blue-500/20 active:bg-blue-500/25"
-            >
-              <Maximize2 size={14} />
-            </button>
-          </div>
+      <section className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+          <h2 className="text-base font-bold text-foreground">Radar</h2>
+          {lastUpdated ? (
+            <span className="font-mono text-xs text-muted-foreground">Loaded {lastUpdated}</span>
+          ) : null}
         </div>
 
-        {/* Inline iframe */}
+        {/* Preview. The map itself ignores touches so the page still scrolls;
+            the whole preview is one button that opens the full-screen radar. */}
         <div className="relative h-56 sm:h-72">
           {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center z-10">
-              <div className="w-6 h-6 border-2 border-border border-t-muted-foreground rounded-full animate-spin" />
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-muted-foreground" />
             </div>
           )}
           <iframe
             src={url}
-            className="w-full h-full border-0"
-            title="Weather Radar"
-            allow="geolocation"
+            className="pointer-events-none h-full w-full border-0"
+            title="Weather radar preview"
+            tabIndex={-1}
+            aria-hidden="true"
             onLoad={() => setIsLoading(false)}
             onError={() => { setIframeError(true); setIsLoading(false); }}
           />
-          <div className="absolute inset-x-0 top-0 h-3 bg-gradient-to-b from-card/60 to-transparent pointer-events-none z-10" />
-          <div className="absolute inset-x-0 bottom-0 h-3 bg-gradient-to-t from-card/60 to-transparent pointer-events-none z-10" />
+          <button
+            type="button"
+            onClick={handleExpand}
+            aria-label="Open full-screen radar"
+            className="group absolute inset-0 z-10 flex items-end justify-end p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <span className="flex min-h-11 items-center gap-2 rounded-lg bg-background/95 px-3.5 text-sm font-semibold text-foreground shadow-md ring-1 ring-border transition-colors group-hover:bg-background group-active:bg-muted">
+              <Maximize2 size={15} aria-hidden="true" />
+              Open radar
+            </span>
+          </button>
         </div>
-
-        {/* Footer */}
-        <div className="px-4 py-1.5 bg-muted/30 flex items-center justify-between">
-          <p className="text-xs font-semibold text-muted-foreground/50 uppercase tracking-wider">Drag to pan · Pinch to zoom</p>
-          <div className="flex items-center gap-1">
-            <div className="w-1 h-1 bg-emerald-500 rounded-full" />
-            <span className="text-xs font-bold text-emerald-500/70 uppercase">Real-time</span>
-          </div>
-        </div>
-      </div>
+      </section>
 
       {/* ── Fullscreen overlay via portal ── */}
       {expanded && createPortal(
@@ -145,13 +129,10 @@ export default function RadarEmbed({ latitude, longitude, lastUpdated }: RadarEm
             onClick={handleCollapse}
             className="shrink-0 relative z-50 flex items-center justify-between px-4 py-4 pt-[max(1rem,env(safe-area-inset-top))] bg-black/90 active:bg-black w-full border-b border-white/10 cursor-pointer"
           >
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-sm font-bold text-white uppercase tracking-wider">Live Radar</span>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/80 border border-white/20">
-              <X size={18} className="text-white" />
-              <span className="text-sm font-bold text-white uppercase tracking-wider">Close</span>
+            <span className="text-base font-bold text-white">Radar</span>
+            <div className="flex min-h-11 items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-4">
+              <X size={18} className="text-white" aria-hidden="true" />
+              <span className="text-sm font-semibold text-white">Close</span>
             </div>
           </button>
 

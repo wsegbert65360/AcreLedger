@@ -3,7 +3,7 @@
 > **Purpose:** Architecture reference for AcreLedger, including detailed patterns, design values, and rationale.
 > Read [AGENTS.md](./AGENTS.md) first, then consult only the sections relevant to the task.
 > Essential safety rules and the working process live in AGENTS; inspect source and tests for implementation details.
-> **Last updated:** 2026-11-13 (Ask the Book stays on only for the owner's farm and out of marketing).
+> **Last updated:** 2026-11-14 (year-end report, spray log, rate-unit, and harvest scale-ticket changes; Ask the Book stays on only for the owner's farm).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- BLUEPRINT.md` for edit history.
@@ -26,6 +26,8 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-14** — Harvest scale ticket is asked only for town loads and a blank ticket is never a fall-worksheet warning. See [HarvestRecord](#harvestrecord).
+- **2026-11-13** — Version 3.6.3: Landlord and Farm Owner Summary are per field per crop with per-crop totals; report PDFs are US Letter with shared AcreLedger branding; the FSA-578 PDF adds Type/Variety; the fall production PDF is landscape with per-crop totals; the spray log PDF names missing details; new tank-mix products default to `fl oz/ac`. See [Landlord Summary Report](#landlord-summary-report) and [SprayRecord](#sprayrecord-2026-standards).
 - **2026-11-13** - Ask the Book stays in the app only for the owner's own farm, stays out of marketing, and is not deleted. Removal inventory is under Ask the Book Read Registry.
 - **2026-11-09** - Free and Pro are on main. Leave `ENTITLEMENTS_MODE` off. Permanent free record book plus **Pro** ($299/farm/year). Code plans are `free | paid | complimentary` (complimentary is the owner farm only). There is no trial. Spray photo capture is removed. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
@@ -333,6 +335,7 @@ Supports multiple products per application (tank-mix) and advanced environmental
 - **Treated Area Default**: the "Treated Area Size" pre-fill and every report/export fallback (`useSprayForm`, `Reports.tsx` spray rows, `generateMissouriLog`, `sprayExport.ts`) resolve to the FSA crop acreage shown on the field, never a raw `field.acreage` read. Read-time resolution goes through the shared `getEffectiveSprayTreatedAcres(record, field, cluAssignments)` helper: stored `treatedAreaSize` when present and positive, else `getDisplayFieldAcres(field, cluAssignments)` (CLU cropland wins, then boundary, then `field.acreage`). Current form edits preserve an explicitly stored `treatedAreaSize` (e.g. a partial-field spot-spray). The one-time migration `20260713120000_backfill_spray_treated_area_to_fsa_acreage.sql` intentionally normalized every active historical treated-area value because legacy automatic defaults could not be distinguished from manual entries. It changes only `treated_area_size` and leaves products, stored totals, weather, wind, temperature, humidity, application times, and notes untouched. This historical one-shot is now retired: guarded history plus `acreage_backfill_private.historical_backfills_retired()` prevents reruns after application, including restores without the migration ledger. It must never be used as data repair; recovery of lost partial areas remains an owner decision. Report/export product totals convert the effective treated area to the rate unit for every profile (including square feet), without mutating stored records.
 - **Total Product Auto-summing**: The system automatically calculates and persists `totalProductAmount` and `totalProductUnit` for **all** products in the tank mix based on their application rate and the field's treated acreage.
 - **Wind Alert**: `WIND_ALERT_MPH = 10` (named constant).
+- **Rate unit default**: a new product starts on `DEFAULT_SPRAY_RATE_UNIT` (`fl oz/ac`). `oz/ac` and `lb/ac` are dry weight units and total in pounds; pickers label each unit as liquid or dry weight, the mix step previews the total as the rate is typed, and a dry weight unit shows an amber note. Stored records keep their unit, and prefill from the last spray copies it forward.
 - **Non-Compliant / Review Status**: Profile-driven — see [Compliance Profiles and Regional Settings](#compliance-profiles-and-regional-settings-australia-pilot). Under `us-epa`, triggered if any product is missing an `epaRegNumber` or lacks a positive application rate and rate unit; under `au-apvma` the registration-number check is off and PIC / water rate / treated-area-in-hectares are required instead. Legacy records derive this review status in the UI without a database rewrite. Per-product totals are canonical and are recalculated synchronously from rate × treated acres before saving; the top-level `totalAmountApplied` remains only a legacy first-product numeric compatibility value and must never sum unlike units.
 - **Active Ingredients**: Documented per-product for compliance; populated automatically from recipes.
 - **Universal Standard**: Replaced Missouri-specific labeling with state-neutral agricultural terminology.
@@ -366,6 +369,7 @@ Grain harvest event.
   landlordName, scaleTicketNumber, deleted_at }
 ```
 `landlordSplitPercent` is the landlord's crop-share % for this load (pre-suggested from the field's `producerShare` as `100 - producerShare`). `landlordName` here is a harvest-time override of the field-level `Field.landlordName`; new harvests prefill it from the field but the value is editable per record.
+`scaleTicketNumber` is optional. The harvest form asks for it only when `destination` is `'town'`; a bin harvest shows the field only if a ticket is already stored, so it is never dropped silently. Reports never flag a blank ticket.
 
 ### HayHarvestRecord
 Hay cutting event. Tracked by cutting number per field per season.
@@ -544,12 +548,15 @@ Full-page weather dashboard accessible by tapping the WeatherBar on the Index pa
 
 #### Route & Navigation
 - **Path**: `/weather` — registered in `App.tsx` alongside other page routes.
+- **WeatherBar contents**: temperature, wind (arrow points downwind), rain total, and today's rain chance, in one row at the original 96px minimum height (no extra provider call; no spray verdict here by owner decision 2026-11-13). Humidity shows from the `sm` breakpoint up; the rain total hides below 360px.
 - **Entry**: WeatherBar (Index page) is wrapped as a clickable element with `useNavigate('/weather')`. The zip-code form inside uses `stopPropagation` so editing still works.
 - **Location sharing**: Reads from the same `localStorage` key (`${userId}_al_zip`) as WeatherBar. Uses saved coordinate strings or first field coordinates before requesting browser GPS; saved zip codes are used directly for weather without prompting for GPS.
 
 #### Data Flow
 - `WeatherService.fetchExtendedWeather(location)` - single Visual Crossing call requesting `/last7days/next10days` with elements: `datetime`, `tempmax`, `tempmin`, `temp`, `feelslike`, `humidity`, `dew`, `windspeed`, `windgusts`, `winddir`, `precip`, `precipprob`, `cloudcover`. Returns current conditions, 7-day rainfall history, and 10-day forecast.
-- Auto-refreshes every 5 minutes (matches WeatherBar polling interval).
+- Auto-refreshes every 15 minutes, and only while the page is visible (`AUTO_REFRESH_MS` in `Weather.tsx`); a tab that was hidden longer than that reloads when shown again. The WeatherBar does not poll.
+- `precipProb` is the higher of the provider's current-conditions chance and today's forecast chance (`rainChanceToday` in `WeatherService`), because the current-conditions value describes observed weather.
+- Section order: current conditions (temperature, wind dial, rainfall totals), spray conditions, radar preview, 10-day forecast. The location search is hidden behind the header's Change location button once weather is showing. The radar preview ignores touches so the page scrolls; tapping it opens the full-screen radar. Wind arrows point where the wind is blowing to (`getDownwindRotation`).
 - Uses its own `extendedCache` promise cache, separate from the WeatherBar's `promiseCache`.
 - Aborts in-flight weather requests on unmount so leaving `/weather` does not update state after navigation.
 
@@ -1169,9 +1176,11 @@ does not catch continuation-page clipping.
 Status presentation rules are reporting-specific: a dated crop row without an explicit status
 may display as `Planted`; undated hay/pasture cropland may display as `Existing stand`; all other
 undated cropland requires an explicit FSA status and produces a readiness error. A clean report
-still states that county FSA review is required. Type/variety is
-intentionally omitted from the PDF unless requested, while preview and CSV retain it for farmer
-review. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
+still states that county FSA review is required. Type/variety appears in the PDF's Section 1
+as well as in the preview and CSV. The document is titled "FSA-578 Acreage Reporting Worksheet"
+everywhere. The Fall Production worksheet totals production per crop and unit
+(`buildFsaFallCropTotals`), prints landscape with landlord name and share columns, and does not
+flag a blank scale ticket. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
 farm/tract/CLU acreage and reporting facts. Both FSA-578 and Fall Production outputs include the
 farm name in their header subtitles, in the on-screen preview and the PDF.
 
@@ -1212,15 +1221,26 @@ without a producer share. Update crop share in the field editor.
 
 Selecting a landlord, or choosing Farm Owner Summary for the entire farm, shows:
 
-- **Fields overview** — one row per field with acres (CLU-aware via `getDisplayFieldAcres`),
-  crop, total bushels, bu/acre, total bales, and landlord crop-share bushels. Grain and bale
-  production remain separate units; the totals row uses a weighted average for overall bu/acre.
+- **Fields overview** — one row per field **per crop** with acres (CLU-aware via
+  `getDisplayFieldAcres`), crop, total bushels, bu/acre, total bales, and landlord crop-share
+  bushels. A double-cropped field, or a field with grain and hay, gets one row per crop. Totals
+  are **per crop** (`LandlordSummary.cropTotals`); bushels of different crops are never added
+  together, and `totals.acres` counts each field once. Harvests with no crop-share percent are
+  counted in `missingShareHarvests` and called out on screen and in the PDF.
 - **Activity Timeline** — all season-scoped activity (plant, spray, custom spray, fertilizer,
   tillage, grain harvest, hay harvest) across the selected scope's fields, sorted by date, with colored
   activity pills. Hay entries show bale count/type and cutting number.
-- **Exports** — CSV (`generateLandlordSummaryCSV`, per-field summary + totals) and a **Detailed
-  PDF** via `exportToPdf` (landscape, fields table + activity timeline in the footer). The PDF
+- **Exports** — CSV (`generateLandlordSummaryCSV`, per-field-per-crop summary + per-crop totals) and a **Detailed
+  PDF** via `exportToPdf` (landscape US Letter, fields table with per-crop totals rows, then the
+  activity timeline as a second table, a tenant signature line, and the AcreLedger note). The PDF
   subtitle includes the farm name, and long footer lines wrap through `doc.splitTextToSize`.
+- **Report PDF branding** — `src/lib/complianceReports/pdfBranding.ts` draws the shared footer
+  ("Made with AcreLedger · acreledger.com", Page X of Y) on every page and the boxed last-page
+  note. It carries no price, trial, or sign-up wording because the PDFs are also generated on iOS.
+  All report PDFs, including the spray log, use US Letter (`REPORT_PAGE_FORMAT`).
+- **Spray log PDF status line** — `sprayExport.ts` uses the same checks as the in-app review queue
+  (`missingComplianceFields`, `sprayProductsNeedReview`) and names what is missing, so it never
+  prints "Complete" for a record the app flags. Detail values wrap instead of being clipped.
 
 Generation lives in `src/lib/complianceReports/generateLandlordSummary.ts` (pure data builder,
 no React). A landlord appears in the selector only if they own at least one non-deleted field

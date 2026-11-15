@@ -65,7 +65,7 @@ describe('exportFsa578WorksheetPdf', () => {
     const tables = pdf.autoTables();
     expect(tables).toHaveLength(5);
     // Section 1: cropland entry table.
-    expect(tables[0].head[0]).toEqual(['FARM', 'TRACT', 'CLU', 'FIELD', 'CROP', 'STATUS', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE', 'SEQ', 'PRACTICE / NOTES']);
+    expect(tables[0].head[0]).toEqual(['FARM', 'TRACT', 'CLU', 'FIELD', 'CROP', 'TYPE / VARIETY', 'STATUS', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE', 'SEQ', 'PRACTICE / NOTES']);
     // Section 2: crop/use totals then farm/tract totals.
     expect(tables[1].head[0]).toEqual(['CROP / INTENDED USE', 'REPORTABLE ACRES']);
     expect(tables[2].head[0]).toEqual(['FARM / TRACT', 'CROPLAND ACRES']);
@@ -144,7 +144,7 @@ describe('exportFsa578WorksheetPdf', () => {
     });
     const blank = pdf.allText();
     expect(blank).toContain('Farm: ________________');
-    expect(blank).toContain('AcreLedger | ________________ | Crop year 2026');
+    expect(blank).toContain('Made with AcreLedger · acreledger.com | ________________ | Crop year 2026');
     expect(blank).not.toContain('AcreLedger Farm');
   });
 
@@ -183,11 +183,20 @@ describe('exportFsa578WorksheetPdf', () => {
     expect(text).toContain('Producer: ________________');
 
     // Sections 2-4 each add a page: 4 pages total, each with identity + Page X of Y.
-    const footers = pdf.texts().filter(t => t.startsWith('AcreLedger | Test Farm | Crop year 2026'));
+    const footers = pdf.texts().filter(t => t.startsWith('Made with AcreLedger · acreledger.com | Test Farm | Crop year 2026'));
     expect(footers).toHaveLength(4);
     for (let page = 1; page <= 4; page += 1) {
       expect(text).toContain(`Page ${page} of 4`);
     }
+  });
+
+  it('adds the AcreLedger note without price or sign-up wording', () => {
+    generate([row({})]);
+
+    const text = pdf.allText();
+    expect(text).toContain('This worksheet was made with AcreLedger');
+    expect(text).toContain('acreledger.com');
+    expect(text).not.toMatch(/\$|free trial|sign up/i);
   });
 
   it('includes crop/use totals, farm/tract totals, and total cropland in reconciliation', () => {
@@ -206,8 +215,8 @@ describe('exportFsa578WorksheetPdf', () => {
     generate([dated, hay]);
 
     const entryBody = pdf.autoTables()[0].body;
-    expect(entryBody[0][5]).toBe('Planted');
-    expect(entryBody[1][5]).toBe('Existing stand');
+    expect(entryBody[0][6]).toBe('Planted');
+    expect(entryBody[1][6]).toBe('Existing stand');
   });
 
   it('saves the worksheet with the requested filename', () => {

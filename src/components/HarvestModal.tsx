@@ -470,18 +470,21 @@ export default function HarvestModal({ field, open, onClose, initialData, mode =
                 className="mt-1 bg-muted border-border text-foreground"
               />
             </div>
-            <div>
-              <Label htmlFor="scaleTicketNumber" className="text-muted-foreground font-mono text-xs">SCALE TICKET #</Label>
-              <Input
-                id="scaleTicketNumber"
-                name="scaleTicketNumber"
-                value={scaleTicketNumber}
-                onChange={e => setScaleTicketNumber(e.target.value)}
-                placeholder="Optional — e.g. TKT-00482"
-                autoCapitalize="characters"
-                className="mt-1 bg-muted border-border text-foreground"
-              />
-            </div>
+            {/* Grain hauled to a bin gets no scale ticket; ask only for town loads. A ticket already saved on a bin record stays visible so it is never dropped silently. */}
+            {(destination === 'town' || scaleTicketNumber.trim() !== '') && (
+              <div>
+                <Label htmlFor="scaleTicketNumber" className="text-muted-foreground font-mono text-xs">SCALE TICKET #</Label>
+                <Input
+                  id="scaleTicketNumber"
+                  name="scaleTicketNumber"
+                  value={scaleTicketNumber}
+                  onChange={e => setScaleTicketNumber(e.target.value)}
+                  placeholder="Optional — e.g. TKT-00482"
+                  autoCapitalize="characters"
+                  className="mt-1 bg-muted border-border text-foreground"
+                />
+              </div>
+            )}
             <div>
               <Label htmlFor="harvestDate" className="text-muted-foreground font-mono text-xs">HARVEST DATE</Label>
               <Input

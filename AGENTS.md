@@ -9,7 +9,7 @@ Read this file first for working instructions and essential safety rules. Then u
 files and [BLUEPRINT.md](./BLUEPRINT.md) sections relevant to the task. BLUEPRINT owns detailed
 architecture, design values, and examples; link to those details instead of copying them here.
 
-> **Last updated:** 2026-11-13 (Ask the Book stays on only for the owner's farm and out of marketing).
+> **Last updated:** 2026-11-14 (harvest scale ticket is town-only; report, spray, and rate-unit rules; Ask the Book stays on only for the owner's farm).
 > **Verification scope:** This is not a whole-document code audit. Most sections have **not** been
 > verified against code; only a section carrying a **Verified against code** note has been, and only
 > for the scope that note states. Use `git log -- AGENTS.md` for edit history.
@@ -25,12 +25,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-14** — Harvest scale ticket (`12450cd`, PR #100): `HarvestModal` shows SCALE TICKET # only for town loads (a ticket already saved on a bin harvest stays visible), and `validateFsaFallProductionRows` no longer warns about a blank ticket/evidence reference for any row. Verified on Node 22: `tsc -b`, lint 0 errors on touched files, 2,223 unit tests.
+- **2026-11-13** — Year-end report fixes. Landlord Summary is one row per field per crop with per-crop totals (`cropTotals`); crops are never summed together, and harvests without a crop-share percent are flagged. Report PDFs (`exportToPdf`, FSA-578) use US Letter and the shared `pdfBranding.ts` footer and AcreLedger note on every page; the note has no price, trial, or sign-up wording (iOS rule). The landlord PDF timeline is a table; the fall production PDF is landscape with per-crop totals and landlord columns; the FSA-578 PDF adds Type/Variety and the title is "FSA-578 Acreage Reporting Worksheet" on screen, CSV, and PDF. Report file names and CSV dates use the local date. The spray log PDF is also Letter, wraps long detail values, names missing required details using the review-queue checks, and labels dry versus fluid ounce rates. New tank-mix products default to `fl oz/ac` (`DEFAULT_SPRAY_RATE_UNIT`); the mix step previews each product's total and warns when a dry weight unit is selected. Shipped as 3.6.3 (`7c1bd25`, PR #99). Verified on Node 22: `tsc -b`, API typecheck, lint 0 errors, `verify:docs`, `verify:app-store`, 2,219 unit tests.
+- **2026-11-13** - Review fixes (`20261113120000`): `guard_field_cap` no longer counts a stored field replayed by a restore (`acreledger.restoring`) or an upsert of an already-active field, so a free farm at or over 50 fields can undo a pre-season reset; a new field id is still capped. `assert_field_capacity` shadow rows are limited to one per farm per minute. `get_field_rainfall_daily` checks the stored slot row, so a slot field with cleared lat/lng reads empty instead of raising `premium_required:rainfall`. A legacy `trialing` Stripe row shows as Free in Billing.
 - **2026-11-13** - Ask the Book stays in the app only for the owner's own farm (`isAskBookEnabled`), stays out of marketing, and is not deleted. See [AI Assistant / Ask the Book](#ai-assistant--ask-the-book).
 - **2026-11-10** - Free farms undo the latest pre-season reset with `undo_pre_season_reset` (server snapshot, 30 days, no Pro check). Uploading a backup file still uses `restore_farm_backup` and stays Pro. Rollover calls `start_pre_season_reset` after the JSON download.
-- **2026-11-09** - Free and Pro are on main. Leave `ENTITLEMENTS_MODE` off. Permanent free record book plus **Pro** ($299/farm/year). Plans in code are `free | paid | complimentary` (complimentary is the owner farm only). There is no trial (no farm gets trial dates; Checkout never sets `trial_end`). Spray photo capture is removed. See the Free tier bullet in the billing section and `docs/free-tier-handoff.md`.
-- **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
-- **2026-11-01** — Added service-managed farm comps and membership-checked status RPC. Trial start/end display from this change was removed with the trial; Settings no longer shows a trial. Enforcement remains OFF.
-- **2026-11-01** — Added PG17 MAINTAIN revocation for public relations and the retired-backfill function search-path pin; disposable focused and full-chain rehearsal commands cover the change. New tables created by supabase_admin must explicitly revoke MAINTAIN from API roles and PUBLIC.
 
 ## Contents
 
@@ -101,6 +100,7 @@ Rules), then open only the files for that area.
 - [@/lib/complianceReports/generateLandlordSummary.ts](./src/lib/complianceReports/generateLandlordSummary.ts) — Landlord Summary and farm-wide Farm Owner Summary data builder (field-level landlord grouping, activity timeline, grain yield, bale production, crop-share math, CSV export).
 - [@/components/reports/LandlordSummaryReport.tsx](./src/components/reports/LandlordSummaryReport.tsx) — Landlord tab UI for Landlord Summary and Farm Owner Summary (Fields overview + Activity Timeline, CSV/Detailed-PDF exports).
 - [@/lib/sprayExport.ts](./src/lib/sprayExport.ts) — universal spray log PDF export. Legacy `[ATTACHMENT:…]` note tokens are stripped from the text and embedded as images. There is no photo-capture control.
+- [@/lib/complianceReports/pdfBranding.ts](./src/lib/complianceReports/pdfBranding.ts) — shared report-PDF page format (US Letter), every-page footer, and the boxed AcreLedger note.
 
 **FSA tracts & CLU**
 - [@/types/fsaTract.ts](./src/types/fsaTract.ts) — canonical FSA tract import and CLU assignment types.
@@ -286,6 +286,8 @@ Canonical detail: [BLUEPRINT → SprayRecord](./BLUEPRINT.md#sprayrecord-2026-st
 - Keep spray terminology state-neutral unless a specific legal report requires state wording.
 - Import `WIND_ALERT_MPH` from `@/lib/weatherHelpers.ts`; do not re-declare it.
 - Treated-area defaults and every report/export fallback go through `getEffectiveSprayTreatedAcres(record, field, cluAssignments)`, never a raw `field.acreage` read. An explicitly stored `treatedAreaSize` is always preserved.
+- New tank-mix products and recipe rows default to `DEFAULT_SPRAY_RATE_UNIT` (`fl oz/ac`) from `@/utils/unitConversion`; do not hardcode `'oz/ac'`, which is a dry weight unit and totals in pounds. Unit pickers use `SPRAY_RATE_UNIT_OPTIONS` with `rateUnitOptionLabel`, and the mix step keeps its live total preview and dry-weight note. Existing records keep their stored unit.
+- The spray log PDF status line uses the review-queue checks (`missingComplianceFields`, `sprayProductsNeedReview`) and names what is missing; it must never print "Complete" for a record the app flags. Detail values wrap, never clip.
 
 ### Regional Settings and the Australia Pilot
 
@@ -342,6 +344,10 @@ Reports:
 - Readiness findings are advisory and never disable export. Authoritative FSA validation stays in `validateFsa578Rows` / `validateFsaFallProductionRows`; `reportReadiness.ts` only adapts it.
 - Reports are export-first on mobile (`MobileReportExportPanel` below `lg`). Do not reintroduce large previews as the default mobile experience.
 - Plant FSA status fields (`Planted`, `Prevented Planting`, `Failed`, `Volunteer`, `Cover Crop`) change across types, mappers, backup schema, migrations, UI, reports, and tests together. Prevented planting may omit seed variety.
+- Every report PDF uses `REPORT_PAGE_FORMAT` (US Letter) and `pdfBranding.ts`: `drawPageFooters` after all pages exist, so pages added after a table get a footer, and `drawAcreLedgerNote` on the last page. The branding carries no price, trial, or sign-up wording because the same PDFs are generated on iOS.
+- The one title is "FSA-578 Acreage Reporting Worksheet" on screen, preview, CSV, and PDF. The FSA-578 PDF includes Type/Variety.
+- Fall production totals are per crop and unit (`buildFsaFallCropTotals`); never print one bushel total across crops. A scale ticket is optional: do not flag a blank ticket/evidence reference, and show the ticket field only for town loads.
+- Numeric columns in `exportToPdf` are right-aligned with `rightAlignColumns`, not by matching header text.
 
 ### Landlord Summary
 
@@ -352,6 +358,7 @@ Canonical detail: [BLUEPRINT → Landlord Summary Report](./BLUEPRINT.md#landlor
 - Both modes provide CSV and Detailed PDF exports. Farm Owner Summary exports require a current `farm_id`, use the Farm Owner Summary title/filename, and track export history separately from the per-landlord report.
 - Acreage uses `getDisplayFieldAcres`; dates use `parseLocalDate` (see [Date Parsing and Sorting](#date-parsing-and-sorting)); every `ReportTable` cell carries `data-label`.
 - Hay bales stay separate from bushels, with no inferred landlord bale share.
+- One row per field per crop, with per-crop totals in `LandlordSummary.cropTotals`; never add bushels of different crops together, on screen, in CSV, or in the PDF. `totals.acres` counts each field once. Harvests with no crop-share percent after the `getLandlordSplitPercent` fallback are counted in `missingShareHarvests` and called out on screen and in the PDF.
 - Keep the retired `LandlordStatementReport` / `generateLandlordStatement` until its test coverage is migrated.
 - Grain delivered-vs-owed is out of scope until grain movements gain a field/landlord link (a schema change).
 
