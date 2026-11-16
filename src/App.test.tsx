@@ -72,8 +72,8 @@ vi.mock('@/context/AskAcreLedgerContext', () => ({
 }));
 
 // Chrome components are irrelevant to routing; keep the tree light.
-vi.mock('@/components/Sidebar', () => ({ default: () => null }));
-vi.mock('@/components/BottomNav', () => ({ default: () => null }));
+vi.mock('@/components/Sidebar', () => ({ default: () => <div data-testid="app-sidebar" /> }));
+vi.mock('@/components/BottomNav', () => ({ default: () => <div data-testid="app-bottom-nav" /> }));
 vi.mock('@/components/BillingNotices', () => ({ default: () => null }));
 vi.mock('@/components/OfflineBanner', () => ({ default: () => null }));
 vi.mock('@/components/SeasonRolloverModal', () => ({ default: () => null }));
@@ -132,6 +132,10 @@ vi.mock('./pages/Equipment', () => ({
 
 vi.mock('./pages/Settings', () => ({
   default: () => <div data-testid="settings-page" />,
+}));
+
+vi.mock('./pages/Onboarding', () => ({
+  default: () => <div data-testid="onboarding-page" />,
 }));
 
 import { App as CapApp } from '@capacitor/app';
@@ -739,6 +743,49 @@ describe('signed-in routing (preserved behavior)', () => {
     renderApp();
     await vi.waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
     expect(screen.queryByTestId('app-dashboard')).not.toBeInTheDocument();
+  });
+
+  it('hides the app navigation during setup', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = {
+      ...signedInState,
+      fields: [],
+      onboardingComplete: false,
+      initialFetchComplete: true,
+      onboardingStatusKnown: true,
+    };
+    renderApp();
+    expect(await screen.findByTestId('onboarding-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('app-bottom-nav')).not.toBeInTheDocument();
+  });
+
+  it('keeps an existing user with cleared storage and no fields out of setup', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = { ...signedInState, fields: [], onboardingComplete: true, onboardingStatusKnown: true };
+    renderApp();
+    expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
+    expect(screen.getByTestId('app-bottom-nav')).toBeInTheDocument();
+  });
+
+  it('keeps a user with fields out of setup even when the cloud flag is false', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = { ...signedInState, onboardingComplete: false, onboardingStatusKnown: true };
+    renderApp();
+    expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
+  });
+
+  it('does not send a user to setup when the first load failed', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = {
+      ...signedInState,
+      fields: [],
+      onboardingComplete: false,
+      onboardingStatusKnown: true,
+      fetchError: true,
+    };
+    renderApp();
+    expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
   });
 
   it('redirects /setup to settings', async () => {

@@ -346,6 +346,12 @@ const AppContent = () => {
   }
 
   const onboardingKey = `${session.user.id}_al_onboarding_complete`;
+  let cachedOnboardingComplete = false;
+  try {
+    cachedOnboardingComplete = !!localStorage.getItem(onboardingKey);
+  } catch {
+    // Storage disabled: rely on the profile flag alone.
+  }
   // Wait for both the data load and a known profile onboarding status.
   // onboardingComplete false also means the profile has not loaded yet, and
   // the empty-fields render before fetchData resolves would bounce an existing
@@ -355,23 +361,25 @@ const AppContent = () => {
     initialFetchComplete &&
     !fetchError &&
     !onboardingComplete &&
-    !localStorage.getItem(onboardingKey) &&
+    !cachedOnboardingComplete &&
     fields.length === 0;
   if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
   }
 
   const showQuickAddFab = location.pathname === '/' || location.pathname === '/weather';
+  // Setup is a focused flow: the nav would only bounce back here while it is required.
+  const showAppNav = location.pathname !== '/onboarding';
 
   return (
     <>
       <OfflineBanner />
-      <Sidebar />
-      <div className="lg:pl-60 print:pl-0">
+      {showAppNav && <Sidebar />}
+      <div className={showAppNav ? 'lg:pl-60 print:pl-0' : undefined}>
         <BillingNotices />
         <AnimatedRoutes />
       </div>
-      <BottomNav />
+      {showAppNav && <BottomNav />}
       <SeasonRolloverModal />
 
       {/* Global Quick Add Dialog */}
@@ -396,6 +404,7 @@ const AppContent = () => {
       {/* Global Floating Action Button (FAB) for Mobile Quick Add */}
       {showQuickAddFab && (
         <button
+          id="coachmark-quick-add"
           onClick={() => {
             native.haptic.light();
             openQuickAdd();

@@ -5,5 +5,5 @@ export const navTabs = [
   { path: '/logistics', icon: Wheat, label: 'Storage' },
   { path: '/activity', icon: ClipboardList, label: 'Activity' },
   { path: '/reports', icon: FileText, label: 'Reports' },
-  { path: '/settings', icon: Settings, label: 'Setup' },
+  { path: '/settings', icon: Settings, label: 'Settings' },
 ];

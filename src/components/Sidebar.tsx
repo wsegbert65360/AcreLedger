@@ -31,6 +31,7 @@ export default function Sidebar() {
 
       <div className="flex-1 px-3 py-4 space-y-4">
         <button
+          data-coachmark="coachmark-quick-add"
           onClick={() => {
             native.haptic.light();
             openQuickAdd();
@@ -60,6 +61,7 @@ export default function Sidebar() {
               <Link
                 key={path}
                 to={path}
+                data-coachmark={path === '/activity' ? 'coachmark-activity-tab' : path === '/reports' ? 'coachmark-reports-tab' : undefined}
                 aria-current={active ? 'page' : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                   active

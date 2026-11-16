@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export type CoachmarkStepId = 'manageFields' | 'weather' | 'activity' | 'reports';
+export type CoachmarkStepId = 'addField' | 'quickAdd' | 'activity' | 'reports';
 
 export interface CoachmarkStep {
   id: CoachmarkStepId;
@@ -12,18 +12,18 @@ export interface CoachmarkStep {
 
 const STEPS: CoachmarkStep[] = [
   {
-    id: 'manageFields',
-    targetId: 'coachmark-manage-fields',
-    title: 'Add your first field',
-    body: 'Tap here to add fields, draw boundaries, and manage your farm layout.',
+    id: 'addField',
+    targetId: 'coachmark-add-field',
+    title: 'Add your fields',
+    body: 'Tap here to add a field or draw its boundary on the map.',
     placement: 'bottom'
   },
   {
-    id: 'weather',
-    targetId: 'coachmark-weather',
-    title: 'Live weather',
-    body: 'Check current conditions, radar, and spray-friendly weather guidance.',
-    placement: 'bottom'
+    id: 'quickAdd',
+    targetId: 'coachmark-quick-add',
+    title: 'Log a record',
+    body: 'Use Quick Add to record planting, spraying, fertilizer, harvest and hay from anywhere.',
+    placement: 'top'
   },
   {
     id: 'activity',
@@ -35,15 +35,36 @@ const STEPS: CoachmarkStep[] = [
   {
     id: 'reports',
     targetId: 'coachmark-reports-tab',
-    title: 'Compliance exports',
-    body: 'Generate FSA, spray, and harvest reports whenever you need them.',
+    title: 'Reports',
+    body: 'FSA, spray, harvest and year-end exports. Some need Pro.',
     placement: 'top'
   }
 ];
 
+export const COACHMARKS_RESTART_EVENT = 'al:restart-coachmarks';
+
 function storageKey(userId: string | undefined) {
   const suffix = userId || 'local';
   return `al_coachmarks_shown_${suffix}`;
+}
+
+// Storage can be disabled or full (private mode, some WebViews). The tour then
+// just lives in memory for this session instead of breaking the app shell.
+function readShown(userId: string | undefined): boolean {
+  try {
+    return window.localStorage.getItem(storageKey(userId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeShown(userId: string | undefined, shown: boolean) {
+  try {
+    if (shown) window.localStorage.setItem(storageKey(userId), '1');
+    else window.localStorage.removeItem(storageKey(userId));
+  } catch {
+    // Ignore: in-memory state still controls this session.
+  }
 }
 
 interface UseCoachmarksOptions {
@@ -54,19 +75,19 @@ interface UseCoachmarksOptions {
 export function useCoachmarks({ userId, enabled }: UseCoachmarksOptions) {
   const [isComplete, setIsComplete] = useState(() => {
     if (typeof window === 'undefined') return true;
-    return window.localStorage.getItem(storageKey(userId)) === '1';
+    return readShown(userId);
   });
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
-    setIsComplete(window.localStorage.getItem(storageKey(userId)) === '1');
+    setIsComplete(readShown(userId));
   }, [userId]);
 
   const isActive = enabled && !isComplete && stepIndex < STEPS.length;
   const currentStep = STEPS[stepIndex];
 
   const markComplete = useCallback(() => {
-    window.localStorage.setItem(storageKey(userId), '1');
+    writeShown(userId, true);
     setIsComplete(true);
   }, [userId]);
 
@@ -89,10 +110,15 @@ export function useCoachmarks({ userId, enabled }: UseCoachmarksOptions) {
   }, [markComplete]);
 
   const restart = useCallback(() => {
-    window.localStorage.removeItem(storageKey(userId));
+    writeShown(userId, false);
     setIsComplete(false);
     setStepIndex(0);
   }, [userId]);
+
+  useEffect(() => {
+    window.addEventListener(COACHMARKS_RESTART_EVENT, restart);
+    return () => window.removeEventListener(COACHMARKS_RESTART_EVENT, restart);
+  }, [restart]);
 
   return useMemo(() => ({
     steps: STEPS,

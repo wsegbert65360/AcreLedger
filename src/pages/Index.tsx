@@ -207,6 +207,7 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
+              id="coachmark-add-field"
               onClick={() => setAddOpen(true)}
               aria-label="Add new field"
               className="flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 text-xs font-semibold text-primary shadow-sm transition-all hover:bg-primary/15 active:scale-95 sm:w-auto sm:px-3"

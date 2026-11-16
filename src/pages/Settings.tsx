@@ -7,6 +7,7 @@ import RecipeManager from '@/components/settings/RecipeManager';
 import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManager';
 import DisplayManager from '@/components/settings/DisplayManager';
 import RegionManager from '@/components/settings/RegionManager';
+import ReplayTour from '@/components/settings/ReplayTour';
 import BillingManager from '@/components/settings/BillingManager';
 import PlanCard from '@/components/settings/PlanCard';
 import { isAuPilotEnabled } from '@/lib/auPilot';
@@ -65,7 +66,7 @@ export default function Settings() {
               <SettingsIcon size={20} className="text-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">Setup</h1>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">Settings</h1>
               <p className="text-xs text-muted-foreground">App configuration</p>
             </div>
           </div>
@@ -81,6 +82,7 @@ export default function Settings() {
           </Link>
         )}
         <CattleToggle />
+        <ReplayTour />
         <Accordion key={requestedSection ?? 'default'} type="multiple" defaultValue={openSections} className="space-y-4">
           <AccordionItem id="settings-section-farm-data" value="farm-data" className="scroll-mt-24 border border-border rounded-2xl bg-card px-4">
             <AccordionTrigger className="hover:no-underline py-4">
