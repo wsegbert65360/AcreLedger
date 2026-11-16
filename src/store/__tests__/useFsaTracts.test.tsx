@@ -53,6 +53,12 @@ vi.doMock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 let useFsaTracts: (typeof import('../useFsaTracts'))['useFsaTracts'];
 beforeAll(async () => {
+  // jsdom's crypto has no randomUUID; the hook mints ids with it for new tracts
+  // and CLU assignments. Use Node's implementation so these tests reach their assertions.
+  if (typeof globalThis.crypto?.randomUUID !== 'function') {
+    const { randomUUID } = await import('node:crypto');
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { value: randomUUID, configurable: true });
+  }
   ({ useFsaTracts } = await import('../useFsaTracts'));
 });
 

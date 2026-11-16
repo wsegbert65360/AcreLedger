@@ -92,7 +92,7 @@ const pageTransition = {
 };
 
 const RouteFallback = () => (
-  <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-live="polite">
+  <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-live="polite" data-route-fallback="">
     <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
     <span className="sr-only">Loading…</span>
   </div>
@@ -365,6 +365,11 @@ const AppContent = () => {
     fields.length === 0;
   if (needsOnboarding && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
+  }
+  // Setup already done (profile flag or this device's cache): a direct visit to
+  // /onboarding would hide the navigation and run setup again, so send it home.
+  if (location.pathname === '/onboarding' && (onboardingComplete || cachedOnboardingComplete)) {
+    return <Navigate to="/" replace />;
   }
 
   const showQuickAddFab = location.pathname === '/' || location.pathname === '/weather';

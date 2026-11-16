@@ -208,6 +208,21 @@ WHERE singleton IS TRUE;
 
 28. [ ] Re-check `mrms_daily_runs`. With mode `shadow` or `enforce`, free slot fields can collect. `field_count` 0 on the next run, after free farms exist, needs a look before you call rainfall done.
 
+## 8a. After enforce: FSA entry free, Fall FSA and Hay Summary Pro (2026-11-16)
+
+Production is already in `enforce`, so ship the server change and the app together. Order matters: if the app ships first, free farms see FSA import as available but the server still refuses it.
+
+1. [ ] `node scripts/test-fsa-entry-free-migration.mjs` and `node scripts/shadow-report.mjs` pass locally.
+2. [ ] `supabase db push` on staging, then prod: `20261116120000_fsa_entry_free.sql` (drops `guard_premium_fsa_tract_imports` and `guard_premium_field_clu_assignments`, and removes the FSA column check from `guard_field_premium_columns`; landlord split stays Pro).
+3. [ ] On prod, confirm the two triggers are gone and the rest remain:
+
+```sql
+SELECT tgname FROM pg_trigger WHERE tgname LIKE 'guard_premium_%' AND NOT tgisinternal ORDER BY 1;
+```
+
+4. [ ] Release the app build with Fall FSA and Hay Summary in `PAID_REPORT_TYPES`. On a free test farm: FSA import works, Fall FSA and Hay Summary show the preview, and export/print/share is refused.
+5. [ ] Any parked `premium_required:fsa_tract` changes on a device can now be retried from Settings.
+
 ## 9. Rollback
 
 Each step undoes that section only. Do not drop tables or delete farm rows.

@@ -15,14 +15,14 @@ const STEPS: CoachmarkStep[] = [
     id: 'addField',
     targetId: 'coachmark-add-field',
     title: 'Add your fields',
-    body: 'Tap here to add a field or draw its boundary on the map.',
+    body: 'This is where you add a field or draw its boundary on the map.',
     placement: 'bottom'
   },
   {
     id: 'quickAdd',
     targetId: 'coachmark-quick-add',
     title: 'Log a record',
-    body: 'Use Quick Add to record planting, spraying, fertilizer, harvest and hay from anywhere.',
+    body: 'Use Quick Add here to record planting, spraying, fertilizer, harvest and hay.',
     placement: 'top'
   },
   {

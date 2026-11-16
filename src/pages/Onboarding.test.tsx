@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const actions = vi.hoisted(() => ({ completeOnboarding: vi.fn(), updateFarmName: vi.fn() }));
 const farm = vi.hoisted(() => ({ isOnline: true as boolean, farmName: 'Oak Creek' }));
 const plan = vi.hoisted(() => ({ entitlement: null as null | { plan: string; enforced: boolean } }));
-const prefs = vi.hoisted(() => ({ country: 'US' }));
+const prefs = vi.hoisted(() => ({ country: 'US', updatePreferences: vi.fn() }));
 
 vi.mock('@/store/farmStore', () => ({
   useFarm: () => ({
@@ -20,11 +20,17 @@ vi.mock('@/store/farmStore', () => ({
 vi.mock('@/hooks/useEntitlement', () => ({
   useEntitlement: () => ({ entitlement: plan.entitlement, loading: false, cachedEntitlement: null, failed: false }),
 }));
-vi.mock('@/store/useAppPreferences', () => ({
-  useAppPreferences: () => ({ preferences: { country: prefs.country }, updatePreferences: vi.fn() }),
+vi.mock('@/store/useAppPreferences', async (importActual) => ({
+  ...(await importActual<typeof import('@/store/useAppPreferences')>()),
+  useAppPreferences: () => ({ preferences: { country: prefs.country }, updatePreferences: prefs.updatePreferences }),
 }));
 vi.mock('@/components/settings/RegionManager', () => ({
-  default: () => <div data-testid="region-manager" />,
+  default: ({ value, onChange }: { value?: string | null; onChange?: (c: 'US' | 'AU') => void }) => (
+    <div data-testid="region-manager" data-value={value ?? ''}>
+      <button type="button" onClick={() => onChange?.('US')}>Pick United States</button>
+      <button type="button" onClick={() => onChange?.('AU')}>Pick Australia</button>
+    </div>
+  ),
 }));
 vi.mock('@/components/TractAssignmentFlow', () => ({
   default: ({ onDone }: { onDone: () => void }) => <button onClick={onDone}>Done</button>,
@@ -49,6 +55,7 @@ describe('Onboarding completion', () => {
     farm.farmName = 'Oak Creek';
     plan.entitlement = null;
     prefs.country = 'US';
+    prefs.updatePreferences.mockReset();
   });
 
   it('stays on setup after Skip fails, then allows a successful retry', async () => {
@@ -124,24 +131,51 @@ describe('Onboarding completion', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
   });
 
-  it('labels FSA import as Pro for a free farm under enforcement, with no price', async () => {
+  it('offers FSA import to a free farm under enforcement with no Pro note', async () => {
     plan.entitlement = { plan: 'free', enforced: true };
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    const note = await screen.findByText(/FSA\/CLU import is part of Pro/);
-    expect(note.textContent).not.toMatch(/\$|price|buy|purchase|subscribe/i);
+    expect(await screen.findByRole('heading', { name: 'Set Up Your Fields' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument(); // TractAssignmentFlow
+    expect(screen.getByRole('button', { name: 'Add fields by hand instead' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\bPro\b/);
+    expect(document.body.textContent).toContain('import FSA tracts later in Settings');
   });
 
-  it('asks AU-pilot users for their region instead of FSA tracts', async () => {
+  it('asks AU-pilot users for their region and needs an explicit choice', async () => {
     prefs.country = 'AU';
     actions.completeOnboarding.mockResolvedValue(true);
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByRole('heading', { name: 'Choose Your Region' })).toBeInTheDocument();
-    expect(screen.getByTestId('region-manager')).toBeInTheDocument();
+    // Starts unselected, even with a saved country, and Done waits for a choice.
+    expect(screen.getByTestId('region-manager')).toHaveAttribute('data-value', '');
     expect(screen.queryByText(/FSA/)).not.toBeInTheDocument();
+    const done = screen.getByRole('button', { name: 'Done' });
+    expect(done).toBeDisabled();
+    fireEvent.click(done);
+    expect(actions.completeOnboarding).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick Australia' }));
+    expect(screen.getByTestId('region-manager')).toHaveAttribute('data-value', 'AU');
+    expect(done).toBeEnabled();
+    fireEvent.click(done);
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+    // Country, locale and units saved together, before setup is marked complete.
+    expect(prefs.updatePreferences).toHaveBeenCalledWith({ country: 'AU', locale: 'en-AU', unitSystem: 'metric' });
+    expect(prefs.updatePreferences.mock.invocationCallOrder[0])
+      .toBeLessThan(actions.completeOnboarding.mock.invocationCallOrder[0]);
+  });
+
+  it('saves the US bundle when an AU-pilot user picks the United States', async () => {
+    prefs.country = 'AU';
+    actions.completeOnboarding.mockResolvedValue(true);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pick United States' }));
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+    expect(prefs.updatePreferences).toHaveBeenCalledWith({ country: 'US', locale: 'en-US', unitSystem: 'imperial' });
   });
 
   it('does not promise the farm name on scale tickets', () => {

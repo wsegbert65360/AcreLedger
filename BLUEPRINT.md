@@ -881,8 +881,11 @@ logged to `entitlement_shadow_log` in `shadow`). The client `useEntitlement()` o
 Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 (`20261107040000_rainfall_tiering.sql`), with `rainfall_field_hourly_allowed(field_id)`
 (service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
-edge function. Pro: all-field hourly rainfall, grain bins and movement, equipment, FSA tract
-entry, landlord splits, backup restore, prepared reports. Complimentary is the owner farm only.
+edge function. FSA/CLU data entry (tract import, CLU assignment, FSA farm/tract/field numbers) is
+free: `20261116120000_fsa_entry_free.sql` dropped the `fsa_tract` write guards. Pro: all-field
+hourly rainfall, grain bins and movement, equipment, landlord splits, backup restore, prepared
+reports (FSA-578, Fall FSA production, spray, fertilizer, Hay Summary, landlord and farm-owner
+statements). Complimentary is the owner farm only.
 Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. There are no photos in the
 current build (Pro-only photos are a later feature); the iOS camera/photo usage strings stay.
 

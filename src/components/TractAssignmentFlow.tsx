@@ -502,35 +502,37 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
 
         {editableTracts.length === 0 && (
           <div className="space-y-4 my-2">
-            {/* Upload Zone */}
-            <div
+            {/* Upload Zone: a label around a focusable file input, so Tab reaches it,
+                Enter/Space open the picker, and focus shows on the whole zone. */}
+            <label
+              htmlFor="empty-state-file-input"
               onDragEnter={handleDialogDrag}
               onDragOver={handleDialogDrag}
               onDragLeave={handleDialogDrag}
               onDrop={handleDialogDrop}
-              onClick={() => document.getElementById('empty-state-file-input')?.click()}
-              className="border-2 border-dashed border-primary/30 hover:border-primary/50 bg-primary/5 hover:bg-primary/10 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-2.5 animate-in fade-in zoom-in duration-300"
+              className="block border-2 border-dashed border-primary/30 hover:border-primary/50 bg-primary/5 hover:bg-primary/10 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-2.5 animate-in fade-in zoom-in duration-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 focus-within:ring-offset-background"
             >
-              <div className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <span className="mx-auto w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <FileUp size={20} className="animate-bounce" />
-              </div>
-              <div className="space-y-1">
-                <p className="font-semibold text-foreground text-sm">
+              </span>
+              <span className="block space-y-1">
+                <span className="block font-semibold text-foreground text-sm">
                   Click to select or drag your field boundary files here
-                </p>
-                <p className="text-xs text-muted-foreground">
+                </span>
+                <span className="block text-xs text-muted-foreground">
                   Accepts FSA boundary files: .zip, .json, or .geojson
-                </p>
-              </div>
+                </span>
+              </span>
               <input
                 id="empty-state-file-input"
                 type="file"
                 accept=".zip,.json,.geojson"
                 multiple
-                className="hidden"
+                aria-label="Choose FSA boundary files"
+                className="sr-only"
                 onChange={handleEmptyStateImport}
               />
-            </div>
+            </label>
 
             {/* Instruction Warning Card */}
             <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-2 text-xs text-muted-foreground">

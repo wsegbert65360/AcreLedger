@@ -254,29 +254,44 @@ describe('Reports Pro gate', () => {
     expect(document.body.textContent).not.toContain('Delta Quarter');
   });
 
-  it('still mounts a free report when the plan check is pending or failed', () => {
-    entitlementState.entitlement = null;
-    entitlementState.loading = true;
-    entitlementState.cachedEntitlement = null;
-    entitlementState.failed = false;
-    const pending = renderReports('/reports?tab=hay-summary');
-    expect(screen.getByText('Hay production summary')).toBeTruthy();
-    expect(screen.queryByTestId('report-plan-loading')).toBeNull();
-    pending.unmount();
+  it('holds Hay Summary and Fall FSA behind the plan check while it is pending or failed', () => {
+    for (const tab of ['hay-summary', 'fsa-harvest']) {
+      entitlementState.entitlement = null;
+      entitlementState.loading = true;
+      entitlementState.cachedEntitlement = null;
+      entitlementState.failed = false;
+      const pending = renderReports(`/reports?tab=${tab}`);
+      expect(screen.getByTestId('report-plan-loading')).toBeTruthy();
+      expect(screen.queryByText('Hay production summary')).toBeNull();
+      pending.unmount();
 
-    entitlementState.loading = false;
-    entitlementState.failed = true;
-    renderReports('/reports?tab=hay-summary');
-    expect(screen.getByText('Hay production summary')).toBeTruthy();
-    expect(screen.queryByTestId('report-plan-loading')).toBeNull();
-    expect(screen.queryByTestId('report-preview')).toBeNull();
+      entitlementState.loading = false;
+      entitlementState.failed = true;
+      const failed = renderReports(`/reports?tab=${tab}`);
+      expect(screen.queryByTestId('report-plan-loading')).toBeNull();
+      expect(screen.getByTestId('report-preview')).toBeTruthy();
+      expect(screen.queryByText('Hay production summary')).toBeNull();
+      failed.unmount();
+    }
   });
 
-  it('still mounts a free report for a free enforced farm', () => {
+  it('shows the Hay Summary and Fall FSA previews to a free enforced farm', () => {
+    const hay = renderReports('/reports?tab=hay-summary');
+    expect(screen.getByTestId('report-preview').textContent).toContain('Hay Production Summary');
+    expect(screen.queryByText('Hay production summary')).toBeNull();
+    hay.unmount();
+
+    renderReports('/reports?tab=fsa-harvest');
+    expect(screen.getByTestId('report-preview').textContent).toContain('FSA Fall Harvest');
+  });
+
+  it('mounts the full Hay Summary for a paid farm', () => {
+    const paid = { ...freeEntitlement(true), plan: 'paid' as const };
+    entitlementState.entitlement = paid;
+    entitlementState.cachedEntitlement = paid;
     renderReports('/reports?tab=hay-summary');
     expect(screen.getByText('Hay production summary')).toBeTruthy();
     expect(screen.queryByTestId('report-preview')).toBeNull();
-    expect(document.body.textContent).not.toContain('FSA-578 Acreage Reporting Worksheet');
   });
 
   it('blocks print and CSV export when the server check fails', async () => {

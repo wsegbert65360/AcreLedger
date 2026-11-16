@@ -19,10 +19,6 @@ export const ENTITLEMENT_COPY = {
   binLockedNote: 'Tracking what goes into each bin is part of Pro. You can still log this harvest as Town.',
   binLockedLabel: 'Pro',
 
-  // FSA tracts (no price or purchase wording: this also shows in the iOS app)
-  fsaTractLocked: 'FSA tract import is part of Pro. You can still add fields by hand.',
-  onboardingFsaProNote: 'FSA/CLU import is part of Pro. You can add fields by hand on the free plan.',
-
   // Rainfall
   rainfallLocked: 'Automatic rainfall for this field is part of Pro.',
 
@@ -39,7 +35,7 @@ export const ENTITLEMENT_COPY = {
   planFreeName: 'Free plan',
   planPaidName: 'Pro',
   planComplimentaryName: 'Complimentary access',
-  planFreeSummary: 'The free record book keeps your field records. Pro adds rainfall on all remaining fields, prepared reports, and the business tools.',
+  planFreeSummary: 'The free record book keeps your field records, including FSA and CLU details. Pro adds prepared reports, rainfall on all remaining fields, and the business tools.',
   planUpgradeLink: 'See Pro',
   planUpgradeLinkWebsite: 'See Pro on our website',
   nativeManageOnWeb: 'Plans are managed on the AcreLedger website.',
@@ -59,7 +55,8 @@ export function freePlanIncluded(): string[] {
   return [
     `Up to ${FREE_LIMITS.fieldCap} active fields`,
     'Daily rainfall on your two oldest fields in the contiguous US. Those two are locked, and you can\u2019t change them.',
-    'Planting, spraying, fertilizing and harvest records',
+    'Planting, spraying, fertilizing, harvest and hay records',
+    'FSA tract import, CLU assignment, and FSA farm, tract and field numbers',
     'Export what you logged',
   ];
 }
@@ -67,10 +64,10 @@ export function freePlanIncluded(): string[] {
 /** What Pro adds. */
 export function paidPlanAdds(): string[] {
   return [
-    'Prepared FSA-578, spray log, fertilizer, and landlord reports',
+    'Prepared reports: FSA-578, Fall FSA production, spray log, fertilizer, Hay Summary, and landlord and farm-owner statements',
     'Grain bins and grain movement',
     'Equipment and maintenance',
-    'Landlord splits and FSA tract details',
+    'Landlord splits',
     'Rainfall on all remaining fields, hourly',
     'Backup restore',
   ];

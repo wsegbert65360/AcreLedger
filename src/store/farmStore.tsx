@@ -1220,9 +1220,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         .update({ onboarding_complete: true }, { count: 'exact' })
         .eq('id', userId);
       if (error) throw error;
-      // No error but no row (missing profile, RLS drift): the cloud flag is still
-      // false, so do not mark this device complete either.
-      if (count === 0) throw new Error('Could not save your setup. Please try again.');
+      // Exactly one profile row must change. Zero (missing profile, RLS drift) or a
+      // missing/null count means the cloud flag may still be false, so do not mark
+      // this device complete either.
+      if (count !== 1) throw new Error('Could not save your setup. Please try again.');
 
       if (sessionUserIdRef.current !== userId) return false;
       setOnboardingComplete(true);

@@ -13,7 +13,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const mockUpdatePreferences = vi.fn();
 let capturedUserId: string | null | undefined;
 
-vi.mock('@/store/useAppPreferences', () => ({
+vi.mock('@/store/useAppPreferences', async (importActual) => ({
+  ...(await importActual<typeof import('@/store/useAppPreferences')>()),
   useAppPreferences: (userId?: string | null) => {
     capturedUserId = userId;
     return {
@@ -39,8 +40,8 @@ vi.mock('@/components/ui/label', () => ({
   Label: ({ children }: any) => <label>{children}</label>,
 }));
 vi.mock('@/components/ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <select data-testid="country-select" onChange={(e) => onValueChange(e.target.value)}>
+  Select: ({ children, onValueChange, value }: any) => (
+    <select data-testid="country-select" data-value={value} onChange={(e) => onValueChange(e.target.value)}>
       {children}
     </select>
   ),
@@ -72,5 +73,15 @@ describe('RegionManager preference scope', () => {
       locale: 'en-AU',
       unitSystem: 'metric',
     });
+  });
+
+  it('in onboarding (controlled) starts unselected and reports the choice without saving', () => {
+    const onChange = vi.fn();
+    render(<RegionManager value={null} onChange={onChange} />);
+    const select = screen.getByTestId('country-select');
+    expect(select).toHaveAttribute('data-value', '');
+    fireEvent.change(select, { target: { value: 'AU' } });
+    expect(onChange).toHaveBeenCalledWith('AU');
+    expect(mockUpdatePreferences).not.toHaveBeenCalled();
   });
 });

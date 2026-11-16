@@ -30,6 +30,13 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   unitSystem: 'imperial',
 };
 
+/** The locale and unit bundle that goes with each country. Users can still override afterwards. */
+export function regionPreferences(country: CountryCode): AppPreferences {
+  return country === 'AU'
+    ? { country, locale: 'en-AU', unitSystem: 'metric' }
+    : { country, locale: 'en-US', unitSystem: 'imperial' };
+}
+
 const COUNTRIES: readonly CountryCode[] = ['US', 'AU'];
 const LOCALES: readonly LocaleCode[] = ['en-US', 'en-AU'];
 const UNIT_SYSTEMS: readonly UnitSystem[] = ['imperial', 'metric'];

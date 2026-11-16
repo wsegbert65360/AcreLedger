@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CoachmarkStep } from '@/hooks/useCoachmarks';
-import { TARGET_WAIT_MS, findCoachmarkTarget } from '@/lib/coachmarkTarget';
+import { TARGET_WAIT_MS, findCoachmarkTarget, isRouteLoading } from '@/lib/coachmarkTarget';
 
 interface CoachmarkOverlayProps {
   step: CoachmarkStep;
@@ -23,6 +24,34 @@ interface Rect {
 
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
+/**
+ * While the tour is open everything else on the page is inert and hidden from
+ * assistive technology. The overlay lives in its own body-level host so it is
+ * the only thing left interactive. Previous attribute values are put back on close.
+ */
+function useInertBackground(host: HTMLElement) {
+  useLayoutEffect(() => {
+    document.body.appendChild(host);
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const changed: Array<{ el: Element; inert: string | null; hidden: string | null }> = [];
+    for (const el of Array.from(document.body.children)) {
+      if (el === host || el.tagName === 'SCRIPT') continue;
+      changed.push({ el, inert: el.getAttribute('inert'), hidden: el.getAttribute('aria-hidden') });
+      el.setAttribute('inert', '');
+      el.setAttribute('aria-hidden', 'true');
+    }
+    return () => {
+      for (const { el, inert, hidden } of changed) {
+        if (inert === null) el.removeAttribute('inert'); else el.setAttribute('inert', inert);
+        if (hidden === null) el.removeAttribute('aria-hidden'); else el.setAttribute('aria-hidden', hidden);
+      }
+      host.remove();
+      // Give focus back to wherever it was, now that it is no longer inert.
+      previousFocus?.focus?.();
+    };
+  }, [host]);
+}
+
 function CoachmarkOverlay({
   step,
   stepIndex,
@@ -32,12 +61,19 @@ function CoachmarkOverlay({
   onSkip,
   isLast
 }: CoachmarkOverlayProps) {
+  const [host] = useState(() => {
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark-host', '');
+    return el;
+  });
   const [targetRect, setTargetRect] = useState<Rect | null>(null);
+  // No target after waiting: show the step centered instead of skipping it.
+  const [centered, setCentered] = useState(false);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
-  const onNextRef = useRef(onNext);
-  onNextRef.current = onNext;
+
+  useInertBackground(host);
 
   // The overlay is position:fixed, so everything stays in viewport coordinates.
   const measure = useCallback((): boolean => {
@@ -48,19 +84,24 @@ function CoachmarkOverlay({
     }
     const rect = el.getBoundingClientRect();
     setTargetRect({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+    setCentered(false);
     return true;
   }, [step.targetId]);
 
-  // The target may not exist yet (lazy page, Suspense fallback). Keep looking
-  // for a short while, then skip the step so the tour can never hang invisibly.
+  // The target may not exist yet. While a lazy route is still loading, keep
+  // waiting; once it has finished, look for TARGET_WAIT_MS more, then fall back
+  // to a centered tooltip so the step is never lost.
   useLayoutEffect(() => {
+    setCentered(false);
     if (measure()) return;
     let frame = 0;
-    const started = Date.now();
+    let started = Date.now();
     const tick = () => {
       if (measure()) return;
-      if (Date.now() - started >= TARGET_WAIT_MS) {
-        onNextRef.current();
+      if (isRouteLoading()) {
+        started = Date.now();
+      } else if (Date.now() - started >= TARGET_WAIT_MS) {
+        setCentered(true);
         return;
       }
       frame = requestAnimationFrame(tick);
@@ -79,10 +120,10 @@ function CoachmarkOverlay({
     };
   }, [measure]);
 
-  // The tooltip is always rendered once a target exists (hidden until placed),
-  // so it can be measured here.
+  // The tooltip is always rendered once it has a place to go (hidden until
+  // placed), so it can be measured here.
   useLayoutEffect(() => {
-    if (!targetRect || !tooltipRef.current) {
+    if (!tooltipRef.current || (!targetRect && !centered)) {
       setTooltipPos(null);
       return;
     }
@@ -91,8 +132,16 @@ function CoachmarkOverlay({
     const margin = 12;
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
-    const placement = step.placement || 'bottom';
 
+    if (!targetRect) {
+      setTooltipPos({
+        top: Math.max(margin, (viewportH - tooltipRect.height) / 2),
+        left: Math.max(margin, (viewportW - tooltipRect.width) / 2),
+      });
+      return;
+    }
+
+    const placement = step.placement || 'bottom';
     let top: number;
     let left: number;
     if (placement === 'bottom') {
@@ -113,20 +162,14 @@ function CoachmarkOverlay({
     top = Math.max(margin, Math.min(top, viewportH - tooltipRect.height - margin));
 
     setTooltipPos({ top, left });
-  }, [targetRect, step]);
+  }, [targetRect, centered, step]);
 
-  const hasTarget = targetRect !== null;
-
-  // Give focus back to wherever it was when the tour closes.
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    return () => { previous?.focus?.(); };
-  }, []);
+  const visible = targetRect !== null || centered;
 
   // Move focus into the tooltip on each step.
   useEffect(() => {
-    if (hasTarget) nextRef.current?.focus();
-  }, [hasTarget, stepIndex]);
+    if (visible) nextRef.current?.focus();
+  }, [visible, stepIndex]);
 
   // Escape skips; Tab stays inside the tooltip.
   useEffect(() => {
@@ -157,58 +200,48 @@ function CoachmarkOverlay({
     return () => document.removeEventListener('keydown', handleKey);
   }, [onSkip]);
 
-  if (!targetRect) return null;
+  if (!visible) return null;
 
   const padding = 8;
-  const spotlightTop = targetRect.top - padding;
-  const spotlightLeft = targetRect.left - padding;
-  const spotlightWidth = targetRect.width + padding * 2;
-  const spotlightHeight = targetRect.height + padding * 2;
+  const spot = targetRect && {
+    top: targetRect.top - padding,
+    left: targetRect.left - padding,
+    width: targetRect.width + padding * 2,
+    height: targetRect.height + padding * 2,
+  };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100]" data-testid="coachmark-overlay">
       {/* Backdrop with cutout */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
         <defs>
           <mask id="coachmark-mask">
             <rect x="0" y="0" width="100%" height="100%" fill="white" />
-            <rect
-              x={spotlightLeft}
-              y={spotlightTop}
-              width={spotlightWidth}
-              height={spotlightHeight}
-              rx="12"
-              fill="black"
-            />
+            {spot && (
+              <rect x={spot.left} y={spot.top} width={spot.width} height={spot.height} rx="12" fill="black" />
+            )}
           </mask>
         </defs>
-        <rect
-          x="0"
-          y="0"
-          width="100%"
-          height="100%"
-          fill="rgba(0,0,0,0.55)"
-          mask="url(#coachmark-mask)"
-        />
+        <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask="url(#coachmark-mask)" />
       </svg>
 
-      {/* Click blocking layers around the spotlight */}
-      <div className="absolute top-0 left-0 right-0 pointer-events-auto" style={{ height: Math.max(0, spotlightTop) }} />
-      <div className="absolute left-0 pointer-events-auto" style={{ top: spotlightTop, width: Math.max(0, spotlightLeft), height: spotlightHeight }} />
-      <div className="absolute right-0 pointer-events-auto" style={{ top: spotlightTop, left: spotlightLeft + spotlightWidth, height: spotlightHeight }} />
-      <div className="absolute bottom-0 left-0 right-0 pointer-events-auto" style={{ top: spotlightTop + spotlightHeight }} />
+      {/* One full-screen click blocker, spotlight included: the highlighted control
+          is shown, not used. The tour only moves with Next, Back, Skip or Escape. */}
+      <div
+        className="absolute inset-0 pointer-events-auto"
+        data-testid="coachmark-click-blocker"
+        aria-hidden="true"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      />
 
       {/* Pulsing highlight ring */}
-      <div
-        aria-hidden="true"
-        className="absolute rounded-xl border-2 border-primary animate-pulse pointer-events-none"
-        style={{
-          top: spotlightTop,
-          left: spotlightLeft,
-          width: spotlightWidth,
-          height: spotlightHeight
-        }}
-      />
+      {spot && (
+        <div
+          aria-hidden="true"
+          className="absolute rounded-xl border-2 border-primary animate-pulse pointer-events-none"
+          style={{ top: spot.top, left: spot.left, width: spot.width, height: spot.height }}
+        />
+      )}
 
       {/* Tooltip: rendered hidden first so it can be measured, then placed. */}
       <div
@@ -221,6 +254,7 @@ function CoachmarkOverlay({
         aria-modal="true"
         aria-labelledby="coachmark-title"
         aria-describedby="coachmark-body"
+        data-placement={spot ? 'target' : 'centered'}
       >
         <div className="flex items-start justify-between gap-2">
           <h3 id="coachmark-title" className="text-sm font-bold text-foreground pt-1">
@@ -263,7 +297,8 @@ function CoachmarkOverlay({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    host,
   );
 }
 

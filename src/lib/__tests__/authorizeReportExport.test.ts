@@ -44,10 +44,27 @@ describe('authorizeReportExport', () => {
     expect(reportExportDeniedMessage('unavailable')).toBe(ENTITLEMENT_COPY.reportCheckFailedToast);
   });
 
-  it('never calls the server for free reports or without a farm', async () => {
+  it('asks the server for every prepared report, and a free farm is denied each one', async () => {
+    const prepared = [
+      'fsa-plant', 'fsa-harvest', 'spray-audit', 'fertilizer-summary', 'hay-summary',
+      'landlord-statement', 'farm-owner-summary',
+    ];
+    for (const reportType of prepared) {
+      const client = clientWith({ error: { code: 'P0402', message: 'premium_required:reports' } });
+      expect(await authorizeReportExport(client, 'farm-1', reportType)).toEqual({ allowed: false, reason: 'premium_required' });
+      expect(client.rpc).toHaveBeenCalledWith('assert_premium', { p_farm_id: 'farm-1', p_feature: 'reports' });
+    }
+  });
+
+  it('allows every prepared report for paid and complimentary farms', async () => {
+    for (const reportType of ['fsa-harvest', 'hay-summary', 'landlord-statement', 'farm-owner-summary']) {
+      expect(await authorizeReportExport(clientWith({ data: null, error: null }), 'farm-1', reportType)).toEqual({ allowed: true });
+    }
+  });
+
+  it('never calls the server for non-report exports or without a farm', async () => {
     const client = clientWith({ error: { code: 'P0402', message: 'premium_required:reports' } });
-    expect(await authorizeReportExport(client, 'farm-1', 'fall-fsa')).toEqual({ allowed: true });
-    expect(await authorizeReportExport(client, 'farm-1', 'hay-summary')).toEqual({ allowed: true });
+    expect(await authorizeReportExport(client, 'farm-1', 'work-requests')).toEqual({ allowed: true });
     expect(await authorizeReportExport(client, null, 'fsa-plant')).toEqual({ allowed: true });
     expect(client.rpc).not.toHaveBeenCalled();
   });

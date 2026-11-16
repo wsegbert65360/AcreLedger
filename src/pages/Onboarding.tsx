@@ -7,20 +7,18 @@ import TractAssignmentFlow from '@/components/TractAssignmentFlow';
 import RegionManager from '@/components/settings/RegionManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENTITLEMENT_COPY } from '@/copy/entitlements';
-import { useEntitlement } from '@/hooks/useEntitlement';
 import { isAuPilotEnabled } from '@/lib/auPilot';
-import { isFreeTierLocked } from '@/lib/entitlements';
 import { useFarm } from '@/store/farmStore';
-import { useAppPreferences } from '@/store/useAppPreferences';
+import { regionPreferences, useAppPreferences, type CountryCode } from '@/store/useAppPreferences';
 
 type SetupStep = 'name' | 'fields' | 'region';
 
 export default function Onboarding() {
   const navigate = useNavigate();
   const { farmName, updateFarmName, completeOnboarding, isOnline, session } = useFarm();
-  const { entitlement } = useEntitlement();
-  const { preferences } = useAppPreferences(session?.user?.id);
+  const { preferences, updatePreferences } = useAppPreferences(session?.user?.id);
+  // Onboarding-only: no country until the user picks one, so the US default can't slip through.
+  const [chosenCountry, setChosenCountry] = useState<CountryCode | null>(null);
   // Same rule as the Settings Region card: AU-pilot users set their region instead of FSA tracts.
   const auPilot = isAuPilotEnabled({ email: session?.user?.email, id: session?.user?.id })
     || preferences.country === 'AU';
@@ -59,6 +57,12 @@ export default function Onboarding() {
 
   const handleDone = () => finish(false);
   const handleSkip = () => finish(step === 'name');
+  const handleRegionDone = () => {
+    if (!chosenCountry || inFlight.current || offline) return;
+    // Save country, locale and units together before setup is marked complete.
+    updatePreferences(regionPreferences(chosenCountry));
+    void finish(false);
+  };
 
   const handleSaveName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,8 +169,8 @@ export default function Onboarding() {
 
           {step === 'region' && (
             <div className="space-y-4 mt-4">
-              <RegionManager />
-              <Button onClick={handleDone} disabled={isSaving || offline} className="w-full h-11 gap-2">
+              <RegionManager value={chosenCountry} onChange={setChosenCountry} />
+              <Button onClick={handleRegionDone} disabled={isSaving || offline || !chosenCountry} className="w-full h-11 gap-2">
                 Done
                 <ArrowRight size={18} />
               </Button>
@@ -179,9 +183,7 @@ export default function Onboarding() {
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">No FSA boundary files?</p>
                   <p className="text-xs text-muted-foreground">
-                    {isFreeTierLocked(entitlement)
-                      ? ENTITLEMENT_COPY.onboardingFsaProNote
-                      : 'You can add fields by hand on the Fields screen and import FSA tracts later in Settings.'}
+                    You can add fields by hand on the Fields screen and import FSA tracts later in Settings.
                   </p>
                 </div>
                 <Button variant="outline" onClick={handleDone} disabled={isSaving || offline} className="h-11 shrink-0">

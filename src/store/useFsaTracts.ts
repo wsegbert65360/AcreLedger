@@ -2,8 +2,6 @@ import { useCallback, useRef } from 'react';
 
 import { toast } from 'sonner';
 
-import { ENTITLEMENT_COPY } from '@/copy/entitlements';
-import { isPremiumRequiredError } from '@/lib/entitlements';
 import { mapFieldCluAssignmentFromDb, mapFieldCluAssignmentToDb, mapFsaTractFromDb, mapFsaTractToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
 import { cluAssignmentService } from '@/services/cluAssignmentService';
@@ -168,9 +166,7 @@ export function useFsaTracts({
       } catch (error) {
         console.error('Failed to import tract:', error);
         rollbackTract();
-        toast.error(isPremiumRequiredError(error as { code?: string; message?: string } | null)
-          ? ENTITLEMENT_COPY.fsaTractLocked
-          : 'Failed to import tract');
+        toast.error('Failed to import tract');
         return false;
       }
     } finally {

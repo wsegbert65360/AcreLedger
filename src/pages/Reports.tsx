@@ -652,6 +652,14 @@ export default function Reports() {
     id: record.id,
     cells: [fmtDate(record.date), fieldMap.get(record.fieldId)?.name || record.fieldName, record.fertilizer_formula, String(record.acres)],
   }));
+  const fallPreviewRows: ReportPreviewRow[] = fsaFallRows.map((row) => ({
+    id: `${row.recordType}-${row.id}`,
+    cells: [row.fieldName, row.crop || '—', `${row.production.toLocaleString()} ${row.productionUnit}`],
+  }));
+  const hayPreviewRows: ReportPreviewRow[] = hayRecords.map((record) => ({
+    id: record.id,
+    cells: [fieldMap.get(record.fieldId)?.name || '—', `#${record.cuttingNumber}`, record.baleCount.toLocaleString()],
+  }));
 
   return (
     <div className="min-h-screen bg-background pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
@@ -809,6 +817,16 @@ export default function Reports() {
 
         {/* ── FSA Fall Harvest / Production Report ───────────────────────────── */}
         <TabsContent value="fsa-harvest" className="mt-0">
+          {paidReportNode(
+            'fsa-harvest',
+            entitlement,
+            cachedEntitlement,
+            failed,
+            <ReportPreview
+              title="FSA Fall Harvest / Production Evidence Worksheet"
+              headers={['Field', 'Crop', 'Production']}
+              rows={fallPreviewRows}
+            />,
           <FallFsaReport
             fsaFallRows={fsaFallRows}
             cropTotals={fallCropTotals}
@@ -830,11 +848,22 @@ export default function Reports() {
               },
             }), 'fall production data')}
             onExportPdf={handleExportHarvestPdf}
-          />
+          />,
+          )}
         </TabsContent>
 
         {/* ── Hay Summary ─────────────────────────────────────────────────────── */}
         <TabsContent value="hay-summary" className="mt-0">
+          {paidReportNode(
+            'hay-summary',
+            entitlement,
+            cachedEntitlement,
+            failed,
+            <ReportPreview
+              title="Hay Production Summary"
+              headers={['Field', 'Cutting', 'Bales']}
+              rows={hayPreviewRows}
+            />,
           <HaySummaryReport
             hayRecords={hayRecords}
             fields={fields}
@@ -844,7 +873,8 @@ export default function Reports() {
             readinessSummary={hayReadinessSummary}
             exportStatus={getExportStatus('hay-summary')}
             onIssueAction={handleIssueAction}
-          />
+          />,
+          )}
         </TabsContent>
 
         {/* ── Landlord Summary ──────────────────────────────────────────────── */}

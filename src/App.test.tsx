@@ -788,6 +788,41 @@ describe('signed-in routing (preserved behavior)', () => {
     expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
   });
 
+  it('sends a completed user who opens /onboarding back to the dashboard', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = { ...signedInState, onboardingComplete: true, onboardingStatusKnown: true };
+    navigate('/onboarding');
+    renderApp();
+    expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+    expect(screen.queryByTestId('onboarding-page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('app-bottom-nav')).toBeInTheDocument();
+  });
+
+  it('uses this device\'s completed-setup cache to leave /onboarding', async () => {
+    localStorage.setItem('user-1_al_onboarding_complete', '1');
+    farmState.current = { ...signedInState, onboardingComplete: false, onboardingStatusKnown: false };
+    navigate('/onboarding');
+    renderApp();
+    expect(await screen.findByTestId('app-dashboard')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('keeps a user who still needs setup on /onboarding', async () => {
+    localStorage.removeItem('user-1_al_onboarding_complete');
+    farmState.current = {
+      ...signedInState,
+      fields: [],
+      onboardingComplete: false,
+      initialFetchComplete: true,
+      onboardingStatusKnown: true,
+    };
+    navigate('/onboarding');
+    renderApp();
+    expect(await screen.findByTestId('onboarding-page')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/onboarding');
+  });
+
   it('redirects /setup to settings', async () => {
     navigate('/setup');
     renderApp();

@@ -13,7 +13,7 @@ const step: CoachmarkStep = {
   id: 'addField',
   targetId: 'coachmark-test-target',
   title: 'Add your fields',
-  body: 'Tap here to add a field.',
+  body: 'This is where you add a field.',
   placement: 'bottom',
 };
 
@@ -58,7 +58,7 @@ describe('CoachmarkOverlay', () => {
     addTarget({ id: step.targetId });
     renderOverlay();
     expect(screen.getByRole('dialog', { name: /Add your fields/ })).toBeVisible();
-    expect(screen.getByText('Tap here to add a field.')).toBeInTheDocument();
+    expect(screen.getByText('This is where you add a field.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip tour' })).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toHaveTextContent('step 1 of 4');
@@ -83,11 +83,66 @@ describe('CoachmarkOverlay', () => {
     expect(screen.getByRole('dialog', { name: /Add your fields/ })).toBeInTheDocument();
   });
 
-  it('skips a step whose target never appears instead of hanging invisibly', () => {
+  it('shows a step whose target never appears centered instead of skipping it', () => {
     vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'Date'] });
     const h = renderOverlay();
     act(() => { vi.advanceTimersByTime(TARGET_WAIT_MS + 100); });
-    expect(h.onNext).toHaveBeenCalledTimes(1);
+    expect(h.onNext).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog', { name: /Add your fields/ });
+    expect(dialog).toHaveAttribute('data-placement', 'centered');
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+  });
+
+  it('keeps waiting while a lazy route is still loading, then finds the target', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'Date'] });
+    const fallback = document.createElement('div');
+    fallback.setAttribute('data-route-fallback', '');
+    document.body.appendChild(fallback);
+    const h = renderOverlay();
+    act(() => { vi.advanceTimersByTime(TARGET_WAIT_MS * 3); });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fallback.remove();
+    addTarget({ id: step.targetId });
+    act(() => { vi.advanceTimersByTime(50); });
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-placement', 'target');
+    expect(h.onNext).not.toHaveBeenCalled();
+  });
+
+  it('blocks clicks on the spotlighted control', () => {
+    const target = addTarget({ id: step.targetId });
+    const clicked = vi.fn();
+    target.addEventListener('click', clicked);
+    const h = renderOverlay();
+    const blocker = screen.getByTestId('coachmark-click-blocker');
+    expect(blocker.className).toMatch(/\binset-0\b/);
+    expect(blocker.className).toMatch(/pointer-events-auto/);
+    fireEvent.click(blocker);
+    expect(clicked).not.toHaveBeenCalled();
+    expect(h.onNext).not.toHaveBeenCalled();
+  });
+
+  it('makes the app behind the tour inert and hidden from assistive technology, then restores it', () => {
+    const appRoot = document.createElement('div');
+    appRoot.id = 'root';
+    appRoot.setAttribute('aria-hidden', 'false');
+    document.body.appendChild(appRoot);
+    const target = addTarget({ id: step.targetId });
+    const view = render(
+      <CoachmarkOverlay step={step} stepIndex={0} totalSteps={4} isLast={false} {...handlers()} />,
+    );
+    expect(appRoot).toHaveAttribute('inert');
+    expect(appRoot).toHaveAttribute('aria-hidden', 'true');
+    expect(target).toHaveAttribute('inert');
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.closest('[inert]')).toBeNull();
+    expect(dialog.closest('[aria-hidden="true"]')).toBeNull();
+
+    view.unmount();
+    expect(appRoot).not.toHaveAttribute('inert');
+    expect(appRoot).toHaveAttribute('aria-hidden', 'false');
+    expect(target).not.toHaveAttribute('inert');
+    expect(target).not.toHaveAttribute('aria-hidden');
+    expect(document.querySelector('[data-coachmark-host]')).toBeNull();
   });
 
   it('prefers the visible desktop target over a hidden mobile one', () => {
@@ -135,6 +190,21 @@ describe('coachmark target contract', () => {
 
   it('step 1 points at the Add field button, not Manage', () => {
     expect(src('pages/Index.tsx')).toMatch(/id="coachmark-add-field"\s+onClick=\{\(\) => setAddOpen\(true\)\}\s+aria-label="Add new field"/);
+  });
+
+  it('tour copy says "This is where" and does not promise Quick Add from anywhere', () => {
+    let steps: ReturnType<typeof useCoachmarks>['steps'] = [];
+    function Probe() { steps = useCoachmarks({ userId: 'copy', enabled: false }).steps; return null; }
+    render(<Probe />);
+    const text = steps.map(s => s.body).join('\n');
+    expect(text).not.toMatch(/Tap here/);
+    expect(text).not.toMatch(/from anywhere/);
+    expect(steps.find(s => s.id === 'addField')?.body).toMatch(/^This is where/);
+    expect(steps.find(s => s.id === 'quickAdd')?.body).toMatch(/^Use Quick Add here/);
+  });
+
+  it('the lazy-route fallback is marked so the tour can wait for it', () => {
+    expect(src('App.tsx')).toContain('data-route-fallback');
   });
 
   it('Quick Add is targeted on both mobile and desktop', () => {

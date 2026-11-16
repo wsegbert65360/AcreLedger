@@ -1,5 +1,15 @@
-/** How long to wait for a coachmark step's target to mount (lazy routes) before skipping the step. */
-export const TARGET_WAIT_MS = 2000;
+/**
+ * How long to keep looking for a step's target once no route is still loading.
+ * After that the step is shown centered (no spotlight) instead of being skipped.
+ */
+export const TARGET_WAIT_MS = 4000;
+
+/** Marks the lazy-route Suspense fallback. While it is on screen the tour keeps waiting. */
+export const ROUTE_FALLBACK_ATTR = 'data-route-fallback';
+
+export function isRouteLoading(): boolean {
+  return document.querySelector(`[${ROUTE_FALLBACK_ATTR}]`) !== null;
+}
 
 /**
  * Mobile bottom nav uses the id; the desktop sidebar uses data-coachmark.

@@ -200,6 +200,21 @@ describe('farmStore composed behaviors', () => {
       expect(toastError).toHaveBeenCalledWith('Could not save your setup. Please try again.');
     });
 
+    it.each([
+      ['null', { error: null, count: null }],
+      // The mock defaults count to 1, so an explicit undefined stands in for a missing count.
+      ['missing', { error: null, count: undefined }],
+      ['more than one', { error: null, count: 2 }],
+    ])('keeps local onboarding incomplete when the update count is %s', async (_label, response) => {
+      control.onboardingComplete = false;
+      cloud.setResult(response as Partial<SupabaseResult>);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await act(async () => expect(await result.current.completeOnboarding()).toBe(false));
+      expect(result.current.onboardingComplete).toBe(false);
+      expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
+      expect(toastError).toHaveBeenCalledWith('Could not save your setup. Please try again.');
+    });
+
     it('waits for a successful profile write before updating local onboarding', async () => {
       control.onboardingComplete = false;
       const { result } = renderHook(() => useFarm(), { wrapper });
@@ -211,7 +226,7 @@ describe('farmStore composed behaviors', () => {
       expect(result.current.onboardingComplete).toBe(false);
       expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
       await act(async () => {
-        finish({ error: null });
+        finish({ error: null, count: 1 });
         expect(await completion).toBe(true);
       });
       expect(result.current.onboardingComplete).toBe(true);

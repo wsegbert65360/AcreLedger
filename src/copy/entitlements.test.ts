@@ -13,24 +13,27 @@ describe('entitlement plan copy', () => {
 
   it('describes the free record book', () => {
     expect(ENTITLEMENT_COPY.planFreeSummary).toBe(
-      'The free record book keeps your field records. Pro adds rainfall on all remaining fields, prepared reports, and the business tools.',
+      'The free record book keeps your field records, including FSA and CLU details. Pro adds prepared reports, rainfall on all remaining fields, and the business tools.',
     );
     expect(freePlanIncluded()).toEqual([
       `Up to ${FREE_LIMITS.fieldCap} active fields`,
       FREE_RAINFALL,
-      'Planting, spraying, fertilizing and harvest records',
+      'Planting, spraying, fertilizing, harvest and hay records',
+      'FSA tract import, CLU assignment, and FSA farm, tract and field numbers',
       'Export what you logged',
     ]);
+    expect(ENTITLEMENT_COPY).not.toHaveProperty('fsaTractLocked');
+    expect(ENTITLEMENT_COPY).not.toHaveProperty('onboardingFsaProNote');
     expect(freePlanIncluded().some((line) => /photo/i.test(line))).toBe(false);
   });
 
   it('lists prepared reports and rainfall on the remaining fields as Pro', () => {
     expect(ENTITLEMENT_COPY.planPaidName).toBe('Pro');
     expect(paidPlanAdds()).toEqual([
-      'Prepared FSA-578, spray log, fertilizer, and landlord reports',
+      'Prepared reports: FSA-578, Fall FSA production, spray log, fertilizer, Hay Summary, and landlord and farm-owner statements',
       'Grain bins and grain movement',
       'Equipment and maintenance',
-      'Landlord splits and FSA tract details',
+      'Landlord splits',
       'Rainfall on all remaining fields, hourly',
       'Backup restore',
     ]);

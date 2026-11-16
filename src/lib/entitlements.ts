@@ -34,13 +34,14 @@ export const PREMIUM_FEATURES = [
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
 /**
- * Report types that need Pro (FSA-578, season spray log, fertilizer, landlord
- * statements). Fall FSA and the hay summary stay free. Save, share, print, and
- * export ask the server first (authorizeReportExport) and fail closed.
- * Reports are still built on the device.
+ * Prepared reports that need Pro: FSA-578, Fall FSA production, spray log,
+ * fertilizer, Hay Summary, and landlord / farm-owner statements. FSA/CLU data
+ * entry itself is free. Save, share, print, and export ask the server first
+ * (authorizeReportExport) and fail closed. Reports are still built on the device.
  */
 const PAID_REPORT_TYPES: ReadonlySet<string> = new Set([
-  'fsa-plant', 'spray-audit', 'fertilizer-summary', 'landlord-statement', 'farm-owner-summary',
+  'fsa-plant', 'fsa-harvest', 'spray-audit', 'fertilizer-summary', 'hay-summary',
+  'landlord-statement', 'farm-owner-summary',
 ]);
 
 export function isPaidReport(reportType: string): boolean {

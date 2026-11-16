@@ -47,7 +47,8 @@ describe('PlanCard', () => {
       expect(screen.getByText(line)).toBeTruthy();
     }
     expect(screen.getByText(/Daily rainfall on your two oldest fields/)).toBeTruthy();
-    expect(screen.getByText('Prepared FSA-578, spray log, fertilizer, and landlord reports')).toBeTruthy();
+    expect(screen.getByText(/^Prepared reports: FSA-578, Fall FSA production/)).toBeTruthy();
+    expect(screen.getByText('FSA tract import, CLU assignment, and FSA farm, tract and field numbers')).toBeTruthy();
     expect(screen.getByText('Rainfall on all remaining fields, hourly')).toBeTruthy();
     expect(screen.queryByText(/photo/i)).toBeNull();
     expect(screen.getByRole('link', { name: ENTITLEMENT_COPY.planUpgradeLink }).getAttribute('href'))
