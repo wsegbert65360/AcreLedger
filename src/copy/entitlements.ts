@@ -1,5 +1,5 @@
 // All free-tier / upgrade wording lives here so it can be reviewed and changed in one place.
-// DRAFT: every string below is placeholder copy for William to approve before `enforce` ships.
+// Approved by William 2026-11-16. Changes to these strings need his sign-off.
 // iOS note: the native app links to the website only on the US App Store storefront
 // (planUpgradeLinkWebsite); everywhere else use `nativeManageOnWeb` and no link. See
 // docs/ios-storefront-link.md and confirm the exact wording before an iOS release.
@@ -19,10 +19,14 @@ export const ENTITLEMENT_COPY = {
   binLockedNote: 'Tracking what goes into each bin is part of Pro. You can still log this harvest as Town.',
   binLockedLabel: 'Pro',
 
+  // FSA tracts (no price or purchase wording: this also shows in the iOS app)
+  fsaTractLocked: 'FSA tract import is part of Pro. You can still add fields by hand.',
+  onboardingFsaProNote: 'FSA/CLU import is part of Pro. You can add fields by hand on the free plan.',
+
   // Rainfall
   rainfallLocked: 'Automatic rainfall for this field is part of Pro.',
 
-  // Cattle events (DRAFT: groups, pasture moves and editing head count stay free)
+  // Cattle events (groups, pasture moves and editing head count stay free)
   cattleEventsLockedTitle: 'Cattle events are part of Pro.',
   cattleEventsLockedBody: 'You can still keep your groups, move them between pastures, and change a head count by editing the group. Events you already logged stay here.',
 

@@ -5,8 +5,26 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const actions = vi.hoisted(() => ({ completeOnboarding: vi.fn(), updateFarmName: vi.fn() }));
+const farm = vi.hoisted(() => ({ isOnline: true as boolean, farmName: 'Oak Creek' }));
+const plan = vi.hoisted(() => ({ entitlement: null as null | { plan: string; enforced: boolean } }));
+const prefs = vi.hoisted(() => ({ country: 'US' }));
+
 vi.mock('@/store/farmStore', () => ({
-  useFarm: () => ({ farmName: 'Oak Creek', ...actions }),
+  useFarm: () => ({
+    farmName: farm.farmName,
+    isOnline: farm.isOnline,
+    session: { user: { id: 'user-1', email: 'farmer@example.com' } },
+    ...actions,
+  }),
+}));
+vi.mock('@/hooks/useEntitlement', () => ({
+  useEntitlement: () => ({ entitlement: plan.entitlement, loading: false, cachedEntitlement: null, failed: false }),
+}));
+vi.mock('@/store/useAppPreferences', () => ({
+  useAppPreferences: () => ({ preferences: { country: prefs.country }, updatePreferences: vi.fn() }),
+}));
+vi.mock('@/components/settings/RegionManager', () => ({
+  default: () => <div data-testid="region-manager" />,
 }));
 vi.mock('@/components/TractAssignmentFlow', () => ({
   default: ({ onDone }: { onDone: () => void }) => <button onClick={onDone}>Done</button>,
@@ -27,6 +45,10 @@ describe('Onboarding completion', () => {
   beforeEach(() => {
     actions.completeOnboarding.mockReset().mockResolvedValue(false);
     actions.updateFarmName.mockReset().mockResolvedValue(true);
+    farm.isOnline = true;
+    farm.farmName = 'Oak Creek';
+    plan.entitlement = null;
+    prefs.country = 'US';
   });
 
   it('stays on setup after Skip fails, then allows a successful retry', async () => {
@@ -47,5 +69,83 @@ describe('Onboarding completion', () => {
     await waitFor(() => expect(actions.completeOnboarding).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Set Up Your Fields' })).toBeInTheDocument();
+  });
+
+  it('does not advance when saving the farm name fails', async () => {
+    actions.updateFarmName.mockResolvedValue(false);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(actions.updateFarmName).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('heading', { name: 'Welcome to AcreLedger' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
+  it('re-enables controls when completion rejects', async () => {
+    actions.completeOnboarding.mockRejectedValue(new Error('boom'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip setup' }));
+    await waitFor(() => expect(actions.completeOnboarding).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Skip setup' })).toBeEnabled());
+  });
+
+  it('sends one request for a quick double Skip', async () => {
+    actions.completeOnboarding.mockResolvedValue(true);
+    renderPage();
+    const skip = screen.getByRole('button', { name: 'Skip setup' });
+    fireEvent.click(skip);
+    fireEvent.click(skip);
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+    expect(actions.completeOnboarding).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a typed farm name when skipping from the name step', async () => {
+    actions.completeOnboarding.mockResolvedValue(true);
+    renderPage();
+    fireEvent.change(screen.getByLabelText('Farm Name'), { target: { value: 'Hilltop Farms' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skip setup' }));
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+    expect(actions.updateFarmName).toHaveBeenCalledWith('Hilltop Farms');
+  });
+
+  it('finishes without FSA data through "Add fields by hand instead"', async () => {
+    actions.completeOnboarding.mockResolvedValue(true);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add fields by hand instead' }));
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+  });
+
+  it('says the internet is required and disables setup while offline', () => {
+    farm.isOnline = false;
+    renderPage();
+    expect(screen.getByRole('status')).toHaveTextContent('Internet required to finish setup');
+    expect(screen.getByRole('button', { name: 'Skip setup' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+  });
+
+  it('labels FSA import as Pro for a free farm under enforcement, with no price', async () => {
+    plan.entitlement = { plan: 'free', enforced: true };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    const note = await screen.findByText(/FSA\/CLU import is part of Pro/);
+    expect(note.textContent).not.toMatch(/\$|price|buy|purchase|subscribe/i);
+  });
+
+  it('asks AU-pilot users for their region instead of FSA tracts', async () => {
+    prefs.country = 'AU';
+    actions.completeOnboarding.mockResolvedValue(true);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByRole('heading', { name: 'Choose Your Region' })).toBeInTheDocument();
+    expect(screen.getByTestId('region-manager')).toBeInTheDocument();
+    expect(screen.queryByText(/FSA/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+  });
+
+  it('does not promise the farm name on scale tickets', () => {
+    renderPage();
+    expect(screen.queryByText(/scale ticket/i)).not.toBeInTheDocument();
   });
 });

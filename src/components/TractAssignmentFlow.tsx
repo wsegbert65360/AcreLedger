@@ -504,6 +504,10 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
           <div className="space-y-4 my-2">
             {/* Upload Zone */}
             <div
+              onDragEnter={handleDialogDrag}
+              onDragOver={handleDialogDrag}
+              onDragLeave={handleDialogDrag}
+              onDrop={handleDialogDrop}
               onClick={() => document.getElementById('empty-state-file-input')?.click()}
               className="border-2 border-dashed border-primary/30 hover:border-primary/50 bg-primary/5 hover:bg-primary/10 rounded-2xl p-6 text-center cursor-pointer transition-all space-y-2.5 animate-in fade-in zoom-in duration-300"
             >

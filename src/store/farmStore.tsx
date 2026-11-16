@@ -1215,11 +1215,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     try {
       if (!farm_id && !await ensureFarm()) return false;
       if (sessionUserIdRef.current !== userId) return false;
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from('profiles')
-        .update({ onboarding_complete: true })
+        .update({ onboarding_complete: true }, { count: 'exact' })
         .eq('id', userId);
       if (error) throw error;
+      // No error but no row (missing profile, RLS drift): the cloud flag is still
+      // false, so do not mark this device complete either.
+      if (count === 0) throw new Error('Could not save your setup. Please try again.');
 
       if (sessionUserIdRef.current !== userId) return false;
       setOnboardingComplete(true);

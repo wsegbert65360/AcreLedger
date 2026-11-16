@@ -190,6 +190,16 @@ describe('farmStore composed behaviors', () => {
       expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
     });
 
+    it('keeps local onboarding incomplete when the profile update touches no row', async () => {
+      control.onboardingComplete = false;
+      cloud.setResult({ error: null, count: 0 });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await act(async () => expect(await result.current.completeOnboarding()).toBe(false));
+      expect(result.current.onboardingComplete).toBe(false);
+      expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
+      expect(toastError).toHaveBeenCalledWith('Could not save your setup. Please try again.');
+    });
+
     it('waits for a successful profile write before updating local onboarding', async () => {
       control.onboardingComplete = false;
       const { result } = renderHook(() => useFarm(), { wrapper });
@@ -197,7 +207,7 @@ describe('farmStore composed behaviors', () => {
       cloud.setTablePages('profiles', [new Promise(resolve => { finish = resolve; })]);
       let completion!: Promise<boolean>;
       act(() => { completion = result.current.completeOnboarding(); });
-      await waitFor(() => expect(cloud.fns.update).toHaveBeenCalledWith({ onboarding_complete: true }));
+      await waitFor(() => expect(cloud.fns.update).toHaveBeenCalledWith({ onboarding_complete: true }, { count: 'exact' }));
       expect(result.current.onboardingComplete).toBe(false);
       expect(localStorage.getItem('user-1_al_onboarding_complete')).toBeNull();
       await act(async () => {
