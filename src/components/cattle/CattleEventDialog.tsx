@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import {
   CATTLE_EVENT_HEAD_RULE, CATTLE_EVENT_LABELS, CATTLE_EVENT_TYPES, CATTLE_REMOVAL_LABELS, isFutureDate, parseHeadCount,
 } from '@/lib/cattle/ui';
@@ -73,22 +74,25 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
 
     setError(null);
     setSaving(true);
+    // Set when the server refuses the save for plan reasons, so the message says so.
+    let premiumRequired = false;
+    const saveOptions = { onPremiumRequired: () => { premiumRequired = true; } };
     try {
       if (isTransfer) {
-        const ok = await transferCattleHead({ fromGroupId: group.id, toGroupId, head: count, eventDate: date, notes: cleanNotes });
-        if (!ok) return void toast.error('Could not save the move.');
+        const ok = await transferCattleHead({ fromGroupId: group.id, toGroupId, head: count, eventDate: date, notes: cleanNotes }, saveOptions);
+        if (!ok) return void toast.error(premiumRequired ? ENTITLEMENT_COPY.cattleEventsLockedTitle : 'Could not save the move.');
       } else {
         const ok = await logCattleEvent({
           groupId: group.id, eventType: type, eventDate: date,
           headDelta: rule === 'positive' ? count : rule === 'negative' ? -count : 0,
           reason: type === 'head_removed' && reason ? reason : undefined,
           notes: cleanNotes,
-        });
-        if (!ok) return void toast.error('Could not save the event.');
+        }, saveOptions);
+        if (!ok) return void toast.error(premiumRequired ? ENTITLEMENT_COPY.cattleEventsLockedTitle : 'Could not save the event.');
         if (weanCount > 0) {
           const moved = await transferCattleHead({
             fromGroupId: group.id, toGroupId, head: weanCount, eventDate: date, notes: cleanNotes ?? 'Weaning',
-          });
+          }, saveOptions);
           if (!moved) {
             toast.error('Weaning was saved, but moving the head did not save. Try the move again.');
             return onClose();

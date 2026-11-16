@@ -168,6 +168,8 @@ export default defineConfig(({ mode }) => {
       "**/*.integration.test.{ts,tsx}",
       "infrastructure/**",
       "scripts/recovery/**",
+      // node:test files. `npm run lint` runs them with `node --test`.
+      "scripts/**/*.test.mjs",
     ],
     coverage: {
       provider: "v8",

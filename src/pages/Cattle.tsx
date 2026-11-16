@@ -7,13 +7,17 @@ import BottomNav from '@/components/BottomNav';
 import CattleGroupDialog from '@/components/cattle/CattleGroupDialog';
 import CattleEventsSection from '@/components/cattle/CattleEventsSection';
 import CattleMoveDialog from '@/components/cattle/CattleMoveDialog';
+import { PlanUpgradeLink } from '@/components/settings/PlanUpgradeLink';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
+import { useEntitlement } from '@/hooks/useEntitlement';
 import { daysOnCurrentPasture } from '@/lib/cattle/derived';
 import { buildCattleCsv, exportCattleCsv } from '@/lib/cattle/report';
 import {
   CATTLE_CLASS_LABELS, PASTURE_REMOVED_LABEL, pastureLabel,
 } from '@/lib/cattle/ui';
+import { isFreeTierLocked } from '@/lib/entitlements';
 import { localTodayIso } from '@/lib/equipment';
 import { formatIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
@@ -45,6 +49,9 @@ function GroupCard({ group, pasture, days }: { group: CattleGroup; pasture: stri
 function CattleList() {
   const { cattleGroups, cattleMoves, cattleEvents, fields } = useFarm();
   const [adding, setAdding] = useState(false);
+  // The cattle CSV is a Pro export, gated on the client like the other reports.
+  const { entitlement, cachedEntitlement } = useEntitlement();
+  const exportLocked = isFreeTierLocked(entitlement ?? cachedEntitlement);
   const today = localTodayIso();
   const groups = useMemo(
     () => cattleGroups.filter(group => !group.deleted_at).sort((a, b) => a.name.localeCompare(b.name)),
@@ -53,6 +60,7 @@ function CattleList() {
   const hasRecords = groups.length > 0;
 
   const exportCsv = async () => {
+    if (exportLocked) return;
     try {
       await exportCattleCsv(buildCattleCsv(cattleGroups, cattleMoves, cattleEvents, fields), `AcreLedger-cattle-${today}.csv`);
     } catch (error) {
@@ -80,10 +88,16 @@ function CattleList() {
         ))}
       </div>
       <Button className="h-12 w-full" onClick={() => setAdding(true)}><Plus className="mr-2 h-4 w-4" />Add group</Button>
-      {hasRecords && (
+      {hasRecords && !exportLocked && (
         <Button variant="outline" className="h-11 w-full" onClick={() => void exportCsv()}>
           <Download className="mr-2 h-4 w-4" />Export cattle CSV
         </Button>
+      )}
+      {hasRecords && exportLocked && (
+        <div className="space-y-1 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm" data-testid="cattle-csv-locked">
+          <p className="font-semibold">{ENTITLEMENT_COPY.cattleCsvLocked}</p>
+          <PlanUpgradeLink />
+        </div>
       )}
       {adding && <CattleGroupDialog onClose={() => setAdding(false)} />}
     </>
@@ -141,7 +155,10 @@ function GroupDetail({ group }: { group: CattleGroup }) {
             </span>
             <Button
               variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label={`Delete move on ${move.movedOn}`}
-              onClick={() => { if (window.confirm('Delete this move?')) void deleteCattleMove(move.id); }}
+              onClick={() => {
+                if (!window.confirm('Delete this move?')) return;
+                void deleteCattleMove(move.id).then(ok => { if (!ok) toast.error('Could not delete the move.'); });
+              }}
             ><Trash2 className="h-4 w-4" /></Button>
           </div>
         ))}

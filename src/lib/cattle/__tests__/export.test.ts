@@ -13,6 +13,16 @@ describe('cattle raw CSV', () => {
     expect(csv.groups).toContain('"\'=cmd"');
     expect(csv.moves).toContain('"\'+unsafe"');
     expect(csv.events).toContain('"working"');
+    expect(csv.events.split('\r\n')[0]).toContain('"transfer_id"');
     expect(csv.groups).not.toMatch(/cost|price|dollar/i);
+  });
+
+  it('keeps the transfer id that links the two halves of a head move', () => {
+    const half: CattleEvent = {
+      id: 'e2', farm_id: 'f1', groupId: 'g1', eventType: 'head_removed', eventDate: '2026-01-03', headDelta: -4,
+      reason: 'moved_to_another_group', transferId: 'e2', ...timestamps,
+    };
+    const row = buildCattleCsvFiles([], [], [half]).events.split('\r\n')[1];
+    expect(row).toContain('"moved_to_another_group","e2"');
   });
 });

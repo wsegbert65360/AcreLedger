@@ -166,4 +166,20 @@ describe('useCattle', () => {
     expect(result.current.events.value.every(e => e.deleted_at)).toBe(true);
     expect(result.current.groups.value.map(g => g.headCount)).toEqual([20, 0]);
   });
+  it('tells the form when the server refuses an event for plan reasons, and rolls back', async () => {
+    shouldQueueWrite.mockResolvedValue(false);
+    supabaseMock.setRpcResult({ data: null, error: { code: 'P0402', message: 'premium_required:cattle_events' } });
+    const onPremiumRequired = vi.fn();
+    const { result } = renderCattle({ groups: [group], online: true });
+    await act(async () => {
+      expect(await result.current.ops.logCattleEvent(
+        { groupId: 'g1', eventType: 'calving', eventDate: '2026-03-12', headDelta: 3 },
+        { onPremiumRequired },
+      )).toBe(false);
+    });
+    expect(onPremiumRequired).toHaveBeenCalledTimes(1);
+    expect(result.current.events.value).toHaveLength(0);
+    expect(result.current.groups.value[0].headCount).toBe(20);
+    expect(enqueueMutation).not.toHaveBeenCalled();
+  });
 });

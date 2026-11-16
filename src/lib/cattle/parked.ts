@@ -151,3 +151,21 @@ export function applyParkedCattleMutations(
   }
   return { groups: nextGroups, moves: nextMoves, events: nextEvents };
 }
+
+/**
+ * The value of the newest "I run cattle" switch still waiting in the queue, or
+ * null when none is waiting. Parked (failed) switches are ignored so a refused
+ * change cannot pin the setting.
+ */
+export function queuedRunsCattle(queue: QueuedMutation[], farmId: string): boolean | null {
+  let value: boolean | null = null;
+  for (const mutation of queue) {
+    if (mutation.farm_id !== farmId || mutation.table_name !== 'farms') continue;
+    if (mutation.retry_count >= MAX_SYNC_RETRIES) continue;
+    const rpc = readCattleRpcEnvelope(mutation.payload);
+    if (rpc?.rpc === 'set_runs_cattle' && typeof rpc.args.p_runs_cattle === 'boolean') {
+      value = rpc.args.p_runs_cattle;
+    }
+  }
+  return value;
+}

@@ -9,6 +9,8 @@ Do not point production at the new project until the owner accepts the drill.
 - `supabase db dump` schema dump **excludes** `auth` and `storage`.
 - `supabase db dump --data-only --use-copy` **includes** Auth and Storage table data unless `--schema` is narrowed.
 - This worker writes separate `auth-data.sql` and `storage-metadata.sql` so restore is explicit.
+- `supabase db dump` runs `pg_dump` with `--no-privileges`, so schema files do not contain GRANT/REVOKE. The worker also writes `privileges.sql` from `pg_dump --schema-only --no-owner` (no `--no-privileges`/`-x` privilege suppression) and keeps only GRANT/REVOKE/ALTER DEFAULT PRIVILEGES so restore does not fail on "already exists".
+- Dump flags for privileges: include object privileges; do not use `--no-privileges` or `-x` to suppress them; keep `--no-owner`. The owner's live PC nightly script already follows those flags (Ops, 2026-11-10). This runbook is the in-repo DR path.
 - Storage **files** are not in the SQL dump. They live under safely hashed paths in `storage/objects/`; `storage/objects-manifest.json` maps every archive path back to its exact bucket and object key.
 - Prefer a direct `db.<ref>.supabase.co:5432` connection. Otherwise use the session pooler on port 5432. Never use transaction pooling (port 6543).
 
@@ -26,7 +28,9 @@ Do not point production at the new project until the owner accepts the drill.
    npm run restore-isolated --prefix scripts/recovery -- --plaintext-dir <verified-decrypted-directory> --confirm-isolated-ref <isolated-project-ref>
    ```
 
-   `scripts/recovery/restore-isolated.ts` is the authority for the complete file order. It includes `auth-schema.sql`, `storage-schema.sql`, and migration schema/data files when present; fails if a required artifact is missing; runs `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after schema loading; and only then enables replica mode and loads data. It requires `--confirm-isolated-ref` for the replacement project, refuses production ref `rtzqswpmhlbrbxjwyywl`, and compares restored table counts with `manifest.json`. Do not replace it with a hand-written `psql` sequence.
+   `scripts/recovery/restore-isolated.ts` is the authority for the complete file order. It includes `auth-schema.sql`, `storage-schema.sql`, `privileges.sql`, and migration schema/data files when present; fails if a required artifact is missing; applies object GRANT/REVOKE after schema files and before data; runs `RECOVERY_SIDE_EFFECT_DISABLE_SQL` after schema loading; and only then enables replica mode and loads data. It requires `--confirm-isolated-ref` for the replacement project, refuses production ref `rtzqswpmhlbrbxjwyywl`, and compares restored table counts with `manifest.json`. Do not replace it with a hand-written `psql` sequence.
+
+   After the isolated restore, compare function EXECUTE grants for `anon` and `authenticated` with the source project. Internal SECURITY DEFINER functions must not become callable by those roles. `verifyExtractedBackup` confirms `privileges.sql` is present and contains GRANT/REVOKE; `FUNCTION_EXECUTE_AUDIT_SQL` in `infrastructure/owner-backup/src/privileges.ts` is the query to run on source and restored databases.
 8. Restore Storage objects into the exact bucket names and keys recorded beside each `archivePath` in `storage/objects-manifest.json`; verify each listed SHA-256 while streaming it.
 9. Recreate configuration that is not in the database: Auth URLs, API keys, Edge Functions (`mrms-hourly`, `mrms-backfill`), Realtime publication on `profiles`, Cron jobs, custom domains.
 10. Recreate Vault secrets **by name** (`mrms_automation_api_key`, `mrms_project_url`). Do not copy old API keys blindly — rotate them.

@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultCommandRunner } from "../../infrastructure/owner-backup/src/command.js";
 import { assertTlsDatabaseUrl, childProcessDatabaseEnv } from "../../infrastructure/owner-backup/src/config.js";
+import { assertPrivilegeArtifact, PRIVILEGES_FILE } from "../../infrastructure/owner-backup/src/privileges.js";
 import type { CommandRunner } from "../../infrastructure/owner-backup/src/types.js";
 import { createRecoveryClient } from "./pg-types.js";
 
@@ -14,6 +15,7 @@ export const ISOLATED_RESTORE_ORDER = [
   "auth-schema.sql",
   "storage-schema.sql",
   "migrations-schema.sql",
+  PRIVILEGES_FILE,
   "data.sql",
   "auth-data.sql",
   "storage-metadata.sql",
@@ -21,7 +23,14 @@ export const ISOLATED_RESTORE_ORDER = [
 ] as const;
 
 export const REQUIRED_RESTORE_FILES = new Set([
-  "roles.sql", "schema.sql", "data.sql", "auth-data.sql", "storage-metadata.sql",
+  "roles.sql", "schema.sql", PRIVILEGES_FILE, "data.sql", "auth-data.sql", "storage-metadata.sql",
+]);
+
+const DATA_RESTORE_FILES = new Set([
+  "data.sql",
+  "auth-data.sql",
+  "storage-metadata.sql",
+  "migrations-data.sql",
 ]);
 
 const SAFE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
@@ -166,10 +175,15 @@ export async function restoreIsolated(options: {
     const file = path.join(databaseDir, name);
     const exists = await fs.access(file).then(() => true, () => false);
     if (!exists && REQUIRED_RESTORE_FILES.has(name)) throw new Error(`Required restore file is missing: ${name}`);
-    if (exists) present.push({ name, file: file.replace(/\\/g, "/") });
+    if (exists) {
+      if (name === PRIVILEGES_FILE) {
+        assertPrivilegeArtifact(await fs.readFile(file, "utf8"));
+      }
+      present.push({ name, file: file.replace(/\\/g, "/") });
+    }
   }
-  const beforeData = present.filter(({ name }) => !["data.sql", "auth-data.sql", "storage-metadata.sql", "migrations-data.sql"].includes(name));
-  const data = present.filter(({ name }) => ["data.sql", "auth-data.sql", "storage-metadata.sql", "migrations-data.sql"].includes(name));
+  const beforeData = present.filter(({ name }) => !DATA_RESTORE_FILES.has(name));
+  const data = present.filter(({ name }) => DATA_RESTORE_FILES.has(name));
   const args = [
     "--single-transaction",
     "--variable",

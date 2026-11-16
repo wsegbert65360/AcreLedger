@@ -102,7 +102,7 @@ vi.doMock('@/lib/syncQueue', () => ({
   MAX_SYNC_RETRIES: 10,
   LINKED_GRAIN_MUTATION_KEY: '__linked_grain_movement',
   readEquipmentRpcEnvelope: () => null,
-  readCattleRpcEnvelope: () => null,
+  readCattleRpcEnvelope: (payload: { __cattle_rpc?: unknown } | null | undefined) => payload?.__cattle_rpc ?? null,
   CATTLE_RPC_KEY: '__cattle_rpc',
   syncQueue: {
     shouldQueueWrite: shouldQueueWriteMock,
@@ -247,9 +247,12 @@ describe('farmStore composed behaviors', () => {
       cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: false }, error: null });
       const { result } = renderHook(() => useFarm(), { wrapper });
       await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      // The server holds the new value once the RPC has saved it.
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: true }, error: null });
       await act(async () => expect(await result.current.updateRunsCattle(true)).toBe(true));
       expect(cloud.fns.rpc).toHaveBeenCalledWith('set_runs_cattle', { p_runs_cattle: true, p_farm_id: expect.any(String) });
       expect(result.current.runsCattle).toBe(true);
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: false }, error: null });
       await act(async () => expect(await result.current.updateRunsCattle(false)).toBe(true));
       expect(result.current.runsCattle).toBe(false);
     });
@@ -555,6 +558,69 @@ describe('farmStore composed behaviors', () => {
       expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_groups');
       expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_moves');
       expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_events');
+    });
+
+    it('loads everything else when the database has no runs_cattle column yet', async () => {
+      control.isOnline = true;
+      // First farms read is the name; the second is the fail-soft cattle setting.
+      cloud.setTablePages('farms', [
+        { data: { name: 'Cloud Farm' }, error: null },
+        { data: null, error: { code: '42703', message: 'column farms.runs_cattle does not exist' } },
+      ]);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.fetchError).toBe(false);
+      expect(result.current.farmName).toBe('Cloud Farm');
+      expect(result.current.runsCattle).toBe(false);
+      expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_groups');
+    });
+
+    it('keeps cattle on while the switch is still waiting in the offline queue', async () => {
+      control.isOnline = true;
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: false }, error: null });
+      getQueueMock.mockResolvedValue([{
+        id: 'q-cattle', table_name: 'farms', operation: 'update', farm_id: 'farm-1',
+        created_at: '2026-01-01T00:00:00Z', retry_count: 0,
+        payload: { id: 'farm-1', __cattle_rpc: { rpc: 'set_runs_cattle', args: { p_runs_cattle: true } } },
+      }]);
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.runsCattle).toBe(true);
+      expect(cloud.fns.from).toHaveBeenCalledWith('cattle_groups');
+    });
+
+    it('loads cattle rows right after the setting is switched on online', async () => {
+      control.isOnline = true;
+      shouldQueueWriteMock.mockResolvedValue(false);
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: false }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(cloud.fns.from).not.toHaveBeenCalledWith('cattle_groups');
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: true }, error: null });
+      await act(async () => expect(await result.current.updateRunsCattle(true)).toBe(true));
+      await waitFor(() => expect(cloud.fns.from).toHaveBeenCalledWith('cattle_groups'));
+      expect(result.current.runsCattle).toBe(true);
+    });
+
+    it('does not let a load that started before a switch overwrite it', async () => {
+      control.isOnline = true;
+      shouldQueueWriteMock.mockResolvedValue(false);
+      cloud.setTableHandler('farms', { data: { name: 'Cloud Farm', runs_cattle: true }, error: null });
+      const { result } = renderHook(() => useFarm(), { wrapper });
+      await waitFor(() => expect(result.current.initialFetchComplete).toBe(true));
+      expect(result.current.runsCattle).toBe(true);
+      // A refresh is still reading the old "on" value when the farmer switches cattle off.
+      let answer: (value: { data: unknown; error: null }) => void = () => undefined;
+      const slowSetting = new Promise<{ data: unknown; error: null }>(resolve => { answer = resolve; });
+      cloud.setTablePages('farms', [{ data: { name: 'Cloud Farm' }, error: null }, slowSetting]);
+      await act(async () => {
+        const loading = result.current.refresh();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await result.current.updateRunsCattle(false);
+        answer({ data: { runs_cattle: true }, error: null });
+        await loading;
+      });
+      expect(result.current.runsCattle).toBe(false);
     });
 
     it('keeps cached cattle when one enabled cattle query fails without blocking core data', async () => {

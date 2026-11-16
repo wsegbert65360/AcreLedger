@@ -10,22 +10,22 @@ Production project ref (already recorded in `docs/runbooks/full-project-recovery
 
 1. [ ] Take a fresh backup of production and confirm the file is on disk before any SQL change. The owner Cloud Run job `acreledger-owner-backup` is not a proven nightly backup yet (`docs/runbooks/owner-backup-operations.md`). A Settings backup from the app is one farm's JSON. This step is a whole-project copy. If you ever have to restore, use `docs/runbooks/full-project-recovery.md` and restore into an isolated project.
 
-2. [ ] Confirm the owner farm, then the complimentary row, **before** `ENTITLEMENTS_MODE` is ever set to `enforce`. The farm id in this repo is `28e107ba-3384-4b6e-9917-8a694803cb82` (`src/lib/askBookAccess.ts`, the only Ask the Book farm). In the Supabase SQL editor (postgres; the app role `authenticated` cannot read or write `public.farm_comps`):
+2. [ ] Confirm the owner farm (id held privately), then the complimentary row, **before** `ENTITLEMENTS_MODE` is ever set to `enforce`. That farm is the only Ask the Book farm (`src/lib/askBookAccess.ts`). In the Supabase SQL editor (postgres; the app role `authenticated` cannot read or write `public.farm_comps`):
 
 ```sql
 SELECT id, name
 FROM public.farms
-WHERE id = '28e107ba-3384-4b6e-9917-8a694803cb82';
+WHERE id = '<the owner farm (id held privately)>';
 ```
 
-Stop if that row is missing or the name is not Egbert Farm.
+Stop if that row is missing or the name is not the owner's farm.
 
 3. [ ] Read the live comp. Columns are `id`, `farm_id`, `reason`, `granted_by`, `created_at`, `expires_at`, `deleted_at` (`supabase/migrations/20261102014611_farm_comps.sql`). A row counts only when `deleted_at` is null and `expires_at` is null or still in the future.
 
 ```sql
 SELECT id, farm_id, reason, granted_by, created_at, expires_at, deleted_at
 FROM public.farm_comps
-WHERE farm_id = '28e107ba-3384-4b6e-9917-8a694803cb82'
+WHERE farm_id = '<the owner farm (id held privately)>'
   AND deleted_at IS NULL
   AND (expires_at IS NULL OR expires_at > now());
 ```
@@ -35,8 +35,8 @@ WHERE farm_id = '28e107ba-3384-4b6e-9917-8a694803cb82'
 ```sql
 INSERT INTO public.farm_comps (farm_id, reason, expires_at)
 VALUES (
-  '28e107ba-3384-4b6e-9917-8a694803cb82',
-  'Egbert Farm owner complimentary',
+  '<the owner farm (id held privately)>',
+  'owner complimentary',
   NULL
 );
 ```
@@ -196,7 +196,7 @@ SET mode = 'shadow', updated_at = now()
 WHERE singleton IS TRUE;
 ```
 
-26. [ ] Watch `public.entitlement_shadow_log` for a few days. Query in `docs/free-tier-metrics.md` (section "After turning on `shadow`"). The table in `docs/free-tier-shadow-report.md` is an offline simulation. Prod is this log. In shadow every write still succeeds. A row means that write would be refused in `enforce`. Egbert Farm should stay out of the log once the section 1 comp row is live. The three old test farms stay on the free plan, so their grain, equipment, FSA, landlord, and backup writes will show up. A row for Egbert Farm means the comp row is missing or expired. Stop. Fix section 1 before `enforce`.
+26. [ ] Watch `public.entitlement_shadow_log` for a few days. Query in `docs/free-tier-metrics.md` (section "After turning on `shadow`"). The table in `docs/free-tier-shadow-report.md` is an offline simulation. Prod is this log. In shadow every write still succeeds. A row means that write would be refused in `enforce`. The owner's farm should stay out of the log once the section 1 comp row is live. The three old test farms stay on the free plan, so their grain, equipment, FSA, landlord, and backup writes will show up. A row for the owner's farm means the comp row is missing or expired. Stop. Fix section 1 before `enforce`.
 
 27. [ ] Set enforce only after that watch, and only after section 10 is decided:
 

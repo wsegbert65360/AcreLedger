@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +17,10 @@ const farm = vi.hoisted(() => ({
   deleteCattleMove: vi.fn(async () => true),
   deleteCattleEvent: vi.fn(async () => true),
 }));
+const plan = vi.hoisted(() => ({ entitlement: null as unknown, cachedEntitlement: null as unknown }));
 vi.mock('@/store/farmStore', () => ({ useFarm: () => farm }));
+vi.mock('@/hooks/useEntitlement', () => ({ useEntitlement: () => ({ ...plan, loading: false, failed: false }) }));
+vi.mock('@/components/settings/PlanUpgradeLink', () => ({ PlanUpgradeLink: () => <a href="/settings?section=billing">See Pro</a> }));
 vi.mock('@/components/BottomNav', () => ({ default: () => null }));
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
 vi.mock('@/components/cattle/CattleGroupDialog', () => ({ default: () => <div>group dialog</div> }));
@@ -27,6 +30,9 @@ vi.mock('@/lib/cattle/report', async importOriginal => {
   return { ...original, exportCattleCsv: vi.fn(async () => undefined) };
 });
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));
+
+import { toast } from 'sonner';
 import Cattle from './Cattle';
 import { exportCattleCsv } from '@/lib/cattle/report';
 import { localTodayIso } from '@/lib/equipment';
@@ -53,7 +59,11 @@ beforeEach(() => {
   farm.cattleMoves = [];
   farm.cattleEvents = [];
   farm.fields = [{ id: 'f1', name: 'Back Pasture', intendedUse: 'Pasture', deleted_at: null }];
+  plan.entitlement = null;
+  plan.cachedEntitlement = null;
+  farm.deleteCattleMove.mockReset().mockResolvedValue(true);
   vi.mocked(exportCattleCsv).mockClear();
+  vi.mocked(toast.error).mockClear();
 });
 
 describe('Cattle page', () => {
@@ -76,6 +86,26 @@ describe('Cattle page', () => {
     expect(screen.getByText(/Back Pasture · 0 days/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Export cattle CSV/ }));
     expect(exportCattleCsv).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks the CSV export on a free farm and shows the Pro note', () => {
+    farm.cattleGroups = [cows];
+    plan.entitlement = { plan: 'free', enforced: true };
+    renderAt('/cattle');
+    expect(screen.queryByRole('button', { name: /Export cattle CSV/ })).toBeNull();
+    expect(screen.getByTestId('cattle-csv-locked').textContent).toContain('The cattle CSV export is part of Pro.');
+    expect(exportCattleCsv).not.toHaveBeenCalled();
+  });
+
+  it('says so when a move cannot be deleted', async () => {
+    farm.cattleGroups = [cows];
+    farm.cattleMoves = [{ ...base, id: 'm1', groupId: 'g1', fieldId: 'f1', movedOn: '2026-03-01', headCount: 20 }];
+    farm.deleteCattleMove.mockResolvedValue(false);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderAt('/cattle/g1');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete move on 2026-03-01' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not delete the move.'));
+    confirm.mockRestore();
   });
 
   it('shows "Pasture removed" when the current field was deleted', () => {

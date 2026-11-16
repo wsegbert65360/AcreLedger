@@ -30,6 +30,7 @@ export default {
       status: RunStatus; source?: string | null; fieldCount?: number | null
       recordCount?: number | null; errorMessage?: string | null
     }) => {
+      // farm-write-allowlist: upsert — daily rainfall ledger, one row per rain date
       const { error } = await db.from('mrms_daily_runs').upsert({
         rain_date: rainDate,
         status: run.status,
@@ -97,6 +98,7 @@ export default {
       }
 
       for (let i = 0; i < records.length; i += 500) {
+        // farm-write-allowlist: upsert — daily rainfall totals (field_id, rain_date)
         const { error } = await db.from('field_rainfall_daily')
           .upsert(records.slice(i, i + 500), { onConflict: 'field_id, rain_date' })
         if (error) throw error

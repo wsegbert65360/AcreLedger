@@ -24,6 +24,27 @@ let sqliteConnection: SQLiteConnection | null = null;
 let initPromise: Promise<SQLiteDBConnection | null> | null = null;
 let nativeStoreFailed = false;
 let unavailableToastShown = false;
+let deviceKeyUnreadLogged = false;
+const unreadableWebCacheLogged = new Set<string>();
+
+function logDeviceKeyUnread(): void {
+  if (deviceKeyUnreadLogged) return;
+  deviceKeyUnreadLogged = true;
+  console.debug('[OfflineStorage] Could not read the device key; left cached rows in place');
+}
+
+function dropUnreadableWebCache(key: string, table: string, reason: 'decrypt' | 'parse'): void {
+  // The sync queue uses different localStorage keys. A cache miss must not clear it.
+  if (SYNC_QUEUE_KEYS.some(queueKey => key === queueKey)) return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Storage rejected the delete. The next load still returns a miss.
+  }
+  if (unreadableWebCacheLogged.has(table)) return;
+  unreadableWebCacheLogged.add(table);
+  console.debug(`[OfflineStorage] Dropped unreadable local cache for ${table} (${reason})`);
+}
 
 async function getEncryptionSecret(): Promise<string> {
   return getLocalEncryptionKey();
@@ -211,15 +232,39 @@ export const offlineStorage = {
       }
       return null;
     } else {
+      let val: string | null;
       try {
-        const val = localStorage.getItem(key);
-        if (!val) return null;
-        // Attempt to decrypt
-        const secret = await getEncryptionSecret();
-        const decrypted = await decryptData(val, secret);
-        return JSON.parse(decrypted);
+        val = localStorage.getItem(key);
       } catch (err) {
         console.error(`Failed to load localStorage cache for ${table}:`, err);
+        return null;
+      }
+      if (!val) return null;
+
+      // A missing device key can be temporary (storage unavailable). Leave the
+      // ciphertext in place so a later read can still decrypt it.
+      let secret: string;
+      try {
+        secret = await getEncryptionSecret();
+      } catch {
+        logDeviceKeyUnread();
+        return null;
+      }
+
+      // The key was read. Ciphertext this key cannot open, or a value that
+      // decrypts but is not JSON, is a cache miss. Drop only this table's key
+      // so the next fetch can rewrite it. Do not log an error on every startup.
+      let decrypted: string;
+      try {
+        decrypted = await decryptData(val, secret);
+      } catch {
+        dropUnreadableWebCache(key, table, 'decrypt');
+        return null;
+      }
+      try {
+        return JSON.parse(decrypted);
+      } catch {
+        dropUnreadableWebCache(key, table, 'parse');
         return null;
       }
     }

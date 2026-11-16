@@ -1,7 +1,6 @@
 # Free tier: hand-off (branch `feat/free-tier`)
 
-Status: built and tested, **nothing deployed to production**, flag `ENTITLEMENTS_MODE` is `off`. You decide when to
-move it to `shadow`, then `enforce`. Design: Project doc `claude/free-tier-implementation-plan.md`.
+Status: **live in production**, `ENTITLEMENTS_MODE = enforce` since 2026-11-16. The owner farm is complimentary. Design: Project doc `claude/free-tier-implementation-plan.md`.
 Release order (backup, migration versions, functions, Stripe, app, Rain API, then the flag): [free-tier release checklist](./free-tier-release-checklist.md).
 
 ## What exists
@@ -24,15 +23,15 @@ With the flag `off` the app behaves exactly as before (full test suite green). N
 CSV export of a farm's own logged data is never blocked. Prepared Pro report files go through `assert_premium`.
 
 ## Shadow result
-Offline simulation (disposable Postgres, real migrations): Egbert Farm (complimentary) and a paid farm are
+Offline simulation (disposable Postgres, real migrations): the owner's farm (complimentary) and a paid farm are
 never blocked; free farms (new farms and the three old test farms) are blocked only on grain, equipment, landlord split and backup restore. FSA tract import, CLU assignment and FSA field numbers are free since `20261116120000_fsa_entry_free.sql`.
 Full table: `docs/free-tier-shadow-report.md`. **Not yet done:** a shadow run on a staging Supabase branch with copies of
 the real farms. That needs a branch (costs money and touches your Supabase project), so I did not create one.
 
 ## Before you turn on `enforce`
-1. Insert one `farm_comps` row in prod for the owner farm (Egbert Farm), no expiry. The 3 old trial farms are owner test accounts and now resolve to the free plan, which is what you want for testing the free tier.
+1. Insert one `farm_comps` row in prod for the owner farm, no expiry. The 3 old trial farms are owner test accounts and now resolve to the free plan, which is what you want for testing the free tier.
 2. Run `shadow` on staging first and check `entitlement_shadow_log` (query in `docs/free-tier-metrics.md`).
-3. ~~Approve or edit every string in `src/copy/entitlements.ts`.~~ Done: approved 2026-11-16.
+3. Approve or edit every string in `src/copy/entitlements.ts` (all marked DRAFT).
 4. Public pages: DONE 2026-11-10 (attorney signed off, William confirmed). Landing, Terms, Refund and Privacy now use the approved draft wording with Pro in place of Premium, dated November 10, 2026. Left out on purpose: the draft's report-preview sentences (feature not built; the draft says hold them) and the iPhone line (Landing says "Works in any web browser." until the iPhone app is released). Still to change by hand: the Project description's "122-day free trial" text.
 5. iOS: Xcode part is done (commit bebc1dd). Still to do: set `VITE_UPGRADE_URL`, look at the link on the real Settings
    screen, test a non-US account and a TestFlight build (`docs/ios-storefront-link.md`).

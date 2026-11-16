@@ -33,12 +33,12 @@ import { useSeasonManagement, type ClearLocalCacheOptions } from './useSeasonMan
 import { useTillageRecords } from './useTillageRecords';
 import { useWorkRequests } from './useWorkRequests';
 import { useEquipment } from './useEquipment';
-import { useCattle } from './useCattle';
+import { useCattle, type CattleSaveOptions } from './useCattle';
 import { useFsaTracts } from './useFsaTracts';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
-import { applyParkedCattleMutations } from '@/lib/cattle/parked';
+import { applyParkedCattleMutations, queuedRunsCattle } from '@/lib/cattle/parked';
 import { CATTLE_RPC_KEY, syncQueue, WebSyncQueueUnreadableError, type QueuedMutation } from '../lib/syncQueue';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import { overlayQueuedRows } from '@/lib/queuedSnapshot';
@@ -254,8 +254,8 @@ interface FarmState {
   addCattleGroup: (record: Omit<CattleGroup, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at' | 'currentFieldId' | 'currentSince'>) => Promise<boolean>;
   updateCattleGroup: (id: string, changes: CattleGroupEdit) => Promise<boolean>;
   moveCattleGroup: (record: Pick<CattleMove, 'groupId' | 'fieldId' | 'movedOn' | 'notes'>) => Promise<boolean>;
-  logCattleEvent: (record: Omit<CattleEvent, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>) => Promise<boolean>;
-  transferCattleHead: (input: { fromGroupId: string; toGroupId: string; head: number; eventDate: string; notes?: string }) => Promise<boolean>;
+  logCattleEvent: (record: Omit<CattleEvent, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>, options?: CattleSaveOptions) => Promise<boolean>;
+  transferCattleHead: (input: { fromGroupId: string; toGroupId: string; head: number; eventDate: string; notes?: string }, options?: CattleSaveOptions) => Promise<boolean>;
   deleteCattleGroup: (id: string) => Promise<boolean>;
   deleteCattleMove: (id: string) => Promise<boolean>;
   deleteCattleEvent: (id: string) => Promise<boolean>;
@@ -370,6 +370,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { equipmentStateRef.current = { equipment, maintenanceSchedules, maintenanceLogs }; });
   const cattleStateRef = useRef({ cattleGroups, cattleMoves, cattleEvents });
   useEffect(() => { cattleStateRef.current = { cattleGroups, cattleMoves, cattleEvents }; });
+  // Bumped by every switch of the setting, so a load that started earlier
+  // cannot put the old value back.
+  const runsCattleGenerationRef = useRef(0);
   const runsCattleRef = useRef(runsCattle);
   useEffect(() => { runsCattleRef.current = runsCattle; }, [runsCattle]);
 
@@ -633,19 +636,42 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       // persist that stale name. Skipping setFarmName skips that cache write.
       const farmNameGeneration = farmNameGenerationRef.current;
       const farmsRead = Promise.resolve(
-        supabase.from('farms').select('name, runs_cattle').eq('id', farm_id).single(),
+        supabase.from('farms').select('name').eq('id', farm_id).single(),
       ).then((result) => {
         const name = !result.error && typeof result.data?.name === 'string'
           ? result.data.name.trim()
           : '';
         const renameStillCurrent = farmNameGenerationRef.current === farmNameGeneration;
         if (name && isCurrentRequest() && renameStillCurrent) setFarmName(name);
-        if (!result.error && typeof result.data?.runs_cattle === 'boolean' && isCurrentRequest()) {
-          setRunsCattle(result.data.runs_cattle);
-          runsCattleRef.current = result.data.runs_cattle;
-        }
         return result;
       }).catch((error: unknown) => ({ data: null, error }));
+
+      // The cattle setting is read on its own and is fail-soft: a database that
+      // does not have farms.runs_cattle yet (client deployed before the
+      // migration) must leave cattle as it was, never fail the whole load.
+      const runsCattleGeneration = runsCattleGenerationRef.current;
+      const serverRunsCattleRead = (async (): Promise<boolean | null> => {
+        try {
+          const result = await supabase.from('farms').select('runs_cattle').eq('id', farm_id).single();
+          if (result.error) {
+            console.warn('Cattle setting did not load; keeping the saved value.', result.error);
+            return null;
+          }
+          return typeof result.data?.runs_cattle === 'boolean' ? result.data.runs_cattle : null;
+        } catch (error) {
+          console.warn('Cattle setting did not load; keeping the saved value.', error);
+          return null;
+        }
+      })();
+      // A switch still waiting in the offline queue wins over the server value,
+      // so the tile and screen do not disappear until it has synced.
+      const queuedRunsCattleRead = (async (): Promise<boolean | null> => {
+        try {
+          return queuedRunsCattle(await syncQueue.getQueue(farm_id), farm_id);
+        } catch {
+          return null;
+        }
+      })();
 
       const coreReads = Promise.all([
         pagedQuery('fields'),
@@ -693,9 +719,17 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         ),
       ]);
 
-      const farmResult = await farmsRead;
+      const [farmResult, serverRunsCattle, queuedRunsCattleValue] = await Promise.all([
+        farmsRead, serverRunsCattleRead, queuedRunsCattleRead,
+      ]);
       if (!isCurrentRequest()) return false;
-      const shouldFetchCattle = !farmResult.error && farmResult.data?.runs_cattle === true;
+      const runsCattleStillCurrent = runsCattleGenerationRef.current === runsCattleGeneration;
+      const loadedRunsCattle = runsCattleStillCurrent ? (queuedRunsCattleValue ?? serverRunsCattle) : null;
+      if (loadedRunsCattle !== null) {
+        setRunsCattle(loadedRunsCattle);
+        runsCattleRef.current = loadedRunsCattle;
+      }
+      const shouldFetchCattle = (loadedRunsCattle ?? runsCattleRef.current) === true;
       const failSoftCattleQuery = async (table: string) => {
         try {
           return await pagedQuery(table);
@@ -1171,6 +1205,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
     const previous = runsCattleRef.current;
     if (previous === value) return true;
+    runsCattleGenerationRef.current += 1;
     setRunsCattle(value);
     runsCattleRef.current = value;
     const args = { p_runs_cattle: value };
@@ -1190,18 +1225,26 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       }
     };
     let ok: boolean;
+    let savedOnServer = false;
     if (await syncQueue.shouldQueueWrite(isOnline, farm_id, [{ tableName: 'farms', id: farm_id }])) {
       ok = await enqueue();
     } else {
       try {
         const { error } = await supabase.rpc('set_runs_cattle', { ...args, p_farm_id: farm_id });
         ok = error ? (isUnknownMutationOutcome(error) ? await enqueue() : false) : true;
+        savedOnServer = !error;
         if (error && !ok) console.error('Failed to save the cattle setting:', error);
       } catch (error) {
         ok = isUnknownMutationOutcome(error) ? await enqueue() : false;
       }
     }
+    // A load that was reading the setting while this save was in flight may
+    // hold the old server value; bumping again makes it drop that value.
+    runsCattleGenerationRef.current += 1;
     if (!ok) { revert(); toast.error('Could not save the cattle setting.'); }
+    // Cattle rows are not fetched while the setting is off, so load them now.
+    // A device with no cached cattle would otherwise show an empty list.
+    if (ok && value && savedOnServer) void fetchDataRef.current();
     return ok;
   }, [farm_id, isOnline, updatePendingSyncCount]);
 
