@@ -26,10 +26,11 @@ Update **Last updated** when editing guidance. Update a section’s **Verified a
 only after checking that section’s implementation, recording the date, commit, and files inspected.
 Navigation checks and editorial changes do not constitute verification of architectural claims.
 
+- **2026-11-16** — Production `ENTITLEMENTS_MODE` set to `enforce`. Egbert Farm is `complimentary`; all other farms are free test/QA farms. Device limit off. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-15** — Branch `feat/cattle` (not merged, not deployed): optional **Cattle** feature behind `farms.runs_cattle` (default off). Free: groups, pasture moves, editing a group's head count. Pro: events (`assert_premium(..., 'cattle_events')`). See [Cattle](#cattle).
 - **2026-11-14** — Harvest scale ticket is asked only for town loads and a blank ticket is never a fall-worksheet warning. See [HarvestRecord](#harvestrecord).
 - **2026-11-13** — Version 3.6.3: Landlord and Farm Owner Summary are per field per crop with per-crop totals; report PDFs are US Letter with shared AcreLedger branding; the FSA-578 PDF adds Type/Variety; the fall production PDF is landscape with per-crop totals; the spray log PDF names missing details; new tank-mix products default to `fl oz/ac`. See [Landlord Summary Report](#landlord-summary-report) and [SprayRecord](#sprayrecord-2026-standards).
-- **2026-11-09** - Branch `feat/free-tier` (not merged, enforcement OFF): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
+- **2026-11-09** - Branch `feat/free-tier` (not merged; enforcement on in production since 2026-11-16): permanent free record book plus **Pro** ($299/farm/year); `ENTITLEMENTS_MODE = off | shadow | enforce`; plans `free | paid | complimentary`; trial removed; spray photo capture removed. See "Free tier and Pro" in the Stripe billing section.
 - **2026-11-01** — `billing_audit_log` records service-role farm_comps insert/update/soft-delete; no client policies and no DELETE trigger.
 - **2026-11-01** — Added service-managed farm comps and membership-checked status RPC; Settings shows trial start/end or complimentary access, and live comps suppress trial countdowns. Enforcement remains OFF.
 - **2026-10-25** — Added approved Privacy, Terms and Refund pages dated November 1, 2026. Checkout passes only the existing farm trial deadline when more than 48 hours remain; no new Stripe trial duration. Allowlist, native purchase suppression and access enforcement are unchanged.
@@ -478,7 +479,7 @@ Writes that touch more than one row are SECURITY DEFINER RPCs (`search_path = ''
 - `soft_delete_cattle_row` removes a group (cascade), move or event. Deleting an event reverses its head delta but floors the count at zero and never refuses; deleting either half of a transfer reverses both. Not gated: delete stays allowed on a free farm.
 - `set_runs_cattle` flips the farm setting.
 
-Free versus Pro: a free farm can add and edit groups (including the head count), move groups between pastures and export the CSV. Logging events and transfers needs Pro. On a free, enforced farm the Events section shows the upgrade prompt (strings in `src/copy/entitlements.ts`, marked DRAFT) and no entry controls; existing events stay visible and deletable. A gated write that reaches the offline queue is parked with the existing "Pro needed to sync this change" outcome.
+Free versus Pro: a free farm can add and edit groups (including the head count), move groups between pastures and export the CSV. Logging events and transfers needs Pro. On a free, enforced farm the Events section shows the upgrade prompt (strings in `src/copy/entitlements.ts`, approved 2026-11-16) and no entry controls; existing events stay visible and deletable. A gated write that reaches the offline queue is parked with the existing "Pro needed to sync this change" outcome.
 
 Offline: every write goes through `syncQueue` as an RPC envelope (`__cattle_rpc`). Replay re-stamps `p_farm_id`; group edits and the RPCs for the same group share record keys so they replay in order; P0002 ("group not found") is retried while that group's insert is still queued and parked otherwise. A plain `farms` mutation without a cattle envelope is discarded on replay. Optimistic updates use functional setters and roll back only the ids and fields they touched. A group edit sends `head_count` only when the user changed it, so a stale offline rename cannot overwrite a count an event changed.
 
@@ -861,11 +862,11 @@ Product access enforcement is off by default. A missing or soft-deleted subscrip
 `unmanaged` and retains full access unless a future owner-approved enforcement path explicitly
 passes `enforce: true`; absence of billing data must not accidentally become a production paywall.
 
-#### Free tier and Pro (branch `feat/free-tier`, enforcement OFF)
+#### Free tier and Pro (branch `feat/free-tier`; production enforcement ON since 2026-11-16)
 
 The app is a permanent free record book; the paid plan is **Pro** ($299 per farm per year,
 web-only purchase; iOS shows a US-storefront-only website link that fails closed). One server
-flag `ENTITLEMENTS_MODE = off | shadow | enforce` (default `off`) lives in `entitlement_config`.
+flag `ENTITLEMENTS_MODE = off | shadow | enforce` (default `off`; production is `enforce`) lives in `entitlement_config`.
 The server is the source of truth: `_farm_entitlement` resolves `free | paid | complimentary`
 (comp row wins). `active` is `paid` until `current_period_end`. A failed renewal is `paid` for
 14 days from `farm_subscriptions.past_due_since` (`20261110160000_billing_past_due_since.sql`),

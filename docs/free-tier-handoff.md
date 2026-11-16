@@ -13,7 +13,7 @@ Release order (backup, migration versions, functions, Stripe, app, Rain API, the
 | Rainfall: free farms get daily totals on their 2 oldest fields | `20261107040000_rainfall_tiering.sql`, `supabase/functions/mrms-daily`, `docs/free-tier-rainfall.md` |
 | Paid-only writes: grain, equipment, FSA/CLU, landlord splits, backup restore | `20261107050000_paid_feature_guards.sql` |
 | App: plan hook, report gate, harvest bin lock, sync "premium needed" outcome, Settings plan card | `src/lib/entitlements.ts`, `src/hooks/useEntitlement.ts`, `src/components/settings/PlanCard.tsx` |
-| All user-facing wording (DRAFT) | `src/copy/entitlements.ts` |
+| All user-facing wording (approved 2026-11-16) | `src/copy/entitlements.ts` |
 | iOS US-storefront website link | `docs/ios-storefront-link.md` |
 | Shadow simulation (runs in `test:db-integrity`) | `scripts/shadow-report.mjs`, result in `docs/free-tier-shadow-report.md` |
 | Cost queries | `docs/free-tier-metrics.md` |
@@ -30,7 +30,7 @@ the real farms. That needs a branch (costs money and touches your Supabase proje
 ## Before you turn on `enforce`
 1. Insert one `farm_comps` row in prod for the owner farm (Egbert Farm), no expiry. The 3 old trial farms are owner test accounts and now resolve to the free plan, which is what you want for testing the free tier.
 2. Run `shadow` on staging first and check `entitlement_shadow_log` (query in `docs/free-tier-metrics.md`).
-3. Approve or edit every string in `src/copy/entitlements.ts` (all marked DRAFT).
+3. ~~Approve or edit every string in `src/copy/entitlements.ts`.~~ Done: approved 2026-11-16.
 4. Public pages: DONE 2026-11-10 (attorney signed off, William confirmed). Landing, Terms, Refund and Privacy now use the approved draft wording with Pro in place of Premium, dated November 10, 2026. Left out on purpose: the draft's report-preview sentences (feature not built; the draft says hold them) and the iPhone line (Landing says "Works in any web browser." until the iPhone app is released). Still to change by hand: the Project description's "122-day free trial" text.
 5. iOS: Xcode part is done (commit bebc1dd). Still to do: set `VITE_UPGRADE_URL`, look at the link on the real Settings
    screen, test a non-US account and a TestFlight build (`docs/ios-storefront-link.md`).

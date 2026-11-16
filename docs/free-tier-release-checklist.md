@@ -179,7 +179,7 @@ Separate repo: `wsegbert65360/RainAPI`, `main` (`feat/rain-api-auth-enforce` mer
 
 Do this only after sections 1 through 7. Staging first if you have a copy of the data. Prod stays `off` until you have watched the log.
 
-`public.entitlement_config` columns: `singleton`, `mode`, `device_limit_enabled`, `updated_at`. Change `mode` only. Leave `device_limit_enabled` false. The file `src/copy/entitlements.ts` is still marked DRAFT. Approve or edit it before `enforce` (`docs/free-tier-handoff.md`).
+`public.entitlement_config` columns: `singleton`, `mode`, `device_limit_enabled`, `updated_at`. Change `mode` only. Leave `device_limit_enabled` false. The strings in `src/copy/entitlements.ts` were approved by William on 2026-11-16, and `enforce` was turned on in production the same day.
 
 24. [ ] Read the row:
 

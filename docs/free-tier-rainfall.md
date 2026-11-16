@@ -43,7 +43,7 @@ growth and Edge Function time.
 nothing changes in `off` / `shadow`.
 
 - `FieldDetailScreen`: locked farms read `RainfallDailyService.fetchRainfallFromDaily` (same `RainfallResult`
-  shape, so the existing cards work). A non-slot field shows the "included with Pro" message (DRAFT copy).
+  shape, so the existing cards work). A non-slot field shows the "included with Pro" message (approved copy).
 - `WeatherWidget` / `Weather`: locked farms never call the Rain API; a slot field shows its daily totals, any
   other location keeps the plain weather-service numbers.
 
