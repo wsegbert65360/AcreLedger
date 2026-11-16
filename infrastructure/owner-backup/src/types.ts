@@ -1,4 +1,4 @@
-export const MANIFEST_VERSION = 2;
+export const MANIFEST_VERSION = 3;
 export const APPLICATION_ID = "acreledger-owner-backup";
 export const DRIVE_FOLDER_NAME = "AcreLedger Database Backups";
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";

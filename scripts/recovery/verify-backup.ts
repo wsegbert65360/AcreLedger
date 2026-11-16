@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { decryptFile, extractArchive, sha256File } from "../../infrastructure/owner-backup/src/encryption.js";
 import { verifyChecksums } from "../../infrastructure/owner-backup/src/manifest.js";
 import { wipePath } from "../../infrastructure/owner-backup/src/wipe.js";
+import { assertPrivilegeArtifact, PRIVILEGES_FILE } from "../../infrastructure/owner-backup/src/privileges.js";
 import { REQUIRED_RESTORE_FILES } from "./restore-isolated.js";
 
 export const VERIFY_ERROR = {
@@ -13,6 +14,7 @@ export const VERIFY_ERROR = {
   MISSING_MANIFEST: "MISSING_MANIFEST",
   MISSING_CHECKSUMS: "MISSING_CHECKSUMS",
   MISSING_RESTORE_FILE: "MISSING_RESTORE_FILE",
+  INVALID_PRIVILEGES: "INVALID_PRIVILEGES",
   MALFORMED_CHECKSUMS: "MALFORMED_CHECKSUMS",
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",
   ARTIFACT_LIST_MISMATCH: "ARTIFACT_LIST_MISMATCH",
@@ -66,8 +68,19 @@ export async function verifyExtractedBackup(extracted: string): Promise<{ manife
 
   const databaseDir = path.join(extracted, "database");
   for (const name of REQUIRED_RESTORE_FILES) {
-    if (!(await pathExists(path.join(databaseDir, name)))) {
+    const file = path.join(databaseDir, name);
+    if (!(await pathExists(file))) {
       throw new BackupVerifyError(`Required restore file is missing: ${name}`, VERIFY_ERROR.MISSING_RESTORE_FILE);
+    }
+    if (name === PRIVILEGES_FILE) {
+      try {
+        assertPrivilegeArtifact(await fs.readFile(file, "utf8"));
+      } catch (error) {
+        throw new BackupVerifyError(
+          error instanceof Error ? error.message : String(error),
+          VERIFY_ERROR.INVALID_PRIVILEGES,
+        );
+      }
     }
   }
 

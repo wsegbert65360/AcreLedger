@@ -4,6 +4,7 @@ import path from "node:path";
 import { childProcessDatabaseEnv, databaseUrlWithoutPassword, type BackupConfig } from "./config.js";
 import { assertSuccess, defaultCommandRunner } from "./command.js";
 import { logEvent } from "./logging.js";
+import { exportPrivileges, PRIVILEGES_FILE } from "./privileges.js";
 import { withRetry } from "./retry.js";
 import type { CommandRunner, TableCount } from "./types.js";
 import { PINNED_SUPABASE_CLI_VERSION } from "./types.js";
@@ -68,6 +69,7 @@ export function buildDumpSpecs(appSchemas: string[]): DumpSpec[] {
         "--data-only",
         "--schema",
         "storage",
+        // supabase CLI -x is a table exclude here, not pg_dump --no-privileges/-x.
         "-x",
         "storage.buckets_vectors",
         "-x",
@@ -236,6 +238,7 @@ export async function collectConfiguration(client: Client): Promise<Record<strin
       "Do not copy secret values from the source project. Recreate Auth URLs, API keys, Vault secrets, and third-party credentials by name.",
       "CLI 2.107.0 schema dump excludes auth and storage; those are exported as dedicated artifacts.",
       "CLI 2.107.0 default data dump includes auth and storage rows. This worker splits them into data.sql, auth-data.sql, and storage-metadata.sql so restore is explicit.",
+      "CLI 2.107.0 `supabase db dump` runs pg_dump with --no-privileges, so object GRANT/REVOKE are captured separately in privileges.sql via pg_dump --schema-only --no-owner.",
       "Storage object bytes are not in the database dump; they are exported separately.",
     ],
   };
@@ -264,6 +267,7 @@ export async function exportDatabase(options: {
     "Verified 2026-09-10: `supabase db dump` schema dump excludes auth and storage.",
     "Verified 2026-09-10: `supabase db dump --data-only --use-copy` includes auth and storage table data unless --schema is narrowed.",
     "Prefer a direct db.<ref>.supabase.co:5432 connection; otherwise the session pooler on port 5432. Never use transaction pooling (6543).",
+    `${PRIVILEGES_FILE} is captured with pg_dump --schema-only --no-owner (no --no-privileges/-x privilege suppression) and stripped to GRANT/REVOKE/ALTER DEFAULT PRIVILEGES.`,
   ];
 
   const inventory = await withDatabase(options.config, async (client) => {
@@ -326,6 +330,14 @@ export async function exportDatabase(options: {
     }
     artifactPaths.push(dest);
   }
+
+  const privilegesPath = await exportPrivileges({
+    databaseUrl: options.config.databaseUrl,
+    databaseDir: options.databaseDir,
+    schemas: inventory.schemas,
+    runner,
+  });
+  artifactPaths.push(privilegesPath);
 
   const pgDumpVersion = await captureVersion(runner, "pg_dump", ["--version"]);
   const supabaseCliVersion = await captureVersion(runner, "supabase", ["--version"]);

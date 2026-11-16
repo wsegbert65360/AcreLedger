@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { PRIVILEGES_FILE } from "../../infrastructure/owner-backup/src/privileges.js";
 import { REQUIRED_RESTORE_FILES } from "./restore-isolated.js";
 import {
   BackupVerifyError,
@@ -37,7 +38,9 @@ async function writeExtractedBackup(options?: {
   for (const name of REQUIRED_RESTORE_FILES) {
     if (options?.omitFile === name) continue;
     const relative = `database/${name}`;
-    const contents = `-- ${name}\n`;
+    const contents = name === PRIVILEGES_FILE
+      ? "GRANT SELECT ON TABLE public.farms TO authenticated;\n"
+      : `-- ${name}\n`;
     await fs.writeFile(path.join(root, relative), contents);
     const digest = sha(contents);
     artifacts.push({ path: relative, sha256: digest, bytes: contents.length });
@@ -93,6 +96,14 @@ describe("verify extracted backup", () => {
     const root = await writeExtractedBackup({ omitFile: "auth-data.sql" });
     await expect(verifyExtractedBackup(root)).rejects.toMatchObject({
       errorCode: VERIFY_ERROR.MISSING_RESTORE_FILE,
+    });
+  });
+
+  it("uses INVALID_PRIVILEGES when privileges.sql has no GRANT or REVOKE", async () => {
+    const root = await writeExtractedBackup();
+    await fs.writeFile(path.join(root, "database", PRIVILEGES_FILE), "-- schema only\n");
+    await expect(verifyExtractedBackup(root)).rejects.toMatchObject({
+      errorCode: VERIFY_ERROR.INVALID_PRIVILEGES,
     });
   });
 

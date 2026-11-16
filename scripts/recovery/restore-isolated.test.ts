@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { PRIVILEGES_FILE } from "../../infrastructure/owner-backup/src/privileges.js";
 import {
   ISOLATED_PROJECT_GUARDS,
   ISOLATED_RESTORE_ORDER,
@@ -19,7 +20,12 @@ const TLS_URL = "postgresql://postgres:secret@localhost:5432/postgres?sslmode=re
 async function writePlaintext(tableCounts: Record<string, number | "unreadable"> = { "public.farms": 1 }): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "acreledger-restore-"));
   await fs.mkdir(path.join(root, "database"));
-  for (const name of ISOLATED_RESTORE_ORDER) await fs.writeFile(path.join(root, "database", name), "-- test\n");
+  for (const name of ISOLATED_RESTORE_ORDER) {
+    const contents = name === PRIVILEGES_FILE
+      ? "GRANT SELECT ON TABLE public.farms TO authenticated;\n"
+      : "-- test\n";
+    await fs.writeFile(path.join(root, "database", name), contents);
+  }
   await fs.writeFile(path.join(root, "manifest.json"), `${JSON.stringify({
     manifestId: "test",
     tableCounts,
@@ -47,6 +53,10 @@ describe("isolated restore", () => {
   it("uses the documented restore order and refuses a non-TLS URL", async () => {
     expect(ISOLATED_RESTORE_ORDER[0]).toBe("roles.sql");
     expect(ISOLATED_RESTORE_ORDER).toContain("auth-data.sql");
+    expect(ISOLATED_RESTORE_ORDER).toContain(PRIVILEGES_FILE);
+    expect(REQUIRED_RESTORE_FILES.has(PRIVILEGES_FILE)).toBe(true);
+    expect(ISOLATED_RESTORE_ORDER.indexOf(PRIVILEGES_FILE)).toBeGreaterThan(ISOLATED_RESTORE_ORDER.indexOf("migrations-schema.sql"));
+    expect(ISOLATED_RESTORE_ORDER.indexOf(PRIVILEGES_FILE)).toBeLessThan(ISOLATED_RESTORE_ORDER.indexOf("data.sql"));
     expect(ISOLATED_PROJECT_GUARDS.some((line) => line.includes("production"))).toBe(true);
     await expect(
       restoreIsolated({
@@ -91,6 +101,8 @@ describe("isolated restore", () => {
         expect(RECOVERY_SIDE_EFFECT_DISABLE_SQL).toContain("DISABLE TRIGGER");
         expect(RECOVERY_SIDE_EFFECT_DISABLE_SQL).toContain("ALTER PUBLICATION supabase_realtime DROP TABLE");
         expect(args.findIndex((item) => item.endsWith("migrations-schema.sql"))).toBeLessThan(args.indexOf(RECOVERY_SIDE_EFFECT_DISABLE_SQL));
+        expect(args.findIndex((item) => item.endsWith(PRIVILEGES_FILE))).toBeGreaterThan(args.findIndex((item) => item.endsWith("migrations-schema.sql")));
+        expect(args.findIndex((item) => item.endsWith(PRIVILEGES_FILE))).toBeLessThan(args.indexOf(RECOVERY_SIDE_EFFECT_DISABLE_SQL));
         expect(args.findIndex((item) => item.endsWith("data.sql"))).toBeGreaterThan(args.indexOf(RECOVERY_SIDE_EFFECT_DISABLE_SQL));
         return { stdout: "", stderr: "", code: 0 };
       },
@@ -104,11 +116,25 @@ describe("isolated restore", () => {
     });
   });
 
+  it("fails when privileges.sql has no GRANT or REVOKE", async () => {
+    const root = await writePlaintext();
+    await fs.writeFile(path.join(root, "database", PRIVILEGES_FILE), "-- schema only\n");
+    await expect(restoreIsolated({
+      databaseUrl: TLS_URL,
+      plaintextDir: root,
+      confirmIsolatedRef: ISOLATED_REF,
+    })).rejects.toThrow(/GRANT or REVOKE/);
+  });
+
   it("fails when a required dump is absent but skips optional dumps", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "acreledger-restore-required-"));
     await fs.mkdir(path.join(root, "database"));
     for (const name of REQUIRED_RESTORE_FILES) {
-      if (name !== "auth-data.sql") await fs.writeFile(path.join(root, "database", name), "-- test\n");
+      if (name === "auth-data.sql") continue;
+      const contents = name === PRIVILEGES_FILE
+        ? "GRANT SELECT ON TABLE public.farms TO authenticated;\n"
+        : "-- test\n";
+      await fs.writeFile(path.join(root, "database", name), contents);
     }
     await expect(restoreIsolated({
       databaseUrl: TLS_URL,
