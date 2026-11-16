@@ -9,7 +9,7 @@ This is the nightly disaster-recovery copy of the whole AcreLedger book. It is n
 
 A run counts as successful only when all of these finish:
 
-1. Database dump
+1. Database dump, including `privileges.sql` (object GRANT/REVOKE)
 2. Storage object copy
 3. Encryption
 4. Drive upload
@@ -59,7 +59,7 @@ If backups fail with `AUTH_REVOKED`:
 2. Existing app checks stay green if application code changed: `npm run lint`, `npm run typecheck`, `npm run typecheck:api`, `npm test`, `npm run build`.
 3. One complete backup is uploaded to Drive and verified.
 4. That archive is restored into a disposable Supabase project.
-5. Source and restored counts match, including Auth users and Storage objects.
+5. Source and restored counts match, including Auth users and Storage objects. Confirm `privileges.sql` was applied: function EXECUTE grants for `anon`/`authenticated` match the source (especially SECURITY DEFINER functions). The in-repo dump uses `pg_dump --schema-only --no-owner` and must not pass `--no-privileges`/`-x` as a privilege-suppression flag. Keep `--no-owner`. The owner's live PC nightly script already uses those flags (Ops removed `--no-privileges` on 2026-11-10); this package is the in-repo DR path and does not change that PC script.
 6. One test farm is extracted and applied to a separate test project; a second farm there stays unchanged.
 7. Owner confirms two working copies of the age private key.
 8. Failure alerts are deliberately triggered and received.

@@ -12,6 +12,8 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 
 Canonical detail: [BLUEPRINT → Backup / Restore Farm Ownership](../../BLUEPRINT.md#backup--restore-farm-ownership).
 
+This file is the in-app farm JSON backup (Settings → Backup Data). Object GRANT/privilege capture for the owner SQL disaster-recovery dump is in [owner-dr.md](./owner-dr.md); do not mix the two.
+
 - The currently selected `farm_id` is authoritative: merge `{ ...record, farm_id }` (or `{ ...record, farmId: farm_id }` for FSA tract/CLU app types) before every mapper call.
 - Backups include `backupVersion`, `fsaTracts`, and `cluAssignments`. Unversioned backups pass through `normalizeBackupForRestore` before strict validation. Settings and pre-rollover backups must pass `backupSchema` before download.
 - Restore helpers write only JSON-present columns; never enumerate every column through `jsonb_populate_record(set)`.

@@ -6,7 +6,7 @@ Each successful run writes one encrypted archive to the owner's personal Drive f
 
 ## What a run includes
 
-- Database roles, public/application schema, and COPY-formatted data
+- Database roles, public/application schema, object privileges (`privileges.sql`), and COPY-formatted data
 - Auth users and identities (password hashes included for full-project recovery)
 - Storage metadata plus actual Storage object bytes
 - Private operational schemas (`ai_assistant_private`, `weather_proxy_private`, `usage_private`)
