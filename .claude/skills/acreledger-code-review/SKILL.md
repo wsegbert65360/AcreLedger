@@ -60,7 +60,7 @@ Run as parallel sub-agents with fresh context. Give each the diff command, commi
 - Free vs Pro enforced on the server (`assert_premium`, RPC guards); the client's Pro feature list matches the server allowlist (a test should tie them).
 - Gated UI has a real Pro note; plan copy lives in `src/copy/entitlements.ts` and says "Pro".
 - iOS stays free of prices, trials, Stripe checkout and in-app purchase. The US storefront link (`src/lib/storefront.ts`, `src/hooks/useIosUpgradeLink.ts`, `PlanUpgradeLink`) must not change; keep `Landing.test.tsx` and `Settings.test.tsx`.
-- Stripe webhook, idempotency and test-mode gates still fail closed; entitlements mode stays `off` unless the spec says otherwise.
+- Stripe webhook, idempotency and test-mode gates still fail closed; production `ENTITLEMENTS_MODE` is `enforce` (since 2026-11-16); flag any change that would turn it off or assumes it is off.
 - Free-tier caps (fields, rainfall slots) can't be bypassed by offline replay.
 - Feature flags default off and the app behaves exactly as before with the flag off (`runs_cattle`: groups and moves free; events, transfers, CSV Pro).
 
