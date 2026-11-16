@@ -14,6 +14,7 @@ import {
 import type { CommandRunner } from "../../infrastructure/owner-backup/src/types.js";
 import { applyTenantRecovery, buildApplyPlan, type ApplyExecutor } from "./apply-tenant-recovery.js";
 import { tenantBundleChecksum, type TenantBundle } from "./extract-tenant.js";
+import { PRIVILEGES_FILE } from "../../infrastructure/owner-backup/src/privileges.js";
 import { ISOLATED_RESTORE_ORDER, restoreIsolated } from "./restore-isolated.js";
 import { TENANT_REGISTRY_VERSION, registryKey, tenantBundleTables } from "./tenant-registry.js";
 
@@ -79,7 +80,10 @@ async function run(): Promise<void> {
   try {
     await fs.mkdir(databaseDir, { recursive: true });
     for (const name of ISOLATED_RESTORE_ORDER) {
-      await fs.writeFile(path.join(databaseDir, name), `-- disposable drill fixture: ${name}\n`, "utf8");
+      const contents = name === PRIVILEGES_FILE
+        ? "GRANT SELECT ON TABLE public.farms TO authenticated;\n"
+        : `-- disposable drill fixture: ${name}\n`;
+      await fs.writeFile(path.join(databaseDir, name), contents, "utf8");
     }
     await fs.writeFile(path.join(databaseDir, "fixture.json"), `${JSON.stringify(dataset, null, 2)}\n`, "utf8");
 

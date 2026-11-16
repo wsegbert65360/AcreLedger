@@ -10,7 +10,7 @@ npm run drill:local --prefix scripts/recovery
 
 ## Scope proved
 
-- Builds a synthetic two-farm backup tree with the required restore files.
+- Builds a synthetic two-farm backup tree with the required restore files, including `privileges.sql` with a GRANT statement.
 - Writes artifact checksums and a manifest, creates a real `tar.zst` archive, extracts it, and verifies every recorded checksum.
 - Recounts the restored synthetic rows and compares them with the manifest.
 - Builds the checked-in single-transaction, side-effect-neutralizing `psql` restore command through an injected recorder; `psql` is deliberately not executed.
@@ -21,8 +21,9 @@ npm run drill:local --prefix scripts/recovery
 ## Not proved by this rehearsal
 
 - `age` encryption/decryption or offline-key recovery.
-- Real `pg_dump`/`psql` compatibility, extension restoration, constraints, triggers, or transaction behavior in a disposable Supabase project.
+- Real `pg_dump`/`psql` compatibility, extension restoration, constraints, triggers, privilege restore, or transaction behavior in a disposable Supabase project.
 - Auth-user restoration, Storage object restoration, RLS behavior through real user sessions, or source-versus-restored live counts.
+- Function EXECUTE grants for `anon`/`authenticated` versus the source. A human isolated restore must run that comparison (`FUNCTION_EXECUTE_AUDIT_SQL` in `infrastructure/owner-backup/src/privileges.ts`) before treating a dump as safe.
 - Google Drive upload/download integrity, retention, scheduling, and alerts.
 
 Those remain mandatory live/disposable-project gates in the owner recovery runbooks before production scheduling or an actual tenant recovery.
