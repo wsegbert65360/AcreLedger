@@ -17,7 +17,7 @@ Keep the five most recent substantive entries, newest first. Git holds the full 
 
 - **2026-11-15** — Cattle is optional and off unless `farms.runs_cattle` is on. Groups, pasture moves, and head-count edits are free. Events, head transfers, and the cattle CSV export are Pro. See [docs/agents/cattle.md](./docs/agents/cattle.md).
 - **2026-11-14** — Harvest scale ticket is shown only for town loads, and a blank ticket is never a fall-worksheet warning.
-- **2026-11-13** — Year-end reports: one landlord row per field per crop, US Letter PDFs with shared AcreLedger branding, spray log names missing details, and new tank-mix products default to `fl oz/ac`. Shipped as 3.6.3.
+- **2026-11-13** — Year-end reports: one landlord row per field per crop, US Letter PDFs with shared AcreLedger branding (the note intentionally carries the "Start your own at acreledger.app" line by product decision, with no price or trial wording), spray log names missing details, and new tank-mix products default to `fl oz/ac`. Shipped as 3.6.3.
 - **2026-11-13** — Review fixes: a free farm at the field cap can undo a pre-season reset; a rainfall slot with cleared coordinates reads empty; a legacy `trialing` row shows as Free.
 - **2026-11-13** — Ask the Book stays on only for the owner's farm, stays out of marketing, and is not removed.
 

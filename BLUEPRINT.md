@@ -1271,8 +1271,8 @@ Selecting a landlord, or choosing Farm Owner Summary for the entire farm, shows:
   activity timeline as a second table, a tenant signature line, and the AcreLedger note). The PDF
   subtitle includes the farm name, and long footer lines wrap through `doc.splitTextToSize`.
 - **Report PDF branding** — `src/lib/complianceReports/pdfBranding.ts` draws the shared footer
-  ("Made with AcreLedger · acreledger.com", Page X of Y) on every page and the boxed last-page
-  note. It carries no price, trial, or sign-up wording because the PDFs are also generated on iOS.
+  ("Made with AcreLedger · acreledger.app", Page X of Y) on every page and the boxed last-page
+  note. By product decision, the note intentionally carries the "Start your own at acreledger.app" line, with no price or trial wording.
   All report PDFs, including the spray log, use US Letter (`REPORT_PAGE_FORMAT`).
 - **Spray log PDF status line** — `sprayExport.ts` uses the same checks as the in-app review queue
   (`missingComplianceFields`, `sprayProductsNeedReview`) and names what is missing, so it never
