@@ -28,6 +28,16 @@ import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { resolveComplianceProfileId } from '@/lib/compliance/profiles';
 import type { ComplianceProfileId } from '@/lib/compliance/profiles';
 import { missingComplianceFields, sprayProductsNeedReview } from '@/lib/sprayCompliance';
+import {
+  buildCropNames,
+  buildReviewFlags,
+  buildSprayLogSummary,
+  displayPersonName,
+  displayRegNumber,
+  formatBaseAmount,
+  productBaseAmount,
+  productKey,
+} from './sprayLogSummary';
 
 interface ExportOptions {
   filename?: string;
@@ -81,6 +91,54 @@ export function generateSprayPDF(
   const rangeStart = options.startDate || derivedRange.start;
   const rangeEnd = options.endDate || derivedRange.end;
 
+  // Everything below is worked out from the records for display only; the
+  // stored records are never changed by an export.
+  const fieldFor = (record: SprayRecord) => options.fields?.find(candidate => candidate.id === record.fieldId);
+  const areaOf = (record: SprayRecord) => ({
+    area: getEffectiveSprayTreatedAcres(record, fieldFor(record), options.cluAssignments),
+    unit: effectiveTreatedAreaUnit(record),
+  });
+  const reportAreaUnit = isAu ? 'ha' : 'ac';
+  const areaInReportUnit = (record: SprayRecord) => {
+    const { area, unit } = areaOf(record);
+    return area != null && Number.isFinite(area) && area > 0 ? normalizeTreatedArea(area, unit, reportAreaUnit) : 0;
+  };
+  const cropName = buildCropNames(chronologicalRecords);
+  const summary = isMulti
+    ? buildSprayLogSummary(chronologicalRecords, areaOf, areaInReportUnit, profileId)
+    : null;
+  const productDisplayUnits = new Map(summary?.products.map(row => [row.key, row.displayUnit]) ?? []);
+  const reviewFlags = buildReviewFlags(chronologicalRecords, {
+    formatWind: (mph) => isAu ? `${convertMphToKmh(mph)} km/h` : `${mph} MPH`,
+    formatDate: formatReportDate,
+    formatTime,
+    rateLabel: getUnitLabel,
+  });
+
+  // Same checks the in-app review queue uses, so the PDF never says
+  // "Complete" for a record the app flags, and it names what is missing.
+  const omissionsFor = (record: SprayRecord) => {
+    const { area, unit } = areaOf(record);
+    const exportOmissions = getRecordOmissions(record, area ?? undefined, profileId, unit);
+    const missingFields = missingComplianceFields(record, profileId).map(label => label.toLowerCase());
+    const productGap = record.products?.length && sprayProductsNeedReview(record.products, profileId)
+      ? [isAu ? 'a product name or rate' : 'a product name, EPA Reg # or rate']
+      : [];
+    return [...new Set([...exportOmissions, ...missingFields, ...productGap])];
+  };
+
+  // A product's total in the unit the summary uses for it, so one product
+  // never shows as quarts on one record and gallons on the next.
+  const productTotalText = (product: NonNullable<SprayRecord['products']>[number], area: number | null | undefined, areaUnit: string) => {
+    const displayUnit = productDisplayUnits.get(productKey(product.product));
+    const amount = displayUnit ? productBaseAmount(product, area, areaUnit, profileId) : null;
+    if (amount && displayUnit) {
+      const text = formatBaseAmount(amount, displayUnit);
+      if (text !== '—') return text;
+    }
+    return formatSprayProductTotal(product, areaForProductTotal(area, areaUnit, product.rateUnit, profileId));
+  };
+
   const drawRunningHeader = () => {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -123,20 +181,121 @@ export function generateSprayPDF(
 
   let yPos = isMulti ? 50 : 40;
 
+  // 1a. Summary page for a multi-record export: crops, products, fields and
+  // the records to check. The records start on the next page.
+  if (summary) {
+    const tableStyle = {
+      theme: 'grid' as const,
+      headStyles: { fillColor: [240, 240, 240] as [number, number, number], textColor: [0, 0, 0] as [number, number, number], fontStyle: 'bold' as const },
+      styles: { fontSize: 8, cellPadding: 1.6, overflow: 'linebreak' as const },
+      margin: { left: 14, right: 14, top: 22, bottom: pageHeight - BOTTOM },
+      willDrawPage: (data: { pageNumber: number }) => {
+        if (data.pageNumber > 1) drawRunningHeader();
+      },
+    };
+    const heading = (text: string) => {
+      if (yPos > BOTTOM - 25) yPos = addContentPage();
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text(text, 14, yPos);
+      doc.setFont('helvetica', 'normal');
+      yPos += 3;
+    };
+    const afterTable = () => {
+      // @ts-expect-error - autoTable adds lastAutoTable to doc
+      yPos = doc.lastAutoTable.finalY + 9;
+    };
+    const areaLabel = isAu ? 'Hectares' : 'Acres';
+
+    const recordsToCheck = chronologicalRecords.filter(record =>
+      record.nonCompliant || omissionsFor(record).length > 0 || (reviewFlags.get(record.id)?.length ?? 0) > 0
+    ).length;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', recordsToCheck ? 'bold' : 'normal');
+    doc.setTextColor(recordsToCheck ? 170 : 0, recordsToCheck ? 90 : 0, 0);
+    doc.text(
+      recordsToCheck
+        ? `Records to check: ${recordsToCheck} of ${chronologicalRecords.length} (marked "Check" or "Review needed" below)`
+        : `Records to check: none`,
+      14,
+      yPos,
+    );
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(0, 0, 0);
+    yPos += 9;
+
+    heading('By crop');
+    autoTable(doc, {
+      ...tableStyle,
+      startY: yPos,
+      head: [['Crop', 'Applications', 'Fields', `${areaLabel} treated`]],
+      body: summary.crops.map(row => [row.crop, String(row.applications), String(row.fields), formatNumber(row.acres)]),
+    });
+    afterTable();
+
+    heading('Product totals');
+    autoTable(doc, {
+      ...tableStyle,
+      startY: yPos,
+      head: [['Product', isAu ? 'APVMA Permit #' : 'EPA Reg #', 'Uses', 'Total applied']],
+      body: summary.products.map(row => [
+        row.name,
+        row.regNumbers.join(', ') || 'None',
+        String(row.uses),
+        row.total ? formatBaseAmount(row.total) : '—',
+      ]),
+      columnStyles: { 0: { cellWidth: 70 } },
+    });
+    afterTable();
+
+    heading('By field');
+    autoTable(doc, {
+      ...tableStyle,
+      startY: yPos,
+      head: [['Field', 'Crop', areaLabel, 'Passes', 'Dates']],
+      body: summary.fields.map(row => [
+        row.field,
+        row.crops.join(', '),
+        row.acres != null ? formatNumber(row.acres) : '-',
+        String(row.passes),
+        row.dates.map(date => formatReportDate(date).replace(/,? \d{4}$/, '')).join(', '),
+      ]),
+      columnStyles: { 0: { cellWidth: 50 } },
+    });
+    afterTable();
+
+    // Records follow on the same page when they fit; a rule marks the end
+    // of the summary.
+    doc.setDrawColor(120, 120, 120);
+    doc.line(14, yPos - 3, RIGHT, yPos - 3);
+    yPos += 6;
+  }
+
   // 2. Records
   chronologicalRecords.forEach((record, index) => {
-    const field = options.fields?.find(candidate => candidate.id === record.fieldId);
-    const treatedArea = getEffectiveSprayTreatedAcres(record, field, options.cluAssignments);
-    const treatedAreaUnit = effectiveTreatedAreaUnit(record);
-    const productRows = Math.max(record.products?.length || 0, 1);
-    const estimatedRecordHeight = 60 + productRows * 11 + (record.notes ? 12 : 0);
+    const { area: treatedArea, unit: treatedAreaUnit } = areaOf(record);
+    const flags = reviewFlags.get(record.id) ?? [];
+    // Product rows are about 7 mm, 11 mm with an active-ingredient line.
+    const productTableHeight = (record.products ?? []).reduce((sum, product) => sum + (product.activeIngredients ? 11 : 7), 0);
+    const hasSetup = Boolean(record.nozzleType || record.nozzleSize || record.pressurePsi != null || record.windSpeedEnd != null || record.tempEnd != null);
+    // Room for the whole record, so it does not split across pages.
+    const estimatedRecordHeight = 10 // divider and title
+      + 30 // detail grid, with room for one wrapped value
+      + (hasSetup ? 8 : 0)
+      + 8 // personnel line
+      + (record.products?.length ? 16 + productTableHeight : 10)
+      + (record.notes ? 10 : 0)
+      + (record.notes?.includes('[ATTACHMENT:') ? 61 : 0)
+      + 10 // status line
+      + flags.length * 4.5;
     if (yPos + estimatedRecordHeight > BOTTOM) {
       yPos = addContentPage();
     }
 
     if (isMulti) {
-      // Divider for multi-record
-      if (index > 0) {
+      // Divider for multi-record, except at the top of a page.
+      if (index > 0 && yPos > 22) {
         doc.setDrawColor(200, 200, 200);
         doc.line(14, yPos, RIGHT, yPos);
         yPos += 10;
@@ -172,14 +331,14 @@ export function generateSprayPDF(
       const windDisplay = joinParts([windKmh, 'km/h', record.windDirection]);
 
       detailsLeft = [
-        `Applicator: ${record.applicatorName || '-'}`,
+        `Applicator: ${displayPersonName(record.applicatorName) || '-'}`,
         `PIC: ${record.pic || '-'}`,
         `Date: ${formatReportDate(record.sprayDate)}`,
         `Time: ${formatTime(record.startTime)} to ${formatTime(record.endTime)}`,
       ];
 
       detailsRight = [
-        `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
+        `Crop/Site: ${cropName(record.cropOrSiteTreated) || '-'}`,
         `Target Pest: ${record.targetPest || '-'}`,
         `Area: ${areaDisplay}`,
         `Method: ${record.applicationMethod || '-'}`,
@@ -193,14 +352,14 @@ export function generateSprayPDF(
       ];
     } else {
       detailsLeft = [
-        `Applicator: ${record.applicatorName || '-'}`,
+        `Applicator: ${displayPersonName(record.applicatorName) || '-'}`,
         `License #: ${record.licenseNumber || '-'}`,
         `Date: ${formatReportDate(record.sprayDate)}`,
         `Time: ${formatTime(record.startTime)} to ${formatTime(record.endTime)}`,
       ];
 
       detailsRight = [
-        `Crop/Site: ${record.cropOrSiteTreated || '-'}`,
+        `Crop/Site: ${cropName(record.cropOrSiteTreated) || '-'}`,
         `Target Pest: ${record.targetPest || '-'}`,
         `Area: ${formatNumber(treatedArea)} ${formatUnit(treatedAreaUnit) || 'ac'}`,
         `Method: ${record.applicationMethod || '-'}`,
@@ -250,9 +409,9 @@ export function generateSprayPDF(
       yPos += setupLines.length * 4 + 3;
     }
 
-    // 2b. Mix & Personnel Details (NEW)
-    const hasMixDetails = record.mixtureRate || record.totalMixtureVolume || record.involvedTechnicians || record.sensitiveAreaCheck;
-    if (hasMixDetails) {
+    // 2b. Mix & Personnel Details. Personnel and the sensitive-area check
+    // always print, so a blank reads as blank instead of disappearing.
+    {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
       doc.text('Mix & Personnel Details:', 14, yPos);
@@ -261,11 +420,13 @@ export function generateSprayPDF(
       const mixParts = [];
       if (record.mixtureRate) mixParts.push(`Rate: ${record.mixtureRate}`);
       if (record.totalMixtureVolume) mixParts.push(`Total Vol: ${record.totalMixtureVolume}`);
-      if (record.involvedTechnicians) mixParts.push(`Personnel: ${record.involvedTechnicians}`);
+      mixParts.push(`Personnel: ${displayPersonName(record.involvedTechnicians) || '-'}`);
       if (record.sensitiveAreaCheck) {
-        let checkStr = 'Sensitive Area Check: PERFORMED';
+        let checkStr = 'Sensitive Area Check: Performed';
         if (record.sensitiveAreaNotes) checkStr += ` (${record.sensitiveAreaNotes})`;
         mixParts.push(checkStr);
+      } else {
+        mixParts.push('Sensitive Area Check: Not recorded');
       }
 
       const mixLines = doc.splitTextToSize(mixParts.join('  |  '), RIGHT - 55) as string[];
@@ -285,10 +446,10 @@ export function generateSprayPDF(
               content: `${p.product}${p.activeIngredients ? '\n' + p.activeIngredients : ''}`,
               styles: { fontStyle: p.activeIngredients ? 'normal' : 'bold' }
             },
-            p.epaRegNumber || '-',
+            displayRegNumber(p.epaRegNumber),
             // getUnitLabel marks dry oz and fluid oz so the rate cannot be misread.
             `${p.rate || '-'} ${p.rateUnit ? getUnitLabel(p.rateUnit) : ''}`.trim(),
-            formatSprayProductTotal(p, areaForProductTotal(treatedArea, treatedAreaUnit, p.rateUnit, profileId))
+            productTotalText(p, treatedArea, treatedAreaUnit)
           ];
         }),
         theme: 'grid',
@@ -341,20 +502,15 @@ export function generateSprayPDF(
       }
     }
 
-    if (record.siteAddress) {
-      doc.text(`Field/Site: ${record.siteAddress}`, 14, yPos);
+    // The site line repeats the record title when it is only the field name.
+    const siteAddress = record.siteAddress?.trim();
+    if (siteAddress && siteAddress.toLowerCase() !== cleanName(record.fieldName || '').toLowerCase()) {
+      doc.text(`Field/Site: ${siteAddress}`, 14, yPos);
       yPos += 5;
     }
 
     // Compliance line
-    // Same checks the in-app review queue uses, so the PDF never says
-    // "Complete" for a record the app flags, and it names what is missing.
-    const exportOmissions = getRecordOmissions(record, treatedArea ?? undefined, profileId, treatedAreaUnit);
-    const missingFields = missingComplianceFields(record, profileId).map(label => label.toLowerCase());
-    const productGap = record.products?.length && sprayProductsNeedReview(record.products, profileId)
-      ? [isAu ? 'a product name or rate' : 'a product name, EPA Reg # or rate']
-      : [];
-    const omissions = [...new Set([...exportOmissions, ...missingFields, ...productGap])];
+    const omissions = omissionsFor(record);
     const needsReview = Boolean(record.nonCompliant || omissions.length);
     doc.setFont('helvetica', needsReview ? 'bold' : 'normal');
     if (needsReview) {
@@ -369,8 +525,29 @@ export function generateSprayPDF(
     doc.text(statusLines, 14, yPos);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
-    yPos += 12 + (statusLines.length - 1) * 4;
+    yPos += 4 + (statusLines.length - 1) * 4;
+
+    // Things worth a second look. These are prompts, not compliance failures.
+    if (flags.length > 0) {
+      doc.setTextColor(170, 90, 0);
+      flags.forEach(flag => {
+        const flagLines = doc.splitTextToSize(`Check: ${flag}.`, RIGHT - 14) as string[];
+        doc.text(flagLines, 14, yPos);
+        yPos += flagLines.length * 4;
+      });
+      doc.setTextColor(0, 0, 0);
+    }
+    yPos += 8;
   });
+
+  // Applicator signature, after the last record.
+  if (yPos > BOTTOM - 20) yPos = addContentPage();
+  doc.setFontSize(9);
+  doc.setTextColor(0, 0, 0);
+  yPos += 6;
+  doc.text('Applicator signature: ________________________________', 14, yPos);
+  doc.text('Date: ______________', RIGHT, yPos, { align: 'right' });
+  yPos += 10;
 
   // AcreLedger note after the last record, then the shared footer on every page.
   const pagesBeforeNote = doc.getNumberOfPages();

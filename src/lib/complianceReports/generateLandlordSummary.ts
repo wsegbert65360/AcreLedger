@@ -55,6 +55,8 @@ export type LandlordFieldSummary = {
   fieldName: string;
   acres: number;
   producerShare?: number;
+  /** Field-level landlord; blank on owned or unassigned land. */
+  landlordName?: string;
   crop: string | null;
   totalBushels: number;
   buPerAcre: number | null;
@@ -73,6 +75,8 @@ export type LandlordActivityRow = {
   crop: string | null;
   /** Human-readable one-line detail, e.g. "Seed: Pioneer P1197" or "Corn — 4,200 bu". */
   detail: string;
+  /** Raw amount behind the detail: bushels for a harvest row, bales for a hay row. */
+  quantity?: number;
 };
 
 export type LandlordCropTotal = {
@@ -212,6 +216,7 @@ function buildFieldSummaries(
           fieldId: field.id,
           fieldName: field.name,
           producerShare: field.producerShare,
+          landlordName: field.landlordName?.trim() || undefined,
           acres,
           crop: group.label,
           totalBushels,
@@ -232,6 +237,7 @@ function buildFieldSummaries(
         fieldId: field.id,
         fieldName: field.name,
         producerShare: field.producerShare,
+        landlordName: field.landlordName?.trim() || undefined,
         acres,
         crop: HAY_LABEL,
         totalBushels: 0,
@@ -247,6 +253,7 @@ function buildFieldSummaries(
         fieldId: field.id,
         fieldName: field.name,
         producerShare: field.producerShare,
+        landlordName: field.landlordName?.trim() || undefined,
         acres,
         crop: latestPlantCrop,
         totalBushels: 0,
@@ -391,6 +398,7 @@ function buildActivityRows(
       activityType: 'harvest',
       crop: r.crop?.trim() || null,
       detail: `${(r.bushels || 0).toLocaleString()} bu`,
+      quantity: r.bushels || 0,
     });
   }
 
@@ -405,6 +413,7 @@ function buildActivityRows(
       activityType: 'hay',
       crop: 'Hay',
       detail: `${(r.baleCount || 0).toLocaleString()} ${r.baleType.toLowerCase()} ${baleLabel} · Cutting ${r.cuttingNumber}`,
+      quantity: r.baleCount || 0,
     });
   }
 

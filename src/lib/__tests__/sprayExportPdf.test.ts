@@ -93,14 +93,93 @@ describe('generateSprayPDF', () => {
     expect(text).toContain('Farm: Test Farm');
     expect(text).toContain('Applications: 2');
 
-    // One products table per record; the tank mix expands to two rows.
-    const tables = pdf.autoTables();
+    // One products table per record after the summary tables; the tank mix
+    // expands to two rows.
+    const tables = pdf.autoTables().filter(table => table.head[0]?.[0] === 'Product / Active Ingredients');
     expect(tables).toHaveLength(2);
     expect(tables[1].body).toHaveLength(2);
     expect(tables[1].body[0][0]).toMatchObject({ content: expect.stringContaining('Roundup') });
     expect(tables[1].body[1][0]).toMatchObject({ content: expect.stringContaining('Dicamba') });
     expect(tables[1].body[1][1]).toBe('100-1023');
     expect(tables[1].head[0]).toEqual(['Product / Active Ingredients', 'EPA Reg #', 'Rate', 'Total Applied']);
+  });
+
+  it('opens a multi-record export with crop, product and field totals', () => {
+    const records = [
+      makeRecord({ id: 'a', cropOrSiteTreated: 'Soybean', products: [{ product: 'Zidua SC', rate: '3', rateUnit: 'fl oz/ac', epaRegNumber: '7969-374' }], treatedAreaSize: 40 }),
+      makeRecord({ id: 'b', sprayDate: '2026-05-03', timestamp: 2000, cropOrSiteTreated: 'Soybeans', products: [{ product: 'zidua sc', rate: '3', rateUnit: 'fl oz/ac', epaRegNumber: '7969-374' }], treatedAreaSize: 100 }),
+    ];
+
+    generateSprayPDF(records, 'Test Farm', { fields: [field] });
+
+    const [crops, products, fields] = pdf.autoTables();
+    // "Soybean" and "Soybeans" are one crop.
+    expect(crops.body).toEqual([['Soybeans', '2', '1', '140']]);
+    // Case variants are one product; 420 fl oz = 3.28 gal.
+    expect(products.body).toEqual([['Zidua SC', '7969-374', '2', '3.28 gal']]);
+    expect(fields.body[0]).toEqual(['North Field', 'Soybeans', '100', '2', expect.stringContaining('May')]);
+    // Each record prints the product in the summary's unit (120 fl oz = 0.94 gal, not 3.75 qt).
+    const recordTables = pdf.autoTables().filter(table => table.head[0]?.[0] === 'Product / Active Ingredients');
+    expect(recordTables[0].body[0][3]).toBe('0.94 gal');
+    expect(pdf.allText()).toContain('Crop/Site: Soybeans');
+  });
+
+  it('flags night spraying, light wind, an odd rate and a repeated record without changing status', () => {
+    const durus = (rate: string) => [{ product: 'Durus', rate, rateUnit: 'qt/ac', epaRegNumber: '84100-62-83979' }];
+    const records = [
+      makeRecord({ id: 'a', fieldId: 'f1', fieldName: 'One', products: durus('3.5'), sprayDate: '2026-04-01', timestamp: 1 }),
+      makeRecord({ id: 'b', fieldId: 'f2', fieldName: 'Two', products: durus('3.5'), sprayDate: '2026-04-02', timestamp: 2 }),
+      makeRecord({ id: 'c', fieldId: 'f3', fieldName: 'Three', products: durus('3.5'), sprayDate: '2026-04-03', timestamp: 3 }),
+      makeRecord({ id: 'd', fieldId: 'f4', fieldName: 'Four', products: durus('1.5'), sprayDate: '2026-04-04', timestamp: 4, startTime: '22:50', endTime: '23:32', windSpeed: 1 }),
+      makeRecord({ id: 'e', fieldId: 'f1', fieldName: 'One', products: durus('3.5'), sprayDate: '2026-06-01', timestamp: 5 }),
+    ];
+
+    generateSprayPDF(records, 'Test Farm', { fields: [field] });
+
+    const text = pdf.allText();
+    expect(text).toContain('Check: Durus rate 1.5 qt/ac differs from the usual 3.5 qt/ac.');
+    expect(text).toContain('Check: Sprayed at night (10:50 PM to 11:32 PM).');
+    expect(text).toContain('Check: Wind 1 MPH is very light; check for a temperature inversion.');
+    expect(text).toContain('Check: Same products and rates as the');
+    expect(text).toContain('Records to check: 2 of 5');
+    // Flags are prompts; the compliance line is unchanged.
+    expect(text.match(/Compliance Status: Complete/g)).toHaveLength(5);
+  });
+
+  it('flags the same weather reading on passes hours apart the same day', () => {
+    const records = [
+      makeRecord({ id: 'a', fieldId: 'f1', fieldName: 'One', startTime: '13:14', temperature: 62, relativeHumidity: 100 }),
+      makeRecord({ id: 'b', fieldId: 'f2', fieldName: 'Two', startTime: '17:30', temperature: 62, relativeHumidity: 100, timestamp: 2000 }),
+    ];
+
+    generateSprayPDF(records, 'Test Farm', { fields: [field] });
+
+    expect(pdf.allText()).toContain('Check: Same temperature and humidity as One at 1:14 PM');
+  });
+
+  it('cleans up names, registration numbers and blank personnel for display only', () => {
+    const record = makeRecord({
+      applicatorName: 'william egbert',
+      siteAddress: 'North Field',
+      products: [{ product: 'Ammonium Sulfate', rate: '1.5', rateUnit: 'lb/ac', epaRegNumber: 'none' }],
+    });
+
+    generateSprayPDF([record], 'Test Farm', { fields: [field] });
+
+    const text = pdf.allText();
+    expect(text).toContain('Applicator: William Egbert');
+    expect(text).toContain('Personnel: -');
+    expect(text).toContain('Sensitive Area Check: Not recorded');
+    expect(text).not.toContain('Field/Site: North Field');
+    expect(text).toContain('Applicator signature:');
+    expect(pdf.autoTables()[0].body[0][1]).toBe('None');
+    expect(record.applicatorName).toBe('william egbert');
+  });
+
+  it('keeps a site address that is not just the field name', () => {
+    generateSprayPDF([makeRecord({ siteAddress: '1200 County Rd 4' })], 'Test Farm', { fields: [field] });
+
+    expect(pdf.allText()).toContain('Field/Site: 1200 County Rd 4');
   });
 
   it('prints the real farm name in the spray header and a fill-in blank when the name is missing', () => {

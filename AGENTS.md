@@ -15,11 +15,11 @@ Read this file first. Then open only the topic file in the [routing index](#rout
 
 Keep the five most recent substantive entries, newest first. Git holds the full history. Reasons are in [docs/decisions.md](./docs/decisions.md).
 
+- **2026-11-17** — Farm Owner Summary PDF redesigned: per-crop tiles and tables with Share %, Your bu, season dates and variety; hay table; not-harvested list; owner sign-off. A Reports switch chooses the full report (condensed, grouped activity timeline) or the summary only. See [docs/agents/reports.md](./docs/agents/reports.md).
 - **2026-11-16** — Free tier enforcement is ON in production (`entitlement_config.mode = 'enforce'`, device limit off); the owner farm is complimentary. FSA/CLU data entry is free (`20261116120000_fsa_entry_free.sql`); Fall FSA and Hay Summary joined the Pro prepared reports. Onboarding: AU-pilot users must pick a region; completion needs exactly one profile row; completed users leave `/onboarding`. The tour blocks spotlight clicks and makes the app inert. Roll back enforcement with `update public.entitlement_config set mode = 'off', updated_at = now() where singleton = true;`. See [docs/agents/billing.md](./docs/agents/billing.md).
 - **2026-11-15** — Cattle is optional and off unless `farms.runs_cattle` is on. Groups, pasture moves, and head-count edits are free. Events, head transfers, and the cattle CSV export are Pro. See [docs/agents/cattle.md](./docs/agents/cattle.md).
 - **2026-11-14** — Harvest scale ticket is shown only for town loads, and a blank ticket is never a fall-worksheet warning.
 - **2026-11-13** — Year-end reports: one landlord row per field per crop, US Letter PDFs with shared AcreLedger branding (the note intentionally carries the "Start your own at acreledger.app" line by product decision, with no price or trial wording), spray log names missing details, and new tank-mix products default to `fl oz/ac`. Shipped as 3.6.3.
-- **2026-11-13** — Review fixes: a free farm at the field cap can undo a pre-season reset; a rainfall slot with cleared coordinates reads empty; a legacy `trialing` row shows as Free.
 
 ## Contents
 

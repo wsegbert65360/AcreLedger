@@ -31,6 +31,20 @@ describe('Farm Owner Summary rendering', () => {
     expect(props.onExportPdf).toHaveBeenCalledOnce();
   });
 
+  test('lets the owner drop the activity timeline from the PDF', () => {
+    const onIncludeTimelineChange = vi.fn();
+    render(<LandlordSummaryReport {...props} wholeFarm includeTimeline onIncludeTimelineChange={onIncludeTimelineChange} />);
+    const toggle = screen.getByRole('switch', { name: /Include activity timeline in PDF/ });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(toggle);
+    expect(onIncludeTimelineChange).toHaveBeenCalledWith(false);
+  });
+
+  test('does not show the timeline toggle on a per-landlord summary', () => {
+    render(<LandlordSummaryReport {...props} selectedLandlord="John Smith" onIncludeTimelineChange={vi.fn()} />);
+    expect(screen.queryByRole('switch', { name: /Include activity timeline/ })).not.toBeInTheDocument();
+  });
+
   test('offers a whole-farm option before any landlord is selected', () => {
     const onWholeFarmChange = vi.fn();
     render(<LandlordSummaryReport {...props} landlordSummary={null} onWholeFarmChange={onWholeFarmChange} />);
