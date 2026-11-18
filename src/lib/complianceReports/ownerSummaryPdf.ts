@@ -14,7 +14,7 @@ import {
 } from './ownerSummaryLayout';
 
 /**
- * Farm Owner Summary PDF (US Letter, landscape).
+ * Farm Owner Summary and per-landlord Landlord Summary PDF (US Letter, landscape).
  *
  * Page 1 opens with one tile per crop, then one table per grain crop, the hay
  * table, and the fields with no production. With `includeTimeline` the
@@ -22,8 +22,15 @@ import {
  * ends at the notes and signature line.
  */
 
+/** `owner`: the whole farm for the farm owner. `landlord`: one landlord's fields, for that landlord. */
+export type SummaryPdfAudience = 'owner' | 'landlord';
+
 export interface OwnerSummaryPdfOptions {
   summary: LandlordSummary;
+  /** Defaults to `owner`. */
+  audience?: SummaryPdfAudience;
+  /** Required for the `landlord` audience: who the report is prepared for. */
+  landlordName?: string;
   /** Printable farm name, or '' when unknown. */
   farmName: string;
   seasonYear: number;
@@ -41,6 +48,37 @@ const BOTTOM_LIMIT = 20;
 
 export const OWNER_SUMMARY_NOTE =
   'Bushels and shares are computed from harvest loads logged in AcreLedger; scale tickets are not shown. Share % is landlord bushels divided by total bushels.';
+
+type AudienceText = {
+  kicker: string;
+  /** Header for the operator's bushels after the landlord share. */
+  keptColumn: string;
+  keptTile: string;
+  signatures: string[];
+};
+
+function audienceText(audience: SummaryPdfAudience): AudienceText {
+  return audience === 'landlord'
+    ? {
+      kicker: 'LANDLORD SUMMARY',
+      keptColumn: 'TENANT BU',
+      keptTile: 'Tenant',
+      signatures: [
+        'Tenant signature: _______________________________     Date: ___________________',
+        'Landlord signature: _____________________________     Date: ___________________',
+      ],
+    }
+    : {
+      kicker: 'FARM OWNER SUMMARY',
+      keptColumn: 'YOUR BU',
+      keptTile: 'Yours',
+      signatures: ['Owner signature: _______________________________     Date: ___________________'],
+    };
+}
+
+function audienceOf(opts: OwnerSummaryPdfOptions): SummaryPdfAudience {
+  return opts.audience ?? 'owner';
+}
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 const fmt0 = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -123,16 +161,22 @@ function drawHeader(doc: jsPDF, opts: OwnerSummaryPdfOptions, layout: OwnerSumma
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...GREEN);
-  doc.text(`FARM OWNER SUMMARY · ${opts.seasonYear} CROP YEAR`, MARGIN, 15);
+  const forLandlord = audienceOf(opts) === 'landlord';
+  doc.text(`${audienceText(audienceOf(opts)).kicker} · ${opts.seasonYear} CROP YEAR`, MARGIN, 15);
 
   doc.setFontSize(18);
   doc.setTextColor(30);
-  doc.text(opts.farmName || 'Farm Owner Summary', MARGIN, 23);
+  doc.text(
+    forLandlord ? `Prepared for ${opts.landlordName ?? ''}` : opts.farmName || 'Farm Owner Summary',
+    MARGIN,
+    23,
+  );
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(80);
-  doc.text(`Generated ${opts.reportDate}`, width - MARGIN, 15, { align: 'right' });
+  const generated = forLandlord && opts.farmName ? `${opts.farmName} · Generated ${opts.reportDate}` : `Generated ${opts.reportDate}`;
+  doc.text(generated, width - MARGIN, 15, { align: 'right' });
   doc.text(
     opts.includeTimeline ? 'Full report · with activity timeline' : 'Summary · no activity timeline',
     width - MARGIN,
@@ -153,13 +197,13 @@ function drawHeader(doc: jsPDF, opts: OwnerSummaryPdfOptions, layout: OwnerSumma
 type Tile = { label: string; value: string; lines: string[] };
 
 /** One tile per grain crop plus hay. Bushels of different crops are never summed into one tile. */
-function buildTiles(layout: OwnerSummaryLayout): Tile[] {
+function buildTiles(layout: OwnerSummaryLayout, text: AudienceText): Tile[] {
   const tiles: Tile[] = layout.grainSections.map(section => ({
     label: section.crop.toUpperCase(),
     value: `${fmt0(section.total.totalBushels)} bu`,
     lines: [
       `${section.total.buPerAcre != null ? fmt1(section.total.buPerAcre) : '—'} bu/ac · ${fmt(section.total.acres)} ac`,
-      `Landlord ${fmt0(section.total.landlordShareBushels)} · Yours ${fmt0(section.total.ownerBushels)}`,
+      `Landlord ${fmt0(section.total.landlordShareBushels)} · ${text.keptTile} ${fmt0(section.total.ownerBushels)}`,
     ],
   }));
   if (layout.hayTotal) {
@@ -203,7 +247,13 @@ function drawTiles(doc: jsPDF, tiles: Tile[], y: number): number {
   return top + tileHeight + 7;
 }
 
-function drawProduction(doc: Doc, layout: OwnerSummaryLayout, summary: LandlordSummary, startY: number): number {
+function drawProduction(
+  doc: Doc,
+  layout: OwnerSummaryLayout,
+  summary: LandlordSummary,
+  text: AudienceText,
+  startY: number,
+): number {
   let y = startY;
 
   for (const section of layout.grainSections) {
@@ -212,7 +262,7 @@ function drawProduction(doc: Doc, layout: OwnerSummaryLayout, summary: LandlordS
     y = table(
       doc,
       y,
-      ['FIELD', 'ACRES', 'BUSHELS', 'BU/AC', 'SHARE %', 'LANDLORD BU', 'YOUR BU', 'PLANTED', 'HARVESTED', 'VARIETY'],
+      ['FIELD', 'ACRES', 'BUSHELS', 'BU/AC', 'SHARE %', 'LANDLORD BU', text.keptColumn, 'PLANTED', 'HARVESTED', 'VARIETY'],
       section.rows.map(row => [
         row.fieldName,
         fmt(row.acres),
@@ -380,8 +430,8 @@ function drawTimeline(doc: Doc, layout: OwnerSummaryLayout): number {
   return y;
 }
 
-function drawSignOff(doc: jsPDF, y: number): number {
-  let top = ensureSpace(doc, y, 20);
+function drawSignOff(doc: jsPDF, text: AudienceText, y: number): number {
+  let top = ensureSpace(doc, y, 14 + text.signatures.length * 7);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(70);
@@ -390,24 +440,28 @@ function drawSignOff(doc: jsPDF, y: number): number {
   top += noteLines.length * 4 + 8;
   doc.setTextColor(40);
   doc.setFontSize(9);
-  doc.text('Owner signature: _______________________________     Date: ___________________', MARGIN, top);
-  return top + 6;
+  text.signatures.forEach((line, i) => doc.text(line, MARGIN, top + i * 9));
+  return top + (text.signatures.length - 1) * 9 + 6;
 }
 
 export function exportOwnerSummaryPdf(opts: OwnerSummaryPdfOptions): void {
+  const audience = audienceOf(opts);
+  const text = audienceText(audience);
   const layout = buildOwnerSummaryLayout(opts.summary);
   const doc = new jsPDF({ orientation: 'landscape', format: REPORT_PAGE_FORMAT }) as Doc;
 
   let y = drawHeader(doc, opts, layout);
-  y = drawTiles(doc, buildTiles(layout), y);
-  y = drawProduction(doc, layout, opts.summary, y);
+  y = drawTiles(doc, buildTiles(layout, text), y);
+  y = drawProduction(doc, layout, opts.summary, text, y);
   if (opts.includeTimeline) {
     y = drawTimeline(doc, layout);
   }
-  y = drawSignOff(doc, y);
-  drawAcreLedgerNote(doc, 'report', y + 4);
+  y = drawSignOff(doc, text, y);
+  drawAcreLedgerNote(doc, audience === 'landlord' ? 'landlord' : 'report', y + 4);
 
-  const identity = [opts.farmName, `Farm Owner Summary ${opts.seasonYear}`].filter(Boolean).join(' · ');
+  const identity = audience === 'landlord'
+    ? [opts.farmName, `Landlord Summary ${opts.seasonYear}`, opts.landlordName].filter(Boolean).join(' · ')
+    : [opts.farmName, `Farm Owner Summary ${opts.seasonYear}`].filter(Boolean).join(' · ');
   drawPageFooters(doc, identity);
 
   if (Capacitor.isNativePlatform()) {

@@ -125,4 +125,34 @@ describe('exportOwnerSummaryPdf', () => {
 
     expect(pdf.allText()).toContain('2 harvest record(s) have no crop-share percent and are counted as 0 share.');
   });
+
+  it('landlord audience: prepared for the landlord, tenant bushels, both signatures and the landlord note', () => {
+    exportOwnerSummaryPdf({
+      ...base,
+      audience: 'landlord',
+      landlordName: 'John Smith',
+      includeTimeline: false,
+      fileName: 'John_Smith_Summary_2026_No_Timeline.pdf',
+    });
+
+    const text = pdf.allText();
+    expect(text).toContain('LANDLORD SUMMARY · 2026 CROP YEAR');
+    expect(text).toContain('Prepared for John Smith');
+    expect(text).toContain('Egbert Farm · Generated 11/17/2026');
+    expect(text).toContain('Landlord 330 · Tenant 670');
+    expect(text).toContain('Tenant signature:');
+    expect(text).toContain('Landlord signature:');
+    expect(text).not.toContain('Owner signature:');
+    expect(text).not.toContain('FARM OWNER SUMMARY');
+    expect(text).toContain('Egbert Farm · Landlord Summary 2026 · John Smith');
+    expect(pdf.autoTables()[0].head[0]).toContain('TENANT BU');
+    expect(pdf.savedAs()).toEqual(['John_Smith_Summary_2026_No_Timeline.pdf']);
+  });
+
+  it('landlord audience can include the timeline too', () => {
+    exportOwnerSummaryPdf({ ...base, audience: 'landlord', landlordName: 'John Smith', includeTimeline: true });
+
+    expect(pdf.allText()).toContain('Activity timeline');
+    expect(pdf.addPageCount()).toBeGreaterThanOrEqual(1);
+  });
 });

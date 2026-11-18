@@ -21,7 +21,7 @@ interface LandlordSummaryReportProps {
   reportDate: string;
   onExportCsv: () => void;
   onExportPdf: () => void;
-  /** Farm Owner Summary only: include the activity timeline pages in the PDF. */
+  /** Include the activity timeline pages in the summary PDF. */
   includeTimeline?: boolean;
   onIncludeTimelineChange?: (includeTimeline: boolean) => void;
   readinessSummary: ReportReadinessSummary | null;
@@ -91,7 +91,7 @@ export default function LandlordSummaryReport({
           </div>
         ) : landlordSummary ? (
           <div className="space-y-6">
-            {wholeFarm && onIncludeTimelineChange && (
+            {onIncludeTimelineChange && (
               <div className="flex min-h-11 items-center gap-3 print:hidden">
                 <Switch
                   id="owner-summary-include-timeline"
