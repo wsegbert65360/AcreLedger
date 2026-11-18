@@ -4,3 +4,5 @@ export * from './generateLandlordSummary';
 export * from './pdfExport';
 export * from './fsa578PdfExport';
 export * from './pdfBranding';
+export * from './ownerSummaryLayout';
+export * from './ownerSummaryPdf';

@@ -1,7 +1,9 @@
 import { Download } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import ReportTable from '@/components/ReportTable';
 import { ACTIVITY_BG_COLORS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, type LandlordSummary } from '@/lib/complianceReports';
@@ -19,6 +21,9 @@ interface LandlordSummaryReportProps {
   reportDate: string;
   onExportCsv: () => void;
   onExportPdf: () => void;
+  /** Farm Owner Summary only: include the activity timeline pages in the PDF. */
+  includeTimeline?: boolean;
+  onIncludeTimelineChange?: (includeTimeline: boolean) => void;
   readinessSummary: ReportReadinessSummary | null;
   onIssueAction?: (issue: ReportReadinessIssue) => void;
   exportStatus?: ReportExportStatus;
@@ -34,6 +39,8 @@ export default function LandlordSummaryReport({
   reportDate,
   onExportCsv,
   onExportPdf,
+  includeTimeline = true,
+  onIncludeTimelineChange,
   readinessSummary,
   onIssueAction,
   exportStatus,
@@ -84,6 +91,21 @@ export default function LandlordSummaryReport({
           </div>
         ) : landlordSummary ? (
           <div className="space-y-6">
+            {wholeFarm && onIncludeTimelineChange && (
+              <div className="flex min-h-11 items-center gap-3 print:hidden">
+                <Switch
+                  id="owner-summary-include-timeline"
+                  checked={includeTimeline}
+                  onCheckedChange={onIncludeTimelineChange}
+                />
+                <Label htmlFor="owner-summary-include-timeline" className="text-sm text-foreground">
+                  Include activity timeline in PDF
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {includeTimeline ? 'Full report: production, hay, then the timeline.' : 'Summary only: production, hay, and sign-off.'}
+                  </span>
+                </Label>
+              </div>
+            )}
             <div className="hidden gap-2 lg:flex print:hidden">
               <Button
                 size="sm"

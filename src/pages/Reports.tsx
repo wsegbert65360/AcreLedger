@@ -19,7 +19,7 @@ import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
 import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/components/reports/ReportPreview';
 import WorkRequestsTab from './workRequests/WorkRequestsTab';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, buildFsa578Rows, buildFsaFallCropTotals, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
+import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, buildFsa578Rows, buildFsaFallCropTotals, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportOwnerSummaryPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -292,6 +292,8 @@ export default function Reports() {
   const summaryExportType = wholeFarm ? 'farm-owner-summary' : 'landlord-statement';
   const summaryTitle = wholeFarm ? 'Farm Owner Summary' : 'Landlord Summary';
   const [selectedLandlord, setSelectedLandlord] = useState<string>('');
+  /** Farm Owner Summary PDF: full report with the activity timeline, or the 2-page summary. */
+  const [includeOwnerTimeline, setIncludeOwnerTimeline] = useState(true);
   const summaryFilePrefix = wholeFarm ? 'Farm_Owner_Summary' : `${selectedLandlord}_Summary`;
   const uniqueLandlords = useMemo(() => getFieldLandlordNames(fields), [fields]);
 
@@ -548,6 +550,21 @@ export default function Reports() {
     }
     if (!landlordSummary) return;
     const printableFarmName = knownFarmName(farmName);
+    if (wholeFarm) {
+      runTrackedExport(summaryExportType, () => {
+        exportOwnerSummaryPdf({
+          summary: landlordSummary,
+          farmName: printableFarmName,
+          seasonYear: viewingSeason,
+          reportDate,
+          includeTimeline: includeOwnerTimeline,
+          fileName: sanitizeNativeFileName(
+            `${summaryFilePrefix}_${viewingSeason}${includeOwnerTimeline ? '' : '_No_Timeline'}.pdf`,
+          ),
+        });
+      }, `${summaryTitle} PDF`);
+      return;
+    }
     runTrackedExport(summaryExportType, () => {
       const fmt = (n: number) => n.toLocaleString();
       exportToPdf({
@@ -899,6 +916,8 @@ export default function Reports() {
               reportDate={reportDate}
               onExportCsv={handleExportLandlordCSV}
               onExportPdf={handleExportLandlordPdf}
+              includeTimeline={includeOwnerTimeline}
+              onIncludeTimelineChange={setIncludeOwnerTimeline}
               readinessSummary={landlordReadinessSummary}
               exportStatus={getExportStatus(summaryExportType)}
               onIssueAction={handleIssueAction}
