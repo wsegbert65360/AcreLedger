@@ -5,11 +5,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
+const FSA_COUNTY_NOTE_HINT = 'Scratchpad for field-specific notes. For FSA county totals, add County: name and, optionally, State: abbreviation on separate lines.';
+
 interface FieldNotesProps {
   field: Field;
+  /** US only: explain the County:/State: lines the Fall FSA report reads. */
+  showFsaCountyHint?: boolean;
 }
 
-export default function FieldNotes({ field }: FieldNotesProps) {
+export default function FieldNotes({ field, showFsaCountyHint = false }: FieldNotesProps) {
   const { updateField, flushFieldNotes } = useFarm();
   const [notes, setNotes] = useState(field.notes || '');
   const [status, setStatus] = useState<'saved' | 'syncing' | 'idle'>('idle');
@@ -140,7 +144,7 @@ export default function FieldNotes({ field }: FieldNotesProps) {
         name="field-notes"
         value={notes}
         onChange={handleNotesChange}
-        placeholder="Scratchpad for field-specific notes. For FSA county totals, add County: name and State: abbreviation on separate lines."
+        placeholder={showFsaCountyHint ? FSA_COUNTY_NOTE_HINT : "Scratchpad for field-specific notes..."}
         className="min-h-[100px] text-sm bg-card/30 border-dashed border-border/60 rounded-xl focus-visible:ring-1 focus-visible:ring-primary/30 transition-all resize-none shadow-inner"
       />
     </section>

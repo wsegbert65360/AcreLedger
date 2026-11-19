@@ -714,7 +714,7 @@ export default function FieldDetailScreen() {
           <FieldCattleSummary fieldId={field.id} />
 
           <div className="pt-4 border-t border-border/70">
-            <FieldNotes key={field.id} field={field} />
+            <FieldNotes key={field.id} field={field} showFsaCountyHint={complianceProfile !== 'au-apvma'} />
           </div>
         </section>
 

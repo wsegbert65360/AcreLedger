@@ -76,11 +76,11 @@ export default function FallFsaReport({
               <h3 className="font-bold">Production totals by farm and county</h3>
               {groupedTotals.map(total => (
                 <div key={JSON.stringify([total.scope, total.county, total.farmNumber, total.crop, total.unit])} className="flex justify-between gap-3">
-                  <span>{[total.scope, total.county, total.farmNumber && `#${total.farmNumber}`, total.crop].filter(Boolean).join(' · ')}</span>
+                  <span>{[total.scope, total.county, total.farmNumber && (/^\d/.test(total.farmNumber) ? `#${total.farmNumber}` : total.farmNumber), total.crop].filter(Boolean).join(' · ')}</span>
                   <span className="font-bold text-harvest whitespace-nowrap">{total.production.toLocaleString()} {total.unit.toUpperCase()}</span>
                 </div>
               ))}
-              {fsaFallRows.some(row => !row.county?.trim()) && <p className="text-xs text-muted-foreground">To assign missing counties, add County: name and optionally State: abbreviation on separate lines in the field notes.</p>}
+              {fsaFallRows.some(row => !row.county?.trim()) && <p className="text-xs text-muted-foreground">To assign missing counties, add County: name and, optionally, State: abbreviation on separate lines in the field notes.</p>}
             </div>
           )}
         </div>

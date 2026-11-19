@@ -796,11 +796,31 @@ export function buildFsaFallProductionRows({
     return { grainRows, hayRows };
 }
 
+const US_STATE_ABBR: Record<string, string> = {
+    alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO',
+    connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID',
+    illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA',
+    maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
+    mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV',
+    'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+    'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK', oregon: 'OR',
+    pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD',
+    tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT', virginia: 'VA', washington: 'WA',
+    'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY',
+};
+
+/** "Missouri", "mo" and "MO" all print as "MO"; anything else is kept as written. */
+function normalizeState(state: string): string {
+    const key = state.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (/^[a-z]{2}$/.test(key)) return key.toUpperCase();
+    return US_STATE_ABBR[key] ?? state.trim();
+}
+
 /** FSA imports preserve county and state as labeled lines in field notes. */
 function getFieldCounty(field?: Field): string {
     const county = field?.notes?.match(/^[ \t]*County:[ \t]*([^\r\n]+)$/im)?.[1].trim();
     const state = field?.notes?.match(/^[ \t]*State:[ \t]*([^\r\n]+)$/im)?.[1].trim();
-    return county ? [county.replace(/\s+County$/i, ''), state].filter(Boolean).join(', ') : '';
+    return county ? [county.replace(/\s+County$/i, ''), state && normalizeState(state)].filter(Boolean).join(', ') : '';
 }
 
 const HAY_TOTAL_LABEL = 'Hay';
