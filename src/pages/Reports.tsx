@@ -14,6 +14,7 @@ import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import SprayAuditReport from '@/components/reports/SprayAuditReport';
 import FertilizerReport from '@/components/reports/FertilizerReport';
 import FallFsaReport from '@/components/reports/FallFsaReport';
+import { buildFsaFallGroupedTotals } from '@/lib/complianceReports/fsaReports';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
 import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
 import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/components/reports/ReportPreview';
@@ -482,7 +483,7 @@ export default function Reports() {
         title: 'FSA Fall Harvest / Production Evidence Worksheet',
         subtitle: complianceFarmSubtitle(farmName, viewingSeason, reportDate, 'pdf'),
         orientation: 'landscape',
-        headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #', 'LANDLORD', 'LL %'],
+        headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #', 'LANDLORD', 'LL %', 'COUNTY'],
         rightAlignColumns: [3, 5, 11],
         rows: fsaFallRows.map(row => [
           fmtDate(row.harvestDate) || '—',
@@ -497,11 +498,18 @@ export default function Reports() {
           row.tractNumber || '—',
           row.landlordName || '—',
           row.landlordSplitPercent != null ? `${row.landlordSplitPercent}%` : '—',
+          row.county || '—',
         ]),
         // One total per crop and unit; bushels of different crops are never summed together.
         footRows: fallCropTotals.map(total => [
-          'TOTAL', '', total.crop, total.production.toLocaleString(), total.unit, '', '', '', '', '', '', '',
+          'TOTAL', '', total.crop, total.production.toLocaleString(), total.unit, '', '', '', '', '', '', '', '',
         ]),
+        secondaryTable: {
+          title: 'Production totals by farm and county',
+          headers: ['SCOPE', 'COUNTY', 'FARM #', 'CROP', 'UNIT', 'PRODUCTION'],
+          rightAlignColumns: [5],
+          rows: buildFsaFallGroupedTotals(fsaFallRows).map(t => [t.scope, t.county, t.farmNumber, t.crop, t.unit, t.production.toLocaleString()]),
+        },
         fileName: `FSA_Fall_Production_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
         footerText: [
           'Production Evidence Worksheet',

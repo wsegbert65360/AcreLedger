@@ -65,6 +65,7 @@ export interface FsaFallProductionRow {
     fieldName: string;
     crop: string;
     farmNumber: string;
+    county?: string;
     tractNumber: string;
     harvestDate: string;
     production: number;
@@ -756,6 +757,7 @@ export function buildFsaFallProductionRows({
             fieldName: record.fieldName || field?.name || '',
             crop: record.crop || '',
             farmNumber: record.fsaFarmNumber || field?.fsaFarmNumber || '',
+            county: getFieldCounty(field),
             tractNumber: record.fsaTractNumber || field?.fsaTractNumber || '',
             harvestDate: record.harvestDate || toLocalIsoDate(record.timestamp),
             production: record.bushels || 0,
@@ -780,6 +782,7 @@ export function buildFsaFallProductionRows({
             // use is a grain crop still produced hay here, so it must not read as that crop.
             crop: hayRowLabel(field?.intendedUse),
             farmNumber: field?.fsaFarmNumber || '',
+            county: getFieldCounty(field),
             tractNumber: field?.fsaTractNumber || '',
             harvestDate: record.date || toLocalIsoDate(record.timestamp),
             production: record.baleCount || 0,
@@ -791,6 +794,13 @@ export function buildFsaFallProductionRows({
     });
 
     return { grainRows, hayRows };
+}
+
+/** FSA imports preserve county and state as labeled lines in field notes. */
+function getFieldCounty(field?: Field): string {
+    const county = field?.notes?.match(/^[ \t]*County:[ \t]*([^\r\n]+)$/im)?.[1].trim();
+    const state = field?.notes?.match(/^[ \t]*State:[ \t]*([^\r\n]+)$/im)?.[1].trim();
+    return county ? [county.replace(/\s+County$/i, ''), state].filter(Boolean).join(', ') : '';
 }
 
 const HAY_TOTAL_LABEL = 'Hay';
@@ -824,6 +834,37 @@ export function buildFsaFallCropTotals(rows: FsaFallProductionRow[]): FsaFallCro
             Number(a.crop === HAY_TOTAL_LABEL) - Number(b.crop === HAY_TOTAL_LABEL)
             || a.crop.localeCompare(b.crop)
             || a.unit.localeCompare(b.unit));
+}
+
+export interface FsaFallGroupedTotal extends FsaFallCropTotal {
+    scope: 'Farm' | 'County / farm' | 'County';
+    county: string;
+    farmNumber: string;
+}
+
+/** Use the same crop/unit aggregation at every reporting level, including unassigned records. */
+export function buildFsaFallGroupedTotals(rows: FsaFallProductionRow[]): FsaFallGroupedTotal[] {
+    const groups = new Map<string, { scope: FsaFallGroupedTotal['scope']; county: string; farmNumber: string; rows: FsaFallProductionRow[] }>();
+    const add = (scope: FsaFallGroupedTotal['scope'], county: string, farmNumber: string, row: FsaFallProductionRow) => {
+        const key = JSON.stringify([scope, county.toLowerCase(), farmNumber]);
+        const group = groups.get(key) ?? { scope, county, farmNumber, rows: [] };
+        group.rows.push(row);
+        groups.set(key, group);
+    };
+    for (const row of rows) {
+        const county = row.county?.trim() || 'Unassigned county';
+        const farm = row.farmNumber.trim() || 'Unassigned farm';
+        add('Farm', '', farm, row);
+        add('County / farm', county, farm, row);
+        add('County', county, '', row);
+    }
+    return [...groups.values()].sort((a, b) =>
+        Number(a.scope !== 'Farm') - Number(b.scope !== 'Farm')
+        || a.county.localeCompare(b.county)
+        || Number(a.scope === 'County') - Number(b.scope === 'County')
+        || a.farmNumber.localeCompare(b.farmNumber, undefined, { numeric: true })
+    ).flatMap(({ scope, county, farmNumber, rows: groupRows }) =>
+        buildFsaFallCropTotals(groupRows).map(total => ({ scope, county, farmNumber, ...total })));
 }
 
 export function validateFsaFallProductionRows(rows: FsaFallProductionRow[]): FsaFallValidationIssue[] {
@@ -891,6 +932,7 @@ export function buildFsaFallProductionCsv({
         'Landlord Name',
         'Landlord Share %',
         'Notes',
+        'County',
     ].map(sanitizeCsvValue).join(',');
 
     const dataRows = rows.map(row => [
@@ -910,9 +952,16 @@ export function buildFsaFallProductionCsv({
         row.landlordName || '',
         row.landlordSplitPercent ?? '',
         row.notes,
+        row.county || '',
     ].map(sanitizeCsvValue).join(','));
 
-    return [...titleRows, header, ...dataRows].join('\n');
+    const summaries = [
+        ['Production totals (each reporting level is a separate summary)'],
+        ['Scope', 'County', 'Farm #', 'Crop', 'Unit', 'Production'],
+        ...buildFsaFallCropTotals(rows).map(t => ['Overall', '', '', t.crop, t.unit, t.production]),
+        ...buildFsaFallGroupedTotals(rows).map(t => [t.scope, t.county, t.farmNumber, t.crop, t.unit, t.production]),
+    ].map(row => row.map(sanitizeCsvValue).join(','));
+    return [...titleRows, header, ...dataRows, '', ...summaries].join('\n');
 }
 
 export async function exportFsaFallProductionData({

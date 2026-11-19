@@ -1218,7 +1218,9 @@ undated cropland requires an explicit FSA status and produces a readiness error.
 still states that county FSA review is required. Type/variety appears in the PDF's Section 1
 as well as in the preview and CSV. The document is titled "FSA-578 Acreage Reporting Worksheet"
 everywhere. The Fall Production worksheet totals production per crop and unit
-(`buildFsaFallCropTotals`), prints landscape with landlord name and share columns, and does not
+(`buildFsaFallCropTotals`), with separate totals by FSA farm number, county and farm number,
+and county (`buildFsaFallGroupedTotals`). County and state come from labeled field notes
+preserved by FSA import; missing values remain unassigned. It prints landscape with landlord name and share columns, and does not
 flag a blank scale ticket. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
 farm/tract/CLU acreage and reporting facts. Both FSA-578 and Fall Production outputs include the
 farm name in their header subtitles, in the on-screen preview and the PDF.

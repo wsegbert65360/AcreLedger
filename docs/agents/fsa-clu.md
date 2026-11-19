@@ -35,4 +35,5 @@ Reports:
 - Every report PDF uses `REPORT_PAGE_FORMAT` (US Letter) and `pdfBranding.ts`: `drawPageFooters` after all pages exist, so pages added after a table get a footer, and `drawAcreLedgerNote` on the last page. The branding carries no price, trial, or sign-up wording because the same PDFs are generated on iOS.
 - The one title is "FSA-578 Acreage Reporting Worksheet" on screen, preview, CSV, and PDF. The FSA-578 PDF includes Type/Variety.
 - Fall production totals are per crop and unit (`buildFsaFallCropTotals`); never print one bushel total across crops. A scale ticket is optional: do not flag a blank ticket/evidence reference, and show the ticket field only for town loads.
+- Fall production includes farm-number totals, each county's farm-number totals, and county subtotals in preview, CSV and PDF (`buildFsaFallGroupedTotals`). County/state use labeled field notes from FSA import or manual entry; never guess a missing county.
 - Numeric columns in `exportToPdf` are right-aligned with `rightAlignColumns`, not by matching header text.
