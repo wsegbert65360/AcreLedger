@@ -134,7 +134,7 @@ describe('generateSprayPDF', () => {
       makeRecord({ id: 'e', fieldId: 'f1', fieldName: 'One', products: durus('3.5'), sprayDate: '2026-06-01', timestamp: 5 }),
     ];
 
-    generateSprayPDF(records, 'Test Farm', { fields: [field] });
+    generateSprayPDF(records, 'Test Farm', { fields: [field], includeReviewFlags: true });
 
     const text = pdf.allText();
     expect(text).toContain('Check: Durus rate 1.5 qt/ac differs from the usual 3.5 qt/ac.');
@@ -152,9 +152,26 @@ describe('generateSprayPDF', () => {
       makeRecord({ id: 'b', fieldId: 'f2', fieldName: 'Two', startTime: '17:30', temperature: 62, relativeHumidity: 100, timestamp: 2000 }),
     ];
 
-    generateSprayPDF(records, 'Test Farm', { fields: [field] });
+    generateSprayPDF(records, 'Test Farm', { fields: [field], includeReviewFlags: true });
 
     expect(pdf.allText()).toContain('Check: Same temperature and humidity as One at 1:14 PM');
+  });
+
+  it('leaves review prompts off the official log by default', () => {
+    const durus = (rate: string) => [{ product: 'Durus', rate, rateUnit: 'qt/ac', epaRegNumber: '84100-62-83979' }];
+    const records = [
+      makeRecord({ id: 'a', fieldId: 'f1', fieldName: 'One', products: durus('3.5'), sprayDate: '2026-04-01', timestamp: 1 }),
+      makeRecord({ id: 'b', fieldId: 'f2', fieldName: 'Two', products: durus('3.5'), sprayDate: '2026-04-02', timestamp: 2 }),
+      makeRecord({ id: 'c', fieldId: 'f3', fieldName: 'Three', products: durus('3.5'), sprayDate: '2026-04-03', timestamp: 3 }),
+      makeRecord({ id: 'd', fieldId: 'f4', fieldName: 'Four', products: durus('1.5'), sprayDate: '2026-04-04', timestamp: 4, startTime: '22:50', endTime: '23:32', windSpeed: 1 }),
+    ];
+
+    generateSprayPDF(records, 'Test Farm', { fields: [field] });
+
+    const text = pdf.allText();
+    expect(text).not.toMatch(/(^|\n)Check: /);
+    expect(text).not.toContain('Sprayed at night');
+    expect(text).toContain('Records to check: none');
   });
 
   it('cleans up names, registration numbers and blank personnel for display only', () => {

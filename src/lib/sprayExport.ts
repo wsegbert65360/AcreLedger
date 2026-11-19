@@ -46,6 +46,8 @@ interface ExportOptions {
   fields?: Field[];
   cluAssignments?: FieldCluAssignment[];
   profile?: ComplianceProfileId;
+  /** Print the app's heuristic "Check:" prompts. Off by default: the spray log is an official record. */
+  includeReviewFlags?: boolean;
 }
 
 function splitAttachmentFromNotes(notes?: string): { cleanNotes: string; attachmentDataUri: string | null } {
@@ -108,12 +110,14 @@ export function generateSprayPDF(
     ? buildSprayLogSummary(chronologicalRecords, areaOf, areaInReportUnit, profileId)
     : null;
   const productDisplayUnits = new Map(summary?.products.map(row => [row.key, row.displayUnit]) ?? []);
-  const reviewFlags = buildReviewFlags(chronologicalRecords, {
-    formatWind: (mph) => isAu ? `${convertMphToKmh(mph)} km/h` : `${mph} MPH`,
-    formatDate: formatReportDate,
-    formatTime,
-    rateLabel: getUnitLabel,
-  });
+  const reviewFlags: Map<string, string[]> = options.includeReviewFlags
+    ? buildReviewFlags(chronologicalRecords, {
+      formatWind: (mph) => isAu ? `${convertMphToKmh(mph)} km/h` : `${mph} MPH`,
+      formatDate: formatReportDate,
+      formatTime,
+      rateLabel: getUnitLabel,
+    })
+    : new Map();
 
   // Same checks the in-app review queue uses, so the PDF never says
   // "Complete" for a record the app flags, and it names what is missing.
@@ -216,7 +220,7 @@ export function generateSprayPDF(
     doc.setTextColor(recordsToCheck ? 170 : 0, recordsToCheck ? 90 : 0, 0);
     doc.text(
       recordsToCheck
-        ? `Records to check: ${recordsToCheck} of ${chronologicalRecords.length} (marked "Check" or "Review needed" below)`
+        ? `Records to check: ${recordsToCheck} of ${chronologicalRecords.length} (marked ${options.includeReviewFlags ? '"Check" or ' : ''}"Review needed" below)`
         : `Records to check: none`,
       14,
       yPos,
@@ -288,7 +292,7 @@ export function generateSprayPDF(
       + (record.notes ? 10 : 0)
       + (record.notes?.includes('[ATTACHMENT:') ? 61 : 0)
       + 10 // status line
-      + flags.length * 4.5;
+      + flags.reduce((sum, flag) => sum + (doc.splitTextToSize(`Check: ${flag}.`, RIGHT - 14) as string[]).length * 4, 0);
     if (yPos + estimatedRecordHeight > BOTTOM) {
       yPos = addContentPage();
     }

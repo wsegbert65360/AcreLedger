@@ -1062,6 +1062,8 @@ module level.
 The `generateSprayPDF` utility (`@/lib/sprayExport.ts`) provides a production-grade, state-neutral
 PDF export for spray records. It handles both single-record and multi-record exports. It is driven
 exclusively by full `SprayRecord`s — `CustomSprayRecord`s are intentionally excluded.
+The app's heuristic review prompts ("Check:" lines) are off by default because the log is an
+official record; they print only with `includeReviewFlags: true`.
 
 ### Spray Entry Chooser (`SprayTypeChooser.tsx`)
 Tapping **Spray** does not open `SprayModal` directly. It opens `SprayTypeChooser`

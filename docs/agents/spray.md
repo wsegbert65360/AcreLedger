@@ -25,6 +25,7 @@ Canonical detail: [BLUEPRINT → SprayRecord](../../BLUEPRINT.md#sprayrecord-202
 - Treated-area defaults and every report/export fallback go through `getEffectiveSprayTreatedAcres(record, field, cluAssignments)`, never a raw `field.acreage` read. An explicitly stored `treatedAreaSize` is always preserved.
 - New tank-mix products and recipe rows default to `DEFAULT_SPRAY_RATE_UNIT` (`fl oz/ac`) from `@/utils/unitConversion`; do not hardcode `'oz/ac'`, which is a dry weight unit and totals in pounds. Unit pickers use `SPRAY_RATE_UNIT_OPTIONS` with `rateUnitOptionLabel`, and the mix step keeps its live total preview and dry-weight note. Existing records keep their stored unit.
 - The spray log PDF status line uses the review-queue checks (`missingComplianceFields`, `sprayProductsNeedReview`) and names what is missing; it must never print "Complete" for a record the app flags. Detail values wrap, never clip.
+- The spray log PDF is an official record. The heuristic review prompts (`buildReviewFlags`: night spraying, light or high wind, odd rate, repeated record) print only with `includeReviewFlags: true`, which no caller sets. By default no "Check:" lines print and "Records to check" counts only missing details and compliance flags.
 
 ## Regional Settings and the Australia Pilot
 
