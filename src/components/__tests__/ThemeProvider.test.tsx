@@ -6,14 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ThemeProvider, useTheme } from '../ThemeProvider';
 
-const setDark = vi.fn();
-const setLight = vi.fn();
+const darkText = vi.fn();
+const lightText = vi.fn();
 
 vi.mock('@/lib/native', () => ({
   native: {
     statusBar: {
-      setDark: (...args: unknown[]) => setDark(...args),
-      setLight: (...args: unknown[]) => setLight(...args),
+      darkText: (...args: unknown[]) => darkText(...args),
+      lightText: (...args: unknown[]) => lightText(...args),
     },
   },
 }));
@@ -36,8 +36,8 @@ describe('ThemeProvider', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.className = '';
-    setDark.mockClear();
-    setLight.mockClear();
+    darkText.mockClear();
+    lightText.mockClear();
 
     let meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
@@ -60,8 +60,8 @@ describe('ThemeProvider', () => {
       </ThemeProvider>
     );
 
-    setDark.mockClear();
-    setLight.mockClear();
+    darkText.mockClear();
+    lightText.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Use color' }));
 
     expect(screen.getByTestId('theme')).toHaveTextContent('color');
@@ -69,8 +69,20 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#faf8ef');
     expect(localStorage.getItem(storageKey)).toBe('color');
-    expect(setDark).toHaveBeenCalled();
-    expect(setLight).not.toHaveBeenCalled();
+    expect(darkText).toHaveBeenCalled();
+    expect(lightText).not.toHaveBeenCalled();
+  });
+
+  it('uses light status-bar text on the dark theme', () => {
+    render(
+      <ThemeProvider defaultTheme="dark" storageKey={storageKey}>
+        <ThemeProbe />
+      </ThemeProvider>
+    );
+
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(lightText).toHaveBeenCalled();
+    expect(darkText).not.toHaveBeenCalled();
   });
 
   it('ignores unknown stored theme values', () => {
