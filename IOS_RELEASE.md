@@ -14,18 +14,19 @@
   `https://acreledger.vercel.app/privacy` and
   `https://acreledger.vercel.app/support` (both returned HTTP 200 on September
   27, 2026).
-- [ ] Mirror `ios/App/App/PrivacyInfo.xcprivacy` in the App Store Connect privacy
-  questionnaire. The prepared answer set covers email address, phone number,
+- [x] Mirror `ios/App/App/PrivacyInfo.xcprivacy` in the App Store Connect privacy
+  questionnaire (published November 4, 2026). The prepared answer set covers email address, phone number,
   physical address, user ID, precise location, photos or videos, search history,
   and other user content; linked to the user; app functionality; no tracking.
-- [ ] Complete the App Store Connect age-rating questionnaire and export
-  compliance answers.
+- [x] Complete the App Store Connect age-rating questionnaire (4+) and export
+  compliance answers (`ITSAppUsesNonExemptEncryption` is `false`).
 - [x] Prepare English (U.S.) listing copy, review notes, privacy answers,
   age-rating answers, screenshot plan, and build-selection checklist in
   `docs/app-store/2026-10-01-submission-package.md`.
-- [ ] Capture and upload the required iPhone 6.9-inch and iPad 13-inch screenshot
-  sets from the exact selected release build.
-- [ ] Enter App Review contact phone and disposable review-account credentials
+- [x] Capture and upload the required iPhone and iPad 13-inch screenshot sets
+  from the selected release build. App Store Connect now requires the iPhone
+  6.1/6.3-inch size (1206 × 2622); the 6.9-inch captures were scaled to it.
+- [x] Enter App Review contact phone and disposable review-account credentials
   directly in App Store Connect. Never commit the password.
 - [x] Owner assigned: **Will Egbert** (confirmed September 23, 2026) reviews
   `account_deletion_requests` at least weekly, completes each request within
@@ -62,6 +63,19 @@ within 30 days.
 
 ## Validation log
 
+- 2026-11-04 — Version 3.6.1 (build 254, from the PR #86 merge `a5ffd3b`)
+  submitted to App Review; status Waiting for Review. CodeMagic's iOS build of
+  `a5ffd3b` succeeded and TestFlight showed build 254 Ready to Submit. Ten
+  screenshots (five scenes on iPhone and iPad, Sample Creek Farm, dark mode)
+  were captured from a local ad-hoc-signed Release simulator build of the same
+  code and uploaded with no alpha. App Store Connect entries: listing copy from
+  `docs/app-store/metadata.en-US.json`, categories Business / Productivity,
+  age rating 4+, the eight privacy data types (app functionality, linked, no
+  tracking) published, content rights declared, price Free, availability
+  United States only, manual release. The iPad Reports screen shows the
+  FSA-578 table layout rather than the "Ready to export" card. EU DSA status
+  was already set to non-trader.
+
 - 2026-11-03 — macOS (Xcode 26.5, CocoaPods 1.17.0) at 3.6.1: `pod install`
   and unsigned Debug and Release simulator builds succeeded on Capacitor 8.5.3,
   including speech-recognition 7.0.1 compilation. The app launched on iPhone 17
@@ -71,7 +85,8 @@ within 30 days.
   Lint, typecheck, and `npm run test` passed. Sample Creek Farm exists in
   production with 4 fields, boundaries, plantings, 1 spray, 2 harvests, and
   2 bins; the North Forty field row still carries intended use Corn and FSA
-  farm 1234 / tract 2 instead of Grain, 1001 / 2001.
+  farm 1234 / tract 2 instead of Grain, 1001 / 2001 (corrected the same day
+  through the app's Edit Field screen).
 
 - 2026-10-09 — Capacitor 6 → 8.5.3 upgrade implementation in progress on working tree (uncommitted). iOS: CocoaPods pod install, Xcode 26 validation, signing/archive creation, TestFlight upload, and physical-device checklist remain pending macOS/App Store access. Speech-recognition 7.0.1 iOS compilation is unverified. SQLCipher and secure-storage encryption flags confirmed present in generated `ios/App/App/capacitor.config.json`.
 - 2026-09-29 — Windows validation on the reconciled review-fix tree (rebased
