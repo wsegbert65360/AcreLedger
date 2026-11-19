@@ -140,7 +140,7 @@ export default function FieldNotes({ field }: FieldNotesProps) {
         name="field-notes"
         value={notes}
         onChange={handleNotesChange}
-        placeholder="Scratchpad for field-specific notes..."
+        placeholder="Scratchpad for field-specific notes. For FSA county totals, add County: name and State: abbreviation on separate lines."
         className="min-h-[100px] text-sm bg-card/30 border-dashed border-border/60 rounded-xl focus-visible:ring-1 focus-visible:ring-primary/30 transition-all resize-none shadow-inner"
       />
     </section>

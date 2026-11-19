@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import ReportTable from '@/components/ReportTable';
 import type { FsaFallCropTotal, FsaFallProductionRow, FsaFallValidationIssue } from '@/lib/complianceReports';
+import { buildFsaFallGroupedTotals } from '@/lib/complianceReports/fsaReports';
 import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
 import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { complianceFarmSubtitle, farmNameForProse } from '@/lib/farmDisplayName';
@@ -40,6 +41,7 @@ export default function FallFsaReport({
 }: FallFsaReportProps) {
   const fsaFallErrors = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'error'), [fsaFallIssues]);
   const fsaFallWarnings = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'warning'), [fsaFallIssues]);
+  const groupedTotals = useMemo(() => buildFsaFallGroupedTotals(fsaFallRows), [fsaFallRows]);
 
   return (
     <>
@@ -57,7 +59,7 @@ export default function FallFsaReport({
       <ReportTable
       title="FSA Fall Harvest / Production Evidence Worksheet"
       subtitle={complianceFarmSubtitle(farmName, viewingSeason, reportDate)}
-      headers={['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #']}
+      headers={['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #', 'COUNTY']}
       onExport={onExportCsv}
       onExportPdf={onExportPdf}
       exportLabel="CSV"
@@ -69,6 +71,18 @@ export default function FallFsaReport({
               <span className="font-bold text-harvest">{total.production.toLocaleString()} {total.unit.toUpperCase()}</span>
             </div>
           ))}
+          {groupedTotals.length > 0 && (
+            <div className="mt-3 space-y-1 border-t pt-3">
+              <h3 className="font-bold">Production totals by farm and county</h3>
+              {groupedTotals.map(total => (
+                <div key={JSON.stringify([total.scope, total.county, total.farmNumber, total.crop, total.unit])} className="flex justify-between gap-3">
+                  <span>{[total.scope, total.county, total.farmNumber && `#${total.farmNumber}`, total.crop].filter(Boolean).join(' · ')}</span>
+                  <span className="font-bold text-harvest whitespace-nowrap">{total.production.toLocaleString()} {total.unit.toUpperCase()}</span>
+                </div>
+              ))}
+              {fsaFallRows.some(row => !row.county?.trim()) && <p className="text-xs text-muted-foreground">To assign missing counties, add County: name and optionally State: abbreviation on separate lines in the field notes.</p>}
+            </div>
+          )}
         </div>
       )}
     >
@@ -84,25 +98,26 @@ export default function FallFsaReport({
           <td data-label="EVIDENCE #" className="px-4 py-3 font-mono text-xs text-foreground truncate max-w-[80px]">{row.evidenceReference || '—'}</td>
           <td data-label="FARM #" className="px-4 py-3 font-mono text-xs text-foreground">{row.farmNumber || '—'}</td>
           <td data-label="TRACT #" className="px-4 py-3 font-mono text-xs text-foreground">{row.tractNumber || '—'}</td>
+          <td data-label="COUNTY" className="px-4 py-3 text-xs text-foreground">{row.county || '—'}</td>
         </tr>
       ))}
       {fsaFallRows.length === 0 && (
         <tr className="full-width-row">
-          <td colSpan={10} className="py-12 text-center text-muted-foreground text-xs">
+          <td colSpan={11} className="py-12 text-center text-muted-foreground text-xs">
             No harvest or hay production records to report for this season
           </td>
         </tr>
       )}
       {fsaFallRows.length > 0 && fsaFallErrors.length > 0 && (
         <tr className="full-width-row print:hidden">
-          <td colSpan={10} className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 text-xs text-red-600 dark:text-red-400 font-semibold">
+          <td colSpan={11} className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 text-xs text-red-600 dark:text-red-400 font-semibold">
             ⚠ {fsaFallErrors.length} error(s) — {fsaFallErrors.map(e => e.message).join('; ')}
           </td>
         </tr>
       )}
       {fsaFallRows.length > 0 && fsaFallWarnings.length > 0 && (
         <tr className="full-width-row print:hidden">
-          <td colSpan={10} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-600 dark:text-amber-400 font-semibold">
+          <td colSpan={11} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-600 dark:text-amber-400 font-semibold">
             ⚠ {fsaFallWarnings.length} warning(s) — missing details will show as gaps
           </td>
         </tr>
