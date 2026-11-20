@@ -194,7 +194,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 shadow-sm backdrop-blur-xl print:hidden">
-        <div className="mx-auto grid min-w-0 max-w-lg grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 py-2.5 sm:flex sm:flex-row sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
+        <div className="mx-auto grid min-w-0 max-w-lg grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 py-2.5 sm:flex sm:max-w-3xl sm:flex-row sm:items-center sm:justify-between lg:max-w-5xl lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Logo />
             <div className="hidden min-w-0 flex-col sm:flex">
@@ -240,7 +240,7 @@ const Index = () => {
 
       </header>
       <main
-        className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8 lg:py-6"
+        className="max-w-lg mx-auto px-4 py-4 space-y-4 sm:max-w-3xl lg:max-w-5xl lg:px-8 lg:py-6"
         style={keyboardPadding > 0 ? { paddingBottom: keyboardPadding } : undefined}
       >
         <ErrorBoundary>
@@ -248,7 +248,7 @@ const Index = () => {
         </ErrorBoundary>
         {showCattleCard ? (
           // Two tiles share a row; a lone Cattle tile takes the full width.
-          <div className={showEquipmentCard ? 'grid grid-cols-2 gap-3' : ''}>
+          <div className={showEquipmentCard ? 'grid grid-cols-2 gap-3 sm:gap-x-10 lg:gap-x-3' : ''}>
             {showEquipmentCard && (
               <Link
                 to="/equipment"

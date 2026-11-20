@@ -380,7 +380,7 @@ const AppContent = () => {
     <>
       <OfflineBanner />
       {showAppNav && <Sidebar />}
-      <div className={showAppNav ? 'lg:pl-60 print:pl-0' : undefined}>
+      <div className={showAppNav ? 'app-shell app-shell--sidebar print:pl-0 print:pr-0' : 'app-shell print:pl-0 print:pr-0'}>
         <BillingNotices />
         <AnimatedRoutes />
       </div>
@@ -414,7 +414,7 @@ const AppContent = () => {
             native.haptic.light();
             openQuickAdd();
           }}
-          className="quick-add-trigger fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-14 w-14 items-center justify-center rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-[0_10px_30px_hsl(var(--primary)/0.35)] transition-all hover:-translate-y-0.5 active:scale-95 lg:hidden"
+          className="quick-add-trigger quick-add-fab fixed right-[calc(1rem+var(--sa-r))] bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-14 w-14 items-center justify-center rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-[0_10px_30px_hsl(var(--primary)/0.35)] transition-all hover:-translate-y-0.5 active:scale-95 lg:hidden"
           aria-label="Quick add record"
         >
           <Plus size={24} strokeWidth={2.5} />

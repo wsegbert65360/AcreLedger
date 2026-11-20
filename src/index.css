@@ -105,6 +105,13 @@
     --sidebar-ring: 142 90% 28%;
 
     --safe-area-top: env(safe-area-inset-top, 0px);
+    /* Side safe areas. iPhone Duo reserves a strip on one side for the camera,
+       status bar and system controls; a landscape iPhone reserves both sides.
+       Fixed overlays center in the space between them. */
+    --sa-l: env(safe-area-inset-left, 0px);
+    --sa-r: env(safe-area-inset-right, 0px);
+    --sa-x-shift: calc((var(--sa-l) - var(--sa-r)) / 2);
+    --sa-avail-w: calc(100vw - var(--sa-l) - var(--sa-r));
   }
 
   .dark {
@@ -271,6 +278,38 @@
   ::-webkit-scrollbar-thumb {
     @apply bg-border/50;
     border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* App content stays clear of the side safe areas (--sa-l / --sa-r). */
+  .app-shell {
+    padding-left: var(--sa-l);
+    padding-right: var(--sa-r);
+  }
+
+  @media (min-width: 1024px) {
+    .app-shell--sidebar {
+      padding-left: calc(15rem + var(--sa-l));
+    }
+  }
+
+  /* iPhone Duo: html[data-side-bars] is set (useSideBarEdge) when the system reserves one
+     side of the display for its controls. The tab bar moves into that strip. On the wider
+     inner display the strip is mirrored on the other side so content stays centered on the
+     hinge, as system split views do. */
+  @media (min-width: 640px) and (max-width: 1023px) {
+    html[data-side-bars='right'] .app-shell {
+      padding-left: var(--sa-r);
+    }
+
+    html[data-side-bars='left'] .app-shell {
+      padding-right: var(--sa-l);
+    }
+  }
+
+  html[data-side-bars] .quick-add-fab {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
 }
 
