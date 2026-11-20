@@ -2,6 +2,7 @@
 
 One line each: the date, the decision, and why. Newer first. This log is seeded from Recent Changes and from `docs/plans/`. A plan that has not been built says so.
 
+- **2026-11-19** — County means where the land physically lies, from boundary geometry against Census TIGER counties, never the FSA office and never field notes. Production for a split field is allocated by mapped share and labeled estimated, because no schema field records production per county. Existing farms are filled by a previewed backfill, not silently, and historical reports change only when geometry changes or the farmer recalculates. Not deployed; the boundary load is a reviewed SQL file.
 - **2026-11-15** — Cattle events and head transfers call `assert_premium(..., 'cattle_events')`. The cattle CSV is locked only in the client, because the file is built on the device from rows the farm already has. Deleting an event stays available on a free farm.
 - **2026-11-14** — Cattle is optional and off by default (`farms.runs_cattle`). Groups, pasture moves, and an explicit head-count edit stay free. Multi-row writes are RPCs so a move or a transfer cannot leave the head count half-updated.
 - **2026-11-15** — The farm-write guard also scans `supabase/functions/`. The seven rainfall upserts in `mrms-backfill`, `mrms-daily`, and `mrms-hourly` stay, with an allowlist comment, because they write radar rows on a natural key. No other banned write was found there.

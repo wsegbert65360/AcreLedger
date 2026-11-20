@@ -107,6 +107,7 @@ const ALLOWED_TABLES = new Set([
   'work_requests',
   'equipment', 'maintenance_schedules', 'maintenance_logs',
   'cattle_groups', 'cattle_moves', 'cattle_events',
+  'county_assignments',
   // Farm-level settings ride the sync queue only as an allowlisted cattle RPC
   // envelope (set_runs_cattle); a plain farms mutation is discarded on replay.
   'farms',
@@ -320,6 +321,33 @@ async function reconcileDuplicateInsert(mutation: QueuedMutation, farmId: string
     .maybeSingle();
   if (error || !data) return false;
   return expectedValueMatches(data, { ...mutation.payload, farm_id: farmId });
+}
+
+/**
+ * Derived county rows can be queued by two devices for the same subject and county. The unique
+ * live-row index rejects the second insert. An automatic row is recomputable, so the second is
+ * dropped; a manual correction is the farmer's decision and is applied onto the live row instead.
+ */
+async function reconcileCountyInsertConflict(mutation: QueuedMutation, farmId: string): Promise<boolean> {
+  const queued = mutation.payload;
+  if (!queued || typeof queued.subject_type !== 'string' || typeof queued.subject_key !== 'string') return false;
+  let lookup = supabase
+    .from('county_assignments')
+    .select('*')
+    .eq('farm_id', farmId)
+    .eq('subject_type', queued.subject_type)
+    .eq('subject_key', queued.subject_key);
+  lookup = queued.county_fips == null ? lookup.is('county_fips', null) : lookup.eq('county_fips', queued.county_fips);
+  const { data: live, error } = await lookup.maybeSingle();
+  if (error || !live) return false;
+  if (queued.method !== 'manual' || live.method === 'manual' && live.id === queued.id) return true;
+  const { id: _id, farm_id: _farmId, ...changes } = queued;
+  const { error: updateError, count } = await supabase
+    .from('county_assignments')
+    .update(changes, { count: 'exact' })
+    .eq('id', live.id)
+    .eq('farm_id', farmId);
+  return !updateError && count === 1;
 }
 
 /**
@@ -857,6 +885,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
       let response: MutationResponse = { error: null };
       let usedEquipmentRpc = false;
       let usedCattleRpc = false;
+      let usedCountyRpc = false;
       const equipmentRpc = readEquipmentRpcEnvelope(mutation.payload);
       const cattleRpc = readCattleRpcEnvelope(mutation.payload);
       const legacyEquipmentReading = !equipmentRpc
@@ -951,6 +980,15 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
           response = mutation.table_name === 'grain_movements' && typeof expectedVersion === 'number'
             ? await base.eq('version', expectedVersion)
             : await base;
+        } else if (mutation.operation === 'soft_delete' && mutation.table_name === 'county_assignments') {
+          // The SELECT policy hides deleted rows, which makes a direct deleted_at UPDATE fail RLS,
+          // so county rows are retired through an RPC. It is idempotent, so a repeat is harmless.
+          usedCountyRpc = true;
+          response = await supabase.rpc('soft_delete_county_assignment', {
+            p_farm_id: farmId,
+            p_id: mutation.payload.id,
+            p_deleted_at: mutation.payload.deleted_at,
+          });
         } else if (mutation.operation === 'soft_delete') {
           // Perform soft delete update
           const base = supabase
@@ -968,6 +1006,7 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
           !response.error
           && !usedEquipmentRpc
           && !usedCattleRpc
+          && !usedCountyRpc
           && mutation.operation !== 'insert'
           && response.count !== 1
         ) {
@@ -1059,7 +1098,18 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
 
           if (
             mutation.operation === 'insert'
+            && mutation.table_name === 'county_assignments'
+            && response.error.code === '23505'
+            && await reconcileCountyInsertConflict(mutation, farmId)
+          ) {
+            await syncQueue.dequeueMutation(mutation.id, token);
+            continue;
+          }
+
+          if (
+            mutation.operation === 'insert'
             && !linkedHarvest
+            && mutation.table_name !== 'county_assignments'
             && response.error.code === '23505'
             && await reconcileDuplicateInsert(mutation, farmId)
           ) {

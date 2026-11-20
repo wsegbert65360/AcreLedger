@@ -281,6 +281,32 @@ export interface FieldCluAssignmentRow {
     deleted_at?: string | null;
 }
 
+export interface CountyAssignmentRow {
+    id: string;
+    farm_id: string;
+    subject_type: 'clu' | 'field';
+    subject_key: string;
+    field_id?: string | null;
+    tract_key?: string | null;
+    clu_number?: string | null;
+    county_fips?: string | null;
+    county_name?: string | null;
+    state_abbr?: string | null;
+    mapped_acres?: number | null;
+    proportion?: number | null;
+    manual_acres?: number | null;
+    method: 'geometry' | 'centroid' | 'manual' | 'unresolved';
+    review_status: 'ok' | 'needs_review' | 'reviewed';
+    review_reason?: string | null;
+    geometry_hash?: string | null;
+    dataset_source?: string | null;
+    dataset_version?: string | null;
+    calculated_at: string;
+    created_at?: string;
+    updated_at?: string;
+    deleted_at?: string | null;
+}
+
 // ─── Work Requests ────────────────────────────────────────────────────────────
 
 export interface WorkRequestProductEntry {

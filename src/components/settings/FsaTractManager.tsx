@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useFarm } from '@/store/farmStore';
 import TractAssignmentFlow from '@/components/TractAssignmentFlow';
+import CountyIdentificationCard from '@/components/county/CountyIdentificationCard';
 
 export default function FsaTractManager() {
   const { fsaTracts, cluAssignments } = useFarm();
@@ -66,6 +67,8 @@ export default function FsaTractManager() {
           </Button>
         </CardContent>
       </Card>
+
+      <CountyIdentificationCard />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl h-[80vh] p-0 flex flex-col gap-0">

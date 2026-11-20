@@ -311,6 +311,30 @@ export const fieldCluAssignmentSchema = z.object({
   deletedAt: z.string().nullable().optional(),
 }).strict();
 
+export const countyAssignmentSchema = z.object({
+  id: z.string().min(1),
+  farmId: z.string().min(1),
+  subjectType: z.enum(['clu', 'field']),
+  subjectKey: z.string().min(1),
+  fieldId: z.string().nullable(),
+  tractKey: z.string().nullable(),
+  cluNumber: z.string().nullable(),
+  countyFips: z.string().regex(/^\d{5}$/).nullable(),
+  countyName: z.string().nullable(),
+  stateAbbr: z.string().nullable(),
+  mappedAcres: z.number().nonnegative().nullable(),
+  proportion: z.number().min(0).max(1).nullable(),
+  manualAcres: z.number().nonnegative().nullable(),
+  method: z.enum(['geometry', 'centroid', 'manual', 'unresolved']),
+  reviewStatus: z.enum(['ok', 'needs_review', 'reviewed']),
+  reviewReason: z.string().nullable(),
+  geometryHash: z.string().nullable(),
+  datasetSource: z.string().nullable(),
+  datasetVersion: z.string().nullable(),
+  calculatedAt: z.string(),
+  deletedAt: z.string().nullable().optional(),
+}).strict();
+
 const workRequestProductSchema = z.object({
   productName: z.string(),
   applicationRate: z.string().optional(),

@@ -5,11 +5,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
-const FSA_COUNTY_NOTE_HINT = 'Scratchpad for field-specific notes. For FSA county totals, add County: name and, optionally, State: abbreviation on separate lines.';
+const FSA_COUNTY_NOTE_HINT = 'Scratchpad for field-specific notes. Counties for FSA totals come from the field boundary (see County below), not from these notes.';
 
 interface FieldNotesProps {
   field: Field;
-  /** US only: explain the County:/State: lines the Fall FSA report reads. */
+  /** US only: explain that Fall FSA counties are not read from notes. */
   showFsaCountyHint?: boolean;
 }
 

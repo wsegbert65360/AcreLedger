@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import ReportTable from '@/components/ReportTable';
 import type { FsaFallCropTotal, FsaFallProductionRow, FsaFallValidationIssue } from '@/lib/complianceReports';
-import { buildFsaFallGroupedTotals } from '@/lib/complianceReports/fsaReports';
+import { buildFsaFallGroupedTotals, COUNTY_UNKNOWN_LABEL } from '@/lib/complianceReports/fsaReports';
 import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportReadiness';
 import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { complianceFarmSubtitle, farmNameForProse } from '@/lib/farmDisplayName';
@@ -14,6 +14,8 @@ function fmtDate(d?: string): string {
 
 interface FallFsaReportProps {
   fsaFallRows: FsaFallProductionRow[];
+  /** Active fields with no identified county; their production is listed under County unknown. */
+  fieldsWithoutCounty?: number;
   cropTotals: FsaFallCropTotal[];
   fsaFallIssues: FsaFallValidationIssue[];
   readinessSummary: ReportReadinessSummary;
@@ -28,6 +30,7 @@ interface FallFsaReportProps {
 
 export default function FallFsaReport({
   fsaFallRows,
+  fieldsWithoutCounty = 0,
   cropTotals,
   fsaFallIssues,
   readinessSummary,
@@ -42,6 +45,8 @@ export default function FallFsaReport({
   const fsaFallErrors = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'error'), [fsaFallIssues]);
   const fsaFallWarnings = useMemo(() => fsaFallIssues.filter(issue => issue.severity === 'warning'), [fsaFallIssues]);
   const groupedTotals = useMemo(() => buildFsaFallGroupedTotals(fsaFallRows), [fsaFallRows]);
+  const hasEstimates = useMemo(() => fsaFallRows.some(row => row.estimated), [fsaFallRows]);
+  const hasUnknownCounty = useMemo(() => fsaFallRows.some(row => !row.countyFips), [fsaFallRows]);
 
   return (
     <>
@@ -75,19 +80,31 @@ export default function FallFsaReport({
             <div className="mt-3 space-y-1 border-t pt-3">
               <h3 className="font-bold">Production totals by farm and county</h3>
               {groupedTotals.map(total => (
-                <div key={JSON.stringify([total.scope, total.county, total.farmNumber, total.crop, total.unit])} className="flex justify-between gap-3">
-                  <span>{[total.scope, total.county, total.farmNumber && (/^\d/.test(total.farmNumber) ? `#${total.farmNumber}` : total.farmNumber), total.crop].filter(Boolean).join(' · ')}</span>
+                <div key={JSON.stringify([total.scope, total.county, total.farmNumber, total.tractNumber, total.crop, total.unit])} className="flex justify-between gap-3">
+                  <span>
+                    {[total.scope, total.county, total.farmNumber && `#${total.farmNumber}`, total.tractNumber && `Tract ${total.tractNumber}`, total.crop].filter(Boolean).join(' · ')}
+                    {total.estimated && <span className="ml-1 text-amber-600 dark:text-amber-400">(estimated)</span>}
+                  </span>
                   <span className="font-bold text-harvest whitespace-nowrap">{total.production.toLocaleString()} {total.unit.toUpperCase()}</span>
                 </div>
               ))}
-              {fsaFallRows.some(row => !row.county?.trim()) && <p className="text-xs text-muted-foreground">To assign missing counties, add County: name and, optionally, State: abbreviation on separate lines in the field notes.</p>}
+              {hasEstimates && (
+                <p className="text-xs text-muted-foreground">
+                  Estimated: a field in more than one county has its production divided by each county&apos;s share of the field&apos;s mapped acres, because no county-specific production was recorded.
+                </p>
+              )}
+              {hasUnknownCounty && (
+                <p className="text-xs text-muted-foreground">
+                  {COUNTY_UNKNOWN_LABEL}: counties are not identified for {fieldsWithoutCounty > 0 ? `${fieldsWithoutCounty} field${fieldsWithoutCounty === 1 ? '' : 's'}` : 'some fields'}. That production is still included in every total. Identify counties in the field or tract screens.
+                </p>
+              )}
             </div>
           )}
         </div>
       )}
     >
       {fsaFallRows.map(row => (
-        <tr key={`${row.recordType}-${row.id}`} className="hover:bg-muted/30 transition-colors">
+        <tr key={`${row.recordType}-${row.id}-${row.countyFips ?? 'unknown'}`} className="hover:bg-muted/30 transition-colors">
           <td data-label="DATE" className="px-4 py-3 font-mono text-xs text-foreground">{fmtDate(row.harvestDate) || '—'}</td>
           <td data-label="FIELD" className="px-4 py-3 text-xs font-bold text-foreground">{row.fieldName}</td>
           <td data-label="CROP/USE" className="px-4 py-3 font-mono text-xs text-harvest font-bold">{row.crop || '—'}</td>
@@ -98,7 +115,10 @@ export default function FallFsaReport({
           <td data-label="EVIDENCE #" className="px-4 py-3 font-mono text-xs text-foreground truncate max-w-[80px]">{row.evidenceReference || '—'}</td>
           <td data-label="FARM #" className="px-4 py-3 font-mono text-xs text-foreground">{row.farmNumber || '—'}</td>
           <td data-label="TRACT #" className="px-4 py-3 font-mono text-xs text-foreground">{row.tractNumber || '—'}</td>
-          <td data-label="COUNTY" className="px-4 py-3 text-xs text-foreground">{row.county || '—'}</td>
+          <td data-label="COUNTY" className="px-4 py-3 text-xs text-foreground">
+            {row.county || COUNTY_UNKNOWN_LABEL}
+            {row.estimated && <span className="ml-1 text-amber-600 dark:text-amber-400" title={`Estimated: ${Math.round((row.allocationFraction ?? 1) * 1000) / 10}% of this record, by mapped county acres`}>(est. {Math.round((row.allocationFraction ?? 1) * 1000) / 10}%)</span>}
+          </td>
         </tr>
       ))}
       {fsaFallRows.length === 0 && (

@@ -8,10 +8,11 @@ import {
     PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow, CustomSprayRecordRow,
     GrainMovementRow, FieldRow, BinRow, SavedSeedRow, SprayRecipeRow,
     FertilizerApplicationRow, FertilizerRecipeRow, TillageRecordRow,
-    FsaTractImportRow, FieldCluAssignmentRow,
+    FsaTractImportRow, FieldCluAssignmentRow, CountyAssignmentRow,
     WorkRequestRow, WorkRequestProductEntry, WorkRequestFieldEntryRow
 } from '../types/database';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+import type { CountyAssignment } from '@/lib/county/types';
 import type {
     Equipment, EquipmentRow, MaintenanceLog, MaintenanceLogRow,
     MaintenanceSchedule, MaintenanceScheduleRow,
@@ -29,7 +30,7 @@ import {
     harvestRecordSchema, hayHarvestRecordSchema, customSprayRecordSchema, grainMovementSchema,
     savedSeedSchema, fertilizerRecipeSchema, sprayRecipeSchema,
     fertilizerApplicationSchema, tillageRecordSchema,
-    fsaTractImportSchema, fieldCluAssignmentSchema,
+    fsaTractImportSchema, fieldCluAssignmentSchema, countyAssignmentSchema,
     workRequestSchema
 } from './backupSchema';
 
@@ -495,6 +496,36 @@ export const mapFieldCluAssignmentFromDb = (db: FieldCluAssignmentRow): FieldClu
     landUse: db.land_use ?? 'cropland',
     assignedAt: db.assigned_at,
     deletedAt: db.deleted_at ?? null
+});
+
+const nullableNum = (val: unknown): number | null => {
+    if (val === null || val === undefined) return null;
+    const n = Number(val);
+    return Number.isFinite(n) ? n : null;
+};
+
+export const mapCountyAssignmentFromDb = (db: CountyAssignmentRow): CountyAssignment => ({
+    id: db.id,
+    farmId: db.farm_id,
+    subjectType: db.subject_type,
+    subjectKey: db.subject_key,
+    fieldId: db.field_id ?? null,
+    tractKey: db.tract_key ?? null,
+    cluNumber: db.clu_number ?? null,
+    countyFips: db.county_fips ?? null,
+    countyName: db.county_name ?? null,
+    stateAbbr: db.state_abbr ?? null,
+    mappedAcres: nullableNum(db.mapped_acres),
+    proportion: nullableNum(db.proportion),
+    manualAcres: nullableNum(db.manual_acres),
+    method: db.method,
+    reviewStatus: db.review_status,
+    reviewReason: db.review_reason ?? null,
+    geometryHash: db.geometry_hash ?? null,
+    datasetSource: db.dataset_source ?? null,
+    datasetVersion: db.dataset_version ?? null,
+    calculatedAt: db.calculated_at,
+    deletedAt: db.deleted_at ?? null,
 });
 
 // --- Helper for Validation ---
@@ -1104,5 +1135,33 @@ export const mapFieldCluAssignmentToDb = (a: FieldCluAssignment): FieldCluAssign
         land_use: a.landUse,
         assigned_at: a.assignedAt,
         deleted_at: a.deletedAt ?? null
+    };
+};
+
+export const mapCountyAssignmentToDb = (a: CountyAssignment): CountyAssignmentRow => {
+    validateRequired(a, ['id', 'farmId', 'subjectType', 'subjectKey', 'method', 'reviewStatus', 'calculatedAt'], 'mapCountyAssignmentToDb');
+    countyAssignmentSchema.parse(a);
+    return {
+        id: a.id,
+        farm_id: a.farmId,
+        subject_type: a.subjectType,
+        subject_key: a.subjectKey,
+        field_id: a.fieldId,
+        tract_key: a.tractKey,
+        clu_number: a.cluNumber,
+        county_fips: a.countyFips,
+        county_name: a.countyName,
+        state_abbr: a.stateAbbr,
+        mapped_acres: a.mappedAcres,
+        proportion: a.proportion,
+        manual_acres: a.manualAcres,
+        method: a.method,
+        review_status: a.reviewStatus,
+        review_reason: a.reviewReason,
+        geometry_hash: a.geometryHash,
+        dataset_source: a.datasetSource,
+        dataset_version: a.datasetVersion,
+        calculated_at: a.calculatedAt,
+        deleted_at: a.deletedAt ?? null,
     };
 };

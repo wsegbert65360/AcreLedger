@@ -14,7 +14,8 @@ import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import SprayAuditReport from '@/components/reports/SprayAuditReport';
 import FertilizerReport from '@/components/reports/FertilizerReport';
 import FallFsaReport from '@/components/reports/FallFsaReport';
-import { buildFsaFallGroupedTotals } from '@/lib/complianceReports/fsaReports';
+import { buildFsaFallGroupedTotals, COUNTY_UNKNOWN_LABEL } from '@/lib/complianceReports/fsaReports';
+import { buildCountyReportContext } from '@/lib/county/reportContext';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
 import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
 import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/components/reports/ReportPreview';
@@ -130,6 +131,7 @@ export default function Reports() {
     fertilizerApplications: allFertilizer,
     fields,
     cluAssignments,
+    countyAssignments = [],
     fsaTracts,
     farmName,
     viewingSeason,
@@ -263,9 +265,13 @@ export default function Reports() {
     () => buildFsa578Readiness(fsaPlantRows, fsaReadinessIssues),
     [fsaPlantRows, fsaReadinessIssues],
   );
+  const countyContext = useMemo(
+    () => buildCountyReportContext({ farmId: farm_id, fields, cluAssignments, countyAssignments }),
+    [farm_id, fields, cluAssignments, countyAssignments],
+  );
   const fsaFallReport = useMemo(
-    () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields }),
-    [harvestRecords, hayRecords, fields],
+    () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields, counties: countyContext }),
+    [harvestRecords, hayRecords, fields, countyContext],
   );
   const fsaFallRows = useMemo(
     () => [...fsaFallReport.grainRows, ...fsaFallReport.hayRows],
@@ -498,7 +504,7 @@ export default function Reports() {
           row.tractNumber || '—',
           row.landlordName || '—',
           row.landlordSplitPercent != null ? `${row.landlordSplitPercent}%` : '—',
-          row.county || '—',
+          `${row.county || COUNTY_UNKNOWN_LABEL}${row.estimated ? ' (est. share)' : ''}`,
         ]),
         // One total per crop and unit; bushels of different crops are never summed together.
         footRows: fallCropTotals.map(total => [
@@ -506,13 +512,15 @@ export default function Reports() {
         ]),
         secondaryTable: {
           title: 'Production totals by farm and county',
-          headers: ['SCOPE', 'COUNTY', 'FARM #', 'CROP', 'UNIT', 'PRODUCTION'],
-          rightAlignColumns: [5],
-          rows: buildFsaFallGroupedTotals(fsaFallRows).map(t => [t.scope, t.county, t.farmNumber, t.crop, t.unit, t.production.toLocaleString()]),
+          headers: ['SCOPE', 'COUNTY', 'FARM #', 'TRACT #', 'CROP', 'UNIT', 'PRODUCTION', 'EST.'],
+          rightAlignColumns: [6],
+          rows: buildFsaFallGroupedTotals(fsaFallRows).map(t => [t.scope, t.county, t.farmNumber, t.tractNumber, t.crop, t.unit, t.production.toLocaleString(), t.estimated ? 'Yes' : '']),
         },
         fileName: `FSA_Fall_Production_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
         footerText: [
           'Production Evidence Worksheet',
+          ...(fsaFallRows.some(r => r.estimated) ? ['Estimated: production for a field in more than one county is divided by each county\'s share of the field\'s mapped acres; no county-specific production was recorded.'] : []),
+          ...(fsaFallRows.some(r => !r.countyFips) ? [`${COUNTY_UNKNOWN_LABEL}: the county is not identified for some fields. That production is still included in all totals.`] : []),
           'I certify that the production information shown above is accurate to the best of my knowledge.',
           'Producer Signature: _______________________________',
           'Date: ___________________',
@@ -678,7 +686,7 @@ export default function Reports() {
     cells: [fmtDate(record.date), fieldMap.get(record.fieldId)?.name || record.fieldName, record.fertilizer_formula, String(record.acres)],
   }));
   const fallPreviewRows: ReportPreviewRow[] = fsaFallRows.map((row) => ({
-    id: `${row.recordType}-${row.id}`,
+    id: `${row.recordType}-${row.id}-${row.countyFips ?? 'unknown'}`,
     cells: [row.fieldName, row.crop || '—', `${row.production.toLocaleString()} ${row.productionUnit}`],
   }));
   const hayPreviewRows: ReportPreviewRow[] = hayRecords.map((record) => ({
@@ -854,6 +862,7 @@ export default function Reports() {
             />,
           <FallFsaReport
             fsaFallRows={fsaFallRows}
+            fieldsWithoutCounty={countyContext.fieldsWithoutCounty}
             cropTotals={fallCropTotals}
             fsaFallIssues={fsaFallIssues}
             readinessSummary={fsaFallReadinessSummary}
@@ -866,6 +875,7 @@ export default function Reports() {
               harvestRecords,
               hayRecords,
               fields,
+              counties: countyContext,
               metadata: {
                 farmName: knownFarmName(farmName),
                 cropYear: viewingSeason,

@@ -3,7 +3,6 @@ import {
     buildFsa578Rows,
     buildFsa578WorksheetCsv,
     buildFsaFallCropTotals,
-    buildFsaFallGroupedTotals,
     buildFsaFallProductionCsv,
     buildFsaFallProductionRows,
     calculateFsa578PlantedAcreTotals,
@@ -1355,28 +1354,6 @@ describe('FSA fall harvest production report rows', () => {
         };
         expect(validateFsaFallProductionRows([{ ...base, destination: 'On-Farm Bin' }])).toEqual([]);
         expect(validateFsaFallProductionRows([{ ...base, destination: 'Elevator/Sale' }])).toEqual([]);
-    });
-
-    it('totals farm numbers across counties and county farm numbers separately, including unassigned records', () => {
-        const field = (id: string, notes?: string): Field => ({ id, name: id, acreage: 10, lat: null, lng: null, farm_id: 'farm', deleted_at: null, fsaFarmNumber: '6418', notes });
-        const cut = (id: string, baleCount: number): HayHarvestRecord => ({ id, fieldId: id, fieldName: id, date: '2026-07-08', baleCount, cuttingNumber: 1, baleType: 'Round', timestamp: 1, seasonYear: 2026, farm_id: 'farm', deleted_at: null });
-        const report = buildFsaFallProductionRows({ harvestRecords: [], hayRecords: [cut('a', 10), cut('b', 20), cut('c', 5)], fields: [field('a', 'County: Henry\nState: MO'), field('b', 'County: Benton\nState: MO'), field('c')] });
-        const totals = buildFsaFallGroupedTotals(report.hayRows);
-        expect(totals).toContainEqual({ scope: 'Farm', county: '', farmNumber: '6418', crop: 'Hay', unit: 'bales', production: 35 });
-        expect(totals).toContainEqual({ scope: 'County / farm', county: 'Henry, MO', farmNumber: '6418', crop: 'Hay', unit: 'bales', production: 10 });
-        expect(totals).toContainEqual({ scope: 'County', county: 'Benton, MO', farmNumber: '', crop: 'Hay', unit: 'bales', production: 20 });
-        expect(totals).toContainEqual({ scope: 'County', county: 'Unassigned county', farmNumber: '', crop: 'Hay', unit: 'bales', production: 5 });
-        const csv = buildFsaFallProductionCsv({ metadata: { farmName: 'Test', cropYear: 2026, reportDate: '2026-11-19' }, rows: report.hayRows });
-        expect(csv).toContain('"County / farm","Henry, MO","6418","Hay","bales","10"');
-    });
-
-    it('groups a county the same whether the state is written out or abbreviated', () => {
-        const field = (id: string, notes: string): Field => ({ id, name: id, acreage: 10, lat: null, lng: null, farm_id: 'farm', deleted_at: null, fsaFarmNumber: '6418', notes });
-        const cut = (id: string, baleCount: number): HayHarvestRecord => ({ id, fieldId: id, fieldName: id, date: '2026-07-08', baleCount, cuttingNumber: 1, baleType: 'Round', timestamp: 1, seasonYear: 2026, farm_id: 'farm', deleted_at: null });
-        const report = buildFsaFallProductionRows({ harvestRecords: [], hayRecords: [cut('a', 10), cut('b', 20)], fields: [field('a', 'County: Henry County\nState: Missouri'), field('b', 'County: henry\nState: mo')] });
-        expect(report.hayRows.map(row => row.county)).toEqual(['Henry, MO', 'henry, MO']);
-        const counties = buildFsaFallGroupedTotals(report.hayRows).filter(total => total.scope === 'County');
-        expect(counties).toEqual([{ scope: 'County', county: 'Henry, MO', farmNumber: '', crop: 'Hay', unit: 'bales', production: 30 }]);
     });
 
     it('builds fall production CSV with grain and hay rows', () => {

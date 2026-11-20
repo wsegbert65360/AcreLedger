@@ -1,3 +1,6 @@
+import CountyPanel from '@/components/county/CountyPanel';
+import { fieldCountySubject } from '@/lib/county/plan';
+import { buildCountyIndex, resolveFieldCountyShares } from '@/lib/county/resolve';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -70,6 +73,7 @@ export default function FieldDetailScreen() {
     fertilizerApplications,
     tillageRecords,
     cluAssignments,
+    countyAssignments = [],
     fsaTracts,
     viewingSeason,
     farmName
@@ -89,6 +93,12 @@ export default function FieldDetailScreen() {
   const [modal, setModal] = useState<ModalType>(null);
   const [isCluDialogOpen, setIsCluDialogOpen] = useState(false);
   const [showSprayChooser, setShowSprayChooser] = useState(false);
+
+  const countySubject = useMemo(() => (field ? fieldCountySubject(field) : null), [field]);
+  const effectiveCounties = useMemo(
+    () => (field ? resolveFieldCountyShares(field, cluAssignments, buildCountyIndex(countyAssignments)) : undefined),
+    [field, cluAssignments, countyAssignments],
+  );
 
   const fieldClus = useMemo(() => {
     return cluAssignments.filter(a => a.fieldId === id && !a.deletedAt);
@@ -346,6 +356,12 @@ export default function FieldDetailScreen() {
         {hasFieldMapData && (
           <section>
             <FieldBoundaryMap fieldId={field.id} />
+          </section>
+        )}
+
+        {countySubject && (
+          <section className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+            <CountyPanel subject={countySubject} notes={field.notes} effective={effectiveCounties} />
           </section>
         )}
 

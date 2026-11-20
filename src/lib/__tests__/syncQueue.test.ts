@@ -1100,4 +1100,41 @@ describe('syncQueue web queue management', () => {
     expect(await syncQueue.getQueue('farm-1')).toEqual([]);
     expect(await syncQueue.getPendingCount('farm-2')).toBe(1);
   });
+  describe('county_assignments replay', () => {
+    const row = (over: Record<string, unknown> = {}) => ({
+      id: 'c1', farm_id: 'farm-1', subject_type: 'field', subject_key: 'f1',
+      county_fips: '29083', method: 'geometry', ...over,
+    });
+
+    it('retires a county row through the soft-delete RPC, not a direct UPDATE', async () => {
+      await syncQueue.enqueueMutation('county_assignments', 'soft_delete', { id: 'c1', deleted_at: '2026-11-19T00:00:00Z' }, 'farm-1');
+      expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+      expect(supabaseControl.rpc).toHaveBeenCalledWith('soft_delete_county_assignment', {
+        p_farm_id: 'farm-1', p_id: 'c1', p_deleted_at: '2026-11-19T00:00:00Z',
+      });
+      expect(supabaseControl.update).not.toHaveBeenCalled();
+      expect(await syncQueue.getPendingCount('farm-1')).toBe(0);
+    });
+
+    it('drops a duplicate automatic insert when a live row already exists', async () => {
+      await syncQueue.enqueueMutation('county_assignments', 'insert', row(), 'farm-1');
+      supabaseControl.insertResponses.push({ error: { code: '23505', message: 'duplicate' }, status: 409 });
+      supabaseControl.selectResponses.push({ data: { id: 'other', method: 'geometry' }, error: null, status: 200 });
+      expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+      expect(supabaseControl.update).not.toHaveBeenCalled();
+      expect(await syncQueue.getPendingCount('farm-1')).toBe(0);
+    });
+
+    it('applies a queued manual correction onto the live row after an insert conflict', async () => {
+      await syncQueue.enqueueMutation('county_assignments', 'insert', row({ method: 'manual', manual_acres: 10 }), 'farm-1');
+      supabaseControl.insertResponses.push({ error: { code: '23505', message: 'duplicate' }, status: 409 });
+      supabaseControl.selectResponses.push({ data: { id: 'other', method: 'geometry' }, error: null, status: 200 });
+      expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+      const changes = supabaseControl.update.mock.calls[0][0];
+      expect(changes.manual_acres).toBe(10);
+      expect(changes).not.toHaveProperty('id');
+      expect(changes).not.toHaveProperty('farm_id');
+      expect(await syncQueue.getPendingCount('farm-1')).toBe(0);
+    });
+  });
 });

@@ -85,6 +85,7 @@ Navigation checks and editorial changes do not constitute verification of archit
   - [FertilizerRecipe](#fertilizerrecipe)
   - [FsaTractImport](#fsatractimport)
   - [FieldCluAssignment](#fieldcluassignment)
+  - [CountyAssignment](#countyassignment)
   - [Rainfall](#rainfall)
   - [Weather Proxy (`api/weather-proxy.ts`)](#weather-proxy-apiweather-proxyts)
   - [Weather Page (`/weather`)](#weather-page-weather)
@@ -552,6 +553,20 @@ Farm-owned assignment from one CLU inside a tract to one AcreLedger field. Not s
 - **Acreage**: Persisted field acreage may be rounded for display/state, but the source CLU feature acres must not be mutated.
 - **Positive acreage**: `backupSchema.ts` requires positive CLU feature acres, CLU assignment acres, plant `acreage`, spray `treatedAreaSize`, and fertilizer `acres` (field `acreage` is non-negative because a new unmeasured field may be 0). The database enforces `field_clu_assignments.acres` as `NOT NULL CHECK (acres > 0)`; that migration raises on historical non-positive rows so they get manual review instead of a silent rewrite.
 - **Field sync**: each assignment toggle calls `syncFieldAcreageAndClus` (`TractAssignmentFlow.tsx`), which updates only the field's `cluNumbers`. It reads `displayAssignments` (persisted + legacy) through `getFieldAssignmentsWithDelta`, and an order-independent no-op guard skips redundant writes.
+
+### CountyAssignment
+Farm-owned physical county of one field or one CLU. Derived from boundary geometry; the farmer's manual corrections persist. Not season-scoped. Rules: [docs/agents/county.md](./docs/agents/county.md).
+```ts
+{ id, farmId, subjectType: 'field' | 'clu', subjectKey, fieldId, tractKey, cluNumber,
+  countyFips | null, countyName, stateAbbr, mappedAcres, proportion, manualAcres,
+  method: 'geometry' | 'centroid' | 'manual' | 'unresolved',
+  reviewStatus: 'ok' | 'needs_review' | 'reviewed', reviewReason,
+  geometryHash, datasetSource, datasetVersion, calculatedAt, deletedAt }
+```
+- **DB table**: `county_assignments`, one live row per `(farm_id, subject_type, subject_key, county_fips)` (partial unique index, so no tombstone is resurrected). Reference data lives in `county_boundaries` (Census TIGER/Line, versioned, read through `get_county_boundaries`).
+- **Soft delete**: through `soft_delete_county_assignment`, because the SELECT policy hides deleted rows. Sync replay routes `soft_delete` on this table to the RPC.
+- **Mappers**: `mapCountyAssignmentFromDb` and `mapCountyAssignmentToDb` (Zod `countyAssignmentSchema`).
+- **Reports**: read through `buildCountyReportContext`; production for a field in several counties is allocated by mapped share and labeled estimated.
 
 ### Rainfall
 High-resolution precipitation tracking using the **Rain API** (IEM Stage IV radar + field-based historical lookups).

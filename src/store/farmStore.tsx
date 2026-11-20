@@ -10,8 +10,9 @@ import { mapFieldFromDb, mapBinFromDb, mapPlantFromDb, mapSprayFromDb,
   mapFertilizerFromDb, mapFertilizerRecipeFromDb, mapTillageFromDb,
   mapFsaTractFromDb, mapFieldCluAssignmentFromDb, mapWorkRequestFromDb,
   mapEquipmentFromDb, mapMaintenanceScheduleFromDb, mapMaintenanceLogFromDb,
-  mapCattleEventFromDb, mapCattleGroupFromDb, mapCattleMoveFromDb
+  mapCattleEventFromDb, mapCattleGroupFromDb, mapCattleMoveFromDb, mapCountyAssignmentFromDb
 } from '../lib/mappers';
+import type { CountyAssignment } from '@/lib/county/types';
 // Database row types are handled via mappers
 import { Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
@@ -35,6 +36,7 @@ import { useWorkRequests } from './useWorkRequests';
 import { useEquipment } from './useEquipment';
 import { useCattle, type CattleSaveOptions } from './useCattle';
 import { useFsaTracts } from './useFsaTracts';
+import { useCountyAssignments } from './useCountyAssignments';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
@@ -107,6 +109,8 @@ interface FarmState {
   fsaTracts: FsaTractImport[];
   /** CLU-to-field assignment records */
   cluAssignments: FieldCluAssignment[];
+  /** Saved physical county assignments for fields and CLUs (derived; manual corrections persist). */
+  countyAssignments: CountyAssignment[];
   /** Outbound work requests (status-driven, not season-scoped) */
   workRequests: WorkRequest[];
   /** Farm equipment and its recurring maintenance/service history. */
@@ -221,6 +225,13 @@ interface FarmState {
   /** Operations for managing FSA tract imports */
   importTract: (tractKey: string, filename: string, geojson: unknown, featureCount: number) => Promise<boolean>;
   deleteTract: (id: string) => Promise<boolean>;
+  /** County assignment operations (preview/apply backfill, manual correction, restore automatic, review) */
+  previewCounties: ReturnType<typeof useCountyAssignments>['previewCounties'];
+  applyCountyPlan: ReturnType<typeof useCountyAssignments>['applyCountyPlan'];
+  recalculateCounties: ReturnType<typeof useCountyAssignments>['recalculateCounties'];
+  saveCountySplit: ReturnType<typeof useCountyAssignments>['saveManualSplit'];
+  restoreCountyAutomatic: ReturnType<typeof useCountyAssignments>['restoreAutomatic'];
+  markCountyReviewed: ReturnType<typeof useCountyAssignments>['markReviewed'];
   /** Operations for managing CLU-to-field assignments */
   assignClu: (fieldId: string, tractKey: string, cluNumber: string, acres: number, landUse?: CluLandUse) => Promise<boolean>;
   updateCluLandUse: (assignmentId: string, landUse: CluLandUse) => Promise<boolean>;
@@ -330,6 +341,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const [sprayRecipes, setSprayRecipes] = useState<SprayRecipe[]>([]);
   const [fsaTracts, setFsaTracts] = useState<FsaTractImport[]>([]);
   const [cluAssignments, setCluAssignments] = useState<FieldCluAssignment[]>([]);
+  const [countyAssignments, setCountyAssignments] = useState<CountyAssignment[]>([]);
   const [workRequests, setWorkRequests] = useState<WorkRequest[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [maintenanceSchedules, setMaintenanceSchedules] = useState<MaintenanceSchedule[]>([]);
@@ -392,6 +404,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     setSprayRecipes([]);
     setFsaTracts([]);
     setCluAssignments([]);
+    setCountyAssignments([]);
     setWorkRequests([]);
     setEquipment([]);
     setMaintenanceSchedules([]);
@@ -493,6 +506,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       // setFarmName leaves every other collection on this path unchanged.
       const farmNameGeneration = farmNameGenerationRef.current;
       try {
+        const countyCached = await offlineStorage.loadCache('county_assignments', userId);
         const [
           fieldsData, binsData, plantData, sprayData, harvestData, hayData, customSprayData,
           fertilizerData, tillageData, grainData, seedsData, fertilizerRecipesData, recipesData,
@@ -548,6 +562,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             landUse: assignment.landUse ?? 'cropland',
           })));
         }
+        if (countyCached) setCountyAssignments(countyCached);
         if (workRequestsData) setWorkRequests(workRequestsData);
         if (equipmentData) setEquipment(equipmentData);
         if (maintenanceSchedulesData) setMaintenanceSchedules(maintenanceSchedulesData);
@@ -738,6 +753,16 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           return { rows: [], error: { message: error instanceof Error ? error.message : String(error) } };
         }
       };
+      // County rows are fail-soft: a missing table (migration not yet applied) must not block the
+      // rest of the farm. The cached copy stays visible when the read fails.
+      const countyRead = (async () => {
+        try {
+          return await pagedQuery('county_assignments');
+        } catch (error) {
+          console.warn('County assignments did not load; keeping the cache.', error);
+          return { rows: [], error: { message: error instanceof Error ? error.message : String(error) } };
+        }
+      })();
       const cattleReads = shouldFetchCattle
         ? Promise.all([
           failSoftCattleQuery('cattle_groups'),
@@ -752,7 +777,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         seedsPages, fertilizerRecipesPages, recipesPages, tractsPages,
         assignmentsPages, workRequestsPages, equipmentPages,
         maintenanceSchedulesPages, maintenanceLogsPages,
-      ], cattlePages] = await Promise.all([coreReads, cattleReads]);
+      ], cattlePages, countyPages] = await Promise.all([coreReads, cattleReads, countyRead]);
 
       if (!isCurrentRequest()) return false;
       const { error: farmErr } = farmResult;
@@ -882,6 +907,9 @@ export function FarmProvider({ children }: { children: ReactNode }) {
           setSprayRecipes(recipesData.map(mapRecipeFromDb));
           setFsaTracts(tractsData.map(mapFsaTractFromDb));
           setCluAssignments(assignmentsData.map(mapFieldCluAssignmentFromDb));
+          if (!countyPages.error) {
+            setCountyAssignments(overlayQueuedRows('county_assignments', countyPages.rows, queued, farm_id).map(mapCountyAssignmentFromDb));
+          }
           setWorkRequests(workRequestsData.map(mapWorkRequestFromDb));
           if (equipmentMapped && schedulesMapped && logsMapped) {
             setEquipment(equipmentMapped);
@@ -981,6 +1009,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('spray_recipes', cacheOwnerUserId, sprayRecipes); } }, [sprayRecipes, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('fsa_tract_imports', cacheOwnerUserId, fsaTracts); } }, [fsaTracts, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('field_clu_assignments', cacheOwnerUserId, cluAssignments); } }, [cluAssignments, cacheOwnerUserId]);
+  useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('county_assignments', cacheOwnerUserId, countyAssignments); } }, [countyAssignments, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('work_requests', cacheOwnerUserId, workRequests); } }, [workRequests, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('equipment', cacheOwnerUserId, equipment); } }, [equipment, cacheOwnerUserId]);
   useEffect(() => { if (cacheOwnerUserId) { offlineStorage.saveCache('maintenance_schedules', cacheOwnerUserId, maintenanceSchedules); } }, [maintenanceSchedules, cacheOwnerUserId]);
@@ -1029,6 +1058,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   const tractOps = useFsaTracts({
     farm_id, fsaTracts, cluAssignments, setFsaTracts, setCluAssignments,
     isOnline, onMutation: updatePendingSyncCount,
+  });
+
+  const countyOps = useCountyAssignments({
+    farm_id, userId: cacheOwnerUserId, fields, fsaTracts, cluAssignments, countyAssignments, setCountyAssignments,
+    isOnline, ready: initialFetchComplete && !!cacheOwnerUserId, onMutation: updatePendingSyncCount,
   });
 
   const binTotals = useMemo(() => {
@@ -1298,6 +1332,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       sprayRecipes,
       fsaTracts,
       cluAssignments,
+      countyAssignments,
       workRequests,
       equipment: equipment.filter(item => !item.deleted_at),
       maintenanceSchedules: maintenanceSchedules.filter(item => !item.deleted_at),
@@ -1336,6 +1371,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       refresh,
       importTract: tractOps.importTract,
       deleteTract: tractOps.deleteTract,
+      previewCounties: countyOps.previewCounties,
+      applyCountyPlan: countyOps.applyCountyPlan,
+      recalculateCounties: countyOps.recalculateCounties,
+      saveCountySplit: countyOps.saveManualSplit,
+      restoreCountyAutomatic: countyOps.restoreAutomatic,
+      markCountyReviewed: countyOps.markReviewed,
       assignClu: tractOps.assignClu,
       updateCluLandUse: tractOps.updateCluLandUse,
       unassignClu: tractOps.unassignClu,
