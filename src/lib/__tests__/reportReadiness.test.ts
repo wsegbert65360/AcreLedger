@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildFsa578Readiness,
-  buildFsaFallReadiness,
+  buildInsuranceProductionReadiness,
   buildReportReadinessSummary,
   buildSprayReadiness,
   buildFertilizerReadiness,
@@ -217,31 +217,17 @@ describe('FSA readiness adapters', () => {
     expect(summary.issues[0]).toMatchObject({ fieldId: 'field-1' });
   });
 
-  it('counts Fall FSA readiness by production record', () => {
-    const rows = [
-      { id: 'harvest-1', fieldName: 'North', recordType: 'grain' as const },
-      { id: 'harvest-2', fieldName: 'South', recordType: 'hay' as const },
-    ];
-    const summary = buildFsaFallReadiness(rows, [
-      { rowId: 'harvest-1', severity: 'warning', field: 'evidenceReference', message: 'North needs a ticket.' },
+  it('counts insurance production readiness by unit and links field issues', () => {
+    const summary = buildInsuranceProductionReadiness(2, [
+      { id: 'noharvest-f1|corn', severity: 'warning', kind: 'not-harvested', message: 'North: Corn was planted but has no harvest loads.', fieldId: 'f1' },
     ]);
 
     expect(summary).toMatchObject({ totalItems: 2, readyItems: 1, warnings: 1 });
     expect(summary.issues[0]).toMatchObject({
-      category: 'Destination and evidence',
-      recordId: 'harvest-1',
-      recordType: 'harvest',
-      actionLabel: 'Review record',
+      category: 'Unharvested or failed acres',
+      fieldId: 'f1',
+      actionLabel: 'Open field',
     });
-  });
-
-  it('routes Fall FSA hay rows to hay activity records', () => {
-    const rows = [{ id: 'hay-1', fieldName: 'South', recordType: 'hay' as const }];
-    const summary = buildFsaFallReadiness(rows, [
-      { rowId: 'hay-1', severity: 'warning', field: 'evidenceReference', message: 'South needs evidence.' },
-    ]);
-
-    expect(summary.issues[0]).toMatchObject({ recordId: 'hay-1', recordType: 'hay' });
   });
 });
 

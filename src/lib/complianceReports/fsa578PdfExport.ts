@@ -8,11 +8,11 @@ import { isSupplementalCrop } from './fsaReports';
 import { buildFsa578FormSheets } from './fsa578FormLayout';
 import type { Fsa578FormSheet } from './fsa578FormLayout';
 import { REPORT_PAGE_FORMAT, drawAcreLedgerNote, drawPageFooters } from './pdfBranding';
-import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata, FsaFallCountyContext } from './fsaReports';
+import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata, ReportCountyContext } from './fsaReports';
 
 interface Fsa578PdfOptions {
   /** Saved county assignments; box 5 prints each farm's physical counties. */
-  counties?: FsaFallCountyContext;
+  counties?: ReportCountyContext;
   metadata: Fsa578WorksheetMetadata;
   rows: Fsa578ReportRow[];
   issues: Fsa578ValidationIssue[];

@@ -9,7 +9,7 @@ import { sanitizeCsvValue } from '@/utils/csv';
 import { calculateSprayProductFields } from '@/utils/unitConversion';
 
 import { buildFsa578Reconciliation } from '../fsa578PdfExport';
-import { buildFsa578Rows, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLogRows, validateFsa578Rows } from '../fsaReports';
+import { buildFsa578Rows, calculateFsa578PlantedAcreTotals, generateMissouriLogRows, validateFsa578Rows } from '../fsaReports';
 import { generateLandlordSummary } from '../generateLandlordSummary';
 
 const field: Field = { id: 'f', farm_id: 'farm', name: 'North', acreage: 40, lat: 0, lng: 0,
@@ -145,7 +145,6 @@ describe('review-07 owner decisions', () => {
     expect(getLandlordSplitPercent(ownerField, 90)).toBeCloseTo(100 - producerShare);
     expect(summary.cropTotals[0].landlordShareBushels).toBeCloseTo(1000 * (100 - producerShare) / 100);
     expect(buildLandlordReadiness(summary, [{ ...harvest, landlordSplitPercent: undefined }]).issues.filter(issue => issue.category === 'Crop share')).toEqual([]);
-    expect(buildFsaFallProductionRows({ harvestRecords: [harvest], hayRecords: [], fields: [ownerField] }).grainRows[0].landlordSplitPercent).toBeCloseTo(100 - producerShare);
     const legacy = generateLandlordSummary({ landlordName: 'Owner', fields: [{ ...ownerField, producerShare: undefined }],
       cluAssignments: [], harvestRecords: [harvest], plantRecords: [], sprayRecords: [], customSprayRecords: [],
       fertilizerApplications: [], tillageRecords: [], hayHarvestRecords: [] });

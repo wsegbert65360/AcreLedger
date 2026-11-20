@@ -13,7 +13,7 @@ For full architecture, data model, and project rules, read **[AGENTS.md](./AGENT
 - **Season scoping**: Users view a `viewingSeason` independent of the farm's `activeSeason`. New records stamp the viewed season, and selectors pull dynamic options from `farmStore.tsx`.
 - **Soft delete everywhere**: Records are excluded by `deleted_at` filter, never hard-deleted. RLS enforces the same exclusion server-side.
 - **FSA tract + CLU assignment**: Import FSA tract GeoJSON, assign CLUs to fields, sync acreage and CLU numbers back to the field, and round-trip everything through backup/restore.
-- **Compliance exports**: FSA-578 acreage summaries, fall production worksheets, spray logs (state-neutral universal format), hay summaries, fertilizer reports, and landlord statements. PDF/CSV exports driven by `@/lib/complianceReports` and `@/lib/sprayExport.ts`.
+- **Compliance exports**: FSA-578 acreage summaries, crop insurance production worksheets, spray logs (state-neutral universal format), hay summaries, fertilizer reports, and landlord statements. PDF/CSV exports driven by `@/lib/complianceReports` and `@/lib/sprayExport.ts`.
 - **Spray wizard**: 5-step wizard (`src/components/spray/`) with an in-cab quick mode, multiple-product tank mix, EPA registration compliance checks, weather conditions, and review step.
 - **Quick Add**: Global FAB + dialog on mobile (`QuickAddDialog.tsx`) with GPS-based nearest field detection and preselected record types.
 - **Duplicate + prefill**: Every activity modal supports `'edit' | 'duplicate'` modes and pre-fills new records from the most recent prior record of the same type for that field.

@@ -382,7 +382,7 @@ export default function Activity() {
               {(tab === 'plant' || tab === 'harvest') && (
                 <button
                   onClick={() => {
-                    const reportType = tab === 'plant' ? 'fsa-plant' : 'fsa-harvest';
+                    const reportType = tab === 'plant' ? 'fsa-plant' : 'insurance-production';
                     void withAuthorizedReportExport(supabase, farm_id, reportType, () => {
                       const exportPromise = tab === 'plant'
                         ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {

@@ -26,15 +26,14 @@ Data and assignments:
 
 Reports:
 
-- FSA-578 and fall production worksheets are supporting worksheets, not official USDA forms. Preserve the disclaimer wording, include the farm name in header subtitles (preview and PDF), and keep CSV and PDF describing the same facts.
+- The FSA-578 worksheet is a supporting worksheet, not an official USDA form. Preserve the disclaimer wording, include the farm name in header subtitles (preview and PDF), and keep CSV and PDF describing the same facts.
 - The FSA-578 PDF uses `exportFsa578WorksheetPdf` (never the generic `exportToPdf`) with the canonical four-section order. Non-cropland CLUs never appear in the crop-entry table.
 - Section 1 is laid out like the manual FSA-578 Report of Acreage: one sheet per FSA farm, unassigned fields on a final sheet, numbered boxes 1-23, crop columns with box 20 totals. The view-model is `buildFsa578FormSheets` (`fsa578FormLayout.ts`); the CSV uses the same practice/status/intended-use code functions. Never print or store producer ID numbers (box 9). A planting's manual `fsaStatusCode` overrides the derived box 16 code. Box 5 operator name/address come from `farms.fsa_operator_*` via `useFsaOperator`, written only through the `set_farm_fsa_operator` RPC. Keep "Not an official USDA form" and do not copy USDA header styling or legal text.
 - Row-construction rules (multiple plantings per field/CLU, CLU-derived acreage, review rows, hay/pasture labeling, status display) live in BLUEPRINT; change them there and in `fsaReports.ts` together.
-- Readiness findings are advisory and never disable export. Authoritative FSA validation stays in `validateFsa578Rows` / `validateFsaFallProductionRows`; `reportReadiness.ts` only adapts it.
+- Readiness findings are advisory and never disable export. Authoritative FSA validation stays in `validateFsa578Rows`; `reportReadiness.ts` only adapts it.
 - Reports are export-first on mobile (`MobileReportExportPanel` below `lg`). Do not reintroduce large previews as the default mobile experience.
 - Plant FSA status fields (`Planted`, `Prevented Planting`, `Failed`, `Volunteer`, `Cover Crop`) change across types, mappers, backup schema, migrations, UI, reports, and tests together. Prevented planting may omit seed variety.
 - Every report PDF uses `REPORT_PAGE_FORMAT` (US Letter) and `pdfBranding.ts`: `drawPageFooters` after all pages exist, so pages added after a table get a footer, and `drawAcreLedgerNote` on the last page. The branding carries no price, trial, or sign-up wording because the same PDFs are generated on iOS.
 - The one title is "FSA-578 Acreage Reporting Worksheet" on screen, preview, CSV, and PDF. The FSA-578 PDF includes Type/Variety.
-- Fall production totals are per crop and unit (`buildFsaFallCropTotals`); never print one bushel total across crops. A scale ticket is optional: do not flag a blank ticket/evidence reference, and show the ticket field only for town loads.
-- Fall production includes farm-number totals plus County → farm number → tract totals in preview, CSV and PDF (`buildFsaFallGroupedTotals`). Counties are the saved physical counties from [county.md](./county.md), never field notes or the FSA office; production for a field in several counties is allocated by mapped share and labeled estimated, and unknown counties show as County unknown and stay in every total.
+- Fall FSA reporting uses the same FSA-578; the old Fall FSA production worksheet was retired (2026-11-19). Post-harvest production goes on the crop insurance production worksheet: see [reports.md](./reports.md#crop-insurance-production-worksheet).
 - Numeric columns in `exportToPdf` are right-aligned with `rightAlignColumns`, not by matching header text.

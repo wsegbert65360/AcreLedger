@@ -118,7 +118,6 @@ interface FsaReadinessRow {
   id: string;
   fieldId?: string;
   fieldName: string;
-  recordType?: 'grain' | 'hay';
 }
 
 interface FsaReadinessValidationIssue {
@@ -182,16 +181,6 @@ const FSA_578_CATEGORY_BY_FIELD: Record<string, string> = {
   acreage: 'Acreage reconciliation',
 };
 
-const FALL_FSA_CATEGORY_BY_FIELD: Record<string, string> = {
-  farmNumber: 'Farm and tract setup',
-  tractNumber: 'Farm and tract setup',
-  crop: 'Production details',
-  harvestDate: 'Production details',
-  production: 'Production details',
-  destination: 'Destination and evidence',
-  evidenceReference: 'Destination and evidence',
-};
-
 export function buildFsa578Readiness(
   rows: FsaReadinessRow[],
   validationIssues: FsaReadinessValidationIssue[],
@@ -216,26 +205,41 @@ export function buildFsa578Readiness(
   return buildReportReadinessSummary({ totalItems: fieldIds.size, issues });
 }
 
-export function buildFsaFallReadiness(
-  rows: FsaReadinessRow[],
-  validationIssues: FsaReadinessValidationIssue[],
-): ReportReadinessSummary {
-  const rowById = new Map(rows.map(row => [row.id, row]));
-  const issues = validationIssues.map((issue, index): ReportReadinessIssue => {
-    const row = rowById.get(issue.rowId);
-    return {
-      id: `fsa-fall-${issue.rowId}-${issue.field}-${index}`,
-      severity: issue.severity,
-      category: FALL_FSA_CATEGORY_BY_FIELD[issue.field] ?? 'Other report details',
-      message: issue.message,
-      itemId: issue.rowId,
-      recordId: issue.rowId,
-      recordType: row?.recordType === 'hay' ? 'hay' : 'harvest',
-      actionLabel: row ? 'Review record' : undefined,
-    };
-  });
+const INSURANCE_CATEGORY_BY_KIND: Record<string, string> = {
+  'harvest-no-planting': 'Planting and harvest match',
+  'harvest-no-crop': 'Planting and harvest match',
+  'not-harvested': 'Unharvested or failed acres',
+  'failed-appraisal': 'Unharvested or failed acres',
+  'county-unknown': 'County setup',
+  'bin-mixed-units': 'Production records',
+};
 
-  return buildReportReadinessSummary({ totalItems: rows.length, issues });
+interface InsuranceReadinessIssue {
+  id: string;
+  severity: 'warning' | 'error';
+  kind: string;
+  message: string;
+  fieldId?: string;
+  recordId?: string;
+}
+
+/** Readiness for the crop insurance production worksheet: one item per unit. */
+export function buildInsuranceProductionReadiness(
+  unitCount: number,
+  reportIssues: InsuranceReadinessIssue[],
+): ReportReadinessSummary {
+  const issues = reportIssues.map((issue): ReportReadinessIssue => ({
+    id: `insurance-${issue.id}`,
+    severity: issue.severity,
+    category: INSURANCE_CATEGORY_BY_KIND[issue.kind] ?? 'Other report details',
+    message: issue.message,
+    itemId: issue.fieldId ?? issue.recordId ?? issue.id,
+    fieldId: issue.fieldId,
+    recordId: issue.recordId,
+    recordType: issue.recordId ? 'harvest' : undefined,
+    actionLabel: issue.fieldId ? 'Open field' : undefined,
+  }));
+  return buildReportReadinessSummary({ totalItems: unitCount, issues, readyItems: unitCount - Math.min(unitCount, new Set(issues.map(i => i.itemId)).size) });
 }
 
 export function buildSprayReadiness(

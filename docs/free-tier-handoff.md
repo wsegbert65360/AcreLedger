@@ -12,7 +12,7 @@ Release order (backup, migration versions, functions, Stripe, app, Rain API, the
 | Rainfall: free farms get daily totals on their 2 oldest fields | `20261107040000_rainfall_tiering.sql`, `supabase/functions/mrms-daily`, `docs/free-tier-rainfall.md` |
 | Paid-only writes: grain, equipment, landlord splits, backup restore | `20261107050000_paid_feature_guards.sql` |
 | FSA/CLU data entry made free (tract import, CLU assignment, FSA numbers on a field), 2026-11-16 | `20261116120000_fsa_entry_free.sql`, `scripts/test-fsa-entry-free-migration.mjs` |
-| Prepared Pro reports: FSA-578, Fall FSA, spray, fertilizer, Hay Summary, landlord, farm owner | `PAID_REPORT_TYPES` in `src/lib/entitlements.ts`, `src/lib/authorizeReportExport.ts` |
+| Prepared Pro reports: FSA-578, crop insurance production, spray, fertilizer, Hay Summary, landlord, farm owner | `PAID_REPORT_TYPES` in `src/lib/entitlements.ts`, `src/lib/authorizeReportExport.ts` |
 | App: plan hook, report gate, harvest bin lock, sync "premium needed" outcome, Settings plan card | `src/lib/entitlements.ts`, `src/hooks/useEntitlement.ts`, `src/components/settings/PlanCard.tsx` |
 | All user-facing wording (approved 2026-11-16) | `src/copy/entitlements.ts` |
 | iOS US-storefront website link | `docs/ios-storefront-link.md` |

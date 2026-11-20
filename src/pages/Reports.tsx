@@ -14,15 +14,14 @@ import SeasonSelect from '@/components/SeasonSelect';
 import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import SprayAuditReport from '@/components/reports/SprayAuditReport';
 import FertilizerReport from '@/components/reports/FertilizerReport';
-import FallFsaReport from '@/components/reports/FallFsaReport';
-import { buildFsaFallGroupedTotals, COUNTY_UNKNOWN_LABEL } from '@/lib/complianceReports/fsaReports';
+import InsuranceProductionReport from '@/components/reports/InsuranceProductionReport';
 import { buildCountyReportContext } from '@/lib/county/reportContext';
 import HaySummaryReport from '@/components/reports/HaySummaryReport';
 import LandlordSummaryReport from '@/components/reports/LandlordSummaryReport';
 import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/components/reports/ReportPreview';
 import WorkRequestsTab from './workRequests/WorkRequestsTab';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
-import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, buildFsa578Rows, buildFsaFallCropTotals, buildFsaFallProductionRows, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportFsaFallProductionData, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportOwnerSummaryPdf, exportFsa578WorksheetPdf, validateFsa578Rows, validateFsaFallProductionRows } from '@/lib/complianceReports';
+import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, buildFsa578Rows, buildInsuranceProductionReport, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportInsuranceProductionCsv, exportInsuranceProductionPdf, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportOwnerSummaryPdf, exportFsa578WorksheetPdf, validateFsa578Rows } from '@/lib/complianceReports';
 import { native, sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -32,14 +31,14 @@ import { ACTIVITY_ICONS, ACTIVITY_TEXT_COLORS } from '@/lib/activityIcons';
 import { formatIsoDate, getWorkDateMs, toLocalIsoDate } from '@/utils/dates';
 import { roundTo } from '@/utils/numbers';
 import { formatSprayProductTotal } from '@/utils/unitConversion';
-import { complianceFarmSubtitle, knownFarmName } from '@/lib/farmDisplayName';
+import { knownFarmName } from '@/lib/farmDisplayName';
 import { getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { areaForProductTotal, effectiveTreatedAreaUnit } from '@/lib/sprayExportFormatters';
 import { Field } from '@/types/farm';
 import {
   buildFertilizerReadiness,
   buildFsa578Readiness,
-  buildFsaFallReadiness,
+  buildInsuranceProductionReadiness,
   buildHayReadiness,
   buildLandlordReadiness,
   buildSprayReadiness,
@@ -57,13 +56,13 @@ import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'fsa-harvest' | 'hay-summary' | 'landlord-statement' | 'work-requests';
+type ReportTab = 'fsa-plant' | 'spray-audit' | 'fertilizer-summary' | 'insurance-production' | 'hay-summary' | 'landlord-statement' | 'work-requests';
 
 const TABS: { key: ReportTab; icon: typeof ACTIVITY_ICONS.plant; label: string; color: string }[] = [
   { key: 'fsa-plant',          icon: ACTIVITY_ICONS.plant,      label: 'FSA-578',     color: ACTIVITY_TEXT_COLORS.plant },
   { key: 'spray-audit',        icon: ACTIVITY_ICONS.spray,      label: 'Spray Audit', color: ACTIVITY_TEXT_COLORS.spray },
   { key: 'fertilizer-summary', icon: ACTIVITY_ICONS.fertilizer, label: 'Fertilizer',  color: ACTIVITY_TEXT_COLORS.fertilizer },
-  { key: 'fsa-harvest',        icon: ACTIVITY_ICONS.harvest,    label: 'Fall FSA',    color: ACTIVITY_TEXT_COLORS.harvest },
+  { key: 'insurance-production',        icon: ACTIVITY_ICONS.harvest,    label: 'Insurance',   color: ACTIVITY_TEXT_COLORS.harvest },
   { key: 'hay-summary',        icon: ACTIVITY_ICONS.hay,        label: 'Hay Summary', color: ACTIVITY_TEXT_COLORS.hay },
   { key: 'landlord-statement', icon: FileText,                  label: 'Landlord',    color: 'text-blue-600' },
   { key: 'work-requests',      icon: Send,                      label: 'Work Reqs',   color: 'text-primary' },
@@ -131,6 +130,7 @@ export default function Reports() {
 
     fertilizerApplications: allFertilizer,
     fields,
+    bins = [],
     cluAssignments,
     countyAssignments = [],
     fsaTracts,
@@ -144,7 +144,8 @@ export default function Reports() {
   const { preferences } = useAppPreferences(session?.user?.id);
   const complianceProfile = defaultProfileForCountry(preferences.country);
 
-  const requestedTab = searchParams.get('tab');
+  const requestedTabParam = searchParams.get('tab');
+  const requestedTab = requestedTabParam === 'fsa-harvest' ? 'insurance-production' : requestedTabParam;
   const [tab, setTab] = useState<ReportTab>(() =>
     TABS.some(candidate => candidate.key === requestedTab) ? requestedTab as ReportTab : 'fsa-plant',
   );
@@ -271,20 +272,15 @@ export default function Reports() {
     () => buildCountyReportContext({ farmId: farm_id, fields, cluAssignments, countyAssignments }),
     [farm_id, fields, cluAssignments, countyAssignments],
   );
-  const fsaFallReport = useMemo(
-    () => buildFsaFallProductionRows({ harvestRecords, hayRecords, fields, counties: countyContext }),
-    [harvestRecords, hayRecords, fields, countyContext],
+  const binNames = useMemo(() => new Map(bins.map(bin => [bin.id, bin.name])), [bins]);
+  const insuranceReport = useMemo(
+    () => buildInsuranceProductionReport({ plantRecords, harvestRecords, fields, counties: countyContext, binNames, cropYear: viewingSeason }),
+    [plantRecords, harvestRecords, fields, countyContext, binNames, viewingSeason],
   );
-  const fsaFallRows = useMemo(
-    () => [...fsaFallReport.grainRows, ...fsaFallReport.hayRows],
-    [fsaFallReport],
+  const insuranceReadinessSummary = useMemo(
+    () => buildInsuranceProductionReadiness(insuranceReport.units.length, insuranceReport.issues),
+    [insuranceReport],
   );
-  const fsaFallIssues = useMemo(() => validateFsaFallProductionRows(fsaFallRows), [fsaFallRows]);
-  const fsaFallReadinessSummary = useMemo(
-    () => buildFsaFallReadiness(fsaFallRows, fsaFallIssues),
-    [fsaFallRows, fsaFallIssues],
-  );
-  const fallCropTotals = useMemo(() => buildFsaFallCropTotals(fsaFallRows), [fsaFallRows]);
   const totalFertAcres   = useMemo(() => roundTo(fertilizerRecords.reduce((s, r) => s + r.acres, 0), 2), [fertilizerRecords]);
   const totalHayBales    = useMemo(() => hayRecords.reduce((s, r) => s + r.baleCount, 0), [hayRecords]);
   const fertilizerReadinessSummary = useMemo(
@@ -333,7 +329,7 @@ export default function Reports() {
     'fsa-plant': buildReportFingerprint(fsaPlantRows),
     'spray-audit': buildReportFingerprint(sprayRecords),
     'fertilizer-summary': buildReportFingerprint(fertilizerRecords),
-    'fsa-harvest': buildReportFingerprint(fsaFallRows),
+    'insurance-production': buildReportFingerprint(insuranceReport),
     'hay-summary': buildReportFingerprint(hayRecords),
     [summaryExportType]: buildReportFingerprint(landlordSummary ? {
       scope: wholeFarm ? 'farm' : selectedLandlord,
@@ -341,7 +337,7 @@ export default function Reports() {
       activity: landlordSummary.activity,
       totals: landlordSummary.totals,
     } : null),
-  }), [fsaPlantRows, sprayRecords, fertilizerRecords, fsaFallRows, hayRecords, landlordSummary, wholeFarm, selectedLandlord, summaryExportType]);
+  }), [fsaPlantRows, sprayRecords, fertilizerRecords, insuranceReport, hayRecords, landlordSummary, wholeFarm, selectedLandlord, summaryExportType]);
 
   const getExportStatus = (reportType: ReportExportType) => {
     void exportHistoryVersion;
@@ -488,54 +484,14 @@ export default function Reports() {
     }, 'fertilizer PDF');
   };
 
-  const handleExportHarvestPdf = () => {
-    runTrackedExport('fsa-harvest', () => {
-      exportToPdf({
-        title: 'FSA Fall Harvest / Production Evidence Worksheet',
-        subtitle: complianceFarmSubtitle(farmName, viewingSeason, reportDate, 'pdf'),
-        orientation: 'landscape',
-        headers: ['DATE', 'FIELD', 'CROP/USE', 'PROD.', 'UNIT', 'MOIST %', 'DEST/STORAGE', 'EVIDENCE #', 'FARM #', 'TRACT #', 'LANDLORD', 'LL %', 'COUNTY'],
-        rightAlignColumns: [3, 5, 11],
-        rows: fsaFallRows.map(row => [
-          fmtDate(row.harvestDate) || '—',
-          row.fieldName,
-          row.crop || '—',
-          row.production.toLocaleString(),
-          row.productionUnit,
-          row.moisturePercent != null ? `${row.moisturePercent}%` : '—',
-          row.destination || '—',
-          row.evidenceReference || '—',
-          row.farmNumber || '—',
-          row.tractNumber || '—',
-          row.landlordName || '—',
-          row.landlordSplitPercent != null ? `${row.landlordSplitPercent}%` : '—',
-          `${row.county || COUNTY_UNKNOWN_LABEL}${row.estimated ? ' (est. share)' : ''}`,
-        ]),
-        // One total per crop and unit; bushels of different crops are never summed together.
-        footRows: fallCropTotals.map(total => [
-          'TOTAL', '', total.crop, total.production.toLocaleString(), total.unit, '', '', '', '', '', '', '', '',
-        ]),
-        secondaryTable: {
-          title: 'Production totals by farm and county',
-          headers: ['SCOPE', 'COUNTY', 'FARM #', 'TRACT #', 'CROP', 'UNIT', 'PRODUCTION', 'EST.'],
-          rightAlignColumns: [6],
-          rows: buildFsaFallGroupedTotals(fsaFallRows).map(t => [t.scope, t.county, t.farmNumber, t.tractNumber, t.crop, t.unit, t.production.toLocaleString(), t.estimated ? 'Yes' : '']),
-        },
-        fileName: `FSA_Fall_Production_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
-        footerText: [
-          'Production Evidence Worksheet',
-          ...(fsaFallRows.some(r => r.estimated) ? ['Estimated: production for a field in more than one county is divided by each county\'s share of the field\'s mapped acres; no county-specific production was recorded.'] : []),
-          ...(fsaFallRows.some(r => !r.countyFips) ? [`${COUNTY_UNKNOWN_LABEL}: the county is not identified for some fields. That production is still included in all totals.`] : []),
-          'I certify that the production information shown above is accurate to the best of my knowledge.',
-          'Producer Signature: _______________________________',
-          'Date: ___________________',
-          'FSA Office Notes / Corrections:',
-          '__________________________________________________',
-          '__________________________________________________',
-        ],
-        brandNote: 'fsa',
+  const handleExportInsurancePdf = () => {
+    runTrackedExport('insurance-production', () => {
+      exportInsuranceProductionPdf({
+        report: insuranceReport,
+        metadata: { farmName: knownFarmName(farmName), cropYear: viewingSeason, reportDate },
+        fileName: `Insurance_Production_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
       });
-    }, 'fall production PDF');
+    }, 'insurance production PDF');
   };
 
   const handleExportHayPdf = () => {
@@ -690,9 +646,9 @@ export default function Reports() {
     id: record.id,
     cells: [fmtDate(record.date), fieldMap.get(record.fieldId)?.name || record.fieldName, record.fertilizer_formula, String(record.acres)],
   }));
-  const fallPreviewRows: ReportPreviewRow[] = fsaFallRows.map((row) => ({
-    id: `${row.recordType}-${row.id}-${row.countyFips ?? 'unknown'}`,
-    cells: [row.fieldName, row.crop || '—', `${row.production.toLocaleString()} ${row.productionUnit}`],
+  const insurancePreviewRows: ReportPreviewRow[] = insuranceReport.units.map(unit => ({
+    id: unit.key,
+    cells: [`${unit.crop} · ${unit.county}`, `${unit.production.toLocaleString()} bu`, unit.yield == null ? '-' : `${unit.yield.toFixed(1)} bu/ac`],
   }));
   const hayPreviewRows: ReportPreviewRow[] = hayRecords.map((record) => ({
     id: record.id,
@@ -855,41 +811,31 @@ export default function Reports() {
           )}
         </TabsContent>
 
-        {/* ── FSA Fall Harvest / Production Report ───────────────────────────── */}
-        <TabsContent value="fsa-harvest" className="mt-0">
+        {/* -- Crop Insurance Production ------------------------------------------ */}
+        <TabsContent value="insurance-production" className="mt-0">
           {paidReportNode(
-            'fsa-harvest',
+            'insurance-production',
             entitlement,
             cachedEntitlement,
             failed,
             <ReportPreview
-              title="FSA Fall Harvest / Production Evidence Worksheet"
-              headers={['Field', 'Crop', 'Production']}
-              rows={fallPreviewRows}
+              title="Crop Insurance Production Worksheet"
+              headers={['Unit', 'Production', 'Yield']}
+              rows={insurancePreviewRows}
             />,
-          <FallFsaReport
-            fsaFallRows={fsaFallRows}
-            fieldsWithoutCounty={countyContext.fieldsWithoutCounty}
-            cropTotals={fallCropTotals}
-            fsaFallIssues={fsaFallIssues}
-            readinessSummary={fsaFallReadinessSummary}
-            exportStatus={getExportStatus('fsa-harvest')}
+          <InsuranceProductionReport
+            report={insuranceReport}
+            readinessSummary={insuranceReadinessSummary}
+            exportStatus={getExportStatus('insurance-production')}
             onIssueAction={handleIssueAction}
             farmName={farmName}
             viewingSeason={viewingSeason}
             reportDate={reportDate}
-            onExportCsv={() => runTrackedExport('fsa-harvest', () => exportFsaFallProductionData({
-              harvestRecords,
-              hayRecords,
-              fields,
-              counties: countyContext,
-              metadata: {
-                farmName: knownFarmName(farmName),
-                cropYear: viewingSeason,
-                reportDate: toLocalIsoDate(Date.now()),
-              },
-            }), 'fall production data')}
-            onExportPdf={handleExportHarvestPdf}
+            onExportCsv={() => runTrackedExport('insurance-production', () => exportInsuranceProductionCsv(insuranceReport, {
+              farmName: knownFarmName(farmName),
+              reportDate: toLocalIsoDate(Date.now()),
+            }), 'insurance production data')}
+            onExportPdf={handleExportInsurancePdf}
           />,
           )}
         </TabsContent>

@@ -65,7 +65,7 @@ export function freePlanIncluded(): string[] {
 /** What Pro adds. */
 export function paidPlanAdds(): string[] {
   return [
-    'Prepared reports: FSA-578, Fall FSA production, spray log, fertilizer, Hay Summary, and landlord and farm-owner statements',
+    'Prepared reports: FSA-578, crop insurance production, spray log, fertilizer, Hay Summary, and landlord and farm-owner statements',
     'Grain bins and grain movement',
     'Equipment and maintenance',
     'Landlord splits',

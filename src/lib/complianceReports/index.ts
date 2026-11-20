@@ -6,3 +6,5 @@ export * from './fsa578PdfExport';
 export * from './pdfBranding';
 export * from './ownerSummaryLayout';
 export * from './ownerSummaryPdf';
+export * from './insuranceProduction';
+export * from './insuranceProductionExport';

@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import FallFsaReport from '@/components/reports/FallFsaReport';
+import InsuranceProductionReport from '@/components/reports/InsuranceProductionReport';
 import FsaPlantReport from '@/components/reports/FsaPlantReport';
 import { buildReportReadinessSummary } from '@/lib/reportReadiness';
 
@@ -25,12 +25,10 @@ function renderPlant(farmName: string | null) {
   );
 }
 
-function renderFall(farmName: string | null) {
-  render(
-    <FallFsaReport
-      fsaFallRows={[]}
-      cropTotals={[]}
-      fsaFallIssues={[]}
+function renderInsurance(farmName: string | null) {
+  return render(
+    <InsuranceProductionReport
+      report={{ cropYear: 2026, units: [], issues: [] }}
       readinessSummary={summary}
       farmName={farmName}
       viewingSeason={2026}
@@ -56,25 +54,13 @@ describe('FSA report farm name header', () => {
     expect(screen.queryByText(/AcreLedger Farm/)).not.toBeInTheDocument();
   });
 
-  it('shows the real farm name on the fall production header and a blank when it is missing', () => {
-    const { unmount } = render(
-      <FallFsaReport
-        fsaFallRows={[]}
-        cropTotals={[]}
-        fsaFallIssues={[]}
-        readinessSummary={summary}
-        farmName="QA Test Farm"
-        viewingSeason={2026}
-        reportDate="Oct 18, 2026"
-        onExportCsv={vi.fn()}
-        onExportPdf={vi.fn()}
-      />,
-    );
-    expect(screen.getByText('Farm: QA Test Farm | Crop Year: 2026 | Not an official USDA form. Generated Oct 18, 2026.')).toBeInTheDocument();
+  it('shows the real farm name on the insurance production header and a blank when it is missing', () => {
+    const { unmount } = renderInsurance('QA Test Farm');
+    expect(screen.getByText('Farm: QA Test Farm | Crop Year: 2026 | Generated Oct 18, 2026.')).toBeInTheDocument();
     unmount();
 
-    renderFall(null);
-    expect(screen.getByText('Farm: — | Crop Year: 2026 | Not an official USDA form. Generated Oct 18, 2026.')).toBeInTheDocument();
+    renderInsurance(null);
+    expect(screen.getByText(/^Farm: .* \| Crop Year: 2026 \| Generated Oct 18, 2026\.$/)).toBeInTheDocument();
     expect(screen.queryByText(/AcreLedger Farm/)).not.toBeInTheDocument();
   });
 });

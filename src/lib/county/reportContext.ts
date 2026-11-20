@@ -1,4 +1,4 @@
-import type { FsaFallCountyContext } from '@/lib/complianceReports/fsaReports';
+import type { ReportCountyContext } from '@/lib/complianceReports/fsaReports';
 import type { Field } from '@/types/farm';
 import type { FieldCluAssignment } from '@/types/fsaTract';
 import { buildCountyIndex, resolveFieldCountyShares } from './resolve';
@@ -13,7 +13,7 @@ export function buildCountyReportContext(input: {
   fields: Field[];
   cluAssignments: FieldCluAssignment[];
   countyAssignments: CountyAssignment[];
-}): FsaFallCountyContext & { fieldsWithoutCounty: number } {
+}): ReportCountyContext & { fieldsWithoutCounty: number } {
   const rows = input.farmId ? input.countyAssignments.filter(r => r.farmId === input.farmId) : [];
   const index = buildCountyIndex(rows);
   const fieldById = new Map(input.fields.map(f => [f.id, f]));

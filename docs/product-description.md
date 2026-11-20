@@ -58,7 +58,7 @@ actually hand to people:
 
 - **FSA-578 acreage worksheet** — a cropland-entry table per farm/tract/CLU
   with reconciliation totals, built to be handed to an FSA employee for entry,
-  plus a Fall FSA production worksheet.
+  plus a crop insurance production worksheet.
 - **Spray audit log** — a universal spray-log PDF,
   the record used to answer applicator and compliance questions.
 - **Fertilizer, hay, and landlord reports** — per-field and per-landlord

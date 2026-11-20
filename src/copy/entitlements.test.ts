@@ -30,7 +30,7 @@ describe('entitlement plan copy', () => {
   it('lists prepared reports and rainfall on the remaining fields as Pro', () => {
     expect(ENTITLEMENT_COPY.planPaidName).toBe('Pro');
     expect(paidPlanAdds()).toEqual([
-      'Prepared reports: FSA-578, Fall FSA production, spray log, fertilizer, Hay Summary, and landlord and farm-owner statements',
+      'Prepared reports: FSA-578, crop insurance production, spray log, fertilizer, Hay Summary, and landlord and farm-owner statements',
       'Grain bins and grain movement',
       'Equipment and maintenance',
       'Landlord splits',

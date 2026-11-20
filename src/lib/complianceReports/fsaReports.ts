@@ -6,15 +6,13 @@ import { effectiveTreatedAreaUnit, normalizeAreaForRate, normalizeTreatedArea } 
 import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
 import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
-import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
+import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
 import type { FsaStatusCode } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { getWorkDateMs, toLocalIsoDate } from '../../utils/dates';
 import { sanitizeCsvValue } from '../../utils/csv';
 import { roundTo } from '../../utils/numbers';
 import { formatSprayProductTotal } from '../../utils/unitConversion';
-import { allocateProduction } from '../county/allocation';
-import { countyLabel } from '../county/resolve';
 import type { FieldCountyShares } from '../county/types';
 import { ACRELEDGER_CSV_LINE } from './pdfBranding';
 import { fsa578CountyLabel, fsaIntendedUseCode, fsaPracticeCode, fsaStatusCode } from './fsa578FormLayout';
@@ -26,7 +24,7 @@ export const COUNTY_UNKNOWN_LABEL = 'County unknown';
  * Where each field's production is physically grown. Supplied by the app from saved county
  * assignments; report code never measures geometry itself and never reads county from notes.
  */
-export interface FsaFallCountyContext {
+export interface ReportCountyContext {
     sharesForField: (fieldId: string) => FieldCountyShares;
 }
 
@@ -79,51 +77,6 @@ export interface Fsa578ValidationIssue {
 export interface Fsa578FieldAcreTotal {
     fieldName: string;
     acres: number;
-}
-
-export interface FsaFallProductionRow {
-    id: string;
-    recordType: 'grain' | 'hay';
-    fieldName: string;
-    crop: string;
-    farmNumber: string;
-    county?: string;
-    tractNumber: string;
-    harvestDate: string;
-    production: number;
-    productionUnit: 'bu' | 'bales' | 'tons';
-    moisturePercent?: number;
-    destination: string;
-    evidenceReference: string;
-    landlordSplitPercent?: number;
-    landlordName?: string;
-    notes: string;
-    /** Five-digit county FIPS; null/absent = county unknown. */
-    countyFips?: string | null;
-    /** Share of the source record this row carries, 0..1. 1 unless the field spans counties. */
-    allocationFraction?: number;
-    /** True when `production` is a proportional estimate for the county, not a county-specific record. */
-    estimated?: boolean;
-    /** The whole record's production before it was divided between counties. */
-    recordProduction?: number;
-}
-
-export interface FsaFallProductionReport {
-    grainRows: FsaFallProductionRow[];
-    hayRows: FsaFallProductionRow[];
-}
-
-export interface FsaFallProductionMetadata {
-    farmName: string;
-    cropYear: number;
-    reportDate: string;
-}
-
-export interface FsaFallValidationIssue {
-    rowId: string;
-    severity: 'warning' | 'error';
-    field: string;
-    message: string;
 }
 
 function parseTractKey(tractKey: string): { farmNumber: string; tractNumber: string } {
@@ -729,7 +682,7 @@ export function buildFsa578WorksheetCsv({
     metadata: Fsa578WorksheetMetadata;
     rows: Fsa578ReportRow[];
     /** Saved county assignments; adds each row's physical county. */
-    counties?: FsaFallCountyContext;
+    counties?: ReportCountyContext;
 }): string {
     const titleRows = [
         [sanitizeCsvValue('FSA-578 Acreage Reporting Worksheet')],
@@ -797,321 +750,6 @@ export function buildFsa578WorksheetCsv({
     ].map(sanitizeCsvValue).join(','));
 
     return [...titleRows, header, ...dataRows].join('\n');
-}
-
-const UNKNOWN_COUNTY_SHARES: FieldCountyShares = {
-    basis: 'unresolved',
-    shares: [{ countyFips: null, countyName: null, stateAbbr: null, fraction: 1 }],
-    estimated: false,
-    needsReview: false,
-};
-
-/**
- * Divides one harvest or hay record between the counties its field lies in.
- *
- * No schema field records production per county, so a split field's production is allocated by
- * the field's mapped county share and marked estimated. The parts always add back to the record
- * (largest-remainder rounding), so nothing is double counted or lost.
- */
-function allocateRecordToCounties(
-    base: Omit<FsaFallProductionRow, 'production' | 'county' | 'countyFips' | 'allocationFraction' | 'estimated' | 'recordProduction'>,
-    total: number,
-    fieldId: string,
-    counties: FsaFallCountyContext | undefined,
-): FsaFallProductionRow[] {
-    const shares = counties?.sharesForField(fieldId) ?? UNKNOWN_COUNTY_SHARES;
-    const decimals = Number.isInteger(total) ? (base.productionUnit === 'bales' ? 0 : 2) : 2;
-    const parts = allocateProduction(total, shares.shares, { decimals });
-    const usable = parts.filter(part => part.amount !== 0 || parts.length === 1);
-    return usable.map(part => ({
-        ...base,
-        production: part.amount,
-        county: part.countyName ? countyLabel(part) : '',
-        countyFips: part.countyFips,
-        allocationFraction: part.fraction,
-        estimated: part.estimated || shares.estimated,
-        recordProduction: total,
-    }));
-}
-
-export function buildFsaFallProductionRows({
-    harvestRecords,
-    hayRecords,
-    fields,
-    counties,
-}: {
-    harvestRecords: HarvestRecord[];
-    hayRecords: HayHarvestRecord[];
-    fields: Field[];
-    counties?: FsaFallCountyContext;
-}): FsaFallProductionReport {
-    const fieldMap = new Map(fields.map(field => [field.id, field]));
-
-    const grainRows: FsaFallProductionRow[] = harvestRecords.flatMap(record => {
-        const field = fieldMap.get(record.fieldId);
-        return allocateRecordToCounties({
-            id: record.id,
-            recordType: 'grain',
-            fieldName: record.fieldName || field?.name || '',
-            crop: record.crop || '',
-            farmNumber: record.fsaFarmNumber || field?.fsaFarmNumber || '',
-            tractNumber: record.fsaTractNumber || field?.fsaTractNumber || '',
-            harvestDate: record.harvestDate || toLocalIsoDate(record.timestamp),
-            productionUnit: 'bu',
-            moisturePercent: record.moisturePercent,
-            destination: record.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale',
-            evidenceReference: record.scaleTicketNumber || '',
-            landlordSplitPercent: getLandlordSplitPercent(field, record.landlordSplitPercent),
-            landlordName: record.landlordName,
-            notes: '',
-        }, record.bushels || 0, record.fieldId, counties);
-    });
-
-    const hayRows: FsaFallProductionRow[] = hayRecords.flatMap(record => {
-        const field = fieldMap.get(record.fieldId);
-        const cutting = `Cutting ${record.cuttingNumber}`;
-        return allocateRecordToCounties({
-            id: record.id,
-            recordType: 'hay',
-            fieldName: record.fieldName || field?.name || '',
-            // A hay cutting is labelled by the field's forage use (Hay Ground, Pasture). A field whose
-            // use is a grain crop still produced hay here, so it must not read as that crop.
-            crop: hayRowLabel(field?.intendedUse),
-            farmNumber: field?.fsaFarmNumber || '',
-            tractNumber: field?.fsaTractNumber || '',
-            harvestDate: record.date || toLocalIsoDate(record.timestamp),
-            productionUnit: 'bales',
-            destination: 'On-Farm / Hay Storage',
-            evidenceReference: cutting,
-            notes: `${cutting}, ${record.baleType} bales`,
-        }, record.baleCount || 0, record.fieldId, counties);
-    });
-
-    return { grainRows, hayRows };
-}
-
-const HAY_TOTAL_LABEL = 'Hay';
-
-/** Row label for a hay cutting: the field's forage use, or "Hay Ground" when the use is blank or a grain crop. */
-function hayRowLabel(intendedUse: string | undefined): string {
-    const use = intendedUse?.trim();
-    return use && isEstablishedForageLabel(use) ? use : 'Hay Ground';
-}
-
-export interface FsaFallCropTotal {
-    crop: string;
-    unit: FsaFallProductionRow['productionUnit'];
-    production: number;
-}
-
-/** Production totals per crop and unit; bushels of different crops are never summed together. */
-export function buildFsaFallCropTotals(rows: FsaFallProductionRow[]): FsaFallCropTotal[] {
-    const totals = new Map<string, FsaFallCropTotal>();
-    for (const row of rows) {
-        // All hay cuttings total together as Hay, whatever each field's use label says.
-        const crop = row.recordType === 'hay' ? HAY_TOTAL_LABEL : row.crop?.trim() || 'Unspecified';
-        const key = `${crop.toLowerCase()}|${row.productionUnit}`;
-        const current = totals.get(key) ?? { crop, unit: row.productionUnit, production: 0 };
-        current.production += row.production || 0;
-        totals.set(key, current);
-    }
-    return [...totals.values()]
-        .map(t => ({ ...t, production: roundTo(t.production, 2) }))
-        .sort((a, b) =>
-            Number(a.crop === HAY_TOTAL_LABEL) - Number(b.crop === HAY_TOTAL_LABEL)
-            || a.crop.localeCompare(b.crop)
-            || a.unit.localeCompare(b.unit));
-}
-
-export interface FsaFallGroupedTotal extends FsaFallCropTotal {
-    scope: 'Farm' | 'County' | 'County / farm' | 'County / farm / tract';
-    county: string;
-    farmNumber: string;
-    tractNumber: string;
-    /** Any production in this group is a proportional estimate rather than a county-specific figure. */
-    estimated: boolean;
-}
-
-const SCOPE_ORDER: Record<FsaFallGroupedTotal['scope'], number> = {
-    Farm: 0, County: 1, 'County / farm': 2, 'County / farm / tract': 3,
-};
-
-/**
- * Totals at every reporting level, all from the same rows so they always reconcile:
- * FSA farm number (county-agnostic, unchanged), then County → FSA farm number → Tract.
- * Production with no known county is its own "County unknown" group and is included in all totals.
- */
-export function buildFsaFallGroupedTotals(rows: FsaFallProductionRow[]): FsaFallGroupedTotal[] {
-    const groups = new Map<string, {
-        scope: FsaFallGroupedTotal['scope']; county: string; farmNumber: string; tractNumber: string; rows: FsaFallProductionRow[];
-    }>();
-    const add = (scope: FsaFallGroupedTotal['scope'], county: string, farmNumber: string, tractNumber: string, row: FsaFallProductionRow) => {
-        const key = JSON.stringify([scope, county.toLowerCase(), farmNumber, tractNumber]);
-        const group = groups.get(key) ?? { scope, county, farmNumber, tractNumber, rows: [] };
-        group.rows.push(row);
-        groups.set(key, group);
-    };
-    for (const row of rows) {
-        const county = row.county?.trim() || COUNTY_UNKNOWN_LABEL;
-        const farm = row.farmNumber.trim() || 'Unassigned farm';
-        const tract = row.tractNumber.trim() || 'Unassigned tract';
-        add('Farm', '', farm, '', row);
-        add('County', county, '', '', row);
-        add('County / farm', county, farm, '', row);
-        add('County / farm / tract', county, farm, tract, row);
-    }
-    const unknownLast = (county: string) => Number(county === COUNTY_UNKNOWN_LABEL);
-    return [...groups.values()].sort((a, b) =>
-        Number(a.scope !== 'Farm') - Number(b.scope !== 'Farm')
-        || (a.scope === 'Farm' ? 0 : unknownLast(a.county) - unknownLast(b.county))
-        || a.county.localeCompare(b.county)
-        || a.farmNumber.localeCompare(b.farmNumber, undefined, { numeric: true })
-        || SCOPE_ORDER[a.scope] - SCOPE_ORDER[b.scope]
-        || a.tractNumber.localeCompare(b.tractNumber, undefined, { numeric: true })
-    ).flatMap(({ scope, county, farmNumber, tractNumber, rows: groupRows }) => {
-        const estimated = groupRows.some(r => r.estimated);
-        return buildFsaFallCropTotals(groupRows).map(total => ({ scope, county, farmNumber, tractNumber, estimated, ...total }));
-    });
-}
-
-export function validateFsaFallProductionRows(rows: FsaFallProductionRow[]): FsaFallValidationIssue[] {
-    const issues: FsaFallValidationIssue[] = [];
-    const isBlank = (value: string | null | undefined) => !value || value.trim().length === 0;
-
-    for (const row of rows) {
-        if (isBlank(row.crop)) {
-            issues.push({ rowId: row.id, severity: 'error', field: 'crop', message: `${row.fieldName} is missing crop/use.` });
-        }
-        if (isBlank(row.farmNumber)) {
-            issues.push({ rowId: row.id, severity: 'error', field: 'farmNumber', message: `${row.fieldName} is missing FSA farm number.` });
-        }
-        if (isBlank(row.tractNumber)) {
-            issues.push({ rowId: row.id, severity: 'error', field: 'tractNumber', message: `${row.fieldName} is missing FSA tract number.` });
-        }
-        if (isBlank(row.harvestDate)) {
-            issues.push({ rowId: row.id, severity: 'error', field: 'harvestDate', message: `${row.fieldName} is missing harvest date.` });
-        }
-        if (!row.production || row.production <= 0) {
-            issues.push({ rowId: row.id, severity: 'error', field: 'production', message: `${row.fieldName} has invalid production quantity.` });
-        }
-        if (isBlank(row.destination)) {
-            issues.push({ rowId: row.id, severity: 'warning', field: 'destination', message: `${row.fieldName} is missing destination/storage.` });
-        }
-        // A scale ticket is optional: bin loads never get one and town loads may not, so a blank
-        // ticket/evidence reference is not flagged.
-    }
-
-    return issues;
-}
-
-export function buildFsaFallProductionCsv({
-    metadata,
-    rows,
-}: {
-    metadata: FsaFallProductionMetadata;
-    rows: FsaFallProductionRow[];
-}): string {
-    const titleRows = [
-        [sanitizeCsvValue('FSA Fall Harvest / Production Evidence Worksheet')],
-        [sanitizeCsvValue('Not an official USDA form. Verify program-specific requirements with your county FSA office.')],
-        [sanitizeCsvValue(ACRELEDGER_CSV_LINE)],
-        [],
-        [sanitizeCsvValue('Farm Name'), sanitizeCsvValue(metadata.farmName)],
-        [sanitizeCsvValue('Crop Year'), sanitizeCsvValue(metadata.cropYear)],
-        [sanitizeCsvValue('Report Date'), sanitizeCsvValue(metadata.reportDate)],
-        [],
-    ].map(row => row.join(','));
-
-    const header = [
-        'Crop Year',
-        'Farm Name',
-        'Record Type',
-        'Field Name',
-        'Farm #',
-        'Tract #',
-        'Crop / Use',
-        'Harvest Date',
-        'Production',
-        'Unit',
-        'Moisture %',
-        'Destination / Storage',
-        'Evidence / Ticket #',
-        'Landlord Name',
-        'Landlord Share %',
-        'Notes',
-        'County',
-        'County FIPS',
-        'Share of Record %',
-        'Allocation',
-        'Record Production',
-    ].map(sanitizeCsvValue).join(',');
-
-    const dataRows = rows.map(row => [
-        metadata.cropYear,
-        metadata.farmName,
-        row.recordType,
-        row.fieldName,
-        row.farmNumber,
-        row.tractNumber,
-        row.crop,
-        row.harvestDate,
-        row.production,
-        row.productionUnit,
-        row.moisturePercent ?? '',
-        row.destination,
-        row.evidenceReference,
-        row.landlordName || '',
-        row.landlordSplitPercent ?? '',
-        row.notes,
-        row.county || COUNTY_UNKNOWN_LABEL,
-        row.countyFips || '',
-        row.allocationFraction != null ? roundTo(row.allocationFraction * 100, 2) : '',
-        row.estimated ? 'Estimated (proportional to mapped county acres)' : 'Measured',
-        row.recordProduction ?? '',
-    ].map(sanitizeCsvValue).join(','));
-
-    const hasEstimates = rows.some(r => r.estimated);
-    const hasUnknown = rows.some(r => !r.countyFips);
-    const notes = [
-        ...(hasEstimates ? [['Estimated rows: the field spans more than one county and no county-specific production was recorded, so production is divided by each county\'s share of the field\'s mapped acres.']] : []),
-        ...(hasUnknown ? [[`${COUNTY_UNKNOWN_LABEL}: counties are not identified for some fields. That production is still included in every total.`]] : []),
-    ].map(row => row.map(sanitizeCsvValue).join(','));
-
-    const summaries = [
-        ['Production totals (each reporting level is a separate summary)'],
-        ['Scope', 'County', 'Farm #', 'Tract #', 'Crop', 'Unit', 'Production', 'Estimated'],
-        ...buildFsaFallCropTotals(rows).map(t => ['Overall', '', '', '', t.crop, t.unit, t.production, '']),
-        ...buildFsaFallGroupedTotals(rows).map(t => [t.scope, t.county, t.farmNumber, t.tractNumber, t.crop, t.unit, t.production, t.estimated ? 'Yes' : 'No']),
-    ].map(row => row.map(sanitizeCsvValue).join(','));
-    return [...titleRows, header, ...dataRows, '', ...notes, ...(notes.length ? [''] : []), ...summaries].join('\n');
-}
-
-export async function exportFsaFallProductionData({
-    harvestRecords,
-    hayRecords,
-    fields,
-    counties,
-    metadata,
-}: {
-    harvestRecords: HarvestRecord[];
-    hayRecords: HayHarvestRecord[];
-    fields: Field[];
-    counties?: FsaFallCountyContext;
-    metadata?: Partial<FsaFallProductionMetadata>;
-}): Promise<void> {
-    const today = toLocalIsoDate(Date.now());
-    const report = buildFsaFallProductionRows({ harvestRecords, hayRecords, fields, counties });
-    const cropYear = metadata?.cropYear ?? harvestRecords[0]?.seasonYear ?? hayRecords[0]?.seasonYear ?? new Date().getFullYear();
-    const csvContent = buildFsaFallProductionCsv({
-        metadata: {
-            farmName: farmNameForCsv(metadata?.farmName),
-            cropYear,
-            reportDate: metadata?.reportDate || today,
-        },
-        rows: [...report.grainRows, ...report.hayRows],
-    });
-
-    await downloadFile(csvContent, `FSA_Fall_Production_${cropYear}_${today}.csv`, 'text/csv');
 }
 
 export function generateMissouriLogRows(records: SprayRecord[], fields: Field[], cluAssignments: FieldCluAssignment[] = []): string[] {
@@ -1202,7 +840,7 @@ export async function exportFsa578Data(
     cluAssignments: FieldCluAssignment[] = [],
     fsaTracts: FsaTractImport[] = [],
     metadata?: Partial<Fsa578WorksheetMetadata>,
-    counties?: FsaFallCountyContext,
+    counties?: ReportCountyContext,
 ): Promise<void> {
     const today = toLocalIsoDate(Date.now());
     const rows = buildFsa578Rows(plantRecords, fields, cluAssignments, fsaTracts);
@@ -1284,7 +922,7 @@ export async function exportFertilizerData(records: FertilizerApplication[], fie
     await downloadFile(csvContent, `Fertilizer_Report_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
 }
 
-async function downloadFile(content: string, fileName: string, contentType: string): Promise<void> {
+export async function downloadFile(content: string, fileName: string, contentType: string): Promise<void> {
     if (Capacitor.isNativePlatform()) {
         await native.shareFile({
             fileName,

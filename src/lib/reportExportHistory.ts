@@ -2,7 +2,7 @@ export type ReportExportType =
   | 'fsa-plant'
   | 'spray-audit'
   | 'fertilizer-summary'
-  | 'fsa-harvest'
+  | 'insurance-production'
   | 'hay-summary'
   | 'landlord-statement'
   | 'farm-owner-summary';

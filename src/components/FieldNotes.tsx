@@ -9,7 +9,7 @@ const FSA_COUNTY_NOTE_HINT = 'Scratchpad for field-specific notes. Counties for 
 
 interface FieldNotesProps {
   field: Field;
-  /** US only: explain that Fall FSA counties are not read from notes. */
+  /** US only: explain that report counties are not read from notes. */
   showFsaCountyHint?: boolean;
 }
 

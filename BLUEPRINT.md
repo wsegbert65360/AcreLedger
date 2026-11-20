@@ -122,6 +122,7 @@ Navigation checks and editorial changes do not constitute verification of archit
   - [ReportTable (Responsive Preview Fallback)](#reporttable-responsive-preview-fallback)
   - [Report Readiness and Mobile Export Workspace](#report-readiness-and-mobile-export-workspace)
   - [FSA-578 Acreage Reporting Worksheet](#fsa-578-acreage-reporting-worksheet)
+  - [Crop Insurance Production Worksheet](#crop-insurance-production-worksheet)
   - [Landlord Summary Report](#landlord-summary-report)
   - [FieldNotes Component (Auto-Save)](#fieldnotes-component-auto-save)
   - [PWA & Bundling](#pwa--bundling)
@@ -912,7 +913,7 @@ Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 (service role only) gating explicit-field `mrms-backfill` (409). Deploy that migration before the
 edge function. FSA/CLU data entry (tract import, CLU assignment, FSA farm/tract/field numbers) is free
 (`20261116120000_fsa_entry_free.sql`). Pro: all-field hourly rainfall, grain bins and movement,
-equipment, landlord splits, backup restore, prepared reports (FSA-578, Fall FSA production, spray,
+equipment, landlord splits, backup restore, prepared reports (FSA-578, crop insurance production, spray,
 fertilizer, Hay Summary, landlord and farm-owner statements). Terms call those reports landlord summaries. Complimentary is the owner farm only, not a sold tier. SQL returns `photo_cap` NULL (`20261110190000_entitlements_hardening.sql` replaced 20), `history_seasons` 2, and `device_cap` 1. Those are not live limits.
 Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. Photo capture is not in this build (a later Pro photo feature is only a possibility). Legacy spray-note attachment tokens are still parsed on edit and in the spray PDF, as described in AGENTS under Spray Wizard Pattern. The iOS camera and photo-library usage strings stay.
 
@@ -1193,8 +1194,9 @@ Reports are designed around two different use cases:
 Shared readiness modeling lives in `src/lib/reportReadiness.ts`. `ReportReadinessPanel` displays
 `ready`, `review`, or `empty` status plus progress and severity counts. `ReportIssueList` groups
 issues by category. Readiness is advisory and exports remain available even when errors exist.
-FSA adapters consume `validateFsa578Rows` and `validateFsaFallProductionRows` so the presentation
-layer cannot drift from the authoritative worksheet validation. Spray readiness counts one item
+The FSA-578 adapter consumes `validateFsa578Rows` and the insurance adapter consumes the
+builder's own `issues` (`buildInsuranceProductionReadiness`), so the presentation layer cannot
+drift from the authoritative worksheet validation. Spray readiness counts one item
 per application even when a tank mix produces multiple product issues. Fertilizer, hay, and
 landlord adapters describe record completeness rather than inventing new legal requirements.
 
@@ -1265,13 +1267,37 @@ Status rules are reporting-specific: a dated crop row without an explicit status
 requires an explicit FSA status, prints a blank status, and produces a readiness error. A clean report
 still states that county FSA review is required. Type/variety appears in the PDF's Section 1
 as well as in the preview and CSV. The document is titled "FSA-578 Acreage Reporting Worksheet"
-everywhere. The Fall Production worksheet totals production per crop and unit
-(`buildFsaFallCropTotals`), with separate totals by FSA farm number, county and farm number,
-and county (`buildFsaFallGroupedTotals`). County and state come from labeled field notes
-preserved by FSA import; missing values remain unassigned. It prints landscape with landlord name and share columns, and does not
-flag a blank scale ticket. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
-farm/tract/CLU acreage and reporting facts. Both FSA-578 and Fall Production outputs include the
-farm name in their header subtitles, in the on-screen preview and the PDF.
+everywhere. CSV and PDF may differ in layout and sectioning, but must describe the same underlying
+farm/tract/CLU acreage and reporting facts. The FSA-578 output includes the farm name in its
+header subtitles, in the on-screen preview and the PDF. Fall FSA reporting uses the same
+FSA-578, so there is no separate fall FSA report (the old Fall FSA production worksheet was
+retired 2026-11-19 in favor of the crop insurance production worksheet below).
+
+### Crop Insurance Production Worksheet
+
+Supports the crop insurance production report (APH) the farmer gives the agent after harvest.
+Builder: `buildInsuranceProductionReport` (`src/lib/complianceReports/insuranceProduction.ts`,
+pure); exports: `insuranceProductionExport.ts` (CSV, landscape Letter PDF); screen:
+`InsuranceProductionReport.tsx`; Reports tab `insurance-production` (Pro; `?tab=fsa-harvest`
+links open it). Rules:
+
+- Enterprise units (owner decision): one unit per crop per county. Counties come from
+  `buildCountyReportContext`; a field in several counties has its planted acres and bushels
+  divided by mapped share (largest remainder for bushels) and marked estimated. No county =
+  "County unknown" unit plus a warning.
+- Production is 100% of all shares (landlord share is not taken out). Bushels are used as
+  entered (field-entered, not harvested wet, owner decision); moisture is shown, never shrunk.
+- Planted acres = `PlantRecord.acreage` of Planted and Failed plantings (Failed adds an
+  appraisal warning). Prevented planting is listed as prevented acres, not planted. Cover and
+  volunteer are excluded. Harvested acres = planted acres of field+crop pairs that have loads.
+  Yield = production / planted acres.
+- A load with no crop takes the field's only planted crop; otherwise it is reported and left
+  out. Practice (irrigated / non-irrigated) comes from the planting and is shown as subtotals
+  inside a unit. Inside each unit: yield by FSA farm number (tracts listed) and every load
+  (date, field, farm/tract, sold vs stored, ticket or bin, moisture, bushels).
+- Warnings: harvest with no planting, load with no crop, planted not harvested, failed
+  (appraisal), county unknown, and a bin that received loads from more than one unit.
+- No hay. Not an official insurance form; the agent sets units and certifies.
 
 Row construction rules (`buildFsa578Rows`):
 

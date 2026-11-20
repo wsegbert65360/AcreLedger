@@ -6,6 +6,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 
 <!-- contents:start -->
 - [Landlord Summary](#landlord-summary)
+- [Crop Insurance Production Worksheet](#crop-insurance-production-worksheet)
 <!-- contents:end -->
 
 ## Landlord Summary
@@ -21,3 +22,12 @@ Canonical detail: [BLUEPRINT → Landlord Summary Report](../../BLUEPRINT.md#lan
 - One row per field per crop, with per-crop totals in `LandlordSummary.cropTotals`; never add bushels of different crops together, on screen, in CSV, or in the PDF. `totals.acres` counts each field once. Harvests with no crop-share percent after the `getLandlordSplitPercent` fallback are counted in `missingShareHarvests` and called out on screen and in the PDF.
 - Keep the retired `LandlordStatementReport` / `generateLandlordStatement` until its test coverage is migrated.
 - Grain delivered-vs-owed is out of scope until grain movements gain a field/landlord link (a schema change).
+
+## Crop Insurance Production Worksheet
+
+Canonical detail: [BLUEPRINT → Crop Insurance Production Worksheet](../../BLUEPRINT.md#crop-insurance-production-worksheet).
+
+- Replaces the retired Fall FSA production worksheet (fall FSA reporting uses the FSA-578). Reports tab `insurance-production` (Pro, `PAID_REPORT_TYPES`); `?tab=fsa-harvest` opens it.
+- Enterprise units: one unit per crop per county from `buildCountyReportContext`. Production is 100% of all shares; never subtract the landlord share. Bushels as entered, no moisture shrink. Yield = production / planted acres.
+- Never sum different crops. Yield by FSA farm number is a breakdown inside a unit, not a unit.
+- Not an official insurance form; the agent sets units and certifies. No hay.

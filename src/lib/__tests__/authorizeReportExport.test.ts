@@ -46,7 +46,7 @@ describe('authorizeReportExport', () => {
 
   it('asks the server for every prepared report, and a free farm is denied each one', async () => {
     const prepared = [
-      'fsa-plant', 'fsa-harvest', 'spray-audit', 'fertilizer-summary', 'hay-summary',
+      'fsa-plant', 'insurance-production', 'spray-audit', 'fertilizer-summary', 'hay-summary',
       'landlord-statement', 'farm-owner-summary',
     ];
     for (const reportType of prepared) {
@@ -57,7 +57,7 @@ describe('authorizeReportExport', () => {
   });
 
   it('allows every prepared report for paid and complimentary farms', async () => {
-    for (const reportType of ['fsa-harvest', 'hay-summary', 'landlord-statement', 'farm-owner-summary']) {
+    for (const reportType of ['insurance-production', 'hay-summary', 'landlord-statement', 'farm-owner-summary']) {
       expect(await authorizeReportExport(clientWith({ data: null, error: null }), 'farm-1', reportType)).toEqual({ allowed: true });
     }
   });

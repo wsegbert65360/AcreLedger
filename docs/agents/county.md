@@ -38,7 +38,7 @@ The county where land physically lies, from its boundary geometry. It is not the
 
 - A field's counties follow this order: manual correction, the field's own boundary, the CLUs assigned to it (each by its own geometry, weighted by assigned acres), a provisional point, then County unknown. A tract's split is never applied to a field as a whole.
 - Production is allocated per county by mapped share and marked estimated whenever a field spans counties, because no schema field records production per county. Largest-remainder rounding makes the parts add back to the record exactly. Do not change this without adding a county-specific production source.
-- Every report reads counties through `buildCountyReportContext` (saved rows only, no geometry work, no network). `buildFsaFallProductionRows` takes the context; with none, county is unknown. `buildFsaFallGroupedTotals` produces Farm, County, County / farm and County / farm / tract totals from the same rows, so they reconcile. County unknown is its own group and is included in every total.
+- Every report reads counties through `buildCountyReportContext` (saved rows only, no geometry work, no network). `buildInsuranceProductionReport` (enterprise unit = crop + county) and the FSA-578 box 5 county take the context; with none, county is unknown. County unknown is its own unit and is included in every total.
 - Estimated rows are labeled on screen, CSV and PDF. The report fingerprint covers the allocated rows, so a change to counties marks an earlier export as changed.
 - Historical reports are not silently recalculated. Counties change only when the geometry changes, or when the farmer applies a recalculation.
 

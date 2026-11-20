@@ -34,13 +34,13 @@ export const PREMIUM_FEATURES = [
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
 /**
- * Prepared reports that need Pro: FSA-578, Fall FSA production, spray log,
+ * Prepared reports that need Pro: FSA-578, crop insurance production, spray log,
  * fertilizer, Hay Summary, and landlord / farm-owner statements. FSA/CLU data
  * entry itself is free. Save, share, print, and export ask the server first
  * (authorizeReportExport) and fail closed. Reports are still built on the device.
  */
 const PAID_REPORT_TYPES: ReadonlySet<string> = new Set([
-  'fsa-plant', 'fsa-harvest', 'spray-audit', 'fertilizer-summary', 'hay-summary',
+  'fsa-plant', 'insurance-production', 'spray-audit', 'fertilizer-summary', 'hay-summary',
   'landlord-statement', 'farm-owner-summary',
 ]);
 

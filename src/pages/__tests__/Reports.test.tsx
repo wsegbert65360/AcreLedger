@@ -254,8 +254,8 @@ describe('Reports Pro gate', () => {
     expect(document.body.textContent).not.toContain('Delta Quarter');
   });
 
-  it('holds Hay Summary and Fall FSA behind the plan check while it is pending or failed', () => {
-    for (const tab of ['hay-summary', 'fsa-harvest']) {
+  it('holds Hay Summary and Insurance Production behind the plan check while it is pending or failed', () => {
+    for (const tab of ['hay-summary', 'insurance-production']) {
       entitlementState.entitlement = null;
       entitlementState.loading = true;
       entitlementState.cachedEntitlement = null;
@@ -275,14 +275,14 @@ describe('Reports Pro gate', () => {
     }
   });
 
-  it('shows the Hay Summary and Fall FSA previews to a free enforced farm', () => {
+  it('shows the Hay Summary and Insurance Production previews to a free enforced farm', () => {
     const hay = renderReports('/reports?tab=hay-summary');
     expect(screen.getByTestId('report-preview').textContent).toContain('Hay Production Summary');
     expect(screen.queryByText('Hay production summary')).toBeNull();
     hay.unmount();
 
     renderReports('/reports?tab=fsa-harvest');
-    expect(screen.getByTestId('report-preview').textContent).toContain('FSA Fall Harvest');
+    expect(screen.getByTestId('report-preview').textContent).toContain('Crop Insurance Production');
   });
 
   it('mounts the full Hay Summary for a paid farm', () => {
