@@ -46,6 +46,9 @@ describe('Landing', () => {
     expect(screen.getByText('Works in any web browser.')).toBeInTheDocument();
     expect(screen.getByRole('main')).not.toHaveTextContent(/free trial|3-month|3 months|read-only|photo/i);
     expect(screen.getByRole('main')).not.toHaveTextContent(/coming soon|no charge|planned price|four[- ]month|4[- ]month|Android|iPad/i);
+    expect(screen.getByRole('main')).not.toHaveTextContent(/A\$299/);
+    expect(screen.getByRole('main')).not.toHaveTextContent(/FSA tract entry is part of Pro/i);
+    expect(screen.getByRole('main')).not.toHaveTextContent(/FSA tract entry, and landlord splits/i);
   });
 
   it('carries the approved FSA footer disclaimer', () => {

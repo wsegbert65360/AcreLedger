@@ -101,7 +101,7 @@ Navigation checks and editorial changes do not constitute verification of archit
   - [Data API Access (Mandatory)](#data-api-access-mandatory)
   - [Tenant Isolation (RLS)](#tenant-isolation-rls)
   - [Profile Membership Protection](#profile-membership-protection)
-  - [Stripe Billing (Test Mode, Web Only)](#stripe-billing-test-mode-web-only)
+  - [Stripe Billing (Web Only)](#stripe-billing-web-only)
   - [Account Lifecycle and Native Credential Safety](#account-lifecycle-and-native-credential-safety)
   - [Ask the Book Read Registry](#ask-the-book-read-registry)
   - [Mapper Pattern](#mapper-pattern)
@@ -175,7 +175,7 @@ be described as operationally proven until deployment verification and both reco
 | Mappers | `@/lib/mappers` | Entity ↔ DB row transformation |
 | Reports | `@/lib/complianceReports` | CSV & PDF export generators (FSA, spray log, etc.) |
 | Native security | Capacitor secure storage + iOS Keychain | Credential/encryption-material storage on native devices |
-| Billing | Stripe test mode + Vercel Functions | Web-only Checkout/Portal and signed webhook entitlement mirror; live charges disabled |
+| Billing | Stripe test or live + Vercel Functions | Web-only Checkout/Portal and signed webhook entitlement mirror; live charges only when BILLING_LIVE_CHARGES=true and the key is sk_live_ |
 | Owner DR tooling | Cloud Run Job + Cloud Scheduler + Google Drive + age | Nightly encrypted whole-project off-site backup and isolated recovery; deployment/drills pending |
 
 ---
@@ -873,21 +873,22 @@ Restore works through the authenticated `restore_farm_backup` `SECURITY DEFINER`
 
 The live auth integration suite verifies forbidden operations by asserting PostgreSQL code `42501`. Its probes must be harmless: same-value protected-column updates, duplicate-ID insert attempts, and delete queries with contradictory filters. Successful preference checks also use same-value writes so verification cannot alter the QA account.
 
-### Stripe Billing (Test Mode, Web Only)
+### Stripe Billing (Web Only)
 
 `farm_comps` is service-managed billing infrastructure, soft-deleted through `deleted_at`, with no client table grants. `get_farm_comp_status` exposes only live status/expiry to the caller's current farm membership. No comp IDs are seeded. `billing_audit_log` is a service-role-only append table (RLS enabled, no client policies, grants match `farm_comps`) with an AFTER INSERT OR UPDATE trigger on `farm_comps`: action `insert` on insert, `soft_delete` when `deleted_at` first becomes set, otherwise `update`. There is no DELETE trigger. Comps and the audit log are excluded from customer backup/restore and Ask the Book (private billing metadata), and classified separately in owner recovery. This status changes display only: a live comp is complimentary access for the owner farm. Settings does not show a trial. Do not turn on access enforcement. There is no in-app purchase. The US-storefront website link is separate and must stay.
 
-Billing is implemented but intentionally restricted to Stripe test mode. The Stripe Settings card is
-web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and stays hidden on Capacitor
+The Stripe Settings card is web-only, requires `VITE_BILLING_UI_ENABLED === 'true'`, and stays hidden on Capacitor
 (`isBillingUiAvailable`). The US-storefront website link in `PlanUpgradeLink` is deliberate and
 must stay; the plan card renders only when entitlements are enforced. Production `ENTITLEMENTS_MODE` is `enforce` since 2026-11-16 (a fresh database defaults to `off`); do not change it without the owner. Internal
-rollout is gated by the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs).
+rollout in test mode is gated by the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs).
 `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and
-optional with a warning elsewhere; empty or unset means billing is unavailable at runtime. The
+optional with a warning elsewhere; empty or unset fails closed in test mode. Live mode
+(`BILLING_LIVE_CHARGES=true` plus an `sk_live_` key and a `price_...` ID) opens checkout to every
+authenticated web owner without blanking `BILLING_ALLOWLIST`. The
 client asks `GET /api/billing-eligibility` with the caller's bearer token and never reads
-`VITE_BILLING_ALLOWLIST`. `BILLING_LIVE_CHARGES` must
-remain absent or exactly `false`, and the server accepts only `sk_test_` keys until the owner
-explicitly approves a production/legal rollout.
+`VITE_BILLING_ALLOWLIST`. Live charges are allowed only when `BILLING_LIVE_CHARGES` is exactly
+`true` and the secret is an `sk_live_` key; otherwise the flag stays absent or `false` and the
+server accepts only `sk_test_` keys.
 
 Production `ENTITLEMENTS_MODE` is `enforce` since 2026-11-16 (a fresh database defaults to `off`); do not change it without the owner. In `off`, a missing or soft-deleted subscription row is
 `unmanaged` and retains full access. Absence of billing data must not become a paywall.
@@ -914,7 +915,7 @@ Free limits: 50 fields; rainfall as daily totals on the farm's two oldest fields
 edge function. FSA/CLU data entry (tract import, CLU assignment, FSA farm/tract/field numbers) is free
 (`20261116120000_fsa_entry_free.sql`). Pro: all-field hourly rainfall, grain bins and movement,
 equipment, landlord splits, backup restore, prepared reports (FSA-578, crop insurance production, spray,
-fertilizer, Hay Summary, landlord and farm-owner statements). Terms call those reports landlord summaries. Complimentary is the owner farm only, not a sold tier. SQL returns `photo_cap` NULL (`20261110190000_entitlements_hardening.sql` replaced 20), `history_seasons` 2, and `device_cap` 1. Those are not live limits.
+fertilizer, Hay Summary, landlord summaries). Complimentary is the owner farm only, not a sold tier. SQL returns `photo_cap` NULL (`20261110190000_entitlements_hardening.sql` replaced 20), `history_seasons` 2, and `device_cap` 1. Those are not live limits.
 Nothing is deleted on downgrade. Export of the farm's own logged data stays available. Prepared Pro report save, share, print, and CSV/PDF export call `assert_premium` and fail closed. Photo capture is not in this build (a later Pro photo feature is only a possibility). Legacy spray-note attachment tokens are still parsed on edit and in the spray PDF, as described in AGENTS under Spray Wizard Pattern. The iOS camera and photo-library usage strings stay.
 
 There is no trial: `ensure_user_farm()` stamps no trial dates (`20261109210000_remove_trial.sql`),

@@ -75,6 +75,7 @@ describe('billing eligibility API', () => {
     delete process.env.BILLING_ALLOWLIST;
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.BILLING_LIVE_CHARGES;
+    delete process.env.STRIPE_PRICE_ID;
   });
 
   it('returns allowlisted true for an allowlisted user', async () => {
@@ -265,13 +266,23 @@ describe('billing eligibility API', () => {
     expect(body).not.toContain('sk_');
     expect(console.error).not.toHaveBeenCalled();
   });
-  it('never enables checkout for a non-allowlisted user, even with test or live billing', async () => {
+  it('never enables checkout for a mismatched test key and live flag, even for a non-allowlisted user', async () => {
     process.env.BILLING_ALLOWLIST = 'someone-else';
     process.env.STRIPE_SECRET_KEY = 'sk_test_trial_fixture';
     process.env.BILLING_LIVE_CHARGES = 'true';
     const result = createResponse();
     await handler(createRequest(), result.response);
     expect(result.state.body).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
+  });
+  it('enables checkout for a non-allowlisted user when live billing is fully configured', async () => {
+    process.env.BILLING_ALLOWLIST = 'someone-else';
+    process.env.STRIPE_SECRET_KEY = 'sk_live_trial_fixture';
+    process.env.BILLING_LIVE_CHARGES = 'true';
+    process.env.STRIPE_PRICE_ID = 'price_live_fixture';
+    const result = createResponse();
+    await handler(createRequest(), result.response);
+    expect(result.state.body).toEqual({ allowlisted: false, checkoutEnabled: true, liveCharges: true });
+    expect(JSON.stringify(result.state.body)).not.toContain('sk_');
   });
 
 });

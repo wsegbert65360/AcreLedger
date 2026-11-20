@@ -167,6 +167,23 @@ describe('create checkout session API', () => {
     expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
+  it('skips the allowlist for a non-allowlisted owner when live billing is configured', async () => {
+    process.env.BILLING_LIVE_CHARGES = 'true';
+    process.env.STRIPE_SECRET_KEY = 'sk_live_key';
+    process.env.STRIPE_PRICE_ID = 'price_live';
+    process.env.BILLING_ALLOWLIST = 'someone-else';
+    const response = createResponse();
+
+    await handler({
+      method: 'POST',
+      headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' },
+      query: {},
+    }, response.response);
+
+    expect(response.state.status).toBe(200);
+    expect(mocks.createCheckoutSession).toHaveBeenCalled();
+  });
+
   it('denies checkout when the active billing row belongs to another farm member', async () => {
     mocks.createClient.mockReturnValue({
       auth: {

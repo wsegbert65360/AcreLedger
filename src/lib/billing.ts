@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import type { FarmSubscription, FarmSubscriptionStatus } from '@/types/farm';
 
 /**
- * Client-side billing helpers for Stripe test-mode checkout (Ticket D).
+ * Client-side billing helpers for Stripe checkout (Ticket D).
  *
  * Billing is web-only for v1: the Billing settings card renders nothing under
  * Capacitor, so no Capacitor plugin is ever touched from here. Paywall
@@ -170,8 +170,8 @@ function parseEligibilityPayload(payload: unknown): BillingEligibility {
   const allowlisted = value.allowlisted === true;
   return {
     allowlisted,
-    checkoutEnabled: allowlisted && value.checkoutEnabled === true,
-    liveCharges: allowlisted && value.liveCharges === true,
+    checkoutEnabled: value.checkoutEnabled === true,
+    liveCharges: value.liveCharges === true,
   };
 }
 

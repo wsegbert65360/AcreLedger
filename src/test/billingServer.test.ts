@@ -32,73 +32,134 @@ describe('billing constants', () => {
   });
 });
 
+const LIVE_ENV = {
+  BILLING_LIVE_CHARGES: 'true',
+  STRIPE_SECRET_KEY: 'sk_live_abc123',
+  STRIPE_PRICE_ID: 'price_live_abc123',
+};
+
 describe('assertTestModeBilling', () => {
   it('accepts explicit test-mode configuration', () => {
     const check = assertTestModeBilling(TEST_ENV);
     expect(check).toEqual({
       ok: true,
-      config: { secretKey: 'sk_test_abc123', priceId: 'price_test_abc123' },
+      config: { secretKey: 'sk_test_abc123', priceId: 'price_test_abc123', mode: 'test' },
     });
   });
 
   it('accepts a missing BILLING_LIVE_CHARGES as test mode', () => {
     const check = assertTestModeBilling({ ...TEST_ENV, BILLING_LIVE_CHARGES: undefined });
-    expect(check.ok).toBe(true);
+    expect(check).toMatchObject({ ok: true, config: { mode: 'test' } });
   });
 
-  it('refuses when live charges are requested', () => {
+  it('accepts live mode when the flag is true and the key is live', () => {
+    expect(assertTestModeBilling(LIVE_ENV)).toEqual({
+      ok: true,
+      config: { secretKey: 'sk_live_abc123', priceId: 'price_live_abc123', mode: 'live' },
+    });
+    expect(assertTestModeBilling({
+      BILLING_LIVE_CHARGES: ' TRUE ',
+      STRIPE_SECRET_KEY: ' sk_live_abc123 ',
+      STRIPE_PRICE_ID: ' price_live_abc123 ',
+    })).toMatchObject({ ok: true, config: { mode: 'live' } });
+  });
+
+  it('refuses a test key when live charges are requested', () => {
     const check = assertTestModeBilling({ ...TEST_ENV, BILLING_LIVE_CHARGES: 'true' });
     expect(check).toMatchObject({ ok: false });
     expect(check.ok === false && check.reason).toMatch(/live charges/i);
   });
 
-  it('refuses any BILLING_LIVE_CHARGES value other than absent or false', () => {
-    for (const value of ['TRUE', '1', 'yes', 'on']) {
+  it('refuses a live key when BILLING_LIVE_CHARGES is not exactly true', () => {
+    expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_SECRET_KEY: 'sk_live_zzz' })).toMatchObject({
+      ok: false,
+    });
+    expect(assertTestModeBilling({
+      ...LIVE_ENV,
+      BILLING_LIVE_CHARGES: 'false',
+    })).toMatchObject({ ok: false });
+  });
+
+  it('refuses BILLING_LIVE_CHARGES values other than absent, false, or true', () => {
+    for (const value of ['1', 'yes', 'on', '']) {
       const check = assertTestModeBilling({ ...TEST_ENV, BILLING_LIVE_CHARGES: value });
       expect(check.ok).toBe(false);
       expect(check.ok === false && check.reason).toMatch(/live charges/i);
     }
   });
 
-  it('refuses live secret keys and missing or malformed keys', () => {
-    expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_SECRET_KEY: 'sk_live_zzz' })).toMatchObject({
-      ok: false,
-    });
+  it('refuses missing or malformed keys', () => {
     expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_SECRET_KEY: '' })).toMatchObject({ ok: false });
     expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_SECRET_KEY: 'not-a-key' })).toMatchObject({
       ok: false,
     });
+    expect(assertTestModeBilling({ ...LIVE_ENV, STRIPE_SECRET_KEY: 'not-a-key' })).toMatchObject({
+      ok: false,
+    });
   });
 
-  it('refuses a missing or malformed price id', () => {
+  it('refuses a missing or malformed price id in both modes', () => {
     expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_PRICE_ID: '' })).toMatchObject({ ok: false });
     expect(assertTestModeBilling({ ...TEST_ENV, STRIPE_PRICE_ID: 'prod_123' })).toMatchObject({
+      ok: false,
+    });
+    expect(assertTestModeBilling({ ...LIVE_ENV, STRIPE_PRICE_ID: '' })).toMatchObject({ ok: false });
+    expect(assertTestModeBilling({ ...LIVE_ENV, STRIPE_PRICE_ID: 'prod_123' })).toMatchObject({
       ok: false,
     });
   });
 });
 
 describe('billing capabilities', () => {
-  it.each([
-    [undefined, 'sk_test_fixture', true],
-    ['false', 'sk_test_fixture', true],
-    [' FaLsE ', ' sk_test_fixture ', true],
-    ['true', 'sk_test_fixture', false],
-    [' TrUe ', 'sk_test_fixture', false],
-    ['false', 'sk_live_fixture', false],
-    ['true', 'sk_live_fixture', false],
-    ['', 'sk_test_fixture', false],
-    ['yes', 'sk_test_fixture', false],
-    [undefined, '', false],
-  ])('matches test-mode assertion for flag %s and key %s', (live, key, expected) => {
-    const env = { ...TEST_ENV, BILLING_LIVE_CHARGES: live, STRIPE_SECRET_KEY: key };
-    expect(getBillingCapabilities(true, env).checkoutEnabled).toBe(expected);
-    expect(assertTestModeBilling(env).ok).toBe(expected);
-    expect(getBillingCapabilities(false, env)).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
+  it('enables checkout in test mode only for allowlisted users', () => {
+    expect(getBillingCapabilities(true, TEST_ENV)).toEqual({
+      allowlisted: true, checkoutEnabled: true, liveCharges: false,
+    });
+    expect(getBillingCapabilities(false, TEST_ENV)).toEqual({
+      allowlisted: false, checkoutEnabled: false, liveCharges: false,
+    });
+    expect(assertTestModeBilling(TEST_ENV)).toMatchObject({ ok: true, config: { mode: 'test' } });
   });
-  it('normalizes live charges and scopes them to the allowlist', () => {
-    expect(getBillingCapabilities(true, { BILLING_LIVE_CHARGES: ' TrUe ' })).toEqual({
-      allowlisted: true, checkoutEnabled: false, liveCharges: true,
+
+  it('enables checkout and liveCharges for every user in properly configured live mode', () => {
+    expect(assertTestModeBilling(LIVE_ENV)).toMatchObject({ ok: true, config: { mode: 'live' } });
+    expect(getBillingCapabilities(true, LIVE_ENV)).toEqual({
+      allowlisted: true, checkoutEnabled: true, liveCharges: true,
+    });
+    expect(getBillingCapabilities(false, LIVE_ENV)).toEqual({
+      allowlisted: false, checkoutEnabled: true, liveCharges: true,
+    });
+  });
+
+  it('keeps checkout disabled when the live flag and key are mismatched', () => {
+    const testKeyLiveFlag = { ...TEST_ENV, BILLING_LIVE_CHARGES: 'true' };
+    const liveKeyTestFlag = { ...LIVE_ENV, BILLING_LIVE_CHARGES: 'false' };
+    expect(getBillingCapabilities(true, testKeyLiveFlag).checkoutEnabled).toBe(false);
+    expect(getBillingCapabilities(false, testKeyLiveFlag).checkoutEnabled).toBe(false);
+    expect(assertTestModeBilling(testKeyLiveFlag).ok).toBe(false);
+    expect(getBillingCapabilities(true, liveKeyTestFlag).checkoutEnabled).toBe(false);
+    expect(getBillingCapabilities(false, liveKeyTestFlag)).toEqual({
+      allowlisted: false, checkoutEnabled: false, liveCharges: false,
+    });
+    expect(assertTestModeBilling(liveKeyTestFlag).ok).toBe(false);
+  });
+
+  it('keeps checkout disabled when the live flag is true but the key is missing or test', () => {
+    expect(getBillingCapabilities(true, { BILLING_LIVE_CHARGES: 'true' }).checkoutEnabled).toBe(false);
+    expect(getBillingCapabilities(true, { ...TEST_ENV, BILLING_LIVE_CHARGES: 'true' }).checkoutEnabled).toBe(false);
+    expect(getBillingCapabilities(true, {
+      BILLING_LIVE_CHARGES: 'true',
+      STRIPE_SECRET_KEY: 'sk_live_abc123',
+    })).toEqual({ allowlisted: true, checkoutEnabled: false, liveCharges: true });
+  });
+
+  it('normalizes the live flag without locking liveCharges to the allowlist', () => {
+    expect(getBillingCapabilities(false, {
+      BILLING_LIVE_CHARGES: ' TrUe ',
+      STRIPE_SECRET_KEY: ' sk_live_abc123 ',
+      STRIPE_PRICE_ID: 'price_live_abc123',
+    })).toEqual({
+      allowlisted: false, checkoutEnabled: true, liveCharges: true,
     });
   });
 });

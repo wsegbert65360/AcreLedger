@@ -1,12 +1,14 @@
 /**
- * Shared pure billing helpers for the Stripe test-mode checkout endpoints
+ * Shared pure billing helpers for the Stripe checkout endpoints
  * (api/create-checkout-session.ts, api/create-portal-session.ts,
  * api/billing-eligibility.ts, api/stripe-webhook.ts). Kept dependency-free so
  * `npm run typecheck:api` and unit tests can exercise the rules without a
  * Stripe client or network.
  *
- * Test mode only: every gate here fails closed. Live charges stay disabled
- * until Will approves legal copy (BILLING_LIVE_CHARGES must stay false).
+ * Live charges are allowed only when BILLING_LIVE_CHARGES is exactly "true"
+ * (trim, case-insensitive) and STRIPE_SECRET_KEY is an `sk_live_` key.
+ * Otherwise the flag stays absent or exactly "false" and the server accepts
+ * only `sk_test_` keys. Every other combination fails closed.
  */
 
 /**
@@ -27,6 +29,7 @@ export type BillingStatus =
 export interface TestModeBillingConfig {
   secretKey: string;
   priceId: string;
+  mode: 'test' | 'live';
 }
 
 export type TestModeBillingCheck =
@@ -41,22 +44,33 @@ function readBillingMode(env: Record<string, string | undefined>) {
 }
 
 /**
- * Refuse unless the server is explicitly configured for Stripe TEST mode:
- * BILLING_LIVE_CHARGES must be absent or exactly "false", the secret key must
- * be a `sk_test_` key, and a yearly `price_...` ID must be present.
+ * Refuse unless the server is explicitly configured for Stripe test mode or
+ * live mode:
+ * - Test: BILLING_LIVE_CHARGES absent or exactly "false", `sk_test_` key,
+ *   and a yearly `price_...` ID.
+ * - Live: BILLING_LIVE_CHARGES exactly "true", `sk_live_` key, and a
+ *   yearly `price_...` ID.
+ * Any other flag value, a live key without the live flag, a test key with
+ * the live flag, or a missing/malformed key or price ID fails closed.
  */
 export function assertTestModeBilling(
   env: Record<string, string | undefined>,
 ): TestModeBillingCheck {
   const { secretKey, liveCharges } = readBillingMode(env);
-  if (liveCharges !== undefined && liveCharges !== 'false') {
+  const testFlag = liveCharges === undefined || liveCharges === 'false';
+  const liveFlag = liveCharges === 'true';
+  if (!testFlag && !liveFlag) {
     return { ok: false, reason: 'Billing is not enabled: live charges are disallowed.' };
   }
 
   if (!secretKey) {
     return { ok: false, reason: 'Billing is not configured: missing Stripe secret key.' };
   }
-  if (!secretKey.startsWith('sk_test_')) {
+  if (liveFlag) {
+    if (!secretKey.startsWith('sk_live_')) {
+      return { ok: false, reason: 'Billing is not enabled: live charges require a live Stripe key.' };
+    }
+  } else if (!secretKey.startsWith('sk_test_')) {
     return { ok: false, reason: 'Billing is restricted to Stripe test mode keys.' };
   }
 
@@ -65,7 +79,7 @@ export function assertTestModeBilling(
     return { ok: false, reason: 'Billing is not configured: missing Stripe price ID.' };
   }
 
-  return { ok: true, config: { secretKey, priceId } };
+  return { ok: true, config: { secretKey, priceId, mode: liveFlag ? 'live' : 'test' } };
 }
 
 /**
@@ -416,10 +430,13 @@ export function isUniqueViolation(error: { code?: string | null } | null | undef
 /** Public capabilities only; never expose Stripe configuration or key material. */
 export function getBillingCapabilities(allowlisted: boolean, env: Record<string, string | undefined>) {
   const { secretKey, liveCharges } = readBillingMode(env);
+  const priceId = (env.STRIPE_PRICE_ID ?? '').trim();
   const testMode = secretKey.startsWith('sk_test_') && (liveCharges === undefined || liveCharges === 'false');
+  const liveMode = liveCharges === 'true' && secretKey.startsWith('sk_live_');
+  const liveCheckout = liveMode && priceId.startsWith('price_');
   return {
     allowlisted,
-    checkoutEnabled: allowlisted && testMode,
-    liveCharges: allowlisted && liveCharges === 'true',
+    checkoutEnabled: liveCheckout || (allowlisted && testMode),
+    liveCharges: liveMode,
   };
 }

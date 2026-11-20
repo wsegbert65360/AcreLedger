@@ -12,12 +12,12 @@ The paid plan is named **Pro** in the app (`src/copy/entitlements.ts`). Code pla
 
 | | Free | Pro |
 | --- | --- | --- |
-| Price | No card. $0 in the app copy. | $299 per farm per year in the US. A$299 per farm per year in Australia. Confirmed in `src/components/settings/BillingManager.tsx`, `src/pages/Landing.tsx`, and `src/pages/Terms.tsx`. |
+| Price | No card. $0 in the app copy. | USD $299 per farm per year. Confirmed in `src/components/settings/BillingManager.tsx`, `src/pages/Landing.tsx`, and `src/pages/Terms.tsx`. |
 | Fields | 50 active fields (`FREE_LIMITS.fieldCap` and `entitlement_free_limits()`). | No field cap (`field_cap` is null on a paid plan). |
 | Rainfall | Daily totals on the two oldest fields. Those two are locked. Confirmed: `rainfallSlotCap` 2, `freePlanIncluded()`, `20261110170000_rainfall_locked_slots.sql`. | Hourly rainfall on the remaining fields (`paidPlanAdds()`). |
-| Records | Planting, spraying, fertilizing, and harvest stay on the free record book. | Grain bins and grain movement, equipment, FSA tract entry, and landlord splits (`assert_premium` features `grain`, `equipment`, `fsa_tract`, `landlord_split`). |
+| Records | Planting, spraying, fertilizing, harvest, and FSA/CLU data entry (tract import, farm/tract/field numbers) stay on the free record book (`20261116120000_fsa_entry_free.sql`). | Grain bins and grain movement, equipment, and landlord splits (`assert_premium` features `grain`, `equipment`, `landlord_split`). |
 | Cattle | Off unless the farm turns on `runs_cattle` (default false). Then groups, pasture moves, and editing a group's head count. | Events and head transfers (`assert_premium` feature `cattle_events`). The cattle CSV is locked in the client with `isFreeTierLocked`. That export does not call `assert_premium`. |
-| Reports | Export of what the farm logged stays available. The hay summary and crop insurance production worksheet are Pro (`isPaidReport`). | Prepared FSA-578, season spray log, fertilizer summary, landlord statement, and farm-owner summary. Save, share, print, and CSV/PDF export call `assert_premium` and fail closed. |
+| Reports | Export of what the farm logged stays available. Fall FSA (FSA-578), Hay Summary, and the crop insurance production worksheet are Pro (`isPaidReport`). | Prepared FSA-578, season spray log, fertilizer summary, Hay Summary, and landlord summaries. Save, share, print, and CSV/PDF export call `assert_premium` and fail closed. |
 | Backup | A Settings backup download is the farm's own JSON. | Uploading a backup file (`restore_farm_backup`) is Pro. Undoing the latest pre-season reset is free. |
 | Photos | No photo capture. `photo_cap` is NULL (`20261110190000_entitlements_hardening.sql`). | No photo capture in this build. |
 
@@ -27,7 +27,7 @@ Nothing already logged is deleted if a farm does not buy Pro.
 
 ## Where someone pays
 
-Stripe checkout and the customer portal are web-only, and hidden unless `VITE_BILLING_UI_ENABLED` is `true`. The iOS app does not sell a subscription or show a price. A website link is shown only for the US App Store storefront, country code `USA`, when `VITE_UPGRADE_URL` is set (`src/lib/storefront.ts`). Every other storefront gets no link. `BILLING_LIVE_CHARGES` stays off and the server accepts only `sk_test_` keys until the owner approves live charges.
+Stripe checkout and the customer portal are web-only, and hidden unless `VITE_BILLING_UI_ENABLED` is `true`. The iOS app does not sell a subscription or show a price. A website link is shown only for the US App Store storefront, country code `USA`, when `VITE_UPGRADE_URL` is set (`src/lib/storefront.ts`). Every other storefront gets no link. Live charges are allowed only when `BILLING_LIVE_CHARGES` is `true` and `STRIPE_SECRET_KEY` is an `sk_live_` key (`assertTestModeBilling` in `server/billing.ts`). Test mode (flag absent or `false`) still requires `sk_test_` keys and `BILLING_ALLOWLIST`. Live mode opens checkout to every authenticated web owner without blanking `BILLING_ALLOWLIST`.
 
 ## Non-goals at launch
 

@@ -21,4 +21,18 @@ describe('approved legal policies', () => {
     expect(container).toHaveTextContent('if you ask within 30 days of any charge (your first payment or a yearly renewal), we refund that charge in full.');
     expect(container).toHaveTextContent('If a renewal payment fails, you have 14 days to update your card before the farm returns to the free record book. There are no late fees.');
   });
+
+  it('uses USD-only Pro pricing and does not call FSA tract entry Pro', () => {
+    const terms = render(<MemoryRouter><Terms /></MemoryRouter>);
+    expect(terms.container).toHaveTextContent('$299 per farm per year.');
+    expect(terms.container).not.toHaveTextContent('A$299');
+    expect(terms.container).not.toHaveTextContent('FSA tract entry');
+    expect(terms.container).toHaveTextContent('landlord summaries');
+    expect(terms.container).not.toHaveTextContent('landlord statements');
+    terms.unmount();
+
+    const refund = render(<MemoryRouter><Refund /></MemoryRouter>);
+    expect(refund.container).not.toHaveTextContent('A$299');
+    expect(refund.container).not.toHaveTextContent('FSA tract entry');
+  });
 });
