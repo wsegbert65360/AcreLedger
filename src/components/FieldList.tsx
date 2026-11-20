@@ -73,7 +73,7 @@ export default function FieldList({ fields }: FieldListProps) {
       )}
       <div
         style={pullStyle}
-        className="space-y-2"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-x-10 lg:gap-x-4"
         {...handlers}
       >
         {augmentedFields.map(field => (

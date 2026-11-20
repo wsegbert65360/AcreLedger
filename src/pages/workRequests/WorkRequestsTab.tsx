@@ -291,7 +291,7 @@ function WorkRequestWizard({ open, onClose, initial, mode, fsaTracts, onSave }: 
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-h-[90vh] w-[calc(100%-1rem)] max-w-2xl overflow-x-hidden overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-h-[90vh] w-[calc(var(--sa-avail-w)-1rem)] max-w-2xl overflow-x-hidden overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {mode === 'edit' ? 'Edit work request' : mode === 'duplicate' ? 'Duplicate work request' : 'New work request'}

@@ -226,7 +226,7 @@ export default function QuickAddDialog() {
   return (
     <>
     <Dialog open={isQuickAddOpen} onOpenChange={(open) => { if (!open) closeQuickAdd(); }}>
-      <DialogContent className="max-w-md w-[92vw] rounded-2xl bg-card border border-border p-5">
+      <DialogContent className="max-w-md w-[calc(var(--sa-avail-w)*0.92)] rounded-2xl bg-card border border-border p-5">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
             <ClipboardList size={18} className="text-primary" />

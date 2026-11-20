@@ -70,6 +70,7 @@ Follow [BLUEPRINT → Text Case & Tracking](../../BLUEPRINT.md#text-case--tracki
 - Follow [Page Header Pattern](../../BLUEPRINT.md#page-header-pattern), [Border Radius Standard](../../BLUEPRINT.md#border-radius-standard), and [Field Dashboard](../../BLUEPRINT.md#field-dashboard-mobile-first) for presentation and section order.
 - Keep dashboard crop filters, totals, and quick actions in the scrollable body below the WeatherBar; do not add floating or sticky bottom bars.
 - Horizontal tab bars on mobile use horizontal scrolling and non-shrinking, non-wrapping labels so every tab remains reachable.
+- iPhone Duo: the system can reserve a strip on one side of the display (outer display, and inner display in landscape). `useSideBarEdge` detects it from the safe-area insets and sets `html[data-side-bars]`; `BottomNav` then renders as an icon rail in that strip, and `.app-shell` in `src/index.css` keeps content clear of it (mirrored on the wide inner display so content centers on the hinge). Fixed overlays and edge-pinned UI use `--sa-l`, `--sa-r`, `--sa-x-shift` and `--sa-avail-w` instead of `inset-x-0`, `left-[50%]` or `w-full`/`vw` widths. Do not detect the device by user agent.
 
 ## Responsive Tables
 
