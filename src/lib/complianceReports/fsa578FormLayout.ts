@@ -162,8 +162,9 @@ function cropLabel(row: Fsa578ReportRow): string {
 }
 
 function formatPlanted(date: string): string {
-  const match = /^\d{4}-(\d{2})-(\d{2})/.exec(date);
-  return match ? `planted ${match[1]}-${match[2]}` : '';
+  // MM-DD-YYYY like the form's date boxes; the year matters for fall-seeded crops.
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  return match ? `planted ${match[2]}-${match[3]}-${match[1]}` : '';
 }
 
 function sheetCounties(cropland: Fsa578ReportRow[], counties?: FsaFallCountyContext): string[] {

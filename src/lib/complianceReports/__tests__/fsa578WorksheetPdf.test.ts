@@ -294,7 +294,7 @@ describe('exportFsa578WorksheetPdf', () => {
     expect(text).toContain('FARM 2050 - SHEET 1 OF 1');
     expect(text).toContain('NO FSA FARM / TRACT ASSIGNED - SHEET 1 OF 1');
     expect(text).toContain('Assign them to an FSA farm/tract before your office visit.');
-    expect(tables[2].body[0][2]).toBe('Corn P1197 / GR\nNew Ground - planted 04-15');
+    expect(tables[2].body[0][2]).toBe('Corn P1197 / GR\nNew Ground - planted 04-15-2026');
   });
 
   it('saves the worksheet with the requested filename', () => {

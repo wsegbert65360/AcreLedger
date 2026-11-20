@@ -1233,7 +1233,7 @@ The PDF has four canonical sections:
    adds a per-row Physical County column with split shares), 6 (other farms in the
    report), 7-10 (other producers: one key per landlord name on that farm; ID number is always
    blank and is never stored or printed), 11 (blank), then the line table: 12 tract, 13 CLU,
-   14 crop + type/variety + intended-use code with field name and planting date, 15 practice
+   14 crop + type/variety + intended-use code with field name and planting date (MM-DD-YYYY), 15 practice
    (I/N), 16 status code, 17 one column per crop (max 8, extra crops fold into OTHER), 18 key,
    19 share. A CLU with an operator share under 100 gets a second line for the other producer's
    key and share with no acres, so box 20 totals per crop column count acres once. Row 21
