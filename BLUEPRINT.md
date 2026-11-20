@@ -1212,9 +1212,26 @@ footer flow.
 
 The PDF has four canonical sections:
 
-1. **Cropland reporting rows** — the primary FSA entry table. Columns are farm, tract, CLU,
-   field, crop, status, acres, planting date, intended use, irrigation, producer share, crop
-   sequence, and practice/notes. Non-cropland rows do not appear here.
+1. **Report of Acreage** — laid out like the manual FSA-578 (08-22-19), one sheet per FSA farm
+   number in numeric order, then a final "No FSA farm / tract assigned" sheet for fields with no
+   farm number. View-model: `buildFsa578FormSheets` in `fsa578FormLayout.ts` (pure). Each sheet
+   has boxes 1-4 (farm no., farmland and cropland as unique-CLU totals, program year), 5
+   (operator name/address/county, blank lines until settings hold them), 6 (other farms in the
+   report), 7-10 (other producers: one key per landlord name on that farm; ID number is always
+   blank and is never stored or printed), 11 (blank), then the line table: 12 tract, 13 CLU,
+   14 crop + type/variety + intended-use code with field name and planting date, 15 practice
+   (I/N), 16 status code, 17 one column per crop (max 8, extra crops fold into OTHER), 18 key,
+   19 share. A CLU with an operator share under 100 gets a second line for the other producer's
+   key and share with no acres, so box 20 totals per crop column count acres once. Row 21
+   (determined acreage) is printed shaded and blank for FSA. Box 22 is a worksheet-only
+   certification note with three signature/date slots and the 1/ and 2/ code legends; box 23
+   lists planting patterns, notes and assignment warnings. "FARM n - SHEET X OF Y" is numbered
+   per farm. Codes: status `I` (planted / cover / established hay or pasture), `D` (second
+   crop), `P`/`DP` prevented, `F`/`DF` failed, `V` volunteer; S, R, E and IF/IP/SF are not
+   derived yet. Intended use: GR, SL, FG (hay/forage), GZ (pasture/grazing), SD, GM, LS. The
+   CSV carries the same codes and the other producer's name and share in trailing columns.
+   Non-cropland rows do not appear here. Do not copy USDA agency header styling, Privacy Act or
+   non-discrimination text.
 2. **Reconciliation totals** — totals by crop/intended use and by farm/tract, plus total
    cropland reported. Hay and pasture without planting events are acreage/use, not “planted
    acreage.”
@@ -1229,9 +1246,9 @@ the current section, and `Page X of Y`. Continuation tables use explicit widths 
 cannot clip. Visually render the complete PDF after layout changes; checking only extracted text
 does not catch continuation-page clipping.
 
-Status presentation rules are reporting-specific: a dated crop row without an explicit status
-may display as `Planted`; undated hay/pasture cropland may display as `Existing stand`; all other
-undated cropland requires an explicit FSA status and produces a readiness error. A clean report
+Status rules are reporting-specific: a dated crop row without an explicit status prints status
+`I`; undated hay/pasture cropland prints `I` (established stand); all other undated cropland
+requires an explicit FSA status, prints a blank status, and produces a readiness error. A clean report
 still states that county FSA review is required. Type/variety appears in the PDF's Section 1
 as well as in the preview and CSV. The document is titled "FSA-578 Acreage Reporting Worksheet"
 everywhere. The Fall Production worksheet totals production per crop and unit

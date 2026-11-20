@@ -84,7 +84,7 @@ describe('exportFsa578WorksheetPdf (real renderer)', () => {
     const text = pdfText(doc);
 
     // Continuation-page header proves real autoTable pagination re-drew Section 1.
-    expect(text).toContain('SECTION 1 - CROPLAND REPORTING ROWS (continued)');
+    expect(text).toContain('SECTION 1 - REPORT OF ACREAGE (one sheet per FSA farm) (continued)');
 
     // Every page carries the numbered footer and the farm/crop-year identity.
     for (let page = 1; page <= pageCount; page += 1) {

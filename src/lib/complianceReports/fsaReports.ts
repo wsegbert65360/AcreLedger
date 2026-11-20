@@ -16,6 +16,7 @@ import { allocateProduction } from '../county/allocation';
 import { countyLabel } from '../county/resolve';
 import type { FieldCountyShares } from '../county/types';
 import { ACRELEDGER_CSV_LINE } from './pdfBranding';
+import { fsaIntendedUseCode, fsaPracticeCode, fsaStatusCode } from './fsa578FormLayout';
 
 /** Label for production whose physical county is not known. It is still counted in every total. */
 export const COUNTY_UNKNOWN_LABEL = 'County unknown';
@@ -44,6 +45,8 @@ export interface Fsa578ReportRow {
     intendedUse: string;
     irrigationCode: string;
     producerShare: string;
+    /** Field-level landlord; printed as producer key 2 on the FSA-578 layout. */
+    landlordName?: string;
     landUse: 'Cropland' | 'Non-cropland';
     cropStatus?: 'Planted' | 'Prevented Planting' | 'Failed' | 'Volunteer' | 'Cover Crop';
     cropSequence?: 'First Crop' | 'Second Crop';
@@ -435,6 +438,7 @@ export function buildFsa578Rows(
             intendedUse: r.intendedUse || field?.intendedUse || '',
             irrigationCode,
             producerShare: `${shareDisplay}%`,
+            landlordName: field?.landlordName?.trim() || '',
             landUse: 'Cropland' as const,
             cropStatus: r.cropStatus || 'Planted' as const,
             cropSequence: (r.cropSequence || 'First Crop') as PlantRecord['cropSequence'],
@@ -538,6 +542,7 @@ export function buildFsa578Rows(
                 intendedUse: field?.intendedUse?.trim() || '',
                 irrigationCode: irrigation === 'Irrigated' ? 'IR' : 'NI',
                 producerShare: `${String(roundTo(share, 2))}%`,
+                landlordName: field?.landlordName?.trim() || '',
                 landUse: 'Cropland' as const,
                 notes: fieldUseCrop
                     ? ''
@@ -694,6 +699,20 @@ export function validateFsa578Rows(rows: Fsa578ReportRow[]): Fsa578ValidationIss
     return issues;
 }
 
+/** FSA-578 form codes, same derivation as the PDF sheet (fsa578FormLayout). */
+function fsa578CsvCodes(row: Fsa578ReportRow): string[] {
+    if (row.landUse !== 'Cropland') return ['', '', '', '', ''];
+    const share = Number.parseFloat(row.producerShare.replace('%', ''));
+    const otherShare = Number.isFinite(share) && share < 100 ? roundTo(100 - share, 2).toFixed(2) : '';
+    return [
+        fsaPracticeCode(row),
+        fsaStatusCode(row),
+        fsaIntendedUseCode(row.intendedUse),
+        otherShare ? (row.landlordName?.trim() || 'Other producer (name not recorded)') : '',
+        otherShare,
+    ];
+}
+
 export function buildFsa578WorksheetCsv({
     metadata,
     rows,
@@ -734,6 +753,11 @@ export function buildFsa578WorksheetCsv({
         'Crop Status',
         'Crop Sequence',
         'Notes',
+        'FSA Practice Code',
+        'FSA Status Code',
+        'FSA Intended Use Code',
+        'Other Producer (Landlord)',
+        'Other Producer Share',
     ].map(sanitizeCsvValue).join(',');
 
     const dataRows = rows.map(row => [
@@ -755,6 +779,7 @@ export function buildFsa578WorksheetCsv({
         row.cropStatus || '',
         row.cropSequence || '',
         row.notes || '',
+        ...fsa578CsvCodes(row),
     ].map(sanitizeCsvValue).join(','));
 
     return [...titleRows, header, ...dataRows].join('\n');

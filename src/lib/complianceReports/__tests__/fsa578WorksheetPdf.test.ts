@@ -53,7 +53,7 @@ describe('exportFsa578WorksheetPdf', () => {
     generate([row({})]);
 
     const text = pdf.allText();
-    const section1 = text.indexOf('SECTION 1 - CROPLAND REPORTING ROWS');
+    const section1 = text.indexOf('SECTION 1 - REPORT OF ACREAGE');
     const section2 = text.indexOf('SECTION 2 - RECONCILIATION TOTALS');
     const section3 = text.indexOf('SECTION 3 - ITEMS TO REVIEW BEFORE FSA ENTRY');
     const section4 = text.indexOf('SECTION 4 - ALL CLU REFERENCE');
@@ -64,8 +64,13 @@ describe('exportFsa578WorksheetPdf', () => {
 
     const tables = pdf.autoTables();
     expect(tables).toHaveLength(5);
-    // Section 1: cropland entry table.
-    expect(tables[0].head[0]).toEqual(['FARM', 'TRACT', 'CLU', 'FIELD', 'CROP', 'TYPE / VARIETY', 'STATUS', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE', 'SEQ', 'PRACTICE / NOTES']);
+    // Section 1: Report of Acreage sheet, numbered like FSA-578 boxes 12-19.
+    const labels = (tables[0].head[0] as Array<{ content: string }>).map(cell => cell.content);
+    expect(labels).toEqual([
+      '12\nTRACT NO.', '13\nFIELD NO.', '14\nCROP OR LAND USE', '15\nPRAC-\nTICE 1/', '16\nSTATUS 2/',
+      '17. CROP OR LAND USE SUMMARY (acres)', '18\nKEY', '19\nSHARE',
+    ]);
+    expect(tables[0].head[1]).toEqual(['CORN']);
     // Section 2: crop/use totals then farm/tract totals.
     expect(tables[1].head[0]).toEqual(['CROP / INTENDED USE', 'REPORTABLE ACRES']);
     expect(tables[2].head[0]).toEqual(['FARM / TRACT', 'CROPLAND ACRES']);
@@ -82,7 +87,7 @@ describe('exportFsa578WorksheetPdf', () => {
     const tables = pdf.autoTables();
     // Section 1 entry table: only the cropland CLU.
     expect(tables[0].body).toHaveLength(1);
-    expect(tables[0].body[0][2]).toBe('1');
+    expect(tables[0].body[0][1]).toBe('1');
 
     // Section 4 appendix: both CLUs, non-cropland explicitly reference-only.
     expect(tables[4].body).toHaveLength(2);
@@ -209,14 +214,56 @@ describe('exportFsa578WorksheetPdf', () => {
     expect(tables[2].body).toContainEqual(['Farm 100 / Tract 200', 120]);
   });
 
-  it('displays dated rows without explicit status as Planted and undated hay as Existing stand', () => {
+  it('prints FSA status I for dated rows and for undated hay, with hay in its own crop column', () => {
     const dated = row({ id: 'row-1' });
     const hay = row({ id: 'row-2', fieldNumber: '2', date: '', crop: 'Hay', intendedUse: 'Hay' });
     generate([dated, hay]);
 
-    const entryBody = pdf.autoTables()[0].body;
-    expect(entryBody[0][6]).toBe('Planted');
-    expect(entryBody[1][6]).toBe('Existing stand');
+    const sheet = pdf.autoTables()[0];
+    expect(sheet.head[1]).toEqual(['CORN', 'HAY']);
+    expect(sheet.body[0].slice(3, 7)).toEqual(['N', 'I', '80.00', '']);
+    expect(sheet.body[1].slice(3, 7)).toEqual(['N', 'I', '', '80.00']);
+    expect(sheet.body[1][2]).toBe('Hay P1197 / FG\nNorth 80');
+  });
+
+  it('adds a producer key line for a landlord share and totals box 20 per crop', () => {
+    generate([
+      row({ id: 'a', producerShare: '66.67%', landlordName: 'Smith Trust' }),
+      row({ id: 'b', fieldNumber: '2', crop: 'Soybeans', acreage: 40, cropSequence: 'Second Crop', cropStatus: 'Planted' }),
+    ]);
+
+    const sheet = pdf.autoTables()[0];
+    expect(sheet.body).toHaveLength(3);
+    expect(sheet.body[0].slice(-2)).toEqual(['1', '66.67']);
+    expect(sheet.body[1]).toEqual(['', '', '', '', '', '', '', '2', '33.33']);
+    expect(sheet.body[2][4]).toBe('D');
+    const foot = sheet.foot as unknown[][];
+    expect((foot[0][0] as { content: string }).content).toBe('20. TOTAL OPERATOR REPORT');
+    expect(foot[0].slice(1, 3)).toEqual(['80.00', '40.00']);
+    expect((foot[1][0] as { content: string }).content).toBe('21. TOTAL DETERMINED ACREAGE (FSA use)');
+
+    const text = pdf.allText();
+    expect(text).toContain('Smith Trust');
+    expect(text).toContain('22. CERTIFICATION - Worksheet only.');
+    expect(text).toContain('23. REMARKS');
+    expect(text).toContain('FARM 100 - SHEET 1 OF 1');
+  });
+
+  it('prints one sheet per FSA farm and a final unassigned sheet', () => {
+    generate([
+      row({ id: 'u', farmNumber: '', tractNumber: '', fieldName: 'New Ground' }),
+      row({ id: 'f2', farmNumber: '2050' }),
+      row({ id: 'f1', farmNumber: '100' }),
+    ]);
+
+    const tables = pdf.autoTables();
+    expect(tables).toHaveLength(7);
+    const text = pdf.allText();
+    expect(text.indexOf('FARM 100 - SHEET 1 OF 1')).toBeGreaterThanOrEqual(0);
+    expect(text).toContain('FARM 2050 - SHEET 1 OF 1');
+    expect(text).toContain('NO FSA FARM / TRACT ASSIGNED - SHEET 1 OF 1');
+    expect(text).toContain('Assign them to an FSA farm/tract before your office visit.');
+    expect(tables[2].body[0][2]).toBe('Corn P1197 / GR\nNew Ground - planted 04-15');
   });
 
   it('saves the worksheet with the requested filename', () => {
