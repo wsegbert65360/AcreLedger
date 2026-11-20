@@ -1,4 +1,4 @@
--- Rollback for 20261120013000_fsa578_status_code_and_operator.sql.
+-- Rollback for 20261120015634_fsa578_status_code_and_operator.sql.
 -- Drops the manual FSA-578 status codes and operator name/address (data loss for those columns only).
 BEGIN;
 

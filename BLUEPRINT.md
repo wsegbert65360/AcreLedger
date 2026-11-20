@@ -316,7 +316,7 @@ Single planting event on a field. Core FSA 578 source record.
 `cropStatus` supports `Planted`, `Prevented Planting`, `Failed`, `Volunteer`, and
 `Cover Crop`. `cropSequence` distinguishes first and second crop. `plantingPattern`
 stores optional FSA practice/pattern notes. `fsaStatusCode` (`plant_records.fsa_status_code`,
-migration `20261120013000`) is an optional manual FSA-578 box 16 code (`FSA_STATUS_CODES`:
+migration `20261120015634`) is an optional manual FSA-578 box 16 code (`FSA_STATUS_CODES`:
 I, P, F, S, D, R, V, E, IF, IP, SF, DF, DP; DB CHECK enforces the list). Null means "Auto":
 the worksheet derives the code from `cropStatus`/`cropSequence`. `PlantModal` shows it as
 "578 STATUS CODE" with an "Auto (X)" default.

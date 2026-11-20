@@ -1,6 +1,6 @@
 -- FSA-578 worksheet: manual box 16 status code on plantings, and the operator
 -- name/address printed in box 5. Both are optional and nullable; existing rows
--- are unchanged. Rollback: supabase/rollbacks/20261120013000_fsa578_status_code_and_operator_rollback.sql
+-- are unchanged. Rollback: supabase/rollbacks/20261120015634_fsa578_status_code_and_operator_rollback.sql
 BEGIN;
 
 ALTER TABLE public.plant_records
