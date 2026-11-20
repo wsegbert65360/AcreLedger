@@ -40,6 +40,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 
 ## Git Remotes and Push Hygiene
 
+- Default workflow: commit and `git push origin main` directly. The owner's account bypasses the GitHub `main` ruleset, so one push lands on GitHub, GitLab and Codeberg together and the nightly sees matching heads. GitHub Actions still runs on the push. Open a pull request only when the owner asks for one.
 - Remote topology: `origin` fetches from GitLab and carries **three push URLs** (GitLab, Codeberg, GitHub). A single `git push origin main` fans out to all three remotes at once — do not push each remote separately. The dedicated `github` and `codeberg` remotes exist for fetching and verifying individual hosts.
 - Before pushing: `git fetch --all` and compare heads. `main` legitimately gains commits from other machines, GitHub PR merges (which land on GitHub first), and agent sessions. If a remote is ahead, fast-forward, or rebuild on the remote head and cherry-pick only the novel commits; never force-push `main`.
 - After pushing: verify every remote head (`git ls-remote <remote> main` for each of `github`, `codeberg`, `origin`) reports the same hash. All three must match before the push is done — mandatory for CI/CD changes, because the nightly GitLab job requires its main commit to match GitHub before requesting CodeMagic builds.
