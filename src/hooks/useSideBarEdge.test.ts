@@ -39,4 +39,14 @@ describe('sideBarEdgeFor', () => {
   it('ignores insets too small to be a reserved strip', () => {
     expect(sideBarEdgeFor({ top: 0, right: 8, bottom: 0, left: 0 }, 600)).toBeNull();
   });
+
+  it('keeps the bottom bar when a one-sided strip is too narrow for the rail', () => {
+    // e.g. an Android phone in landscape with its camera cutout on one side
+    expect(sideBarEdgeFor({ top: 0, right: 0, bottom: 0, left: 48 }, 780)).toBeNull();
+    expect(sideBarEdgeFor({ top: 0, right: 63, bottom: 0, left: 0 }, 780)).toBeNull();
+  });
+
+  it('uses the rail once the strip can hold it', () => {
+    expect(sideBarEdgeFor({ top: 0, right: 64, bottom: 0, left: 0 }, 780)).toBe('right');
+  });
 });

@@ -11,6 +11,12 @@ export interface SafeAreaInsets {
 
 /** Insets smaller than this are rounding, not a strip reserved for system controls. */
 const MIN_STRIP_PX = 20;
+/**
+ * A side strip must be at least this wide to hold the tab rail (48px buttons, 6px padding,
+ * 1px border each side = 62px). iPhone Duo's strip is 84px. Narrower one-sided insets, such as
+ * an Android phone in landscape with its camera cutout on one side, keep the bottom bar.
+ */
+const MIN_RAIL_STRIP_PX = 64;
 /** At this width and above, the desktop Sidebar replaces the tab bar. */
 const DESKTOP_MIN_WIDTH = 1024;
 /** WebKit can report new insets a moment after the resize event, so check again. */
@@ -26,8 +32,8 @@ export function sideBarEdgeFor(insets: SafeAreaInsets, viewportWidth: number): S
   if (viewportWidth >= DESKTOP_MIN_WIDTH || insets.top >= MIN_STRIP_PX) return null;
   const right = insets.right >= MIN_STRIP_PX;
   const left = insets.left >= MIN_STRIP_PX;
-  if (right && !left) return 'right';
-  if (left && !right) return 'left';
+  if (right && !left) return insets.right >= MIN_RAIL_STRIP_PX ? 'right' : null;
+  if (left && !right) return insets.left >= MIN_RAIL_STRIP_PX ? 'left' : null;
   return null;
 }
 
