@@ -456,6 +456,7 @@ export default function Reports() {
         },
         rows: reportRows,
         issues,
+        counties: countyContext,
         fileName: `FSA_578_Worksheet_${viewingSeason}_${toLocalIsoDate(Date.now())}.pdf`,
       });
     }, 'FSA planting PDF');
@@ -796,7 +797,7 @@ export default function Reports() {
                 operatorAddress: fsaOperator.address || undefined,
                 cropYear: viewingSeason,
                 reportDate: toLocalIsoDate(Date.now()),
-              }), 'FSA-578 worksheet data')}
+              }, countyContext), 'FSA-578 worksheet data')}
               onExportPdf={handleExportFsaPlantPdf}
               onIssueAction={handleIssueAction}
             />,

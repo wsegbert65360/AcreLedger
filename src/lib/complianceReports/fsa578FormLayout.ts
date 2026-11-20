@@ -1,5 +1,21 @@
 import { roundTo } from '@/utils/numbers';
-import type { Fsa578ReportRow } from './fsaReports';
+import type { Fsa578ReportRow, FsaFallCountyContext } from './fsaReports';
+
+/**
+ * Physical county label(s) for a field from saved county assignments, e.g.
+ * "Henry, MO" or "Henry, MO 60% / Benton, MO 40%". Empty when unknown.
+ */
+export function fsa578CountyLabel(fieldId: string, counties?: FsaFallCountyContext): string {
+  if (!counties) return '';
+  const shares = counties.sharesForField(fieldId).shares.filter(share => share.countyName);
+  if (shares.length === 0) return '';
+  const name = (share: typeof shares[number]) => [share.countyName, share.stateAbbr].filter(Boolean).join(', ');
+  if (shares.length === 1) return name(shares[0]);
+  return [...shares]
+    .sort((a, b) => b.fraction - a.fraction)
+    .map(share => `${name(share)} ${Math.round(share.fraction * 100)}%`)
+    .join(' / ');
+}
 
 /**
  * Same word match as `isEstablishedForageLabel` in fsaReports.ts. Kept local so
@@ -60,6 +76,8 @@ export interface Fsa578FormSheet {
   totals: number[];
   /** Box 23 remarks: notes, planting patterns and assignment warnings. */
   remarks: string[];
+  /** Physical counties of this farm's cropland ("Henry, MO"), most acres first. Empty when unknown. */
+  counties: string[];
 }
 
 /** Box 15 practice: I irrigated, N non-irrigated. */
@@ -148,7 +166,23 @@ function formatPlanted(date: string): string {
   return match ? `planted ${match[1]}-${match[2]}` : '';
 }
 
-function buildSheet(farmNumber: string, rows: Fsa578ReportRow[], allFarms: string[]): Fsa578FormSheet {
+function sheetCounties(cropland: Fsa578ReportRow[], counties?: FsaFallCountyContext): string[] {
+  if (!counties) return [];
+  const acresByCounty = new Map<string, number>();
+  const seenFields = new Set<string>();
+  cropland.forEach(row => {
+    if (seenFields.has(row.fieldId)) return;
+    seenFields.add(row.fieldId);
+    counties.sharesForField(row.fieldId).shares.forEach(share => {
+      if (!share.countyName) return;
+      const label = [share.countyName, share.stateAbbr].filter(Boolean).join(', ');
+      acresByCounty.set(label, (acresByCounty.get(label) || 0) + Math.max(row.acreage, 0.0001) * share.fraction);
+    });
+  });
+  return [...acresByCounty.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([label]) => label);
+}
+
+function buildSheet(farmNumber: string, rows: Fsa578ReportRow[], allFarms: string[], counties?: FsaFallCountyContext): Fsa578FormSheet {
   const unassigned = !farmNumber;
   const cropland = rows.filter(row => row.landUse === 'Cropland');
 
@@ -232,6 +266,7 @@ function buildSheet(farmNumber: string, rows: Fsa578ReportRow[], allFarms: strin
     lines,
     totals: totals.map(total => roundTo(total, 2)),
     remarks,
+    counties: sheetCounties(cropland, counties),
   };
 }
 
@@ -240,7 +275,7 @@ function buildSheet(farmNumber: string, rows: Fsa578ReportRow[], allFarms: strin
  * farm number in a final UNASSIGNED sheet. Sheets with no cropland rows are
  * skipped (their CLUs stay in Section 4).
  */
-export function buildFsa578FormSheets(rows: Fsa578ReportRow[]): Fsa578FormSheet[] {
+export function buildFsa578FormSheets(rows: Fsa578ReportRow[], counties?: FsaFallCountyContext): Fsa578FormSheet[] {
   const byFarm = new Map<string, Fsa578ReportRow[]>();
   rows.forEach(row => {
     const farm = row.farmNumber.trim();
@@ -251,6 +286,6 @@ export function buildFsa578FormSheets(rows: Fsa578ReportRow[]): Fsa578FormSheet[
   const ordered = byFarm.has('') ? [...farms, ''] : farms;
 
   return ordered
-    .map(farm => buildSheet(farm, byFarm.get(farm) || [], farms))
+    .map(farm => buildSheet(farm, byFarm.get(farm) || [], farms, counties))
     .filter(sheet => sheet.lines.length > 0);
 }

@@ -1227,8 +1227,10 @@ The PDF has four canonical sections:
    number in numeric order, then a final "No FSA farm / tract assigned" sheet for fields with no
    farm number. View-model: `buildFsa578FormSheets` in `fsa578FormLayout.ts` (pure). Each sheet
    has boxes 1-4 (farm no., farmland and cropland as unique-CLU totals, program year), 5
-   (operator name and address from `farms.fsa_operator_*`, else blank lines; county blank until
-   county assignments are wired in), 6 (other farms in the
+   (operator name and address from `farms.fsa_operator_*`, else blank lines; County/State lists
+   the farm's physical counties from saved `county_assignments` through the same
+   `buildCountyReportContext` the Fall report uses, most acres first, blank when unknown; the CSV
+   adds a per-row Physical County column with split shares), 6 (other farms in the
    report), 7-10 (other producers: one key per landlord name on that farm; ID number is always
    blank and is never stored or printed), 11 (blank), then the line table: 12 tract, 13 CLU,
    14 crop + type/variety + intended-use code with field name and planting date, 15 practice

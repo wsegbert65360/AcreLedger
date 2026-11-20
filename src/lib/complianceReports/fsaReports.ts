@@ -17,7 +17,7 @@ import { allocateProduction } from '../county/allocation';
 import { countyLabel } from '../county/resolve';
 import type { FieldCountyShares } from '../county/types';
 import { ACRELEDGER_CSV_LINE } from './pdfBranding';
-import { fsaIntendedUseCode, fsaPracticeCode, fsaStatusCode } from './fsa578FormLayout';
+import { fsa578CountyLabel, fsaIntendedUseCode, fsaPracticeCode, fsaStatusCode } from './fsa578FormLayout';
 
 /** Label for production whose physical county is not known. It is still counted in every total. */
 export const COUNTY_UNKNOWN_LABEL = 'County unknown';
@@ -724,9 +724,12 @@ function fsa578CsvCodes(row: Fsa578ReportRow): string[] {
 export function buildFsa578WorksheetCsv({
     metadata,
     rows,
+    counties,
 }: {
     metadata: Fsa578WorksheetMetadata;
     rows: Fsa578ReportRow[];
+    /** Saved county assignments; adds each row's physical county. */
+    counties?: FsaFallCountyContext;
 }): string {
     const titleRows = [
         [sanitizeCsvValue('FSA-578 Acreage Reporting Worksheet')],
@@ -767,6 +770,7 @@ export function buildFsa578WorksheetCsv({
         'FSA Intended Use Code',
         'Other Producer (Landlord)',
         'Other Producer Share',
+        'Physical County',
     ].map(sanitizeCsvValue).join(',');
 
     const dataRows = rows.map(row => [
@@ -789,6 +793,7 @@ export function buildFsa578WorksheetCsv({
         row.cropSequence || '',
         row.notes || '',
         ...fsa578CsvCodes(row),
+        fsa578CountyLabel(row.fieldId, counties),
     ].map(sanitizeCsvValue).join(','));
 
     return [...titleRows, header, ...dataRows].join('\n');
@@ -1197,6 +1202,7 @@ export async function exportFsa578Data(
     cluAssignments: FieldCluAssignment[] = [],
     fsaTracts: FsaTractImport[] = [],
     metadata?: Partial<Fsa578WorksheetMetadata>,
+    counties?: FsaFallCountyContext,
 ): Promise<void> {
     const today = toLocalIsoDate(Date.now());
     const rows = buildFsa578Rows(plantRecords, fields, cluAssignments, fsaTracts);
@@ -1205,12 +1211,14 @@ export async function exportFsa578Data(
         metadata: {
             farmName: farmNameForCsv(metadata?.farmName),
             producerName: metadata?.producerName,
+            operatorAddress: metadata?.operatorAddress,
             county: metadata?.county,
             state: metadata?.state,
             cropYear,
             reportDate: metadata?.reportDate || today,
         },
         rows,
+        counties,
     });
 
     await downloadFile(csvContent, `FSA_578_Worksheet_${cropYear}_${today}.csv`, 'text/csv');

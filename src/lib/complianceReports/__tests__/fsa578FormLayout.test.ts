@@ -3,6 +3,7 @@ import type { Fsa578ReportRow } from '../fsaReports';
 import {
   FSA578_OTHER_CROP_COLUMN,
   buildFsa578FormSheets,
+  fsa578CountyLabel,
   derivedFsaStatusCode,
   fsaIntendedUseCode,
   fsaPracticeCode,
@@ -104,6 +105,30 @@ describe('buildFsa578FormSheets', () => {
     const extra = sheet.lines.filter(line => !line.primary);
     expect(extra.map(line => [line.key, line.share, line.acres])).toEqual([[2, '50.00', null], [2, '25.00', null], [3, '40.00', null]]);
     expect(sheet.totals).toEqual([240]);
+  });
+
+  it('lists physical counties per farm, most acres first, and labels split fields', () => {
+    const share = (countyName: string | null, fraction: number) => ({ countyFips: countyName ? '29083' : null, countyName, stateAbbr: countyName ? 'MO' : null, fraction });
+    const counties = {
+      sharesForField: (fieldId: string) => ({
+        basis: 'field-geometry' as const,
+        estimated: fieldId === 'split',
+        needsReview: false,
+        shares: fieldId === 'split' ? [share('Benton', 0.4), share('Henry', 0.6)]
+          : fieldId === 'unknown' ? [share(null, 1)]
+          : [share('Benton', 1)],
+      }),
+    };
+    const [sheet] = buildFsa578FormSheets([
+      row({ id: 'a', fieldId: 'split', acreage: 100 }),
+      row({ id: 'b', fieldId: 'whole', fieldNumber: '2', acreage: 10 }),
+      row({ id: 'c', fieldId: 'unknown', fieldNumber: '3', acreage: 5 }),
+    ], counties);
+    expect(sheet.counties).toEqual(['Henry, MO', 'Benton, MO']);
+    expect(fsa578CountyLabel('split', counties)).toBe('Henry, MO 60% / Benton, MO 40%');
+    expect(fsa578CountyLabel('unknown', counties)).toBe('');
+    expect(fsa578CountyLabel('whole')).toBe('');
+    expect(buildFsa578FormSheets([row({})])[0].counties).toEqual([]);
   });
 
   it('folds crops past the column limit into OTHER', () => {

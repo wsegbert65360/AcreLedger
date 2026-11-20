@@ -8,9 +8,11 @@ import { isSupplementalCrop } from './fsaReports';
 import { buildFsa578FormSheets } from './fsa578FormLayout';
 import type { Fsa578FormSheet } from './fsa578FormLayout';
 import { REPORT_PAGE_FORMAT, drawAcreLedgerNote, drawPageFooters } from './pdfBranding';
-import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata } from './fsaReports';
+import type { Fsa578ReportRow, Fsa578ValidationIssue, Fsa578WorksheetMetadata, FsaFallCountyContext } from './fsaReports';
 
 interface Fsa578PdfOptions {
+  /** Saved county assignments; box 5 prints each farm's physical counties. */
+  counties?: FsaFallCountyContext;
   metadata: Fsa578WorksheetMetadata;
   rows: Fsa578ReportRow[];
   issues: Fsa578ValidationIssue[];
@@ -118,7 +120,9 @@ function drawSheetHeader(doc: jsPDF, metadata: Fsa578WorksheetMetadata, sheet: F
   drawBox(doc, 111, top, 32, 10, '4. PROGRAM YR.', String(metadata.cropYear));
 
   const operator = metadata.producerName?.trim();
-  const county = [metadata.county, metadata.state].filter(Boolean).join(', ');
+  const county = sheet.counties.length
+    ? (doc.splitTextToSize(sheet.counties.join('; '), 70) as string[])[0]
+    : [metadata.county, metadata.state].filter(Boolean).join(', ');
   const addressLines = (metadata.operatorAddress || '')
     .split(/\s*\n\s*/)
     .map(line => line.trim())
@@ -336,7 +340,7 @@ function drawReportOfAcreageSheets(doc: jsPDF, metadata: Fsa578WorksheetMetadata
   doc.setPage(doc.getNumberOfPages());
 }
 
-export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: Fsa578PdfOptions): void {
+export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName, counties }: Fsa578PdfOptions): void {
   const doc = new jsPDF({ orientation: 'landscape', format: REPORT_PAGE_FORMAT });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -365,7 +369,7 @@ export function exportFsa578WorksheetPdf({ metadata, rows, issues, fileName }: F
     alternateRowStyles: { fillColor: [244, 247, 242] as [number, number, number] },
   };
 
-  drawReportOfAcreageSheets(doc, metadata, buildFsa578FormSheets(rows));
+  drawReportOfAcreageSheets(doc, metadata, buildFsa578FormSheets(rows, counties));
 
   doc.addPage(REPORT_PAGE_FORMAT, 'landscape');
   const reconciliationStartPage = doc.getNumberOfPages();

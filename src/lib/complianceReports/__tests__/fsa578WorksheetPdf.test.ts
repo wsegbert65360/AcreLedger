@@ -262,6 +262,24 @@ describe('exportFsa578WorksheetPdf', () => {
     expect(pdf.autoTables()[0].body[0][4]).toBe('R');
   });
 
+  it('prints the farm physical county from saved county assignments in box 5', () => {
+    exportFsa578WorksheetPdf({
+      metadata,
+      rows: [row({})],
+      issues: [],
+      fileName: 'fsa578.pdf',
+      counties: {
+        sharesForField: () => ({
+          basis: 'field-geometry',
+          estimated: false,
+          needsReview: false,
+          shares: [{ countyFips: '29083', countyName: 'Henry', stateAbbr: 'MO', fraction: 1 }],
+        }),
+      },
+    });
+    expect(pdf.allText()).toContain('County/State: Henry, MO');
+  });
+
   it('prints one sheet per FSA farm and a final unassigned sheet', () => {
     generate([
       row({ id: 'u', farmNumber: '', tractNumber: '', fieldName: 'New Ground' }),
