@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { useFarm } from '@/store/farmStore';
 import { useEntitlement } from '@/hooks/useEntitlement';
+import { useFsaOperator } from '@/hooks/useFsaOperator';
 import { isFreeTierLocked, isPaidReport, type Entitlement } from '@/lib/entitlements';
 import { withAuthorizedReportExport } from '@/lib/authorizeReportExport';
 import { supabase } from '@/lib/supabase';
@@ -138,6 +139,7 @@ export default function Reports() {
     session,
     farm_id,
   } = useFarm();
+  const { operator: fsaOperator } = useFsaOperator();
 
   const { preferences } = useAppPreferences(session?.user?.id);
   const complianceProfile = defaultProfileForCountry(preferences.country);
@@ -447,6 +449,8 @@ export default function Reports() {
       exportFsa578WorksheetPdf({
         metadata: {
           farmName: knownFarmName(farmName),
+          producerName: fsaOperator.name || undefined,
+          operatorAddress: fsaOperator.address || undefined,
           cropYear: viewingSeason,
           reportDate,
         },
@@ -788,6 +792,8 @@ export default function Reports() {
               reportDate={reportDate}
               onExportCsv={() => runTrackedExport('fsa-plant', async () => exportFsa578Data(plantRecords, fields, cluAssignments, await getMergedFsaTractsForExport(), {
                 farmName: knownFarmName(farmName),
+                producerName: fsaOperator.name || undefined,
+                operatorAddress: fsaOperator.address || undefined,
                 cropYear: viewingSeason,
                 reportDate: toLocalIsoDate(Date.now()),
               }), 'FSA-578 worksheet data')}

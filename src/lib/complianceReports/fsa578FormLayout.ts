@@ -70,10 +70,17 @@ export function fsaPracticeCode(row: Pick<Fsa578ReportRow, 'irrigationCode'>): s
 }
 
 /**
- * Box 16 crop status from the recorded plant status and crop sequence.
- * S, R, E and IF/IP/SF are not derivable from records and stay blank for now.
+ * Box 16 crop status. A code the farmer picked on the planting wins;
+ * otherwise it is derived from the recorded plant status and crop sequence.
+ * S, R, E and IF/IP/SF are only available as a manual choice.
  */
-export function fsaStatusCode(row: Pick<Fsa578ReportRow, 'cropStatus' | 'cropSequence' | 'date' | 'crop' | 'intendedUse'>): string {
+export function fsaStatusCode(row: Pick<Fsa578ReportRow, 'cropStatus' | 'cropSequence' | 'date' | 'crop' | 'intendedUse' | 'fsaStatusOverride'>): string {
+  if (row.fsaStatusOverride) return row.fsaStatusOverride;
+  return derivedFsaStatusCode(row);
+}
+
+/** Box 16 code derived from records only, ignoring any manual choice. */
+export function derivedFsaStatusCode(row: Pick<Fsa578ReportRow, 'cropStatus' | 'cropSequence' | 'date' | 'crop' | 'intendedUse'>): string {
   const second = row.cropSequence === 'Second Crop';
   switch (row.cropStatus) {
     case 'Prevented Planting':

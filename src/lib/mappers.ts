@@ -2,7 +2,8 @@ import {
     PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
     GrainMovement, Field, Bin, SavedSeed, SprayRecipe, FertilizerApplication,
     SprayRecipeProduct, FertilizerRecipe, TillageRecord,
-    WorkRequest, WorkRequestProduct, WorkRequestFieldEntry, WorkRequestStatus, WorkType
+    WorkRequest, WorkRequestProduct, WorkRequestFieldEntry, WorkRequestStatus, WorkType,
+    parseFsaStatusCode,
 } from '../types/farm';
 import {
     PlantRecordRow, SprayRecordRow, HarvestRecordRow, HayHarvestRow, CustomSprayRecordRow,
@@ -218,6 +219,7 @@ export const mapPlantFromDb = (db: PlantRecordRow): PlantRecord => ({
     irrigationPractice: (db.irrigation_practice || 'Non-Irrigated') as 'Irrigated' | 'Non-Irrigated',
     cropStatus: (db.crop_status || 'Planted') as PlantRecord['cropStatus'],
     cropSequence: (db.crop_sequence || 'First Crop') as PlantRecord['cropSequence'],
+    fsaStatusCode: parseFsaStatusCode(db.fsa_status_code),
     plantingPattern: safeStr(db.planting_pattern) || undefined,
     seasonYear: safeNum(db.season_year, new Date().getFullYear()),
     timestamp: safeTimestamp(db.timestamp),
@@ -799,6 +801,7 @@ export const mapPlantToDb = (r: PlantRecord) => {
         irrigation_practice: r.irrigationPractice ?? null,
         crop_status: r.cropStatus ?? 'Planted',
         crop_sequence: r.cropSequence ?? 'First Crop',
+        fsa_status_code: r.fsaStatusCode ?? null,
         planting_pattern: r.plantingPattern ?? null,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),

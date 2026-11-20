@@ -3,6 +3,7 @@ import type { Fsa578ReportRow } from '../fsaReports';
 import {
   FSA578_OTHER_CROP_COLUMN,
   buildFsa578FormSheets,
+  derivedFsaStatusCode,
   fsaIntendedUseCode,
   fsaPracticeCode,
   fsaStatusCode,
@@ -45,6 +46,13 @@ describe('FSA-578 form codes', () => {
     expect(fsaStatusCode({ ...base, cropStatus: 'Volunteer' })).toBe('V');
     expect(fsaStatusCode({ ...base })).toBe('');
     expect(fsaStatusCode({ date: '', crop: 'Pasture', intendedUse: 'Grazing' })).toBe('I');
+  });
+
+  it('uses the manual status code over the derived one', () => {
+    const base = { date: '2026-05-01', crop: 'Soybeans', intendedUse: 'Grain', cropStatus: 'Planted' as const, cropSequence: 'Second Crop' as const };
+    expect(fsaStatusCode(base)).toBe('D');
+    expect(fsaStatusCode({ ...base, fsaStatusOverride: 'S' })).toBe('S');
+    expect(derivedFsaStatusCode({ ...base })).toBe('D');
   });
 
   it('maps intended use', () => {

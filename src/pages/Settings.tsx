@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Settings as SettingsIcon, Sprout, Database, User, CreditCard, Tractor, ChevronRight } from 'lucide-react';
 import FsaTractManager from '@/components/settings/FsaTractManager';
+import FsaOperatorManager from '@/components/settings/FsaOperatorManager';
 import SeedManager from '@/components/settings/SeedManager';
 import RecipeManager from '@/components/settings/RecipeManager';
 import FertilizerRecipeManager from '@/components/settings/FertilizerRecipeManager';
@@ -100,6 +101,7 @@ export default function Settings() {
                 <div className="space-y-6">
                   <RecipeManager />
                   <FsaTractManager />
+                  {preferences.country !== 'AU' && <FsaOperatorManager />}
                 </div>
               </div>
             </AccordionContent>

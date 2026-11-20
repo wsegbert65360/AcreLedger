@@ -5,6 +5,7 @@ import type { ReportReadinessIssue, ReportReadinessSummary } from '@/lib/reportR
 import type { ReportExportStatus } from '@/lib/reportExportHistory';
 import { complianceFarmSubtitle, farmNameForProse } from '@/lib/farmDisplayName';
 import { formatIsoDate } from '@/utils/dates';
+import { fsaStatusCode } from '@/lib/complianceReports/fsa578FormLayout';
 import { MobileReportExportPanel } from './MobileReportExportPanel';
 
 function fmtDate(d?: string): string {
@@ -59,7 +60,7 @@ export default function FsaPlantReport({
       <ReportTable
       title="FSA-578 Acreage Reporting Worksheet"
       subtitle={complianceFarmSubtitle(farmName, viewingSeason, reportDate)}
-      headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'SEQ', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS']}
+      headers={['FARM #', 'TRACT #', 'CLU/FIELD #', 'FIELD', 'LAND USE', 'CROP', 'SEQ', 'TYPE/VARIETY', 'PATTERN', 'ACRES', 'PLANT DATE', 'USE', 'IRR', 'SHARE %', 'STATUS', '578 CODE']}
       onExport={onExportCsv}
       onExportPdf={onExportPdf}
       exportLabel="CSV"
@@ -89,7 +90,7 @@ export default function FsaPlantReport({
     >
       {fsaPlantRows.length > 0 && fsaReadinessIssues.length > 0 && (
         <tr className="full-width-row print:hidden">
-          <td colSpan={15} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+          <td colSpan={16} className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
             <div className="font-bold uppercase tracking-wide mb-1">
               FSA-578 readiness check: {fsaReadinessErrors.length} errors, {fsaReadinessWarnings.length} warnings
             </div>
@@ -121,11 +122,12 @@ export default function FsaPlantReport({
           <td data-label="IRR" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.irrigationCode}</td>
           <td data-label="SHARE %" className="px-2 py-2 font-mono text-xs text-foreground text-right print:px-1 print:py-1">{row.producerShare}</td>
           <td data-label="STATUS" className="px-2 py-2 font-mono text-xs text-foreground print:px-1 print:py-1">{row.cropStatus || '-'}</td>
+          <td data-label="578 CODE" className="px-2 py-2 font-mono text-xs font-bold text-foreground print:px-1 print:py-1">{row.landUse === 'Cropland' ? (fsaStatusCode(row) || '-') : '-'}</td>
         </tr>
       ))}
       {fsaPlantRows.length === 0 && (
         <tr className="full-width-row">
-          <td colSpan={15} className="py-12 text-center text-muted-foreground text-xs">
+          <td colSpan={16} className="py-12 text-center text-muted-foreground text-xs">
             No planting or non-cropland CLU records to report for this season
           </td>
         </tr>

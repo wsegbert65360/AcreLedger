@@ -89,11 +89,23 @@ export interface PlantRecord {
   irrigationPractice?: 'Irrigated' | 'Non-Irrigated'; // FSA 578 mandatory: IR or NI
   cropStatus?: 'Planted' | 'Prevented Planting' | 'Failed' | 'Volunteer' | 'Cover Crop';
   cropSequence?: 'First Crop' | 'Second Crop';
+  /** Manual FSA-578 box 16 status code; overrides the code derived from cropStatus/cropSequence. */
+  fsaStatusCode?: FsaStatusCode;
   plantingPattern?: string;
   seasonYear: number;
   farm_id: string;
   deleted_at: string | null;
   memo?: string;
+}
+
+/** FSA-578 box 16 crop status codes (FSA-578 Manual 08-22-19, footnote 2/). */
+export const FSA_STATUS_CODES = ['I', 'P', 'F', 'S', 'D', 'R', 'V', 'E', 'IF', 'IP', 'SF', 'DF', 'DP'] as const;
+export type FsaStatusCode = typeof FSA_STATUS_CODES[number];
+
+export function parseFsaStatusCode(value: unknown): FsaStatusCode | undefined {
+  return typeof value === 'string' && (FSA_STATUS_CODES as readonly string[]).includes(value)
+    ? value as FsaStatusCode
+    : undefined;
 }
 
 export interface SprayRecord {

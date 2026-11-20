@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FSA_STATUS_CODES } from '../types/farm';
 
 const geoJsonPolygonSchema = z.object({
   type: z.literal('Polygon'),
@@ -95,6 +96,7 @@ export const plantRecordSchema = z.object({
   irrigationPractice: z.string().optional(),
   cropStatus: z.string().optional(),
   cropSequence: z.string().optional(),
+  fsaStatusCode: z.enum(FSA_STATUS_CODES).nullable().optional(),
   plantingPattern: z.string().optional(),
   seasonYear: z.number(),
   timestamp: z.number().optional(),

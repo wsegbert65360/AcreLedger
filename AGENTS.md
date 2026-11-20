@@ -15,11 +15,11 @@ Read this file first. Then open only the topic file in the [routing index](#rout
 
 Keep the five most recent substantive entries, newest first. Git holds the full history. Reasons are in [docs/decisions.md](./docs/decisions.md).
 
+- **2026-11-19** — FSA-578 worksheet Section 1 now follows the manual FSA-578 Report of Acreage: one sheet per FSA farm (unassigned fields last), boxes 1-23, practice/status/intended-use codes, crop columns with box 20 totals, landlord key lines. Plantings gain an optional manual 578 status code (`plant_records.fsa_status_code`) and farms an optional operator name/address (`farms.fsa_operator_*`, `set_farm_fsa_operator` RPC); migration `20261120013000` must be live before a build that contains them. See [docs/agents/fsa-clu.md](./docs/agents/fsa-clu.md).
 - **2026-11-19** — Physical county identification: field and CLU boundaries are intersected with Census counties, saved per farm (`county_assignments`, sync + offline), with manual corrections, a reviewed backfill, and county → farm → tract totals in the Fall FSA report (estimated and County unknown labeled). Notes are never used. See [docs/agents/county.md](./docs/agents/county.md).
 - **2026-11-17** — Farm Owner Summary PDF redesigned: per-crop tiles and tables with Share %, Your bu, season dates and variety; hay table; not-harvested list; owner sign-off. A Reports switch chooses the full report (condensed, grouped activity timeline) or the summary only. See [docs/agents/reports.md](./docs/agents/reports.md).
 - **2026-11-16** — Free tier enforcement is ON in production (`entitlement_config.mode = 'enforce'`, device limit off); the owner farm is complimentary. FSA/CLU data entry is free (`20261116120000_fsa_entry_free.sql`); Fall FSA and Hay Summary joined the Pro prepared reports. Onboarding: AU-pilot users must pick a region; completion needs exactly one profile row; completed users leave `/onboarding`. The tour blocks spotlight clicks and makes the app inert. Roll back enforcement with `update public.entitlement_config set mode = 'off', updated_at = now() where singleton = true;`. See [docs/agents/billing.md](./docs/agents/billing.md).
 - **2026-11-15** — Cattle is optional and off unless `farms.runs_cattle` is on. Groups, pasture moves, and head-count edits are free. Events, head transfers, and the cattle CSV export are Pro. See [docs/agents/cattle.md](./docs/agents/cattle.md).
-- **2026-11-14** — Harvest scale ticket is shown only for town loads, and a blank ticket is never a fall-worksheet warning.
 
 ## Contents
 

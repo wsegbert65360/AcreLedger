@@ -16,8 +16,29 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useFarm } from '@/store/farmStore';
-import { Field, PlantRecord } from '@/types/farm';
+import { FSA_STATUS_CODES, Field, PlantRecord } from '@/types/farm';
+import type { FsaStatusCode } from '@/types/farm';
+import { derivedFsaStatusCode } from '@/lib/complianceReports/fsa578FormLayout';
 import { compareWorkDateDesc, formatIsoDate, toLocalIsoDate } from '@/utils/dates';
+
+/** FSA-578 footnote 2/ labels for the box 16 override picker. */
+const FSA_STATUS_CODE_LABELS: Record<FsaStatusCode, string> = {
+  I: 'Initial',
+  P: 'Prevented',
+  F: 'Failed',
+  S: 'Subsequent crop',
+  D: 'Double crop',
+  R: 'Repeat',
+  V: 'Volunteer',
+  E: 'Experimental',
+  IF: 'Initial failed',
+  IP: 'Initial prevented',
+  SF: 'Subsequent failed',
+  DF: 'Double-cropped failed',
+  DP: 'Double-cropped prevented',
+};
+
+type FsaStatusChoice = FsaStatusCode | 'auto';
 
 const CROP_STATUS_OPTIONS: NonNullable<PlantRecord['cropStatus']>[] = [
   'Planted',
@@ -55,6 +76,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
   const [cropStatus, setCropStatus] = useState<NonNullable<PlantRecord['cropStatus']>>(initialData?.cropStatus || 'Planted');
   const [cropSequence, setCropSequence] = useState<NonNullable<PlantRecord['cropSequence']>>(initialData?.cropSequence || 'First Crop');
   const [plantingPattern, setPlantingPattern] = useState(initialData?.plantingPattern || '');
+  const [fsaStatusChoice, setFsaStatusChoice] = useState<FsaStatusChoice>(initialData?.fsaStatusCode || 'auto');
   const [plantDate, setPlantDate] = useState(initialData?.plantDate || toLocalIsoDate(Date.now()));
   const [acreage, setAcreageState] = useState((initialData?.acreage ?? displayFieldAcres).toString());
   const acreageEditedRef = useRef(false);
@@ -66,6 +88,13 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
   const [isSaving, setIsSaving] = useState(false);
   const [carryStatus, setCarryStatus] = useState<'hidden' | 'offered' | 'carried'>('hidden');
   const requiresSeedVariety = cropStatus !== 'Prevented Planting';
+  const autoFsaStatusCode = derivedFsaStatusCode({
+    cropStatus,
+    cropSequence: cropStatus === 'Planted' ? cropSequence : undefined,
+    date: plantDate,
+    crop,
+    intendedUse,
+  });
   const duplicatePlanting = useMemo(() => {
     const targetSeason = initialData && !isDuplicate ? initialData.seasonYear : viewingSeason;
 
@@ -120,6 +149,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setCropStatus(initialData.cropStatus || 'Planted');
       setCropSequence(initialData.cropSequence || 'First Crop');
       setPlantingPattern(initialData.plantingPattern || '');
+      setFsaStatusChoice(initialData.fsaStatusCode || 'auto');
       setPlantDate(isDuplicate ? toLocalIsoDate(Date.now()) : (initialData.plantDate || toLocalIsoDate(Date.now())));
       setAcreageState((initialData.acreage ?? displayFieldAcres).toString());
       setMemo(initialData.memo || '');
@@ -132,6 +162,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
       setCropStatus('Planted');
       setCropSequence('First Crop');
       setPlantingPattern('');
+      setFsaStatusChoice('auto');
       setPlantDate(toLocalIsoDate(Date.now()));
       setAcreageState(displayFieldAcres.toString());
       setMemo('');
@@ -196,6 +227,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
           irrigationPractice,
           cropStatus,
           cropSequence: cropStatus === 'Planted' ? cropSequence : undefined,
+          fsaStatusCode: fsaStatusChoice === 'auto' ? undefined : fsaStatusChoice,
           plantingPattern: plantingPattern.trim() || undefined,
           memo: memo.trim() || undefined,
         });
@@ -212,6 +244,7 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
           irrigationPractice,
           cropStatus,
           cropSequence: cropStatus === 'Planted' ? cropSequence : undefined,
+          fsaStatusCode: fsaStatusChoice === 'auto' ? undefined : fsaStatusChoice,
           plantingPattern: plantingPattern.trim() || undefined,
           memo: memo.trim() || undefined,
         });
@@ -446,6 +479,20 @@ export default function PlantModal({ field, open, onClose, initialData, mode = '
                 placeholder="Optional"
                 className="mt-1 bg-muted border-border text-foreground"
               />
+            </div>
+            <div>
+              <Label htmlFor="fsaStatusCodeSelect" className="text-muted-foreground font-mono text-xs">578 STATUS CODE</Label>
+              <Select value={fsaStatusChoice} onValueChange={(v: FsaStatusChoice) => setFsaStatusChoice(v)}>
+                <SelectTrigger id="fsaStatusCodeSelect" className="mt-1 bg-muted border-border text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto ({autoFsaStatusCode || 'blank'})</SelectItem>
+                  {FSA_STATUS_CODES.map(code => (
+                    <SelectItem key={code} value={code}>{code} - {FSA_STATUS_CODE_LABELS[code]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

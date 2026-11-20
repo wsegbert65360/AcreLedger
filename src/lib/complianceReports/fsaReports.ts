@@ -7,6 +7,7 @@ import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
 import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord, HayHarvestRecord } from '../../types/farm';
+import type { FsaStatusCode } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { getWorkDateMs, toLocalIsoDate } from '../../utils/dates';
 import { sanitizeCsvValue } from '../../utils/csv';
@@ -50,6 +51,8 @@ export interface Fsa578ReportRow {
     landUse: 'Cropland' | 'Non-cropland';
     cropStatus?: 'Planted' | 'Prevented Planting' | 'Failed' | 'Volunteer' | 'Cover Crop';
     cropSequence?: 'First Crop' | 'Second Crop';
+    /** Manual FSA-578 box 16 code from the planting; wins over the derived code. */
+    fsaStatusOverride?: FsaStatusCode;
     organicStatus?: 'Conventional' | 'Organic' | 'Transitioning';
     plantingPattern?: string;
     notes?: string;
@@ -58,6 +61,8 @@ export interface Fsa578ReportRow {
 export interface Fsa578WorksheetMetadata {
     farmName: string;
     producerName?: string;
+    /** Operator mailing address for FSA-578 box 5 (may span lines). */
+    operatorAddress?: string;
     county?: string;
     state?: string;
     cropYear: number;
@@ -239,6 +244,7 @@ function mergeCompatiblePlantRecords(records: PlantRecord[], fieldMap: Map<strin
             share,
             r.cropStatus || 'Planted',
             r.cropSequence || 'First Crop',
+            r.fsaStatusCode || '',
             r.plantingPattern || '',
         ].join('|');
 
@@ -283,6 +289,7 @@ function fsa578GroupKey(row: Fsa578ReportRow): string {
         row.producerShare,
         row.cropStatus || '',
         row.cropSequence || '',
+        row.fsaStatusOverride || '',
         row.plantingPattern || '',
         row.notes || '',
     ].join('|');
@@ -442,6 +449,7 @@ export function buildFsa578Rows(
             landUse: 'Cropland' as const,
             cropStatus: r.cropStatus || 'Planted' as const,
             cropSequence: (r.cropSequence || 'First Crop') as PlantRecord['cropSequence'],
+            fsaStatusOverride: r.fsaStatusCode,
             plantingPattern: r.plantingPattern || '',
             notes: '',
         };
@@ -727,6 +735,7 @@ export function buildFsa578WorksheetCsv({
         [],
         [sanitizeCsvValue('Farm Name'), sanitizeCsvValue(metadata.farmName)],
         [sanitizeCsvValue('Producer Name'), sanitizeCsvValue(metadata.producerName || '')],
+        [sanitizeCsvValue('Operator Address'), sanitizeCsvValue((metadata.operatorAddress || '').replace(/\s*\n\s*/g, ', '))],
         [sanitizeCsvValue('County'), sanitizeCsvValue(metadata.county || '')],
         [sanitizeCsvValue('State'), sanitizeCsvValue(metadata.state || '')],
         [sanitizeCsvValue('Crop Year'), sanitizeCsvValue(metadata.cropYear)],

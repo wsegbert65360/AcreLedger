@@ -311,11 +311,22 @@ Single planting event on a field. Core FSA 578 source record.
 { id, farm_id, fieldId, fieldName, crop, seedVariety, seedingRate, population,
   acreage, plantDate, timestamp, seasonYear, intendedUse, irrigationPractice,
   producerShare, fsaFarmNumber, fsaTractNumber, fsaFieldNumber,
-  cropStatus, cropSequence, plantingPattern, deleted_at }
+  cropStatus, cropSequence, fsaStatusCode, plantingPattern, deleted_at }
 ```
 `cropStatus` supports `Planted`, `Prevented Planting`, `Failed`, `Volunteer`, and
 `Cover Crop`. `cropSequence` distinguishes first and second crop. `plantingPattern`
-stores optional FSA practice/pattern notes.
+stores optional FSA practice/pattern notes. `fsaStatusCode` (`plant_records.fsa_status_code`,
+migration `20261120013000`) is an optional manual FSA-578 box 16 code (`FSA_STATUS_CODES`:
+I, P, F, S, D, R, V, E, IF, IP, SF, DF, DP; DB CHECK enforces the list). Null means "Auto":
+the worksheet derives the code from `cropStatus`/`cropSequence`. `PlantModal` shows it as
+"578 STATUS CODE" with an "Auto (X)" default.
+
+The FSA-578 operator name and mailing address (worksheet box 5) are optional
+`farms.fsa_operator_name` / `farms.fsa_operator_address`, written only through the
+`set_farm_fsa_operator(p_farm_id, p_name, p_address)` RPC (blank clears). Settings → Farm Data
+→ "FSA-578 operator" edits them (hidden for AU); `useFsaOperator` reads them fail-soft and
+caches them per farm. Saving needs a connection, like renaming the farm. Not in the customer
+backup.
 - **Acreage default**: `PlantModal`'s "Planted Acres" new-record default and its edit/duplicate fallback use `getDisplayFieldAcres(field, cluAssignments)` — the FSA crop acreage — never a raw `field.acreage` read, mirroring the spray treated-area default below. An edited-ref + CLU-hydration refresh effect preserves manual edits and stored values on edit/duplicate. Historical records were backfilled by migration `20260715130000_backfill_plant_acreage_to_fsa_acreage.sql`. The FSA-578 worksheet apportions this stored acreage across assigned CLUs for split/variety plantings; second-crop and failed/replant rows may repeat the full CLU acreage.
 
 ### SprayRecord (2026 Standards)
@@ -1216,7 +1227,8 @@ The PDF has four canonical sections:
    number in numeric order, then a final "No FSA farm / tract assigned" sheet for fields with no
    farm number. View-model: `buildFsa578FormSheets` in `fsa578FormLayout.ts` (pure). Each sheet
    has boxes 1-4 (farm no., farmland and cropland as unique-CLU totals, program year), 5
-   (operator name/address/county, blank lines until settings hold them), 6 (other farms in the
+   (operator name and address from `farms.fsa_operator_*`, else blank lines; county blank until
+   county assignments are wired in), 6 (other farms in the
    report), 7-10 (other producers: one key per landlord name on that farm; ID number is always
    blank and is never stored or printed), 11 (blank), then the line table: 12 tract, 13 CLU,
    14 crop + type/variety + intended-use code with field name and planting date, 15 practice
@@ -1226,9 +1238,9 @@ The PDF has four canonical sections:
    (determined acreage) is printed shaded and blank for FSA. Box 22 is a worksheet-only
    certification note with three signature/date slots and the 1/ and 2/ code legends; box 23
    lists planting patterns, notes and assignment warnings. "FARM n - SHEET X OF Y" is numbered
-   per farm. Codes: status `I` (planted / cover / established hay or pasture), `D` (second
-   crop), `P`/`DP` prevented, `F`/`DF` failed, `V` volunteer; S, R, E and IF/IP/SF are not
-   derived yet. Intended use: GR, SL, FG (hay/forage), GZ (pasture/grazing), SD, GM, LS. The
+   per farm. Codes: a planting's manual `fsaStatusCode` wins; otherwise status `I` (planted /
+   cover / established hay or pasture), `D` (second crop), `P`/`DP` prevented, `F`/`DF`
+   failed, `V` volunteer (S, R, E and IF/IP/SF only by manual choice). Intended use: GR, SL, FG (hay/forage), GZ (pasture/grazing), SD, GM, LS. The
    CSV carries the same codes and the other producer's name and share in trailing columns.
    Non-cropland rows do not appear here. Do not copy USDA agency header styling, Privacy Act or
    non-discrimination text.

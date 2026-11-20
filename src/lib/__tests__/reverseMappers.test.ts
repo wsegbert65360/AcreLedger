@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  mapFieldToDb, mapPlantToDb, mapSprayToDb, mapHarvestToDb,
+  mapFieldToDb, mapPlantToDb, mapPlantFromDb, mapSprayToDb, mapHarvestToDb,
   mapHayToDb, mapGrainToDb, mapBinToDb, mapSeedToDb,
   mapRecipeToDb, mapFertilizerRecipeToDb, mapFertilizerToDb,
   mapTillageToDb, mapFsaTractToDb, mapFieldCluAssignmentToDb
@@ -180,7 +180,16 @@ describe('Reverse mapper Zod schema validation', () => {
     expect(result.field_id).toBe('field-1');
     expect(result.crop_status).toBe('Cover Crop');
     expect(result.planting_pattern).toBe('Double crop');
+    expect(result.fsa_status_code).toBeNull();
     expect(result.deleted_at).toBeNull();
+  });
+
+  it('mapPlantToDb writes a manual FSA-578 status code and mapPlantFromDb reads only valid codes', () => {
+    expect(mapPlantToDb(makePlant({ fsaStatusCode: 'S' })).fsa_status_code).toBe('S');
+    expect(() => mapPlantToDb(makePlant({ fsaStatusCode: 'ZZ' as never }))).toThrow();
+    const row = { ...mapPlantToDb(makePlant({})), fsa_status_code: 'DF' };
+    expect(mapPlantFromDb(row as never).fsaStatusCode).toBe('DF');
+    expect(mapPlantFromDb({ ...row, fsa_status_code: 'bogus' } as never).fsaStatusCode).toBeUndefined();
   });
 
   it('mapSprayToDb passes Zod validation for valid spray record', () => {

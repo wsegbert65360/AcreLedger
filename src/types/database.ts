@@ -64,6 +64,7 @@ export interface PlantRecordRow {
     irrigation_practice?: string | null;
     crop_status?: string | null;
     crop_sequence?: string | null;
+    fsa_status_code?: string | null;
     planting_pattern?: string | null;
     season_year: number;
     timestamp: string;

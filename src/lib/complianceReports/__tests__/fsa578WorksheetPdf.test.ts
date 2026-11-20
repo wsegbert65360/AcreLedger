@@ -249,6 +249,19 @@ describe('exportFsa578WorksheetPdf', () => {
     expect(text).toContain('FARM 100 - SHEET 1 OF 1');
   });
 
+  it('prints the saved operator name and address in box 5', () => {
+    exportFsa578WorksheetPdf({
+      metadata: { ...metadata, producerName: 'William Egbert', operatorAddress: '123 County Rd\nClinton, MO 64735' },
+      rows: [row({ fsaStatusOverride: 'R' })],
+      issues: [],
+      fileName: 'fsa578.pdf',
+    });
+    const text = pdf.allText();
+    expect(text).toContain('William Egbert');
+    expect(text).toContain('123 County Rd, Clinton, MO 64735');
+    expect(pdf.autoTables()[0].body[0][4]).toBe('R');
+  });
+
   it('prints one sheet per FSA farm and a final unassigned sheet', () => {
     generate([
       row({ id: 'u', farmNumber: '', tractNumber: '', fieldName: 'New Ground' }),

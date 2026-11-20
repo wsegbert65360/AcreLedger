@@ -119,9 +119,15 @@ function drawSheetHeader(doc: jsPDF, metadata: Fsa578WorksheetMetadata, sheet: F
 
   const operator = metadata.producerName?.trim();
   const county = [metadata.county, metadata.state].filter(Boolean).join(', ');
+  const addressLines = (metadata.operatorAddress || '')
+    .split(/\s*\n\s*/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .join(', ');
+  const address = addressLines ? (doc.splitTextToSize(addressLines, 86) as string[])[0] : 'Address: ___________________________';
   drawBox(doc, 12, top + 10, 91, 18, 'KEY 1   5. OPERATOR NAME AND ADDRESS', [
     operator || 'Name: ______________________________',
-    'Address: ___________________________',
+    address,
     county ? `County/State: ${county}` : 'County/State: ______________________',
   ]);
   const otherFarms = doc.splitTextToSize(sheet.otherFarms.join(', ') || '-', 38) as string[];
