@@ -9,7 +9,7 @@ describe('approved legal policies', () => {
   it.each([['Terms of Service', Terms], ['Refund Policy', Refund]] as const)('renders %s with approved dates and legal navigation', (title, Page) => {
     const { container } = render(<MemoryRouter><Page /></MemoryRouter>);
     expect(screen.getByText(`AcreLedger ${title}`)).toBeInTheDocument();
-    expect(screen.getByText('Last updated: November 10, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Last updated: November 20, 2026')).toBeInTheDocument();
     expect(container).not.toHaveTextContent(/FINAL, attorney|DRAFT|internal|effective date, set/);
     expect(screen.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', '/privacy');
     expect(screen.getByRole('link', { name: 'Terms of service' })).toHaveAttribute('href', '/terms');
@@ -24,7 +24,7 @@ describe('approved legal policies', () => {
 
   it('uses USD-only Pro pricing and does not call FSA tract entry Pro', () => {
     const terms = render(<MemoryRouter><Terms /></MemoryRouter>);
-    expect(terms.container).toHaveTextContent('$299 per farm per year.');
+    expect(terms.container).toHaveTextContent('US$299 per farm per year, charged in US dollars.');
     expect(terms.container).not.toHaveTextContent('A$299');
     expect(terms.container).not.toHaveTextContent('FSA tract entry');
     expect(terms.container).toHaveTextContent('landlord summaries');

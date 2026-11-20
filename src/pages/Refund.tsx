@@ -3,7 +3,7 @@ import LegalPolicyPage from "@/components/LegalPolicyPage";
 export default function Refund({ withBottomNav = false }: { withBottomNav?: boolean }) {
     return (
         <LegalPolicyPage title="Refund Policy" policyTitle="AcreLedger Refund Policy" withBottomNav={withBottomNav}>
-            <p>{"Last updated: November 10, 2026"}</p>
+            <p>{"Last updated: November 20, 2026"}</p>
             <p>{"AcreLedger is provided by Egbert Farms, LLC (\"we\")."}</p>
             <h2 className="text-lg font-bold text-foreground pt-4">{"Start on the free record book"}</h2>
             <p>{"Every new farm starts on the free record book with no card. You can keep field records on up to 50 active fields, with automatic rainfall on your two oldest fields. Those two are locked, and you cannot change them. We still back up a free farm’s data. Pro is optional if you want rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, and landlord splits)."}</p>
