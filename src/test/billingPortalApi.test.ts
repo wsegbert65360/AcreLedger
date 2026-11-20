@@ -170,6 +170,32 @@ describe('create portal session API', () => {
     expect(mocks.createPortalSession).not.toHaveBeenCalled();
   });
 
+  it('denies a caller missing from the server allowlist in test mode', async () => {
+    process.env.BILLING_ALLOWLIST = 'someone-else';
+    const response = createResponse();
+
+    await handler(createRequest(), response.response);
+
+    expect(response.state).toMatchObject({
+      status: 403,
+      body: { error: 'Billing is coming soon.' },
+    });
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
+  it('skips the allowlist for a non-allowlisted owner when live billing is configured', async () => {
+    process.env.BILLING_LIVE_CHARGES = 'true';
+    process.env.STRIPE_SECRET_KEY = 'sk_live_key';
+    process.env.STRIPE_PRICE_ID = 'price_live';
+    process.env.BILLING_ALLOWLIST = 'someone-else';
+    const response = createResponse();
+
+    await handler(createRequest(), response.response);
+
+    expect(response.state.status).toBe(200);
+    expect(mocks.createPortalSession).toHaveBeenCalled();
+  });
+
   it('fails closed when the existing subscription cannot be verified', async () => {
     const client = mocks.createClient();
     client.from = vi.fn((table: string) => ({

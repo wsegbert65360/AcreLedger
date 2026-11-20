@@ -190,6 +190,14 @@ describe('BillingManager', () => {
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
+  it('offers checkout when the server enables it even if the user is not allowlisted', async () => {
+    stubBillingFetch({ allowlisted: false, checkoutEnabled: true });
+    renderBilling();
+
+    expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
+    expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+  });
+
   it('treats a fetch error or non-2xx eligibility response as unavailable billing with the free record book copy', async () => {
     stubBillingFetch({ eligibilityError: new Error('network down') });
     const { unmount } = renderBilling();

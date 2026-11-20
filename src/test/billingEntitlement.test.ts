@@ -293,9 +293,14 @@ describe('fetchBillingEligibility', () => {
     expect(await fetchBillingEligibility({ userId: 'test-mode-user', accessToken: 'token' })).toEqual(expected);
     expect(getCachedBillingEligibility('test-mode-user')).toEqual(expected);
   });
-  it.each([true, 'true'])('ignores checkout and live charges for non-allowlisted responses (%s)', async liveCharges => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: false, checkoutEnabled: true, liveCharges }), { status: 200 })));
-    expect(await fetchBillingEligibility({ userId: 'non-allowed', accessToken: 'token' })).toEqual({ allowlisted: false, checkoutEnabled: false, liveCharges: false });
+  it('follows server checkoutEnabled and liveCharges without requiring allowlisted', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: false, checkoutEnabled: true, liveCharges: true }), { status: 200 })));
+    expect(await fetchBillingEligibility({ userId: 'non-allowed', accessToken: 'token' })).toEqual({ allowlisted: false, checkoutEnabled: true, liveCharges: true });
+  });
+
+  it('treats non-boolean checkout and liveCharges fields as false', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowlisted: false, checkoutEnabled: true, liveCharges: 'true' }), { status: 200 })));
+    expect(await fetchBillingEligibility({ userId: 'non-allowed', accessToken: 'token' })).toEqual({ allowlisted: false, checkoutEnabled: true, liveCharges: false });
   });
 
   it('returns false when the server reports not allowlisted', async () => {

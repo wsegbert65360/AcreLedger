@@ -6,7 +6,7 @@ This file is the cross-agent operating guide. It holds the summary, the context-
 
 Read this file first. Then open only the topic file in the [routing index](#routing-index) and the [BLUEPRINT.md](./BLUEPRINT.md) sections the task touches. Feature rules live under `docs/agents/`, one rule in one file. BLUEPRINT holds architecture detail.
 
-> **Last updated:** 2026-11-16 (Free tier enforced in production; FSA/CLU entry free; Fall FSA and Hay Summary Pro).
+> **Last updated:** 2026-11-20 (Stripe live mode gated by BILLING_LIVE_CHARGES + sk_live_; USD-only Pro copy).
 > **Verification scope:** This is not a whole-document code audit. A topic file's **Verified against code** note lists what was checked and the commit. Use `git log -- AGENTS.md` for edit history.
 >
 > **Where detail lives:** The topic file is the agent rule. [BLUEPRINT.md](./BLUEPRINT.md) is the architecture write-up. If they disagree, follow the stricter data-safety reading and fix the drift.
@@ -15,11 +15,11 @@ Read this file first. Then open only the topic file in the [routing index](#rout
 
 Keep the five most recent substantive entries, newest first. Git holds the full history. Reasons are in [docs/decisions.md](./docs/decisions.md).
 
+- **2026-11-20** — Stripe live mode is allowed when `BILLING_LIVE_CHARGES` is `true` and the secret is an `sk_live_` key. Test mode still uses `BILLING_ALLOWLIST`; live mode opens checkout to every authenticated web owner without blanking the allowlist. Pro copy is USD $299 only; FSA tract entry is free. See [docs/agents/billing.md](./docs/agents/billing.md).
 - **2026-11-19** — Fall FSA production worksheet retired (fall FSA reporting uses the FSA-578). New Pro report: Crop Insurance Production Worksheet, Reports tab `insurance-production` — enterprise units (crop + county), 100% of all shares, bushels as entered, yield = production / planted acres, with yield by FSA farm number and every load. See [docs/agents/reports.md](./docs/agents/reports.md#crop-insurance-production-worksheet).
 - **2026-11-19** — FSA-578 worksheet Section 1 now follows the manual FSA-578 Report of Acreage: one sheet per FSA farm (unassigned fields last), boxes 1-23, practice/status/intended-use codes, crop columns with box 20 totals, landlord key lines. Plantings gain an optional manual 578 status code (`plant_records.fsa_status_code`) and farms an optional operator name/address (`farms.fsa_operator_*`, `set_farm_fsa_operator` RPC); migration `20261120015634` is applied in production. Box 5 County/State and a CSV Physical County column come from saved county assignments. See [docs/agents/fsa-clu.md](./docs/agents/fsa-clu.md).
 - **2026-11-19** — Physical county identification: field and CLU boundaries are intersected with Census counties, saved per farm (`county_assignments`, sync + offline), with manual corrections, a reviewed backfill, and county → farm → tract totals in the Fall FSA report (estimated and County unknown labeled). Notes are never used. See [docs/agents/county.md](./docs/agents/county.md).
 - **2026-11-17** — Farm Owner Summary PDF redesigned: per-crop tiles and tables with Share %, Your bu, season dates and variety; hay table; not-harvested list; owner sign-off. A Reports switch chooses the full report (condensed, grouped activity timeline) or the summary only. See [docs/agents/reports.md](./docs/agents/reports.md).
-- **2026-11-16** — Free tier enforcement is ON in production (`entitlement_config.mode = 'enforce'`, device limit off); the owner farm is complimentary. FSA/CLU data entry is free (`20261116120000_fsa_entry_free.sql`); Fall FSA and Hay Summary joined the Pro prepared reports. Onboarding: AU-pilot users must pick a region; completion needs exactly one profile row; completed users leave `/onboarding`. The tour blocks spotlight clicks and makes the app inert. Roll back enforcement with `update public.entitlement_config set mode = 'off', updated_at = now() where singleton = true;`. See [docs/agents/billing.md](./docs/agents/billing.md).
 
 ## Contents
 
@@ -37,7 +37,7 @@ Keep the five most recent substantive entries, newest first. Git holds the full 
 
 ## Project Summary
 
-AcreLedger is a mobile-first, PWA-ready agricultural record book for individual farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports. The customer tiers are Free and Pro. Pro is $299 per farm per year. The one-page product description is [PRODUCT.md](./PRODUCT.md). Agent rules for billing are in [docs/agents/billing.md](./docs/agents/billing.md).
+AcreLedger is a mobile-first, PWA-ready agricultural record book for individual farmers and small operations. It tracks fields, planting, spraying, fertilizing, harvest, hay, grain bins, grain movement, weather, rainfall, and compliance exports. The customer tiers are Free and Pro. Pro is USD $299 per farm per year. Live Stripe charges are allowed only when `BILLING_LIVE_CHARGES` is `true` and the secret is an `sk_live_` key. The one-page product description is [PRODUCT.md](./PRODUCT.md). Agent rules for billing are in [docs/agents/billing.md](./docs/agents/billing.md).
 
 The app uses React 18, TypeScript strict mode, Vite 7, React Router 7, Supabase Postgres/Auth/RLS, React Context, shadcn/ui, Tailwind CSS, Lucide, Sonner, Zod, Visual Crossing weather, IEM Stage IV rainfall, and Capacitor 8.
 

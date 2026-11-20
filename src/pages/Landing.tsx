@@ -121,7 +121,7 @@ const steps = [
 
 const includedFree = [
   'Field records on up to 50 active fields',
-  'Add fields by hand. FSA tract entry is part of Pro',
+  'Add fields by hand, including FSA tract and farm numbers',
   'Automatic rainfall on your two oldest fields in the contiguous US. Those two are locked, and you can\u2019t change them',
   'History, offline entry, and cloud sync',
   'Export your records. We back up a free farm\u2019s data too. Restoring a backup is part of Pro',
@@ -132,14 +132,14 @@ const includedPro = [
   'Automatic rainfall on all remaining fields',
   'Prepared FSA reports',
   'Backup restore',
-  'Landlord summaries and the business tools, including grain bins, equipment, FSA tract entry, and landlord splits',
+  'Landlord summaries and the business tools, including grain bins, equipment, and landlord splits',
 ];
 
 const faqs = [
   {
     question: 'Do I need FSA boundary files before I start?',
     answer:
-      'No. Add fields by hand and start recording the same day. FSA tract entry is part of Pro. Your earlier records stay with their fields.',
+      'No. Add fields by hand and start recording the same day. Your earlier records stay with their fields.',
   },
   {
     question: 'Does AcreLedger replace official USDA or product-label requirements?',
@@ -149,7 +149,7 @@ const faqs = [
   {
     question: 'What does AcreLedger cost?',
     answer:
-      'Each farm starts on the free record book. You can keep records on up to 50 active fields, with automatic rainfall on your two oldest fields. You can\u2019t change those two, and no card is needed. Pro is $299 per farm per year (A$299 in Australia) for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, FSA tract entry, and landlord splits). If you never upgrade, you keep the free record book. You can export your records any time, and skipping Pro never deletes anything. We back up a free farm\u2019s data too.',
+      'Each farm starts on the free record book. You can keep records on up to 50 active fields, with automatic rainfall on your two oldest fields. You can\u2019t change those two, and no card is needed. Pro is $299 per farm per year for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, and landlord splits). If you never upgrade, you keep the free record book. You can export your records any time, and skipping Pro never deletes anything. We back up a free farm\u2019s data too.',
   },
   {
     question: 'Who owns the records I keep here?',

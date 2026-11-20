@@ -78,6 +78,7 @@ export default function BillingManager() {
   const userId = session?.user?.id ?? null;
   const checkoutEnabled = userId != null && eligibility?.userId === userId && eligibility.checkoutEnabled;
   const allowlisted = userId != null && eligibility?.userId === userId ? eligibility.allowlisted : null;
+  const showBillingActions = allowlisted === true || checkoutEnabled;
 
   useEffect(() => {
     setSubscriptionLoaded(false);
@@ -202,7 +203,7 @@ export default function BillingManager() {
   const compOnly = comped && !hasActiveRow;
   const badge = compOnly
     ? { label: 'Complimentary', className: 'bg-plant/10 text-plant border-plant/20' }
-    : getStatusBadge(subscription, { allowlisted: allowlisted === true });
+    : getStatusBadge(subscription, { allowlisted: showBillingActions });
   // past_due/unpaid subscriptions are still live in Stripe, so those owners fix
   // payment in the portal; a second Checkout would create a parallel subscription.
   const needsCheckout =
@@ -221,7 +222,7 @@ export default function BillingManager() {
             <CreditCard size={18} className="text-primary" />
             Billing
           </span>
-          {(compOnly || (eligibilityKnown && (!allowlisted || subscriptionLoaded))) && <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
+          {(compOnly || (eligibilityKnown && (!showBillingActions || subscriptionLoaded))) && <Badge variant="outline" className={`rounded-full font-medium ${badge.className}`}>
             {badge.label}
           </Badge>}
         </CardTitle>
@@ -230,7 +231,7 @@ export default function BillingManager() {
         {comped ? (
           <p className="text-sm text-foreground">Complimentary access{farmComp?.expires_at ? ` until ${formatBillingDate(farmComp.expires_at)}` : ''}</p>
         ) : null}
-        {!eligibilityKnown || compOnly ? null : !allowlisted ? (
+        {!eligibilityKnown || compOnly ? null : !showBillingActions ? (
           <p className="text-sm text-muted-foreground">
             Free record book. No card needed. Pro is $299 per farm per year.
           </p>

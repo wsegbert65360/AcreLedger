@@ -76,7 +76,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // ---------- Test-mode billing gate (fails closed) ----------
+  // ---------- Billing gate (test or live; fails closed) ----------
   const billing = assertTestModeBilling(process.env);
   if (!billing.ok) {
     return res.status(403).json({ error: billing.reason });
@@ -131,9 +131,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const farmId = profile.farm_id;
 
-    // ---------- Internal rollout allowlist ----------
+    // ---------- Internal rollout allowlist (test mode only) ----------
     const email = typeof user.email === 'string' ? user.email : null;
-    if (!isBillingAllowlisted({ email, userId: user.id }, process.env.BILLING_ALLOWLIST)) {
+    if (
+      billing.config.mode !== 'live' &&
+      !isBillingAllowlisted({ email, userId: user.id }, process.env.BILLING_ALLOWLIST)
+    ) {
       return res.status(403).json({ error: 'Billing is coming soon.' });
     }
 

@@ -85,7 +85,7 @@ VITE_AI_ASSISTANT_URL=https://your-app.vercel.app
 # Optional client crash collector (public browser endpoint; never include credentials)
 VITE_ERROR_REPORTING_DSN=https://errors.example/ingest
 
-# Billing (Stripe TEST MODE). Allowlist is server-only; never VITE_BILLING_ALLOWLIST.
+# Billing (Stripe test or live). Allowlist is server-only; never VITE_BILLING_ALLOWLIST.
 VITE_BILLING_UI_ENABLED=
 BILLING_LIVE_CHARGES=false
 BILLING_ALLOWLIST=
@@ -98,7 +98,7 @@ STRIPE_WEBHOOK_SECRET=
 
 `VITE_ERROR_REPORTING_DSN` is optional and disabled when empty. When set, it must be an HTTPS collector URL with no credentials, query, or fragment. The browser sends bounded, token-redacted error details and the pathname only; it omits cookies and URL query strings. Because every `VITE_*` value is public, the collector must accept CORS JSON posts without embedded secrets and enforce its own rate limits and retention policy.
 
-Billing is web-only and hidden unless `VITE_BILLING_UI_ENABLED` is exactly `true`. The rollout allowlist is the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs) checked by `GET /api/billing-eligibility`. Do not set `VITE_BILLING_ALLOWLIST`; that client variable is unused and must not appear in the bundle. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere. Empty or unset fails closed at runtime (everyone sees "Billing coming soon"). Stripe keys stay `sk_test_` until live charges are approved.
+Billing is web-only and hidden unless `VITE_BILLING_UI_ENABLED` is exactly `true`. The rollout allowlist is the server-only `BILLING_ALLOWLIST` (comma-separated emails or user IDs) checked by `GET /api/billing-eligibility`. Do not set `VITE_BILLING_ALLOWLIST`; that client variable is unused and must not appear in the bundle. `BILLING_ALLOWLIST` is required in Vercel production (the bundle check fails if unset) and optional with a warning elsewhere. Test mode: empty or unset fails closed at runtime (everyone sees "Billing coming soon"). Live mode (`BILLING_LIVE_CHARGES=true` plus an `sk_live_` key) opens checkout to every authenticated web owner without blanking `BILLING_ALLOWLIST`. Live charges are allowed only with that flag and an `sk_live_` key; otherwise the server accepts only `sk_test_` keys.
 
 ## Deployment
 
