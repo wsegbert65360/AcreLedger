@@ -344,6 +344,20 @@ function plantingAcresForClu(record: PlantRecord, cluAcres: number, fieldCluAcre
     return roundTo(Math.min(record.acreage, fieldCluAcres) * cluAcres / fieldCluAcres, 2);
 }
 
+/**
+ * Acres for a planting on a field with no CLU to apportion across: the
+ * planting's own acres, capped at the field's acres. A field split 40 corn /
+ * 40 soybeans must not report 80 + 80. Second-crop and double-crop/replant
+ * rows may repeat the field's acres, as they do per CLU. A planting with no
+ * usable acreage falls back to the field's acres (the PlantModal default).
+ */
+function plantingAcresForField(record: PlantRecord, fieldAcres: number): number {
+    if (record.cropStatus !== 'Failed' && !isSupplementalCrop(record) && allowsRepeatedCluAcres(record)) return fieldAcres;
+    if (!Number.isFinite(record.acreage) || record.acreage <= 0) return fieldAcres;
+    if (!Number.isFinite(fieldAcres) || fieldAcres <= 0) return roundTo(record.acreage, 2);
+    return roundTo(Math.min(record.acreage, fieldAcres), 2);
+}
+
 function assignmentWarning(a: FieldCluAssignment, tracts: FsaTractImport[], acres: Map<string, number>): string | undefined {
     if (!tracts.some(t => !t.deletedAt && t.tractKey === a.tractKey)) return undefined;
     const featureAcres = acres.get(`${a.tractKey}:${a.cluNumber}`);
@@ -458,7 +472,7 @@ export function buildFsa578Rows(
                 farmNumber: field?.fsaFarmNumber || '',
                 tractNumber: field?.fsaTractNumber || '',
                 fieldNumber: r.fsaFieldNumber || field?.fsaFieldNumber || '',
-                acreage: field ? getDisplayFieldAcres(field, cluAssignments) : r.acreage,
+                acreage: field ? plantingAcresForField(r, getDisplayFieldAcres(field, cluAssignments)) : r.acreage,
             }];
         }
 
