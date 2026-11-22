@@ -1,25 +1,14 @@
 import { toast } from 'sonner';
 
 import { freshAccessToken, SignInAgainError } from '@/lib/freshAccessToken';
-import { bundledVisualCrossingKey, cleanEnvValue } from '@/lib/weatherBuildConfig';
+import { cleanEnvValue } from '@/lib/weatherBuildConfig';
 import { formatWeatherLatLng, normalizeWeatherLocation } from '@/lib/weatherCoords';
 import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
 
-const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 const PROXY_PATH = '/api/weather-proxy';
 const SIGN_IN_AGAIN = 'Sign in again to load weather.';
 
 const IS_CAPACITOR_BUILD = import.meta.env.MODE === 'capacitor';
-
-function readBundledVisualCrossingKey(): string {
-    // Production web and Capacitor must not reference VITE_VISUALCROSSING_KEY.
-    // The value sits in a branch Vite constant-folds away, so the vendor key
-    // is not inlined into App Store or other native bundles.
-    if (!import.meta.env.DEV) return '';
-    return bundledVisualCrossingKey(true, import.meta.env.VITE_VISUALCROSSING_KEY);
-}
-
-const VISUAL_CROSSING_KEY = readBundledVisualCrossingKey();
 const WEATHER_PROXY_URL = cleanEnvValue(import.meta.env.VITE_WEATHER_PROXY_URL);
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
@@ -40,14 +29,6 @@ function dropCacheEntry<T>(cache: Map<string, Promise<T>>, key: string, pending?
     if (!pending || cache.get(key) === pending) cache.delete(key);
 }
 
-
-function encodeEndpoint(endpoint: string): string {
-    return endpoint
-        .split('/')
-        .filter(Boolean)
-        .map(segment => encodeURIComponent(segment))
-        .join('/');
-}
 
 function resolveWeatherProxyUrl(): string {
     if (IS_CAPACITOR_BUILD && !WEATHER_PROXY_URL) {
@@ -73,14 +54,6 @@ function isWeatherProxyUrl(url: string): boolean {
 function buildWeatherUrl(location: string, endpoint: string, query: Record<string, string>): string {
     const params = new URLSearchParams(query);
     const resolvedLocation = normalizeWeatherLocation(location);
-
-    const canUseDirectApi = Boolean(VISUAL_CROSSING_KEY) && import.meta.env.DEV;
-    if (canUseDirectApi) {
-        params.set('key', VISUAL_CROSSING_KEY);
-        const pathLocation = encodeURIComponent(resolvedLocation);
-        const pathEndpoint = encodeEndpoint(endpoint);
-        return `${VC_BASE_URL}/${pathLocation}${pathEndpoint ? `/${pathEndpoint}` : ''}?${params.toString()}`;
-    }
 
     params.set('location', resolvedLocation);
     if (endpoint) params.set('endpoint', endpoint);
@@ -158,7 +131,7 @@ function calendarRainfall(data: any): { precip24h: number | null; precip72h: num
 
 /**
  * Hardened Weather Service.
- * Fetches real-time conditions and historical rainfall through Visual Crossing or the weather proxy.
+ * Fetches real-time conditions and historical rainfall through the weather proxy.
  */
 export const WeatherService = {
     /**

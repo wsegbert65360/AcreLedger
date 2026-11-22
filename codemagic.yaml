@@ -90,6 +90,10 @@ workflows:
             echo "Capacitor bundle is missing the Ask the book endpoint" >&2
             exit 1
           fi
+          if grep -Rqs "VITE_VISUALCROSSING_KEY" dist/assets; then
+            echo "Capacitor bundle contains the VITE_VISUALCROSSING_KEY name" >&2
+            exit 1
+          fi
           if [ -n "$VITE_VISUALCROSSING_KEY" ] && grep -RFqs "$VITE_VISUALCROSSING_KEY" dist/assets; then
             echo "Capacitor bundle contains VITE_VISUALCROSSING_KEY" >&2
             exit 1
@@ -270,6 +274,10 @@ workflows:
           fi
           if ! grep -Rqs "acreledger.vercel.app" dist/assets; then
             echo "Capacitor bundle is missing the Ask the book endpoint" >&2
+            exit 1
+          fi
+          if grep -Rqs "VITE_VISUALCROSSING_KEY" dist/assets; then
+            echo "Capacitor bundle contains the VITE_VISUALCROSSING_KEY name" >&2
             exit 1
           fi
           if [ -n "$VITE_VISUALCROSSING_KEY" ] && grep -RFqs "$VITE_VISUALCROSSING_KEY" dist/assets; then
