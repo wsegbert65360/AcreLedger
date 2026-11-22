@@ -15,7 +15,37 @@ export const SW_RELOADED_AT_KEY = 'al_sw_reloaded_at';
 const OVERLAY_SELECTOR =
   '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
-export function shouldDeferReload(root: ParentNode = document, deferCount = 0): boolean {
+/** Typing within this long counts as editing: a reload would drop the entry. */
+export const SW_RELOAD_EDIT_IDLE_MS = 60_000;
+
+function isEditableFocused(): boolean {
+  const el = typeof document === 'undefined' ? null : document.activeElement;
+  if (!el || el === document.body) return false;
+  if (el instanceof HTMLElement && el.isContentEditable) return true;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag !== 'INPUT') return false;
+  const type = (el as HTMLInputElement).type;
+  return !['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'color', 'file', 'image'].includes(type);
+}
+
+/**
+ * Someone is entering a record (a field has focus, or they typed in the last
+ * minute). A reload would drop unsaved form state, so it waits, with no cap:
+ * the update applies as soon as they stop. Full-page forms are not dialogs,
+ * so the dialog check alone let those reload mid-entry.
+ */
+export function isEditing(nowMs: number = Date.now(), lastInputAt = Number.NEGATIVE_INFINITY): boolean {
+  return isEditableFocused() || nowMs - lastInputAt < SW_RELOAD_EDIT_IDLE_MS;
+}
+
+export function shouldDeferReload(
+  root: ParentNode = document,
+  deferCount = 0,
+  nowMs: number = Date.now(),
+  lastInputAt = Number.NEGATIVE_INFINITY,
+): boolean {
+  if (isEditing(nowMs, lastInputAt)) return true;
   return !!root.querySelector(OVERLAY_SELECTOR) && deferCount < MAX_DEFERS;
 }
 
@@ -35,12 +65,17 @@ export function createReloadOnce(overrides: {
   let deferred = false;
   let deferCount = 0;
   let retryTimer: number | undefined;
+  let lastInputAt = Number.NEGATIVE_INFINITY;
+  if (typeof document !== 'undefined') {
+    document.addEventListener('input', () => { lastInputAt = now(); }, { capture: true, passive: true });
+  }
 
   const reloadOnce = () => {
     if (reloading || deferred) return;
-    if (shouldDeferReload(document, deferCount)) {
+    if (shouldDeferReload(document, deferCount, now(), lastInputAt)) {
       deferred = true;
-      deferCount += 1;
+      // Only dialog waits count toward the force-apply cap; editing waits do not.
+      if (!isEditing(now(), lastInputAt)) deferCount += 1;
       window.setTimeout(() => {
         deferred = false;
         reloadOnce();
