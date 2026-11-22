@@ -44,7 +44,7 @@ try {
         USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()) AND deleted_at IS NULL);
       CREATE POLICY ${t}_update ON public.${t} FOR UPDATE TO authenticated
         USING (farm_id = (SELECT farm_id FROM public.profiles WHERE id = auth.uid()));
-      CREATE POLICY "Restrict updates on deleted rows" ON public.${t} AS RESTRICTIVE FOR UPDATE USING (deleted_at IS NULL);
+      CREATE POLICY "Restrict updates on deleted rows" ON public.${t} AS RESTRICTIVE FOR UPDATE USING (deleted_at IS NULL) WITH CHECK (true);
       GRANT SELECT, INSERT, UPDATE ON public.${t} TO authenticated;
       INSERT INTO public.${t} VALUES ('${rowA1}', '${farmA}', NULL), ('${rowA2}', '${farmA}', NULL), ('${rowB}', '${farmB}', NULL);
     `);
