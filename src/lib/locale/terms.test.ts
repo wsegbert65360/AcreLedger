@@ -11,5 +11,7 @@ describe('locale terminology (AU pilot)', () => {
   it('renders "paddock" under en-AU', () => {
     expect(term('field', 'en-AU')).toBe('paddock');
     expect(term('fields', 'en-AU')).toBe('paddocks');
+    expect(term('Field', 'en-AU')).toBe('Paddock');
+    expect(term('Field', 'en-US')).toBe('Field');
   });
 });

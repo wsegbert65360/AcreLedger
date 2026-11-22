@@ -31,7 +31,7 @@ describe('RecordListItem', () => {
   it('lets keyboard and VoiceOver users select a record', () => {
     const onToggle = vi.fn();
     render(
-      <RecordListItem id="r1" title="North 40" subtitle="Corn" details="" isSelected={false}
+      <RecordListItem id="r1" title="North 40" subtitle="Corn" details="" date="" isSelected={false}
         onToggle={onToggle} onEdit={vi.fn()} type="plant" />,
     );
     const box = screen.getByRole('checkbox', { name: 'Select North 40' });
