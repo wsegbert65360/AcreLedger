@@ -16,6 +16,7 @@ import { useAppPreferences } from '@/store/useAppPreferences';
 import { defaultProfileForCountry, resolveComplianceProfileId, getComplianceProfile } from '@/lib/compliance/profiles';
 import { missingComplianceFields as getMissingComplianceFields } from '@/lib/sprayCompliance';
 import { getPropertyIdentifier } from '@/lib/propertyIdentifiers';
+import { storageGet, storageSet } from '@/lib/safeStorage';
 
 export type SprayWizardStep = 'core' | 'mix' | 'conditions' | 'review';
 
@@ -84,16 +85,16 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
   const [step, setStep] = useState<SprayWizardStep>('core');
   const stepIndex = WIZARD_STEPS.indexOf(step);
-  const [isQuickMode, setIsQuickMode] = useState(() => localStorage.getItem('al_spray_quick_mode') === 'true');
+  const [isQuickMode, setIsQuickMode] = useState(() => storageGet('al_spray_quick_mode') === 'true');
 
   useEffect(() => {
-    localStorage.setItem('al_spray_quick_mode', String(isQuickMode));
+    storageSet('al_spray_quick_mode', String(isQuickMode));
   }, [isQuickMode]);
 
   const [products, setProducts] = useState<SprayRecipeProduct[]>(() => normalizeProducts(initialData));
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
-  const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
-  const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
+  const [applicatorName, setApplicatorName] = useState(() => initialData?.applicatorName || storageGet(`al_applicator_name_${userPrefix}`) || '');
+  const [licenseNumber, setLicenseNumber] = useState(() => initialData?.licenseNumber || storageGet(`al_license_number_${userPrefix}`) || '');
   const [targetPest, setTargetPest] = useState(initialData?.targetPest || 'grass/broadleaves');
   const [sprayDate, setSprayDate] = useState(initialData?.sprayDate || toLocalIsoDate(Date.now()));
   const [startTime, setStartTime] = useState(() => initialData?.startTime || new Date().toTimeString().slice(0, 5));
@@ -113,7 +114,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
   const [totalMixtureVolume, setTotalMixtureVolume] = useState(initialData?.totalMixtureVolume || '');
   const [waterRate, setWaterRate] = useState(initialData?.waterRate || '');
   const [waterRateUnit, setWaterRateUnit] = useState(initialData?.waterRateUnit || 'L/ha');
-  const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || localStorage.getItem(`al_equipment_id_${userPrefix}`) || '');
+  const [equipmentId, setEquipmentId] = useState(() => initialData?.equipmentId || storageGet(`al_equipment_id_${userPrefix}`) || '');
   const [manualWindDirection, setManualWindDirection] = useState<string>(initialData?.windDirection || '');
   const [manualWindSpeed, setManualWindSpeed] = useState<string>(initialData?.windSpeed?.toString() || '');
   const [isPremixed, setIsPremixed] = useState(initialData?.isPremixed || false);
@@ -233,8 +234,8 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
     } else {
       const now = new Date();
       setProducts(suggestedSpray ? normalizeProducts(suggestedSpray).map(p => ({ ...p, ui_id: crypto.randomUUID() })) : [createEmptyProduct()]);
-      setApplicatorName(suggestedSpray?.applicatorName || localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
-      setLicenseNumber(suggestedSpray?.licenseNumber || localStorage.getItem(`al_license_number_${userPrefix}`) || '');
+      setApplicatorName(suggestedSpray?.applicatorName || storageGet(`al_applicator_name_${userPrefix}`) || '');
+      setLicenseNumber(suggestedSpray?.licenseNumber || storageGet(`al_license_number_${userPrefix}`) || '');
       setTargetPest(suggestedSpray?.targetPest || 'grass/broadleaves');
       setSprayDate(toLocalIsoDate(Date.now()));
       setStartTime(now.toTimeString().slice(0, 5));
@@ -249,7 +250,7 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
       setWaterRateUnit('L/ha');
       setTotalMixtureVolume('');
       setInvolvedTechnicians('');
-      setEquipmentId(localStorage.getItem(`al_equipment_id_${userPrefix}`) || '');
+      setEquipmentId(storageGet(`al_equipment_id_${userPrefix}`) || '');
       setManualWindDirection('');
       setManualWindSpeed('');
       setIsPremixed(false);
@@ -272,9 +273,9 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
   const resetCarryFields = useCallback(() => {
     setProducts([createEmptyProduct()]);
-    setApplicatorName(localStorage.getItem(`al_applicator_name_${userPrefix}`) || '');
-    setLicenseNumber(localStorage.getItem(`al_license_number_${userPrefix}`) || '');
-    setEquipmentId(localStorage.getItem(`al_equipment_id_${userPrefix}`) || '');
+    setApplicatorName(storageGet(`al_applicator_name_${userPrefix}`) || '');
+    setLicenseNumber(storageGet(`al_license_number_${userPrefix}`) || '');
+    setEquipmentId(storageGet(`al_equipment_id_${userPrefix}`) || '');
     setApplicationMethod('Ground Broadcast');
     setComplianceProfile(defaultProfile);
     setRei('');
@@ -574,9 +575,9 @@ export function useSprayForm({ field, open, onClose, initialData, mode = 'edit' 
 
     setIsSaving(true);
     try {
-      if (applicatorName.trim()) localStorage.setItem(`al_applicator_name_${userPrefix}`, applicatorName.trim());
-      if (licenseNumber.trim()) localStorage.setItem(`al_license_number_${userPrefix}`, licenseNumber.trim());
-      if (equipmentId.trim()) localStorage.setItem(`al_equipment_id_${userPrefix}`, equipmentId.trim());
+      if (applicatorName.trim()) storageSet(`al_applicator_name_${userPrefix}`, applicatorName.trim());
+      if (licenseNumber.trim()) storageSet(`al_license_number_${userPrefix}`, licenseNumber.trim());
+      if (equipmentId.trim()) storageSet(`al_equipment_id_${userPrefix}`, equipmentId.trim());
 
       let finalNotes = notes.trim();
       if (photoBase64 && photoType) {

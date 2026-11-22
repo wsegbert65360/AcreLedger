@@ -17,6 +17,7 @@ import { useFarm } from '@/store/farmStore';
 import type { SprayRecipe } from '@/types/farm';
 
 import RecipeForm from './RecipeForm';
+import { storageSet } from '@/lib/safeStorage';
 
 export default function RecipeManager() {
   const { sprayRecipes, addSprayRecipe, deleteSprayRecipe, updateSprayRecipe, session } = useFarm();
@@ -44,8 +45,8 @@ export default function RecipeManager() {
         {adding && (
           <RecipeForm
             onSave={async (r: Pick<SprayRecipe, 'name' | 'products' | 'applicatorName' | 'licenseNumber' | 'epaRegNumber' | 'targetPest' | 'cropOrSiteTreated'>) => {
-              if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
-              if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
+              if (r.applicatorName) storageSet(`al_applicator_name_${userPrefix}`, r.applicatorName);
+              if (r.licenseNumber) storageSet(`al_license_number_${userPrefix}`, r.licenseNumber);
               await addSprayRecipe(r);
               setAdding(false);
             }}
@@ -62,8 +63,8 @@ export default function RecipeManager() {
                 key={recipe.id}
                 initial={recipe}
                 onSave={async (r: Pick<SprayRecipe, 'name' | 'products' | 'applicatorName' | 'licenseNumber' | 'epaRegNumber' | 'targetPest' | 'cropOrSiteTreated'>) => {
-                  if (r.applicatorName) localStorage.setItem(`al_applicator_name_${userPrefix}`, r.applicatorName);
-                  if (r.licenseNumber) localStorage.setItem(`al_license_number_${userPrefix}`, r.licenseNumber);
+                  if (r.applicatorName) storageSet(`al_applicator_name_${userPrefix}`, r.applicatorName);
+                  if (r.licenseNumber) storageSet(`al_license_number_${userPrefix}`, r.licenseNumber);
                   await updateSprayRecipe({ ...recipe, ...r });
                   setEditingId(null);
                 }}
