@@ -154,7 +154,7 @@ describe('Stripe webhook delivery recovery', () => {
   beforeEach(() => {
     process.env.BILLING_LIVE_CHARGES = 'false';
     process.env.STRIPE_SECRET_KEY = 'sk_test_key';
-    process.env.STRIPE_PRICE_ID = 'price_test';
+    process.env.STRIPE_PRICE_ID = 'price_1';
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
@@ -178,6 +178,20 @@ describe('Stripe webhook delivery recovery', () => {
     });
     expect(mocks.constructEvent).not.toHaveBeenCalled();
     expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it('does not grant Pro for a subscription on a price other than the Pro price', async () => {
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result(), result());
+    supabase.queue('farm_subscriptions', result({ data: null, count: null }), result());
+    mocks.retrieveSubscription.mockResolvedValueOnce({ ...currentSubscription, items: { data: [{ price: { id: 'price_other' } }] } });
+
+    expect((await invoke()).status).toBe(200);
+    const writes = supabase.calls.filter(
+      call => call.table === 'farm_subscriptions' && (call.operation === 'update' || call.operation === 'insert'),
+    );
+    expect(writes).toEqual([]);
   });
 
   it('ignores an event from the other Stripe mode without touching billing state', async () => {

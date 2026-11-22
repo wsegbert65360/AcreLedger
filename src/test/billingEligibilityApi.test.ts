@@ -2,10 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
+  farmRole: undefined as string | undefined,
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: (...args: unknown[]) => mocks.createClient(...args),
+  createClient: (...args: unknown[]) => {
+    const client = mocks.createClient(...args);
+    // Default: the caller is the farm owner.
+    if (client && !client.from) {
+      client.from = vi.fn(() => ({ select: () => ({ eq: () => ({ maybeSingle: vi.fn().mockResolvedValue({ data: { farm_role: mocks.farmRole ?? 'owner' }, error: null }) }) }) }));
+    }
+    return client;
+  },
 }));
 
 import handler from '../../api/billing-eligibility';
@@ -285,4 +293,22 @@ describe('billing eligibility API', () => {
     expect(JSON.stringify(result.state.body)).not.toContain('sk_');
   });
 
+
+  it('never offers Checkout to a member who cannot manage billing', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_key';
+    process.env.STRIPE_PRICE_ID = 'price_test';
+    mocks.farmRole = 'worker';
+    try {
+      const result = createResponse();
+      await handler(createRequest(), result.response);
+      expect(result.state.body).toMatchObject({ allowlisted: true, checkoutEnabled: false });
+      // The same owner would be offered Checkout.
+      mocks.farmRole = 'owner';
+      const owner = createResponse();
+      await handler(createRequest(), owner.response);
+      expect(owner.state.body).toMatchObject({ checkoutEnabled: true });
+    } finally {
+      mocks.farmRole = undefined;
+    }
+  });
 });

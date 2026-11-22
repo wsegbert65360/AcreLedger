@@ -430,8 +430,30 @@ export function isUniqueViolation(error: { code?: string | null } | null | undef
   return error?.code === '23505';
 }
 
+/** Owners and admins manage billing; workers and other roles do not. A missing role is the legacy owner default. */
+export function canManageBilling(farmRole: string | null | undefined): boolean {
+  return farmRole == null || farmRole === 'owner' || farmRole === 'admin';
+}
+
+/**
+ * Price ids that may grant Pro: STRIPE_PRICE_ID plus any listed in
+ * STRIPE_ACCEPTED_PRICE_IDS (comma-separated, for subscribers left on an
+ * older price after a price change). A subscription on any other price is
+ * not mirrored, so a plan switched in the Customer Portal can't grant Pro.
+ */
+export function acceptedPriceIds(env: Record<string, string | undefined>): Set<string> {
+  const ids = [env.STRIPE_PRICE_ID, ...(env.STRIPE_ACCEPTED_PRICE_IDS ?? '').split(',')]
+    .map(id => (id ?? '').trim())
+    .filter(id => id.startsWith('price_'));
+  return new Set(ids);
+}
+
 /** Public capabilities only; never expose Stripe configuration or key material. */
-export function getBillingCapabilities(allowlisted: boolean, env: Record<string, string | undefined>) {
+export function getBillingCapabilities(
+  allowlisted: boolean,
+  env: Record<string, string | undefined>,
+  canManage = true,
+) {
   const { secretKey, liveCharges } = readBillingMode(env);
   const priceId = (env.STRIPE_PRICE_ID ?? '').trim();
   const testMode = secretKey.startsWith('sk_test_') && (liveCharges === undefined || liveCharges === 'false');
@@ -439,7 +461,8 @@ export function getBillingCapabilities(allowlisted: boolean, env: Record<string,
   const liveCheckout = liveMode && priceId.startsWith('price_');
   return {
     allowlisted,
-    checkoutEnabled: liveCheckout || (allowlisted && testMode),
+    // A member who cannot manage billing never sees Subscribe.
+    checkoutEnabled: canManage && (liveCheckout || (allowlisted && testMode)),
     liveCharges: liveMode,
   };
 }
