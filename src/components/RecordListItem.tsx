@@ -51,7 +51,19 @@ export default function RecordListItem({
           )}
         </div>
         <div className="flex flex-col gap-2 items-center justify-center ml-2">
-          <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border group-hover:border-muted-foreground'
+          <div
+            role="checkbox"
+            aria-checked={isSelected}
+            aria-label={`Select ${title}`}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggle(id, e.shiftKey);
+              }
+            }}
+            className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border group-hover:border-muted-foreground'
             }`}>
             {isSelected && <Check size={12} strokeWidth={3} />}
           </div>

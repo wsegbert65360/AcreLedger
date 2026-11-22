@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import RecordListItem from '../RecordListItem';
@@ -26,5 +26,17 @@ describe('RecordListItem', () => {
     expect(title.className).toContain('line-clamp-2');
     expect(title.className).not.toContain('truncate');
     expect(screen.getByText('Aug 8, 2026')).toBeTruthy();
+  });
+
+  it('lets keyboard and VoiceOver users select a record', () => {
+    const onToggle = vi.fn();
+    render(
+      <RecordListItem id="r1" title="North 40" subtitle="Corn" details="" isSelected={false}
+        onToggle={onToggle} onEdit={vi.fn()} type="plant" />,
+    );
+    const box = screen.getByRole('checkbox', { name: 'Select North 40' });
+    expect(box).toHaveAttribute('aria-checked', 'false');
+    fireEvent.keyDown(box, { key: ' ' });
+    expect(onToggle).toHaveBeenCalledWith('r1', false);
   });
 });

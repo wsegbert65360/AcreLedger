@@ -335,7 +335,8 @@ export default function FertilizerModal({ field, open, onClose, initialData, mod
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="absolute right-2 h-7 w-7 text-destructive/60 hover:text-destructive hover:bg-destructive/10 hidden group-hover:flex transition-all z-10"
+                                                    className="absolute right-1 flex h-9 w-9 text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition-all z-10"
+                                                    aria-label={`Delete recipe ${recipe.name}`}
                                                     onClick={(e) => handleDeleteRecipe(e, recipe.id, recipe.name)}
                                                     disabled={isDeleting === recipe.id}
                                                 >
