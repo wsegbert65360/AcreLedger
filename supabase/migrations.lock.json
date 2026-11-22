@@ -126,5 +126,6 @@
   "20261122140036_app_schema_version.sql": "ea61298b8ee9a1164ab80277efef3a5b031bc0a976a90f25a61487a692514eb7",
   "20261122140056_premium_guard_allows_noop_updates.sql": "e1427b73af92d69022415bdd5abdf0bb424f40c4f6ea1bd75eb6457f6faa1abf",
   "20261122140118_restore_county_assignments.sql": "b679e18b2886a576266237dfe127b91158bbe4ed29f98311702c0fbf1f0ac7ce",
-  "20261122200000_farm_manager_only_settings_rpcs.sql": "71569078b74b5f138ce6abbd7572c53b13b7bf970d17d6858c36c25d4c9a03dc"
+  "20261122200000_farm_manager_only_settings_rpcs.sql": "71569078b74b5f138ce6abbd7572c53b13b7bf970d17d6858c36c25d4c9a03dc",
+  "20261122200100_season_ceiling_earliest_timezone.sql": "cfce0e88f5edcc8eeafdb8471846e6677e0fffbbda98db01c6b76a51f7d326f0"
 }
