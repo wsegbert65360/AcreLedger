@@ -1,12 +1,11 @@
 import { Capacitor } from '@capacitor/core';
 
-import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { farmNameForCsv } from '@/lib/farmDisplayName';
 import { effectiveTreatedAreaUnit, normalizeAreaForRate, normalizeTreatedArea } from '@/lib/sprayExportFormatters';
 import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
 import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
-import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
+import { SprayRecord, Field, PlantRecord, FertilizerApplication } from '../../types/farm';
 import type { FsaStatusCode } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { getWorkDateMs, toLocalIsoDate } from '../../utils/dates';
@@ -876,42 +875,6 @@ export async function exportFsa578Data(
     });
 
     await downloadFile(csvContent, `FSA_578_Worksheet_${cropYear}_${today}.csv`, 'text/csv');
-}
-
-export async function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]): Promise<void> {
-    const header = [
-        'Date',
-        'Field',
-        'Crop',
-        'Bushels',
-        'Moisture %',
-        'Destination',
-        'Landlord Share %',
-        'Landlord Name',
-        'Scale Ticket #',
-        'Farm #',
-        'Tract #'
-    ].join(',');
-
-    const rows = harvestRecords.map(r => {
-        const field = fields.find(f => f.id === r.fieldId);
-        return [
-            sanitizeCsvValue(r.harvestDate || new Date(r.timestamp).toLocaleDateString()),
-            sanitizeCsvValue(r.fieldName),
-            sanitizeCsvValue(r.crop),
-            sanitizeCsvValue(r.bushels),
-            sanitizeCsvValue(r.moisturePercent),
-            sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale'),
-            sanitizeCsvValue(getLandlordSplitPercent(field, r.landlordSplitPercent)),
-            sanitizeCsvValue(r.landlordName),
-            sanitizeCsvValue(r.scaleTicketNumber),
-            sanitizeCsvValue(field?.fsaFarmNumber),
-            sanitizeCsvValue(field?.fsaTractNumber)
-        ].join(',');
-    });
-
-    const csvContent = [header, ...rows].join('\n');
-    await downloadFile(csvContent, `FSA_Harvest_Report_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
 }
 
 export async function exportFertilizerData(records: FertilizerApplication[], fields: Field[]): Promise<void> {

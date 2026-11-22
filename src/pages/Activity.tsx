@@ -13,14 +13,12 @@ import {
   ACTIVITY_TEXT_COLORS,
 } from '@/lib/activityIcons';
 import { withAuthorizedReportExport } from '@/lib/authorizeReportExport';
-import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
-import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { supabase } from '@/lib/supabase';
 import { useAppPreferences } from '@/store/useAppPreferences';
 import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
-import { compareWorkDateDesc, getWorkDateMs, toLocalIsoDate } from '@/utils/dates';
+import { compareWorkDateDesc, getWorkDateMs } from '@/utils/dates';
 import type {
   PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
   FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord
@@ -80,7 +78,6 @@ export default function Activity() {
   const {
     fields,
     cluAssignments,
-    fsaTracts,
     plantRecords,
     sprayRecords,
     harvestRecords,
@@ -380,30 +377,17 @@ export default function Activity() {
                 </button>
               )}
               {(tab === 'plant' || tab === 'harvest') && (
+                // One export path: the Reports tab builds the full-season FSA-578
+                // (county, operator, no search filter, no rows in the undo window)
+                // and the insurance worksheet that replaced the FSA harvest CSV.
                 <button
-                  onClick={() => {
-                    const reportType = tab === 'plant' ? 'fsa-plant' : 'insurance-production';
-                    void withAuthorizedReportExport(supabase, farm_id, reportType, () => {
-                      const exportPromise = tab === 'plant'
-                        ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {
-                          farmName: farmName ?? undefined,
-                          cropYear: viewingSeason,
-                          reportDate: toLocalIsoDate(Date.now()),
-                        }))
-                        : exportHarvestData(filteredHarvest, fields);
-
-                      return exportPromise.catch((error) => {
-                        console.error('FSA export failed:', error);
-                        toast.error('Failed to export FSA data. Please try again.');
-                      });
-                    });
-                  }}
+                  onClick={() => navigate(tab === 'plant' ? '/reports?tab=fsa-plant' : '/reports?tab=insurance-production')}
                   className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-plant/10 p-2.5 text-xs font-bold text-plant transition-colors hover:bg-plant/20"
-                  title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
+                  title={tab === 'plant' ? 'Open the FSA-578 report' : 'Open the insurance production worksheet'}
                 >
                   <FileDown size={16} />
-                  <span className="hidden sm:inline">FSA EXPORT</span>
-                  <span className="inline sm:hidden">FSA</span>
+                  <span className="hidden sm:inline">{tab === 'plant' ? 'FSA-578' : 'INSURANCE'}</span>
+                  <span className="inline sm:hidden">{tab === 'plant' ? 'FSA' : 'APH'}</span>
                 </button>
               )}
               {tab === 'hay' && (
