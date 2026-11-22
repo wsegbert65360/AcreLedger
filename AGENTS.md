@@ -120,7 +120,7 @@ Topic file, then the code it names:
 - Landlord and farm-owner reports — [docs/agents/reports.md](./docs/agents/reports.md)
 - Weather and rainfall — [docs/agents/weather-rainfall.md](./docs/agents/weather-rainfall.md)
 - Billing, Free, and Pro — [docs/agents/billing.md](./docs/agents/billing.md)
-- Equipment (live for every user; do not replace the meter RPCs) — [docs/agents/equipment.md](./docs/agents/equipment.md)
+- Equipment (Pro, server-gated by `guard_premium_table('equipment')`; a free farm sees a Pro note and no Add; do not replace the meter RPCs) — [docs/agents/equipment.md](./docs/agents/equipment.md)
 - Cattle (off unless `runs_cattle`; groups and moves are free; events, transfers, and CSV are Pro) — [docs/agents/cattle.md](./docs/agents/cattle.md)
 - Offline, native, and accounts — [docs/agents/offline-native.md](./docs/agents/offline-native.md)
 - Owner disaster recovery (tooling exists; drills are not done) — [docs/agents/owner-dr.md](./docs/agents/owner-dr.md)
