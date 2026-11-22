@@ -19,6 +19,7 @@ describe('entitlement plan copy', () => {
       `Up to ${FREE_LIMITS.fieldCap} active fields`,
       FREE_RAINFALL,
       'Planting, spraying, fertilizing, harvest and hay records',
+      'Cattle groups and pasture moves',
       'FSA tract import, CLU assignment, and FSA farm, tract and field numbers',
       'Export what you logged',
     ]);
@@ -33,6 +34,7 @@ describe('entitlement plan copy', () => {
       'Prepared reports: FSA-578, crop insurance production, spray log, fertilizer, Hay Summary, and landlord summaries',
       'Grain bins and grain movement',
       'Equipment and maintenance',
+      'Cattle events, head transfers and the cattle CSV',
       'Landlord splits',
       'Rainfall on all remaining fields, hourly',
       'Backup restore',
