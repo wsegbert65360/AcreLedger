@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { FertilizerApplication, Field } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
 import { toast } from 'sonner';
 import { mapFertilizerToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
@@ -261,6 +262,7 @@ function useDeleteFertilizerRecord({ farm_id, fertilizerApplications, setFertili
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = fertilizerApplications
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -333,6 +335,12 @@ function useDeleteFertilizerRecord({ farm_id, fertilizerApplications, setFertili
           console.error('Error deleting fertilizer applications:', error);
         } else {
           console.warn('Fertilizer delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('fertilizer_applications', ids, farm_id, snapshot, setFertilizerApplications);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
         }
 
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);

@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { PlantRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
 import { toast } from 'sonner';
 import { mapPlantToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
@@ -223,6 +224,7 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = plantRecords
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -295,6 +297,12 @@ export function usePlantRecords({ farm_id, viewingSeason, plantRecords, setPlant
           console.error('Error deleting plant records:', error);
         } else {
           console.warn('Plant delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('plant_records', ids, farm_id, snapshot, setPlantRecords);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
         }
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setPlantRecords(prev => {

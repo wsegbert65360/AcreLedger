@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { CustomSprayRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
 import { softDeleteRows } from '@/lib/softDeleteRows';
 import { toast } from 'sonner';
 import { mapCustomSprayToDb } from '@/lib/mappers';
@@ -223,6 +224,7 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = customSprayRecords
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -292,6 +294,12 @@ export function useCustomSprayRecords({ farm_id, viewingSeason, customSprayRecor
           console.error('Error deleting custom spray records:', error);
         } else {
           console.warn('Custom spray delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('custom_spray_records', ids, farm_id, snapshot, setCustomSprayRecords);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
         }
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setCustomSprayRecords(prev => {
