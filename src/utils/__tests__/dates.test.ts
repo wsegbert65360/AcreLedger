@@ -71,3 +71,18 @@ describe('toLocalIsoDate across time zones', () => {
     expect(toLocalIsoDate(morning)).toBe('2026-11-21');
   });
 });
+
+describe('parseLocalDate validation', () => {
+  it('parses a real calendar day at local midnight', () => {
+    const d = parseLocalDate('2028-02-29');
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2028, 1, 29, 0]);
+  });
+
+  it.each(['2026-02-30', '2026-13-01', '2026-00-10', '2026-2-3', 'not a date', '', '2026-11-22T10:00:00Z'])(
+    'returns an invalid Date for %j instead of rolling over',
+    (input) => {
+      expect(Number.isNaN(parseLocalDate(input).getTime())).toBe(true);
+    },
+  );
+});
+

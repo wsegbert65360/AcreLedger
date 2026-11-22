@@ -398,7 +398,7 @@ export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
     binName: safeStr(db.bin_name, 'Unknown Bin'),
     type: (db.type || 'in') as 'in' | 'out',
     bushels: safeNum(db.bushels),
-    moisturePercent: safeNum(db.moisture_percent, 15.0),
+    moisturePercent: db.moisture_percent == null ? null : safeNum(db.moisture_percent, 15.0),
     sourceFieldName: db.source_field_name || undefined,
     destination: db.destination || undefined,
     price: db.price != null ? safeNum(db.price) : undefined,

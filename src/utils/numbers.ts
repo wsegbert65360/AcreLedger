@@ -6,9 +6,35 @@ import type { LocaleCode } from '@/store/useAppPreferences';
  * Avoids floating-point precision errors.
  */
 export function roundTo(val: number, decimals: number = 2): number {
-    if (typeof val !== 'number' || isNaN(val)) return 0;
+    if (typeof val !== 'number' || !Number.isFinite(val)) return 0;
+    // Shift by exponent text, not by multiplying: 1.005 * 100 is 100.49999…,
+    // so the multiply form rounds 1.005 down to 1.
+    const shifted = Math.round(Number(`${val}e${decimals}`));
+    const result = Number(`${shifted}e${-decimals}`);
+    if (Number.isFinite(result)) return result;
     const factor = Math.pow(10, decimals);
     return Math.round(val * factor) / factor;
+}
+
+/**
+ * Whole-number percentages that always add up to exactly 100 (largest
+ * remainder). Plain rounding can print 33% / 33% / 33%. Zero total → all 0.
+ */
+export function wholePercents(weights: readonly number[]): number[] {
+    const clean = weights.map(w => (Number.isFinite(w) && w > 0 ? w : 0));
+    const total = clean.reduce((a, b) => a + b, 0);
+    if (!(total > 0)) return clean.map(() => 0);
+    const exact = clean.map(w => (w / total) * 100);
+    const result = exact.map(Math.floor);
+    let remaining = 100 - result.reduce((a, b) => a + b, 0);
+    const order = exact.map((value, index) => ({ index, rem: value - result[index] }))
+        .sort((a, b) => b.rem - a.rem || a.index - b.index);
+    for (const { index } of order) {
+        if (remaining <= 0) break;
+        result[index] += 1;
+        remaining -= 1;
+    }
+    return result;
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   syncQueue,
 } from '@/lib/syncQueue';
 import { applyReadingUpdate, convertMeterUnit } from '@/lib/equipment';
+import { roundTo as sharedRoundTo } from '@/utils/numbers';
 import type { Equipment, MaintenanceLog, MaintenanceSchedule, MeterUnit } from '@/types/equipment';
 
 interface UseEquipmentArgs {
@@ -50,9 +51,9 @@ function readingFromRpc(data: unknown): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/** Shared rounding, but a non-finite value passes through (never becomes a 0 reading). */
 function roundTo(value: number, places: number): number {
-  const factor = 10 ** places;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
+  return Number.isFinite(value) ? sharedRoundTo(value, places) : value;
 }
 
 /** Meter columns are NUMERIC(10,1). Rounding before the write keeps the queued
