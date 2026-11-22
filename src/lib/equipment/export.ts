@@ -1,5 +1,4 @@
-import { Capacitor } from '@capacitor/core';
-import { native } from '@/lib/native';
+import { downloadFile } from '@/lib/downloadFile';
 import type { Equipment, MaintenanceLog } from '@/types/equipment';
 import { sanitizeCsvValue } from '@/utils/csv';
 
@@ -36,14 +35,5 @@ export async function exportMaintenanceCsv(
   fileName: string,
 ): Promise<void> {
   const csv = buildMaintenanceCsv(logs, equipment);
-  if (Capacitor.isNativePlatform()) {
-    await native.shareFile({ fileName, data: csv, title: 'AcreLedger equipment maintenance', encoding: 'utf8' });
-    return;
-  }
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  await downloadFile(csv, fileName, 'text/csv;charset=utf-8', 'AcreLedger equipment maintenance');
 }

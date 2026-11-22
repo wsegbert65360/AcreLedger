@@ -22,7 +22,8 @@ import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/compo
 import WorkRequestsTab from './workRequests/WorkRequestsTab';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, buildFsa578Rows, buildInsuranceProductionReport, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportInsuranceProductionCsv, exportInsuranceProductionPdf, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportOwnerSummaryPdf, exportFsa578WorksheetPdf, validateFsa578Rows } from '@/lib/complianceReports';
-import { native, sanitizeNativeFileName } from '@/lib/native';
+import { downloadFile } from '@/lib/downloadFile';
+import { sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
@@ -414,25 +415,7 @@ export default function Reports() {
       const csv = generateLandlordSummaryCSV(landlordSummary);
       const fileName = sanitizeNativeFileName(`${summaryFilePrefix}_${viewingSeason}.csv`);
 
-      if (Capacitor.isNativePlatform()) {
-        await native.shareFile({
-          fileName,
-          data: csv,
-          title: `AcreLedger Export: ${fileName}`,
-          encoding: 'utf8'
-        });
-        return;
-      }
-
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 2000); // Wait 2s to ensure browser starts download
+      await downloadFile(csv, fileName, 'text/csv');
     }, `${summaryTitle} CSV`);
   };
 

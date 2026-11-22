@@ -1,5 +1,4 @@
-import { Capacitor } from '@capacitor/core';
-import { native } from '@/lib/native';
+import { downloadFile } from '@/lib/downloadFile';
 import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 import { sanitizeCsvValue } from '@/utils/csv';
 import { CATTLE_CLASS_LABELS, CATTLE_EVENT_LABELS, CATTLE_REMOVAL_LABELS, pastureLabel } from './ui';
@@ -44,14 +43,5 @@ export function buildCattleCsv(
 }
 
 export async function exportCattleCsv(csv: string, fileName: string): Promise<void> {
-  if (Capacitor.isNativePlatform()) {
-    await native.shareFile({ fileName, data: csv, title: 'AcreLedger cattle', encoding: 'utf8' });
-    return;
-  }
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  await downloadFile(csv, fileName, 'text/csv;charset=utf-8', 'AcreLedger cattle');
 }
