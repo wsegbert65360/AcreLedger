@@ -8,6 +8,8 @@ import {
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
 import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
+import type { CountyAssignment } from '@/lib/county/types';
+import { mapCountyAssignmentToDb } from '@/lib/mappers';
 import {
   mapBinToDbForRestore, mapCustomSprayToDbForRestore, mapEquipmentToDbForRestore,
   mapFertilizerRecipeToDbForRestore, mapFertilizerToDbForRestore, mapFieldCluAssignmentToDbForRestore,
@@ -445,6 +447,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const tractsToDb      = (backupData.fsaTracts            ?? []).map((t) => mapFsaTractToDbForRestore({ ...t, farmId: farm_id } as FsaTractImport));
       const assignmentsToDb = (backupData.cluAssignments       ?? []).map((a) => mapFieldCluAssignmentToDbForRestore({ ...a, farmId: farm_id } as FieldCluAssignment));
       const workRequestsToDb = (backupData.workRequests        ?? []).map((w) => mapWorkRequestToDbForRestore({ ...w, farm_id } as unknown as WorkRequest));
+      const countiesToDb = (backupData.countyAssignments ?? []).map((c) => mapCountyAssignmentToDb({ ...c, farmId: farm_id } as CountyAssignment));
       const equipmentToDb = (backupData.equipment ?? []).map((row) => mapEquipmentToDbForRestore({ ...row, farm_id } as Equipment));
       const schedulesToDb = (backupData.maintenanceSchedules ?? []).map((row) => mapMaintenanceScheduleToDbForRestore({ ...row, farm_id } as MaintenanceSchedule));
       const logsToDb = (backupData.maintenanceLogs ?? []).map((row) => mapMaintenanceLogToDbForRestore({ ...row, farm_id } as MaintenanceLog));
@@ -478,6 +481,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         spray_recipes: recipesToDb,
         fsa_tract_imports: tractsToDb,
         field_clu_assignments: assignmentsToDb,
+        county_assignments: countiesToDb,
         work_requests: workRequestsToDb,
         equipment: equipmentToDb,
         maintenance_schedules: schedulesToDb,

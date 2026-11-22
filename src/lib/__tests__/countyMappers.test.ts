@@ -28,3 +28,14 @@ describe('county assignment mappers', () => {
     expect(() => mapCountyAssignmentToDb(row({ farmId: '' }))).toThrow();
   });
 });
+
+describe('county assignments in the JSON backup', () => {
+  it('round-trips a manual split through backup JSON and the restore mapper', async () => {
+    const { backupSchema } = await import('../backupSchema');
+    const manual = row({ id: 'm1', countyFips: '29015', countyName: 'Benton', method: 'manual', manualAcres: 45, reviewStatus: 'reviewed' });
+    const parsed = backupSchema.parse(JSON.parse(JSON.stringify({ countyAssignments: [manual] })));
+    expect(parsed.countyAssignments).toEqual([manual]);
+    expect(mapCountyAssignmentToDb({ ...parsed.countyAssignments![0], farmId: 'restoring-farm' } as typeof manual))
+      .toMatchObject({ id: 'm1', farm_id: 'restoring-farm', method: 'manual', manual_acres: 45, deleted_at: null });
+  });
+});

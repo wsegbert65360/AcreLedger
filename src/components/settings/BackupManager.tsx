@@ -51,6 +51,7 @@ export default function BackupManager() {
     sprayRecipes,
     fsaTracts,
     cluAssignments,
+    countyAssignments,
     workRequests,
     equipment,
     maintenanceSchedules,
@@ -139,6 +140,8 @@ export default function BackupManager() {
         sprayRecipes,
         fsaTracts,
         cluAssignments,
+        // Manual county splits live only here; a re-lookup cannot recreate them.
+        countyAssignments: (countyAssignments ?? []).filter(row => !row.deletedAt),
         workRequests,
         equipment,
         maintenanceSchedules,

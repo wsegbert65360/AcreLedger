@@ -124,5 +124,6 @@
   "20261121130000_subscription_livemode_and_active_bound.sql": "e2007b555ba88f3c6e58f20c06da87a139d24e5afbbc2cd974387d15f977fb96",
   "20261121140000_core_select_policies_match_production.sql": "b4cb3f7c0a7c573581f143c103c81e017f9249df5828ae1f38ec31da8629d552",
   "20261121150000_app_schema_version.sql": "ea61298b8ee9a1164ab80277efef3a5b031bc0a976a90f25a61487a692514eb7",
-  "20261121160000_premium_guard_allows_noop_updates.sql": "e1427b73af92d69022415bdd5abdf0bb424f40c4f6ea1bd75eb6457f6faa1abf"
+  "20261121160000_premium_guard_allows_noop_updates.sql": "e1427b73af92d69022415bdd5abdf0bb424f40c4f6ea1bd75eb6457f6faa1abf",
+  "20261121170000_restore_county_assignments.sql": "b679e18b2886a576266237dfe127b91158bbe4ed29f98311702c0fbf1f0ac7ce"
 }
