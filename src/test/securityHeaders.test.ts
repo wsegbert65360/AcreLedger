@@ -18,7 +18,6 @@ function headerMap(source: string): Map<string, string> {
 
 describe('vercel.json security headers', () => {
   const headers = headerMap('/(.*)');
-  const csp = headers.get('Content-Security-Policy-Report-Only') ?? '';
 
   it('sets HSTS, nosniff, DENY framing, and strict-origin referrer policy', () => {
     expect(headers.get('Strict-Transport-Security')).toBe('max-age=31536000; includeSubDomains');
@@ -27,20 +26,8 @@ describe('vercel.json security headers', () => {
     expect(headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
   });
 
-  it('uses report-only CSP with frame-ancestors none and current app origins', () => {
-    expect(csp).toContain("frame-ancestors 'none'");
-    expect(csp).toContain('https://rtzqswpmhlbrbxjwyywl.supabase.co');
-    expect(csp).toContain('wss://rtzqswpmhlbrbxjwyywl.supabase.co');
-    expect(csp).toContain('https://js.stripe.com');
-    expect(csp).toContain('https://checkout.stripe.com');
-    expect(csp).toContain('https://api.stripe.com');
-    expect(csp).toContain('https://server.arcgisonline.com');
-    expect(csp).toContain('https://weather.visualcrossing.com');
-    expect(csp).toContain('https://rain-api.vercel.app');
-    expect(csp).toContain('https://www.windy.com');
-    expect(csp).toContain('https://nominatim.openstreetmap.org');
-    expect(csp).toContain('https://itunes.apple.com');
-    expect(csp).toContain('https://cdnjs.cloudflare.com');
+  it('sends no report-only CSP (it had nowhere to report; index.html carries the enforced CSP)', () => {
+    expect(headers.has('Content-Security-Policy-Report-Only')).toBe(false);
   });
 });
 
