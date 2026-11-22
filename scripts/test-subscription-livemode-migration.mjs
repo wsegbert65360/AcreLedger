@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// Disposable PGlite: 20261121130000_subscription_livemode_and_active_bound.sql.
+// Disposable PGlite: 20261122055428_subscription_livemode_and_active_bound.sql.
 // An `active` row is Pro only through current_period_end + 14 days; the
 // other branches are unchanged; clients cannot write livemode.
 const db = new PGlite();
@@ -35,7 +35,7 @@ try {
       RETURNS TABLE (field_cap int, rainfall_slot_cap int, photo_cap int, history_seasons int, device_cap int)
       LANGUAGE sql AS $$ SELECT 50, 2, NULL::int, 2, 1 $$;
   `);
-  await db.exec(await readFile(new URL('../supabase/migrations/20261121130000_subscription_livemode_and_active_bound.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261122055428_subscription_livemode_and_active_bound.sql', import.meta.url), 'utf8'));
 
   await setSub('active', `now() + interval '200 days'`);
   assert.equal(await planFor(), 'paid', 'active in period');

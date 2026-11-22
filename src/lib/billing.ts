@@ -82,7 +82,7 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
   }
   if (status === 'active') {
     // Paid through current_period_end plus grace for a late renewal event;
-    // matches _farm_entitlement (20261121130000). No period end: unchanged.
+    // matches _farm_entitlement (20261122055428). No period end: unchanged.
     const periodEndMs = parseInstantMs(subscription.current_period_end);
     if (periodEndMs !== null && nowMs > periodEndMs + graceDays * DAY_MS) {
       return { hasAccess: false, inGrace: false, phase: 'locked', status };

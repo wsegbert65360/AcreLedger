@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
  * Tables whose client SELECT policy hides deleted rows. A direct
  * `.update({ deleted_at })` on them fails RLS (Postgres checks the new row
  * against the SELECT policy), so they are retired through the
- * `soft_delete_farm_rows` RPC (migration 20261121120000).
+ * `soft_delete_farm_rows` RPC (migration 20261122055358).
  */
 export const RPC_SOFT_DELETE_TABLES = [
   'custom_spray_records',

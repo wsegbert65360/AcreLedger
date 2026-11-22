@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// Disposable PGlite: 20261121120000_soft_delete_farm_rows.sql.
+// Disposable PGlite: 20261122055358_soft_delete_farm_rows.sql.
 // Proves that a direct client soft delete fails when the SELECT policy hides
 // deleted rows, and that the RPC retires rows for the caller's farm only.
 const db = new PGlite();
@@ -49,7 +49,7 @@ try {
       INSERT INTO public.${t} VALUES ('${rowA1}', '${farmA}', NULL), ('${rowA2}', '${farmA}', NULL), ('${rowB}', '${farmB}', NULL);
     `);
   }
-  const migration = await readFile(new URL('../supabase/migrations/20261121120000_soft_delete_farm_rows.sql', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../supabase/migrations/20261122055358_soft_delete_farm_rows.sql', import.meta.url), 'utf8');
   await db.exec(migration);
 
   for (const t of TABLES) {

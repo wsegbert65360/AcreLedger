@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// Disposable PGlite: 20261121160000_premium_guard_allows_noop_updates.sql.
+// Disposable PGlite: 20261122140056_premium_guard_allows_noop_updates.sql.
 // On a free farm in enforce mode, a no-op UPDATE of a Pro table (a replayed,
 // non-increasing meter reading) passes; a real change and an insert still
 // need Pro; a soft delete stays allowed.
@@ -27,7 +27,7 @@ try {
       updated_at timestamptz DEFAULT now(), deleted_at timestamptz);
     INSERT INTO public.equipment (id, farm_id, name, current_reading) VALUES ('${eq}', '${farm}', 'Tractor', 1200);
   `);
-  await db.exec(await readFile(new URL('../supabase/migrations/20261121160000_premium_guard_allows_noop_updates.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261122140056_premium_guard_allows_noop_updates.sql', import.meta.url), 'utf8'));
   await db.exec(`CREATE TRIGGER guard_premium_equipment BEFORE INSERT OR UPDATE ON public.equipment
     FOR EACH ROW EXECUTE FUNCTION public.guard_premium_table('equipment')`);
 

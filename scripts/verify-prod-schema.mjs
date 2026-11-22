@@ -1,7 +1,7 @@
 // Schema before app: a production deploy must not ship ahead of the database.
 // Compares the newest migration in supabase/migrations with the newest one
 // applied in the target project (public.app_schema_version(), migration
-// 20261121150000). Fails when the project is behind.
+// 20261122140036). Fails when the project is behind.
 //
 // Runs only for Vercel production builds (VERCEL_ENV=production) or when
 // VERIFY_PROD_SCHEMA=1. Uses the service-role key (the RPC is service-role
@@ -37,7 +37,7 @@ try {
     signal: AbortSignal.timeout(15000),
   });
   if (response.status === 404) {
-    console.warn('Schema-before-app check: app_schema_version() is not in production yet (apply 20261121150000). Passing.');
+    console.warn('Schema-before-app check: app_schema_version() is not in production yet (apply 20261122140036). Passing.');
     process.exit(0);
   }
   if (!response.ok) throw new Error(`HTTP ${response.status}`);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// Disposable PGlite: 20261121140000_core_select_policies_match_production.sql.
+// Disposable PGlite: 20261122140026_core_select_policies_match_production.sql.
 // Before: a client soft delete on a core table fails RLS (SELECT policy filters
 // deleted_at). After: it succeeds, edits to deleted rows are still refused,
 // and another farm's rows stay invisible.
@@ -50,7 +50,7 @@ try {
   await assert.rejects(softDelete(), /row-level security/, 'before: core soft delete fails RLS');
   await db.exec('RESET ROLE');
 
-  await db.exec(await readFile(new URL('../supabase/migrations/20261121140000_core_select_policies_match_production.sql', import.meta.url), 'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261122140026_core_select_policies_match_production.sql', import.meta.url), 'utf8'));
 
   await asUser();
   assert.equal((await softDelete()).affectedRows, 1, 'after: core soft delete succeeds');

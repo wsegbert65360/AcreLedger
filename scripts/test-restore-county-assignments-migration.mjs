@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-// Disposable PGlite: 20261121170000_restore_county_assignments.sql.
+// Disposable PGlite: 20261122140118_restore_county_assignments.sql.
 // A backup's county assignments (manual splits included) are restored, a
 // live row for the same subject and county under another id is retired
 // instead of aborting the restore, and another farm's ids are refused.
@@ -61,7 +61,7 @@ try {
   await db.exec(await mig('20260716015958_preserve_restore_payload_columns.sql').then(sql =>
     // Only the generic helpers; the old wrapper body is replaced below.
     sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION public._restore_table_for_farm('), sql.indexOf('CREATE OR REPLACE FUNCTION public._restore_table_for_farm_with_conflict('))));
-  await db.exec(await mig('20261121170000_restore_county_assignments.sql'));
+  await db.exec(await mig('20261122140118_restore_county_assignments.sql'));
 
   // A live auto row for Henry under another id, and another farm's row.
   await db.query(`INSERT INTO public.county_assignments SELECT * FROM jsonb_populate_record(NULL::public.county_assignments, $1)`,

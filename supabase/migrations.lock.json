@@ -120,10 +120,10 @@
   "20261116120000_fsa_entry_free.sql": "f705e33a762ae200c6c009facb74fed57efeeea6244ccb5bef99cfbf1db8a11c",
   "20261119202950_county_assignments.sql": "70e7a5eb29e3177c8d3cc8dde6d9ca1baf52c6ecf2d893afdd79c807e4897f9e",
   "20261120015634_fsa578_status_code_and_operator.sql": "deda9212928a4098d52d33d9517304c4f4a4071014595f620e6e05b95fcca511",
-  "20261121120000_soft_delete_farm_rows.sql": "78f995a0bed3db3688a05a9388ffc47fe310d5ef4bd3394ac5a14a489b1f8dc3",
-  "20261121130000_subscription_livemode_and_active_bound.sql": "e2007b555ba88f3c6e58f20c06da87a139d24e5afbbc2cd974387d15f977fb96",
-  "20261121140000_core_select_policies_match_production.sql": "b4cb3f7c0a7c573581f143c103c81e017f9249df5828ae1f38ec31da8629d552",
-  "20261121150000_app_schema_version.sql": "ea61298b8ee9a1164ab80277efef3a5b031bc0a976a90f25a61487a692514eb7",
-  "20261121160000_premium_guard_allows_noop_updates.sql": "e1427b73af92d69022415bdd5abdf0bb424f40c4f6ea1bd75eb6457f6faa1abf",
-  "20261121170000_restore_county_assignments.sql": "b679e18b2886a576266237dfe127b91158bbe4ed29f98311702c0fbf1f0ac7ce"
+  "20261122055358_soft_delete_farm_rows.sql": "78f995a0bed3db3688a05a9388ffc47fe310d5ef4bd3394ac5a14a489b1f8dc3",
+  "20261122055428_subscription_livemode_and_active_bound.sql": "e2007b555ba88f3c6e58f20c06da87a139d24e5afbbc2cd974387d15f977fb96",
+  "20261122140026_core_select_policies_match_production.sql": "188a4467f66dac9ff9dade88a694b97f10fbefdb8890756b0e02ded08cc16b7b",
+  "20261122140036_app_schema_version.sql": "ea61298b8ee9a1164ab80277efef3a5b031bc0a976a90f25a61487a692514eb7",
+  "20261122140056_premium_guard_allows_noop_updates.sql": "e1427b73af92d69022415bdd5abdf0bb424f40c4f6ea1bd75eb6457f6faa1abf",
+  "20261122140118_restore_county_assignments.sql": "b679e18b2886a576266237dfe127b91158bbe4ed29f98311702c0fbf1f0ac7ce"
 }
