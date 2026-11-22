@@ -191,6 +191,23 @@ describe('WeatherService', () => {
             expect((global.fetch as any).mock.calls[1][1].headers.Authorization).toBe('Bearer refreshed-token');
         });
 
+        it('shows one plain message when the farm daily weather limit is reached', async () => {
+            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
+            vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
+            vi.resetModules();
+
+            await import('@/lib/supabase');
+            const { toast } = await import('sonner');
+            const { WeatherService, WEATHER_LIMIT_REACHED } = await import('../WeatherService');
+            (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 429, statusText: 'Too Many Requests' });
+
+            const result = await WeatherService.fetchCurrentWeather('72301');
+
+            expect(result.isError).toBe(true);
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            expect(toast.error).toHaveBeenCalledWith(WEATHER_LIMIT_REACHED, { id: 'weather-daily-limit' });
+        });
+
         it('should correctly map successful response', async () => {
             vi.useFakeTimers();
             vi.setSystemTime(new Date('2026-03-26T12:00:00Z'));

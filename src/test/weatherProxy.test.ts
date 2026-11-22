@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const authGetUser = vi.fn();
 const consumeRateLimit = vi.fn();
 const incrementUsage = vi.fn();
+const consumeFarmQuota = vi.fn();
 const createClient = vi.fn();
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -63,13 +64,17 @@ describe('weather proxy', () => {
     authGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
     consumeRateLimit.mockResolvedValue({ data: true, error: null });
     incrementUsage.mockResolvedValue({ data: true, error: null });
+    consumeFarmQuota.mockResolvedValue({ data: { allowed: true, pro: true }, error: null });
+    delete process.env.WEATHER_FREE_DAILY_CAP;
     createClient.mockImplementation((_url: string, key: string) => {
       if (key === 'service-role-key') {
         return { rpc: incrementUsage };
       }
       return {
         auth: { getUser: authGetUser },
-        rpc: consumeRateLimit,
+        rpc: (name: string, ...args: unknown[]) => (name === 'consume_weather_farm_request'
+          ? consumeFarmQuota(name, ...args)
+          : consumeRateLimit(name, ...args)),
       };
     });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -191,6 +196,49 @@ describe('weather proxy', () => {
       p_provider: 'weather',
       p_cap: 2000,
     });
+  });
+
+  it('refuses a farm over its daily weather limit before touching the shared cap', async () => {
+    consumeFarmQuota.mockResolvedValue({ data: { allowed: false, pro: false }, error: null });
+    const { state, headers } = await invoke();
+    expect(state.status).toBe(429);
+    expect(state.body).toEqual({ error: 'Daily weather limit reached for this farm' });
+    expect(headers.get('Retry-After')).toBe('3600');
+    expect(incrementUsage).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the farm quota cannot be checked', async () => {
+    consumeFarmQuota.mockResolvedValue({ data: null, error: { message: 'rpc unavailable' } });
+    const { state } = await invoke();
+    expect(state.status).toBe(503);
+    expect(incrementUsage).not.toHaveBeenCalled();
+  });
+
+  it('charges a Free farm to the Free share (half the cap) and then the shared cap', async () => {
+    consumeFarmQuota.mockResolvedValue({ data: { allowed: true, pro: false }, error: null });
+    const { state } = await invoke();
+    expect(state.status).toBe(200);
+    expect(incrementUsage.mock.calls).toEqual([
+      ['increment_provider_daily_usage', { p_provider: 'weather-free', p_cap: 1000 }],
+      ['increment_provider_daily_usage', { p_provider: 'weather', p_cap: 2000 }],
+    ]);
+  });
+
+  it('stops Free farms when the Free share is used up, without using the shared cap', async () => {
+    consumeFarmQuota.mockResolvedValue({ data: { allowed: true, pro: false }, error: null });
+    incrementUsage.mockResolvedValueOnce({ data: false, error: null });
+    const { state } = await invoke();
+    expect(state.status).toBe(503);
+    expect(incrementUsage).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('lets a Pro farm skip the Free share', async () => {
+    const { state } = await invoke();
+    expect(state.status).toBe(200);
+    expect(incrementUsage).toHaveBeenCalledTimes(1);
+    expect(incrementUsage).toHaveBeenCalledWith('increment_provider_daily_usage', { p_provider: 'weather', p_cap: 2000 });
   });
 
   it('fails closed when the durable quota cannot be checked', async () => {

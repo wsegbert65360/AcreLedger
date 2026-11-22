@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 export const DEFAULT_WEATHER_DAILY_CAP = 2000;
 export const DEFAULT_AI_DAILY_CAP = 500;
 
-export type ProviderDailyName = 'weather' | 'ai';
+export type ProviderDailyName = 'weather' | 'weather-free' | 'ai';
 
 export function resolveDailyCap(raw: string | undefined, fallback: number): number {
   const parsed = Number.parseInt((raw ?? '').trim(), 10);
