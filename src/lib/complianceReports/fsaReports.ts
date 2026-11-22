@@ -208,7 +208,9 @@ function mergeCompatiblePlantRecords(records: PlantRecord[], fieldMap: Map<strin
         }
 
         existing.id = `${existing.id}+${r.id}`;
-        existing.acreage = roundTo(existing.acreage + r.acreage, 2);
+        // One non-finite acreage must not zero the merged row (roundTo(NaN) is 0).
+        const finite = (n: number) => (Number.isFinite(n) ? n : 0);
+        existing.acreage = roundTo(finite(existing.acreage) + finite(r.acreage), 2);
         if (r.plantDate && (!existing.plantDate || r.plantDate > existing.plantDate)) {
             existing.plantDate = r.plantDate;
         }

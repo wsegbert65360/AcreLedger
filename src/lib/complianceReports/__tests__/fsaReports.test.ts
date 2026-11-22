@@ -168,6 +168,14 @@ describe('FSA 578 rows for a field with no CLU', () => {
         expect(rows.map(r => r.acreage)).toEqual([80, 80]);
     });
 
+    it('does not zero a merged row when one planting has no acreage', () => {
+        const rows = buildFsa578Rows([
+            plant({ id: 'a', acreage: 30, seedVariety: 'X' }),
+            plant({ id: 'b', acreage: Number.NaN, seedVariety: 'X' }),
+        ], [{ ...field, acreage: Number.NaN }], []);
+        expect(rows.reduce((sum, r) => sum + r.acreage, 0)).toBe(30);
+    });
+
     it('falls back to the field acres when the planting has none', () => {
         const rows = buildFsa578Rows([plant({ id: 'blank', acreage: Number.NaN })], [field], []);
         expect(rows[0].acreage).toBe(80);
