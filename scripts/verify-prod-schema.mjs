@@ -4,7 +4,8 @@
 // 20261121150000). Fails when the project is behind.
 //
 // Runs only for Vercel production builds (VERCEL_ENV=production) or when
-// VERIFY_PROD_SCHEMA=1. Uses the publishable (anon) key. Until the RPC itself
+// VERIFY_PROD_SCHEMA=1. Uses the service-role key (the RPC is service-role
+// only). The key is never logged or bundled. Until the RPC itself
 // is applied, and on a network error, it warns and passes: the check must
 // never block a deploy for a reason other than a missing migration.
 import { readdir } from 'node:fs/promises';
@@ -18,9 +19,9 @@ if (!enabled) {
 }
 
 const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
-const key = (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 if (!url || !key) {
-  console.error('Schema-before-app check: SUPABASE_URL/VITE_SUPABASE_URL and the anon key are required for a production build.');
+  console.error('Schema-before-app check: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for a production build.');
   process.exit(1);
 }
 

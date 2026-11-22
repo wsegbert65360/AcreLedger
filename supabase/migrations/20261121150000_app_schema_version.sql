@@ -3,8 +3,8 @@
 -- Returns the newest applied migration version. The Vercel build
 -- (scripts/verify-prod-schema.mjs) compares it with the newest file in
 -- supabase/migrations and fails the deploy when production is behind, so an
--- app build never ships ahead of the schema it needs. Exposes only a
--- migration timestamp; no farm data.
+-- app build never ships ahead of the schema it needs. Service role only (the
+-- build uses the server key); returns only a migration timestamp.
 
 CREATE OR REPLACE FUNCTION public.app_schema_version()
 RETURNS text
@@ -25,8 +25,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.app_schema_version() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.app_schema_version() TO anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.app_schema_version() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.app_schema_version() TO service_role;
 
 COMMENT ON FUNCTION public.app_schema_version() IS
   'Newest applied migration version, for the deploy-time schema-before-app check.';
