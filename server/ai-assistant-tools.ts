@@ -74,7 +74,9 @@ interface FarmEntitySpec {
 const FARM_ENTITY_REGISTRY: Record<FarmEntityName, FarmEntitySpec> = {
   farm: {
     table: 'farms', label: 'farm details', farmScope: 'farm_primary_key', softDelete: false,
-    orderColumn: 'id', numericFields: [], groupFields: ['name'],
+    // Explicit columns: trial and future billing columns never reach the model.
+    orderColumn: 'id', listSelect: 'id, name, runs_cattle, fsa_operator_name, created_at',
+    numericFields: [], groupFields: ['name'],
   },
   profile: {
     table: 'profiles', label: 'current user profile', farmScope: 'farm_id', softDelete: false,
