@@ -41,6 +41,16 @@ function createResponse() {
   return { response, state };
 }
 
+function expectRequiredTermsConsent(params: {
+  consent_collection?: unknown;
+  custom_text?: { terms_of_service_acceptance?: { message?: string } };
+}) {
+  expect(params.consent_collection).toEqual({ terms_of_service: 'required' });
+  expect(params.custom_text?.terms_of_service_acceptance?.message).toContain(
+    'https://www.acreledger.app/terms',
+  );
+}
+
 let farmTrialEndsAt: string | null;
 let farmLookupError: { message: string } | null;
 
@@ -114,11 +124,18 @@ describe('create checkout session API', () => {
         metadata: { farm_id: 'farm-1', user_id: 'user-1' },
         client_reference_id: 'farm-1',
         customer_email: 'farmer@example.com',
+        consent_collection: { terms_of_service: 'required' },
+        custom_text: {
+          terms_of_service_acceptance: {
+            message: expect.stringContaining('https://www.acreledger.app/terms'),
+          },
+        },
         success_url: 'https://acreledger.example/settings?billing=success',
         cancel_url: 'https://acreledger.example/settings?billing=cancelled',
       }),
       { idempotencyKey: expect.stringMatching(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/) },
     );
+    expectRequiredTermsConsent(mocks.createCheckoutSession.mock.calls[0][0]);
   });
 
   it.each(['2026-10-27T12:00:00Z', '2026-10-26T12:00:00Z', '2026-10-24T12:00:00Z', null])('creates no trial even when the farm still carries a stored date (%s)', async deadline => {
@@ -182,6 +199,7 @@ describe('create checkout session API', () => {
 
     expect(response.state.status).toBe(200);
     expect(mocks.createCheckoutSession).toHaveBeenCalled();
+    expectRequiredTermsConsent(mocks.createCheckoutSession.mock.calls[0][0]);
   });
 
   it('denies checkout when the active billing row belongs to another farm member', async () => {

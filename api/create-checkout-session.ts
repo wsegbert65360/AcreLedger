@@ -9,6 +9,9 @@ import {
   isBillingAllowlisted,
 } from '../server/billing.js';
 
+/** Canonical public Terms URL: index.html canonical origin + `/terms`. */
+const TERMS_OF_SERVICE_URL = 'https://www.acreledger.app/terms';
+
 type QueryValue = string | string[] | undefined;
 
 interface ApiRequest {
@@ -207,7 +210,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           metadata: { farm_id: farmId, user_id: user.id },
           client_reference_id: farmId,
           ...buildCheckoutCustomerParams(existing, email),
-          consent_collection: { terms_of_service: 'none' },
+          consent_collection: { terms_of_service: 'required' },
+          custom_text: {
+            terms_of_service_acceptance: {
+              message: `I agree to the [Terms of Service](${TERMS_OF_SERVICE_URL}).`,
+            },
+          },
           success_url: `${origin}/settings?billing=success`,
           cancel_url: `${origin}/settings?billing=cancelled`,
         },
