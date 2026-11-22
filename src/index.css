@@ -638,3 +638,17 @@ html.color [data-theme-choice="color"] {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * iOS Safari and WKWebView zoom the page when a field with text under 16px
+ * gets focus, and the zoom stays after the keyboard closes. Many fields use
+ * text-sm/text-xs (notes boxes, spray product name, recipe and field forms),
+ * so fix it once here for iOS only: desktop and Android keep the small text.
+ */
+@supports (-webkit-touch-callout: none) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="color"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
