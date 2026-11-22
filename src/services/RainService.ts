@@ -178,6 +178,7 @@ export const RainService = {
       // --- Custom range via Rain API (field-based historical lookup) ---
       const fetchCustomRange = async (startDate: string): Promise<{ total: number | null; dataWarning?: string }> => {
         try {
+          // eslint-disable-next-line no-restricted-syntax -- the Rain API (MRMS) works in UTC dates
           const today = new Date().toISOString().split('T')[0];
           const rangeParams = new URLSearchParams({
             field_id: normalizedFieldId,

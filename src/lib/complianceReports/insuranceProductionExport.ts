@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { toLocalIsoDate } from '@/utils/dates';
 import autoTable from 'jspdf-autotable';
 import { Capacitor } from '@capacitor/core';
 import { farmNameForCsv, farmNameForPdf } from '@/lib/farmDisplayName';
@@ -76,7 +77,7 @@ export function buildInsuranceProductionCsv({
 }
 
 export async function exportInsuranceProductionCsv(report: InsuranceProductionReport, metadata: Partial<InsuranceProductionMetadata>): Promise<void> {
-  const reportDate = metadata.reportDate || new Date().toISOString().slice(0, 10);
+  const reportDate = metadata.reportDate || toLocalIsoDate(Date.now());
   const csv = buildInsuranceProductionCsv({
     metadata: { farmName: farmNameForCsv(metadata.farmName), cropYear: report.cropYear, reportDate },
     report,

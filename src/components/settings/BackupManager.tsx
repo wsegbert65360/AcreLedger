@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toLocalIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -150,7 +151,7 @@ export default function BackupManager() {
         source: backupSource,
         loadedAt: dataLoadedAt ?? new Date().toISOString(),
       };
-      const filename = `acreledger-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const filename = `acreledger-backup-${toLocalIsoDate(Date.now())}.json`;
 
       const validatedBackup = backupSchema.parse(backupData);
       const success = await exportDataAsJson(validatedBackup, filename);

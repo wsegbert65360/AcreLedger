@@ -20,7 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { useAppPreferences } from '@/store/useAppPreferences';
 import { defaultProfileForCountry } from '@/lib/compliance/profiles';
 import { sprayRecordNeedsReview } from '@/lib/sprayCompliance';
-import { compareWorkDateDesc, getWorkDateMs } from '@/utils/dates';
+import { compareWorkDateDesc, getWorkDateMs, toLocalIsoDate } from '@/utils/dates';
 import type {
   PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
   FertilizerApplication, GrainMovement, TillageRecord, ActivityRecord
@@ -388,7 +388,7 @@ export default function Activity() {
                         ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {
                           farmName: farmName ?? undefined,
                           cropYear: viewingSeason,
-                          reportDate: new Date().toISOString().split('T')[0],
+                          reportDate: toLocalIsoDate(Date.now()),
                         }))
                         : exportHarvestData(filteredHarvest, fields);
 

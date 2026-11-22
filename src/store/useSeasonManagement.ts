@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react';
+import { toLocalIsoDate } from '@/utils/dates';
 import {
   Field, Bin, PlantRecord, SprayRecord, HarvestRecord, HayHarvestRecord, CustomSprayRecord,
   FertilizerApplication, GrainMovement, SavedSeed, SprayRecipe, FertilizerRecipe, TillageRecord,
@@ -305,7 +306,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       };
       const validatedBackup = backupSchema.parse(backupData);
 
-      const filename = `Pre_Season_Reset_${new Date().toISOString().split('T')[0]}.json`;
+      const filename = `Pre_Season_Reset_${toLocalIsoDate(Date.now())}.json`;
       const downloaded = await exportDataAsJson(validatedBackup, filename);
 
       if (!downloaded) {

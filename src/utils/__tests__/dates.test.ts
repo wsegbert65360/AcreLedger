@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { compareWorkDateDesc, getWorkDateMs, parseLocalDate, toLocalIsoDate, type WorkDateFields } from '../dates';
 
@@ -52,4 +52,22 @@ describe('compareWorkDateDesc', () => {
             '2026-04-22',
         ]);
     });
+});
+
+describe('toLocalIsoDate across time zones', () => {
+  const original = process.env.TZ;
+  afterEach(() => { process.env.TZ = original; });
+
+  it('keeps the Missouri evening date, where a UTC slice gives tomorrow', () => {
+    process.env.TZ = 'America/Chicago';
+    const evening = Date.parse('2026-11-21T01:30:00Z'); // Nov 20, 7:30 pm CST
+    expect(toLocalIsoDate(evening)).toBe('2026-11-20');
+    expect(new Date(evening).toISOString().slice(0, 10)).toBe('2026-11-21');
+  });
+
+  it('keeps the Sydney morning date, where a UTC slice gives yesterday', () => {
+    process.env.TZ = 'Australia/Sydney';
+    const morning = Date.parse('2026-11-20T22:00:00Z'); // Nov 21, 9:00 am AEDT
+    expect(toLocalIsoDate(morning)).toBe('2026-11-21');
+  });
 });

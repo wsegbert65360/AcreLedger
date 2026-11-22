@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toLocalIsoDate } from '@/utils/dates';
 import { Capacitor } from '@capacitor/core';
 import { native } from '@/lib/native';
 import { useFarm } from '@/store/farmStore';
@@ -96,7 +97,7 @@ export default function SyncStatus() {
     try {
       const changes = await getFailedSyncChanges?.();
       const data = JSON.stringify(changes ?? [], null, 2);
-      const fileName = `acreledger-unsynced-changes-${new Date().toISOString().slice(0, 10)}.json`;
+      const fileName = `acreledger-unsynced-changes-${toLocalIsoDate(Date.now())}.json`;
       if (Capacitor.isNativePlatform()) {
         const shared = await native.shareFile({ fileName, data, title: 'AcreLedger unsynced changes', encoding: 'utf8' });
         if (shared === false) {
