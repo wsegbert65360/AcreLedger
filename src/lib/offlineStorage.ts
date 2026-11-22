@@ -9,6 +9,20 @@ import { toast } from 'sonner';
 import { SYNC_QUEUE_KEYS } from '@/lib/syncQueueKeys';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 
+let cacheWriteWarned = false;
+/**
+ * A failed cache write (storage full) means a reload while offline would show
+ * an older copy and the farmer might re-enter records. Say so once per session.
+ * The sync queue itself is separate and unaffected.
+ */
+function warnCacheWriteFailed(): void {
+  if (cacheWriteWarned) return;
+  cacheWriteWarned = true;
+  toast.warning('This device could not save its offline copy of your records.', {
+    description: 'Your changes are still queued to sync. Stay online until they finish, and free up storage on this device.',
+  });
+}
+
 const isNative = Capacitor.isNativePlatform();
 
 export const OFFLINE_DATABASE_UNAVAILABLE = 'Offline database unavailable.';
@@ -200,6 +214,7 @@ export const offlineStorage = {
         }
       } catch (err) {
         console.error(`Failed to save offline cache for ${table}:`, err);
+        warnCacheWriteFailed();
       }
     } else {
       try {
@@ -208,6 +223,7 @@ export const offlineStorage = {
         localStorage.setItem(key, encrypted);
       } catch (err) {
         console.error(`Failed to save localStorage cache for ${table}:`, err);
+        warnCacheWriteFailed();
       }
     }
   },

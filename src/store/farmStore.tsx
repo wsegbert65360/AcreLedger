@@ -1116,6 +1116,7 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     initialFetchComplete,
     fetchError,
     pendingSyncCount,
+    syncQueueReadFailed,
     farmRole,
   });
 

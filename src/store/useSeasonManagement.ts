@@ -202,6 +202,8 @@ interface UseSeasonManagementArgs {
   initialFetchComplete: boolean;
   fetchError: boolean;
   pendingSyncCount: number;
+  /** The offline queue could not be read: unsynced changes may exist and are not counted. */
+  syncQueueReadFailed?: boolean;
   farmRole?: string | null;
 }
 
@@ -229,7 +231,10 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setCattleGroups, setCattleMoves, setCattleEvents, setFarmId,
     refetchFarmData,
     isOnline, initialFetchComplete, fetchError, pendingSyncCount, farmRole,
+    syncQueueReadFailed = false,
   } = args;
+  // An unreadable queue may hold unsynced changes; treat it like pending work.
+  const hasUnsyncedWork = pendingSyncCount > 0 || syncQueueReadFailed;
 
   // ─── Rollover ───────────────────────────────────────────────────────────────
 
@@ -274,7 +279,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
-    if (!initialFetchComplete || fetchError || pendingSyncCount > 0) {
+    if (!initialFetchComplete || fetchError || hasUnsyncedWork) {
       toast.error('Wait for cloud data and pending changes to finish syncing before rollover.');
       return false;
     }
@@ -369,7 +374,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
     equipment, maintenanceSchedules, maintenanceLogs,
     cattleGroups, cattleMoves, cattleEvents, activeSeason, viewingSeason,
-    isOnline, farm_id, initialFetchComplete, fetchError, pendingSyncCount,
+    isOnline, farm_id, initialFetchComplete, fetchError, hasUnsyncedWork,
     setActiveSeason, setViewingSeason, setLoading, refreshActiveSeason,
   ]);
 
@@ -389,7 +394,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       return false;
     }
 
-    if (!initialFetchComplete || fetchError || pendingSyncCount > 0) {
+    if (!initialFetchComplete || fetchError || hasUnsyncedWork) {
       toast.error('Wait for cloud data and pending changes to finish syncing before restore.');
       return false;
     }
@@ -531,7 +536,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       setLoading(false);
     }
   }, [
-    farm_id, isOnline, initialFetchComplete, fetchError, pendingSyncCount, farmRole, activeSeason,
+    farm_id, isOnline, initialFetchComplete, fetchError, hasUnsyncedWork, farmRole, activeSeason,
     setLoading, refetchFarmData, setActiveSeason, setViewingSeason,
   ]);
 
@@ -698,7 +703,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       toast.error('Undoing a pre-season reset requires a signed-in user.');
       return false;
     }
-    if (!initialFetchComplete || fetchError || pendingSyncCount > 0) {
+    if (!initialFetchComplete || fetchError || hasUnsyncedWork) {
       toast.error('Wait for cloud data and pending changes to finish syncing before restore.');
       return false;
     }
@@ -762,7 +767,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       setLoading(false);
     }
   }, [
-    session, farm_id, isOnline, initialFetchComplete, fetchError, pendingSyncCount,
+    session, farm_id, isOnline, initialFetchComplete, fetchError, hasUnsyncedWork,
     activeSeason, viewingSeason, setActiveSeason, setViewingSeason, setLoading,
     refetchFarmData, refreshActiveSeason,
   ]);

@@ -68,6 +68,7 @@ export default function BackupManager() {
     dataLoadSource,
     dataLoadedAt,
     farmRole,
+    syncQueueReadFailed,
   } = useFarm();
   const [backingUp, setBackingUp] = useState(false);
   const [lastBackup, setLastBackup] = useState<Date | null>(loadLastBackup);
@@ -103,8 +104,9 @@ export default function BackupManager() {
 
   const backupBlocked = !initialFetchComplete;
   const restoreAllowed = canRestoreFarmBackup(farmRole);
-  const backupWarned = fetchError || equipmentLoadFailed || cattleLoadFailed;
-  const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed || cattleLoadFailed)
+  // An unreadable offline queue may hold changes the cloud snapshot lacks.
+  const backupWarned = fetchError || equipmentLoadFailed || cattleLoadFailed || syncQueueReadFailed;
+  const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed || cattleLoadFailed || syncQueueReadFailed)
     ? 'cache'
     : (dataLoadSource ?? 'cloud');
 
