@@ -82,7 +82,7 @@ After editing, run the checks the change touches and report which ones ran:
 - `npm run test:unit` — the app unit suite. `npm run test` also runs docs, tracked-asset, and App Store checks, then owner-DR package tests.
 - `npm run test:unit:gate` — the CI unit gate.
 - `npm run build` — the bundle gate, not the type gate.
-- `npm run verify:migrations` — migration filenames and a disposable PGlite replay, including the new farm-table guard.
+- `npm run verify:migrations` — the migration lock (`supabase/migrations.lock.json`: an applied migration that was edited, renamed or removed fails), migration filenames, and a disposable PGlite replay, including the new farm-table guard. Runs in `ci:vercel-gate` and GitHub CI. Record a new migration with `npm run migrations:lock`; never use it to accept an edit to an applied one.
 - `npm run test:db-integrity` — disposable PGlite suites. It does not contact a live database.
 
 Say what changed, what you ran, and any risk you did not check. `.nvmrc` is Node 22. Use that for unit tests and typecheck. Node 18 is not the gate.
@@ -120,7 +120,7 @@ Topic file, then the code it names:
 - Landlord and farm-owner reports — [docs/agents/reports.md](./docs/agents/reports.md)
 - Weather and rainfall — [docs/agents/weather-rainfall.md](./docs/agents/weather-rainfall.md)
 - Billing, Free, and Pro — [docs/agents/billing.md](./docs/agents/billing.md)
-- Equipment (live for every user; do not replace the meter RPCs) — [docs/agents/equipment.md](./docs/agents/equipment.md)
+- Equipment (Pro, server-gated by `guard_premium_table('equipment')`; a free farm sees a Pro note and no Add; do not replace the meter RPCs) — [docs/agents/equipment.md](./docs/agents/equipment.md)
 - Cattle (off unless `runs_cattle`; groups and moves are free; events, transfers, and CSV are Pro) — [docs/agents/cattle.md](./docs/agents/cattle.md)
 - Offline, native, and accounts — [docs/agents/offline-native.md](./docs/agents/offline-native.md)
 - Owner disaster recovery (tooling exists; drills are not done) — [docs/agents/owner-dr.md](./docs/agents/owner-dr.md)

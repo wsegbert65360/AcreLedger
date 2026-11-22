@@ -23,6 +23,8 @@ import {
   fieldMatchesQuery,
 } from '@/lib/fieldSearch';
 import { cn } from '@/lib/utils';
+import { term } from '@/lib/locale/terms';
+import { useAppPreferences } from '@/store/useAppPreferences';
 import { formatMeasurement, roundTo } from '@/utils/numbers';
 import { isEquipmentUiEnabled } from '@/lib/equipment/feature';
 import { localTodayIso, summarizeEquipmentStatus } from '@/lib/equipment';
@@ -42,7 +44,10 @@ const Index = () => {
     maintenanceSchedules,
     runsCattle,
     cattleGroups,
+    session,
   } = useFarm();
+  // Australia pilot: "paddocks" where US screens say "fields".
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const { openAsk } = useAskAcreLedger();
 
   const { rowCrops, pastureHay, totalAcres, cropTotals } = useMemo(() => {
@@ -200,7 +205,7 @@ const Index = () => {
             <div className="hidden min-w-0 flex-col sm:flex">
               <h1 className="truncate text-sm font-bold tracking-tight text-foreground">Farm Overview</h1>
               <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                <span className="shrink-0 whitespace-nowrap">{allFields.length} fields</span>
+                <span className="shrink-0 whitespace-nowrap">{allFields.length} {term('fields', preferences.locale)}</span>
                 <SeasonSelect className="max-w-[6.5rem] shrink border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
               </div>
             </div>
@@ -233,7 +238,7 @@ const Index = () => {
             </button>
           </div>
           <div className="col-span-2 flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground sm:hidden">
-            <span className="shrink-0 whitespace-nowrap">{allFields.length} fields</span>
+            <span className="shrink-0 whitespace-nowrap">{allFields.length} {term('fields', preferences.locale)}</span>
             <SeasonSelect className="max-w-[6.5rem] shrink border-none bg-muted/60 px-2 text-xs shadow-none focus:ring-1 focus:ring-primary/30" />
           </div>
         </div>

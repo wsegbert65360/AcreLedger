@@ -7,6 +7,7 @@ import {
   SW_RELOAD_COOLDOWN_MS,
   SW_RELOAD_DEFER_MS,
   SW_RELOADED_AT_KEY,
+  SW_RELOAD_EDIT_IDLE_MS,
 } from './swReload';
 
 describe('service worker reload guard', () => {
@@ -45,6 +46,31 @@ describe('service worker reload guard', () => {
       vi.advanceTimersByTime(SW_RELOAD_DEFER_MS);
       expect(reload).not.toHaveBeenCalled();
     }
+    vi.advanceTimersByTime(SW_RELOAD_DEFER_MS);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits while a form field has focus, past the dialog cap, then reloads once editing stops', () => {
+    document.body.innerHTML = '<input id="bushels" type="number">';
+    const input = document.getElementById('bushels') as HTMLInputElement;
+    input.focus();
+    const reloadOnce = createReloadOnce({ reload });
+    reloadOnce();
+    vi.advanceTimersByTime(SW_RELOAD_DEFER_MS * (MAX_DEFERS + 2));
+    expect(reload).not.toHaveBeenCalled();
+    input.blur();
+    vi.advanceTimersByTime(SW_RELOAD_DEFER_MS);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits a minute after typing even when focus has left the field', () => {
+    let clock = 1_000_000;
+    document.body.innerHTML = '<textarea id="notes"></textarea>';
+    const reloadOnce = createReloadOnce({ reload, now: () => clock });
+    document.getElementById('notes')!.dispatchEvent(new Event('input', { bubbles: true }));
+    reloadOnce();
+    expect(reload).not.toHaveBeenCalled();
+    clock += SW_RELOAD_EDIT_IDLE_MS + 1;
     vi.advanceTimersByTime(SW_RELOAD_DEFER_MS);
     expect(reload).toHaveBeenCalledTimes(1);
   });

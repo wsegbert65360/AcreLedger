@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
 import EquipmentDetails from '@/components/equipment/EquipmentDetails';
 import EquipmentIcon from '@/components/equipment/EquipmentIcon';
+import { ProFeatureNote } from '@/components/settings/ProFeatureNote';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,9 @@ import {
 import { exportMaintenanceCsv } from '@/lib/equipment/export';
 import { formatIsoDate, toLocalIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { isFreeTierLocked } from '@/lib/entitlements';
 import type { Equipment as EquipmentRecord, EquipmentKind, MaintenanceLogKind, MaintenanceSchedule, MeterUnit } from '@/types/equipment';
 
 const KINDS: EquipmentKind[] = ['tractor', 'combine', 'sprayer', 'planter', 'tillage', 'truck', 'implement', 'other'];
@@ -304,6 +308,9 @@ export default function Equipment() {
   const { equipment, maintenanceSchedules, maintenanceLogs, deleteEquipment, deleteMaintenanceSchedule } = useFarm();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EquipmentRecord | 'new' | null>(null);
+  // Equipment is server-gated Pro: say so up front and don't offer Add on a free farm.
+  const { entitlement, cachedEntitlement } = useEntitlement();
+  const locked = isFreeTierLocked(entitlement ?? cachedEntitlement);
   const [meterMachine, setMeterMachine] = useState<EquipmentRecord | null>(null);
   const [scheduleEditor, setScheduleEditor] = useState<MaintenanceSchedule | 'new' | null>(null);
   const [logKind, setLogKind] = useState<MaintenanceLogKind | null>(null);
@@ -324,10 +331,11 @@ export default function Equipment() {
   };
 
   return <div className="min-h-screen bg-background pb-[calc(7rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl"><div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3 lg:max-w-5xl lg:px-8"><div className="flex items-center gap-2">{selected && <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)} aria-label="Back to equipment"><ArrowLeft /></Button>}<div><h1 className="text-lg font-bold">{selected ? machineName(selected) : 'Equipment'}</h1><p className="text-xs text-muted-foreground">{selected ? `${selected.kind} · ${selected.currentReading.toLocaleString()} ${UNIT_LABEL[selected.meterUnit]}` : `${equipment.length} machine${equipment.length === 1 ? '' : 's'}`}</p></div></div><div className="flex items-center gap-2"><SyncStatusIndicator />{!selected && <Button size="sm" className="h-11" onClick={() => setEditing('new')}><Plus className="mr-1 h-4 w-4" />Add</Button>}</div></div></header>
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-xl"><div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3 lg:max-w-5xl lg:px-8"><div className="flex items-center gap-2">{selected && <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)} aria-label="Back to equipment"><ArrowLeft /></Button>}<div><h1 className="text-lg font-bold">{selected ? machineName(selected) : 'Equipment'}</h1><p className="text-xs text-muted-foreground">{selected ? `${selected.kind} · ${selected.currentReading.toLocaleString()} ${UNIT_LABEL[selected.meterUnit]}` : `${equipment.length} machine${equipment.length === 1 ? '' : 's'}`}</p></div></div><div className="flex items-center gap-2"><SyncStatusIndicator />{!selected && !locked && <Button size="sm" className="h-11" onClick={() => setEditing('new')}><Plus className="mr-1 h-4 w-4" />Add</Button>}</div></div></header>
     <main className="mx-auto max-w-lg space-y-4 px-4 py-4 lg:max-w-5xl lg:px-8">
+      {locked && <ProFeatureNote title={ENTITLEMENT_COPY.equipmentLockedTitle} body={ENTITLEMENT_COPY.proExistingRecordsBody} testId="equipment-locked" />}
       {!selected ? <>
-        {sorted.length === 0 && <section className="rounded-2xl border-2 border-dashed p-10 text-center"><Wrench className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" /><h2 className="font-bold">No equipment yet</h2><p className="mt-1 text-sm text-muted-foreground">Add your first machine to track meters, maintenance, and repairs.</p><Button className="mt-4 h-11" onClick={() => setEditing('new')}><Plus className="mr-2 h-4 w-4" />Add equipment</Button></section>}
+        {sorted.length === 0 && <section className="rounded-2xl border-2 border-dashed p-10 text-center"><Wrench className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" /><h2 className="font-bold">No equipment yet</h2><p className="mt-1 text-sm text-muted-foreground">Add your first machine to track meters, maintenance, and repairs.</p>{!locked && <Button className="mt-4 h-11" onClick={() => setEditing('new')}><Plus className="mr-2 h-4 w-4" />Add equipment</Button>}</section>}
         <div className="grid gap-3 lg:grid-cols-2">{sorted.map(({ machine, due }) => <EquipmentListCard key={machine.id} machine={machine} due={due} onOpen={() => setSelectedId(machine.id)} />)}</div>
         {maintenanceLogs.length > 0 && <Button variant="outline" className="h-11 w-full" onClick={() => void exportMaintenanceCsv(maintenanceLogs, equipment, `AcreLedger_Equipment_${todayIso()}.csv`)}><Download className="mr-2 h-4 w-4" />Export all logs</Button>}
       </> : <>

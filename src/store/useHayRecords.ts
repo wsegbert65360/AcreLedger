@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { HayHarvestRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
 import { toast } from 'sonner';
 import { mapHayToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
@@ -222,6 +223,7 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = hayHarvestRecords
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -294,6 +296,12 @@ export function useHayRecords({ farm_id, viewingSeason, hayHarvestRecords, setHa
           console.error('Error deleting hay harvest records:', error);
         } else {
           console.warn('Hay delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('hay_harvest_records', ids, farm_id, snapshot, setHayHarvestRecords);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
         }
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setHayHarvestRecords(prev => {

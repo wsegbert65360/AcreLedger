@@ -122,11 +122,18 @@ describe('syncQueue web queue management', () => {
     expect((await syncQueue.getQueue('farm-1')).map(item => item.retry_count)).toEqual([1, 0]);
   });
 
-  it.each(['PGRST204', '42703', '42501'])('pauses %s without spending retries', async code => {
+  it.each(['PGRST204', '42703', '42501'])('pauses %s, then parks it so it can be exported or discarded', async code => {
     await syncQueue.enqueueMutation('fields', 'update', { id: 'f1', name: 'Local' }, 'farm-1');
-    supabaseControl.updateResponses.push({ error: { code }, count: null });
-    expect(await syncQueue.replayQueue('farm-1')).toBe(false);
-    expect((await syncQueue.getQueue('farm-1'))[0].retry_count).toBe(0);
+    for (let i = 0; i < MAX_SYNC_RETRIES; i++) {
+      supabaseControl.updateResponses.push({ error: { code }, count: null });
+      expect(await syncQueue.replayQueue('farm-1')).toBe(false);
+    }
+    expect((await syncQueue.getQueue('farm-1'))[0].retry_count).toBe(MAX_SYNC_RETRIES);
+    expect(await syncQueue.getFailed('farm-1')).toHaveLength(1);
+    // Once a fix is available, Retry resets the count and the change syncs.
+    await syncQueue.retryFailed('farm-1');
+    expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+    expect(await syncQueue.getQueue('farm-1')).toHaveLength(0);
   });
 
   it('throws on failed dequeue and halts the drain before a younger edit', async () => {
@@ -1100,6 +1107,27 @@ describe('syncQueue web queue management', () => {
     expect(await syncQueue.getQueue('farm-1')).toEqual([]);
     expect(await syncQueue.getPendingCount('farm-2')).toBe(1);
   });
+  it.each(['custom_spray_records', 'work_requests', 'maintenance_schedules', 'maintenance_logs'])(
+    'retires %s through soft_delete_farm_rows, not a direct UPDATE that RLS refuses',
+    async table => {
+      await syncQueue.enqueueMutation(table, 'soft_delete', { id: 'r1', deleted_at: '2026-11-21T00:00:00Z' }, 'farm-1');
+      supabaseControl.rpcResponses.push({ data: 1, error: null, status: 200 });
+      expect(await syncQueue.replayQueue('farm-1')).toBe(true);
+      expect(supabaseControl.rpc).toHaveBeenCalledWith('soft_delete_farm_rows', {
+        p_farm_id: 'farm-1', p_table: table, p_ids: ['r1'], p_deleted_at: '2026-11-21T00:00:00Z',
+      });
+      expect(supabaseControl.update).not.toHaveBeenCalled();
+      expect(await syncQueue.getPendingCount('farm-1')).toBe(0);
+    },
+  );
+
+  it('keeps a soft_delete_farm_rows replay queued when the RPC reports zero rows', async () => {
+    await syncQueue.enqueueMutation('work_requests', 'soft_delete', { id: 'r1', deleted_at: '2026-11-21T00:00:00Z' }, 'farm-1');
+    supabaseControl.rpcResponses.push({ data: 0, error: null, status: 200 });
+    expect(await syncQueue.replayQueue('farm-1')).toBe(false);
+    expect(await syncQueue.getPendingCount('farm-1')).toBe(1);
+  });
+
   describe('county_assignments replay', () => {
     const row = (over: Record<string, unknown> = {}) => ({
       id: 'c1', farm_id: 'farm-1', subject_type: 'field', subject_key: 'f1',

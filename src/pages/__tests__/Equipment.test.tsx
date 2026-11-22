@@ -20,6 +20,9 @@ vi.mock('@/store/farmStore', () => ({
   useFarm: () => farm,
 }));
 
+const plan = vi.hoisted(() => ({ entitlement: null as null | { plan: string; enforced: boolean } }));
+vi.mock('@/hooks/useEntitlement', () => ({ useEntitlement: () => ({ entitlement: plan.entitlement, cachedEntitlement: null, loading: false }) }));
+vi.mock('@/components/settings/PlanUpgradeLink', () => ({ PlanUpgradeLink: () => <a href="/settings?section=billing">See Pro</a> }));
 vi.mock('@/components/BottomNav', () => ({ default: () => null }));
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
 
@@ -72,6 +75,7 @@ describe('Equipment details', () => {
     farm.equipment = [fullMachine, emptyMachine];
     farm.maintenanceSchedules = [];
     farm.maintenanceLogs = [];
+    plan.entitlement = null;
   });
 
   it('shows saved serial and notes on the list card and hides them when blank', () => {
@@ -122,5 +126,20 @@ describe('Equipment details', () => {
     for (const label of ['Make', 'Model', 'Serial number', 'Year', 'Notes', 'Reading updated']) {
       expect(within(emptyRegion).queryByText(label)).not.toBeInTheDocument();
     }
+  });
+
+  it('shows a Pro note and no Add button on a free farm, and keeps saved machines visible', () => {
+    plan.entitlement = { plan: 'free', enforced: true };
+    render(<EquipmentPage />);
+    expect(screen.getByTestId('equipment-locked')).toHaveTextContent('Equipment and maintenance tracking is part of Pro.');
+    expect(screen.queryByRole('button', { name: /^Add$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /John Deere/ })).toBeInTheDocument();
+  });
+
+  it('offers Add on a Pro farm with no note', () => {
+    plan.entitlement = { plan: 'paid', enforced: true };
+    render(<EquipmentPage />);
+    expect(screen.queryByTestId('equipment-locked')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Add$/ })).toBeInTheDocument();
   });
 });

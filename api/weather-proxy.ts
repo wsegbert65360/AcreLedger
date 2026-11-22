@@ -66,6 +66,7 @@ function isValidEndpoint(endpoint: string): boolean {
   const match = endpoint.match(/^(\d{4}-\d{2}-\d{2})(?:T([01]\d|2[0-3]):([0-5]\d):([0-5]\d))?$/);
   if (!match) return false;
   const date = new Date(`${match[1]}T00:00:00Z`);
+  // eslint-disable-next-line no-restricted-syntax -- round-trip validation of a UTC-built date
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === match[1];
 }
 

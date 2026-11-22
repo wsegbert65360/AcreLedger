@@ -32,6 +32,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 - Every form input must have a unique `id` and `name`.
 - Every `Label` must use `htmlFor` linked to the input ID.
 - Interactive touch targets should be at least 44px high. Default form `Input` and `SelectTrigger` components must use `h-11` (44px) height. Custom height overrides (such as `h-9` or `h-10`) on form inputs and selectors should be avoided to prevent touch-target regressions.
+- iOS zooms into a focused field with text under 16px. `src/index.css` forces 16px on iOS (`@supports (-webkit-touch-callout: none)`) for text inputs, textareas and native selects, so `text-sm` on a field is fine elsewhere; don't remove that rule.
 
 ## Light Mode Theme
 

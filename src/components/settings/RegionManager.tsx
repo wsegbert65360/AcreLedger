@@ -62,7 +62,7 @@ export default function RegionManager({ value, onChange }: RegionManagerProps = 
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Australia uses the APVMA compliance profile, metric units, and paddock terminology.
+            Australia uses the APVMA compliance profile and metric units, and says “paddock” on the field list and field form. Other screens still say “field” during the pilot.
           </p>
         </div>
       </CardContent>

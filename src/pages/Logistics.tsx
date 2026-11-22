@@ -7,10 +7,14 @@ import BinManageModal, { BinManager } from '@/components/BinManageModal';
 import BinMonitorPanel, { BinMonitorPanelData, BinTrendPoint } from '@/components/grain/BinMonitorPanel';
 import BinSiloThumb from '@/components/grain/BinSiloThumb';
 import SellModal from '@/components/SellModal';
+import { ProFeatureNote } from '@/components/settings/ProFeatureNote';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useFarm } from '@/store/farmStore';
+import { ENTITLEMENT_COPY } from '@/copy/entitlements';
+import { useEntitlement } from '@/hooks/useEntitlement';
+import { isFreeTierLocked } from '@/lib/entitlements';
 import { useAppPreferences } from '@/store/useAppPreferences';
 import type { Bin, GrainMovement } from '@/types/farm';
 import { formatShortDate } from '@/utils/dates';
@@ -110,6 +114,9 @@ function BinQuickActions({ bin, variant, onAdd, onSell }: BinQuickActionsProps) 
 
 export default function Logistics() {
   const { bins, getBinTotal, grainMovements, session } = useFarm();
+  // Grain bins are server-gated Pro: say so up front and don't offer Add bin on a free farm.
+  const { entitlement, cachedEntitlement } = useEntitlement();
+  const binsLocked = isFreeTierLocked(entitlement ?? cachedEntitlement);
   const { preferences } = useAppPreferences(session?.user?.id ?? null);
   const [managing, setManaging] = useState(false);
   const [addBinOpen, setAddBinOpen] = useState(false);
@@ -194,10 +201,12 @@ export default function Logistics() {
         <p className="mx-auto max-w-[16rem] text-sm leading-relaxed text-muted-foreground">
           Add your first bin to start monitoring capacity, inventory, and grain movement.
         </p>
-        <Button className="w-full sm:w-auto mt-5 bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={() => setAddBinOpen(true)}>
-          <Plus size={16} className="mr-2" />
-          Add bin
-        </Button>
+        {!binsLocked && (
+          <Button className="w-full sm:w-auto mt-5 bg-harvest text-harvest-foreground hover:bg-harvest/90" onClick={() => setAddBinOpen(true)}>
+            <Plus size={16} className="mr-2" />
+            Add bin
+          </Button>
+        )}
       </div>
     );
   } else if (selectedBinDetail) {
@@ -404,7 +413,10 @@ export default function Logistics() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-lg space-y-4 px-4 py-4 lg:max-w-6xl lg:px-8">{mainContent}</main>
+      <main className="mx-auto max-w-lg space-y-4 px-4 py-4 lg:max-w-6xl lg:px-8">
+        {binsLocked && <ProFeatureNote title={ENTITLEMENT_COPY.binsLockedTitle} body={ENTITLEMENT_COPY.proExistingRecordsBody} testId="bins-locked" />}
+        {mainContent}
+      </main>
 
       {addBinOpen && <BinManageModal open onClose={() => setAddBinOpen(false)} />}
       {sellingBin && <SellModal bin={sellingBin} open={!!sellingBin} onClose={() => setSellingBin(null)} />}

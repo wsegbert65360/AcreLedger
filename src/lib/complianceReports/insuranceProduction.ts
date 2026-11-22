@@ -105,6 +105,30 @@ function isPlantedForInsurance(plant: PlantRecord): boolean {
   return status === 'Planted' || status === 'Failed';
 }
 
+const acresOf = (plant: PlantRecord) => (Number.isFinite(plant.acreage) && plant.acreage > 0 ? plant.acreage : 0);
+const isReplant = (plant: PlantRecord) => /replant/i.test(plant.plantingPattern || '');
+
+/**
+ * Planted acres of one crop on one field, counting a replanted stand once.
+ * A failed stand replanted to the same crop is one set of acres: replant
+ * acres first cover failed acres, and only the rest add to the total. When
+ * a failed stand is present the total is also capped at the field's acres
+ * (unless the crop was grown twice as a second crop), so an untagged replant
+ * cannot double the acres and halve the yield.
+ */
+function insuredPlantedAcres(plantedHere: PlantRecord[], field: Field | undefined): number {
+  const failed = plantedHere.filter(plant => plant.cropStatus === 'Failed').reduce((sum, plant) => sum + acresOf(plant), 0);
+  const replant = plantedHere.filter(plant => plant.cropStatus !== 'Failed' && isReplant(plant)).reduce((sum, plant) => sum + acresOf(plant), 0);
+  const planted = plantedHere.filter(plant => plant.cropStatus !== 'Failed' && !isReplant(plant)).reduce((sum, plant) => sum + acresOf(plant), 0);
+  const total = planted + failed + Math.max(0, replant - failed);
+  // Only a failed stand can be double-entered as a replant, so only then cap
+  // at the field's acres (or the largest single planting, when that is larger).
+  if (failed === 0 || plantedHere.some(plant => plant.cropSequence === 'Second Crop')) return total;
+  const fieldAcres = field && Number.isFinite(field.acreage) && field.acreage > 0 ? field.acreage : 0;
+  const cap = Math.max(fieldAcres, ...plantedHere.map(acresOf));
+  return cap > 0 ? Math.min(total, cap) : total;
+}
+
 function safeYield(production: number, acres: number): number | null {
   return acres > 0 ? roundTo(production / acres, 1) : null;
 }
@@ -230,7 +254,7 @@ export function buildInsuranceProductionReport({
     const { shares, estimated } = sharesFor(plantings[0].fieldId);
     const harvested = loadsByFieldCrop.has(key);
     const plantedHere = plantings.filter(isPlantedForInsurance);
-    const plantedAcres = plantedHere.reduce((sum, plant) => sum + (Number.isFinite(plant.acreage) ? plant.acreage : 0), 0);
+    const plantedAcres = insuredPlantedAcres(plantedHere, field);
     const preventedAcres = plantings
       .filter(plant => plant.cropStatus === 'Prevented Planting')
       .reduce((sum, plant) => sum + (Number.isFinite(plant.acreage) ? plant.acreage : 0), 0);

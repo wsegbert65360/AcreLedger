@@ -664,12 +664,12 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                       <span className="ml-2">{tract.filename}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
                       title="Replace with new file"
+                      aria-label="Replace with new file"
                       onClick={() => {
                         setReimportTarget(tract.id);
                         reimportRef.current?.click();
@@ -680,8 +680,9 @@ export default function TractAssignmentFlow({ onDone, initialFieldId }: TractAss
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive"
                       title="Delete tract"
+                      aria-label="Delete tract"
                       onClick={() => handleDeleteTract(tract.id)}
                     >
                       <Trash2 size={13} />

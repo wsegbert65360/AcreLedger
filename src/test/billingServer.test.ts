@@ -328,6 +328,7 @@ describe('buildSubscriptionUpsert (webhook mapper)', () => {
       stripe_subscription_id: 'sub_stripe_1',
       stripe_subscription_created_at: '2026-09-21T14:13:20.000Z',
       stripe_price_id: 'price_test_1',
+      livemode: null,
     });
   });
 

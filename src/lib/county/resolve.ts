@@ -90,8 +90,12 @@ export function resolveFieldCountyShares(
   const cluParts: { shares: CountyShare[]; weight: number }[] = [];
   let cluNeedsReview = false;
   let cluAnyResolved = false;
-  for (const assignment of cluAssignments) {
-    if (assignment.deletedAt || assignment.fieldId !== field.id) continue;
+  // Weight cropland CLUs only: production and planted acres come from
+  // cropland, so a woods or waterway CLU in another county must not pull a
+  // share there. With no cropland CLU, fall back to all of the field's CLUs.
+  const fieldClus = cluAssignments.filter(a => !a.deletedAt && a.fieldId === field.id);
+  const croplandClus = fieldClus.filter(a => (a.landUse || 'cropland') === 'cropland');
+  for (const assignment of croplandClus.length > 0 ? croplandClus : fieldClus) {
     const rows = activeRows(index.get(subjectIndexKey('clu', cluSubjectKey(assignment.tractKey, assignment.cluNumber))) ?? []);
     const shares = rows.length > 0 ? sharesFromRows(rows) : UNKNOWN_SHARES;
     if (!allUnknown(shares)) cluAnyResolved = true;

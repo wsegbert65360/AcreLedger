@@ -140,6 +140,48 @@ describe('Missouri Log Generation', () => {
     });
 });
 
+describe('FSA 578 rows for a field with no CLU', () => {
+    const field: Field = {
+        id: 'field-split', farm_id: 'farm-1', name: 'Split Field', acreage: 80, lat: 39, lng: -94,
+        fsaFarmNumber: '918', fsaTractNumber: '1327', fsaFieldNumber: '2', deleted_at: null,
+    };
+    const plant = (over: Partial<PlantRecord>): PlantRecord => ({
+        id: 'p', farm_id: 'farm-1', fieldId: 'field-split', fieldName: 'Split Field', crop: 'Corn',
+        seedVariety: '', acreage: 40, timestamp: new Date('2026-05-01T12:00:00Z').getTime(),
+        seasonYear: 2026, deleted_at: null, ...over,
+    } as PlantRecord);
+
+    it('reports each planting at its own acres, not the whole field per crop', () => {
+        const rows = buildFsa578Rows([
+            plant({ id: 'corn', crop: 'Corn', acreage: 40 }),
+            plant({ id: 'beans', crop: 'Soybeans', acreage: 40 }),
+        ], [field], []);
+        expect(rows.map(r => [r.crop, r.acreage])).toEqual([['Corn', 40], ['Soybeans', 40]]);
+        expect(calculateFsa578PlantedAcreTotals(rows).totalAcres).toBe(80);
+    });
+
+    it('caps a planting at the field acres and keeps second crops at full acres', () => {
+        const rows = buildFsa578Rows([
+            plant({ id: 'wheat', crop: 'Wheat', acreage: 95 }),
+            plant({ id: 'dc', crop: 'Soybeans', acreage: 80, cropSequence: 'Second Crop' }),
+        ], [field], []);
+        expect(rows.map(r => r.acreage)).toEqual([80, 80]);
+    });
+
+    it('does not zero a merged row when one planting has no acreage', () => {
+        const rows = buildFsa578Rows([
+            plant({ id: 'a', acreage: 30, seedVariety: 'X' }),
+            plant({ id: 'b', acreage: Number.NaN, seedVariety: 'X' }),
+        ], [{ ...field, acreage: Number.NaN }], []);
+        expect(rows.reduce((sum, r) => sum + r.acreage, 0)).toBe(30);
+    });
+
+    it('falls back to the field acres when the planting has none', () => {
+        const rows = buildFsa578Rows([plant({ id: 'blank', acreage: Number.NaN })], [field], []);
+        expect(rows[0].acreage).toBe(80);
+    });
+});
+
 describe('FSA 578 report rows', () => {
     it('splits planted crop acreage by assigned cropland CLU numbers', () => {
         const field: Field = {

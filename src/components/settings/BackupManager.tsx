@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toLocalIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,6 +51,7 @@ export default function BackupManager() {
     sprayRecipes,
     fsaTracts,
     cluAssignments,
+    countyAssignments,
     workRequests,
     equipment,
     maintenanceSchedules,
@@ -66,6 +68,7 @@ export default function BackupManager() {
     dataLoadSource,
     dataLoadedAt,
     farmRole,
+    syncQueueReadFailed,
   } = useFarm();
   const [backingUp, setBackingUp] = useState(false);
   const [lastBackup, setLastBackup] = useState<Date | null>(loadLastBackup);
@@ -101,8 +104,9 @@ export default function BackupManager() {
 
   const backupBlocked = !initialFetchComplete;
   const restoreAllowed = canRestoreFarmBackup(farmRole);
-  const backupWarned = fetchError || equipmentLoadFailed || cattleLoadFailed;
-  const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed || cattleLoadFailed)
+  // An unreadable offline queue may hold changes the cloud snapshot lacks.
+  const backupWarned = fetchError || equipmentLoadFailed || cattleLoadFailed || syncQueueReadFailed;
+  const backupSource: 'cloud' | 'cache' = (!initialFetchComplete || fetchError || equipmentLoadFailed || cattleLoadFailed || syncQueueReadFailed)
     ? 'cache'
     : (dataLoadSource ?? 'cloud');
 
@@ -138,6 +142,8 @@ export default function BackupManager() {
         sprayRecipes,
         fsaTracts,
         cluAssignments,
+        // Manual county splits live only here; a re-lookup cannot recreate them.
+        countyAssignments: (countyAssignments ?? []).filter(row => !row.deletedAt),
         workRequests,
         equipment,
         maintenanceSchedules,
@@ -150,7 +156,7 @@ export default function BackupManager() {
         source: backupSource,
         loadedAt: dataLoadedAt ?? new Date().toISOString(),
       };
-      const filename = `acreledger-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const filename = `acreledger-backup-${toLocalIsoDate(Date.now())}.json`;
 
       const validatedBackup = backupSchema.parse(backupData);
       const success = await exportDataAsJson(validatedBackup, filename);

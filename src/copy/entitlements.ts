@@ -27,6 +27,11 @@ export const ENTITLEMENT_COPY = {
   cattleCsvLocked: 'The cattle CSV export is part of Pro.',
   cattleEventsLockedBody: 'You can still keep your groups, move them between pastures, and change a head count by editing the group. Events you already logged stay here.',
 
+  // Equipment and grain bins (server-gated Pro). Approved by William 2026-11-22 (review #27).
+  equipmentLockedTitle: 'Equipment and maintenance tracking is part of Pro.',
+  binsLockedTitle: 'Grain bins and bin inventory are part of Pro.',
+  proExistingRecordsBody: 'Anything you already saved stays here, and you can always export it.',
+
   // Sync queue (change refused for plan reasons, parked on the device)
   syncParkedTitle: 'Saved on this device. You need Pro to sync this change.',
   syncParkedBody: 'Open Settings to export or discard it. Nothing was deleted.',

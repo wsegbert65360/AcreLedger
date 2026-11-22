@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { softDeleteRows, usesSoftDeleteRpc } from '@/lib/softDeleteRows';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import {
   mapEquipmentToDb,
@@ -126,6 +127,9 @@ export function useEquipment({
           .update(stripUpdateIdentity(payload), { count: 'exact' })
           .eq('id', payload.id)
           .eq('farm_id', farm_id);
+      } else if (usesSoftDeleteRpc(table)) {
+        // The SELECT policy hides deleted rows, so a direct UPDATE fails RLS; use the RPC.
+        response = await softDeleteRows(table, [String(payload.id)], farm_id, String(payload.deleted_at));
       } else {
         response = await supabase.from(table)
           .update({ deleted_at: payload.deleted_at }, { count: 'exact' })

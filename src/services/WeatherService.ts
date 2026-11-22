@@ -145,6 +145,7 @@ function calendarRainfall(data: any): { precip24h: number | null; precip72h: num
     const sum = (count: number): number | null => {
         let total = 0;
         for (let offset = 1; offset <= count; offset++) {
+            // eslint-disable-next-line no-restricted-syntax -- midnight is built as UTC from the location's local date
             const date = new Date(midnight - offset * 86400000).toISOString().slice(0, 10);
             const precip = days.get(date)?.precip;
             if (typeof precip !== 'number' || !Number.isFinite(precip) || precip < 0) return null;
