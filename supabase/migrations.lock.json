@@ -122,5 +122,6 @@
   "20261120015634_fsa578_status_code_and_operator.sql": "deda9212928a4098d52d33d9517304c4f4a4071014595f620e6e05b95fcca511",
   "20261121120000_soft_delete_farm_rows.sql": "78f995a0bed3db3688a05a9388ffc47fe310d5ef4bd3394ac5a14a489b1f8dc3",
   "20261121130000_subscription_livemode_and_active_bound.sql": "e2007b555ba88f3c6e58f20c06da87a139d24e5afbbc2cd974387d15f977fb96",
-  "20261121140000_core_select_policies_match_production.sql": "b4cb3f7c0a7c573581f143c103c81e017f9249df5828ae1f38ec31da8629d552"
+  "20261121140000_core_select_policies_match_production.sql": "b4cb3f7c0a7c573581f143c103c81e017f9249df5828ae1f38ec31da8629d552",
+  "20261121150000_app_schema_version.sql": "c2bda06413cbf54708f43daf41e5efc1a9450b7eba774d776074998b2e8f9482"
 }
