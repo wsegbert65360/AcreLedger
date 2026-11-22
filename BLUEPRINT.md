@@ -1388,7 +1388,7 @@ event to automatically sync content to Supabase.
 `useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging.
 
 ### Content Security Policy (CSP)
-The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, Vercel, and Windy.com.
+The `index.html` meta CSP tag is the only CSP (`vercel.json` sends none since 2026-11-22). It currently allows `unsafe-eval` and `unsafe-inline` in `script-src` and restricts origins to `self`, Supabase, Visual Crossing, Vercel, Windy.com, iTunes and Nominatim. Tightening `unsafe-eval` needs a production build check first; `src/test/cspFetchOrigins.test.ts` pins the fetch origins.
 Windy.com must be allowed through both `child-src` and `frame-src` because the weather radar is an external iframe.
 
 ---

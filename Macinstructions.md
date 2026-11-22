@@ -7,7 +7,7 @@ This document is the instruction layer for the AI assistant/developer executing 
 ## 1. Prerequisites and Setup on macOS
 
 Before running build commands, verify the local environment:
-1. **Node.js**: Verify that Node (v18+ or v20+) and npm are installed.
+1. **Node.js**: Verify that Node 22 (the version pinned in `.nvmrc` and `package.json` engines) and npm are installed.
 2. **Xcode**: Must have Xcode 14+ installed along with the Xcode Command Line Tools:
    ```bash
    xcode-select --install
