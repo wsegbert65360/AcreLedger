@@ -194,6 +194,9 @@ export async function getDatabase() {
   return initPromise;
 }
 
+/** Cache entry that records which farm the user's cached rows belong to. */
+const CACHE_FARM_MARKER = '__cache_farm';
+
 export const offlineStorage = {
   /**
    * Saves a table's data array to local cache.
@@ -284,6 +287,21 @@ export const offlineStorage = {
         return null;
       }
     }
+  },
+
+  /**
+   * The cache is keyed by user. When the server says this user now belongs to
+   * a different farm, drop the old farm's cached rows so they are never shown
+   * as this farm's. The sync queue is keyed by farm and is left alone.
+   * Returns true when the cache was cleared.
+   */
+  bindCacheToFarm: async (userId: string, farmId: string): Promise<boolean> => {
+    const cached = await offlineStorage.loadCache(CACHE_FARM_MARKER, userId);
+    const previous = Array.isArray(cached) && typeof cached[0] === 'string' ? cached[0] : null;
+    const changed = previous !== null && previous !== farmId;
+    if (changed) await offlineStorage.clearCache(userId);
+    if (changed || previous === null) await offlineStorage.saveCache(CACHE_FARM_MARKER, userId, [farmId]);
+    return changed;
   },
 
   /**

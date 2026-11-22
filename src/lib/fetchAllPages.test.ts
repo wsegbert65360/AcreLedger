@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { COMPLETE_COLLECTION_PAGE_SIZE, fetchAllPages } from './fetchAllPages';
@@ -95,5 +98,14 @@ describe('fetchAllPages', () => {
 
   it('exports the Data API max_rows cap as the default page size', () => {
     expect(COMPLETE_COLLECTION_PAGE_SIZE).toBe(1000);
+  });
+
+  // A short page ends the read, so the server cap must never be below the
+  // page size. A lower cap would silently truncate every complete read.
+  // Production's Data API "Max rows" lives in the dashboard: keep it >= 1000.
+  it('page size never exceeds the configured Data API max_rows', () => {
+    const toml = readFileSync(resolve(process.cwd(), 'supabase/config.toml'), 'utf8');
+    const maxRows = Number(/^\s*max_rows\s*=\s*(\d+)/m.exec(toml)?.[1]);
+    expect(maxRows).toBeGreaterThanOrEqual(COMPLETE_COLLECTION_PAGE_SIZE);
   });
 });
