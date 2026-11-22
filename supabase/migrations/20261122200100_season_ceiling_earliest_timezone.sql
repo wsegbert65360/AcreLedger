@@ -15,6 +15,9 @@ $$;
 COMMENT ON FUNCTION public._season_year_ceiling() IS
   'Highest allowed season: next year in the earliest time zone (UTC+14).';
 
+-- CHECK constraints run as the writing role, so every API role must be able to call it.
+GRANT EXECUTE ON FUNCTION public._season_year_ceiling() TO anon, authenticated, service_role;
+
 ALTER TABLE public.profiles
   DROP CONSTRAINT IF EXISTS profiles_active_season_valid,
   ADD CONSTRAINT profiles_active_season_valid CHECK (
@@ -42,16 +45,22 @@ BEGIN
   v_def := pg_catalog.pg_get_functiondef(v_fn);
   v_new := replace(v_def, 'EXTRACT(YEAR FROM CURRENT_DATE)::integer + 1', 'public._season_year_ceiling()');
   IF v_new = v_def THEN
-    RAISE EXCEPTION '_restore_farm_backup_impl: UTC season ceiling not found';
+    IF strpos(v_def, 'public._season_year_ceiling()') = 0 THEN
+      RAISE EXCEPTION '_restore_farm_backup_impl: UTC season ceiling not found';
+    END IF;
+  ELSE
+    EXECUTE v_new;
   END IF;
-  EXECUTE v_new;
 
   v_fn := 'public.start_pre_season_reset(integer, integer)'::regprocedure;
   v_def := pg_catalog.pg_get_functiondef(v_fn);
   v_new := replace(v_def, 'p_to_season > v_year + 1', 'p_to_season > public._season_year_ceiling()');
   IF v_new = v_def THEN
-    RAISE EXCEPTION 'start_pre_season_reset: UTC season ceiling not found';
+    IF strpos(v_def, 'public._season_year_ceiling()') = 0 THEN
+      RAISE EXCEPTION 'start_pre_season_reset: UTC season ceiling not found';
+    END IF;
+  ELSE
+    EXECUTE v_new;
   END IF;
-  EXECUTE v_new;
 END;
 $$;
