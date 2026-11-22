@@ -6,7 +6,12 @@ import {
   buildCheckoutIdempotencyKey,
   canStartCheckout,
   hasLiveStripeSubscription,
-  isBillingAllowlisted, canManageBilling } from '../server/billing.js';
+  isBillingAllowlisted,
+  canManageBilling,
+} from '../server/billing.js';
+
+/** Canonical public Terms URL: index.html canonical origin + `/terms`. */
+const TERMS_OF_SERVICE_URL = 'https://www.acreledger.app/terms';
 
 type QueryValue = string | string[] | undefined;
 
@@ -224,6 +229,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           // The buyer accepts the Terms at Checkout (auto-renewing plan). Needs the
           // Terms URL set in the Stripe dashboard (Settings → Public details).
           consent_collection: { terms_of_service: 'required' },
+          custom_text: {
+            terms_of_service_acceptance: {
+              message: `I agree to the [Terms of Service](${TERMS_OF_SERVICE_URL}).`,
+            },
+          },
           success_url: `${origin}/settings?billing=success`,
           cancel_url: `${origin}/settings?billing=cancelled`,
         },

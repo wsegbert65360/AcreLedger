@@ -64,7 +64,7 @@ In **Settings → Environment variable groups**, create a group called **`appsto
 | `APP_STORE_CONNECT_ISSUER_ID` | `12345678-1234-...` | No |
 | `APP_STORE_CONNECT_PRIVATE_KEY` | `-----BEGIN PRIVATE KEY-----...` | Yes |
 
-The `VITE_*` variables are injected at build time by Vite. App Store and other native builds require an absolute HTTPS `VITE_WEATHER_PROXY_URL` pointing at the deployed weather proxy. Do not set `VITE_VISUALCROSSING_KEY` in the `appstore` group or any native build: non-dev bundles, including Capacitor, must not contain that key. `codemagic.yaml` fails the build when the proxy URL is missing and fails if a configured Visual Crossing key appears in `dist/assets`. `VITE_AI_ASSISTANT_URL` is public configuration (not a secret) and is also pinned in `codemagic.yaml` so a missing environment-group value cannot silently ship a broken Ask the book screen. The `APP_STORE_CONNECT_*` variables are used for TestFlight publishing via `auth: integration`.
+The `VITE_*` variables are injected at build time by Vite. App Store and other native builds require an absolute HTTPS `VITE_WEATHER_PROXY_URL` pointing at the deployed weather proxy. Do not set `VITE_VISUALCROSSING_KEY` in the `appstore` group or any client build. The client never reads that variable, including local `npm run dev`. `codemagic.yaml` fails the build when the proxy URL is missing and fails if a configured Visual Crossing key appears in `dist/assets`. `VITE_AI_ASSISTANT_URL` is public configuration (not a secret) and is also pinned in `codemagic.yaml` so a missing environment-group value cannot silently ship a broken Ask the book screen. The `APP_STORE_CONNECT_*` variables are used for TestFlight publishing via `auth: integration`.
 
 ---
 

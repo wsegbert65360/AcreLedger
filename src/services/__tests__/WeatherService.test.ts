@@ -8,10 +8,7 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 describe('WeatherService', () => {
-    const mockApiKey = 'test-api-key';
-
     beforeEach(() => {
-        vi.stubEnv('VITE_VISUALCROSSING_KEY', mockApiKey);
         vi.clearAllMocks();
         getSessionMock.mockResolvedValue({
             data: { session: { access_token: 'test-token', expires_at: Math.floor(Date.now() / 1000) + 3600 } },
@@ -73,7 +70,6 @@ describe('WeatherService', () => {
             expect(r2.locationName).toBe('Unknown');
         });
         it('should use an absolute weather proxy URL when configured', async () => {
-            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
             vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
             vi.resetModules();
 
@@ -102,8 +98,23 @@ describe('WeatherService', () => {
             expect(fetchOptions.headers).toEqual(expect.any(Object));
         });
 
+        it('throws when a capacitor build has no VITE_WEATHER_PROXY_URL', async () => {
+            vi.stubEnv('MODE', 'capacitor');
+            vi.stubEnv('VITE_WEATHER_PROXY_URL', '');
+            vi.resetModules();
+
+            const { WeatherService } = await import('../WeatherService');
+            const result = await WeatherService.fetchCurrentWeather('72301');
+
+            expect(result.isError).toBe(true);
+            expect(global.fetch).not.toHaveBeenCalled();
+            expect(console.error).toHaveBeenCalledWith(
+                '[WeatherService] Error fetching current weather:',
+                expect.objectContaining({ message: 'Capacitor weather requires VITE_WEATHER_PROXY_URL.' }),
+            );
+        });
+
         it('attaches the current bearer when the session is not near expiry', async () => {
-            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
             vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
             vi.resetModules();
 
@@ -127,7 +138,6 @@ describe('WeatherService', () => {
         });
 
         it('refreshes a weather token that expires within a minute', async () => {
-            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
             vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
             vi.resetModules();
 
@@ -155,7 +165,6 @@ describe('WeatherService', () => {
         });
 
         it('does not send an unauthenticated weather request when refresh fails', async () => {
-            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
             vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
             vi.resetModules();
 
@@ -173,7 +182,6 @@ describe('WeatherService', () => {
         });
 
         it('refreshes once after a proxy 401 and stops if the retry is still unauthorized', async () => {
-            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
             vi.stubEnv('VITE_WEATHER_PROXY_URL', 'https://acreledger.example.vercel.app/');
             vi.resetModules();
 
@@ -236,8 +244,11 @@ describe('WeatherService', () => {
             expect(result.temp).toBe(72);
             expect(result.precip24h).toBe(0.1);
             expect(result.precip72h).toBe(0.6);
-            expect((global.fetch as any).mock.calls[0][0]).toContain('weather.visualcrossing.com');
-            expect((global.fetch as any).mock.calls[0][0]).toContain('key=test-api-key');
+            const [fetchUrl, fetchOptions] = (global.fetch as any).mock.calls[0];
+            expect(fetchUrl).toContain('/api/weather-proxy');
+            expect(fetchUrl).not.toContain('weather.visualcrossing.com');
+            expect(fetchUrl).not.toContain('key=');
+            expect(fetchOptions.headers.Authorization).toBe('Bearer test-token');
         });
 
         it('should flag an error instead of zero weather when currentConditions is missing temp/humidity', async () => {
@@ -414,6 +425,10 @@ describe('WeatherService', () => {
 
             (global.fetch as any)
                 .mockImplementationOnce((_url: string, opts: { signal?: AbortSignal }) => new Promise((_resolve, reject) => {
+                    if (opts.signal?.aborted) {
+                        reject(abortError);
+                        return;
+                    }
                     opts.signal?.addEventListener('abort', () => reject(abortError));
                 }))
                 .mockResolvedValueOnce({
@@ -526,7 +541,6 @@ describe('WeatherService', () => {
         });
 
         it('rounds high-precision southern coords to 4 decimals on the request', async () => {
-            vi.stubEnv('VITE_VISUALCROSSING_KEY', '');
             vi.resetModules();
             const { WeatherService } = await import('../WeatherService');
             (global.fetch as any).mockResolvedValue({

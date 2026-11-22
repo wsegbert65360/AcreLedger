@@ -28,10 +28,8 @@ vi.mock('sonner', () => ({
 
 describe('Restore Performance Benchmark', () => {
     let mockArgs: any;
-    const mockApiKey = 'test-api-key'; // Define mockApiKey for vi.stubEnv
 
     beforeEach(() => {
-        vi.stubEnv('VITE_VISUALCROSSING_KEY', mockApiKey);
         vi.clearAllMocks();
         vi.resetModules();
         global.fetch = vi.fn();
