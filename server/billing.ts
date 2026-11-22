@@ -265,6 +265,7 @@ export interface StripeSubscriptionLike {
   trial_end?: number | null;
   current_period_end?: number | null;
   cancel_at_period_end?: boolean | null;
+  livemode?: boolean | null;
   metadata?: Record<string, string> | null;
   items?: {
     data?: Array<
@@ -311,6 +312,7 @@ export function buildSubscriptionUpsert(subscription: StripeSubscriptionLike): {
   stripe_subscription_id: string;
   stripe_subscription_created_at: string | null;
   stripe_price_id: string | null;
+  livemode: boolean | null;
 } {
   const customer = subscription.customer;
   return {
@@ -323,6 +325,7 @@ export function buildSubscriptionUpsert(subscription: StripeSubscriptionLike): {
     stripe_subscription_id: subscription.id,
     stripe_subscription_created_at: stripeEpochToIso(subscription.created),
     stripe_price_id: subscription.items?.data?.[0]?.price?.id ?? null,
+    livemode: typeof subscription.livemode === 'boolean' ? subscription.livemode : null,
   };
 }
 

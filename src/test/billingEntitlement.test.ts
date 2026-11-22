@@ -51,6 +51,18 @@ describe('getFarmBillingAccess', () => {
     }
   });
 
+  it('ends an active row 14 days after its period end, matching _farm_entitlement', () => {
+    const subscription = makeSubscription({ status: 'active' });
+    const day = 86_400_000;
+    const end = Date.parse('2027-01-08T00:00:00.000Z');
+    expect(getFarmBillingAccess({ subscription, enforce: true, nowMs: end + 13 * day }).hasAccess).toBe(true);
+    expect(getFarmBillingAccess({ subscription, enforce: true, nowMs: end + 15 * day })).toEqual({
+      hasAccess: false, inGrace: false, phase: 'locked', status: 'active',
+    });
+    const noEnd = makeSubscription({ status: 'active', current_period_end: null });
+    expect(getFarmBillingAccess({ subscription: noEnd, enforce: true, nowMs: end + 400 * day }).hasAccess).toBe(true);
+  });
+
   it('treats a legacy trialing row as free: allowed only while enforcement is off', () => {
     const subscription = makeSubscription({ status: 'trialing' });
     const nowMs = Date.parse(BEFORE_PERIOD_END);

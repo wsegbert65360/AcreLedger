@@ -260,6 +260,15 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
     return res.status(400).json({ error: 'Invalid webhook signature or payload' });
   }
 
+  // Only events from the mode this deployment bills in. The webhook secret
+  // already separates modes; this is the second check, so a test-mode event
+  // can never write billing state while live (or the reverse).
+  const expectLive = billingCheck.config.mode === 'live';
+  if (event.livemode !== expectLive) {
+    console.warn(`Ignoring ${event.livemode ? 'live' : 'test'}-mode Stripe event ${event.id} in ${billingCheck.config.mode} mode.`);
+    return res.status(200).json({ received: true, ignored: 'mode_mismatch' });
+  }
+
   const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
       autoRefreshToken: false,

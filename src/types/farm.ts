@@ -450,6 +450,8 @@ export interface FarmSubscription {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** Stripe livemode, written by the webhook; null on rows from before 2026-11-21. */
+  livemode?: boolean | null;
 }
 
 export type ActivityRecord =
