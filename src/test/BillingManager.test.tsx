@@ -34,9 +34,11 @@ const defaultSession = {
 const farmState: {
   session: typeof defaultSession | null;
   farm_id: string | null;
+  isOnline: boolean;
 } = {
   session: { ...defaultSession, user: { ...defaultSession.user } },
   farm_id: 'farm-1',
+  isOnline: true,
 };
 
 vi.mock('@/store/farmStore', () => ({
@@ -113,6 +115,7 @@ function stubBillingFetch(options?: {
 }
 
 beforeEach(() => {
+  farmState.isOnline = true;
   vi.stubEnv('VITE_BILLING_UI_ENABLED', 'true');
   farmState.session = { ...defaultSession, user: { ...defaultSession.user } };
   farmState.farm_id = 'farm-1';
@@ -408,6 +411,16 @@ describe('BillingManager', () => {
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByText('Not subscribed')).toBeNull();
     expect(screen.queryByText('No billing subscription for this farm yet.')).toBeNull();
+  });
+
+  it('disables Subscribe offline and says billing needs a connection', async () => {
+    farmState.isOnline = false;
+    stubBillingFetch({ allowlisted: true });
+    renderBilling();
+    const button = await screen.findByRole('button', { name: /subscribe/i });
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/Billing needs a connection/)).toBeInTheDocument();
+    expect(refreshSessionMock).not.toHaveBeenCalled();
   });
 
   it('always refreshes and posts the refreshed token, not the stale store snapshot', async () => {

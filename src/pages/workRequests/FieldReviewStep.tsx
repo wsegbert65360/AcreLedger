@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import type { WorkRequestFieldEntry } from '@/types/farm';
 import type { WorkRequestDraft } from './useWorkRequestForm';
 import { Button } from '@/components/ui/button';
@@ -71,11 +72,20 @@ export default function FieldReviewStep({ draft, patchFieldEntry, resolve, navUr
 
   const relookupRoad = async (entry: WorkRequestFieldEntry) => {
     if (entry.gpsLat == null || entry.gpsLng == null) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      toast.error('Road lookup needs a connection. Your road name was kept.');
+      return;
+    }
     setLookupInProgress(prev => ({ ...prev, [entry.fieldId]: true }));
     const result = await lookupNearbyRoad(entry.gpsLat, entry.gpsLng);
     const patch: Partial<WorkRequestFieldEntry> = {};
-    patch.nearbyRoad = result.name || '';
-    patch.roadSource = result.name ? 'nominatim' : 'manual';
+    if (result.name) {
+      patch.nearbyRoad = result.name;
+      patch.roadSource = 'nominatim';
+    } else {
+      // No answer (offline, rate-limited, or no road found): never wipe a road the user typed.
+      toast.error('Could not find a nearby road. Your road name was kept.');
+    }
     if (result.point) {
       const { geometry } = resolve(entry.fieldId);
       const snapped = resolveDefaultNavPoint({ lat: entry.gpsLat ?? null, lng: entry.gpsLng ?? null }, geometry, result.point);
