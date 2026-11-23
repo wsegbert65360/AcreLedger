@@ -205,12 +205,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return res.status(429).json({ error: 'Weather request limit exceeded' });
   }
 
+  // Per-farm quota: Free 50, Pro 500 per UTC day (owner decision 2026-11-22).
+  const { data: farmQuota, error: farmQuotaError } = await supabase
+    .rpc('consume_weather_farm_request');
+  if (farmQuotaError || !farmQuota || typeof farmQuota !== 'object') {
+    console.error('Weather proxy farm quota error:', farmQuotaError);
+    return res.status(503).json({ error: 'Weather service temporarily unavailable' });
+  }
+  const { allowed: farmAllowed, pro: farmIsPro } = farmQuota as { allowed?: unknown; pro?: unknown };
+  if (farmAllowed !== true) {
+    res.setHeader('Retry-After', '3600');
+    return res.status(429).json({ error: 'Daily weather limit reached for this farm' });
+  }
+
   const weatherCap = resolveDailyCap(process.env.WEATHER_DAILY_CAP, DEFAULT_WEATHER_DAILY_CAP);
-  const globalCap = await consumeProviderDailyCap(
-    createServiceRoleClient(supabaseUrl, supabaseServiceRoleKey),
-    'weather',
-    weatherCap,
-  );
+  const serviceClient = createServiceRoleClient(supabaseUrl, supabaseServiceRoleKey);
+  // Free farms share only part of the cap, so Pro keeps weather when Free use runs out.
+  if (farmIsPro !== true) {
+    const freeCap = resolveDailyCap(process.env.WEATHER_FREE_DAILY_CAP, Math.max(1, Math.floor(weatherCap / 2)));
+    const freeShare = await consumeProviderDailyCap(serviceClient, 'weather-free', Math.min(freeCap, weatherCap));
+    if (freeShare !== 'ok') {
+      return res.status(503).json({ error: 'Weather service temporarily unavailable' });
+    }
+  }
+  const globalCap = await consumeProviderDailyCap(serviceClient, 'weather', weatherCap);
   if (globalCap !== 'ok') {
     return res.status(503).json({ error: 'Weather service temporarily unavailable' });
   }

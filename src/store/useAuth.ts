@@ -11,6 +11,7 @@ import {
   isValidViewingSeason,
   resolveRemoteViewingSeason,
 } from '@/lib/seasonYears';
+import { offlineStorage } from '@/lib/offlineStorage';
 import { supabase } from '@/lib/supabase';
 
 export function useAuth() {
@@ -230,6 +231,13 @@ export function useAuth() {
           }
 
           if (currentFarmId) {
+            try {
+              // Before stores read the cache for this farm.
+              await offlineStorage.bindCacheToFarm(userId, currentFarmId);
+            } catch (cacheError) {
+              console.error('Could not bind offline cache to farm:', cacheError);
+            }
+            if (!isCurrent()) return;
             setFarmId(currentFarmId);
             let active = profileData.active_season;
             if (!isValidActiveSeason(active)) {

@@ -1,8 +1,7 @@
-import { Capacitor } from '@capacitor/core';
+import { downloadFile } from '@/lib/downloadFile';
 
 import { farmNameForCsv } from '@/lib/farmDisplayName';
 import { effectiveTreatedAreaUnit, normalizeAreaForRate, normalizeTreatedArea } from '@/lib/sprayExportFormatters';
-import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
 import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
 import { SprayRecord, Field, PlantRecord, FertilizerApplication } from '../../types/farm';
@@ -901,24 +900,4 @@ export async function exportFertilizerData(records: FertilizerApplication[], fie
     await downloadFile(csvContent, `Fertilizer_Report_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
 }
 
-export async function downloadFile(content: string, fileName: string, contentType: string): Promise<void> {
-    if (Capacitor.isNativePlatform()) {
-        await native.shareFile({
-            fileName,
-            data: content,
-            title: `AcreLedger Export: ${fileName}`,
-            encoding: 'utf8'
-        });
-        return;
-    }
-
-    const blob = new Blob([content], { type: contentType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
+export { downloadFile };

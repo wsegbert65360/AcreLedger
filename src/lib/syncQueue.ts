@@ -578,7 +578,8 @@ export const syncQueue = {
       if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
       try {
         const res = await db.query(
-          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC, rowid ASC;',
+          // Insertion order: rowid only grows, while created_at follows a wall clock that can jump.
+          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY rowid ASC;',
           [farmId]
         );
         if (res.values) {

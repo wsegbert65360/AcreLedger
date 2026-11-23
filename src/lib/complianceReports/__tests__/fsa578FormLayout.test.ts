@@ -131,6 +131,20 @@ describe('buildFsa578FormSheets', () => {
     expect(buildFsa578FormSheets([row({})])[0].counties).toEqual([]);
   });
 
+  it('box 5 county percentages always add up to 100', () => {
+    const share = (countyName: string, fraction: number) => ({ countyFips: '29083', countyName, stateAbbr: 'MO', fraction });
+    const counties = {
+      sharesForField: () => ({
+        basis: 'field-geometry' as const, estimated: false, needsReview: false,
+        shares: [share('Henry', 1 / 3), share('Benton', 1 / 3), share('Cass', 1 / 3)],
+      }),
+    };
+    const label = fsa578CountyLabel('three', counties);
+    const total = [...label.matchAll(/(\d+)%/g)].reduce((sum, m) => sum + Number(m[1]), 0);
+    expect(total).toBe(100);
+    expect(label).toBe('Henry, MO 34% / Benton, MO 33% / Cass, MO 33%');
+  });
+
   it('folds crops past the column limit into OTHER', () => {
     const crops = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
     const [sheet] = buildFsa578FormSheets(crops.map((crop, i) => row({ id: crop, crop, fieldNumber: String(i + 1), acreage: 1 })));

@@ -1,4 +1,4 @@
-import { roundTo } from '@/utils/numbers';
+import { roundTo, wholePercents } from '@/utils/numbers';
 import type { Fsa578ReportRow, ReportCountyContext } from './fsaReports';
 
 /**
@@ -11,9 +11,10 @@ export function fsa578CountyLabel(fieldId: string, counties?: ReportCountyContex
   if (shares.length === 0) return '';
   const name = (share: typeof shares[number]) => [share.countyName, share.stateAbbr].filter(Boolean).join(', ');
   if (shares.length === 1) return name(shares[0]);
-  return [...shares]
-    .sort((a, b) => b.fraction - a.fraction)
-    .map(share => `${name(share)} ${Math.round(share.fraction * 100)}%`)
+  const sorted = [...shares].sort((a, b) => b.fraction - a.fraction);
+  const percents = wholePercents(sorted.map(share => share.fraction));
+  return sorted
+    .map((share, index) => `${name(share)} ${percents[index]}%`)
     .join(' / ');
 }
 

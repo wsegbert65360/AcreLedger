@@ -6,6 +6,10 @@
  * larger collections — bin inventory, activity history, compliance reports,
  * and backups would all look successful while missing rows.
  *
+ * A short page ends the read (no extra empty-page request on slow rural
+ * links), so the server's max_rows must stay >= the page size. The test pins
+ * supabase/config.toml; production's dashboard "Max rows" must match.
+ *
  * Pages are offset-based (`from`–`to`, inclusive). Callers MUST order the
  * query by a unique tiebreaker (`id`) so the total order is deterministic;
  * without it, rows can be skipped or duplicated between pages.

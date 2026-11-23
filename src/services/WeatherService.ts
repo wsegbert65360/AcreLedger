@@ -6,6 +6,7 @@ import { formatWeatherLatLng, normalizeWeatherLocation } from '@/lib/weatherCoor
 import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
 
 const PROXY_PATH = '/api/weather-proxy';
+export const WEATHER_LIMIT_REACHED = "Today's weather lookups for this farm are used up. They reset at midnight UTC.";
 const SIGN_IN_AGAIN = 'Sign in again to load weather.';
 
 const IS_CAPACITOR_BUILD = import.meta.env.MODE === 'capacitor';
@@ -86,6 +87,11 @@ async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> 
             toast.error(SIGN_IN_AGAIN);
             throw new SignInAgainError(SIGN_IN_AGAIN);
         }
+    }
+    if (proxied && res.status === 429) {
+        // One toast however many widgets hit the limit at once.
+        toast.error(WEATHER_LIMIT_REACHED, { id: 'weather-daily-limit' });
+        throw new Error(WEATHER_LIMIT_REACHED);
     }
     if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
     return res.json();

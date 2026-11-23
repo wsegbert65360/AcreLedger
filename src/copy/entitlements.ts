@@ -22,7 +22,7 @@ export const ENTITLEMENT_COPY = {
   // Rainfall
   rainfallLocked: 'Automatic rainfall for this field is part of Pro.',
 
-  // Cattle (approved by William 2026-11-15). Groups, pasture moves and editing head count stay free.
+  // Cattle (approved by William 2026-11-15; plan-list lines added 2026-11-22, review #44). Groups, pasture moves and editing head count stay free.
   cattleEventsLockedTitle: 'Cattle events are part of Pro.',
   cattleCsvLocked: 'The cattle CSV export is part of Pro.',
   cattleEventsLockedBody: 'You can still keep your groups, move them between pastures, and change a head count by editing the group. Events you already logged stay here.',
@@ -62,6 +62,7 @@ export function freePlanIncluded(): string[] {
     `Up to ${FREE_LIMITS.fieldCap} active fields`,
     'Daily rainfall on your two oldest fields in the contiguous US. Those two are locked, and you can\u2019t change them.',
     'Planting, spraying, fertilizing, harvest and hay records',
+    'Cattle groups and pasture moves',
     'FSA tract import, CLU assignment, and FSA farm, tract and field numbers',
     'Export what you logged',
   ];
@@ -73,6 +74,7 @@ export function paidPlanAdds(): string[] {
     'Prepared reports: FSA-578, crop insurance production, spray log, fertilizer, Hay Summary, and landlord summaries',
     'Grain bins and grain movement',
     'Equipment and maintenance',
+    'Cattle events, head transfers and the cattle CSV',
     'Landlord splits',
     'Rainfall on all remaining fields, hourly',
     'Backup restore',

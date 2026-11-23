@@ -14,7 +14,7 @@ Moved from AGENTS.md. This file is the agent rule. Architecture detail stays in 
 - `codemagic.yaml` defines `acreledger-ios` (IPA/TestFlight) and `acreledger-android` (AAB/Play internal) workflows.
 - There is no push-to-main trigger. The GitLab nightly schedule requests both workflows when the scheduled main commit matches GitHub main; unchanged successful builds are skipped. Manual starts remain available.
 - Nightly requests pass `EXPECTED_BUILD_SHA`; both workflows reject a checkout at a different commit before installing dependencies.
-- Android uses the shared `appstore` variables plus the `google_play` group containing `GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS`, and the uploaded `acreledger_upload` keystore. Keep credentials in Codemagic, never in the repository.
+- Android uses only the shared `appstore` group and the uploaded `acreledger_upload` keystore. `codemagic.yaml` has no `google_play` group. `GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS` is read if present (version-code lookup); without it, set `ANDROID_VERSION_CODE_OVERRIDE`. Keep credentials in Codemagic, never in the repository.
 - Android version codes use the latest build number across all Play tracks plus one; lookup failures stop the build. Initial uploads require a valid lookup or manual versioning.
 - GitHub Actions gates pull requests and main pushes with lint, app/API type checks, unit tests, and disposable PGlite database-integrity tests. Codemagic also runs database-integrity tests.
 - Code signing uses uploaded certificates and provisioning profiles via `ios_signing`.

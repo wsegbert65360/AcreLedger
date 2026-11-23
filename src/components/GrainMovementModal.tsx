@@ -30,7 +30,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
   const isLinkedHarvest = !!initialData.harvestRecordId;
   const [binId, setBinId] = useState(initialData.binId);
   const [bushels, setBushels] = useState(initialData.bushels.toString());
-  const [moisture, setMoisture] = useState(initialData.moisturePercent.toString());
+  const [moisture, setMoisture] = useState(initialData.moisturePercent?.toString() ?? '');
   const [price, setPrice] = useState(initialData.price?.toString() || '');
   const [destination, setDestination] = useState(initialData.destination || '');
   const [sourceField, setSourceField] = useState(initialData.sourceFieldName || '');
@@ -42,7 +42,7 @@ export default function GrainMovementModal({ open, onClose, initialData, mode = 
     if (initialData) {
       setBinId(initialData.binId);
       setBushels(initialData.bushels.toString());
-      setMoisture(initialData.moisturePercent.toString());
+      setMoisture(initialData.moisturePercent?.toString() ?? '');
       setPrice(initialData.price?.toString() || '');
       setDestination(initialData.destination || '');
       setSourceField(initialData.sourceFieldName || '');

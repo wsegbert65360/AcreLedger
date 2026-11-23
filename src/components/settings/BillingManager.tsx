@@ -237,7 +237,7 @@ export default function BillingManager() {
         ) : null}
         {!eligibilityKnown || compOnly ? null : !showBillingActions ? (
           <p className="text-sm text-muted-foreground">
-            Free record book. No card needed. Pro is $299 per farm per year.
+            Free record book. No card needed. Pro is US$299 per farm per year.
           </p>
         ) : (
           <>
@@ -277,7 +277,7 @@ export default function BillingManager() {
             )}
             {canManage && subscription == null && (
               <p className="text-xs text-muted-foreground">
-                Free record book. No card needed. Pro is $299 per farm per year.
+                Free record book. No card needed. Pro is US$299 per farm per year.
               </p>
             )}
           </>

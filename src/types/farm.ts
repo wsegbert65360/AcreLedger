@@ -222,7 +222,7 @@ export interface GrainMovement {
   binName: string;
   type: 'in' | 'out';
   bushels: number;
-  moisturePercent: number;
+  moisturePercent: number | null; // null: not recorded (e.g. a sale with no moisture reading)
   sourceFieldName?: string;
   timestamp: number;
   seasonYear: number;

@@ -149,7 +149,7 @@ const faqs = [
   {
     question: 'What does AcreLedger cost?',
     answer:
-      'Each farm starts on the free record book. You can keep records on up to 50 active fields, with automatic rainfall on your two oldest fields. You can\u2019t change those two, and no card is needed. Pro is $299 per farm per year for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, and landlord splits). If you never upgrade, you keep the free record book. You can export your records any time, and skipping Pro never deletes anything. We back up a free farm\u2019s data too.',
+      'Each farm starts on the free record book. You can keep records on up to 50 active fields, with automatic rainfall on your two oldest fields. You can\u2019t change those two, and no card is needed. Pro is US$299 per farm per year for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools (including grain bins, equipment, and landlord splits). If you never upgrade, you keep the free record book. You can export your records any time, and skipping Pro never deletes anything. We back up a free farm\u2019s data too.',
   },
   {
     question: 'Who owns the records I keep here?',
@@ -254,7 +254,7 @@ const Landing = () => {
               {!isNative && (
                 <>
                   <p className="landing-hero-terms" data-reveal style={revealDelay(320)}>
-                    Free record book. No card needed. Pro is $299 per farm per year.
+                    Free record book. No card needed. Pro is US$299 per farm per year.
                   </p>
                 </>
               )}
@@ -380,7 +380,7 @@ const Landing = () => {
                 What it costs.
               </h2>
               <p className="landing-lede" data-reveal style={revealDelay(80)}>
-                Free record book. No card needed. Pro is $299 per farm per year.
+                Free record book. No card needed. Pro is US$299 per farm per year.
               </p>
               <div className="landing-ticket-wrap">
                 <dl className="landing-ticket" data-reveal>
@@ -390,7 +390,7 @@ const Landing = () => {
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.green)}>
                     <dt>Farm subscription</dt>
-                    <dd>Free record book. Pro is $299.00 per farm / year, billed annually.</dd>
+                    <dd>Free record book. Pro is US$299.00 per farm / year, billed annually.</dd>
                   </div>
                   <div className="landing-ticket-line" style={accent(ACCENTS.gold)}>
                     <dt>Your records</dt>
@@ -400,7 +400,7 @@ const Landing = () => {
                     </dd>
                   </div>
                   <p className="landing-ticket-note">
-                    Your farm starts on the free record book the day you set it up, and you don’t need a card. Pro is $299 per farm per year, billed annually, for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools. Internet service, third-party services, and professional or government filing fees cost extra.
+                    Your farm starts on the free record book the day you set it up, and you don’t need a card. Pro is US$299 per farm per year, billed annually, for rainfall on all remaining fields, prepared FSA reports, backup restore, and the business tools. Internet service, third-party services, and professional or government filing fees cost extra.
                   </p>
                 </dl>
 
@@ -411,7 +411,7 @@ const Landing = () => {
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
-                  <p className="landing-included-title">Pro — $299 per farm per year</p>
+                  <p className="landing-included-title">Pro — US$299 per farm per year</p>
                   <ul className="landing-included">
                     {includedPro.map((item) => (
                       <li key={item}>{item}</li>
@@ -423,7 +423,7 @@ const Landing = () => {
                     </Link>
                   </div>
                   <p className="landing-hero-terms">
-                    Free record book. No card needed. Pro is $299 per farm per year.
+                    Free record book. No card needed. Pro is US$299 per farm per year.
                   </p>
                 </div>
               </div>
@@ -472,7 +472,7 @@ const Landing = () => {
             </div>
             {!isNative && (
               <p className="landing-final-terms" data-reveal style={revealDelay(200)}>
-                Free record book. No card needed. Pro is $299 per farm per year.
+                Free record book. No card needed. Pro is US$299 per farm per year.
               </p>
             )}
             <div className="landing-stamp" data-reveal="stamp" style={revealDelay(320)}>

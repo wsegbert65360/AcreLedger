@@ -128,32 +128,3 @@ export function countyLabel(share: { countyName: string | null; stateAbbr: strin
   if (!share.countyName) return 'County unknown';
   return share.stateAbbr ? `${share.countyName}, ${share.stateAbbr}` : share.countyName;
 }
-
-/** Tract-level county summary: CLU rows of one tract, by mapped acres. */
-export function tractCountySummary(
-  tractKey: string,
-  cluNumbers: string[],
-  index: CountyIndex,
-): { counties: { fips: string | null; label: string; mappedAcres: number }[]; unresolvedClus: number } {
-  const byCounty = new Map<string, { fips: string | null; label: string; mappedAcres: number }>();
-  let unresolved = 0;
-  for (const clu of cluNumbers) {
-    const rows = activeRows(index.get(subjectIndexKey('clu', cluSubjectKey(tractKey, clu))) ?? [])
-      .filter(r => r.countyFips != null);
-    if (rows.length === 0) {
-      unresolved += 1;
-      continue;
-    }
-    for (const row of rows) {
-      const key = row.countyFips!;
-      const entry = byCounty.get(key) ?? {
-        fips: key,
-        label: countyLabel({ countyName: row.countyName, stateAbbr: row.stateAbbr }),
-        mappedAcres: 0,
-      };
-      entry.mappedAcres = roundTo(entry.mappedAcres + (row.mappedAcres ?? 0), 4);
-      byCounty.set(key, entry);
-    }
-  }
-  return { counties: [...byCounty.values()].sort((a, b) => b.mappedAcres - a.mappedAcres), unresolvedClus: unresolved };
-}

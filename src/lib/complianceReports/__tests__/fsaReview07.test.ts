@@ -103,6 +103,13 @@ describe('review-07 acreage and compliance regressions', () => {
     expect(sanitizeCsvValue('  =1+1')).toBe('"\'  =1+1"');
     expect(sanitizeCsvValue('\ttext')).toBe('"\'\ttext"');
   });
+
+  it('keeps stringified negative numbers numeric but still guards formula-looking text', () => {
+    expect(sanitizeCsvValue('-12.5')).toBe('"-12.5"');
+    expect(sanitizeCsvValue('-3')).toBe('"-3"');
+    expect(sanitizeCsvValue('-1+1')).toBe('"\'-1+1"');
+    expect(sanitizeCsvValue('-A1')).toBe('"\'-A1"');
+  });
 });
 
 

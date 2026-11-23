@@ -140,7 +140,7 @@ describe('SellModal inventory validation', () => {
         binName: 'Bin 1',
         type: 'out',
         bushels: 1000,
-        moisturePercent: 15,
+        moisturePercent: null, // blank moisture is not recorded, never an invented 15%
       })
     );
   });

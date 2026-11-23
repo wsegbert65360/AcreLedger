@@ -128,10 +128,22 @@ higher rating.
 
 ## Export compliance
 
-`ios/App/App/Info.plist` sets `ITSAppUsesNonExemptEncryption` to `false`. The app
-uses Apple/platform encryption and standard HTTPS plus the submitted build has
-already been classified as using no non-exempt encryption. Reconfirm this on the
-new build; do not change the answer if the cryptography changes.
+`ios/App/App/Info.plist` sets `ITSAppUsesNonExemptEncryption` to `false`.
+
+What the app actually uses (updated 2026-11-22, review #39):
+
+- Standard HTTPS/TLS through the platform networking stack.
+- Keychain (Apple) for the session and the local database key.
+- **SQLCipher** (AES-256, via `@capacitor-community/sqlite`) to encrypt the
+  offline cache on the device. This is not Apple's OS encryption. It protects
+  only the user's own farm records at rest; nothing is sent encrypted with it.
+
+The `false` answer rests on that last use counting as exempt (data protection
+for the user's own data, no proprietary algorithm). The owner confirms this in
+App Store Connect's export-compliance questions on each new build and, if
+Apple's questions treat SQLCipher as non-exempt, changes the plist and files
+the annual self-classification instead. Do not change the answer silently if
+the cryptography changes.
 
 ## Screenshot package
 

@@ -161,7 +161,7 @@ describe('useAuth session and active-season synchronization', () => {
       finishA({ data: { farm_id: 'farm-1', active_season: 2023, onboarding_complete: true } });
       oldRealtime?.({ new: { active_season: 2022 } });
     });
-    expect(result.current.farm_id).toBe('farm-2');
+    await waitFor(() => expect(result.current.farm_id).toBe('farm-2'));
     expect(result.current.activeSeason).toBe(2024);
     expect(result.current.viewingSeason).toBe(2024);
     expect(result.current.onboardingComplete).toBe(false);
@@ -186,7 +186,7 @@ describe('useAuth session and active-season synchronization', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.farm_id).toBeNull();
     await act(async () => finish({ data: { ...state.profile, farm_id: 'forged' } }));
-    expect(result.current.farm_id).toBe('forged'); // The profile is trusted, metadata is not.
+    await waitFor(() => expect(result.current.farm_id).toBe('forged')); // The profile is trusted, metadata is not.
     expect(auth.refreshSession).toHaveBeenCalledTimes(1);
     cloud.setResult({ data: null });
     act(() => auth.onAuthStateChange.mock.calls[0][0]('SIGNED_IN', {

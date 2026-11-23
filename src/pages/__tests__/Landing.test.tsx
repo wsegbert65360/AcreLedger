@@ -42,7 +42,7 @@ describe('Landing', () => {
 
   it('uses the Free and Pro price and device copy with no trial', () => {
     renderLanding();
-    expect(screen.getAllByText('Free record book. No card needed. Pro is $299 per farm per year.').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText('Free record book. No card needed. Pro is US$299 per farm per year.').length).toBeGreaterThanOrEqual(3);
     expect(screen.getByText('Works in any web browser.')).toBeInTheDocument();
     expect(screen.getByRole('main')).not.toHaveTextContent(/free trial|3-month|3 months|read-only|photo/i);
     expect(screen.getByRole('main')).not.toHaveTextContent(/coming soon|no charge|planned price|four[- ]month|4[- ]month|Android|iPad/i);

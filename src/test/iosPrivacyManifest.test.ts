@@ -22,6 +22,13 @@ describe('iOS privacy manifest', () => {
     expect(manifest).toContain(`<string>${dataType}</string>`);
   });
 
+  it.each([
+    ['NSPrivacyAccessedAPICategoryUserDefaults', 'CA92.1'],
+    ['NSPrivacyAccessedAPICategoryFileTimestamp', 'C617.1'], // @capacitor/filesystem
+  ])('declares required-reason API %s (%s)', (api, reason) => {
+    expect(manifest).toMatch(new RegExp(`<string>${api}</string>\\s*<key>NSPrivacyAccessedAPITypeReasons</key>\\s*<array>\\s*<string>${reason}</string>`));
+  });
+
   it('declares no tracking', () => {
     expect(manifest).toMatch(/<key>NSPrivacyTracking<\/key>\s*<false\/>/);
     expect(manifest).not.toMatch(/<key>NSPrivacyCollectedDataTypeTracking<\/key>\s*<true\/>/);

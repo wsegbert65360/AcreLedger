@@ -14,7 +14,12 @@ vi.mock('stripe', () => ({
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: (...args: unknown[]) => mocks.createClient(...args),
+  createClient: (...args: unknown[]) => {
+    const client = mocks.createClient(...args);
+    // Default: the farm has no complimentary Pro (get_farm_comp_status).
+    if (client && !client.rpc) client.rpc = vi.fn().mockResolvedValue({ data: [{ is_comped: false, expires_at: null }], error: null });
+    return client;
+  },
 }));
 
 import handler from '../../api/create-checkout-session';
@@ -146,6 +151,41 @@ describe('create checkout session API', () => {
     const params = mocks.createCheckoutSession.mock.calls[0][0];
     expect(params.subscription_data).not.toHaveProperty('trial_end');
     expect(params.subscription_data).not.toHaveProperty('trial_period_days');
+  });
+
+  const post = async () => {
+    const result = createResponse();
+    await handler({ method: 'POST', headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' }, query: {} }, result.response);
+    return result.state;
+  };
+
+  it('requires the buyer to accept the Terms at Checkout', async () => {
+    expect((await post()).status).toBe(200);
+    expect(mocks.createCheckoutSession.mock.calls[0][0].consent_collection).toEqual({ terms_of_service: 'required' });
+  });
+
+  it('refuses a worker: only an owner or admin can become the billing owner', async () => {
+    const client = mocks.createClient();
+    const from = client.from;
+    client.from = vi.fn((table: string) => (table === 'profiles'
+      ? { select: () => ({ eq: () => ({ maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'user-1', farm_id: 'farm-1', farm_role: 'worker' }, error: null }) }) }) }
+      : from(table)));
+    const state = await post();
+    expect(state).toMatchObject({ status: 403, body: { error: 'Only the farm owner can start billing.' } });
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('does not start Checkout for a farm with complimentary Pro', async () => {
+    mocks.createClient().rpc = vi.fn().mockResolvedValue({ data: [{ is_comped: true, expires_at: null }], error: null });
+    const state = await post();
+    expect(state.status).toBe(409);
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the comp status cannot be read', async () => {
+    mocks.createClient().rpc = vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
+    expect((await post()).status).toBe(500);
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('cleans quoted or padded Supabase env values before creating the client', async () => {
