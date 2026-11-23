@@ -31,11 +31,11 @@ export function ReportPreview({ title, headers, rows }: ReportPreviewProps) {
       <div className="report-preview-watermark" aria-hidden="true">
         {ENTITLEMENT_COPY.reportPreviewLabel}
       </div>
-      <div className="relative z-[1] space-y-3 p-4">
+      <div className="relative z-[1] min-w-0 space-y-3 p-4">
         <p className="inline-flex rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
           {ENTITLEMENT_COPY.reportPreviewLabel}
         </p>
-        <h2 className="text-base font-bold text-foreground">{title}</h2>
+        <h2 className="min-w-0 break-words text-base font-bold text-foreground">{title}</h2>
         {sample.length > 0 ? (
           <ul data-testid="report-preview-rows" className="space-y-2">
             {sample.map((row) => (

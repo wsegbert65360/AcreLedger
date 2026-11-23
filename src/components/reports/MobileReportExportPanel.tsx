@@ -42,12 +42,12 @@ export function MobileReportExportPanel({
   return (
     <section className="space-y-4 lg:hidden print:hidden">
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <div className="flex items-start gap-3">
-          <span className="rounded-xl bg-primary/10 p-2.5 text-primary">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="shrink-0 rounded-xl bg-primary/10 p-2.5 text-primary">
             <FileText className="h-5 w-5" aria-hidden="true" />
           </span>
-          <div>
-            <h2 className="font-sans text-lg font-bold text-foreground">{title}</h2>
+          <div className="min-w-0">
+            <h2 className="break-words font-sans text-lg font-bold text-foreground">{title}</h2>
             <p className="mt-1 font-sans text-sm leading-relaxed text-muted-foreground">{description}</p>
           </div>
         </div>

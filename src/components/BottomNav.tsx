@@ -63,7 +63,7 @@ export default function BottomNav() {
 
   return (
     <nav aria-label="Primary" className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/70 bg-card/90 shadow-[0_-8px_30px_hsl(var(--foreground)/0.06)] backdrop-blur-xl print:hidden pb-[env(safe-area-inset-bottom)] lg:hidden">
-      <div className="flex items-center justify-around max-w-lg mx-auto relative px-2">
+      <div className="relative mx-auto flex w-full min-w-0 max-w-lg items-center px-2">
         {navTabs.map(({ path, icon: Icon, label }) => {
           const active = pathname === path;
           return (
@@ -74,7 +74,7 @@ export default function BottomNav() {
               onClick={() => {
                 native.haptic.light();
               }}
-              className={`relative touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-3 transition-all active:scale-95 ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              className={`relative flex h-16 min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2.5 transition-all active:scale-95 ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 }`}
               aria-current={active ? 'page' : undefined}
             >
@@ -92,7 +92,7 @@ export default function BottomNav() {
                 )}
                 <Icon size={22} strokeWidth={active ? 2.5 : 1.5} />
               </div>
-              <span className={`text-xs ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
+              <span className={`max-w-full truncate text-center text-xs ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
             </Link>
           );
         })}

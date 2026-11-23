@@ -672,7 +672,7 @@ export default function Reports() {
         <Tabs
           value={tab}
           onValueChange={(value) => setTab(value as ReportTab)}
-          className="space-y-4"
+          className="min-w-0 max-w-full space-y-4"
         >
         {/* Season Selector */}
         <div className="flex min-h-14 min-w-0 items-center justify-between gap-4 rounded-2xl border border-border bg-muted/30 px-3 py-2 print:hidden">
@@ -684,10 +684,10 @@ export default function Reports() {
         </div>
 
         {/* Tab Bar — flex-1 shrink-0 allows tabs to fill screen width equally on desktop, but never shrink below content size on mobile */}
-        <div className="relative print:hidden">
+        <div className="relative min-w-0 max-w-full print:hidden">
         <TabsList
           aria-label="Report type"
-          className="no-scrollbar flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1"
+          className="no-scrollbar flex h-auto w-full min-w-0 max-w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1"
         >
           {TABS.map(t => (
             <TabsTrigger
