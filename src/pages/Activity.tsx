@@ -354,10 +354,10 @@ export default function Activity() {
             </div>
           </div>
 
-          <div className="flex min-w-0 w-full items-center justify-end gap-2 sm:w-auto">
+          <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <div className="shrink-0"><SyncStatusIndicator /></div>
 
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               {tab === 'spray' && (
                 <button
                   onClick={() => {
@@ -436,9 +436,9 @@ export default function Activity() {
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs — grouped pills */}
-        <div className="relative -mx-4 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
-          <div className="relative">
-          <div ref={activityTypesRef} role="group" aria-label="Activity types" className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
+        <div className="relative -mx-4 min-w-0 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
+          <div className="relative min-w-0">
+          <div ref={activityTypesRef} role="group" aria-label="Activity types" className="flex min-w-0 gap-1.5 overflow-x-auto no-scrollbar pr-8">
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
                 {group.tabs.map((t) => {
@@ -499,8 +499,8 @@ export default function Activity() {
         </div>
 
         {/* Search + Review Queue filter */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="relative min-w-0 flex-1">
             <Label htmlFor="activitySearch" className="sr-only">Search Records</Label>
             <input
               id="activitySearch"
@@ -509,7 +509,7 @@ export default function Activity() {
               onChange={e => setSearch(e.target.value)}
               placeholder="Search records..."
               aria-label="Search records"
-              className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              className="min-w-0 w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
           <button

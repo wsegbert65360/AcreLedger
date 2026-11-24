@@ -240,6 +240,16 @@
     @apply border-border;
   }
 
+  /* 400px is the narrowest phone width we QA. Clip sideways overflow at the
+     root so a slightly-too-wide descendant cannot create page-level horizontal
+     scroll. overflow-x: clip (not hidden) avoids a scroll container that would
+     break position:sticky. */
+  html,
+  #root {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     background-image:
@@ -284,6 +294,8 @@
 @layer components {
   /* App content stays clear of the side safe areas (--sa-l / --sa-r). */
   .app-shell {
+    min-width: 0;
+    max-width: 100%;
     padding-left: var(--sa-l);
     padding-right: var(--sa-r);
   }
@@ -612,12 +624,21 @@ html.color [data-theme-choice="color"] {
   justify-content: center;
   pointer-events: none;
   user-select: none;
+  overflow: hidden;
+  max-width: 100%;
   font-size: 4.5rem;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(15, 23, 42, 0.16);
   transform: rotate(-18deg);
+}
+
+@media (max-width: 480px) {
+  .report-preview-watermark {
+    font-size: 2.5rem;
+    letter-spacing: 0.08em;
+  }
 }
 
 @media print {
