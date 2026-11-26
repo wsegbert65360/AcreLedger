@@ -17,10 +17,10 @@ import type { CattleGroup } from '@/types/cattle';
 
 /** The amber hold-back note for a herd, or nothing when no withdrawal is running. */
 export function WithdrawalBadge({ groupId, className = '' }: { groupId: string; className?: string }) {
-  const { cattleTreatments } = useFarm();
+  const { cattleTreatments, cattleEvents } = useFarm();
   const hold = useMemo(
-    () => activeWithdrawal(cattleTreatments, groupId, localTodayIso()),
-    [cattleTreatments, groupId],
+    () => activeWithdrawal(cattleTreatments, cattleEvents, groupId, localTodayIso()),
+    [cattleTreatments, cattleEvents, groupId],
   );
   if (!hold) return null;
   return (

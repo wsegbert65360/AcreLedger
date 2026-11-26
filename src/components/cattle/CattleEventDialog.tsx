@@ -30,7 +30,7 @@ const MIXED_SEX = 'mixed';
 
 /** Log one event for a herd. Moving head to another herd is one queued transfer, not two writes. */
 export default function CattleEventDialog({ group, onClose }: { group: CattleGroup; onClose: () => void }) {
-  const { cattleGroups, cattleTreatments, logCattleEvent, transferCattleHead } = useFarm();
+  const { cattleGroups, cattleEvents, cattleTreatments, logCattleEvent, transferCattleHead } = useFarm();
   const today = localTodayIso();
   const counts = groupCounts(group);
   const ownClass = herdTypeClass(group.class);
@@ -134,7 +134,7 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
 
     // Shipping cattle that are still in a withdrawal period needs a second look.
     if (type === 'head_removed' && reason === 'shipped') {
-      const held = withdrawalConflicts(cattleTreatments, group.id, date, cattleClass);
+      const held = withdrawalConflicts(cattleTreatments, cattleEvents, group.id, date, cattleClass);
       if (held.length > 0) {
         const worst = held[0];
         const proceed = window.confirm(

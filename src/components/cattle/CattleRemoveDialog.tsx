@@ -33,7 +33,7 @@ const NO_CAUSE = '__none__';
 
 /** Sell, record deaths, or transfer head out of a herd, several classes in one save. */
 export default function CattleRemoveDialog({ group, mode, onClose }: { group: CattleGroup; mode: RemoveMode; onClose: () => void }) {
-  const { cattleGroups, cattleTreatments, logCattleEvent, transferCattleHead, addCattleGroup, moveCattleGroup } = useFarm();
+  const { cattleGroups, cattleEvents, cattleTreatments, logCattleEvent, transferCattleHead, addCattleGroup, moveCattleGroup } = useFarm();
   const today = localTodayIso();
   const counts = groupCounts(group);
   const [date, setDate] = useState(today);
@@ -63,6 +63,8 @@ export default function CattleRemoveDialog({ group, mode, onClose }: { group: Ca
     if (mode === 'sell' && avgWeight.trim()) {
       const value = Number(avgWeight.trim());
       if (!/^\d+(\.\d)?$/.test(avgWeight.trim()) || !(value > 0) || value > 9999) return fail('Average weight must be a number, like 1250 or 1250.5.');
+      // One weight cannot describe two classes (cows and calves, say).
+      if (lines.length > 1) return fail('An average weight covers one class. Clear it, or sell each class separately.');
       weight = value;
     }
     if (mode === 'transfer') {
@@ -71,7 +73,7 @@ export default function CattleRemoveDialog({ group, mode, onClose }: { group: Ca
     }
     if (mode === 'sell') {
       for (const line of lines) {
-        const held = withdrawalConflicts(cattleTreatments, group.id, date, line.cls);
+        const held = withdrawalConflicts(cattleTreatments, cattleEvents, group.id, date, line.cls);
         if (held.length > 0) {
           const worst = held[0];
           if (!window.confirm(`${worst.product} is still in withdrawal until ${formatIsoDate(worst.withdrawalUntil)}. Sell these head anyway?`)) return undefined;

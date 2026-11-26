@@ -177,19 +177,33 @@ const mixed: CattleGroup = {
 describe('CattleRemoveDialog', () => {
   beforeEach(() => { farm.cattleGroups = [mixed, group]; });
 
-  it('sells several classes in one save with the average weight and buyer', async () => {
+  it('sells several classes in one save with the buyer', async () => {
     const onClose = vi.fn();
     render(<CattleRemoveDialog group={mixed} mode="sell" onClose={onClose} />);
     type('Steers (24)', '24'); type('Cows (40)', '3');
-    type('Average weight, lb (optional)', '1250');
     type('Buyer or hauler (optional)', 'Smith Livestock');
     fireEvent.click(screen.getByRole('button', { name: 'Save sale' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(farm.logCattleEvent).toHaveBeenCalledTimes(2);
     expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: 'head_removed', reason: 'shipped', cattleClass: 'steers', headDelta: -24, avgWeight: 1250, notes: 'Smith Livestock',
+      eventType: 'head_removed', reason: 'shipped', cattleClass: 'steers', headDelta: -24, notes: 'Smith Livestock',
     }), expect.anything());
     expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ cattleClass: 'cows', headDelta: -3 }), expect.anything());
+  });
+
+  it('takes an average weight for one class only', async () => {
+    const onClose = vi.fn();
+    render(<CattleRemoveDialog group={mixed} mode="sell" onClose={onClose} />);
+    type('Steers (24)', '24'); type('Cows (40)', '3');
+    type('Average weight, lb (optional)', '1250');
+    fireEvent.click(screen.getByRole('button', { name: 'Save sale' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('covers one class');
+    expect(farm.logCattleEvent).not.toHaveBeenCalled();
+    type('Cows (40)', '');
+    fireEvent.click(screen.getByRole('button', { name: 'Save sale' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(farm.logCattleEvent).toHaveBeenCalledTimes(1);
+    expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ cattleClass: 'steers', avgWeight: 1250 }), expect.anything());
   });
 
   it('refuses more head than the herd holds', async () => {

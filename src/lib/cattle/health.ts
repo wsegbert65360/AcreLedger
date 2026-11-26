@@ -56,35 +56,78 @@ export interface ActiveWithdrawal {
   treatmentId: string;
 }
 
-/** The treatment that holds a herd back the longest on a date, or null. */
-export function activeWithdrawal(
-  treatments: CattleTreatment[],
-  groupId: string,
-  onDate: string,
-  cattleClass?: CountClass,
-): ActiveWithdrawal | null {
-  let best: CattleTreatment | null = null;
-  for (const item of treatments) {
-    if (item.groupId !== groupId || !isWithdrawalActive(item, onDate)) continue;
-    // A class-only treatment does not hold back the other classes.
-    if (cattleClass && item.cattleClass && item.cattleClass !== cattleClass) continue;
-    if (!best || item.withdrawalUntil > best.withdrawalUntil) best = item;
-  }
-  return best ? { until: best.withdrawalUntil, product: best.product, treatmentId: best.id } : null;
+type HoldEvent = Pick<CattleEvent, 'groupId' | 'eventType' | 'eventDate' | 'cattleClass' | 'toClass' | 'transferId' | 'deleted_at'>;
+
+/** A herd and class that may hold treated head; no class means any class in the herd. */
+interface HoldPlace {
+  groupId: string;
+  cattleClass?: CountClass;
+  /** The earliest date treated head could have been there. */
+  since: string;
 }
 
-/** Every treatment holding a herd (or one class of it) back on a date. */
+/**
+ * Everywhere a treatment's head may be on a date: where they were treated, plus
+ * wherever a later reclass or transfer could have taken them. Events do not say
+ * which head moved, so any move out of a held class carries the hold with it.
+ */
+function holdPlaces(treatment: CattleTreatment, events: readonly HoldEvent[], onDate: string): HoldPlace[] {
+  const places = new Map<string, HoldPlace>();
+  const queue: HoldPlace[] = [];
+  const reach = (place: HoldPlace) => {
+    const key = `${place.groupId}|${place.cattleClass ?? '*'}`;
+    const seen = places.get(key);
+    if (seen && seen.since <= place.since) return;
+    places.set(key, place);
+    queue.push(place);
+  };
+  reach({ groupId: treatment.groupId, cattleClass: treatment.cattleClass, since: treatment.treatedOn });
+
+  const moves = events.filter(item => !item.deleted_at && item.eventDate <= onDate
+    && (item.eventType === 'reclass' || (item.eventType === 'head_removed' && item.transferId)));
+  for (let place = queue.shift(); place; place = queue.shift()) {
+    for (const move of moves) {
+      if (move.groupId !== place.groupId || move.eventDate < place.since) continue;
+      if (place.cattleClass && move.cattleClass && move.cattleClass !== place.cattleClass) continue;
+      if (move.eventType === 'reclass') {
+        reach({ groupId: move.groupId, cattleClass: move.toClass, since: move.eventDate });
+        continue;
+      }
+      for (const arrival of events) {
+        if (arrival.deleted_at || arrival.eventType !== 'head_added' || arrival.transferId !== move.transferId) continue;
+        reach({ groupId: arrival.groupId, cattleClass: arrival.cattleClass ?? move.cattleClass, since: move.eventDate });
+      }
+    }
+  }
+  return [...places.values()];
+}
+
+/** Every treatment that may hold a herd (or one class of it) back on a date, longest first. */
 export function withdrawalConflicts(
   treatments: CattleTreatment[],
+  events: readonly HoldEvent[],
   groupId: string,
   onDate: string,
   cattleClass?: CountClass,
 ): CattleTreatment[] {
   return treatments
-    .filter(item => item.groupId === groupId
-      && isWithdrawalActive(item, onDate)
-      && !(cattleClass && item.cattleClass && item.cattleClass !== cattleClass))
+    .filter(item => isWithdrawalActive(item, onDate)
+      && holdPlaces(item, events, onDate).some(place => place.groupId === groupId
+        // A class-only hold does not hold back the other classes.
+        && !(cattleClass && place.cattleClass && place.cattleClass !== cattleClass)))
     .sort((a, b) => b.withdrawalUntil.localeCompare(a.withdrawalUntil));
+}
+
+/** The treatment that holds a herd back the longest on a date, or null. */
+export function activeWithdrawal(
+  treatments: CattleTreatment[],
+  events: readonly HoldEvent[],
+  groupId: string,
+  onDate: string,
+  cattleClass?: CountClass,
+): ActiveWithdrawal | null {
+  const best = withdrawalConflicts(treatments, events, groupId, onDate, cattleClass)[0];
+  return best ? { until: best.withdrawalUntil, product: best.product, treatmentId: best.id } : null;
 }
 
 /** What the form remembers about a product used before, so a repeat is two taps. */

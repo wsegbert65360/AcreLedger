@@ -34,11 +34,50 @@ describe('withdrawal dates', () => {
   it('picks the longest hold and lets a class-only treatment skip other classes', () => {
     const calves = treatment({ id: 't2', cattleClass: 'calves', withdrawalUntil: '2026-07-30', product: 'Draxxin' });
     const all = [treatment(), calves];
-    expect(activeWithdrawal(all, 'g1', '2026-06-01')?.product).toBe('Draxxin');
-    expect(activeWithdrawal(all, 'g1', '2026-06-01', 'steers')?.product).toBe('Ivomec');
-    expect(activeWithdrawal(all, 'g2', '2026-06-01')).toBeNull();
-    expect(withdrawalConflicts(all, 'g1', '2026-06-01', 'steers')).toHaveLength(1);
-    expect(withdrawalConflicts(all, 'g1', '2026-08-01')).toHaveLength(0);
+    expect(activeWithdrawal(all, [], 'g1', '2026-06-01')?.product).toBe('Draxxin');
+    expect(activeWithdrawal(all, [], 'g1', '2026-06-01', 'steers')?.product).toBe('Ivomec');
+    expect(activeWithdrawal(all, [], 'g2', '2026-06-01')).toBeNull();
+    expect(withdrawalConflicts(all, [], 'g1', '2026-06-01', 'steers')).toHaveLength(1);
+    expect(withdrawalConflicts(all, [], 'g1', '2026-08-01')).toHaveLength(0);
+  });
+});
+
+describe('a withdrawal follows the cattle', () => {
+  const calves = treatment({ cattleClass: 'calves' });
+  const event = { eventDate: '2026-05-10', deleted_at: null };
+  const wean = { ...event, groupId: 'g1', eventType: 'reclass' as const, cattleClass: 'calves' as const, toClass: 'steers' as const };
+  const move = (day: string, from: string, to: string, cattleClass: 'calves' | 'steers', id = 'x') => [
+    { ...event, eventDate: day, groupId: from, eventType: 'head_removed' as const, cattleClass, transferId: id },
+    { ...event, eventDate: day, groupId: to, eventType: 'head_added' as const, cattleClass, transferId: id },
+  ];
+  const held = (events: Parameters<typeof withdrawalConflicts>[1], group: string, cls?: 'calves' | 'steers' | 'cows', date = '2026-06-01') =>
+    withdrawalConflicts([calves], events, group, date, cls).length;
+
+  it('through weaning into a new class', () => {
+    expect(held([wean], 'g1', 'steers')).toBe(1);
+    expect(held([wean], 'g1', 'cows')).toBe(0);
+  });
+
+  it('through transfers to other herds, including a chain', () => {
+    const events = [wean, ...move('2026-05-12', 'g1', 'g2', 'steers', 'a'), ...move('2026-05-20', 'g2', 'g3', 'steers', 'b')];
+    expect(held(events, 'g2', 'steers')).toBe(1);
+    expect(held(events, 'g3', 'steers')).toBe(1);
+    expect(held(events, 'g3')).toBe(1);
+    expect(held(events, 'g3', 'cows')).toBe(0);
+    expect(activeWithdrawal([calves], events, 'g3', '2026-06-01')?.product).toBe('Ivomec');
+  });
+
+  it('carries a whole-herd treatment with the class that moves', () => {
+    const events = move('2026-05-12', 'g1', 'g2', 'steers');
+    expect(withdrawalConflicts([treatment()], events, 'g2', '2026-06-01', 'steers')).toHaveLength(1);
+  });
+
+  it('ignores moves before the treatment, after the date asked about, out of order, or deleted', () => {
+    expect(held(move('2026-04-30', 'g1', 'g2', 'calves'), 'g2')).toBe(0);
+    expect(held(move('2026-05-20', 'g1', 'g2', 'calves'), 'g2', 'calves', '2026-05-15')).toBe(0);
+    const outOfOrder = [...move('2026-05-20', 'g1', 'g2', 'calves', 'a'), ...move('2026-05-12', 'g2', 'g3', 'calves', 'b')];
+    expect(held(outOfOrder, 'g3')).toBe(0);
+    expect(held([{ ...wean, deleted_at: '2026-05-11T00:00:00Z' }], 'g1', 'steers')).toBe(0);
   });
 });
 
