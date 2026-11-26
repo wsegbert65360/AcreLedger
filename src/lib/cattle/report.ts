@@ -3,7 +3,7 @@ import type { CattleEvent, CattleGroup, CattleMove, CattleTreatment } from '@/ty
 import { sanitizeCsvValue } from '@/utils/csv';
 import { COUNT_CLASSES, COUNT_TITLES, groupCounts } from './counts';
 import { describeDose, ROUTE_SHORT, TREATMENT_KIND_LABELS } from './health';
-import { CATTLE_CLASS_LABELS, CATTLE_EVENT_LABELS, CATTLE_REMOVAL_LABELS, pastureLabel } from './ui';
+import { CATTLE_CLASS_LABELS, CATTLE_EVENT_LABELS, pastureLabel, reasonLabel } from './ui';
 
 type Cell = string | number | null | undefined;
 
@@ -53,7 +53,7 @@ export function buildCattleCsv(
       : event.cattleClass ? COUNT_TITLES[event.cattleClass] : '';
     rows.push(line([
       'Event', nameById.get(event.groupId), classById.get(event.groupId), event.eventDate, '', '',
-      event.headDelta, CATTLE_EVENT_LABELS[event.eventType], event.reason ? CATTLE_REMOVAL_LABELS[event.reason] : '',
+      event.headDelta, CATTLE_EVENT_LABELS[event.eventType], reasonLabel(event.reason),
       event.notes ?? '', cattle, ...NO_COUNTS,
       '', '', '', '', '', '', '', '',
       event.bredCount ?? '', event.openCount ?? '', event.notCheckedCount ?? '', event.exposedCount ?? '',

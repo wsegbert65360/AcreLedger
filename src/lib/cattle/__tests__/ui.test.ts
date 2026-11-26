@@ -63,7 +63,7 @@ describe('buildCattleCsv', () => {
     expect(lines[0]).toBe('Record,Group,Class,Date,Pasture,Head,Head Change,Event,Reason,Notes,Cattle,Cows,Heifers,Bulls,Calves,Steers,Stockers,Product,Treatment Type,Dose,Route,Withdrawal Days,Withdrawal Until,Lot Number,Given By,Bred,Open,Not Checked,Exposed,Head Weaned,Avg Weight');
     expect(lines).toHaveLength(4);
     expect(lines[1]).toContain(`"'=SUM(A1)"`);
-    expect(lines[3]).toContain('"Head removed","Shipped"');
+    expect(lines[3]).toContain('"Head removed","Sold / shipped"');
   });
 
   it('writes a mixed herd with its class counts and the class an event changed', () => {

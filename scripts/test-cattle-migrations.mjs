@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -48,6 +48,11 @@ const definerMigration = await readFile(
 
 const healthMigration = await readFile(
   new URL('../supabase/migrations/20261126040807_cattle_herd_health_breeding.sql', import.meta.url),
+  'utf8',
+);
+
+const salesMigration = await readFile(
+  new URL('../supabase/migrations/20261126163733_cattle_sales_deaths.sql', import.meta.url),
   'utf8',
 );
 
@@ -897,7 +902,38 @@ try {
   );
   assert.equal((await db.query(`SELECT has_table_privilege('anon', 'public.cattle_treatments', 'SELECT') AS a, has_table_privilege('authenticated', 'public.cattle_treatments', 'INSERT') AS i`)).rows[0].a, false, 'anon cannot read treatments');
 
-  console.log('Cattle migration checks passed: herd health and breeding (treatments, preg checks, bull turnout, weaning numbers), defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, reused names, the Pro gate on events, and mixed herds (class counts, older-client totals, class events, reclass, class transfers and class-aware reversal).');
+  // ---- Sales and deaths (20261126163733) ----
+  await db.exec(salesMigration);
+  const s = i => `10000000-0000-4000-8000-0000000005${String(i).padStart(2, '0')}`;
+  await db.exec('SET ROLE authenticated;');
+  await db.query(`INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1, $2, 'Sale herd', 'mixed', 40)`, [s(1), ids.farm]);
+  const sale = (id, type, delta, extra = {}) => db.query(
+    'SELECT public.log_cattle_event($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) AS value',
+    [ids.farm, id, s(1), type, '2026-11-10', delta, extra.reason ?? null, null, extra.cls ?? 'cows', null, null, null,
+      null, null, null, null, extra.headWeaned ?? null, extra.avgWeight ?? null],
+  );
+  await sale(s(10), 'head_removed', -3, { reason: 'shipped', avgWeight: 1204.46 });
+  const saleRow = (await db.query('SELECT * FROM public.cattle_events WHERE id = $1', [s(10)])).rows[0];
+  assert.equal(Number(saleRow.avg_weight), 1204.5, 'a sale keeps its average weight to one decimal');
+  assert.equal(saleRow.head_weaned, null, 'a sale has no head weaned');
+  assert.equal((await sale(s(10), 'head_removed', -3, { reason: 'shipped', avgWeight: 1204.46 })).rows[0].value.already_applied, true, 'a weighed sale replays idempotently');
+  await sale(s(11), 'head_removed', -2, { reason: 'shipped' });
+  await assert.rejects(sale(s(12), 'head_removed', -1, { reason: 'moved_to_another_group', avgWeight: 900 }), code('23514'), 'only a sale carries a weight');
+  await assert.rejects(sale(s(12), 'head_removed', -1, { reason: 'shipped', avgWeight: 0 }), code('23514'), 'a sale weight must be above zero');
+  await assert.rejects(sale(s(12), 'head_removed', -1, { reason: 'shipped', headWeaned: 4, avgWeight: 900 }), code('23514'), 'a sale has no head weaned');
+  await assert.rejects(sale(s(12), 'death', -1, { avgWeight: 900 }), code('23514'), 'a death carries no weight');
+  await sale(s(13), 'death', -1, { reason: 'illness' });
+  assert.equal((await db.query('SELECT reason FROM public.cattle_events WHERE id = $1', [s(13)])).rows[0].reason, 'illness', 'a death keeps its cause');
+  await sale(s(14), 'death', -1);
+  assert.equal((await db.query('SELECT reason FROM public.cattle_events WHERE id = $1', [s(14)])).rows[0].reason, null, 'a death with no cause still saves');
+  await assert.rejects(sale(s(15), 'death', -1, { reason: 'bored' }), code('23514'), 'an unknown cause is refused');
+  const afterSales = (await db.query('SELECT cows FROM public.cattle_groups WHERE id = $1', [s(1)])).rows[0].cows;
+  assert.equal(afterSales, 40 - 3 - 2 - 1 - 1, 'sales and deaths take their head off the class');
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'event', s(10)]);
+  assert.equal((await db.query('SELECT cows FROM public.cattle_groups WHERE id = $1', [s(1)])).rows[0].cows, afterSales + 3, 'deleting a weighed sale puts the head back');
+  await db.exec('RESET ROLE');
+
+  console.log('Cattle migration checks passed: sales and deaths (weighed sales, death causes), herd health and breeding (treatments, preg checks, bull turnout, weaning numbers), defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, reused names, the Pro gate on events, and mixed herds (class counts, older-client totals, class events, reclass, class transfers and class-aware reversal).');
 } finally {
   await db.close();
 }

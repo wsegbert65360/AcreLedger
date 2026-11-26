@@ -25,6 +25,8 @@ export type CattleEventType =
 
 /** A death is logged with the death event, not as a removal reason. */
 export type CattleRemovalReason = 'shipped' | 'moved_to_another_group';
+/** Why a head was lost; stored in the death event's reason. */
+export type CattleDeathCause = 'illness' | 'calving' | 'weather' | 'predator' | 'unknown' | 'other';
 
 export type CalfSex = 'heifer' | 'steer' | 'bull';
 
@@ -71,7 +73,7 @@ export interface CattleEvent extends CattleRowBase {
   eventType: CattleEventType;
   eventDate: string;
   headDelta: number;
-  reason?: CattleRemovalReason;
+  reason?: CattleRemovalReason | CattleDeathCause;
   /** Shared by both halves of a head transfer; deleting either half reverses both. */
   transferId?: string;
   /** The class the head change hit (the from-class for a reclass). */
@@ -133,7 +135,7 @@ export interface CattleEventRow {
   event_type: CattleEventType;
   event_date: string;
   head_delta: number;
-  reason?: CattleRemovalReason | null;
+  reason?: CattleRemovalReason | CattleDeathCause | null;
   transfer_id?: string | null;
   cattle_class?: CountClass | null;
   to_class?: CountClass | null;

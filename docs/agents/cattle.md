@@ -1,4 +1,4 @@
-﻿# Cattle
+# Cattle
 
 Agent rules for the optional cattle book. Architecture detail is [BLUEPRINT â†’ Cattle](../../BLUEPRINT.md#cattle).
 
@@ -10,6 +10,7 @@ Agent rules for the optional cattle book. Architecture detail is [BLUEPRINT â�
 - [Writes](#writes)
 - [Mixed herds](#mixed-herds)
 - [Herd health and breeding](#herd-health-and-breeding)
+- [Weaning, sales and locations](#weaning-sales-and-locations)
 <!-- contents:end -->
 
 ## Switch
@@ -58,3 +59,12 @@ Added 2026-11-25 (`20261126040807_cattle_herd_health_breeding.sql`; the `sync_ca
 - Stats (`src/lib/cattle/health.ts` `herdYearStats`): pregnancy %, calving %, weaning %, and weight weaned per cow exposed. Exposed comes from bulls-in records when there are any, otherwise the cows and heifers on hand (labeled).
 - Exports: the cattle CSV has treatment rows and the new columns. The Pro treatment record PDF (`src/lib/cattle/treatmentRecordPdf.ts`, report type `cattle-treatment-record`) is server-authorized like the other Pro reports.
 - No dollars, no animal IDs, no feeding records.
+
+## Weaning, sales and locations
+
+- Herd page buttons: Move, Sell, Death, Transfer, Wean calves. Sell, Death and Transfer take head per class (`src/lib/cattle/lines.ts`), so one save can be 24 steers and 3 cull cows.
+- Each class line is its own queued event (`head_removed` / `death` / `transfer_cattle_head`). There is no batch id and no single server transaction (the plan's `wean_cattle_calves` RPC was not built); a failed later line reports "N of M saved" and earlier lines stay saved. Every call is already idempotent.
+- Sales are `head_removed` with reason `shipped` (label "Sold / shipped"), optional `avg_weight`, buyer or hauler in notes. No prices. Withdrawal conflicts still ask first. Deaths take an optional cause (`illness, calving, weather, predator, unknown, other`) in `reason`. Migration `20261126163733_cattle_sales_deaths.sql` widens the weaning-shape check and `log_cattle_event` validation for these.
+- Wean calves records one `weaning` event (head weaned, avg weight), then `reclass` events calves to heifers / steers (split prefilled from this year's calving `calf_sex`; blank split keeps them calves), then optional transfers to an existing or new herd.
+- Locations (`src/lib/cattle/locations.ts`, `LocationPicker`): pasture, hay fields and crop fields. Crop fields are offered after harvest or Sep 1 to Mar 31, otherwise under "Show all fields"; an unharvested crop field needs a confirmation. A new herd made by Transfer or Wean gets its first move to its location after the head land. One location per herd; splitting a herd is a transfer to a new herd.
+- Still true: no dollars, no animal IDs, no feeding records; Pro-only writes via `assert_premium(farm,'cattle_events')`, deleting stays free.

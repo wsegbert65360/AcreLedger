@@ -1,5 +1,5 @@
 import type {
-  CalfSex, CattleClass, CattleEvent, CattleEventType, CattleGroup, CattleRemovalReason,
+  CalfSex, CattleClass, CattleDeathCause, CattleEvent, CattleEventType, CattleGroup, CattleRemovalReason,
 } from '@/types/cattle';
 import { COUNT_LABELS } from './counts';
 
@@ -34,9 +34,26 @@ export const CALF_SEX_LABELS: Record<CalfSex, string> = {
 };
 
 export const CATTLE_REMOVAL_LABELS: Record<CattleRemovalReason, string> = {
-  shipped: 'Shipped',
+  shipped: 'Sold / shipped',
   moved_to_another_group: 'Moved to another group',
 };
+
+export const CATTLE_DEATH_CAUSE_LABELS: Record<CattleDeathCause, string> = {
+  illness: 'Illness',
+  calving: 'Calving trouble',
+  weather: 'Weather',
+  predator: 'Predator',
+  unknown: 'Unknown',
+  other: 'Other',
+};
+
+/** Label for an event's stored reason: a removal reason or a cause of death. */
+export function reasonLabel(reason: CattleRemovalReason | CattleDeathCause | null | undefined): string {
+  if (!reason) return '';
+  return (CATTLE_REMOVAL_LABELS as Record<string, string>)[reason]
+    ?? (CATTLE_DEATH_CAUSE_LABELS as Record<string, string>)[reason]
+    ?? '';
+}
 
 export const PASTURE_REMOVED_LABEL = 'Pasture removed';
 export const OFF_PASTURE_LABEL = 'Off pasture';
@@ -147,5 +164,9 @@ export function describeEvent(
   const sex = event.eventType === 'calving' && event.calfSex ? `, ${CALF_SEX_LABELS[event.calfSex].toLowerCase()}` : '';
   // An event from before mixed herds has no class: keep the plain "(-1)".
   const amount = event.cattleClass ? what(Math.abs(event.headDelta)) : String(Math.abs(event.headDelta));
-  return `${label} (${sign}${amount}${sex})`;
+  const weight = event.eventType === 'head_removed' && event.avgWeight
+    ? `, avg ${Number(event.avgWeight.toFixed(1))} lb`
+    : '';
+  const cause = event.eventType === 'death' && event.reason ? `, ${reasonLabel(event.reason).toLowerCase()}` : '';
+  return `${label} (${sign}${amount}${sex}${weight}${cause})`;
 }

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import { useEntitlement } from '@/hooks/useEntitlement';
 import { isFreeTierLocked } from '@/lib/entitlements';
-import { CATTLE_REMOVAL_LABELS, describeEvent } from '@/lib/cattle/ui';
+import { describeEvent, reasonLabel } from '@/lib/cattle/ui';
 import { formatIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
 import type { CattleGroup } from '@/types/cattle';
@@ -47,7 +47,7 @@ export default function CattleEventsSection({ group }: { group: CattleGroup }) {
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold">{describeEvent(event, cattleEvents, cattleGroups)}</span>
             <span className="block text-xs text-muted-foreground">
-              {formatIsoDate(event.eventDate)}{event.reason && !event.transferId ? ` · ${CATTLE_REMOVAL_LABELS[event.reason]}` : ''}
+              {formatIsoDate(event.eventDate)}{event.reason && !event.transferId && event.eventType === 'head_removed' ? ` · ${reasonLabel(event.reason)}` : ''}
             </span>
             {event.notes && <span className="block truncate text-xs text-muted-foreground">{event.notes}</span>}
           </span>

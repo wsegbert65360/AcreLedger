@@ -460,7 +460,7 @@ export const cattleEventSchema = z.object({
   eventType: z.enum(['calving', 'weaning', 'working', 'preg_check', 'death', 'head_added', 'head_removed', 'reclass', 'bull_in', 'bull_out']),
   eventDate: z.string(),
   headDelta: z.number().int(),
-  reason: z.enum(['shipped', 'moved_to_another_group']).optional(),
+  reason: z.enum(['shipped', 'moved_to_another_group', 'illness', 'calving', 'weather', 'predator', 'unknown', 'other']).optional(),
   transferId: z.string().optional(),
   cattleClass: z.enum(['cows', 'heifers', 'bulls', 'calves', 'steers', 'stockers']).optional(),
   toClass: z.enum(['cows', 'heifers', 'bulls', 'calves', 'steers', 'stockers']).optional(),

@@ -131,5 +131,6 @@
   "20261122200200_weather_farm_quota.sql": "50d036026453f12aab1dac5f86908044515c5c4515e3a55a1ab26d5dc47f0e6d",
   "20261126032045_cattle_mixed_herds.sql": "4acf322435fdd3cf01cd2c72983d7f0ec503ebe3da1be26cdeeb77ab7a4848ee",
   "20261126035847_cattle_counts_trigger_definer.sql": "78fb64a71f093c1d4ce49ec7ce1fb1f8a7d095a12790bb2d560e4fe81bf1cb77",
-  "20261126040807_cattle_herd_health_breeding.sql": "2d3f1ede204a4a7e8c29e9f0f78ca220e99b9494186f97ca4507143d559ef671"
+  "20261126040807_cattle_herd_health_breeding.sql": "2d3f1ede204a4a7e8c29e9f0f78ca220e99b9494186f97ca4507143d559ef671",
+  "20261126163733_cattle_sales_deaths.sql": "2de4fb9e4979abeafd32d54ca3571fc4d44f6ac9aaffaef13375abb2141ed30a"
 }

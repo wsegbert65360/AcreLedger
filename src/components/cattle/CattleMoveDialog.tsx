@@ -1,41 +1,41 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { OFF_PASTURE_LABEL, isFutureDate, isPastureField, orderFieldsForPicker } from '@/lib/cattle/ui';
+import { isFutureDate } from '@/lib/cattle/ui';
 import { localTodayIso } from '@/lib/equipment';
 import { useFarm } from '@/store/farmStore';
 import type { CattleGroup } from '@/types/cattle';
+import LocationPicker, { OFF_LOCATION, needsLocationConfirm, useLocationOptions } from './LocationPicker';
 
-const OFF = '__off_pasture__';
-
-/** Move a group to a pasture. Pasture and hay fields are listed first; the date starts at today. */
+/** Move a group to a pasture, hay field or (in fall and winter) crop field; the date starts at today. */
 export default function CattleMoveDialog({ group, onClose }: { group: CattleGroup; onClose: () => void }) {
-  const { fields, moveCattleGroup } = useFarm();
+  const { moveCattleGroup } = useFarm();
   const today = localTodayIso();
+  const options = useLocationOptions();
   const [fieldId, setFieldId] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
   const [date, setDate] = useState(today);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const options = useMemo(() => orderFieldsForPicker([...fields]), [fields]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (saving) return;
     if (!fieldId) return setError('Pick where the group is going.');
+    if (needsLocationConfirm(options, fieldId, confirmed)) return setError('Confirm the crop has not been harvested, or pick another field.');
     if (!date) return setError('Pick the date of the move.');
     if (isFutureDate(date, localTodayIso())) return setError('The move date cannot be in the future.');
     setError(null);
     setSaving(true);
     try {
       const ok = await moveCattleGroup({
-        groupId: group.id, fieldId: fieldId === OFF ? undefined : fieldId, movedOn: date, notes: notes.trim() || undefined,
+        groupId: group.id, fieldId: fieldId === OFF_LOCATION ? undefined : fieldId, movedOn: date, notes: notes.trim() || undefined,
       });
       if (!ok) return toast.error('Could not save the move.');
       onClose();
@@ -52,20 +52,7 @@ export default function CattleMoveDialog({ group, onClose }: { group: CattleGrou
           <DialogDescription>{group.headCount} head</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} noValidate className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="move-field">Moving to</Label>
-            <Select value={fieldId} onValueChange={setFieldId}>
-              <SelectTrigger id="move-field" className="h-12"><SelectValue placeholder="Choose a pasture" /></SelectTrigger>
-              <SelectContent>
-                {options.map(field => (
-                  <SelectItem key={field.id} value={field.id} className="min-h-11">
-                    {field.name}{isPastureField(field) ? '' : ' (not pasture)'}
-                  </SelectItem>
-                ))}
-                <SelectItem value={OFF} className="min-h-11">{OFF_PASTURE_LABEL}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <LocationPicker id="move-field" label="Moving to" value={fieldId} onChange={value => { setFieldId(value); setConfirmed(false); }} confirmed={confirmed} onConfirmChange={setConfirmed} />
           <div className="space-y-1.5">
             <Label htmlFor="move-date">Date</Label>
             <Input id="move-date" type="date" value={date} max={today} onChange={event => setDate(event.target.value)} className="h-12" />

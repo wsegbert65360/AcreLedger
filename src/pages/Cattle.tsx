@@ -7,6 +7,8 @@ import BottomNav from '@/components/BottomNav';
 import CattleGroupDialog from '@/components/cattle/CattleGroupDialog';
 import CattleEventsSection from '@/components/cattle/CattleEventsSection';
 import CattleMoveDialog from '@/components/cattle/CattleMoveDialog';
+import CattleRemoveDialog from '@/components/cattle/CattleRemoveDialog';
+import CattleWeanDialog from '@/components/cattle/CattleWeanDialog';
 import CattleTreatmentsSection, { WithdrawalBadge } from '@/components/cattle/CattleTreatmentsSection';
 import { PlanUpgradeLink } from '@/components/settings/PlanUpgradeLink';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
@@ -17,6 +19,7 @@ import {
   calvingStats, COUNT_CLASSES, COUNT_TITLES, countsSummary, femalesPerBull, groupCounts, pairCount,
 } from '@/lib/cattle/counts';
 import { daysOnCurrentPasture } from '@/lib/cattle/derived';
+import { currentLocationKind, LOCATION_KIND_LABELS } from '@/lib/cattle/locations';
 import { breedingSeasons, herdYearStats } from '@/lib/cattle/health';
 import { buildCattleCsv, exportCattleCsv } from '@/lib/cattle/report';
 import { exportTreatmentRecordPdf, treatmentYears } from '@/lib/cattle/treatmentRecordPdf';
@@ -222,11 +225,14 @@ function GroupDetail({ group }: { group: CattleGroup }) {
   const { cattleMoves, fields, deleteCattleGroup, deleteCattleMove } = useFarm();
   const [editing, setEditing] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [action, setAction] = useState<'sell' | 'death' | 'transfer' | 'wean' | null>(null);
   const today = localTodayIso();
   const moves = useMemo(() => cattleMoves
     .filter(move => move.groupId === group.id && !move.deleted_at)
     .sort((a, b) => b.movedOn.localeCompare(a.movedOn) || b.createdAt.localeCompare(a.createdAt)), [cattleMoves, group.id]);
   const pasture = pastureLabel(group.currentFieldId, fields);
+  const locationKind = currentLocationKind(group.currentFieldId, [...fields]);
+  const kindLabel = locationKind ? ` (${LOCATION_KIND_LABELS[locationKind].toLowerCase()})` : '';
 
   const remove = async () => {
     if (!window.confirm(`Delete ${group.name} and its move, event and treatment history?`)) return;
@@ -250,12 +256,18 @@ function GroupDetail({ group }: { group: CattleGroup }) {
           <MapPin className="h-4 w-4 shrink-0" />
           <span className="min-w-0 truncate">
             {group.currentFieldId
-              ? `${pasture}${pasture === PASTURE_REMOVED_LABEL ? '' : ` · ${dayText(daysOnCurrentPasture(group, today))}`}`
+              ? `${pasture}${kindLabel}${pasture === PASTURE_REMOVED_LABEL ? '' : ` · ${dayText(daysOnCurrentPasture(group, today))}`}`
               : 'Not on a pasture'}
           </span>
         </p>
         {group.notes && <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{group.notes}</p>}
         <Button className="h-14 w-full text-base font-bold" onClick={() => setMoving(true)}>Move</Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('sell')}>Sell</Button>
+          <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('death')}>Death</Button>
+          <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('transfer')}>Transfer</Button>
+          <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('wean')}>Wean calves</Button>
+        </div>
       </section>
 
       <section className="space-y-2">
@@ -286,6 +298,10 @@ function GroupDetail({ group }: { group: CattleGroup }) {
       <Button variant="destructive" className="h-11 w-full" onClick={() => void remove()}><Trash2 className="mr-2 h-4 w-4" />Delete herd</Button>
       {editing && <CattleGroupDialog group={group} onClose={() => setEditing(false)} />}
       {moving && <CattleMoveDialog group={group} onClose={() => setMoving(false)} />}
+      {action === 'wean' && <CattleWeanDialog group={group} onClose={() => setAction(null)} />}
+      {(action === 'sell' || action === 'death' || action === 'transfer') && (
+        <CattleRemoveDialog group={group} mode={action} onClose={() => setAction(null)} />
+      )}
     </>
   );
 }

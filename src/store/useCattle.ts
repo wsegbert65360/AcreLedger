@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { isPremiumRequiredError } from '@/lib/entitlements';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
@@ -21,7 +21,8 @@ export type NewCattleTreatment = Omit<CattleTreatment,
   'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at' | 'withdrawalUntil'>;
 
 /** A new herd: its counts per class; the total is their sum. */
-export type NewCattleGroup = Pick<CattleGroup, 'name' | 'class' | 'counts' | 'notes'>;
+/** id lets a caller that creates a herd and then writes to it know the id up front. */
+export type NewCattleGroup = Pick<CattleGroup, 'name' | 'class' | 'counts' | 'notes'> & { id?: string };
 
 /** Move head of one class from one herd to another (weaning, splitting a herd). */
 export interface CattleTransferInput {
@@ -71,6 +72,9 @@ export function useCattle({
   farm_id, cattleGroups, cattleMoves, cattleEvents, cattleTreatments,
   setCattleGroups, setCattleMoves, setCattleEvents, setCattleTreatments, isOnline, onMutation,
 }: UseCattleArgs) {
+  // The newest herds, so a form that adds a herd and then writes to it in one go sees it.
+  const groupsRef = useRef(cattleGroups);
+  groupsRef.current = cattleGroups;
   const enqueue = useCallback(async (
     table: CattleTable,
     operation: Operation,
@@ -153,7 +157,7 @@ export function useCattle({
     const counts = { ...input.counts };
     const record: CattleGroup = {
       ...input, counts, headCount: countsTotal(counts),
-      id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
+      id: input.id ?? crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
     };
     let mapped: Record<string, unknown>;
     try { mapped = mapCattleGroupToDb(record); } catch (error) { console.error(error); return false; }
@@ -215,7 +219,7 @@ export function useCattle({
     input: Pick<CattleMove, 'groupId' | 'fieldId' | 'movedOn' | 'notes'>,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
-    const previousGroup = cattleGroups.find(item => item.id === input.groupId && !item.deleted_at);
+    const previousGroup = groupsRef.current.find(item => item.id === input.groupId && !item.deleted_at);
     if (!previousGroup) return false;
     const now = new Date().toISOString();
     const move: CattleMove = {
@@ -256,7 +260,7 @@ export function useCattle({
     options?: CattleSaveOptions,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
-    const found = cattleGroups.find(item => item.id === input.groupId && !item.deleted_at);
+    const found = groupsRef.current.find(item => item.id === input.groupId && !item.deleted_at);
     if (!found) return false;
     const previousGroup = normalizeCattleGroup(found);
     // Same class the server will use, so the optimistic change and the replay agree.
@@ -282,7 +286,9 @@ export function useCattle({
         : { bredCount: undefined, openCount: undefined, notCheckedCount: undefined }),
       exposedCount: input.eventType === 'bull_in' ? input.exposedCount : undefined,
       headWeaned: input.eventType === 'weaning' ? input.headWeaned : undefined,
-      avgWeight: input.eventType === 'weaning' && input.headWeaned ? input.avgWeight : undefined,
+      avgWeight: (input.eventType === 'weaning' && input.headWeaned)
+        || (input.eventType === 'head_removed' && input.reason === 'shipped')
+        ? input.avgWeight : undefined,
       id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
     };
     let mapped: Record<string, unknown>;
@@ -325,8 +331,8 @@ export function useCattle({
     options?: CattleSaveOptions,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
-    const fromFound = cattleGroups.find(item => item.id === input.fromGroupId && !item.deleted_at);
-    const to = cattleGroups.find(item => item.id === input.toGroupId && !item.deleted_at);
+    const fromFound = groupsRef.current.find(item => item.id === input.fromGroupId && !item.deleted_at);
+    const to = groupsRef.current.find(item => item.id === input.toGroupId && !item.deleted_at);
     if (!fromFound || !to || fromFound.id === to.id) return false;
     const from = normalizeCattleGroup(fromFound);
     const cattleClass = input.cattleClass ?? herdTypeClass(from.class);
