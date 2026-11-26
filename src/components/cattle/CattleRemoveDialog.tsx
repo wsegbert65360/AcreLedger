@@ -92,6 +92,8 @@ export default function CattleRemoveDialog({ group, mode, onClose }: { group: Ca
         toGroupId = crypto.randomUUID();
         const created = await addCattleGroup(newHerdInput(dest, toGroupId));
         if (!created) return void toast.error('Could not start the new herd.');
+        // Let the new herd reach groupsRef before resolving the transfer destination.
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
       for (const line of lines) {
         let ok: boolean;

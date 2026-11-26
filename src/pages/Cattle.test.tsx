@@ -27,6 +27,8 @@ vi.mock('@/components/settings/PlanUpgradeLink', () => ({ PlanUpgradeLink: () =>
 vi.mock('@/components/BottomNav', () => ({ default: () => null }));
 vi.mock('@/components/SyncStatusIndicator', () => ({ default: () => null }));
 vi.mock('@/components/cattle/CattleGroupDialog', () => ({ default: () => <div>group dialog</div> }));
+vi.mock('@/components/cattle/CattleRemoveDialog', () => ({ default: () => <div>remove dialog</div> }));
+vi.mock('@/components/cattle/CattleWeanDialog', () => ({ default: () => <div>wean dialog</div> }));
 vi.mock('@/components/cattle/CattleMoveDialog', () => ({ default: () => <div>move dialog</div> }));
 vi.mock('@/lib/cattle/report', async importOriginal => {
   const original = await importOriginal<typeof import('@/lib/cattle/report')>();
@@ -145,6 +147,30 @@ describe('Cattle page', () => {
     expect(screen.getByText('move dialog')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Edit/ }));
     expect(screen.getByText('group dialog')).toBeTruthy();
+  });
+
+  it.each(['entitlement', 'cachedEntitlement'] as const)('hides Pro actions for a locked farm using %s', source => {
+    farm.cattleGroups = [cows];
+    plan[source] = { plan: 'free', enforced: true };
+    renderAt('/cattle/g1');
+    for (const name of ['Sell', 'Death', 'Transfer', 'Wean calves']) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+    expect(screen.getByTestId('cattle-events-locked')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Move' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy();
+  });
+
+  it.each(['Sell', 'Death', 'Transfer', 'Wean calves'])('closes the %s dialog when the farm becomes locked', name => {
+    farm.cattleGroups = [cows];
+    plan.entitlement = { plan: 'paid', enforced: true };
+    const view = renderAt('/cattle/g1');
+    fireEvent.click(screen.getByRole('button', { name }));
+    const dialog = name === 'Wean calves' ? 'wean dialog' : 'remove dialog';
+    expect(screen.getByText(dialog)).toBeTruthy();
+    plan.entitlement = { plan: 'free', enforced: true };
+    view.rerender(<MemoryRouter initialEntries={['/cattle/g1']}><Routes><Route path="/cattle/:groupId" element={<Cattle />} /></Routes></MemoryRouter>);
+    expect(screen.queryByText(dialog)).toBeNull();
   });
 
   it('says so when the group is gone', () => {

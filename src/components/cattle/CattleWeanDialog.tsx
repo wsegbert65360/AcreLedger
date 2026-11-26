@@ -60,8 +60,26 @@ export default function CattleWeanDialog({ group, onClose }: { group: CattleGrou
     } else if (suggested) {
       split = suggested;
     }
+    const alreadyWeaned = cattleEvents.some(item => !item.deleted_at && item.groupId === group.id
+      && item.eventType === 'weaning' && item.eventDate === date && item.headWeaned === weanCount);
+    const afterWean: { cls: CountClass; head: number }[] = split
+      ? ([{ cls: 'heifers', head: split.heifers }, { cls: 'steers', head: split.steers }] as const).filter(line => line.head > 0)
+      : [{ cls: 'calves', head: weanCount }];
+    // A retry must keep the destination of any transfer that already landed,
+    // even if the new-herd name was changed before resubmitting.
+    const priorAddition = alreadyWeaned && cattleEvents.find(addition => !addition.deleted_at
+      && addition.eventType === 'head_added' && addition.eventDate === date && addition.transferId
+      && afterWean.some(line => addition.cattleClass === line.cls && addition.headDelta === line.head)
+      && cattleEvents.some(removal => !removal.deleted_at && removal.groupId === group.id
+        && removal.eventType === 'head_removed' && removal.reason === 'moved_to_another_group'
+        && removal.eventDate === date && removal.transferId === addition.transferId
+        && removal.cattleClass === addition.cattleClass && removal.headDelta === -addition.headDelta));
+    const retryDestination = moveOut && isNewHerd(dest) && alreadyWeaned
+      ? cattleGroups.find(item => !item.deleted_at && item.farm_id === group.farm_id && item.id !== group.id
+        && (priorAddition ? item.id === priorAddition.groupId : item.name.trim().toLowerCase() === dest.name.trim().toLowerCase()))
+      : undefined;
     if (moveOut) {
-      const problem = destinationError(dest, cattleGroups, needsConfirm);
+      const problem = destinationError(retryDestination ? { ...dest, target: retryDestination.id } : dest, cattleGroups, needsConfirm);
       if (problem) return fail(problem);
     }
 
@@ -71,34 +89,46 @@ export default function CattleWeanDialog({ group, onClose }: { group: CattleGrou
     const saveOptions = { onPremiumRequired: () => { premiumRequired = true; } };
     const cleanNotes = notes.trim() || undefined;
     try {
-      const weaning = await logCattleEvent({
+      const weaning = alreadyWeaned || await logCattleEvent({
         groupId: group.id, eventType: 'weaning', eventDate: date, headDelta: 0, cattleClass: 'calves',
         headWeaned: weanCount, avgWeight: weight, notes: cleanNotes,
       }, saveOptions);
       if (!weaning) return void toast.error(premiumRequired ? ENTITLEMENT_COPY.cattleEventsLockedTitle : 'Could not save the weaning.');
 
       // Each step is its own queued save; a failure after the weaning is reported, not rolled back.
-      const afterWean: { cls: CountClass; head: number }[] = [];
       const steps: (() => Promise<boolean>)[] = [];
       if (split) {
         for (const [toClass, head] of [['heifers', split.heifers], ['steers', split.steers]] as const) {
           if (head < 1) continue;
-          afterWean.push({ cls: toClass, head });
+          const alreadyReclassed = cattleEvents.some(item => !item.deleted_at && item.groupId === group.id
+            && item.eventType === 'reclass' && item.eventDate === date && !item.reason
+            && item.cattleClass === 'calves' && item.toClass === toClass && item.classHead === head);
+          if (alreadyReclassed) continue;
           steps.push(() => logCattleEvent({
             groupId: group.id, eventType: 'reclass', eventDate: date, headDelta: 0,
             cattleClass: 'calves', toClass, classHead: head,
           }, saveOptions));
         }
-      } else {
-        afterWean.push({ cls: 'calves', head: weanCount });
       }
-      let toGroupId = dest.target;
+      let toGroupId = retryDestination?.id ?? dest.target;
       if (moveOut) {
-        if (isNewHerd(dest)) {
+        if (isNewHerd(dest) && !retryDestination) {
           toGroupId = crypto.randomUUID();
-          steps.unshift(() => addCattleGroup(newHerdInput(dest, toGroupId)));
+          steps.unshift(async () => {
+            const created = await addCattleGroup(newHerdInput(dest, toGroupId));
+            // Let the new herd reach groupsRef before resolving the transfer destination.
+            if (created) await new Promise(resolve => setTimeout(resolve, 0));
+            return created;
+          });
         }
         for (const line of afterWean) {
+          const alreadyTransferred = cattleEvents.some(item => !item.deleted_at && item.groupId === group.id
+            && item.eventType === 'head_removed' && item.reason === 'moved_to_another_group'
+            && item.eventDate === date && item.cattleClass === line.cls && item.headDelta === -line.head
+            && item.transferId && cattleEvents.some(other => !other.deleted_at && other.groupId === toGroupId
+              && other.eventType === 'head_added' && other.transferId === item.transferId
+              && other.eventDate === date && other.cattleClass === line.cls && other.headDelta === line.head));
+          if (alreadyTransferred) continue;
           steps.push(() => transferCattleHead({
             fromGroupId: group.id, toGroupId, head: line.head, eventDate: date, notes: cleanNotes ?? 'Weaning', cattleClass: line.cls,
           }, saveOptions));

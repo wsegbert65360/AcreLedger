@@ -49,6 +49,7 @@ const zero = { cows: 0, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 
 
 beforeEach(() => {
   farm.cattleGroups = [group];
+  farm.cattleEvents = [];
   farm.fields = [
     { id: 'f1', name: 'Corn North', intendedUse: 'Row crop', deleted_at: null },
     { id: 'f2', name: 'Back Pasture', intendedUse: 'Pasture', deleted_at: null },
@@ -213,6 +214,15 @@ describe('CattleRemoveDialog', () => {
   });
 
   it('transfers to a new herd, then puts that herd in its field', async () => {
+    let destinationReady = false;
+    farm.addCattleGroup.mockImplementationOnce(async () => {
+      setTimeout(() => { destinationReady = true; }, 0);
+      return true;
+    });
+    farm.transferCattleHead.mockImplementationOnce(async () => {
+      expect(destinationReady).toBe(true);
+      return destinationReady;
+    });
     const onClose = vi.fn();
     render(<CattleRemoveDialog group={mixed} mode="transfer" onClose={onClose} />);
     type('Steers (24)', '24');
@@ -252,6 +262,115 @@ describe('CattleWeanDialog', () => {
     expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'reclass', toClass: 'heifers', classHead: 15 }), expect.anything());
     expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'reclass', toClass: 'steers', classHead: 13 }), expect.anything());
     expect(farm.transferCattleHead).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for a newly created destination before transferring weaned calves', async () => {
+    let destinationReady = false;
+    farm.addCattleGroup.mockImplementationOnce(async () => {
+      setTimeout(() => { destinationReady = true; }, 0);
+      return true;
+    });
+    farm.transferCattleHead.mockImplementationOnce(async () => {
+      expect(destinationReady).toBe(true);
+      return destinationReady;
+    });
+    const onClose = vi.fn();
+    render(<CattleWeanDialog group={mixed} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '__new_herd__' } });
+    type('New herd name', 'Weaned calves');
+    fireEvent.change(screen.getAllByRole('combobox')[2], { target: { value: 'f2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Wean' }));
+    await waitFor(() => expect(farm.transferCattleHead).toHaveBeenCalled());
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('resumes after an existing matching weaning without recording it twice', async () => {
+    farm.cattleEvents = [{ groupId: mixed.id, eventType: 'weaning', eventDate: localTodayIso(), headWeaned: 4, deleted_at: null }];
+    const onClose = vi.fn();
+    render(<CattleWeanDialog group={mixed} onClose={onClose} />);
+    type('Heifer calves (the rest become steers)', '2');
+    fireEvent.click(screen.getByRole('button', { name: 'Wean' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(farm.logCattleEvent).toHaveBeenCalledTimes(2);
+    for (const [event] of farm.logCattleEvent.mock.calls as unknown as [{ eventType: string }][]) {
+      expect(event.eventType).toBe('reclass');
+    }
+  });
+
+  it('resumes after reclasses and one transfer already landed, saving only the remaining transfer', async () => {
+    farm.cattleGroups = [mixed, group];
+    farm.cattleEvents = [
+      { groupId: mixed.id, eventType: 'weaning', eventDate: localTodayIso(), headWeaned: 4, deleted_at: null },
+      ...(['heifers', 'steers'] as const).map(toClass => ({
+        groupId: mixed.id, eventType: 'reclass', eventDate: localTodayIso(), cattleClass: 'calves',
+        toClass, classHead: 2, deleted_at: null,
+      })),
+      { groupId: mixed.id, eventType: 'head_removed', reason: 'moved_to_another_group', eventDate: localTodayIso(),
+        cattleClass: 'heifers', headDelta: -2, transferId: 't1', deleted_at: null },
+      { groupId: group.id, eventType: 'head_added', eventDate: localTodayIso(),
+        cattleClass: 'heifers', headDelta: 2, transferId: 't1', deleted_at: null },
+    ];
+    const onClose = vi.fn();
+    render(<CattleWeanDialog group={mixed} onClose={onClose} />);
+    type('Heifer calves (the rest become steers)', '2');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: group.id } });
+    fireEvent.click(screen.getByRole('button', { name: 'Wean' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(farm.logCattleEvent).not.toHaveBeenCalled();
+    expect(farm.transferCattleHead).toHaveBeenCalledTimes(1);
+    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({
+      fromGroupId: mixed.id, toGroupId: group.id, cattleClass: 'steers', head: 2,
+    }), expect.anything());
+  });
+
+  it.each(['same name', 'changed name', 'no transfer yet'])('reuses the new herd on retry: %s', async scenario => {
+    const destination = { ...group, id: 'new-herd', name: 'Weaned calves' };
+    farm.cattleGroups = [mixed, destination];
+    farm.cattleEvents = [
+      { groupId: mixed.id, eventType: 'weaning', eventDate: localTodayIso(), headWeaned: 4, deleted_at: null },
+      ...(['heifers', 'steers'] as const).map(toClass => ({
+        groupId: mixed.id, eventType: 'reclass', eventDate: localTodayIso(), cattleClass: 'calves',
+        toClass, classHead: 2, deleted_at: null,
+      })),
+      ...(scenario === 'no transfer yet' ? [] : [
+        { groupId: mixed.id, eventType: 'head_removed', reason: 'moved_to_another_group', eventDate: localTodayIso(),
+          cattleClass: 'heifers', headDelta: -2, transferId: 'new-transfer', deleted_at: null },
+        { groupId: destination.id, eventType: 'head_added', eventDate: localTodayIso(),
+          cattleClass: 'heifers', headDelta: 2, transferId: 'new-transfer', deleted_at: null },
+      ]),
+    ];
+    const onClose = vi.fn();
+    render(<CattleWeanDialog group={mixed} onClose={onClose} />);
+    type('Heifer calves (the rest become steers)', '2');
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '__new_herd__' } });
+    type('New herd name', scenario === 'changed name' ? 'Another name' : destination.name);
+    fireEvent.change(screen.getAllByRole('combobox')[2], { target: { value: 'f2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Wean' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(farm.addCattleGroup).not.toHaveBeenCalled();
+    expect(farm.logCattleEvent).not.toHaveBeenCalled();
+    expect(farm.transferCattleHead).toHaveBeenCalledTimes(scenario === 'no transfer yet' ? 2 : 1);
+    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({
+      fromGroupId: mixed.id, toGroupId: destination.id, cattleClass: 'steers', head: 2,
+    }), expect.anything());
+    if (scenario !== 'no transfer yet') {
+      expect(farm.transferCattleHead).not.toHaveBeenCalledWith(expect.objectContaining({ cattleClass: 'heifers' }), expect.anything());
+    }
+  });
+
+  it.each(['other group', 'other date', 'other count', 'deleted'])('records weaning when the prior record has %s', async mismatch => {
+    farm.cattleEvents = [{ groupId: mismatch === 'other group' ? 'other' : mixed.id, eventType: 'weaning',
+      eventDate: mismatch === 'other date' ? '2026-11-25' : localTodayIso(),
+      headWeaned: mismatch === 'other count' ? 3 : 4, deleted_at: mismatch === 'deleted' ? '2026-11-26' : null }];
+    const onClose = vi.fn();
+    render(<CattleWeanDialog group={mixed} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Wean' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(farm.logCattleEvent).toHaveBeenCalledTimes(1);
+    expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ groupId: mixed.id, eventType: 'weaning', eventDate: localTodayIso(), headWeaned: 4 }), expect.anything());
   });
 
   it('refuses weaning more calves than the herd has', async () => {

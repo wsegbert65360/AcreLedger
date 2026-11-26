@@ -222,6 +222,8 @@ function CattleList() {
 
 function GroupDetail({ group }: { group: CattleGroup }) {
   const navigate = useNavigate();
+  const { entitlement, cachedEntitlement } = useEntitlement();
+  const locked = isFreeTierLocked(entitlement ?? cachedEntitlement);
   const { cattleMoves, fields, deleteCattleGroup, deleteCattleMove } = useFarm();
   const [editing, setEditing] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -262,12 +264,12 @@ function GroupDetail({ group }: { group: CattleGroup }) {
         </p>
         {group.notes && <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{group.notes}</p>}
         <Button className="h-14 w-full text-base font-bold" onClick={() => setMoving(true)}>Move</Button>
-        <div className="grid grid-cols-2 gap-2">
+        {!locked && <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('sell')}>Sell</Button>
           <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('death')}>Death</Button>
           <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('transfer')}>Transfer</Button>
           <Button variant="outline" className="h-12 font-semibold" onClick={() => setAction('wean')}>Wean calves</Button>
-        </div>
+        </div>}
       </section>
 
       <section className="space-y-2">
@@ -298,8 +300,8 @@ function GroupDetail({ group }: { group: CattleGroup }) {
       <Button variant="destructive" className="h-11 w-full" onClick={() => void remove()}><Trash2 className="mr-2 h-4 w-4" />Delete herd</Button>
       {editing && <CattleGroupDialog group={group} onClose={() => setEditing(false)} />}
       {moving && <CattleMoveDialog group={group} onClose={() => setMoving(false)} />}
-      {action === 'wean' && <CattleWeanDialog group={group} onClose={() => setAction(null)} />}
-      {(action === 'sell' || action === 'death' || action === 'transfer') && (
+      {!locked && action === 'wean' && <CattleWeanDialog group={group} onClose={() => setAction(null)} />}
+      {!locked && (action === 'sell' || action === 'death' || action === 'transfer') && (
         <CattleRemoveDialog group={group} mode={action} onClose={() => setAction(null)} />
       )}
     </>
