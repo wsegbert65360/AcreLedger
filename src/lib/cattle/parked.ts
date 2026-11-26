@@ -3,6 +3,7 @@ import {
   mapCattleMoveFromDb, mapCattleMoveToDb,
 } from '@/lib/mappers';
 import { MAX_SYNC_RETRIES, readCattleRpcEnvelope, type QueuedMutation } from '@/lib/syncQueue';
+import { applyEventToGroup, herdTypeClass, isCountClass, normalizeCattleGroup, withClassDelta } from './counts';
 import type {
   CattleEvent, CattleEventRow, CattleGroup, CattleGroupRow, CattleMove, CattleMoveRow,
 } from '@/types/cattle';
@@ -85,8 +86,14 @@ export function applyParkedCattleMutations(
       nextEvents = overlayEvent(nextEvents, payload);
       const groupId = String(rpc.args.p_group_id ?? '');
       const delta = Number(rpc.args.p_head_delta);
-      if (!alreadyPresent && Number.isInteger(delta)) {
-        nextGroups = nextGroups.map(group => group.id === groupId ? { ...group, headCount: group.headCount + delta } : group);
+      const event = nextEvents.find(item => item.id === payload.id);
+      if (!alreadyPresent && event && Number.isInteger(delta)) {
+        nextGroups = nextGroups.map(group => group.id === groupId
+          ? applyEventToGroup(normalizeCattleGroup(group), {
+            ...event,
+            cattleClass: isCountClass(rpc.args.p_class) ? rpc.args.p_class : event.cattleClass,
+          }, 1)
+          : group);
       }
       continue;
     }
@@ -103,12 +110,17 @@ export function applyParkedCattleMutations(
       nextEvents = overlayEvent(nextEvents, {
         id: toId, farm_id: payload.farm_id, group_id: rpc.args.p_to_group_id, event_type: 'head_added',
         event_date: rpc.args.p_event_date, head_delta: head, reason: null, notes, transfer_id: fromId,
+        cattle_class: isCountClass(rpc.args.p_class) ? rpc.args.p_class : null,
         created_at: stamp, updated_at: stamp, deleted_at: null,
       });
       if (!alreadyPresent) {
+        const fromGroup = nextGroups.find(group => group.id === rpc.args.p_from_group_id);
+        const cls = isCountClass(rpc.args.p_class)
+          ? rpc.args.p_class
+          : fromGroup ? herdTypeClass(fromGroup.class) : 'cows';
         nextGroups = nextGroups.map(group => group.id === rpc.args.p_from_group_id
-          ? { ...group, headCount: Math.max(0, group.headCount - head) }
-          : group.id === rpc.args.p_to_group_id ? { ...group, headCount: group.headCount + head } : group);
+          ? withClassDelta(normalizeCattleGroup(group), cls, -head)
+          : group.id === rpc.args.p_to_group_id ? withClassDelta(normalizeCattleGroup(group), cls, head) : group);
       }
       continue;
     }
@@ -139,8 +151,10 @@ export function applyParkedCattleMutations(
           const halfIds = new Set(halves.map(item => item.id));
           nextEvents = nextEvents.map(item => halfIds.has(item.id) ? { ...item, deleted_at: deletedAt } : item);
           nextGroups = nextGroups.map(group => {
-            const delta = halves.filter(item => item.groupId === group.id).reduce((sum, item) => sum + item.headDelta, 0);
-            return delta === 0 ? group : { ...group, headCount: Math.max(0, group.headCount - delta) };
+            const own = halves.filter(item => item.groupId === group.id);
+            return own.length === 0
+              ? group
+              : own.reduce((current, half) => applyEventToGroup(current, half, -1), normalizeCattleGroup(group));
           });
         }
       }

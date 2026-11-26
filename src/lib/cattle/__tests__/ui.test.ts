@@ -6,7 +6,10 @@ import {
 import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
 
 const base = { farm_id: 'f', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', deleted_at: null };
-const group = (over: Partial<CattleGroup>): CattleGroup => ({ ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 10, ...over });
+const group = (over: Partial<CattleGroup>): CattleGroup => ({
+  ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 10,
+  counts: { cows: 10, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 }, ...over,
+});
 
 describe('cattle ui helpers', () => {
   it('accepts only whole head counts of zero or more', () => {
@@ -57,10 +60,24 @@ describe('buildCattleCsv', () => {
     }];
     const csv = buildCattleCsv(groups, moves, events, [{ id: 'f1', name: 'North' }]);
     const lines = csv.split('\r\n');
-    expect(lines[0]).toBe('Record,Group,Class,Date,Pasture,Head,Head Change,Event,Reason,Notes');
+    expect(lines[0]).toBe('Record,Group,Class,Date,Pasture,Head,Head Change,Event,Reason,Notes,Cattle,Cows,Heifers,Bulls,Calves,Steers,Stockers');
     expect(lines).toHaveLength(4);
     expect(lines[1]).toContain(`"'=SUM(A1)"`);
     expect(lines[3]).toContain('"Head removed","Shipped"');
+  });
+
+  it('writes a mixed herd with its class counts and the class an event changed', () => {
+    const herd = group({
+      name: '2014 herd', class: 'mixed', headCount: 41,
+      counts: { cows: 30, heifers: 0, bulls: 1, calves: 10, steers: 0, stockers: 0 },
+    });
+    const death: CattleEvent = {
+      ...base, id: 'e1', groupId: 'g1', eventType: 'death', eventDate: '2026-04-01', headDelta: -1, cattleClass: 'calves',
+    };
+    const lines = buildCattleCsv([herd], [], [death], []).split('\r\n');
+    expect(lines[1]).toContain('"Cow-calf herd"');
+    expect(lines[1]).toContain('"30","0","1","10","0","0"');
+    expect(lines[2]).toContain('"Calves"');
   });
 
   it('leaves out deleted rows and rows of deleted groups', () => {
@@ -80,9 +97,17 @@ describe('describeEvent', () => {
   it('names the other group for both halves of a transfer', () => {
     expect(describeEvent({ id: 'a', eventType: 'head_removed', headDelta: -4, transferId: 'a' }, halves, groups)).toBe('Moved 4 head to Calves');
     expect(describeEvent({ id: 'b', eventType: 'head_added', headDelta: 4, transferId: 'a' }, halves, groups)).toBe('Received 4 head from Cows');
+    expect(describeEvent({ id: 'a', eventType: 'head_removed', headDelta: -4, transferId: 'a', cattleClass: 'calves' }, halves, groups)).toBe('Moved 4 calves to Calves');
   });
   it('labels plain events with their head change', () => {
     expect(describeEvent({ id: 'x', eventType: 'death', headDelta: -1 }, [], groups)).toBe('Death (-1)');
     expect(describeEvent({ id: 'y', eventType: 'working', headDelta: 0 }, [], groups)).toBe('Worked cattle');
+  });
+  it('names the class, calf sex and reclass', () => {
+    expect(describeEvent({ id: 'x', eventType: 'death', headDelta: -1, cattleClass: 'calves' }, [], groups)).toBe('Death (-1 calf)');
+    expect(describeEvent({ id: 'c', eventType: 'calving', headDelta: 3, cattleClass: 'calves', calfSex: 'heifer' }, [], groups)).toBe('Calving (+3 calves, heifer calves)');
+    expect(describeEvent({
+      id: 'r', eventType: 'reclass', headDelta: 0, cattleClass: 'calves', toClass: 'heifers', classHead: 2,
+    }, [], groups)).toBe('2 calves now heifers');
   });
 });

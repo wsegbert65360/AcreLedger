@@ -26,8 +26,12 @@ import { localTodayIso } from '@/lib/equipment';
 import type { CattleGroup } from '@/types/cattle';
 
 const base = { farm_id: 'f', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', deleted_at: null };
-const cows: CattleGroup = { ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 20 };
-const calves: CattleGroup = { ...base, id: 'g2', name: 'Calves', class: 'calves', headCount: 5 };
+const zero = { cows: 0, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 };
+const cows: CattleGroup = { ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 20, counts: { ...zero, cows: 20 } };
+const calves: CattleGroup = { ...base, id: 'g2', name: 'Calves', class: 'calves', headCount: 5, counts: { ...zero, calves: 5 } };
+const herd: CattleGroup = {
+  ...base, id: 'g3', name: '2014 herd', class: 'mixed', headCount: 41, counts: { ...zero, cows: 30, calves: 10, bulls: 1 },
+};
 
 beforeEach(() => {
   farm.cattleGroups = [cows, calves];
@@ -65,15 +69,54 @@ describe('CattleEventDialog', () => {
     expect(farm.logCattleEvent).not.toHaveBeenCalled();
   });
 
-  it('logs a death as a negative change and will not remove more head than the group has', async () => {
+  it('logs a death as a negative change and will not remove more of a class than the herd has', async () => {
     render(<CattleEventDialog group={cows} onClose={vi.fn()} />);
     pick(0, 'death');
     typeInto('Head lost', '25');
     save();
-    expect(await alertText()).toContain('only has 20 head');
+    expect(await alertText()).toContain('only has 20 cows');
     typeInto('Head lost', '2');
     save();
-    await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'death', headDelta: -2 }), expect.anything()));
+    await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'death', headDelta: -2, cattleClass: 'cows',
+    }), expect.anything()));
+  });
+
+  it('a death in a cow-calf herd can be a calf, checked against the calves', async () => {
+    farm.cattleGroups = [herd, cows];
+    render(<CattleEventDialog group={herd} onClose={vi.fn()} />);
+    pick(0, 'death');
+    pick(1, 'calves');
+    typeInto('Head lost', '11');
+    save();
+    expect(await alertText()).toContain('only has 10 calves');
+    typeInto('Head lost', '1');
+    save();
+    await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'death', headDelta: -1, cattleClass: 'calves',
+    }), expect.anything()));
+  });
+
+  it('records calf sex on calving when all calves are one sex', async () => {
+    render(<CattleEventDialog group={herd} onClose={vi.fn()} />);
+    typeInto('Calves born', '2');
+    pick(1, 'heifer');
+    save();
+    await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'calving', headDelta: 2, calfSex: 'heifer',
+    }), expect.anything()));
+  });
+
+  it('changes class inside the herd without changing the total', async () => {
+    render(<CattleEventDialog group={herd} onClose={vi.fn()} />);
+    pick(0, 'reclass');
+    pick(1, 'calves');
+    pick(2, 'heifers');
+    typeInto('How many head', '3');
+    save();
+    await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'reclass', headDelta: 0, cattleClass: 'calves', toClass: 'heifers', classHead: 3,
+    }), expect.anything()));
   });
 
   it('asks why head were removed, and shipped is a plain removal', async () => {
@@ -82,7 +125,7 @@ describe('CattleEventDialog', () => {
     typeInto('Head removed', '4');
     save();
     expect(await alertText()).toContain('why');
-    pick(1, 'shipped');
+    pick(2, 'shipped');
     save();
     await waitFor(() => expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'head_removed', headDelta: -4, reason: 'shipped',
@@ -90,31 +133,36 @@ describe('CattleEventDialog', () => {
     expect(farm.transferCattleHead).not.toHaveBeenCalled();
   });
 
-  it('moving head to another group is one transfer and no separate event write', async () => {
+  it('moving head to another herd is one transfer of one class and no separate event write', async () => {
     const onClose = vi.fn();
     render(<CattleEventDialog group={cows} onClose={onClose} />);
     pick(0, 'head_removed');
     typeInto('Head removed', '4');
-    pick(1, 'moved_to_another_group');
+    pick(2, 'moved_to_another_group');
     save();
-    expect(await alertText()).toContain('Pick the group');
-    pick(2, 'g2');
+    expect(await alertText()).toContain('Pick the herd');
+    pick(3, 'g2');
     save();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(farm.transferCattleHead).toHaveBeenCalledTimes(1);
-    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({ fromGroupId: 'g1', toGroupId: 'g2', head: 4 }), expect.anything());
+    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({
+      fromGroupId: 'g1', toGroupId: 'g2', head: 4, cattleClass: 'cows',
+    }), expect.anything());
     expect(farm.logCattleEvent).not.toHaveBeenCalled();
   });
 
-  it('weaning logs the event and offers to move N head through one transfer', async () => {
-    render(<CattleEventDialog group={cows} onClose={vi.fn()} />);
+  it('weaning logs the event and moves N calves through one transfer', async () => {
+    farm.cattleGroups = [herd, calves];
+    render(<CattleEventDialog group={herd} onClose={vi.fn()} />);
     pick(0, 'weaning');
-    typeInto('Move weaned head to another group (optional)', '6');
+    typeInto('Move weaned calves to another herd (optional)', '6');
     pick(1, 'g2');
     save();
     await waitFor(() => expect(farm.transferCattleHead).toHaveBeenCalledTimes(1));
     expect(farm.logCattleEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'weaning', headDelta: 0 }), expect.anything());
-    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({ fromGroupId: 'g1', toGroupId: 'g2', head: 6 }), expect.anything());
+    expect(farm.transferCattleHead).toHaveBeenCalledWith(expect.objectContaining({
+      fromGroupId: 'g3', toGroupId: 'g2', head: 6, cattleClass: 'calves',
+    }), expect.anything());
   });
 
   it('weaning without a move is just the event', async () => {

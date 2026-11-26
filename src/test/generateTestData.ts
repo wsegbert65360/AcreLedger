@@ -10,6 +10,7 @@ import type {
 } from '@/types/farm';
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
 import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
+import { countsTotal, emptyCounts, herdTypeClass } from '@/lib/cattle/counts';
 
 // --- Helpers ---
 
@@ -453,12 +454,19 @@ export function generateCattle(fields: Field[], count = 4): {
   events: CattleEvent[];
 } {
   const now = '2026-03-01T12:00:00.000Z';
-  const classes: CattleGroup['class'][] = ['cows', 'calves', 'replacement_heifers', 'stockers'];
-  const groups = Array.from({ length: count }, (_, index): CattleGroup => ({
-    id: uid(), farm_id: 'test-farm', name: `Herd ${index + 1}`, class: classes[index % classes.length],
-    headCount: 20 + index * 5, currentFieldId: fields[index % fields.length]?.id,
-    currentSince: isoDate(2026, 2, 1 + index), createdAt: now, updatedAt: now, deleted_at: null,
-  }));
+  const classes: CattleGroup['class'][] = ['mixed', 'calves', 'replacement_heifers', 'stockers'];
+  const groups = Array.from({ length: count }, (_, index): CattleGroup => {
+    const herdType = classes[index % classes.length];
+    // The first herd is a cow-calf herd: cows, their calves and a bull together.
+    const counts = herdType === 'mixed'
+      ? { ...emptyCounts(), cows: 20 + index * 5, calves: 18 + index * 5, bulls: 1 }
+      : { ...emptyCounts(), [herdTypeClass(herdType)]: 20 + index * 5 };
+    return {
+      id: uid(), farm_id: 'test-farm', name: `Herd ${index + 1}`, class: herdType,
+      counts, headCount: countsTotal(counts), currentFieldId: fields[index % fields.length]?.id,
+      currentSince: isoDate(2026, 2, 1 + index), createdAt: now, updatedAt: now, deleted_at: null,
+    };
+  });
   const moves = groups.map((group): CattleMove => ({
     id: uid(), farm_id: 'test-farm', groupId: group.id, fieldId: group.currentFieldId,
     movedOn: group.currentSince!, headCount: group.headCount, createdAt: now, updatedAt: now, deleted_at: null,

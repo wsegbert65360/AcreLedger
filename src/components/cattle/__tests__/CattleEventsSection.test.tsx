@@ -23,7 +23,10 @@ import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import type { CattleGroup } from '@/types/cattle';
 
 const base = { farm_id: 'f', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', deleted_at: null };
-const group: CattleGroup = { ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 20 };
+const group: CattleGroup = {
+  ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 20,
+  counts: { cows: 20, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 },
+};
 const paid: Entitlement = { ...freeEntitlement(true), plan: 'paid' };
 
 beforeEach(() => {

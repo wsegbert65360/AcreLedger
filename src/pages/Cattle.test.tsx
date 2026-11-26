@@ -38,7 +38,7 @@ import { exportCattleCsv } from '@/lib/cattle/report';
 import { localTodayIso } from '@/lib/equipment';
 
 const base = { farm_id: 'f', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', deleted_at: null };
-const cows = { ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 20, currentFieldId: 'f1', currentSince: localTodayIso() };
+const cows = { ...base, id: 'g1', name: 'Cows', class: 'cows', headCount: 20, counts: { cows: 20, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 }, currentFieldId: 'f1', currentSince: localTodayIso() };
 
 function renderAt(path: string) {
   return render(
@@ -75,7 +75,7 @@ describe('Cattle page', () => {
 
   it('shows a one-line empty state and no export when there are no groups', () => {
     renderAt('/cattle');
-    expect(screen.getByText('Add your first group to start tracking cattle.')).toBeTruthy();
+    expect(screen.getByText('Add your first herd to start tracking cattle.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Export cattle CSV/ })).toBeNull();
   });
 
@@ -133,6 +133,6 @@ describe('Cattle page', () => {
 
   it('says so when the group is gone', () => {
     renderAt('/cattle/missing');
-    expect(screen.getByText('This group is no longer here.')).toBeTruthy();
+    expect(screen.getByText('This herd is no longer here.')).toBeTruthy();
   });
 });

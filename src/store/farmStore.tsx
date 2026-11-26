@@ -34,13 +34,14 @@ import { useSeasonManagement, type ClearLocalCacheOptions } from './useSeasonMan
 import { useTillageRecords } from './useTillageRecords';
 import { useWorkRequests } from './useWorkRequests';
 import { useEquipment } from './useEquipment';
-import { useCattle, type CattleSaveOptions } from './useCattle';
+import { useCattle, type CattleSaveOptions, type CattleTransferInput, type NewCattleGroup } from './useCattle';
 import { useFsaTracts } from './useFsaTracts';
 import { useCountyAssignments } from './useCountyAssignments';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { isOfflineDatabaseUnavailableError, offlineStorage } from '../lib/offlineStorage';
 import { applyParkedEquipmentMutations } from '@/lib/equipment/parked';
 import { applyParkedCattleMutations, queuedRunsCattle } from '@/lib/cattle/parked';
+import { normalizeCattleGroup } from '@/lib/cattle/counts';
 import { CATTLE_RPC_KEY, syncQueue, WebSyncQueueUnreadableError, type QueuedMutation } from '../lib/syncQueue';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import { overlayQueuedRows } from '@/lib/queuedSnapshot';
@@ -262,11 +263,11 @@ interface FarmState {
   logMaintenance: (record: Omit<MaintenanceLog, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>, forceLower?: boolean) => Promise<boolean>;
   updateMaintenanceLog: (record: MaintenanceLog) => Promise<boolean>;
   deleteMaintenanceLog: (id: string) => Promise<boolean>;
-  addCattleGroup: (record: Omit<CattleGroup, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at' | 'currentFieldId' | 'currentSince'>) => Promise<boolean>;
+  addCattleGroup: (record: NewCattleGroup) => Promise<boolean>;
   updateCattleGroup: (id: string, changes: CattleGroupEdit) => Promise<boolean>;
   moveCattleGroup: (record: Pick<CattleMove, 'groupId' | 'fieldId' | 'movedOn' | 'notes'>) => Promise<boolean>;
   logCattleEvent: (record: Omit<CattleEvent, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at'>, options?: CattleSaveOptions) => Promise<boolean>;
-  transferCattleHead: (input: { fromGroupId: string; toGroupId: string; head: number; eventDate: string; notes?: string }, options?: CattleSaveOptions) => Promise<boolean>;
+  transferCattleHead: (input: CattleTransferInput, options?: CattleSaveOptions) => Promise<boolean>;
   deleteCattleGroup: (id: string) => Promise<boolean>;
   deleteCattleMove: (id: string) => Promise<boolean>;
   deleteCattleEvent: (id: string) => Promise<boolean>;
@@ -567,7 +568,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         if (equipmentData) setEquipment(equipmentData);
         if (maintenanceSchedulesData) setMaintenanceSchedules(maintenanceSchedulesData);
         if (maintenanceLogsData) setMaintenanceLogs(maintenanceLogsData);
-        if (cattleGroupsData) setCattleGroups(cattleGroupsData);
+        // A cache saved before mixed herds has no class counts; fill them in.
+        if (cattleGroupsData) setCattleGroups((cattleGroupsData as CattleGroup[]).map(normalizeCattleGroup));
         if (cattleMovesData) setCattleMoves(cattleMovesData);
         if (cattleEventsData) setCattleEvents(cattleEventsData);
         const hydratedFarmName = readCachedFarmName(farmNameData, farmIdFromIdentityKey(hydrationIdentity));

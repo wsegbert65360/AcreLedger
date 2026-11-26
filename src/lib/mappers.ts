@@ -21,6 +21,7 @@ import type {
 import type {
     CattleEvent, CattleEventRow, CattleGroup, CattleGroupRow, CattleMove, CattleMoveRow,
 } from '@/types/cattle';
+import { COUNT_CLASSES, countsFromRow, countsTotal, groupCounts, isCountClass } from '@/lib/cattle/counts';
 import {
     migrateFsaToPropertyIdentifiers,
     getPropertyIdentifier,
@@ -123,19 +124,23 @@ export const mapMaintenanceLogFromDb = (db: MaintenanceLogRow): MaintenanceLog =
     deleted_at: db.deleted_at ?? null,
 });
 
-export const mapCattleGroupFromDb = (db: CattleGroupRow): CattleGroup => ({
+export const mapCattleGroupFromDb = (db: CattleGroupRow): CattleGroup => {
+    const counts = countsFromRow(db, db.class, safeNum(db.head_count));
+    return {
     id: db.id,
     farm_id: db.farm_id,
     name: safeStr(db.name),
     class: db.class,
-    headCount: safeNum(db.head_count),
+    headCount: countsTotal(counts),
+    counts,
     currentFieldId: optionalString(db.current_field_id),
     currentSince: optionalString(db.current_since),
     notes: optionalString(db.notes),
     createdAt: db.created_at,
     updatedAt: db.updated_at,
     deleted_at: db.deleted_at ?? null,
-});
+    };
+};
 
 export const mapCattleMoveFromDb = (db: CattleMoveRow): CattleMove => ({
     id: db.id,
@@ -159,6 +164,10 @@ export const mapCattleEventFromDb = (db: CattleEventRow): CattleEvent => ({
     headDelta: safeNum(db.head_delta),
     reason: db.reason ?? undefined,
     transferId: optionalString(db.transfer_id),
+    cattleClass: isCountClass(db.cattle_class) ? db.cattle_class : undefined,
+    toClass: isCountClass(db.to_class) ? db.to_class : undefined,
+    classHead: db.class_head != null && Number.isInteger(Number(db.class_head)) ? Number(db.class_head) : undefined,
+    calfSex: db.calf_sex === 'heifer' || db.calf_sex === 'steer' || db.calf_sex === 'bull' ? db.calf_sex : undefined,
     notes: optionalString(db.notes),
     createdAt: db.created_at,
     updatedAt: db.updated_at,
@@ -657,6 +666,11 @@ export const mapMaintenanceLogToDb = (log: MaintenanceLog): Record<string, unkno
     return row;
 };
 
+const cattleCountColumns = (group: CattleGroup): Record<string, number> => {
+    const counts = groupCounts(group);
+    return { head_count: countsTotal(counts), ...Object.fromEntries(COUNT_CLASSES.map(item => [item, counts[item]])) };
+};
+
 export const mapCattleGroupToDb = (group: CattleGroup): Record<string, unknown> => {
     validateRequired(group, ['id', 'farm_id', 'name', 'class'], 'mapCattleGroupToDb');
     return {
@@ -664,7 +678,7 @@ export const mapCattleGroupToDb = (group: CattleGroup): Record<string, unknown> 
         farm_id: group.farm_id,
         name: group.name,
         class: group.class,
-        head_count: group.headCount,
+        ...cattleCountColumns(group),
         current_field_id: nullableString(group.currentFieldId),
         current_since: nullableString(group.currentSince),
         notes: nullableString(group.notes),
@@ -675,20 +689,20 @@ export const mapCattleGroupToDb = (group: CattleGroup): Record<string, unknown> 
 };
 
 /**
- * head_count is sent only when the user changed it. Events and transfers own the
- * count through RPCs, so a stale offline edit of a name or note must not
- * overwrite a count an event just changed.
+ * The class counts (and head_count, their total) are sent only when the user
+ * changed a count. Events and transfers own the counts through RPCs, so a stale
+ * offline edit of a name or note must not overwrite a count an event just changed.
  */
 export const mapCattleGroupUpdateToDb = (
     group: CattleGroup,
-    options: { headCountChanged?: boolean } = {},
+    options: { countsChanged?: boolean } = {},
 ): Record<string, unknown> => {
     validateRequired(group, ['id', 'name', 'class'], 'mapCattleGroupUpdateToDb');
     return {
         id: group.id,
         name: group.name,
         class: group.class,
-        ...(options.headCountChanged ? { head_count: group.headCount } : {}),
+        ...(options.countsChanged ? cattleCountColumns(group) : {}),
         notes: nullableString(group.notes),
         updated_at: group.updatedAt,
         deleted_at: group.deleted_at ?? null,
@@ -722,6 +736,10 @@ export const mapCattleEventToDb = (event: CattleEvent): Record<string, unknown> 
         head_delta: event.headDelta,
         reason: nullableString(event.reason),
         transfer_id: nullableString(event.transferId),
+        cattle_class: event.cattleClass ?? null,
+        to_class: event.toClass ?? null,
+        class_head: event.classHead ?? null,
+        calf_sex: event.calfSex ?? null,
         notes: nullableString(event.notes),
         created_at: event.createdAt,
         updated_at: event.updatedAt,

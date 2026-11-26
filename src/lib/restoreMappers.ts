@@ -24,6 +24,15 @@ const SOURCE_KEY_ALIASES: Record<string, string[]> = {
   equipment_id: ['equipmentId', 'equipment_id'],
   group_id: ['groupId', 'group_id'],
   transfer_id: ['transferId', 'transfer_id'],
+  // Cattle class counts live in one `counts` object on the app side. A backup
+  // from before mixed herds has none, so only head_count is sent and the
+  // database puts it on the herd type's class.
+  cows: ['counts', 'cows'],
+  heifers: ['counts', 'heifers'],
+  bulls: ['counts', 'bulls'],
+  calves: ['counts', 'calves'],
+  steers: ['counts', 'steers'],
+  stockers: ['counts', 'stockers'],
   schedule_id: ['scheduleId', 'schedule_id'],
   harvest_record_id: ['harvestRecordId', 'harvest_record_id'],
   tract_key: ['tractKey', 'tract_key'],

@@ -1,12 +1,16 @@
-import type { CattleClass, CattleEvent, CattleEventType, CattleGroup, CattleRemovalReason } from '@/types/cattle';
+import type {
+  CalfSex, CattleClass, CattleEvent, CattleEventType, CattleGroup, CattleRemovalReason,
+} from '@/types/cattle';
+import { COUNT_LABELS } from './counts';
 
+/** Herd types. Cow-calf (stored as 'mixed') comes first: cows, calves and bulls together. */
 export const CATTLE_CLASS_LABELS: Record<CattleClass, string> = {
+  mixed: 'Cow-calf herd',
   cows: 'Cows',
+  replacement_heifers: 'Heifers',
   bulls: 'Bulls',
   calves: 'Calves',
-  replacement_heifers: 'Replacement heifers',
-  stockers: 'Stockers',
-  mixed: 'Mixed',
+  stockers: 'Stockers / steers',
 };
 export const CATTLE_CLASSES = Object.keys(CATTLE_CLASS_LABELS) as CattleClass[];
 
@@ -18,6 +22,13 @@ export const CATTLE_EVENT_LABELS: Record<CattleEventType, string> = {
   death: 'Death',
   head_added: 'Head added',
   head_removed: 'Head removed',
+  reclass: 'Change class',
+};
+
+export const CALF_SEX_LABELS: Record<CalfSex, string> = {
+  heifer: 'Heifer calves',
+  steer: 'Steer calves',
+  bull: 'Bull calves',
 };
 
 export const CATTLE_REMOVAL_LABELS: Record<CattleRemovalReason, string> = {
@@ -29,7 +40,7 @@ export const PASTURE_REMOVED_LABEL = 'Pasture removed';
 export const OFF_PASTURE_LABEL = 'Off pasture';
 
 export function duplicateGroupNameMessage(name: string): string {
-  return `You already have a group called "${name.trim()}". Pick a different name.`;
+  return `You already have a herd called "${name.trim()}". Pick a different name.`;
 }
 
 /** Case-insensitive match against live groups, ignoring the group being edited. */
@@ -88,23 +99,36 @@ export const CATTLE_EVENT_HEAD_RULE: Record<CattleEventType, EventHeadRule> = {
   weaning: 'none',
   working: 'none',
   preg_check: 'none',
+  reclass: 'none',
 };
 
 export const CATTLE_EVENT_TYPES = Object.keys(CATTLE_EVENT_LABELS) as CattleEventType[];
 
 /** Timeline wording; a head transfer names the group on the other side. */
 export function describeEvent(
-  event: Pick<CattleEvent, 'id' | 'eventType' | 'headDelta' | 'transferId' | 'reason'>,
+  event: Pick<CattleEvent, 'id' | 'eventType' | 'headDelta' | 'transferId' | 'reason'>
+    & Partial<Pick<CattleEvent, 'cattleClass' | 'toClass' | 'classHead' | 'calfSex'>>,
   allEvents: Pick<CattleEvent, 'id' | 'groupId' | 'transferId' | 'deleted_at'>[],
   groups: Pick<CattleGroup, 'id' | 'name'>[],
 ): string {
+  const what = (head: number) => event.cattleClass
+    ? `${head} ${head === 1 ? COUNT_LABELS[event.cattleClass].one : COUNT_LABELS[event.cattleClass].many}`
+    : `${head} head`;
   if (event.transferId) {
     const other = allEvents.find(item => item.transferId === event.transferId && item.id !== event.id && !item.deleted_at);
     const otherName = other ? groups.find(group => group.id === other.groupId)?.name : undefined;
     const head = Math.abs(event.headDelta);
-    if (event.headDelta < 0) return `Moved ${head} head${otherName ? ` to ${otherName}` : ' to another group'}`;
-    return `Received ${head} head${otherName ? ` from ${otherName}` : ' from another group'}`;
+    if (event.headDelta < 0) return `Moved ${what(head)}${otherName ? ` to ${otherName}` : ' to another group'}`;
+    return `Received ${what(head)}${otherName ? ` from ${otherName}` : ' from another group'}`;
+  }
+  if (event.eventType === 'reclass' && event.cattleClass && event.toClass && event.classHead) {
+    return `${what(event.classHead)} now ${COUNT_LABELS[event.toClass].many}`;
   }
   const label = CATTLE_EVENT_LABELS[event.eventType];
-  return event.headDelta === 0 ? label : `${label} (${event.headDelta > 0 ? '+' : ''}${event.headDelta})`;
+  if (event.headDelta === 0) return label;
+  const sign = event.headDelta > 0 ? '+' : '-';
+  const sex = event.eventType === 'calving' && event.calfSex ? `, ${CALF_SEX_LABELS[event.calfSex].toLowerCase()}` : '';
+  // An event from before mixed herds has no class: keep the plain "(-1)".
+  const amount = event.cattleClass ? what(Math.abs(event.headDelta)) : String(Math.abs(event.headDelta));
+  return `${label} (${sign}${amount}${sex})`;
 }

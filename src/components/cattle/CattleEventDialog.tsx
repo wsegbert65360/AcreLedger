@@ -8,12 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ENTITLEMENT_COPY } from '@/copy/entitlements';
+import { COUNT_CLASSES, COUNT_LABELS, COUNT_TITLES, countsSummary, groupCounts, herdTypeClass } from '@/lib/cattle/counts';
 import {
-  CATTLE_EVENT_HEAD_RULE, CATTLE_EVENT_LABELS, CATTLE_EVENT_TYPES, CATTLE_REMOVAL_LABELS, isFutureDate, parseHeadCount,
+  CALF_SEX_LABELS, CATTLE_EVENT_HEAD_RULE, CATTLE_EVENT_LABELS, CATTLE_EVENT_TYPES, CATTLE_REMOVAL_LABELS,
+  isFutureDate, parseHeadCount,
 } from '@/lib/cattle/ui';
 import { localTodayIso } from '@/lib/equipment';
 import { useFarm } from '@/store/farmStore';
-import type { CattleEventType, CattleGroup, CattleRemovalReason } from '@/types/cattle';
+import type { CalfSex, CattleEventType, CattleGroup, CattleRemovalReason, CountClass } from '@/types/cattle';
 
 const HEAD_LABEL: Partial<Record<CattleEventType, string>> = {
   calving: 'Calves born',
@@ -22,13 +24,21 @@ const HEAD_LABEL: Partial<Record<CattleEventType, string>> = {
   head_removed: 'Head removed',
 };
 
-/** Log one event for a group. Moving head to another group is one queued transfer, not two writes. */
+const MIXED_SEX = 'mixed';
+
+/** Log one event for a herd. Moving head to another herd is one queued transfer, not two writes. */
 export default function CattleEventDialog({ group, onClose }: { group: CattleGroup; onClose: () => void }) {
   const { cattleGroups, logCattleEvent, transferCattleHead } = useFarm();
   const today = localTodayIso();
+  const counts = groupCounts(group);
+  const ownClass = herdTypeClass(group.class);
+  const firstWithHead = COUNT_CLASSES.find(item => counts[item] > 0) ?? ownClass;
   const [type, setType] = useState<CattleEventType>('calving');
   const [date, setDate] = useState(today);
   const [head, setHead] = useState('');
+  const [cattleClass, setCattleClass] = useState<CountClass>(counts[ownClass] > 0 ? ownClass : firstWithHead);
+  const [toClass, setToClass] = useState<CountClass>('heifers');
+  const [calfSex, setCalfSex] = useState<CalfSex | typeof MIXED_SEX>(MIXED_SEX);
   const [reason, setReason] = useState<CattleRemovalReason | ''>('');
   const [toGroupId, setToGroupId] = useState('');
   const [weanHead, setWeanHead] = useState('');
@@ -41,6 +51,9 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
   );
   const rule = CATTLE_EVENT_HEAD_RULE[type];
   const isTransfer = type === 'head_removed' && reason === 'moved_to_another_group';
+  const isReclass = type === 'reclass';
+  const picksClass = type === 'head_added' || type === 'death' || type === 'head_removed' || isReclass;
+  const classWord = (item: CountClass, n: number) => (n === 1 ? COUNT_LABELS[item].one : COUNT_LABELS[item].many);
 
   const fail = (message: string) => { setError(message); return undefined; };
 
@@ -52,23 +65,24 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
     const cleanNotes = notes.trim() || undefined;
 
     let count = 0;
-    if (rule !== 'none') {
+    if (rule !== 'none' || isReclass) {
       const parsed = parseHeadCount(head);
       if (parsed === null || parsed < 1) return fail('Head must be a whole number, at least 1.');
       count = parsed;
-      if (rule === 'negative' && count > group.headCount) {
-        return fail(`${group.name} only has ${group.headCount} head.`);
+      if ((rule === 'negative' || isReclass) && count > counts[cattleClass]) {
+        return fail(`${group.name} only has ${counts[cattleClass]} ${classWord(cattleClass, counts[cattleClass])}.`);
       }
     }
+    if (isReclass && toClass === cattleClass) return fail('Pick a different class to change them to.');
     if (type === 'head_removed' && !reason) return fail('Say why the head were removed.');
-    if (isTransfer && !toGroupId) return fail('Pick the group the head are moving to.');
+    if (isTransfer && !toGroupId) return fail('Pick the herd the head are moving to.');
 
     let weanCount = 0;
     if (type === 'weaning' && weanHead.trim()) {
       const parsed = parseHeadCount(weanHead);
-      if (parsed === null || parsed < 1) return fail('Head to move must be a whole number, at least 1.');
-      if (parsed > group.headCount) return fail(`${group.name} only has ${group.headCount} head.`);
-      if (!toGroupId) return fail('Pick the group the weaned head are moving to.');
+      if (parsed === null || parsed < 1) return fail('Calves to move must be a whole number, at least 1.');
+      if (parsed > counts.calves) return fail(`${group.name} only has ${counts.calves} ${classWord('calves', counts.calves)}.`);
+      if (!toGroupId) return fail('Pick the herd the weaned calves are moving to.');
       weanCount = parsed;
     }
 
@@ -79,22 +93,28 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
     const saveOptions = { onPremiumRequired: () => { premiumRequired = true; } };
     try {
       if (isTransfer) {
-        const ok = await transferCattleHead({ fromGroupId: group.id, toGroupId, head: count, eventDate: date, notes: cleanNotes }, saveOptions);
+        const ok = await transferCattleHead({
+          fromGroupId: group.id, toGroupId, head: count, eventDate: date, notes: cleanNotes, cattleClass,
+        }, saveOptions);
         if (!ok) return void toast.error(premiumRequired ? ENTITLEMENT_COPY.cattleEventsLockedTitle : 'Could not save the move.');
       } else {
         const ok = await logCattleEvent({
           groupId: group.id, eventType: type, eventDate: date,
           headDelta: rule === 'positive' ? count : rule === 'negative' ? -count : 0,
           reason: type === 'head_removed' && reason ? reason : undefined,
+          cattleClass: picksClass ? cattleClass : undefined,
+          toClass: isReclass ? toClass : undefined,
+          classHead: isReclass ? count : undefined,
+          calfSex: type === 'calving' && calfSex !== MIXED_SEX ? calfSex : undefined,
           notes: cleanNotes,
         }, saveOptions);
         if (!ok) return void toast.error(premiumRequired ? ENTITLEMENT_COPY.cattleEventsLockedTitle : 'Could not save the event.');
         if (weanCount > 0) {
           const moved = await transferCattleHead({
-            fromGroupId: group.id, toGroupId, head: weanCount, eventDate: date, notes: cleanNotes ?? 'Weaning',
+            fromGroupId: group.id, toGroupId, head: weanCount, eventDate: date, notes: cleanNotes ?? 'Weaning', cattleClass: 'calves',
           }, saveOptions);
           if (!moved) {
-            toast.error('Weaning was saved, but moving the head did not save. Try the move again.');
+            toast.error('Weaning was saved, but moving the calves did not save. Try the move again.');
             return onClose();
           }
         }
@@ -105,16 +125,32 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
     }
   };
 
+  const classPicker = (id: string, label: string, value: CountClass, onChange: (value: CountClass) => void, showCounts: boolean) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Select value={value} onValueChange={next => onChange(next as CountClass)}>
+        <SelectTrigger id={id} className="h-11"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {COUNT_CLASSES.map(item => (
+            <SelectItem key={item} value={item} className="min-h-11">
+              {COUNT_TITLES[item]}{showCounts ? ` (${counts[item]})` : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
   const destinationPicker = (
     <div className="space-y-1.5">
-      <Label htmlFor="event-to-group">Move to group</Label>
+      <Label htmlFor="event-to-group">Move to herd</Label>
       <Select value={toGroupId} onValueChange={setToGroupId}>
-        <SelectTrigger id="event-to-group" className="h-11"><SelectValue placeholder="Choose a group" /></SelectTrigger>
+        <SelectTrigger id="event-to-group" className="h-11"><SelectValue placeholder="Choose a herd" /></SelectTrigger>
         <SelectContent>
           {others.map(item => <SelectItem key={item.id} value={item.id} className="min-h-11">{item.name}</SelectItem>)}
         </SelectContent>
       </Select>
-      {others.length === 0 && <p className="text-xs text-muted-foreground">Add another group first.</p>}
+      {others.length === 0 && <p className="text-xs text-muted-foreground">Add another herd first.</p>}
     </div>
   );
 
@@ -123,7 +159,7 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
       <DialogContent className="max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Log an event</DialogTitle>
-          <DialogDescription>{group.name} · {group.headCount} head</DialogDescription>
+          <DialogDescription>{group.name} · {countsSummary(counts)}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} noValidate className="space-y-4">
           <div className="space-y-1.5">
@@ -139,10 +175,27 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
             <Label htmlFor="event-date">Date</Label>
             <Input id="event-date" type="date" value={date} max={today} onChange={event => setDate(event.target.value)} className="h-11" />
           </div>
-          {rule !== 'none' && (
+          {picksClass && classPicker('event-class', isReclass ? 'From' : 'Which cattle', cattleClass, setCattleClass, rule === 'negative' || isReclass)}
+          {isReclass && classPicker('event-to-class', 'Change them to', toClass, setToClass, false)}
+          {(rule !== 'none' || isReclass) && (
             <div className="space-y-1.5">
-              <Label htmlFor="event-head">{HEAD_LABEL[type]}</Label>
+              <Label htmlFor="event-head">{isReclass ? 'How many head' : HEAD_LABEL[type]}</Label>
               <Input id="event-head" value={head} onChange={event => setHead(event.target.value)} className="h-11" inputMode="numeric" placeholder="0" />
+            </div>
+          )}
+          {isReclass && <p className="text-xs text-muted-foreground">For example, calves kept back as replacement heifers, or a heifer that calved becoming a cow.</p>}
+          {type === 'calving' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="event-calf-sex">Calves (optional)</Label>
+              <Select value={calfSex} onValueChange={value => setCalfSex(value as CalfSex | typeof MIXED_SEX)}>
+                <SelectTrigger id="event-calf-sex" className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={MIXED_SEX} className="min-h-11">Mixed or not recorded</SelectItem>
+                  {(Object.keys(CALF_SEX_LABELS) as CalfSex[]).map(item => (
+                    <SelectItem key={item} value={item} className="min-h-11">{CALF_SEX_LABELS[item]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
           {type === 'head_removed' && (
@@ -162,8 +215,8 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
           {type === 'weaning' && (
             <>
               <div className="space-y-1.5">
-                <Label htmlFor="event-wean-head">Move weaned head to another group (optional)</Label>
-                <Input id="event-wean-head" value={weanHead} onChange={event => setWeanHead(event.target.value)} className="h-11" inputMode="numeric" placeholder="How many head" />
+                <Label htmlFor="event-wean-head">Move weaned calves to another herd (optional)</Label>
+                <Input id="event-wean-head" value={weanHead} onChange={event => setWeanHead(event.target.value)} className="h-11" inputMode="numeric" placeholder="How many calves" />
               </div>
               {weanHead.trim() !== '' && destinationPicker}
             </>

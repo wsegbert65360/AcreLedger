@@ -36,6 +36,11 @@ const gateMigration = await readFile(
   'utf8',
 );
 
+const mixedMigration = await readFile(
+  new URL('../supabase/migrations/20261126020000_cattle_mixed_herds.sql', import.meta.url),
+  'utf8',
+);
+
 const ids = {
   farm: '10000000-0000-4000-8000-000000000001',
   otherFarm: '10000000-0000-4000-8000-000000000002',
@@ -624,7 +629,76 @@ try {
   `)).rows[0];
   assert.deepEqual(fnProps, { secdef: true, config: '{"search_path=\\"\\""}', anon_exec: false, auth_exec: true }, 'transfer_cattle_head is SECURITY DEFINER, empty search_path, explicit grants');
 
-  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, reused names, and the Pro gate on events.');
+  // ---- Mixed herds (20261126020000) ----
+  const preMixedHead = await db.query('SELECT id, class, head_count FROM public.cattle_groups ORDER BY id');
+  await db.exec(mixedMigration);
+  await setPlan('off', 'free');
+  const backfilled = await db.query('SELECT id, class, head_count, cows, heifers, bulls, calves, steers, stockers FROM public.cattle_groups ORDER BY id');
+  for (const before of preMixedHead.rows) {
+    const after = backfilled.rows.find(row => row.id === before.id);
+    const sum = after.cows + after.heifers + after.bulls + after.calves + after.steers + after.stockers;
+    assert.equal(after.head_count, before.head_count, 'backfill keeps every total');
+    assert.equal(sum, after.head_count, 'backfilled classes add up to the total');
+  }
+  const m = i => `10000000-0000-4000-8000-0000000003${String(i).padStart(2, '0')}`;
+  const counts = async id => (await db.query('SELECT head_count, cows, heifers, bulls, calves, steers, stockers FROM public.cattle_groups WHERE id = $1', [id])).rows[0];
+  await db.query(`INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count, cows, bulls, calves) VALUES ($1, $2, '2014 herd', 'mixed', 0, 30, 1, 0)`, [m(1), ids.farm]);
+  await db.query(`INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count, steers) VALUES ($1, $2, 'Weaned steers', 'stockers', 0, 0)`, [m(2), ids.farm]);
+  assert.deepEqual(await counts(m(1)), { head_count: 31, cows: 30, heifers: 0, bulls: 1, calves: 0, steers: 0, stockers: 0 }, 'a mixed herd holds cows and a bull; the total is the sum');
+
+  // Adding bulls by editing the herd never clears the cows.
+  await db.query('UPDATE public.cattle_groups SET bulls = 2 WHERE id = $1', [m(1)]);
+  assert.deepEqual(await counts(m(1)), { head_count: 32, cows: 30, heifers: 0, bulls: 2, calves: 0, steers: 0, stockers: 0 }, 'editing one class keeps the others');
+
+  // An older client that only sends head_count changes the herd type's class.
+  await db.query(`INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1, $2, 'Old app cows', 'cows', 12)`, [m(3), ids.farm]);
+  assert.equal((await counts(m(3))).cows, 12, 'an older insert without counts lands on its class');
+  await db.query('UPDATE public.cattle_groups SET head_count = 10 WHERE id = $1', [m(3)]);
+  assert.deepEqual(await counts(m(3)), { head_count: 10, cows: 10, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 }, 'an older total-only edit changes its class');
+
+  await db.exec(`SET ROLE authenticated;`);
+  const logMixed = (id, type, delta, cls = null, extra = {}) => db.query(
+    'SELECT public.log_cattle_event($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) AS value',
+    [ids.farm, id, m(1), type, '2026-11-09', delta, extra.reason ?? null, null, cls, extra.toClass ?? null, extra.classHead ?? null, extra.calfSex ?? null],
+  );
+  const born = await logMixed(m(10), 'calving', 5, null, { calfSex: 'heifer' });
+  assert.equal(born.rows[0].value.counts.calves, 5, 'calving adds calves and returns the class counts');
+  assert.equal((await logMixed(m(10), 'calving', 5, null, { calfSex: 'heifer' })).rows[0].value.already_applied, true, 'calving replays idempotently');
+  await logMixed(m(11), 'death', -1, 'calves');
+  assert.equal((await counts(m(1))).calves, 4, 'a calf death comes off calves');
+  await assert.rejects(logMixed(m(12), 'death', -3, 'bulls'), error => error.code === '23514', 'a class cannot go negative even when the herd total could cover it');
+  await logMixed(m(13), 'reclass', 0, 'calves', { toClass: 'heifers', classHead: 2 });
+  let herd = await counts(m(1));
+  assert.deepEqual([herd.calves, herd.heifers, herd.head_count], [2, 2, 36], 'reclass moves head between classes and keeps the total');
+  await assert.rejects(logMixed(m(14), 'reclass', 0, 'calves', { toClass: 'calves', classHead: 1 }), error => error.code === '23514', 'reclass needs two different classes');
+
+  // Old-signature call (no class) still resolves and hits the herd type's class.
+  const oldCall = await db.query('SELECT public.log_cattle_event($1,$2,$3,$4,$5,$6,$7,$8) AS value', [ids.farm, m(15), m(1), 'head_added', '2026-11-09', 3, null, null]);
+  assert.equal(oldCall.rows[0].value.counts.cows, 33, 'an older client event on a mixed herd changes cows');
+
+  // Weaning: move calves to another herd by class.
+  const weaned = await db.query('SELECT public.transfer_cattle_head($1,$2,$3,$4,$5,$6,$7,$8,$9) AS value', [ids.farm, m(20), m(21), m(1), m(2), 2, '2026-11-09', 'Weaning', 'calves']);
+  assert.deepEqual([weaned.rows[0].value.from_counts.calves, weaned.rows[0].value.to_counts.calves], [0, 2], 'a transfer moves one class');
+  await assert.rejects(
+    db.query('SELECT public.transfer_cattle_head($1,$2,$3,$4,$5,$6,$7,$8,$9) AS value', [ids.farm, m(22), m(23), m(1), m(2), 1, '2026-11-09', null, 'calves']),
+    error => error.code === '23514', 'a transfer cannot take more of a class than the herd has',
+  );
+
+  // Deleting events reverses them on their own class.
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'event', m(20)]);
+  herd = await counts(m(1));
+  assert.equal(herd.calves, 2, 'deleting a transfer gives the calves back');
+  assert.equal((await counts(m(2))).calves, 0, 'and takes them off the other herd');
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'event', m(13)]);
+  herd = await counts(m(1));
+  assert.deepEqual([herd.calves, herd.heifers], [4, 0], 'deleting a reclass moves the head back');
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'event', m(11)]);
+  assert.equal((await counts(m(1))).calves, 5, 'deleting a calf death puts the calf back on calves');
+  herd = await counts(m(1));
+  assert.equal(herd.head_count, herd.cows + herd.heifers + herd.bulls + herd.calves + herd.steers + herd.stockers, 'the total always equals the classes');
+  await db.exec('RESET ROLE');
+
+  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, reused names, the Pro gate on events, and mixed herds (class counts, older-client totals, class events, reclass, class transfers and class-aware reversal).');
 } finally {
   await db.close();
 }

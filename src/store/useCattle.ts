@@ -7,7 +7,27 @@ import {
 } from '@/lib/mappers';
 import { CATTLE_RPC_KEY, type CattleRpcName, cattleEnvelopeGroupIds, syncQueue } from '@/lib/syncQueue';
 import { supabase } from '@/lib/supabase';
-import type { CattleEvent, CattleGroup, CattleGroupEdit, CattleMove } from '@/types/cattle';
+import {
+  addCounts, applyEventToGroup, COUNT_CLASSES, countsFromRpc, countsTotal, diffCounts, emptyCounts,
+  groupCounts, herdTypeClass, normalizeCattleGroup, resolveEventClass, sameCounts, withClassDelta,
+} from '@/lib/cattle/counts';
+import type {
+  CattleCounts, CattleEvent, CattleGroup, CattleGroupEdit, CattleMove, CountClass,
+} from '@/types/cattle';
+
+/** A new herd: its counts per class; the total is their sum. */
+export type NewCattleGroup = Pick<CattleGroup, 'name' | 'class' | 'counts' | 'notes'>;
+
+/** Move head of one class from one herd to another (weaning, splitting a herd). */
+export interface CattleTransferInput {
+  fromGroupId: string;
+  toGroupId: string;
+  head: number;
+  eventDate: string;
+  notes?: string;
+  /** Left out, the from-herd's own class moves. */
+  cattleClass?: CountClass;
+}
 
 interface UseCattleArgs {
   farm_id: string | null;
@@ -119,13 +139,14 @@ export function useCattle({
     }
   }, [enqueue, farm_id, isOnline, onMutation]);
 
-  const addCattleGroup = useCallback(async (
-    input: Omit<CattleGroup, 'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at' | 'currentFieldId' | 'currentSince'>,
-  ): Promise<boolean> => {
+  const addCattleGroup = useCallback(async (input: NewCattleGroup): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
+    if (COUNT_CLASSES.some(item => !Number.isInteger(input.counts[item]) || input.counts[item] < 0)) return false;
     const now = new Date().toISOString();
+    const counts = { ...input.counts };
     const record: CattleGroup = {
-      ...input, id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
+      ...input, counts, headCount: countsTotal(counts),
+      id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
     };
     let mapped: Record<string, unknown>;
     try { mapped = mapCattleGroupToDb(record); } catch (error) { console.error(error); return false; }
@@ -144,27 +165,30 @@ export function useCattle({
     if (!previous) return false;
     const name = changes.name ?? previous.name;
     if (!name.trim()) return false;
-    if (changes.headCount !== undefined && (!Number.isInteger(changes.headCount) || changes.headCount < 0)) return false;
-    // head_count goes to the server only when the caller explicitly sets it, so
-    // a stale offline edit of a name or note cannot overwrite a count that an
-    // event or transfer has changed since.
-    const headCountChanged = changes.headCount !== undefined && changes.headCount !== previous.headCount;
+    if (changes.counts && COUNT_CLASSES.some(item => !Number.isInteger(changes.counts?.[item]) || (changes.counts?.[item] ?? -1) < 0)) return false;
+    // The class counts go to the server only when the caller changed one, so a
+    // stale offline edit of a name or note cannot overwrite counts that an event
+    // or transfer has changed since. Editing one class never clears the others.
+    const previousCounts = groupCounts(previous);
+    const countsChanged = changes.counts !== undefined && !sameCounts(changes.counts, previousCounts);
+    const nextCounts = countsChanged && changes.counts ? { ...changes.counts } : previousCounts;
     const updatedAt = new Date().toISOString();
     const updated: CattleGroup = {
       ...previous,
       name,
       class: changes.class ?? previous.class,
       notes: 'notes' in changes ? changes.notes : previous.notes,
-      headCount: headCountChanged ? (changes.headCount as number) : previous.headCount,
+      counts: nextCounts,
+      headCount: countsTotal(nextCounts),
       farm_id,
       updatedAt,
     };
     let mapped: Record<string, unknown>;
-    try { mapped = mapCattleGroupUpdateToDb(updated, { headCountChanged }); } catch (error) { console.error(error); return false; }
+    try { mapped = mapCattleGroupUpdateToDb(updated, { countsChanged }); } catch (error) { console.error(error); return false; }
     setCattleGroups(current => current.map(item => item.id === id
       ? {
         ...item, name: updated.name, class: updated.class, notes: updated.notes, updatedAt,
-        ...(headCountChanged ? { headCount: updated.headCount } : {}),
+        ...(countsChanged ? { counts: updated.counts, headCount: updated.headCount } : {}),
       }
       : item));
     const ok = await persistGroup('update', mapped);
@@ -173,7 +197,7 @@ export function useCattle({
       setCattleGroups(current => current.map(item => item.id === id
         ? {
           ...item, name: previous.name, class: previous.class, notes: previous.notes, updatedAt: previous.updatedAt,
-          ...(headCountChanged ? { headCount: previous.headCount } : {}),
+          ...(countsChanged ? { counts: previousCounts, headCount: countsTotal(previousCounts) } : {}),
         }
         : item));
     }
@@ -225,55 +249,76 @@ export function useCattle({
     options?: CattleSaveOptions,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
-    const previousGroup = cattleGroups.find(item => item.id === input.groupId && !item.deleted_at);
-    if (!previousGroup || previousGroup.headCount + input.headDelta < 0) return false;
+    const found = cattleGroups.find(item => item.id === input.groupId && !item.deleted_at);
+    if (!found) return false;
+    const previousGroup = normalizeCattleGroup(found);
+    // Same class the server will use, so the optimistic change and the replay agree.
+    const cattleClass = resolveEventClass(input.eventType, input.headDelta, input.cattleClass, previousGroup.class);
+    if (input.eventType === 'reclass') {
+      if (!cattleClass || !input.toClass || cattleClass === input.toClass) return false;
+      if (!input.classHead || !Number.isInteger(input.classHead) || previousGroup.counts[cattleClass] < input.classHead) return false;
+    } else if (cattleClass && previousGroup.counts[cattleClass] + input.headDelta < 0) {
+      return false;
+    }
     const now = new Date().toISOString();
     const event: CattleEvent = {
-      ...input, id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
+      ...input,
+      cattleClass,
+      toClass: input.eventType === 'reclass' ? input.toClass : undefined,
+      classHead: input.eventType === 'reclass' ? input.classHead : undefined,
+      calfSex: input.eventType === 'calving' ? input.calfSex : undefined,
+      id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
     };
     let mapped: Record<string, unknown>;
     try { mapped = mapCattleEventToDb(event); } catch (error) { console.error(error); return false; }
     setCattleEvents(current => [...current, event]);
     setCattleGroups(current => current.map(group => group.id === event.groupId
-      ? { ...group, headCount: group.headCount + event.headDelta }
+      ? applyEventToGroup(normalizeCattleGroup(group), event, 1)
       : group));
     const result = await persistRpc('log_cattle_event', {
       p_event_id: event.id, p_group_id: event.groupId, p_event_type: event.eventType,
       p_event_date: event.eventDate, p_head_delta: event.headDelta,
       p_reason: event.reason ?? null, p_notes: event.notes ?? null,
+      p_class: event.cattleClass ?? null, p_to_class: event.toClass ?? null,
+      p_class_head: event.classHead ?? null, p_calf_sex: event.calfSex ?? null,
     }, 'cattle_events', 'insert', mapped);
     if (!result.ok) {
       if (result.premiumRequired) options?.onPremiumRequired?.();
       setCattleEvents(current => current.filter(item => item.id !== event.id));
-      // Undo this event's own delta rather than restoring a whole-group snapshot.
+      // Undo this event's own change rather than restoring a whole-group snapshot.
       setCattleGroups(current => current.map(group => group.id === event.groupId
-        ? { ...group, headCount: Math.max(0, group.headCount - event.headDelta) }
+        ? applyEventToGroup(normalizeCattleGroup(group), event, -1)
         : group));
     }
-    const storedHeadCount = result.data && typeof result.data === 'object'
-      ? Number((result.data as { head_count?: unknown }).head_count)
-      : Number.NaN;
-    if (result.ok && Number.isInteger(storedHeadCount)) {
+    const stored = result.data && typeof result.data === 'object'
+      ? countsFromRpc((result.data as { counts?: unknown }).counts)
+      : null;
+    if (result.ok && stored) {
       setCattleGroups(current => current.map(group => group.id === event.groupId
-        ? { ...group, headCount: storedHeadCount }
+        ? { ...group, counts: stored, headCount: countsTotal(stored) }
         : group));
     }
     return result.ok;
   }, [cattleGroups, farm_id, persistRpc, setCattleEvents, setCattleGroups]);
 
   const transferCattleHead = useCallback(async (
-    input: { fromGroupId: string; toGroupId: string; head: number; eventDate: string; notes?: string },
+    input: CattleTransferInput,
     options?: CattleSaveOptions,
   ): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
-    const from = cattleGroups.find(item => item.id === input.fromGroupId && !item.deleted_at);
+    const fromFound = cattleGroups.find(item => item.id === input.fromGroupId && !item.deleted_at);
     const to = cattleGroups.find(item => item.id === input.toGroupId && !item.deleted_at);
-    if (!from || !to || from.id === to.id) return false;
-    if (!Number.isInteger(input.head) || input.head <= 0 || from.headCount < input.head) return false;
+    if (!fromFound || !to || fromFound.id === to.id) return false;
+    const from = normalizeCattleGroup(fromFound);
+    const cattleClass = input.cattleClass ?? herdTypeClass(from.class);
+    if (!Number.isInteger(input.head) || input.head <= 0 || from.counts[cattleClass] < input.head) return false;
     const now = new Date().toISOString();
     const fromId = crypto.randomUUID();
     const toId = crypto.randomUUID();
-    const base = { farm_id, eventDate: input.eventDate, notes: input.notes, transferId: fromId, createdAt: now, updatedAt: now, deleted_at: null };
+    const base = {
+      farm_id, eventDate: input.eventDate, notes: input.notes, transferId: fromId, cattleClass,
+      createdAt: now, updatedAt: now, deleted_at: null,
+    };
     const removed: CattleEvent = {
       ...base, id: fromId, groupId: from.id, eventType: 'head_removed', headDelta: -input.head, reason: 'moved_to_another_group',
     };
@@ -282,27 +327,27 @@ export function useCattle({
     try { mapCattleEventToDb(added); mapped = mapCattleEventToDb(removed); } catch (error) { console.error(error); return false; }
     setCattleEvents(current => [...current, removed, added]);
     setCattleGroups(current => current.map(group => group.id === from.id
-      ? { ...group, headCount: Math.max(0, group.headCount - input.head) }
-      : group.id === to.id ? { ...group, headCount: group.headCount + input.head } : group));
+      ? withClassDelta(normalizeCattleGroup(group), cattleClass, -input.head)
+      : group.id === to.id ? withClassDelta(normalizeCattleGroup(group), cattleClass, input.head) : group));
     const result = await persistRpc('transfer_cattle_head', {
       p_from_event_id: fromId, p_to_event_id: toId, p_from_group_id: from.id, p_to_group_id: to.id,
-      p_head: input.head, p_event_date: input.eventDate, p_notes: input.notes ?? null,
+      p_head: input.head, p_event_date: input.eventDate, p_notes: input.notes ?? null, p_class: cattleClass,
     }, 'cattle_events', 'insert', mapped);
     if (!result.ok) {
       if (result.premiumRequired) options?.onPremiumRequired?.();
       setCattleEvents(current => current.filter(item => item.id !== fromId && item.id !== toId));
       setCattleGroups(current => current.map(group => group.id === from.id
-        ? { ...group, headCount: group.headCount + input.head }
-        : group.id === to.id ? { ...group, headCount: Math.max(0, group.headCount - input.head) } : group));
+        ? withClassDelta(normalizeCattleGroup(group), cattleClass, input.head)
+        : group.id === to.id ? withClassDelta(normalizeCattleGroup(group), cattleClass, -input.head) : group));
       return false;
     }
     const data = result.data && typeof result.data === 'object' ? result.data as Record<string, unknown> : null;
-    const fromStored = Number(data?.from_head_count);
-    const toStored = Number(data?.to_head_count);
-    if (Number.isInteger(fromStored) && Number.isInteger(toStored)) {
+    const fromStored = countsFromRpc(data?.from_counts);
+    const toStored = countsFromRpc(data?.to_counts);
+    if (fromStored && toStored) {
       setCattleGroups(current => current.map(group => group.id === from.id
-        ? { ...group, headCount: fromStored }
-        : group.id === to.id ? { ...group, headCount: toStored } : group));
+        ? { ...group, counts: fromStored, headCount: countsTotal(fromStored) }
+        : group.id === to.id ? { ...group, counts: toStored, headCount: countsTotal(toStored) } : group));
     }
     return true;
   }, [cattleGroups, farm_id, persistRpc, setCattleEvents, setCattleGroups]);
@@ -364,40 +409,44 @@ export function useCattle({
     const halves = previousEvent.transferId
       ? cattleEvents.filter(item => item.transferId === previousEvent.transferId && !item.deleted_at)
       : [previousEvent];
-    const reductions = new Map<string, number>();
-    const applied = new Map<string, number>();
+    // Per class, what reversing each half changes on its group (floored at zero).
+    const changeByGroup = new Map<string, CattleCounts>();
     for (const half of halves) {
-      const group = cattleGroups.find(item => item.id === half.groupId && !item.deleted_at);
-      if (!group) continue;
-      const before = reductions.get(group.id) ?? group.headCount;
-      const after = Math.max(0, before - half.headDelta);
-      reductions.set(group.id, after);
-      applied.set(group.id, (applied.get(group.id) ?? 0) + (before - after));
+      const found = cattleGroups.find(item => item.id === half.groupId && !item.deleted_at);
+      if (!found) continue;
+      const group = normalizeCattleGroup(found);
+      const start = changeByGroup.get(group.id);
+      const before = start ? addCounts(group.counts, start) : group.counts;
+      const after = applyEventToGroup({ ...group, counts: before }, half, -1).counts;
+      changeByGroup.set(group.id, addCounts(start ?? emptyCounts(), diffCounts(after, before)));
     }
     if (!cattleGroups.some(item => item.id === previousEvent.groupId && !item.deleted_at)) return false;
     const deletedAt = new Date().toISOString();
     const halfIds = new Set(halves.map(item => item.id));
+    const shift = (sign: 1 | -1) => setCattleGroups(current => current.map(group => {
+      const change = changeByGroup.get(group.id);
+      if (!change) return group;
+      const normal = normalizeCattleGroup(group);
+      const counts = addCounts(normal.counts, sign === 1 ? change : diffCounts(emptyCounts(), change), true);
+      return { ...normal, counts, headCount: countsTotal(counts) };
+    }));
     setCattleEvents(current => current.map(item => halfIds.has(item.id) ? { ...item, deleted_at: deletedAt } : item));
-    setCattleGroups(current => current.map(group => reductions.has(group.id)
-      ? { ...group, headCount: Math.max(0, group.headCount - halves.filter(h => h.groupId === group.id).reduce((sum, h) => sum + h.headDelta, 0)) }
-      : group));
+    shift(1);
     const result = await persistRpc('soft_delete_cattle_row', {
       p_row_type: 'event', p_row_id: id,
     }, 'cattle_events', 'soft_delete', { id, farm_id, group_id: previousEvent.groupId, deleted_at: deletedAt });
     if (!result.ok) {
       setCattleEvents(current => current.map(item => halfIds.has(item.id) ? { ...item, deleted_at: null } : item));
       // Give back exactly what this delete removed.
-      setCattleGroups(current => current.map(group => applied.has(group.id)
-        ? { ...group, headCount: group.headCount + (applied.get(group.id) ?? 0) }
-        : group));
+      shift(-1);
       return false;
     }
-    const storedHeadCount = result.data && typeof result.data === 'object'
-      ? Number((result.data as { head_count?: unknown }).head_count)
-      : Number.NaN;
-    if (Number.isInteger(storedHeadCount)) {
+    const stored = result.data && typeof result.data === 'object'
+      ? countsFromRpc((result.data as { counts?: unknown }).counts)
+      : null;
+    if (stored) {
       setCattleGroups(current => current.map(group => group.id === previousEvent.groupId
-        ? { ...group, headCount: storedHeadCount }
+        ? { ...group, counts: stored, headCount: countsTotal(stored) }
         : group));
     }
     return true;

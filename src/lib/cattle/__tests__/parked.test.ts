@@ -5,6 +5,7 @@ import type { CattleEvent, CattleGroup } from '@/types/cattle';
 
 const group: CattleGroup = {
   id: 'g1', farm_id: 'farm-1', name: 'Cows', class: 'cows', headCount: 12,
+  counts: { cows: 12, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 },
   createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', deleted_at: null,
 };
 const event: CattleEvent = {
@@ -29,13 +30,13 @@ describe('parked cattle overlays', () => {
   });
 
   it('applies an event and its delta when the server snapshot does not contain it', () => {
-    const result = applyParkedCattleMutations([{ ...group, headCount: 10 }], [], [], [queued], true);
+    const result = applyParkedCattleMutations([{ ...group, headCount: 10, counts: { ...group.counts, cows: 10 } }], [], [], [queued], true);
     expect(result.groups[0].headCount).toBe(12);
     expect(result.events).toHaveLength(1);
   });
 
   it('applies a queued transfer as two linked events and moves head between groups', () => {
-    const calves: CattleGroup = { ...group, id: 'g2', name: 'Calves', headCount: 3 };
+    const calves: CattleGroup = { ...group, id: 'g2', name: 'Calves', headCount: 3, counts: { ...group.counts, cows: 3 } };
     const transfer: QueuedMutation = {
       ...queued, id: 'q2',
       payload: {

@@ -31,8 +31,10 @@ import type { CattleGroup } from '@/types/cattle';
 
 const group: CattleGroup = {
   id: 'g1', farm_id: 'f', name: 'Cows', class: 'cows', headCount: 20,
+  counts: { cows: 20, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 },
   createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', deleted_at: null,
 };
+const zero = { cows: 0, heifers: 0, bulls: 0, calves: 0, steers: 0, stockers: 0 };
 
 beforeEach(() => {
   farm.cattleGroups = [group];
@@ -46,11 +48,11 @@ beforeEach(() => {
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 describe('CattleGroupDialog', () => {
-  it('rejects a negative or fractional head count', async () => {
+  it('rejects a negative or fractional count', async () => {
     render(<CattleGroupDialog onClose={vi.fn()} />);
-    type('Group name', 'Heifers');
-    for (const bad of ['-3', '2.5', '']) {
-      type('Head count', bad);
+    type('Herd name', 'Heifers');
+    for (const bad of ['-3', '2.5']) {
+      type('Heifers', bad);
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
       expect(await screen.findByRole('alert')).toHaveTextContent('whole number');
     }
@@ -59,37 +61,45 @@ describe('CattleGroupDialog', () => {
 
   it('shows a friendly message for a duplicate name on add and on rename', async () => {
     const { unmount } = render(<CattleGroupDialog onClose={vi.fn()} />);
-    type('Group name', ' cows ');
-    type('Head count', '5');
+    type('Herd name', ' cows ');
+    type('Cows', '5');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('already have a group called "cows"');
+    expect(await screen.findByRole('alert')).toHaveTextContent('already have a herd called "cows"');
     unmount();
 
     farm.cattleGroups = [group, { ...group, id: 'g2', name: 'Calves' }];
     render(<CattleGroupDialog group={{ ...group, id: 'g2', name: 'Calves' }} onClose={vi.fn()} />);
-    type('Group name', 'COWS');
+    type('Herd name', 'COWS');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('already have a group called "COWS"');
+    expect(await screen.findByRole('alert')).toHaveTextContent('already have a herd called "COWS"');
     expect(farm.updateCattleGroup).not.toHaveBeenCalled();
   });
 
-  it('saves a new group and closes', async () => {
+  it('saves a new cow-calf herd with cows, calves and a bull together', async () => {
     const onClose = vi.fn();
     render(<CattleGroupDialog onClose={onClose} />);
-    type('Group name', 'Heifers');
-    type('Head count', '14');
+    type('Herd name', '2014 herd');
+    type('Cows', '30');
+    type('Calves', '28');
+    fireEvent.click(screen.getByRole('button', { name: 'One more bulls' }));
+    expect(screen.getByTestId('cattle-total')).toHaveTextContent('59 head');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(farm.addCattleGroup).toHaveBeenCalledWith(expect.objectContaining({ name: 'Heifers', headCount: 14, class: 'cows' }));
+    expect(farm.addCattleGroup).toHaveBeenCalledWith(expect.objectContaining({
+      name: '2014 herd', class: 'mixed', counts: { ...zero, cows: 30, calves: 28, bulls: 1 },
+    }));
   });
 
-  it('allows keeping its own name on edit', async () => {
+  it('adding bulls on edit keeps the cows', async () => {
     const onClose = vi.fn();
     render(<CattleGroupDialog group={group} onClose={onClose} />);
-    type('Head count', '22');
+    expect((screen.getByLabelText('Cows') as HTMLInputElement).value).toBe('20');
+    type('Bulls', '1');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(farm.updateCattleGroup).toHaveBeenCalledWith('g1', expect.objectContaining({ name: 'Cows', headCount: 22 }));
+    expect(farm.updateCattleGroup).toHaveBeenCalledWith('g1', expect.objectContaining({
+      name: 'Cows', counts: { ...zero, cows: 20, bulls: 1 },
+    }));
   });
 });
 

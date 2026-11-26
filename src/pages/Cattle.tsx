@@ -12,6 +12,9 @@ import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
 import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 import { useEntitlement } from '@/hooks/useEntitlement';
+import {
+  calvingStats, COUNT_CLASSES, COUNT_TITLES, countsSummary, femalesPerBull, groupCounts, pairCount,
+} from '@/lib/cattle/counts';
 import { daysOnCurrentPasture } from '@/lib/cattle/derived';
 import { buildCattleCsv, exportCattleCsv } from '@/lib/cattle/report';
 import {
@@ -36,13 +39,51 @@ function GroupCard({ group, pasture, days }: { group: CattleGroup; pasture: stri
     >
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Beef size={22} /></span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-bold leading-tight">{group.name}</span>
-        <span className="block text-xs text-muted-foreground">{CATTLE_CLASS_LABELS[group.class]} · {group.headCount} head</span>
+        <span className="block truncate font-bold leading-tight">{group.name} <span className="font-semibold text-muted-foreground">· {group.headCount} head</span></span>
+        <span className="block truncate text-xs text-muted-foreground">{countsSummary(groupCounts(group))}</span>
         <span className={removed ? 'block truncate text-xs font-semibold text-amber-700 dark:text-amber-300' : 'block truncate text-xs text-muted-foreground'}>
           {group.currentFieldId ? `${pasture}${removed ? '' : ` · ${dayText(days)}`}` : 'Not on a pasture'}
         </span>
       </span>
     </Link>
+  );
+}
+
+/** Per-class counts, cow-calf pairs, the bull ratio and this year's calving. */
+function HerdBreakdown({ group }: { group: CattleGroup }) {
+  const { cattleEvents } = useFarm();
+  const counts = groupCounts(group);
+  const classes = COUNT_CLASSES.filter(item => counts[item] > 0);
+  const pairs = pairCount(counts);
+  const perBull = femalesPerBull(counts);
+  const year = localTodayIso().slice(0, 4);
+  const stats = calvingStats({ id: group.id, counts }, cattleEvents, year);
+  return (
+    <div className="space-y-2" data-testid="herd-breakdown">
+      {classes.length > 0 && (
+        <dl className="grid grid-cols-3 gap-2">
+          {classes.map(item => (
+            <div key={item} className="rounded-xl bg-muted/60 px-2 py-1.5 text-center">
+              <dt className="text-xs text-muted-foreground">{COUNT_TITLES[item]}</dt>
+              <dd className="text-lg font-bold">{counts[item]}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {(pairs > 0 || perBull !== null) && (
+        <p className="text-sm text-muted-foreground">
+          {[pairs > 0 ? `${pairs} pair${pairs === 1 ? '' : 's'}` : '', perBull !== null ? `1 bull to ${perBull} females` : '']
+            .filter(Boolean).join(' · ')}
+        </p>
+      )}
+      {(stats.calvesBorn > 0 || stats.calvesLost > 0) && (
+        <p className="text-sm text-muted-foreground" data-testid="calving-stats">
+          {year}: {stats.calvesBorn} calves born
+          {stats.calvesLost > 0 ? ` · ${stats.calvesLost} lost` : ''}
+          {stats.calvingPercent !== null ? ` · ${stats.calvingPercent}% of cows and heifers calved` : ''}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -74,7 +115,8 @@ function CattleList() {
       {!hasRecords && (
         <section className="rounded-2xl border-2 border-dashed p-10 text-center">
           <Beef className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
-          <p className="font-semibold">Add your first group to start tracking cattle.</p>
+          <p className="font-semibold">Add your first herd to start tracking cattle.</p>
+          <p className="mt-1 text-sm text-muted-foreground">One herd can hold cows, heifers, bulls, calves, steers and stockers.</p>
         </section>
       )}
       <div className="grid gap-3 lg:grid-cols-2">
@@ -87,7 +129,7 @@ function CattleList() {
           />
         ))}
       </div>
-      <Button className="h-12 w-full" onClick={() => setAdding(true)}><Plus className="mr-2 h-4 w-4" />Add group</Button>
+      <Button className="h-12 w-full" onClick={() => setAdding(true)}><Plus className="mr-2 h-4 w-4" />Add herd</Button>
       {hasRecords && !exportLocked && (
         <Button variant="outline" className="h-11 w-full" onClick={() => void exportCsv()}>
           <Download className="mr-2 h-4 w-4" />Export cattle CSV
@@ -118,7 +160,7 @@ function GroupDetail({ group }: { group: CattleGroup }) {
   const remove = async () => {
     if (!window.confirm(`Delete ${group.name} and its move and event history?`)) return;
     if (await deleteCattleGroup(group.id)) navigate('/cattle', { replace: true });
-    else toast.error('Could not delete the group.');
+    else toast.error('Could not delete the herd.');
   };
 
   return (
@@ -131,6 +173,7 @@ function GroupDetail({ group }: { group: CattleGroup }) {
           </div>
           <Button variant="outline" className="h-11 shrink-0" onClick={() => setEditing(true)}><Pencil className="mr-2 h-4 w-4" />Edit</Button>
         </div>
+        <HerdBreakdown group={group} />
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-4 w-4 shrink-0" />
           <span className="min-w-0 truncate">
@@ -166,7 +209,7 @@ function GroupDetail({ group }: { group: CattleGroup }) {
 
       <CattleEventsSection group={group} />
 
-      <Button variant="destructive" className="h-11 w-full" onClick={() => void remove()}><Trash2 className="mr-2 h-4 w-4" />Delete group</Button>
+      <Button variant="destructive" className="h-11 w-full" onClick={() => void remove()}><Trash2 className="mr-2 h-4 w-4" />Delete herd</Button>
       {editing && <CattleGroupDialog group={group} onClose={() => setEditing(false)} />}
       {moving && <CattleMoveDialog group={group} onClose={() => setMoving(false)} />}
     </>
@@ -195,7 +238,7 @@ export default function Cattle() {
             <div className="min-w-0">
               <h1 className="truncate text-lg font-bold">{group ? group.name : 'Cattle'}</h1>
               <p className="text-xs text-muted-foreground">
-                {group ? `${group.headCount} head` : `${liveCount} group${liveCount === 1 ? '' : 's'}`}
+                {group ? `${group.headCount} head` : `${liveCount} herd${liveCount === 1 ? '' : 's'}`}
               </p>
             </div>
           </div>
@@ -211,7 +254,7 @@ export default function Cattle() {
         {groupId
           ? (group ? <GroupDetail key={group.id} group={group} /> : (
             <section className="rounded-2xl border-2 border-dashed p-10 text-center">
-              <p className="font-semibold">This group is no longer here.</p>
+              <p className="font-semibold">This herd is no longer here.</p>
               <Button variant="outline" className="mt-4 h-11" asChild><Link to="/cattle">Back to cattle</Link></Button>
             </section>
           ))
