@@ -19,8 +19,8 @@ export interface RecordCardText {
 const formatBushels = (bu: number, locale: LocaleCode) =>
   `${Number.isFinite(bu) ? formatNumber(bu, locale, { maximumFractionDigits: 3 }) : '—'} BU`;
 
-const formatMoisture = (m: number) =>
-  Number.isFinite(m) ? `${m}% moisture` : 'Moisture not recorded';
+const formatMoisture = (m: number | null | undefined) =>
+  typeof m === 'number' && Number.isFinite(m) ? `${m}% moisture` : 'Moisture not recorded';
 
 /**
  * Work date with time when the stored timestamp falls on that same day

@@ -129,6 +129,7 @@ async function invoke(signature: string | null = 'valid-signature') {
 }
 
 const subscriptionEvent = {
+  livemode: false,
   id: 'evt_subscription_updated',
   type: 'customer.subscription.updated',
   data: {
@@ -153,7 +154,7 @@ describe('Stripe webhook delivery recovery', () => {
   beforeEach(() => {
     process.env.BILLING_LIVE_CHARGES = 'false';
     process.env.STRIPE_SECRET_KEY = 'sk_test_key';
-    process.env.STRIPE_PRICE_ID = 'price_test';
+    process.env.STRIPE_PRICE_ID = 'price_1';
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
@@ -176,6 +177,30 @@ describe('Stripe webhook delivery recovery', () => {
       body: { error: 'Missing stripe-signature header' },
     });
     expect(mocks.constructEvent).not.toHaveBeenCalled();
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it('does not grant Pro for a subscription on a price other than the Pro price', async () => {
+    const supabase = createSupabaseClient();
+    mocks.createClient.mockReturnValue(supabase.client);
+    supabase.queue('billing_webhook_events', result(), result());
+    supabase.queue('farm_subscriptions', result({ data: null, count: null }), result());
+    mocks.retrieveSubscription.mockResolvedValueOnce({ ...currentSubscription, items: { data: [{ price: { id: 'price_other' } }] } });
+
+    expect((await invoke()).status).toBe(200);
+    const writes = supabase.calls.filter(
+      call => call.table === 'farm_subscriptions' && (call.operation === 'update' || call.operation === 'insert'),
+    );
+    expect(writes).toEqual([]);
+  });
+
+  it('ignores an event from the other Stripe mode without touching billing state', async () => {
+    mocks.constructEvent.mockReturnValueOnce({ ...subscriptionEvent, livemode: true });
+
+    const response = await invoke();
+
+    expect(response).toMatchObject({ status: 200, body: { received: true, ignored: 'mode_mismatch' } });
+    expect(mocks.retrieveSubscription).not.toHaveBeenCalled();
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
@@ -254,12 +279,14 @@ describe('Stripe webhook delivery recovery', () => {
     const failedAt = 1799366400;
     mocks.constructEvent
       .mockReturnValueOnce({
+        livemode: false,
         id: 'evt_payment_failed_1',
         type: 'invoice.payment_failed',
         created: failedAt,
         data: { object: { subscription: 'sub_current' } },
       })
       .mockReturnValueOnce({
+        livemode: false,
         id: 'evt_payment_failed_2',
         type: 'invoice.payment_failed',
         created: failedAt + 86_400,
@@ -308,6 +335,7 @@ describe('Stripe webhook delivery recovery', () => {
 
   it('clears past_due_since when a later invoice is paid', async () => {
     mocks.constructEvent.mockReturnValueOnce({
+      livemode: false,
       id: 'evt_invoice_paid_clear',
       type: 'invoice.paid',
       created: 1799452800,
@@ -342,6 +370,7 @@ describe('Stripe webhook delivery recovery', () => {
 
   it('keeps a newer failure anchor when an older invoice.paid is delivered late', async () => {
     mocks.constructEvent.mockReturnValueOnce({
+      livemode: false,
       id: 'evt_invoice_paid_old',
       type: 'invoice.paid',
       created: 1799000000,
@@ -379,6 +408,7 @@ describe('Stripe webhook delivery recovery', () => {
 
   it('does not grant a metadata-only subscription.created event', async () => {
     mocks.constructEvent.mockReturnValueOnce({
+      livemode: false,
       id: 'evt_created',
       type: 'customer.subscription.created',
       data: { object: { ...currentSubscription, status: 'trialing' } },
@@ -396,6 +426,7 @@ describe('Stripe webhook delivery recovery', () => {
 
   it('rejects checkout metadata whose user is not a member of the farm', async () => {
     mocks.constructEvent.mockReturnValueOnce({
+      livemode: false,
       id: 'evt_checkout',
       type: 'checkout.session.completed',
       data: {
@@ -421,6 +452,7 @@ describe('Stripe webhook delivery recovery', () => {
 
   it('ignores completed Checkout that does not reference the metadata farm', async () => {
     mocks.constructEvent.mockReturnValueOnce({
+      livemode: false,
       id: 'evt_mismatched_checkout',
       type: 'checkout.session.completed',
       data: {
@@ -442,6 +474,7 @@ describe('Stripe webhook delivery recovery', () => {
 
   it('reads the legacy top-level invoice subscription id', async () => {
     mocks.constructEvent.mockReturnValueOnce({
+      livemode: false,
       id: 'evt_invoice_paid',
       type: 'invoice.paid',
       data: { object: { subscription: 'sub_legacy' } },

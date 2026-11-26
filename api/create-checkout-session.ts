@@ -7,7 +7,11 @@ import {
   canStartCheckout,
   hasLiveStripeSubscription,
   isBillingAllowlisted,
+  canManageBilling,
 } from '../server/billing.js';
+
+/** Canonical public Terms URL: index.html canonical origin + `/terms`. */
+const TERMS_OF_SERVICE_URL = 'https://www.acreledger.app/terms';
 
 type QueryValue = string | string[] | undefined;
 
@@ -122,7 +126,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // ---------- Farm scope from the caller's own profile (RLS applies) ----------
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, farm_id')
+      .select('id, farm_id, farm_role')
       .eq('id', user.id)
       .maybeSingle();
     if (profileError) {
@@ -133,6 +137,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(400).json({ error: 'No farm selected.' });
     }
     const farmId = profile.farm_id;
+    // Only an owner or admin can become the farm's billing owner; a worker cannot.
+    if (!canManageBilling(profile.farm_role)) {
+      return res.status(403).json({ error: 'Only the farm owner can start billing.' });
+    }
 
     // ---------- Internal rollout allowlist (test mode only) ----------
     const email = typeof user.email === 'string' ? user.email : null;
@@ -141,6 +149,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       !isBillingAllowlisted({ email, userId: user.id }, process.env.BILLING_ALLOWLIST)
     ) {
       return res.status(403).json({ error: 'Billing is coming soon.' });
+    }
+
+    // ---------- Complimentary Pro needs no billing ----------
+    const { data: comp, error: compError } = await supabase.rpc('get_farm_comp_status', { p_farm_id: farmId });
+    if (compError) {
+      console.error('Failed to read farm comp status:', compError.message);
+      return res.status(500).json({ error: 'Could not verify billing status' });
+    }
+    const compRow = Array.isArray(comp) ? comp[0] : comp;
+    if (compRow?.is_comped) {
+      return res.status(409).json({ error: 'This farm has complimentary Pro, so there is nothing to pay.' });
     }
 
     // ---------- Owner gate ----------
@@ -207,7 +226,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           metadata: { farm_id: farmId, user_id: user.id },
           client_reference_id: farmId,
           ...buildCheckoutCustomerParams(existing, email),
-          consent_collection: { terms_of_service: 'none' },
+          // The buyer accepts the Terms at Checkout (auto-renewing plan). Needs the
+          // Terms URL set in the Stripe dashboard (Settings → Public details).
+          consent_collection: { terms_of_service: 'required' },
+          custom_text: {
+            terms_of_service_acceptance: {
+              message: `I agree to the [Terms of Service](${TERMS_OF_SERVICE_URL}).`,
+            },
+          },
           success_url: `${origin}/settings?billing=success`,
           cancel_url: `${origin}/settings?billing=cancelled`,
         },

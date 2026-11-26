@@ -22,7 +22,8 @@ import { ReportPlanLoading, ReportPreview, type ReportPreviewRow } from '@/compo
 import WorkRequestsTab from './workRequests/WorkRequestsTab';
 import { loadBundledFsaTracts, mergeBundledFsaTracts } from '@/lib/bundledFsaTracts';
 import { LANDLORD_ACTIVITY_LABELS, isBaleOnly, buildFsa578Rows, buildInsuranceProductionReport, calculateFsa578PlantedAcreTotals, generateMissouriLog, exportFsa578Data, exportInsuranceProductionCsv, exportInsuranceProductionPdf, exportFertilizerData, generateLandlordSummary, generateLandlordSummaryCSV, getFieldLandlordNames, exportToPdf, exportOwnerSummaryPdf, exportFsa578WorksheetPdf, validateFsa578Rows } from '@/lib/complianceReports';
-import { native, sanitizeNativeFileName } from '@/lib/native';
+import { downloadFile } from '@/lib/downloadFile';
+import { sanitizeNativeFileName } from '@/lib/native';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
@@ -414,25 +415,7 @@ export default function Reports() {
       const csv = generateLandlordSummaryCSV(landlordSummary);
       const fileName = sanitizeNativeFileName(`${summaryFilePrefix}_${viewingSeason}.csv`);
 
-      if (Capacitor.isNativePlatform()) {
-        await native.shareFile({
-          fileName,
-          data: csv,
-          title: `AcreLedger Export: ${fileName}`,
-          encoding: 'utf8'
-        });
-        return;
-      }
-
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 2000); // Wait 2s to ensure browser starts download
+      await downloadFile(csv, fileName, 'text/csv');
     }, `${summaryTitle} CSV`);
   };
 
@@ -689,7 +672,7 @@ export default function Reports() {
         <Tabs
           value={tab}
           onValueChange={(value) => setTab(value as ReportTab)}
-          className="space-y-4"
+          className="min-w-0 max-w-full space-y-4"
         >
         {/* Season Selector */}
         <div className="flex min-h-14 min-w-0 items-center justify-between gap-4 rounded-2xl border border-border bg-muted/30 px-3 py-2 print:hidden">
@@ -701,10 +684,10 @@ export default function Reports() {
         </div>
 
         {/* Tab Bar — flex-1 shrink-0 allows tabs to fill screen width equally on desktop, but never shrink below content size on mobile */}
-        <div className="relative print:hidden">
+        <div className="relative min-w-0 max-w-full print:hidden">
         <TabsList
           aria-label="Report type"
-          className="no-scrollbar flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1"
+          className="no-scrollbar flex h-auto w-full min-w-0 max-w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1"
         >
           {TABS.map(t => (
             <TabsTrigger

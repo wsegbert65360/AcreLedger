@@ -69,7 +69,7 @@ export default function BillingManager() {
   const comped = isFarmComped(farmComp, now);
   const billingUiEnabled = isBillingUiAvailable();
 
-  const { session, farm_id } = useFarm();
+  const { session, farm_id, isOnline } = useFarm();
   const [subscription, setSubscription] = useState<FarmSubscription | null>(null);
   const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
   const [eligibility, setEligibility] = useState<{ userId: string; allowlisted: boolean; checkoutEnabled: boolean } | null>(null);
@@ -172,6 +172,10 @@ export default function BillingManager() {
       // Always rotate the token immediately before posting the bearer: the
       // useFarm() snapshot can hold an expired JWT, and the token must
       // survive the round trip to the billing function.
+      if (!isOnline) {
+        toast.error('Billing needs a connection. Connect to the internet and try again.');
+        return;
+      }
       const { data: { session: refreshed }, error: refreshError } = await supabase.auth.refreshSession();
       const token = refreshed?.access_token;
       if (refreshError || !token) {
@@ -189,7 +193,7 @@ export default function BillingManager() {
         setIsBusy(false);
       }
     },
-    [],
+    [isOnline],
   );
 
   if (!billingUiEnabled || !session || !farm_id) return null;
@@ -233,7 +237,7 @@ export default function BillingManager() {
         ) : null}
         {!eligibilityKnown || compOnly ? null : !showBillingActions ? (
           <p className="text-sm text-muted-foreground">
-            Free record book. No card needed. Pro is $299 per farm per year.
+            Free record book. No card needed. Pro is US$299 per farm per year.
           </p>
         ) : (
           <>
@@ -243,11 +247,14 @@ export default function BillingManager() {
                 Ask the farm owner to manage billing for this farm.
               </p>
             )}
+            {!isOnline && (checkoutEnabled || canOpenPortal) && (
+              <p className="text-sm text-muted-foreground">Billing needs a connection. You&apos;re offline.</p>
+            )}
             {checkoutEnabled && canManage && needsCheckout && (
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => openBillingSession('checkout')}
-                  disabled={isBusy}
+                  disabled={isBusy || !isOnline}
                   size="sm"
                   className="min-h-11 bg-plant text-plant-foreground hover:bg-plant/90"
                 >
@@ -259,7 +266,7 @@ export default function BillingManager() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => openBillingSession('portal')}
-                  disabled={isBusy}
+                  disabled={isBusy || !isOnline}
                   size="sm"
                   variant="outline"
                   className="min-h-11 border-border text-foreground hover:bg-muted"
@@ -270,7 +277,7 @@ export default function BillingManager() {
             )}
             {canManage && subscription == null && (
               <p className="text-xs text-muted-foreground">
-                Free record book. No card needed. Pro is $299 per farm per year.
+                Free record book. No card needed. Pro is US$299 per farm per year.
               </p>
             )}
           </>

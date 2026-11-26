@@ -209,6 +209,14 @@ describe('season rollover safety', () => {
     expect(args.setViewingSeason).toHaveBeenNthCalledWith(2, 2024);
   });
 
+  it('blocks rollover when the offline queue cannot be read', async () => {
+    const args = makeArgs({ pendingSyncCount: 0, syncQueueReadFailed: true });
+    const { result } = renderHook(() => useSeasonManagement(args));
+
+    await expect(result.current.rolloverToNewSeason(2026)).resolves.toBe(false);
+    expect(exportDataAsJson).not.toHaveBeenCalled();
+  });
+
   it('blocks rollover while local changes are waiting to sync', async () => {
     const args = makeArgs({ pendingSyncCount: 1 });
     const { result } = renderHook(() => useSeasonManagement(args));

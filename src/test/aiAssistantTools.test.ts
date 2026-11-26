@@ -206,6 +206,20 @@ describe('full farm read catalog', () => {
     expect(FARM_ENTITY_NAMES.some(name => /cattle/i.test(name))).toBe(false);
   });
 
+  it('never exposes billing, entitlement, comp or account tables', () => {
+    const blocked = /subscription|billing|entitlement|comp|stripe|webhook|deletion|auth|shadow|snapshot/i;
+    expect(FARM_ENTITY_NAMES.filter(name => blocked.test(name))).toEqual([]);
+  });
+
+  it('reads the farm row with explicit columns, not the trial fields', async () => {
+    const fake = createFakeSupabase();
+    await executeNamedTool('query_farm_records', { entity: 'farm', limit: 1 }, ctxFor(fake.client));
+    const select = fake.calls.find(call => call.table === 'farms')?.select ?? '';
+    expect(select).not.toBe('*');
+    expect(select).toContain('name');
+    expect(select).not.toMatch(/trial|\*/);
+  });
+
   it('publishes every active farm record area and no mutation tools', () => {
     expect(FARM_ENTITY_NAMES).toEqual([
       'farm', 'profile', 'fields', 'bins', 'plant_records', 'spray_records',

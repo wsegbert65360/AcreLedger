@@ -171,6 +171,17 @@ export function isBaleOnly(item: { totalBushels: number; totalBales: number }): 
   return item.totalBales > 0 && item.totalBushels === 0;
 }
 
+/** Planted acres of one crop on a field, capped at the field's acres; the field's acres when none are recorded or the field has no acres. */
+function plantedCropAcres(plantRecords: PlantRecord[], fieldId: string, crop: string | null, fieldAcres: number): number {
+  if (!crop || !(fieldAcres > 0)) return fieldAcres;
+  const key = crop.trim().toLowerCase();
+  const planted = plantRecords
+    .filter(p => p.fieldId === fieldId && p.crop?.trim().toLowerCase() === key)
+    .filter(p => p.cropStatus !== 'Failed' && p.cropStatus !== 'Prevented Planting' && p.cropStatus !== 'Cover Crop' && p.cropStatus !== 'Volunteer')
+    .reduce((sum, p) => sum + (Number.isFinite(p.acreage) && p.acreage > 0 ? p.acreage : 0), 0);
+  return planted > 0 ? roundTo(Math.min(planted, fieldAcres), 2) : fieldAcres;
+}
+
 function buildFieldSummaries(
   landlordFields: Field[],
   cluAssignments: FieldCluAssignment[],
@@ -212,15 +223,18 @@ function buildFieldSummaries(
           group.harvests.reduce((sum, h) => sum + (h.bushels || 0) * ((getLandlordSplitPercent(field, h.landlordSplitPercent) ?? 0) / 100), 0),
           2,
         );
+        // Yield is per planted acre of this crop. On a split field (40 corn /
+        // 40 soybeans) whole-field acres would halve each crop's bu/ac.
+        const cropAcres = plantedCropAcres(plantRecords, field.id, group.label, acres);
         return {
           fieldId: field.id,
           fieldName: field.name,
           producerShare: field.producerShare,
           landlordName: field.landlordName?.trim() || undefined,
-          acres,
+          acres: cropAcres,
           crop: group.label,
           totalBushels,
-          buPerAcre: acres > 0 ? roundTo(totalBushels / acres, 2) : null,
+          buPerAcre: cropAcres > 0 ? roundTo(totalBushels / cropAcres, 2) : null,
           totalBales: 0,
           landlordShareBushels,
         };

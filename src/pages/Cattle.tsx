@@ -20,7 +20,9 @@ import { buildCattleCsv, exportCattleCsv } from '@/lib/cattle/report';
 import {
   CATTLE_CLASS_LABELS, PASTURE_REMOVED_LABEL, pastureLabel,
 } from '@/lib/cattle/ui';
+import { withAuthorizedReportExport } from '@/lib/authorizeReportExport';
 import { isFreeTierLocked } from '@/lib/entitlements';
+import { supabase } from '@/lib/supabase';
 import { localTodayIso } from '@/lib/equipment';
 import { formatIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
@@ -88,9 +90,10 @@ function HerdBreakdown({ group }: { group: CattleGroup }) {
 }
 
 function CattleList() {
-  const { cattleGroups, cattleMoves, cattleEvents, fields } = useFarm();
+  const { cattleGroups, cattleMoves, cattleEvents, fields, farm_id } = useFarm();
   const [adding, setAdding] = useState(false);
-  // The cattle CSV is a Pro export, gated on the client like the other reports.
+  // The cattle CSV is a Pro export: hidden for a free farm, and the server
+  // confirms Pro (assert_premium) before the file is built, like the other reports.
   const { entitlement, cachedEntitlement } = useEntitlement();
   const exportLocked = isFreeTierLocked(entitlement ?? cachedEntitlement);
   const today = localTodayIso();
@@ -103,7 +106,8 @@ function CattleList() {
   const exportCsv = async () => {
     if (exportLocked) return;
     try {
-      await exportCattleCsv(buildCattleCsv(cattleGroups, cattleMoves, cattleEvents, fields), `AcreLedger-cattle-${today}.csv`);
+      await withAuthorizedReportExport(supabase, farm_id, 'cattle-csv', () =>
+        exportCattleCsv(buildCattleCsv(cattleGroups, cattleMoves, cattleEvents, fields), `AcreLedger-cattle-${today}.csv`));
     } catch (error) {
       console.error('Cattle CSV export failed:', error);
       toast.error('Could not export the cattle CSV.');

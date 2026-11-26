@@ -97,6 +97,24 @@ describe('generateLandlordSummary', () => {
     expect(summary.fields.find(f => f.fieldName === 'Deleted')).toBeUndefined();
   });
 
+  test('uses each crop\'s planted acres for bu/acre on a split field', () => {
+    const summary = generateLandlordSummary({
+      ...baseParams,
+      landlordName: 'John Smith',
+      plantRecords: [
+        { ...plantRecords[0], id: 'pc', acreage: 20, crop: 'Corn' },
+        { ...plantRecords[0], id: 'pb', acreage: 20, crop: 'Soybeans' },
+        { ...plantRecords[0], id: 'pf', acreage: 20, crop: 'Corn', cropStatus: 'Failed' },
+      ],
+      harvestRecords: [
+        { ...harvestRecords[0], id: 'hc', bushels: 4000, crop: 'Corn' },
+        { ...harvestRecords[0], id: 'hb', bushels: 1000, crop: 'Soybeans' },
+      ],
+    });
+    const north = summary.fields.filter(f => f.fieldId === 'f1' && f.crop !== 'Hay');
+    expect(north.map(f => [f.crop, f.acres, f.buPerAcre])).toEqual([['Corn', 20, 200], ['Soybeans', 20, 50]]);
+  });
+
   test('case-insensitive landlord match', () => {
     const summary = generateLandlordSummary({ ...baseParams, landlordName: 'john smith' });
     expect(new Set(summary.fields.map(f => f.fieldId)).size).toBe(2);

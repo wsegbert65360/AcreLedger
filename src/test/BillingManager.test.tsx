@@ -34,9 +34,11 @@ const defaultSession = {
 const farmState: {
   session: typeof defaultSession | null;
   farm_id: string | null;
+  isOnline: boolean;
 } = {
   session: { ...defaultSession, user: { ...defaultSession.user } },
   farm_id: 'farm-1',
+  isOnline: true,
 };
 
 vi.mock('@/store/farmStore', () => ({
@@ -113,6 +115,7 @@ function stubBillingFetch(options?: {
 }
 
 beforeEach(() => {
+  farmState.isOnline = true;
   vi.stubEnv('VITE_BILLING_UI_ENABLED', 'true');
   farmState.session = { ...defaultSession, user: { ...defaultSession.user } };
   farmState.farm_id = 'farm-1';
@@ -185,7 +188,7 @@ describe('BillingManager', () => {
     stubBillingFetch({ allowlisted: false });
     renderBilling();
 
-    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
@@ -195,20 +198,20 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
-    expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(screen.getByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
   });
 
   it('treats a fetch error or non-2xx eligibility response as unavailable billing with the free record book copy', async () => {
     stubBillingFetch({ eligibilityError: new Error('network down') });
     const { unmount } = renderBilling();
-    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     unmount();
 
     clearBillingEligibilityCache();
     stubBillingFetch({ eligibilityStatus: 500, allowlisted: true });
     renderBilling();
-    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
@@ -221,7 +224,7 @@ describe('BillingManager', () => {
 
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
-    expect(screen.queryByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeNull();
+    expect(screen.queryByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeNull();
   });
 
   it('does not show another user\'s cached allowlisted answer', async () => {
@@ -263,7 +266,7 @@ describe('BillingManager', () => {
     );
 
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
-    expect(screen.queryByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeNull();
+    expect(screen.queryByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeNull();
   });
 
   it('ignores a late in-flight eligibility result from a previous user', async () => {
@@ -307,13 +310,13 @@ describe('BillingManager', () => {
     await act(async () => {
       for (const resolve of resolvers) resolve(eligibilityResponse(false));
     });
-    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
 
     await act(async () => {
       for (const resolve of previousResolvers) resolve(eligibilityResponse(true));
     });
 
-    expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(screen.getByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
@@ -347,7 +350,7 @@ describe('BillingManager', () => {
     });
     renderBilling();
 
-    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/billing-eligibility'))).toHaveLength(2);
   });
@@ -387,7 +390,7 @@ describe('BillingManager', () => {
     });
     renderBilling();
 
-    expect(await screen.findByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(await screen.findByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
   });
 
@@ -395,7 +398,7 @@ describe('BillingManager', () => {
     renderBilling();
 
     expect(await screen.findByRole('button', { name: /subscribe/i })).toBeInTheDocument();
-    expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(screen.getByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /manage billing/i })).toBeNull();
   });
 
@@ -408,6 +411,16 @@ describe('BillingManager', () => {
     expect(screen.queryByRole('button', { name: /subscribe/i })).toBeNull();
     expect(screen.queryByText('Not subscribed')).toBeNull();
     expect(screen.queryByText('No billing subscription for this farm yet.')).toBeNull();
+  });
+
+  it('disables Subscribe offline and says billing needs a connection', async () => {
+    farmState.isOnline = false;
+    stubBillingFetch({ allowlisted: true });
+    renderBilling();
+    const button = await screen.findByRole('button', { name: /subscribe/i });
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/Billing needs a connection/)).toBeInTheDocument();
+    expect(refreshSessionMock).not.toHaveBeenCalled();
   });
 
   it('always refreshes and posts the refreshed token, not the stale store snapshot', async () => {

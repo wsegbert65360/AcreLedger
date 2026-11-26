@@ -4,6 +4,7 @@ import { getDatabase, OFFLINE_DATABASE_UNAVAILABLE } from './offlineStorage';
 import { toast } from 'sonner';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 import { SYNC_QUEUE_KEYS } from './syncQueueKeys';
+import { softDeleteRows, usesSoftDeleteRpc } from './softDeleteRows';
 import { isPremiumRequiredError } from './entitlements';
 import { ENTITLEMENT_COPY } from '@/copy/entitlements';
 
@@ -577,7 +578,8 @@ export const syncQueue = {
       if (!db) throw new Error(OFFLINE_DATABASE_UNAVAILABLE);
       try {
         const res = await db.query(
-          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY created_at ASC, rowid ASC;',
+          // Insertion order: rowid only grows, while created_at follows a wall clock that can jump.
+          'SELECT * FROM sync_queue WHERE farm_id = ? ORDER BY rowid ASC;',
           [farmId]
         );
         if (res.values) {
@@ -989,6 +991,15 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
             p_id: mutation.payload.id,
             p_deleted_at: mutation.payload.deleted_at,
           });
+        } else if (mutation.operation === 'soft_delete' && usesSoftDeleteRpc(mutation.table_name)) {
+          // These SELECT policies hide deleted rows, so a direct deleted_at UPDATE fails RLS.
+          // The RPC is idempotent and returns how many ids are now deleted (1 here).
+          response = await softDeleteRows(
+            mutation.table_name,
+            [String(mutation.payload.id)],
+            farmId,
+            String(mutation.payload.deleted_at),
+          );
         } else if (mutation.operation === 'soft_delete') {
           // Perform soft delete update
           const base = supabase
@@ -1029,11 +1040,31 @@ async function replayQueueOnce(farmId: string, authRetried: boolean, token?: Que
 
         if (response.error) {
           if (['PGRST204', '42703', '42501'].includes(response.error.code?.toUpperCase())) {
+            // Schema or permission refusal: an app or server fix is needed. Spend a
+            // retry so the item eventually parks; a parked item can be exported or
+            // discarded, and "Retry" resets the count once a fix is available.
+            // Without this the item stayed pending forever and blocked rollover,
+            // restore and account deletion.
             blockRecord(mutation);
-            pendingRetryCount++;
-            toast.warning('Sync paused: an app or server fix is needed.', {
-              description: 'Your changes remain on this device. Retry after the fix is available.',
-            });
+            const nextRetries = mutation.retry_count + 1;
+            for (const id of linkedMutationIds) {
+              const queued = queue.find(item => item.id === id);
+              if (queued) await syncQueue.incrementRetry(id, queued.retry_count, token);
+              handledMutationIds.add(id);
+            }
+            if (nextRetries >= MAX_SYNC_RETRIES) {
+              failedParkedCount++;
+              if (nextRetries === MAX_SYNC_RETRIES) {
+                toast.error(`An offline change to ${mutation.table_name} could not be synced.`, {
+                  description: 'Open Settings → Cloud Sync to export or discard it. Nothing was deleted.',
+                });
+              }
+            } else {
+              pendingRetryCount++;
+              toast.warning('Sync paused: an app or server fix is needed.', {
+                description: 'Your changes remain on this device. Retry after the fix is available.',
+              });
+            }
             continue;
           }
           if (usedEquipmentRpc && isNonRetryableEquipmentRpcError(response.error)) {

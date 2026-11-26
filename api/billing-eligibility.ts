@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { getBillingCapabilities, isBillingAllowlisted } from '../server/billing.js';
+import { canManageBilling, getBillingCapabilities, isBillingAllowlisted } from '../server/billing.js';
 
 type QueryValue = string | string[] | undefined;
 
@@ -127,7 +127,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       { email, userId: user.id },
       process.env.BILLING_ALLOWLIST,
     );
-    return res.status(200).json(getBillingCapabilities(allowlisted, process.env));
+    // Members who are not owner/admin cannot start Checkout, so don't offer it.
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('farm_role')
+      .eq('id', user.id)
+      .maybeSingle();
+    return res.status(200).json(getBillingCapabilities(allowlisted, process.env, canManageBilling(profile?.farm_role)));
   } catch (err: unknown) {
     console.error('Billing eligibility error:', err);
     return res.status(500).json({ error: 'Unexpected server error' });

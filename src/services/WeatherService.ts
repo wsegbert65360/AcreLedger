@@ -1,25 +1,15 @@
 import { toast } from 'sonner';
 
 import { freshAccessToken, SignInAgainError } from '@/lib/freshAccessToken';
-import { bundledVisualCrossingKey, cleanEnvValue } from '@/lib/weatherBuildConfig';
+import { cleanEnvValue } from '@/lib/weatherBuildConfig';
 import { formatWeatherLatLng, normalizeWeatherLocation } from '@/lib/weatherCoords';
 import { WeatherData, ExtendedWeatherData, ForecastDay } from '../types/weather';
 
-const VC_BASE_URL = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline';
 const PROXY_PATH = '/api/weather-proxy';
+export const WEATHER_LIMIT_REACHED = "Today's weather lookups for this farm are used up. They reset at midnight UTC.";
 const SIGN_IN_AGAIN = 'Sign in again to load weather.';
 
 const IS_CAPACITOR_BUILD = import.meta.env.MODE === 'capacitor';
-
-function readBundledVisualCrossingKey(): string {
-    // Production web and Capacitor must not reference VITE_VISUALCROSSING_KEY.
-    // The value sits in a branch Vite constant-folds away, so the vendor key
-    // is not inlined into App Store or other native bundles.
-    if (!import.meta.env.DEV) return '';
-    return bundledVisualCrossingKey(true, import.meta.env.VITE_VISUALCROSSING_KEY);
-}
-
-const VISUAL_CROSSING_KEY = readBundledVisualCrossingKey();
 const WEATHER_PROXY_URL = cleanEnvValue(import.meta.env.VITE_WEATHER_PROXY_URL);
 
 // Cache in-flight requests to deduplicate concurrent calls for the same location
@@ -40,14 +30,6 @@ function dropCacheEntry<T>(cache: Map<string, Promise<T>>, key: string, pending?
     if (!pending || cache.get(key) === pending) cache.delete(key);
 }
 
-
-function encodeEndpoint(endpoint: string): string {
-    return endpoint
-        .split('/')
-        .filter(Boolean)
-        .map(segment => encodeURIComponent(segment))
-        .join('/');
-}
 
 function resolveWeatherProxyUrl(): string {
     if (IS_CAPACITOR_BUILD && !WEATHER_PROXY_URL) {
@@ -73,14 +55,6 @@ function isWeatherProxyUrl(url: string): boolean {
 function buildWeatherUrl(location: string, endpoint: string, query: Record<string, string>): string {
     const params = new URLSearchParams(query);
     const resolvedLocation = normalizeWeatherLocation(location);
-
-    const canUseDirectApi = Boolean(VISUAL_CROSSING_KEY) && import.meta.env.DEV;
-    if (canUseDirectApi) {
-        params.set('key', VISUAL_CROSSING_KEY);
-        const pathLocation = encodeURIComponent(resolvedLocation);
-        const pathEndpoint = encodeEndpoint(endpoint);
-        return `${VC_BASE_URL}/${pathLocation}${pathEndpoint ? `/${pathEndpoint}` : ''}?${params.toString()}`;
-    }
 
     params.set('location', resolvedLocation);
     if (endpoint) params.set('endpoint', endpoint);
@@ -114,6 +88,11 @@ async function fetchWeatherJson(url: string, signal: AbortSignal): Promise<any> 
             throw new SignInAgainError(SIGN_IN_AGAIN);
         }
     }
+    if (proxied && res.status === 429) {
+        // One toast however many widgets hit the limit at once.
+        toast.error(WEATHER_LIMIT_REACHED, { id: 'weather-daily-limit' });
+        throw new Error(WEATHER_LIMIT_REACHED);
+    }
     if (!res.ok) throw new Error(`Weather API error: ${res.statusText}`);
     return res.json();
 }
@@ -145,6 +124,7 @@ function calendarRainfall(data: any): { precip24h: number | null; precip72h: num
     const sum = (count: number): number | null => {
         let total = 0;
         for (let offset = 1; offset <= count; offset++) {
+            // eslint-disable-next-line no-restricted-syntax -- midnight is built as UTC from the location's local date
             const date = new Date(midnight - offset * 86400000).toISOString().slice(0, 10);
             const precip = days.get(date)?.precip;
             if (typeof precip !== 'number' || !Number.isFinite(precip) || precip < 0) return null;
@@ -157,7 +137,7 @@ function calendarRainfall(data: any): { precip24h: number | null; precip72h: num
 
 /**
  * Hardened Weather Service.
- * Fetches real-time conditions and historical rainfall through Visual Crossing or the weather proxy.
+ * Fetches real-time conditions and historical rainfall through the weather proxy.
  */
 export const WeatherService = {
     /**

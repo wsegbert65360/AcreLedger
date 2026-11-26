@@ -7,11 +7,11 @@
  */
 import type { LocaleCode } from '@/store/useAppPreferences';
 
-export type TermKey = 'field' | 'fields';
+export type TermKey = 'field' | 'fields' | 'Field' | 'Fields';
 
 const TERMS: Record<LocaleCode, Record<TermKey, string>> = {
-  'en-US': { field: 'field', fields: 'fields' },
-  'en-AU': { field: 'paddock', fields: 'paddocks' },
+  'en-US': { field: 'field', fields: 'fields', Field: 'Field', Fields: 'Fields' },
+  'en-AU': { field: 'paddock', fields: 'paddocks', Field: 'Paddock', Fields: 'Paddocks' },
 };
 
 export function term(key: TermKey, locale: LocaleCode): string {

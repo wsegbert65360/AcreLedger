@@ -150,7 +150,7 @@ describe('SyncStatus', () => {
       expect(click).toHaveBeenCalled();
       expect(revokeObjectURL).not.toHaveBeenCalled();
       await act(async () => {
-        vi.advanceTimersByTime(1000);
+        vi.advanceTimersByTime(2000);
       });
       expect(revokeObjectURL).toHaveBeenCalledWith('blob:x');
       expect(document.body.querySelector('a')).toBeNull();

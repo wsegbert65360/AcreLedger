@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { mapGrainFromDb, mapGrainToDb } from '@/lib/mappers';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
 import { syncQueue } from '@/lib/syncQueue';
 import { GrainMovement } from '@/types/farm';
 
@@ -230,6 +231,7 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = grainMovements
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -331,6 +333,12 @@ export function useGrainMovements({ farm_id, viewingSeason, grainMovements, setG
           toast.error('Failed to delete records.', toastOptions);
         } else {
           console.warn('Grain delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('grain_movements', ids, farm_id, snapshot, setGrainMovements);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
           toast.error('Failed to delete records.', { description: `${affectedRows ?? 0} of ${ids.length} record(s) were found.` });
         }
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);

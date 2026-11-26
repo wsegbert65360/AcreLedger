@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { SprayRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
 import { toast } from 'sonner';
 import { mapSprayToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
@@ -222,6 +223,7 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = sprayRecords
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -294,6 +296,12 @@ export function useSprayRecords({ farm_id, viewingSeason, sprayRecords, setSpray
           console.error('Error deleting spray records:', error);
         } else {
           console.warn('Spray delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('spray_records', ids, farm_id, snapshot, setSprayRecords);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
         }
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setSprayRecords(prev => {

@@ -63,8 +63,8 @@ Copy `.env.example` to `.env.local` and fill in:
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOi...
 
-# Weather (Visual Crossing). VITE_VISUALCROSSING_KEY is local dev only — never App Store or native.
-VITE_VISUALCROSSING_KEY=your_visual_crossing_api_key
+# Weather goes through /api/weather-proxy. Do not set VITE_VISUALCROSSING_KEY (retired).
+# Local npm run dev needs vercel dev, or VITE_WEATHER_PROXY_URL pointing at a deployed proxy.
 # Required for Capacitor/native. Web can leave this empty and use /api/weather-proxy.
 VITE_WEATHER_PROXY_URL=https://your-app.vercel.app
 
@@ -94,7 +94,7 @@ STRIPE_PRICE_ID=
 STRIPE_WEBHOOK_SECRET=
 ```
 
-`VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly. For iOS/Capacitor weather, set an absolute HTTPS `VITE_WEATHER_PROXY_URL`. Do not set `VITE_VISUALCROSSING_KEY` for App Store or native builds; that key is for local dev only. The web app uses the server-side `/api/weather-proxy`.
+`VITE_RAIN_API_URL` is optional. If set, it must be a clean HTTPS URL (no quotes, no `KEY=`, no trailing `/rain`). When unset, `RainService` uses the production Rain API directly. For iOS/Capacitor weather, set an absolute HTTPS `VITE_WEATHER_PROXY_URL`. Do not set `VITE_VISUALCROSSING_KEY`; the client never reads it. Every build, including local `npm run dev`, uses `/api/weather-proxy` (`vercel dev` locally, or `VITE_WEATHER_PROXY_URL` for a deployed proxy). The server-only key is `VISUALCROSSING_API_KEY`.
 
 `VITE_ERROR_REPORTING_DSN` is optional and disabled when empty. When set, it must be an HTTPS collector URL with no credentials, query, or fragment. The browser sends bounded, token-redacted error details and the pathname only; it omits cookies and URL query strings. Because every `VITE_*` value is public, the collector must accept CORS JSON posts without embedded secrets and enforce its own rate limits and retention policy.
 

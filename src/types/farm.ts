@@ -222,7 +222,7 @@ export interface GrainMovement {
   binName: string;
   type: 'in' | 'out';
   bushels: number;
-  moisturePercent: number;
+  moisturePercent: number | null; // null: not recorded (e.g. a sale with no moisture reading)
   sourceFieldName?: string;
   timestamp: number;
   seasonYear: number;
@@ -450,6 +450,8 @@ export interface FarmSubscription {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** Stripe livemode, written by the webhook; null on rows from before 2026-11-21. */
+  livemode?: boolean | null;
 }
 
 export type ActivityRecord =

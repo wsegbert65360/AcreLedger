@@ -90,8 +90,12 @@ export function resolveFieldCountyShares(
   const cluParts: { shares: CountyShare[]; weight: number }[] = [];
   let cluNeedsReview = false;
   let cluAnyResolved = false;
-  for (const assignment of cluAssignments) {
-    if (assignment.deletedAt || assignment.fieldId !== field.id) continue;
+  // Weight cropland CLUs only: production and planted acres come from
+  // cropland, so a woods or waterway CLU in another county must not pull a
+  // share there. With no cropland CLU, fall back to all of the field's CLUs.
+  const fieldClus = cluAssignments.filter(a => !a.deletedAt && a.fieldId === field.id);
+  const croplandClus = fieldClus.filter(a => (a.landUse || 'cropland') === 'cropland');
+  for (const assignment of croplandClus.length > 0 ? croplandClus : fieldClus) {
     const rows = activeRows(index.get(subjectIndexKey('clu', cluSubjectKey(assignment.tractKey, assignment.cluNumber))) ?? []);
     const shares = rows.length > 0 ? sharesFromRows(rows) : UNKNOWN_SHARES;
     if (!allUnknown(shares)) cluAnyResolved = true;
@@ -123,33 +127,4 @@ export function fractionPercent(fraction: number): number {
 export function countyLabel(share: { countyName: string | null; stateAbbr: string | null }): string {
   if (!share.countyName) return 'County unknown';
   return share.stateAbbr ? `${share.countyName}, ${share.stateAbbr}` : share.countyName;
-}
-
-/** Tract-level county summary: CLU rows of one tract, by mapped acres. */
-export function tractCountySummary(
-  tractKey: string,
-  cluNumbers: string[],
-  index: CountyIndex,
-): { counties: { fips: string | null; label: string; mappedAcres: number }[]; unresolvedClus: number } {
-  const byCounty = new Map<string, { fips: string | null; label: string; mappedAcres: number }>();
-  let unresolved = 0;
-  for (const clu of cluNumbers) {
-    const rows = activeRows(index.get(subjectIndexKey('clu', cluSubjectKey(tractKey, clu))) ?? [])
-      .filter(r => r.countyFips != null);
-    if (rows.length === 0) {
-      unresolved += 1;
-      continue;
-    }
-    for (const row of rows) {
-      const key = row.countyFips!;
-      const entry = byCounty.get(key) ?? {
-        fips: key,
-        label: countyLabel({ countyName: row.countyName, stateAbbr: row.stateAbbr }),
-        mappedAcres: 0,
-      };
-      entry.mappedAcres = roundTo(entry.mappedAcres + (row.mappedAcres ?? 0), 4);
-      byCounty.set(key, entry);
-    }
-  }
-  return { counties: [...byCounty.values()].sort((a, b) => b.mappedAcres - a.mappedAcres), unresolvedClus: unresolved };
 }

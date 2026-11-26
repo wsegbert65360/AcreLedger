@@ -100,6 +100,32 @@ describe('buildInsuranceProductionReport', () => {
     ]);
   });
 
+  it('counts a failed stand replanted to the same crop once', () => {
+    const build = (replant: Partial<PlantRecord>) => buildInsuranceProductionReport({
+      plantRecords: [plant('p1', 'a', { cropStatus: 'Failed' }), plant('p2', 'a', replant)],
+      harvestRecords: [load('l1', 'a', 16000)],
+      fields: [field('a')],
+      counties: counties({ a: [henry] }),
+      cropYear: 2026,
+    }).units[0];
+    // Tagged replant, and an untagged one capped at the field's 80 acres.
+    expect(build({ plantingPattern: 'Replant' })).toMatchObject({ plantedAcres: 80, yield: 200 });
+    expect(build({})).toMatchObject({ plantedAcres: 80, yield: 200 });
+    // A partial replant still counts the failed acres that were not replanted.
+    expect(build({ plantingPattern: 'Replant', acreage: 30 }).plantedAcres).toBe(80);
+  });
+
+  it('keeps a failed half and a planted half of a field as separate acres', () => {
+    const unit = buildInsuranceProductionReport({
+      plantRecords: [plant('p1', 'a', { cropStatus: 'Failed', acreage: 40 }), plant('p2', 'a', { acreage: 40 })],
+      harvestRecords: [load('l1', 'a', 8000)],
+      fields: [field('a')],
+      counties: counties({ a: [henry] }),
+      cropYear: 2026,
+    }).units[0];
+    expect(unit.plantedAcres).toBe(80);
+  });
+
   it('flags unharvested, failed, unplanted, unknown-county and mixed-bin cases', () => {
     const report = buildInsuranceProductionReport({
       plantRecords: [

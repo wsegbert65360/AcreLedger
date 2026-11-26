@@ -59,9 +59,10 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
         const amount = parsedBushels;
         const parsedPrice = price.trim() === '' ? null : parseLocalizedNumber(price, preferences.locale);
         const parsedMoisture = moisture.trim() === '' ? null : parseLocalizedNumber(moisture, preferences.locale);
-        // Explicit 0% moisture is a real reading; only a blank or unparsable value defaults to 15.
-        const m = Number.isFinite(parsedMoisture) ? parsedMoisture as number : 15;
-        if (amount == null || amount <= 0 || parsedPrice === null && price.trim() !== '') {
+        // Blank means not recorded (null), never an invented 15%. 0% is a real reading.
+        const m = parsedMoisture == null ? null : parsedMoisture;
+        if (amount == null || amount <= 0 || parsedPrice === null && price.trim() !== ''
+            || (moisture.trim() !== '' && (m == null || !Number.isFinite(m) || m < 0 || m > 100))) {
             native.haptic.error();
             return;
         }
@@ -72,6 +73,11 @@ export default function SellModal({ bin, open, onClose }: SellModalProps) {
             // Combine selected date with current local time to ensure correct registration time and avoid UTC shift
             const localNow = new Date();
             const selectedDate = parseLocalDate(date);
+            if (Number.isNaN(selectedDate.getTime())) {
+                native.haptic.error();
+                toast.error('Pick a valid sale date.');
+                return;
+            }
             selectedDate.setHours(localNow.getHours(), localNow.getMinutes(), localNow.getSeconds(), localNow.getMilliseconds());
 
             const success = await addGrainMovement({

@@ -1,4 +1,6 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { term } from '@/lib/locale/terms';
+import { useAppPreferences } from '@/store/useAppPreferences';
 
 import { FileUp, MapPin, Plus, Pencil, Map as MapIcon, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -49,7 +51,10 @@ interface FieldManageModalProps {
 }
 
 export default function FieldManageModal({ open, onClose, editField }: FieldManageModalProps) {
-  const { addField, updateField, cluAssignments } = useFarm();
+  const { addField, updateField, cluAssignments, session } = useFarm();
+  // Australia pilot: "Paddock" where US screens say "Field".
+  const { preferences } = useAppPreferences(session?.user?.id ?? null);
+  const fieldWord = term('Field', preferences.locale);
   const editBoundaryAcreage = editField ? getBoundaryFieldAcres(editField, cluAssignments) : null;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState(editField?.name || '');
@@ -367,7 +372,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-primary">
             {isEdit ? <Pencil size={20} /> : <Plus size={20} />}
-            {isEdit ? 'Edit Field' : 'Add Field'}
+            {isEdit ? `Edit ${fieldWord}` : `Add ${fieldWord}`}
           </DialogTitle>
           <DialogDescription className="sr-only">
             Add or edit field details and boundaries.
@@ -635,7 +640,7 @@ export default function FieldManageModal({ open, onClose, editField }: FieldMana
             disabled={isSaving || !valid}
             className="touch-target w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-plant font-bold"
           >
-            {isSaving ? (isEdit ? 'Saving...' : 'Adding...') : (isEdit ? 'Save Changes' : 'Add Field')}
+            {isSaving ? (isEdit ? 'Saving...' : 'Adding...') : (isEdit ? 'Save Changes' : `Add ${fieldWord}`)}
           </Button>
         </DialogFooter>
       </DialogContent>

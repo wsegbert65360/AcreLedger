@@ -14,7 +14,12 @@ vi.mock('stripe', () => ({
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: (...args: unknown[]) => mocks.createClient(...args),
+  createClient: (...args: unknown[]) => {
+    const client = mocks.createClient(...args);
+    // Default: the farm has no complimentary Pro (get_farm_comp_status).
+    if (client && !client.rpc) client.rpc = vi.fn().mockResolvedValue({ data: [{ is_comped: false, expires_at: null }], error: null });
+    return client;
+  },
 }));
 
 import handler from '../../api/create-checkout-session';
@@ -39,6 +44,16 @@ function createResponse() {
     end() {},
   };
   return { response, state };
+}
+
+function expectRequiredTermsConsent(params: {
+  consent_collection?: unknown;
+  custom_text?: { terms_of_service_acceptance?: { message?: string } };
+}) {
+  expect(params.consent_collection).toEqual({ terms_of_service: 'required' });
+  expect(params.custom_text?.terms_of_service_acceptance?.message).toContain(
+    'https://www.acreledger.app/terms',
+  );
 }
 
 let farmTrialEndsAt: string | null;
@@ -114,11 +129,18 @@ describe('create checkout session API', () => {
         metadata: { farm_id: 'farm-1', user_id: 'user-1' },
         client_reference_id: 'farm-1',
         customer_email: 'farmer@example.com',
+        consent_collection: { terms_of_service: 'required' },
+        custom_text: {
+          terms_of_service_acceptance: {
+            message: expect.stringContaining('https://www.acreledger.app/terms'),
+          },
+        },
         success_url: 'https://acreledger.example/settings?billing=success',
         cancel_url: 'https://acreledger.example/settings?billing=cancelled',
       }),
       { idempotencyKey: expect.stringMatching(/^acreledger-checkout:farm-1:initial:[0-9a-z]+$/) },
     );
+    expectRequiredTermsConsent(mocks.createCheckoutSession.mock.calls[0][0]);
   });
 
   it.each(['2026-10-27T12:00:00Z', '2026-10-26T12:00:00Z', '2026-10-24T12:00:00Z', null])('creates no trial even when the farm still carries a stored date (%s)', async deadline => {
@@ -129,6 +151,41 @@ describe('create checkout session API', () => {
     const params = mocks.createCheckoutSession.mock.calls[0][0];
     expect(params.subscription_data).not.toHaveProperty('trial_end');
     expect(params.subscription_data).not.toHaveProperty('trial_period_days');
+  });
+
+  const post = async () => {
+    const result = createResponse();
+    await handler({ method: 'POST', headers: { origin: 'https://acreledger.example', authorization: 'Bearer valid-token' }, query: {} }, result.response);
+    return result.state;
+  };
+
+  it('requires the buyer to accept the Terms at Checkout', async () => {
+    expect((await post()).status).toBe(200);
+    expect(mocks.createCheckoutSession.mock.calls[0][0].consent_collection).toEqual({ terms_of_service: 'required' });
+  });
+
+  it('refuses a worker: only an owner or admin can become the billing owner', async () => {
+    const client = mocks.createClient();
+    const from = client.from;
+    client.from = vi.fn((table: string) => (table === 'profiles'
+      ? { select: () => ({ eq: () => ({ maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'user-1', farm_id: 'farm-1', farm_role: 'worker' }, error: null }) }) }) }
+      : from(table)));
+    const state = await post();
+    expect(state).toMatchObject({ status: 403, body: { error: 'Only the farm owner can start billing.' } });
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('does not start Checkout for a farm with complimentary Pro', async () => {
+    mocks.createClient().rpc = vi.fn().mockResolvedValue({ data: [{ is_comped: true, expires_at: null }], error: null });
+    const state = await post();
+    expect(state.status).toBe(409);
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the comp status cannot be read', async () => {
+    mocks.createClient().rpc = vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
+    expect((await post()).status).toBe(500);
+    expect(mocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('cleans quoted or padded Supabase env values before creating the client', async () => {
@@ -182,6 +239,7 @@ describe('create checkout session API', () => {
 
     expect(response.state.status).toBe(200);
     expect(mocks.createCheckoutSession).toHaveBeenCalled();
+    expectRequiredTermsConsent(mocks.createCheckoutSession.mock.calls[0][0]);
   });
 
   it('denies checkout when the active billing row belongs to another farm member', async () => {

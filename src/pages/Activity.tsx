@@ -13,8 +13,6 @@ import {
   ACTIVITY_TEXT_COLORS,
 } from '@/lib/activityIcons';
 import { withAuthorizedReportExport } from '@/lib/authorizeReportExport';
-import { loadMergedFsaTracts } from '@/lib/bundledFsaTracts';
-import { exportFsa578Data, exportHarvestData } from '@/lib/complianceReports';
 import { generateSprayPDF } from '@/lib/sprayExport';
 import { supabase } from '@/lib/supabase';
 import { useAppPreferences } from '@/store/useAppPreferences';
@@ -80,7 +78,6 @@ export default function Activity() {
   const {
     fields,
     cluAssignments,
-    fsaTracts,
     plantRecords,
     sprayRecords,
     harvestRecords,
@@ -357,10 +354,10 @@ export default function Activity() {
             </div>
           </div>
 
-          <div className="flex min-w-0 w-full items-center justify-end gap-2 sm:w-auto">
+          <div className="flex min-w-0 w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <div className="shrink-0"><SyncStatusIndicator /></div>
 
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               {tab === 'spray' && (
                 <button
                   onClick={() => {
@@ -380,30 +377,17 @@ export default function Activity() {
                 </button>
               )}
               {(tab === 'plant' || tab === 'harvest') && (
+                // One export path: the Reports tab builds the full-season FSA-578
+                // (county, operator, no search filter, no rows in the undo window)
+                // and the insurance worksheet that replaced the FSA harvest CSV.
                 <button
-                  onClick={() => {
-                    const reportType = tab === 'plant' ? 'fsa-plant' : 'insurance-production';
-                    void withAuthorizedReportExport(supabase, farm_id, reportType, () => {
-                      const exportPromise = tab === 'plant'
-                        ? loadMergedFsaTracts(fsaTracts).then(mergedTracts => exportFsa578Data(filteredPlant, fields, cluAssignments, mergedTracts, {
-                          farmName: farmName ?? undefined,
-                          cropYear: viewingSeason,
-                          reportDate: new Date().toISOString().split('T')[0],
-                        }))
-                        : exportHarvestData(filteredHarvest, fields);
-
-                      return exportPromise.catch((error) => {
-                        console.error('FSA export failed:', error);
-                        toast.error('Failed to export FSA data. Please try again.');
-                      });
-                    });
-                  }}
+                  onClick={() => navigate(tab === 'plant' ? '/reports?tab=fsa-plant' : '/reports?tab=insurance-production')}
                   className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg bg-plant/10 p-2.5 text-xs font-bold text-plant transition-colors hover:bg-plant/20"
-                  title={tab === 'plant' ? "Export FSA-578 Data Summary" : "Export Harvest Production Data"}
+                  title={tab === 'plant' ? 'Open the FSA-578 report' : 'Open the insurance production worksheet'}
                 >
                   <FileDown size={16} />
-                  <span className="hidden sm:inline">FSA EXPORT</span>
-                  <span className="inline sm:hidden">FSA</span>
+                  <span className="hidden sm:inline">{tab === 'plant' ? 'FSA-578' : 'INSURANCE'}</span>
+                  <span className="inline sm:hidden">{tab === 'plant' ? 'FSA' : 'APH'}</span>
                 </button>
               )}
               {tab === 'hay' && (
@@ -452,9 +436,9 @@ export default function Activity() {
       </header>
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 lg:max-w-5xl lg:px-8">
         {/* Tabs — grouped pills */}
-        <div className="relative -mx-4 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
-          <div className="relative">
-          <div ref={activityTypesRef} role="group" aria-label="Activity types" className="flex gap-1.5 overflow-x-auto no-scrollbar pr-8">
+        <div className="relative -mx-4 min-w-0 space-y-1.5 border-y border-border bg-card/50 py-2 px-4">
+          <div className="relative min-w-0">
+          <div ref={activityTypesRef} role="group" aria-label="Activity types" className="flex min-w-0 gap-1.5 overflow-x-auto no-scrollbar pr-8">
             {TAB_GROUPS.map(group => (
               <div key={group.group} className="flex items-center gap-1 flex-shrink-0">
                 {group.tabs.map((t) => {
@@ -515,8 +499,8 @@ export default function Activity() {
         </div>
 
         {/* Search + Review Queue filter */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="relative min-w-0 flex-1">
             <Label htmlFor="activitySearch" className="sr-only">Search Records</Label>
             <input
               id="activitySearch"
@@ -525,7 +509,7 @@ export default function Activity() {
               onChange={e => setSearch(e.target.value)}
               placeholder="Search records..."
               aria-label="Search records"
-              className="w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              className="min-w-0 w-full px-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
           <button

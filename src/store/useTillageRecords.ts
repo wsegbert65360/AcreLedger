@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { TillageRecord } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
 import { toast } from 'sonner';
 import { mapTillageToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
@@ -222,6 +223,7 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = tillageRecords
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -294,6 +296,12 @@ export function useTillageRecords({ farm_id, viewingSeason, tillageRecords, setT
           console.error('Error deleting tillage records:', error);
         } else {
           console.warn('Tillage delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('tillage_records', ids, farm_id, snapshot, setTillageRecords);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
         }
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setTillageRecords(prev => {

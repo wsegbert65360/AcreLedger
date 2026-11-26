@@ -1,6 +1,8 @@
 import { useCallback, useRef } from 'react';
 import { WorkRequest } from '@/types/farm';
 import { supabase } from '@/lib/supabase';
+import { rollbackOnlyStillLive } from '@/lib/partialDelete';
+import { softDeleteRows } from '@/lib/softDeleteRows';
 import { toast } from 'sonner';
 import { mapWorkRequestToDb } from '@/lib/mappers';
 import { syncQueue } from '@/lib/syncQueue';
@@ -277,6 +279,7 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
     }
     isMutating.current = true;
 
+    ids = [...new Set(ids)];
     const snapshot = workRequests
       .map((record, index) => ({ record, index }))
       .filter(({ record }) => ids.includes(record.id));
@@ -315,18 +318,15 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
 
       let error, affectedRows;
       try {
-        const res = await supabase
-          .from('work_requests')
-          .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
-          .in('id', ids)
-          .eq('farm_id', farm_id);
+        // The SELECT policy hides deleted rows, so a direct UPDATE fails RLS; use the RPC.
+        const res = await softDeleteRows('work_requests', ids, farm_id);
         error = res.error;
         affectedRows = res.count;
       } catch (err) {
         error = err;
       }
 
-      if (error || affectedRows !== ids.length) {
+      if (error || affectedRows !== new Set(ids).size) {
         if (error) {
           if (isUnknownMutationOutcome(error)) {
             console.warn('Work request delete outcome unknown; queuing for retry:', error);
@@ -349,6 +349,12 @@ export function useWorkRequests({ farm_id, workRequests, setWorkRequests, isOnli
           console.error('Error deleting work requests:', error);
         } else {
           console.warn('Work request delete mismatch:', { requested: ids.length, affected: affectedRows ?? 0 });
+          // Some rows may have been deleted: put back only the ones still live.
+          const partial = await rollbackOnlyStillLive('work_requests', ids, farm_id, snapshot, setWorkRequests);
+          if (partial) {
+            if (onMutation) await onMutation();
+            return partial === 'all-deleted';
+          }
         }
         const rollbackSnapshot = [...snapshot].sort((a, b) => b.index - a.index);
         setWorkRequests(prev => {

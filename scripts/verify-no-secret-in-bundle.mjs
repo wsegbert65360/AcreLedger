@@ -23,6 +23,8 @@ const viteBin = resolve(projectRoot, 'node_modules/vite/bin/vite.js');
 const SENTINEL = 'ZZSENTINELVCKEY0000';
 const BILLING_ALLOWLIST_ENV_NAME = 'VITE_BILLING_ALLOWLIST';
 const BILLING_ALLOWLIST_SENTINEL = 'zzsentinel-allowlist@example.invalid';
+const VC_CLIENT_ENV_NAME = 'VITE_VISUALCROSSING_KEY';
+const VC_SERVER_ENV_NAME = 'VISUALCROSSING_API_KEY';
 const DUMMY_PROXY_URL = 'https://example.invalid';
 
 function walk(directory) {
@@ -62,6 +64,39 @@ function scanDistForNeedles(label, needles) {
   }
 
   console.log(`${label}: no sentinel in dist.`);
+}
+
+function configuredVisualCrossingKeyValues() {
+  const values = [];
+  for (const name of [VC_CLIENT_ENV_NAME, VC_SERVER_ENV_NAME]) {
+    const value = process.env[name];
+    if (typeof value === 'string' && value.trim() !== '' && value !== SENTINEL) {
+      values.push(value);
+    }
+  }
+  return values;
+}
+
+function scanDistForConfiguredVisualCrossingKeys(label) {
+  const values = configuredVisualCrossingKeyValues();
+  if (values.length === 0) {
+    console.log(`${label}: no configured Visual Crossing key value to scan.`);
+    return;
+  }
+  if (!existsSync(distRoot)) {
+    fail(`${label}: dist is missing after the Vite build.`);
+  }
+
+  for (const file of walk(distRoot)) {
+    const contents = readFileSync(file);
+    for (const value of values) {
+      if (contents.includes(value)) {
+        fail(`Visual Crossing key value found in ${label} bundle`);
+      }
+    }
+  }
+
+  console.log(`${label}: no Visual Crossing key value in dist.`);
 }
 
 function scanSrcForBillingAllowlistName() {
@@ -173,10 +208,11 @@ const sentinelEnv = {
   [BILLING_ALLOWLIST_ENV_NAME]: BILLING_ALLOWLIST_SENTINEL,
 };
 
-const billingSentinelNeedles = [SENTINEL, BILLING_ALLOWLIST_SENTINEL, BILLING_ALLOWLIST_ENV_NAME];
+const billingSentinelNeedles = [SENTINEL, BILLING_ALLOWLIST_SENTINEL, BILLING_ALLOWLIST_ENV_NAME, VC_CLIENT_ENV_NAME];
 
 runViteBuild('web', { args: [], env: sentinelEnv });
 scanDistForNeedles('web', billingSentinelNeedles);
+scanDistForConfiguredVisualCrossingKeys('web');
 // Always on: not gated by VERCEL_ENV or BILLING_ALLOWLIST. Must run before the
 // capacitor build replaces dist, because the email scan covers the web build.
 scanHardcodedBillingEmails();
@@ -193,6 +229,7 @@ runViteBuild('capacitor', {
   },
 });
 scanDistForNeedles('capacitor', billingSentinelNeedles);
+scanDistForConfiguredVisualCrossingKeys('capacitor');
 
 console.log('Visual Crossing sentinel is absent from web and capacitor bundles.');
 console.log('Billing allowlist sentinel is absent from web and capacitor bundles.');
@@ -212,6 +249,7 @@ if (billingAllowlistGuard.action === 'skip') {
   const normalEnv = { ...process.env };
   delete normalEnv[BILLING_ALLOWLIST_ENV_NAME];
   runViteBuild('normal', { args: [], env: normalEnv });
-  scanDistForNeedles('normal', [BILLING_ALLOWLIST_ENV_NAME]);
+  scanDistForNeedles('normal', [BILLING_ALLOWLIST_ENV_NAME, VC_CLIENT_ENV_NAME]);
+  scanDistForConfiguredVisualCrossingKeys('normal');
   scanDistForAllowlistEntries();
 }

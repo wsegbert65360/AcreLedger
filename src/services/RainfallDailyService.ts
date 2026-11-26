@@ -19,6 +19,7 @@ export function chicagoToday(now: Date = new Date()): string {
 
 function shiftDate(isoDate: string, days: number): string {
   const [y, m, d] = isoDate.split('-').map(Number);
+  // eslint-disable-next-line no-restricted-syntax -- date-only arithmetic done in UTC on purpose
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 

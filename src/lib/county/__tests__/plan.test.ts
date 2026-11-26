@@ -204,6 +204,19 @@ describe('resolveFieldCountyShares', () => {
     expect(out.shares.reduce((s, x) => s + x.fraction, 0)).toBeCloseTo(1, 9);
   });
 
+  it('weights cropland CLUs only, so a woods CLU in another county gets no share', () => {
+    const rows = [
+      row({ id: 'a', subjectType: 'clu', subjectKey: '100:1', fieldId: null, tractKey: '100', cluNumber: '1', countyFips: '29083', mappedAcres: 70, proportion: 1 }),
+      row({ id: 'b', subjectType: 'clu', subjectKey: '100:2', fieldId: null, tractKey: '100', cluNumber: '2', countyFips: '29015', mappedAcres: 30, proportion: 1 }),
+    ];
+    const woods = { ...clu('100', '2', 30), landUse: 'non_cropland' as const };
+    const out = resolveFieldCountyShares(f, [clu('100', '1', 70), woods], buildCountyIndex(rows));
+    expect(out.shares.map(s => [s.countyFips, s.fraction])).toEqual([['29083', 1]]);
+    // With no cropland CLU at all, the field still resolves from its other CLUs.
+    const onlyWoods = resolveFieldCountyShares(f, [woods], buildCountyIndex(rows));
+    expect(onlyWoods.shares.map(s => s.countyFips)).toEqual(['29015']);
+  });
+
   it('lets a manual field correction override geometry', () => {
     const rows = [
       row({ id: 'a', subjectKey: 'field-1', countyFips: '29083', method: 'manual', manualAcres: 10, proportion: 10 / 55, mappedAcres: null }),

@@ -7,8 +7,9 @@ import {
     mapSeedFromDb, mapSeedToDb,
     mapRecipeFromDb, mapRecipeToDb, mapFertilizerToDb,
     mapHarvestToDb, mapHayToDb, mapHayFromDb, mapGrainToDb,
+    mapTillageToDb, mapFertilizerRecipeToDb,
 } from '../mappers';
-import { SprayRecord, SavedSeed, CustomSprayRecord } from '../../types/farm';
+import { SprayRecord, SavedSeed, CustomSprayRecord, SprayRecipe, TillageRecord, FertilizerRecipe } from '../../types/farm';
 
 describe('Mappers Round-Trip', () => {
     it('should preserve boundary acreage through the legacy operational column', () => {
@@ -364,4 +365,22 @@ describe('Optional column null semantics', () => {
         expect(db.temperature).toBe(0);
         expect(mapHayFromDb(db as any).temperature).toBe(0);
     });
+});
+
+describe('cleared optional fields are sent as null', () => {
+  // JSON.stringify drops undefined keys, and PostgREST then keeps the old value.
+  const sent = (row: object) => JSON.parse(JSON.stringify(row));
+
+  it('spray recipe applicator, license, pest and EPA number', () => {
+    const row = mapRecipeToDb({ id: 'r1', farm_id: 'f1', name: 'Burndown', products: [], deleted_at: null,
+      applicatorName: undefined, licenseNumber: undefined, targetPest: undefined, epaRegNumber: undefined } as SprayRecipe);
+    expect(sent(row)).toMatchObject({ applicator_name: null, license_number: null, target_pest: null, epa_reg_number: null });
+  });
+
+  it('tillage notes and fertilizer recipe N-P-K', () => {
+    expect(sent(mapTillageToDb({ id: 't1', farm_id: 'f1', fieldId: 'x', fieldName: 'X', date: '2026-04-01', implementType: 'Disk',
+      seasonYear: 2026, timestamp: 0, deleted_at: null } as TillageRecord))).toHaveProperty('notes', null);
+    expect(sent(mapFertilizerRecipeToDb({ id: 'fr1', farm_id: 'f1', name: 'Starter', deleted_at: null } as unknown as FertilizerRecipe)))
+      .toHaveProperty('npk_ratio', null);
+  });
 });

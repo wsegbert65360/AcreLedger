@@ -407,7 +407,7 @@ export const mapGrainFromDb = (db: GrainMovementRow): GrainMovement => ({
     binName: safeStr(db.bin_name, 'Unknown Bin'),
     type: (db.type || 'in') as 'in' | 'out',
     bushels: safeNum(db.bushels),
-    moisturePercent: safeNum(db.moisture_percent, 15.0),
+    moisturePercent: db.moisture_percent == null ? null : safeNum(db.moisture_percent, 15.0),
     sourceFieldName: db.source_field_name || undefined,
     destination: db.destination || undefined,
     price: db.price != null ? safeNum(db.price) : undefined,
@@ -1054,10 +1054,10 @@ export const mapSeedToDb = (s: SavedSeed): Partial<SavedSeedRow> => {
         name: s.name,
         crop: s.crop,
         variety: s.variety,
-        supplier: s.supplier,
-        lot_number: s.lotNumber,
-        year: s.year,
-        notes: s.notes,
+        supplier: s.supplier ?? null,
+        lot_number: s.lotNumber ?? null,
+        year: s.year ?? null,
+        notes: s.notes ?? null,
         farm_id: s.farm_id,
         deleted_at: s.deleted_at ?? null
     };
@@ -1071,10 +1071,12 @@ export const mapRecipeToDb = (r: SprayRecipe) => {
         farm_id: r.farm_id,
         name: r.name,
         products: r.products,
-        applicator_name: r.applicatorName,
-        license_number: r.licenseNumber,
-        target_pest: r.targetPest,
-        epa_reg_number: r.epaRegNumber,
+        // Optional columns send null, never undefined: JSON drops an undefined key and
+        // PostgREST then keeps the old value, so a cleared license would come back.
+        applicator_name: r.applicatorName ?? null,
+        license_number: r.licenseNumber ?? null,
+        target_pest: r.targetPest ?? null,
+        epa_reg_number: r.epaRegNumber ?? null,
         crop_or_site_treated: r.cropOrSiteTreated ?? null,
         deleted_at: r.deleted_at ?? null
     };
@@ -1087,7 +1089,7 @@ export const mapFertilizerRecipeToDb = (r: FertilizerRecipe) => {
         id: r.id,
         farm_id: r.farm_id,
         name: r.name,
-        npk_ratio: r.npkRatio,
+        npk_ratio: r.npkRatio ?? null,
         deleted_at: r.deleted_at ?? null
     };
 };
@@ -1121,7 +1123,7 @@ export const mapTillageToDb = (r: TillageRecord) => {
         field_name: r.fieldName,
         date: r.date,
         implement_type: r.implementType,
-        notes: r.notes,
+        notes: r.notes ?? null,
         season_year: r.seasonYear,
         timestamp: r.timestamp ? new Date(r.timestamp).toISOString() : new Date().toISOString(),
         deleted_at: r.deleted_at ?? null

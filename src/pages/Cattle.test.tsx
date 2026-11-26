@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const farm = vi.hoisted(() => ({
+  farm_id: 'farm-1',
   runsCattle: true,
   initialFetchComplete: true,
   cattleLoadFailed: false,
@@ -30,6 +31,8 @@ vi.mock('@/lib/cattle/report', async importOriginal => {
   return { ...original, exportCattleCsv: vi.fn(async () => undefined) };
 });
 
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/supabase', () => ({ supabase: { rpc } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));
 
 import { toast } from 'sonner';
@@ -79,13 +82,24 @@ describe('Cattle page', () => {
     expect(screen.queryByRole('button', { name: /Export cattle CSV/ })).toBeNull();
   });
 
-  it('lists groups with pasture and exports one CSV', () => {
+  it('lists groups with pasture and exports one CSV after the server confirms Pro', async () => {
     farm.cattleGroups = [cows];
+    rpc.mockResolvedValueOnce({ error: null });
     renderAt('/cattle');
     expect(screen.getByText('Cows').closest('a')?.getAttribute('href')).toBe('/cattle/g1');
     expect(screen.getByText(/Back Pasture · 0 days/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Export cattle CSV/ }));
-    expect(exportCattleCsv).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(exportCattleCsv).toHaveBeenCalledTimes(1));
+    expect(rpc).toHaveBeenCalledWith('assert_premium', { p_farm_id: farm.farm_id, p_feature: 'reports' });
+  });
+
+  it('does not export the CSV when the server says the farm is not Pro', async () => {
+    farm.cattleGroups = [cows];
+    rpc.mockResolvedValueOnce({ error: { code: 'P0402', message: 'premium_required' } });
+    renderAt('/cattle');
+    fireEvent.click(screen.getByRole('button', { name: /Export cattle CSV/ }));
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    expect(exportCattleCsv).not.toHaveBeenCalled();
   });
 
   it('locks the CSV export on a free farm and shows the Pro note', () => {

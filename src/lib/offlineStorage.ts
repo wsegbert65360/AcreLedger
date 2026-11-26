@@ -9,6 +9,20 @@ import { toast } from 'sonner';
 import { SYNC_QUEUE_KEYS } from '@/lib/syncQueueKeys';
 import { encryptData, decryptData, getLocalEncryptionKey } from '@/utils/crypto';
 
+let cacheWriteWarned = false;
+/**
+ * A failed cache write (storage full) means a reload while offline would show
+ * an older copy and the farmer might re-enter records. Say so once per session.
+ * The sync queue itself is separate and unaffected.
+ */
+function warnCacheWriteFailed(): void {
+  if (cacheWriteWarned) return;
+  cacheWriteWarned = true;
+  toast.warning('This device could not save its offline copy of your records.', {
+    description: 'Your changes are still queued to sync. Stay online until they finish, and free up storage on this device.',
+  });
+}
+
 const isNative = Capacitor.isNativePlatform();
 
 export const OFFLINE_DATABASE_UNAVAILABLE = 'Offline database unavailable.';
@@ -180,6 +194,9 @@ export async function getDatabase() {
   return initPromise;
 }
 
+/** Cache entry that records which farm the user's cached rows belong to. */
+const CACHE_FARM_MARKER = '__cache_farm';
+
 export const offlineStorage = {
   /**
    * Saves a table's data array to local cache.
@@ -200,6 +217,7 @@ export const offlineStorage = {
         }
       } catch (err) {
         console.error(`Failed to save offline cache for ${table}:`, err);
+        warnCacheWriteFailed();
       }
     } else {
       try {
@@ -208,6 +226,7 @@ export const offlineStorage = {
         localStorage.setItem(key, encrypted);
       } catch (err) {
         console.error(`Failed to save localStorage cache for ${table}:`, err);
+        warnCacheWriteFailed();
       }
     }
   },
@@ -268,6 +287,21 @@ export const offlineStorage = {
         return null;
       }
     }
+  },
+
+  /**
+   * The cache is keyed by user. When the server says this user now belongs to
+   * a different farm, drop the old farm's cached rows so they are never shown
+   * as this farm's. The sync queue is keyed by farm and is left alone.
+   * Returns true when the cache was cleared.
+   */
+  bindCacheToFarm: async (userId: string, farmId: string): Promise<boolean> => {
+    const cached = await offlineStorage.loadCache(CACHE_FARM_MARKER, userId);
+    const previous = Array.isArray(cached) && typeof cached[0] === 'string' ? cached[0] : null;
+    const changed = previous !== null && previous !== farmId;
+    if (changed) await offlineStorage.clearCache(userId);
+    if (changed || previous === null) await offlineStorage.saveCache(CACHE_FARM_MARKER, userId, [farmId]);
+    return changed;
   },
 
   /**

@@ -598,7 +598,7 @@ The system uses a **Dual-Source Lookup** strategy to ensure data reliability and
 Weather rainfall fallbacks use completed calendar days in the provider location's timezone (Yesterday / Last 3 days / Last 7 days), excluding today's mixed observation/forecast total. `rainfallBasis` switches labels to rolling hours only after a successful radar lookup. Missing fallback days and failed historical range lookups remain unavailable (`null`), not zero; range failures include `dataWarning`. WeatherBar uses the weather response's resolved coordinates for radar rainfall, never an unrelated first field. Explicit saved ZIP/coordinates take priority over field defaults on the weather page.
 
 ### Weather Proxy (`api/weather-proxy.ts`)
-Production web and Capacitor weather traffic uses an authenticated Vercel Function so the Visual Crossing key never reaches the client. Capacitor and other native builds require `VITE_WEATHER_PROXY_URL` and must not bundle `VITE_VISUALCROSSING_KEY`; that key is for local `npm run dev` only. `WeatherService` sends the current Supabase access token; the function validates it with `auth.getUser`, validates the requested timeline endpoint, location, and query allowlist, then safely builds the upstream request. Only `GET` and `OPTIONS` are supported, and the upstream request times out after 10 seconds. Upstream non-2xx responses are returned as `502` without the provider body.
+Every weather build, including local `npm run dev`, Capacitor, and production web, uses an authenticated Vercel Function so the Visual Crossing key never reaches the client. Capacitor and other native builds require `VITE_WEATHER_PROXY_URL`. The client does not read `VITE_VISUALCROSSING_KEY`; local dev needs `vercel dev` or `VITE_WEATHER_PROXY_URL` pointing at a deployed proxy. `WeatherService` sends the current Supabase access token; the function validates it with `auth.getUser`, validates the requested timeline endpoint, location, and query allowlist, then safely builds the upstream request. Only `GET` and `OPTIONS` are supported, and the upstream request times out after 10 seconds. Upstream non-2xx responses are returned as `502` without the provider body.
 
 The function requires the server-only Vercel variables `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `VISUALCROSSING_API_KEY`, and `ALLOWED_ORIGINS`. CORS uses exact comma-separated origins and fails closed for requests carrying an unknown origin; deployed web aliases and `capacitor://localhost` must be listed explicitly. Environment changes require a new Vercel deployment.
 
@@ -1388,7 +1388,7 @@ event to automatically sync content to Supabase.
 `useXRecords` hooks MUST log the full error object from Supabase (Message, Details, Hint) to the console to assist in remote debugging.
 
 ### Content Security Policy (CSP)
-The `index.html` MUST include a meta CSP tag that allows `unsafe-eval` (required by UI libraries and PWA tools) while restricting origins to `self`, Supabase, Visual Crossing, Vercel, and Windy.com.
+The `index.html` meta CSP tag is the only CSP (`vercel.json` sends none since 2026-11-22). It currently allows `unsafe-eval` and `unsafe-inline` in `script-src` and restricts origins to `self`, Supabase, Visual Crossing, Vercel, Windy.com, iTunes and Nominatim. Tightening `unsafe-eval` needs a production build check first; `src/test/cspFetchOrigins.test.ts` pins the fetch origins.
 Windy.com must be allowed through both `child-src` and `frame-src` because the weather radar is an external iframe.
 
 ---

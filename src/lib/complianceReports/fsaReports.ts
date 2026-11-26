@@ -1,12 +1,10 @@
-import { Capacitor } from '@capacitor/core';
+import { downloadFile } from '@/lib/downloadFile';
 
-import { getLandlordSplitPercent } from '@/lib/cropShare';
 import { farmNameForCsv } from '@/lib/farmDisplayName';
 import { effectiveTreatedAreaUnit, normalizeAreaForRate, normalizeTreatedArea } from '@/lib/sprayExportFormatters';
-import { native } from '@/lib/native';
 import { parseTractKeys } from '@/lib/tractLookup';
 import { getDisplayFieldAcres, getEffectiveSprayTreatedAcres } from '@/lib/fieldAcreage';
-import { SprayRecord, Field, PlantRecord, FertilizerApplication, HarvestRecord } from '../../types/farm';
+import { SprayRecord, Field, PlantRecord, FertilizerApplication } from '../../types/farm';
 import type { FsaStatusCode } from '../../types/farm';
 import type { FieldCluAssignment, FsaTractImport } from '../../types/fsaTract';
 import { getWorkDateMs, toLocalIsoDate } from '../../utils/dates';
@@ -208,7 +206,9 @@ function mergeCompatiblePlantRecords(records: PlantRecord[], fieldMap: Map<strin
         }
 
         existing.id = `${existing.id}+${r.id}`;
-        existing.acreage = roundTo(existing.acreage + r.acreage, 2);
+        // One non-finite acreage must not zero the merged row (roundTo(NaN) is 0).
+        const finite = (n: number) => (Number.isFinite(n) ? n : 0);
+        existing.acreage = roundTo(finite(existing.acreage) + finite(r.acreage), 2);
         if (r.plantDate && (!existing.plantDate || r.plantDate > existing.plantDate)) {
             existing.plantDate = r.plantDate;
         }
@@ -344,6 +344,20 @@ function plantingAcresForClu(record: PlantRecord, cluAcres: number, fieldCluAcre
     return roundTo(Math.min(record.acreage, fieldCluAcres) * cluAcres / fieldCluAcres, 2);
 }
 
+/**
+ * Acres for a planting on a field with no CLU to apportion across: the
+ * planting's own acres, capped at the field's acres. A field split 40 corn /
+ * 40 soybeans must not report 80 + 80. Second-crop and double-crop/replant
+ * rows may repeat the field's acres, as they do per CLU. A planting with no
+ * usable acreage falls back to the field's acres (the PlantModal default).
+ */
+function plantingAcresForField(record: PlantRecord, fieldAcres: number): number {
+    if (record.cropStatus !== 'Failed' && !isSupplementalCrop(record) && allowsRepeatedCluAcres(record)) return fieldAcres;
+    if (!Number.isFinite(record.acreage) || record.acreage <= 0) return fieldAcres;
+    if (!Number.isFinite(fieldAcres) || fieldAcres <= 0) return roundTo(record.acreage, 2);
+    return roundTo(Math.min(record.acreage, fieldAcres), 2);
+}
+
 function assignmentWarning(a: FieldCluAssignment, tracts: FsaTractImport[], acres: Map<string, number>): string | undefined {
     if (!tracts.some(t => !t.deletedAt && t.tractKey === a.tractKey)) return undefined;
     const featureAcres = acres.get(`${a.tractKey}:${a.cluNumber}`);
@@ -458,7 +472,7 @@ export function buildFsa578Rows(
                 farmNumber: field?.fsaFarmNumber || '',
                 tractNumber: field?.fsaTractNumber || '',
                 fieldNumber: r.fsaFieldNumber || field?.fsaFieldNumber || '',
-                acreage: field ? getDisplayFieldAcres(field, cluAssignments) : r.acreage,
+                acreage: field ? plantingAcresForField(r, getDisplayFieldAcres(field, cluAssignments)) : r.acreage,
             }];
         }
 
@@ -862,42 +876,6 @@ export async function exportFsa578Data(
     await downloadFile(csvContent, `FSA_578_Worksheet_${cropYear}_${today}.csv`, 'text/csv');
 }
 
-export async function exportHarvestData(harvestRecords: HarvestRecord[], fields: Field[]): Promise<void> {
-    const header = [
-        'Date',
-        'Field',
-        'Crop',
-        'Bushels',
-        'Moisture %',
-        'Destination',
-        'Landlord Share %',
-        'Landlord Name',
-        'Scale Ticket #',
-        'Farm #',
-        'Tract #'
-    ].join(',');
-
-    const rows = harvestRecords.map(r => {
-        const field = fields.find(f => f.id === r.fieldId);
-        return [
-            sanitizeCsvValue(r.harvestDate || new Date(r.timestamp).toLocaleDateString()),
-            sanitizeCsvValue(r.fieldName),
-            sanitizeCsvValue(r.crop),
-            sanitizeCsvValue(r.bushels),
-            sanitizeCsvValue(r.moisturePercent),
-            sanitizeCsvValue(r.destination === 'bin' ? 'On-Farm Bin' : 'Elevator/Sale'),
-            sanitizeCsvValue(getLandlordSplitPercent(field, r.landlordSplitPercent)),
-            sanitizeCsvValue(r.landlordName),
-            sanitizeCsvValue(r.scaleTicketNumber),
-            sanitizeCsvValue(field?.fsaFarmNumber),
-            sanitizeCsvValue(field?.fsaTractNumber)
-        ].join(',');
-    });
-
-    const csvContent = [header, ...rows].join('\n');
-    await downloadFile(csvContent, `FSA_Harvest_Report_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
-}
-
 export async function exportFertilizerData(records: FertilizerApplication[], fields: Field[]): Promise<void> {
     const header = [
         'Date',
@@ -922,24 +900,4 @@ export async function exportFertilizerData(records: FertilizerApplication[], fie
     await downloadFile(csvContent, `Fertilizer_Report_${toLocalIsoDate(Date.now())}.csv`, 'text/csv');
 }
 
-export async function downloadFile(content: string, fileName: string, contentType: string): Promise<void> {
-    if (Capacitor.isNativePlatform()) {
-        await native.shareFile({
-            fileName,
-            data: content,
-            title: `AcreLedger Export: ${fileName}`,
-            encoding: 'utf8'
-        });
-        return;
-    }
-
-    const blob = new Blob([content], { type: contentType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
+export { downloadFile };

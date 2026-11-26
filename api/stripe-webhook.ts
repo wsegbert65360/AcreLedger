@@ -8,8 +8,7 @@ import {
   resolvePastDueSince,
   shouldApplySubscriptionSnapshot,
   type PastDueSignal,
-  type StripeSubscriptionLike,
-} from '../server/billing.js';
+  type StripeSubscriptionLike, acceptedPriceIds } from '../server/billing.js';
 
 // Stripe signs the raw request body, so Vercel's JSON body parser must stay off.
 export const config = { api: { bodyParser: false } };
@@ -136,6 +135,14 @@ export async function upsertFarmSubscriptionEntitlement(
   }
 
   const mapped = buildSubscriptionUpsert(subscription);
+  // Only the Pro price grants Pro. A subscription on another price (a plan
+  // switched in the Customer Portal, a stray test product) is acknowledged but
+  // not mirrored. A missing price id keeps the previous behaviour.
+  const accepted = acceptedPriceIds(process.env);
+  if (mapped.stripe_price_id && accepted.size > 0 && !accepted.has(mapped.stripe_price_id)) {
+    console.error(`Subscription ${subscription.id} for farm ${farmId} uses unexpected price ${mapped.stripe_price_id}; not granting Pro.`);
+    return true;
+  }
   const payload = {
     ...mapped,
     past_due_since: resolvePastDueSince({
@@ -258,6 +265,15 @@ export default async function handler(req: WebhookRequest, res: ApiResponse) {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch {
     return res.status(400).json({ error: 'Invalid webhook signature or payload' });
+  }
+
+  // Only events from the mode this deployment bills in. The webhook secret
+  // already separates modes; this is the second check, so a test-mode event
+  // can never write billing state while live (or the reverse).
+  const expectLive = billingCheck.config.mode === 'live';
+  if (event.livemode !== expectLive) {
+    console.warn(`Ignoring ${event.livemode ? 'live' : 'test'}-mode Stripe event ${event.id} in ${billingCheck.config.mode} mode.`);
+    return res.status(200).json({ received: true, ignored: 'mode_mismatch' });
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {

@@ -26,7 +26,7 @@ describe('BillingManager status', () => {
   it('shows Free beside the free record book copy for non-allowlisted users', async () => {
     mount();
     expect(await screen.findByText('Free')).toBeInTheDocument();
-    expect(screen.getByText('Free record book. No card needed. Pro is $299 per farm per year.')).toBeInTheDocument();
+    expect(screen.getByText('Free record book. No card needed. Pro is US$299 per farm per year.')).toBeInTheDocument();
     expect(screen.queryByText('Not subscribed')).toBeNull();
   });
   it('shows a legacy trialing Stripe row as Free, never Active', async () => {

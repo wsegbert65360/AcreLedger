@@ -1,6 +1,12 @@
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const platform = vi.hoisted(() => ({ native: false }));
+vi.mock('@capacitor/core', async importOriginal => ({
+  ...(await importOriginal<typeof import('@capacitor/core')>()),
+  Capacitor: { isNativePlatform: () => platform.native, getPlatform: () => (platform.native ? 'ios' : 'web') },
+}));
 
 import Refund from '../Refund';
 import Terms from '../Terms';
@@ -34,5 +40,22 @@ describe('approved legal policies', () => {
     const refund = render(<MemoryRouter><Refund /></MemoryRouter>);
     expect(refund.container).not.toHaveTextContent('A$299');
     expect(refund.container).not.toHaveTextContent('FSA tract entry');
+  });
+
+  describe('inside the iOS app', () => {
+    afterEach(() => { platform.native = false; });
+
+    it.each([['Terms', Terms], ['Refund', Refund]] as const)('%s shows no price, Stripe or billing path', (_name, Page) => {
+      platform.native = true;
+      const { container } = render(<MemoryRouter><Page /></MemoryRouter>);
+      expect(container).not.toHaveTextContent(/\$\s?\d|US\$|Stripe|Settings → Billing|per farm per year/);
+      expect(container).toHaveTextContent('Australian Consumer Law');
+    });
+
+    it('keeps the approved iOS line in Terms', () => {
+      platform.native = true;
+      const { container } = render(<MemoryRouter><Terms /></MemoryRouter>);
+      expect(container).toHaveTextContent('The iOS app does not sell subscriptions or show prices. Subscriptions are managed on the web.');
+    });
   });
 });

@@ -52,7 +52,8 @@ export interface FarmBillingAccessOptions {
 /**
  * Entitlement rule for a farm's subscription row (source of truth is the
  * `farm_subscriptions` mirror, never client-reported state):
- * - `active`: full access. `current_period_end` is the paid-through bound.
+ * - `active`: full access through `current_period_end` plus `graceDays`
+ *   (a late renewal event); past that, locked, as in `_farm_entitlement`.
  * - `trialing`: reported as its own phase and treated as free, like a missing
  *   row: access follows `enforce`. A legacy trial is never Pro.
  * - Payment failure (`past_due`, `unpaid`, or `canceled` with `past_due_since`):
@@ -80,6 +81,12 @@ export function getFarmBillingAccess(options: FarmBillingAccessOptions): FarmBil
     return { hasAccess: !enforce, inGrace: false, phase: 'trialing', status };
   }
   if (status === 'active') {
+    // Paid through current_period_end plus grace for a late renewal event;
+    // matches _farm_entitlement (20261122055428). No period end: unchanged.
+    const periodEndMs = parseInstantMs(subscription.current_period_end);
+    if (periodEndMs !== null && nowMs > periodEndMs + graceDays * DAY_MS) {
+      return { hasAccess: false, inGrace: false, phase: 'locked', status };
+    }
     return { hasAccess: true, inGrace: false, phase: 'active', status };
   }
 
