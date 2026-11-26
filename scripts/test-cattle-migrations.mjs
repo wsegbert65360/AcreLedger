@@ -37,7 +37,7 @@ const gateMigration = await readFile(
 );
 
 const mixedMigration = await readFile(
-  new URL('../supabase/migrations/20261126020000_cattle_mixed_herds.sql', import.meta.url),
+  new URL('../supabase/migrations/20261126032045_cattle_mixed_herds.sql', import.meta.url),
   'utf8',
 );
 
@@ -629,7 +629,7 @@ try {
   `)).rows[0];
   assert.deepEqual(fnProps, { secdef: true, config: '{"search_path=\\"\\""}', anon_exec: false, auth_exec: true }, 'transfer_cattle_head is SECURITY DEFINER, empty search_path, explicit grants');
 
-  // ---- Mixed herds (20261126020000) ----
+  // ---- Mixed herds (20261126032045) ----
   const preMixedHead = await db.query('SELECT id, class, head_count FROM public.cattle_groups ORDER BY id');
   await db.exec(mixedMigration);
   await setPlan('off', 'free');

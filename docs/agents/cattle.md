@@ -35,7 +35,7 @@ Agent rules for the optional cattle book. Architecture detail is [BLUEPRINT → 
 
 ## Mixed herds
 
-Added 2026-11-25 (`20261126020000_cattle_mixed_herds.sql`). A herd (`cattle_groups` row) holds cows, heifers, bulls, calves, steers and stockers together.
+Added 2026-11-25 (`20261126032045_cattle_mixed_herds.sql`). A herd (`cattle_groups` row) holds cows, heifers, bulls, calves, steers and stockers together.
 
 - `cattle_groups` has six count columns: `cows`, `heifers`, `bulls`, `calves`, `steers`, `stockers`. `head_count` is always their sum; the `sync_cattle_class_counts` trigger enforces it. Never write `head_count` alone from new code.
 - A write that changes only `head_count` (an older client, a backup without counts) puts the difference on the herd type's class (`_cattle_count_column(class)`; `mixed` → cows). A decrease that class cannot cover comes off the others in a fixed order. `src/lib/cattle/counts.ts` mirrors this (`herdTypeClass`, `countsFromRow`, `normalizeCattleGroup`).

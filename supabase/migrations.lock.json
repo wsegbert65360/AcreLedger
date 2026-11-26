@@ -129,5 +129,5 @@
   "20261122200000_farm_manager_only_settings_rpcs.sql": "71569078b74b5f138ce6abbd7572c53b13b7bf970d17d6858c36c25d4c9a03dc",
   "20261122200100_season_ceiling_earliest_timezone.sql": "290b27886678e9f2592ae6a2c54d95acf7da2789a0e823831b92f58f856afa9f",
   "20261122200200_weather_farm_quota.sql": "50d036026453f12aab1dac5f86908044515c5c4515e3a55a1ab26d5dc47f0e6d",
-  "20261126020000_cattle_mixed_herds.sql": "4acf322435fdd3cf01cd2c72983d7f0ec503ebe3da1be26cdeeb77ab7a4848ee"
+  "20261126032045_cattle_mixed_herds.sql": "4acf322435fdd3cf01cd2c72983d7f0ec503ebe3da1be26cdeeb77ab7a4848ee"
 }
