@@ -401,6 +401,17 @@ export const TENANT_REGISTRY: TenantTable[] = [
   },
   {
     schema: "public",
+    table: "cattle_treatments",
+    ownership: "direct",
+    farmColumn: "farm_id",
+    hasDeletedAt: true,
+    restoreOrder: 44,
+    primaryKeys: ["id"],
+    includeInTenantBundle: true,
+    notes: "Treatment and vaccine records (withdrawal_until is generated). Restore after cattle groups.",
+  },
+  {
+    schema: "public",
     table: "county_assignments",
     ownership: "direct",
     farmColumn: "farm_id",

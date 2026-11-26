@@ -6,7 +6,7 @@ import {
   WorkRequest
 } from '@/types/farm';
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
-import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
+import type { CattleEvent, CattleGroup, CattleMove, CattleTreatment } from '@/types/cattle';
 import type { FsaTractImport, FieldCluAssignment } from '@/types/fsaTract';
 import type { CountyAssignment } from '@/lib/county/types';
 import { mapCountyAssignmentToDb } from '@/lib/mappers';
@@ -17,7 +17,7 @@ import {
   mapHayToDbForRestore, mapMaintenanceLogToDbForRestore, mapMaintenanceScheduleToDbForRestore,
   mapPlantToDbForRestore, mapRecipeToDbForRestore, mapSeedToDbForRestore, mapSprayToDbForRestore,
   mapTillageToDbForRestore, mapWorkRequestToDbForRestore,
-  mapCattleEventToDbForRestore, mapCattleGroupToDbForRestore, mapCattleMoveToDbForRestore,
+  mapCattleEventToDbForRestore, mapCattleGroupToDbForRestore, mapCattleMoveToDbForRestore, mapCattleTreatmentToDbForRestore,
 } from '@/lib/restoreMappers';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -168,6 +168,7 @@ interface UseSeasonManagementArgs {
   cattleGroups: CattleGroup[];
   cattleMoves: CattleMove[];
   cattleEvents: CattleEvent[];
+  cattleTreatments: CattleTreatment[];
   activeSeason: number;
   viewingSeason?: number;
   setActiveSeason: React.Dispatch<React.SetStateAction<number>>;
@@ -195,6 +196,7 @@ interface UseSeasonManagementArgs {
   setCattleGroups: React.Dispatch<React.SetStateAction<CattleGroup[]>>;
   setCattleMoves: React.Dispatch<React.SetStateAction<CattleMove[]>>;
   setCattleEvents: React.Dispatch<React.SetStateAction<CattleEvent[]>>;
+  setCattleTreatments: React.Dispatch<React.SetStateAction<CattleTreatment[]>>;
   setFarmId: React.Dispatch<React.SetStateAction<string | null>>;
   /** Reload all farm entities from Supabase after restore (source of truth). */
   refetchFarmData: () => Promise<boolean>;
@@ -221,14 +223,14 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     savedSeeds, fertilizerRecipes, sprayRecipes, tillageRecords,
     fsaTracts, cluAssignments, workRequests,
     equipment, maintenanceSchedules, maintenanceLogs,
-    cattleGroups, cattleMoves, cattleEvents, activeSeason, viewingSeason,
+    cattleGroups, cattleMoves, cattleEvents, cattleTreatments, activeSeason, viewingSeason,
     setActiveSeason, setViewingSeason, setLoading,
     setFields, setBins, setPlantRecords, setSprayRecords,
     setHarvestRecords, setHayHarvestRecords, setCustomSprayRecords, setFertilizerApplications,
     setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setTillageRecords, setFsaTracts, setCluAssignments, setWorkRequests,
     setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
-    setCattleGroups, setCattleMoves, setCattleEvents, setFarmId,
+    setCattleGroups, setCattleMoves, setCattleEvents, setCattleTreatments, setFarmId,
     refetchFarmData,
     isOnline, initialFetchComplete, fetchError, pendingSyncCount, farmRole,
     syncQueueReadFailed = false,
@@ -308,7 +310,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
         savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
         equipment, maintenanceSchedules, maintenanceLogs,
-        cattleGroups, cattleMoves, cattleEvents, activeSeason,
+        cattleGroups, cattleMoves, cattleEvents, cattleTreatments, activeSeason,
         rolloverDate: new Date().toISOString(),
       };
       const validatedBackup = backupSchema.parse(backupData);
@@ -373,7 +375,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     hayHarvestRecords, customSprayRecords, fertilizerApplications, tillageRecords, grainMovements,
     savedSeeds, fertilizerRecipes, sprayRecipes, fsaTracts, cluAssignments, workRequests,
     equipment, maintenanceSchedules, maintenanceLogs,
-    cattleGroups, cattleMoves, cattleEvents, activeSeason, viewingSeason,
+    cattleGroups, cattleMoves, cattleEvents, cattleTreatments, activeSeason, viewingSeason,
     isOnline, farm_id, initialFetchComplete, fetchError, hasUnsyncedWork,
     setActiveSeason, setViewingSeason, setLoading, refreshActiveSeason,
   ]);
@@ -459,6 +461,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
       const cattleGroupsToDb = (backupData.cattleGroups ?? []).map((row) => mapCattleGroupToDbForRestore({ ...row, farm_id } as CattleGroup));
       const cattleMovesToDb = (backupData.cattleMoves ?? []).map((row) => mapCattleMoveToDbForRestore({ ...row, farm_id } as CattleMove));
       const cattleEventsToDb = (backupData.cattleEvents ?? []).map((row) => mapCattleEventToDbForRestore({ ...row, farm_id } as CattleEvent));
+      const cattleTreatmentsToDb = (backupData.cattleTreatments ?? []).map((row) => mapCattleTreatmentToDbForRestore({ ...row, farm_id } as CattleTreatment));
 
       const switchActiveSeason = options?.switchActiveSeason === true
         && backupData.activeSeason !== undefined
@@ -494,6 +497,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
         cattle_groups: cattleGroupsToDb,
         cattle_moves: cattleMovesToDb,
         cattle_events: cattleEventsToDb,
+        cattle_treatments: cattleTreatmentsToDb,
       };
       if (switchActiveSeason) {
         payload._expected_active_season = activeSeason;
@@ -656,6 +660,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setCattleGroups([]);
     setCattleMoves([]);
     setCattleEvents([]);
+    setCattleTreatments([]);
     if (isSignOut) {
       setActiveSeason(getCurrentYear());
       setViewingSeason(getCurrentYear());
@@ -685,7 +690,7 @@ export function useSeasonManagement(args: UseSeasonManagementArgs) {
     setTillageRecords, setGrainMovements, setSavedSeeds, setFertilizerRecipes, setSprayRecipes,
     setFsaTracts, setCluAssignments, setWorkRequests,
     setEquipment, setMaintenanceSchedules, setMaintenanceLogs,
-    setCattleGroups, setCattleMoves, setCattleEvents,
+    setCattleGroups, setCattleMoves, setCattleEvents, setCattleTreatments,
     setFarmId, setActiveSeason, setViewingSeason,
     refetchFarmData, refreshActiveSeason,
   ]);

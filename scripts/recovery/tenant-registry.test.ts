@@ -35,6 +35,7 @@ const KNOWN_FARM_OWNED = [
   "public.cattle_groups",
   "public.cattle_moves",
   "public.cattle_events",
+  "public.cattle_treatments",
   "public.farm_comps",
   "public.billing_audit_log",
   "public.farm_subscriptions",

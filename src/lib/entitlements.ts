@@ -41,7 +41,7 @@ export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
  */
 const PAID_REPORT_TYPES: ReadonlySet<string> = new Set([
   'fsa-plant', 'insurance-production', 'spray-audit', 'fertilizer-summary', 'hay-summary',
-  'landlord-statement', 'farm-owner-summary', 'cattle-csv',
+  'landlord-statement', 'farm-owner-summary', 'cattle-csv', 'cattle-treatment-record',
 ]);
 
 export function isPaidReport(reportType: string): boolean {

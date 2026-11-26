@@ -1,5 +1,5 @@
 import type { Equipment, MaintenanceLog, MaintenanceSchedule } from '@/types/equipment';
-import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
+import type { CattleEvent, CattleGroup, CattleMove, CattleTreatment } from '@/types/cattle';
 import type {
   Bin, CustomSprayRecord, FertilizerApplication, FertilizerRecipe, Field, GrainMovement,
   HarvestRecord, HayHarvestRecord, PlantRecord, SavedSeed, SprayRecipe, SprayRecord,
@@ -11,7 +11,7 @@ import {
   mapFieldCluAssignmentToDb, mapFieldToDb, mapFsaTractToDb, mapGrainToDb, mapHarvestToDb,
   mapHayToDb, mapMaintenanceLogToDb, mapMaintenanceScheduleToDb, mapPlantToDb, mapRecipeToDb,
   mapSeedToDb, mapSprayToDb, mapTillageToDb, mapWorkRequestToDb,
-  mapCattleEventToDb, mapCattleGroupToDb, mapCattleMoveToDb,
+  mapCattleEventToDb, mapCattleGroupToDb, mapCattleMoveToDb, mapCattleTreatmentToDb,
 } from '@/lib/mappers';
 
 const IDENTITY_KEYS = new Set(['id', 'farm_id']);
@@ -127,6 +127,7 @@ export const mapMaintenanceLogToDbForRestore = wrapRestoreMapper(mapMaintenanceL
 export const mapCattleGroupToDbForRestore = wrapRestoreMapper(mapCattleGroupToDb);
 export const mapCattleMoveToDbForRestore = wrapRestoreMapper(mapCattleMoveToDb);
 export const mapCattleEventToDbForRestore = wrapRestoreMapper(mapCattleEventToDb);
+export const mapCattleTreatmentToDbForRestore = wrapRestoreMapper(mapCattleTreatmentToDb);
 
 export type RestoreField = Field;
 export type RestoreSpray = SprayRecord;
@@ -148,5 +149,6 @@ export type RestoreLog = MaintenanceLog;
 export type RestoreCattleGroup = CattleGroup;
 export type RestoreCattleMove = CattleMove;
 export type RestoreCattleEvent = CattleEvent;
+export type RestoreCattleTreatment = CattleTreatment;
 export type RestoreTract = FsaTractImport;
 export type RestoreAssignment = FieldCluAssignment;

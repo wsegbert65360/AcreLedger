@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -38,6 +38,16 @@ const gateMigration = await readFile(
 
 const mixedMigration = await readFile(
   new URL('../supabase/migrations/20261126032045_cattle_mixed_herds.sql', import.meta.url),
+  'utf8',
+);
+
+const definerMigration = await readFile(
+  new URL('../supabase/migrations/20261126035847_cattle_counts_trigger_definer.sql', import.meta.url),
+  'utf8',
+);
+
+const healthMigration = await readFile(
+  new URL('../supabase/migrations/20261126040807_cattle_herd_health_breeding.sql', import.meta.url),
   'utf8',
 );
 
@@ -698,7 +708,196 @@ try {
   assert.equal(herd.head_count, herd.cows + herd.heifers + herd.bulls + herd.calves + herd.steers + herd.stockers, 'the total always equals the classes');
   await db.exec('RESET ROLE');
 
-  console.log('Cattle migration checks passed: defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, reused names, the Pro gate on events, and mixed herds (class counts, older-client totals, class events, reclass, class transfers and class-aware reversal).');
+  // ---- Hotfix 20261126043000: a signed-in user's direct herd add/edit runs the count trigger ----
+  await db.exec(`SET ROLE authenticated;`);
+  await assert.rejects(
+    db.query(`INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1, $2, 'Direct add', 'cows', 4)`, [m(40), ids.farm]),
+    error => error.code === '42501',
+    'before the hotfix a direct herd insert hit permission denied on the helper',
+  );
+  await db.exec('RESET ROLE');
+  await db.exec(definerMigration);
+  await db.exec(`SET ROLE authenticated;`);
+  await db.query(`INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1, $2, 'Direct add', 'cows', 4)`, [m(40), ids.farm]);
+  assert.equal((await counts(m(40))).cows, 4, 'a direct herd insert by a signed-in user works and fills its class');
+  await db.query('UPDATE public.cattle_groups SET bulls = 2 WHERE id = $1', [m(40)]);
+  assert.deepEqual(await counts(m(40)), { head_count: 6, cows: 4, heifers: 0, bulls: 2, calves: 0, steers: 0, stockers: 0 }, 'a direct herd edit by a signed-in user keeps the other classes');
+  await db.query('UPDATE public.cattle_groups SET head_count = 5 WHERE id = $1', [m(40)]);
+  assert.equal((await counts(m(40))).head_count, 5, 'an older total-only edit by a signed-in user works');
+  await db.exec('RESET ROLE');
+
+  // ---- Herd health and breeding (20261126040000) ----
+  await db.exec(healthMigration);
+  const h = i => `10000000-0000-4000-8000-0000000004${String(i).padStart(2, '0')}`;
+  await db.exec(`SET ROLE authenticated;`);
+  const logHealth = (id, type, extra = {}) => db.query(
+    'SELECT public.log_cattle_event($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) AS value',
+    [ids.farm, id, m(1), type, extra.date ?? '2026-11-09', 0, null, null, null, null, null, null,
+      extra.bred ?? null, extra.open ?? null, extra.notChecked ?? null, extra.exposed ?? null,
+      extra.headWeaned ?? null, extra.avgWeight ?? null],
+  );
+  const eventRow = async id => (await db.query('SELECT * FROM public.cattle_events WHERE id = $1', [id])).rows[0];
+  const code = c => error => error.code === c;
+
+  // Preg check results.
+  await logHealth(h(1), 'preg_check', { bred: 28, open: 2, notChecked: 0 });
+  let pregRow = await eventRow(h(1));
+  assert.deepEqual([pregRow.bred_count, pregRow.open_count, pregRow.not_checked_count], [28, 2, 0], 'a preg check stores bred, open and not checked');
+  assert.equal((await logHealth(h(1), 'preg_check', { bred: 28, open: 2, notChecked: 0 })).rows[0].value.already_applied, true, 'a preg check replays idempotently');
+  await assert.rejects(logHealth(h(1), 'preg_check', { bred: 27, open: 3, notChecked: 0 }), code('23505'), 'the same id with other results conflicts');
+  await assert.rejects(logHealth(h(2), 'preg_check', { bred: 0, open: 0, notChecked: 0 }), code('23514'), 'a preg check needs at least one head');
+  await assert.rejects(logHealth(h(2), 'working', { bred: 1 }), code('23514'), 'preg numbers belong to a preg check only');
+  await logHealth(h(3), 'preg_check');
+  assert.equal((await eventRow(h(3))).bred_count, null, 'an older preg check with no results still saves');
+  await logHealth(h(4), 'preg_check', { bred: 10 });
+  pregRow = await eventRow(h(4));
+  assert.deepEqual([pregRow.bred_count, pregRow.open_count, pregRow.not_checked_count], [10, 0, 0], 'a partial result fills the rest with zero');
+
+  // Bull turnout and pull.
+  await logHealth(h(5), 'bull_in', { date: '2026-05-20', exposed: 30 });
+  await logHealth(h(6), 'bull_out', { date: '2026-08-01' });
+  assert.equal((await eventRow(h(5))).exposed_count, 30, 'bulls in keeps the females exposed');
+  assert.equal((await eventRow(h(6))).exposed_count, null, 'bulls out has no exposure');
+  assert.equal((await logHealth(h(5), 'bull_in', { date: '2026-05-20', exposed: 30 })).rows[0].value.already_applied, true, 'bulls in replays idempotently');
+  await assert.rejects(logHealth(h(7), 'bull_out', { exposed: 5 }), code('23514'), 'exposure applies to bulls in only');
+  await assert.rejects(logHealth(h(7), 'bull_in', { exposed: 0 }), code('23514'), 'exposure must be positive');
+
+  // Weaning numbers.
+  await logHealth(h(8), 'weaning', { headWeaned: 25, avgWeight: 512.46 });
+  const weanRow = await eventRow(h(8));
+  assert.equal(weanRow.head_weaned, 25);
+  assert.equal(Number(weanRow.avg_weight), 512.5, 'average weight is kept to one decimal');
+  assert.equal((await logHealth(h(8), 'weaning', { headWeaned: 25, avgWeight: 512.46 })).rows[0].value.already_applied, true, 'weaning replays idempotently');
+  await logHealth(h(9), 'weaning', { headWeaned: 12 });
+  assert.equal((await eventRow(h(9))).avg_weight, null, 'head weaned alone is allowed');
+  await assert.rejects(logHealth(h(10), 'weaning', { avgWeight: 500 }), code('23514'), 'a weight needs a head count');
+  await assert.rejects(logHealth(h(10), 'working', { headWeaned: 5 }), code('23514'), 'weaning numbers belong to weaning only');
+  await assert.rejects(logHealth(h(10), 'weaning', { headWeaned: 5, avgWeight: 0 }), code('23514'), 'weight must be above zero');
+
+  // Older argument lists still resolve.
+  const oldEight = await db.query('SELECT public.log_cattle_event($1,$2,$3,$4,$5,$6,$7,$8) AS value', [ids.farm, h(11), m(1), 'head_added', '2026-11-09', 1, null, null]);
+  assert.equal(oldEight.rows[0].value.already_applied, false, 'the eight-argument call still works');
+  const oldTwelve = await db.query('SELECT public.log_cattle_event($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) AS value', [ids.farm, h(12), m(1), 'calving', '2026-11-09', 1, null, null, null, null, null, 'steer']);
+  assert.equal(oldTwelve.rows[0].value.already_applied, false, 'the twelve-argument call still works');
+
+  // Treatments.
+  const treat = (id, over = {}) => {
+    const a = {
+      farm: ids.farm, group: m(1), date: '2026-11-09', product: 'Bovi-Shield Gold 5', kind: 'vaccine',
+      head: 20, dose: 2, unit: 'mL', route: 'SQ', days: 21, cls: null, basis: 'per_head',
+      lot: 'L123', by: 'William', notes: null, ...over,
+    };
+    return db.query(
+      'SELECT public.log_cattle_treatment($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) AS value',
+      [a.farm, id, a.group, a.date, a.product, a.kind, a.head, a.dose, a.unit, a.route, a.days, a.cls, a.basis, a.lot, a.by, a.notes],
+    );
+  };
+  const firstTreatment = await treat(h(20));
+  assert.equal(firstTreatment.rows[0].value.already_applied, false);
+  assert.equal(firstTreatment.rows[0].value.withdrawal_until, '2026-11-30', 'withdrawal is the treatment date plus the days');
+  const tRow = (await db.query(`SELECT product, kind, head_treated, dose, route, withdrawal_days, to_char(withdrawal_until, 'YYYY-MM-DD') AS wu FROM public.cattle_treatments WHERE id = $1`, [h(20)])).rows[0];
+  assert.deepEqual([tRow.product, tRow.kind, tRow.head_treated, Number(tRow.dose), tRow.route, tRow.withdrawal_days, tRow.wu], ['Bovi-Shield Gold 5', 'vaccine', 20, 2, 'SQ', 21, '2026-11-30'], 'the treatment is saved with its generated withdrawal date');
+  assert.equal((await treat(h(20))).rows[0].value.already_applied, true, 'a treatment replays idempotently');
+  assert.equal((await treat(h(20), { product: ' Bovi-Shield Gold 5 ' })).rows[0].value.already_applied, true, 'text is trimmed before the replay check');
+  await assert.rejects(treat(h(20), { dose: 3 }), code('23505'), 'the same id with another dose conflicts');
+  for (const [label, over] of [
+    ['zero head', { head: 0 }],
+    ['more head than the herd holds', { head: 999 }],
+    ['more head than the class holds', { cls: 'bulls', head: 3 }],
+    ['an unknown class', { cls: 'hogs' }],
+    ['zero dose', { dose: 0 }],
+    ['an unknown unit', { unit: 'gallon' }],
+    ['an unknown route', { route: 'rectal' }],
+    ['a 400-day withdrawal', { days: 400 }],
+    ['a negative withdrawal', { days: -1 }],
+    ['a blank product', { product: '  ' }],
+    ['an unknown kind', { kind: 'supplement' }],
+    ['a future date', { date: '2999-01-01' }],
+    ['an unknown dose basis', { basis: 'per_acre' }],
+  ]) {
+    await assert.rejects(treat(h(21), over), code('23514'), `a treatment with ${label} is refused`);
+  }
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_treatments WHERE id = $1', [h(21)])).rows[0].c, 0, 'a refused treatment leaves no row');
+  await assert.rejects(treat(h(21), { farm: ids.otherFarm }), code('42501'), 'another farm id is denied');
+  await assert.rejects(treat(h(21), { group: ids.otherGroup }), code('P0002'), 'a herd from another farm is not found');
+  const whole = await treat(h(22), { head: 5, cls: null, product: 'Cydectin', kind: 'dewormer', route: 'pour_on', days: 0 });
+  assert.equal(whole.rows[0].value.withdrawal_until, '2026-11-09', 'zero withdrawal clears on the treatment day');
+
+  // Clients cannot write the table directly.
+  await assert.rejects(
+    db.query(`INSERT INTO public.cattle_treatments (farm_id, group_id, treated_on, product, kind, head_treated, dose, dose_unit, route) VALUES ($1, $2, '2026-11-09', 'x', 'other', 1, 1, 'mL', 'SQ')`, [ids.farm, m(1)]),
+    code('42501'), 'direct inserts are refused',
+  );
+  await assert.rejects(db.query(`UPDATE public.cattle_treatments SET product = 'y' WHERE id = $1`, [h(20)]), code('42501'), 'direct updates are refused');
+  await assert.rejects(db.query('DELETE FROM public.cattle_treatments WHERE id = $1', [h(20)]), code('42501'), 'direct deletes are refused');
+
+  // Tenant isolation: another farm's treatment is invisible.
+  await db.exec('RESET ROLE');
+  await db.exec(`
+    SELECT set_config('acreledger.cattle_rpc', 'on', true);
+    INSERT INTO public.cattle_treatments (id, farm_id, group_id, treated_on, product, kind, head_treated, dose, dose_unit, route)
+    VALUES ('${h(29)}', '${ids.otherFarm}', '${ids.otherGroup}', '2026-11-09', 'Other farm shot', 'other', 1, 1, 'mL', 'SQ');
+  `);
+  await db.exec(`SET ROLE authenticated;`);
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_treatments WHERE id = $1', [h(29)])).rows[0].c, 0, 'RLS hides another farm\'s treatments');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_treatments WHERE id = $1', [h(20)])).rows[0].c, 1, 'and shows this farm\'s');
+
+  // Pro gate: new treatments need Pro; replays and deletes stay free.
+  await db.exec('RESET ROLE'); await setPlan('enforce', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+  await assert.rejects(treat(h(30)), error => error.code === 'P0402' && /premium_required:cattle_events/.test(error.message), 'a new treatment needs Pro on a free farm');
+  assert.equal((await treat(h(20))).rows[0].value.already_applied, true, 'replaying a saved treatment never parks');
+  const delT = await db.query('SELECT public.delete_cattle_treatment($1,$2) AS value', [ids.farm, h(22)]);
+  assert.equal(delT.rows[0].value.already_applied, false, 'deleting a treatment stays free');
+  assert.equal((await db.query('SELECT public.delete_cattle_treatment($1,$2) AS value', [ids.farm, h(22)])).rows[0].value.already_applied, true, 'a second delete is a no-op');
+  assert.equal((await db.query('SELECT count(*)::int AS c FROM public.cattle_treatments WHERE id = $1', [h(22)])).rows[0].c, 0, 'a deleted treatment is hidden');
+  await assert.rejects(db.query('SELECT public.delete_cattle_treatment($1,$2)', [ids.otherFarm, h(22)]), code('42501'), 'deleting for another farm is denied');
+  await assert.rejects(db.query('SELECT public.delete_cattle_treatment($1,$2)', [ids.farm, h(99)]), code('P0002'), 'an unknown treatment is not found');
+  await db.exec('RESET ROLE'); await setPlan('off', 'free');
+  await db.exec(`SET ROLE authenticated;`);
+
+  // Deleting a herd takes its treatments with it.
+  await db.query(`INSERT INTO public.cattle_groups (id, farm_id, name, class, head_count) VALUES ($1, $2, 'Tombstone herd', 'cows', 10)`, [m(30), ids.farm]);
+  await treat(h(31), { group: m(30), head: 5 });
+  await db.query('SELECT public.soft_delete_cattle_row($1,$2,$3)', [ids.farm, 'group', m(30)]);
+  await db.exec('RESET ROLE');
+  assert.equal((await db.query('SELECT deleted_at IS NOT NULL AS gone FROM public.cattle_treatments WHERE id = $1', [h(31)])).rows[0].gone, true, 'a deleted herd tombstones its treatments');
+  assert.equal((await db.query('SELECT deleted_at IS NULL AS live FROM public.cattle_treatments WHERE id = $1', [h(20)])).rows[0].live, true, 'other herds keep theirs');
+
+  // Backup restore brings treatments back (the generated withdrawal date is not in the payload).
+  // The restore wrapper also restores county assignments, so the test needs that table to exist.
+  await db.exec(`
+    CREATE TABLE public.county_assignments (
+      id uuid PRIMARY KEY, farm_id uuid, subject_type text, subject_key text, county_fips text, deleted_at timestamptz
+    );
+  `);
+  await db.exec(`SET ROLE authenticated;`);
+  const restoreTreatment = {
+    id: h(40), farm_id: ids.farm, group_id: m(1), treated_on: '2026-10-01', product: 'Ivomec', kind: 'dewormer',
+    cattle_class: null, head_treated: 10, dose: 5, dose_unit: 'mL', dose_basis: 'per_head', route: 'pour_on',
+    withdrawal_days: 48, lot_number: null, given_by: null, notes: null,
+    created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', deleted_at: null,
+  };
+  const restoredTreatments = await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify({ cattle_treatments: [restoreTreatment] })]);
+  assert.equal(restoredTreatments.rows[0].value.cattle_treatments, 1, 'restore reports the treatments it brought back');
+  assert.equal((await db.query(`SELECT to_char(withdrawal_until, 'YYYY-MM-DD') AS wu FROM public.cattle_treatments WHERE id = $1`, [h(40)])).rows[0].wu, '2026-11-18', 'a restored treatment gets its withdrawal date');
+  assert.equal((await db.query('SELECT public.restore_farm_backup($1::jsonb, NULL) AS value', [JSON.stringify({ cattle_treatments: [restoreTreatment] })])).rows[0].value.cattle_treatments, 1, 'restoring twice is safe');
+
+  await db.exec('RESET ROLE');
+  const treatProps = (await db.query(`
+    SELECT p.proname, p.prosecdef AS secdef,
+      has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_exec,
+      has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_exec
+    FROM pg_proc p WHERE p.proname IN ('log_cattle_treatment', 'delete_cattle_treatment') ORDER BY p.proname
+  `)).rows;
+  assert.deepEqual(
+    treatProps.map(row => [row.proname, row.secdef, row.anon_exec, row.auth_exec]),
+    [['delete_cattle_treatment', true, false, true], ['log_cattle_treatment', true, false, true]],
+    'treatment RPCs are SECURITY DEFINER with explicit grants',
+  );
+  assert.equal((await db.query(`SELECT has_table_privilege('anon', 'public.cattle_treatments', 'SELECT') AS a, has_table_privilege('authenticated', 'public.cattle_treatments', 'INSERT') AS i`)).rows[0].a, false, 'anon cannot read treatments');
+
+  console.log('Cattle migration checks passed: herd health and breeding (treatments, preg checks, bull turnout, weaning numbers), defaults, RLS, tenant isolation, back-dated moves, head-count floor, RPC replay, event reversal, cascade soft delete, required removal reasons, UTC date slack, text normalisation, floored event delete, and atomic transfers, backup/delete/restore, renamed name collisions, reused names, the Pro gate on events, and mixed herds (class counts, older-client totals, class events, reclass, class transfers and class-aware reversal).');
 } finally {
   await db.close();
 }

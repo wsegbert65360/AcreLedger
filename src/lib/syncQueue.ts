@@ -32,7 +32,7 @@ export type EquipmentRpcName = typeof EQUIPMENT_RPCS[number];
 const EQUIPMENT_RPC_ALLOWLIST = new Set<string>(EQUIPMENT_RPCS);
 export const CATTLE_RPCS = [
   'move_cattle_group', 'log_cattle_event', 'soft_delete_cattle_row',
-  'transfer_cattle_head', 'set_runs_cattle',
+  'transfer_cattle_head', 'set_runs_cattle', 'log_cattle_treatment', 'delete_cattle_treatment',
 ] as const;
 export type CattleRpcName = typeof CATTLE_RPCS[number];
 const CATTLE_RPC_ALLOWLIST = new Set<string>(CATTLE_RPCS);
@@ -107,7 +107,7 @@ const ALLOWED_TABLES = new Set([
   'fsa_tract_imports', 'field_clu_assignments',
   'work_requests',
   'equipment', 'maintenance_schedules', 'maintenance_logs',
-  'cattle_groups', 'cattle_moves', 'cattle_events',
+  'cattle_groups', 'cattle_moves', 'cattle_events', 'cattle_treatments',
   'county_assignments',
   // Farm-level settings ride the sync queue only as an allowlisted cattle RPC
   // envelope (set_runs_cattle); a plain farms mutation is discarded on replay.

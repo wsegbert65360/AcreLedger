@@ -1,11 +1,12 @@
 import {
   mapCattleEventFromDb, mapCattleEventToDb, mapCattleGroupFromDb, mapCattleGroupToDb,
-  mapCattleMoveFromDb, mapCattleMoveToDb,
+  mapCattleMoveFromDb, mapCattleMoveToDb, mapCattleTreatmentFromDb, mapCattleTreatmentToDb,
 } from '@/lib/mappers';
 import { MAX_SYNC_RETRIES, readCattleRpcEnvelope, type QueuedMutation } from '@/lib/syncQueue';
 import { applyEventToGroup, herdTypeClass, isCountClass, normalizeCattleGroup, withClassDelta } from './counts';
 import type {
   CattleEvent, CattleEventRow, CattleGroup, CattleGroupRow, CattleMove, CattleMoveRow,
+  CattleTreatment, CattleTreatmentRow,
 } from '@/types/cattle';
 
 function upsert<T extends { id: string }>(rows: T[], row: T): T[] {
@@ -42,6 +43,17 @@ function overlayEvent(rows: CattleEvent[], payload: Record<string, unknown>): Ca
   } catch { return rows; }
 }
 
+function overlayTreatment(rows: CattleTreatment[], payload: Record<string, unknown>): CattleTreatment[] {
+  const id = String(payload.id ?? '');
+  if (!id) return rows;
+  const current = rows.find(item => item.id === id);
+  try {
+    return upsert(rows, mapCattleTreatmentFromDb({
+      ...(current ? mapCattleTreatmentToDb(current) : {}), ...payload, id,
+    } as CattleTreatmentRow));
+  } catch { return rows; }
+}
+
 function latestMove(groupId: string, moves: CattleMove[]): CattleMove | undefined {
   return moves
     .filter(item => item.groupId === groupId && !item.deleted_at)
@@ -55,13 +67,15 @@ export function applyParkedCattleMutations(
   events: CattleEvent[],
   queue: QueuedMutation[],
   includePending = false,
-): { groups: CattleGroup[]; moves: CattleMove[]; events: CattleEvent[] } {
+  treatments: CattleTreatment[] = [],
+): { groups: CattleGroup[]; moves: CattleMove[]; events: CattleEvent[]; treatments: CattleTreatment[] } {
   let nextGroups = groups;
   let nextMoves = moves;
   let nextEvents = events;
+  let nextTreatments = treatments;
   const relevant = queue.filter(item =>
     (includePending || item.retry_count >= MAX_SYNC_RETRIES)
-    && ['cattle_groups', 'cattle_moves', 'cattle_events'].includes(item.table_name));
+    && ['cattle_groups', 'cattle_moves', 'cattle_events', 'cattle_treatments'].includes(item.table_name));
 
   for (const mutation of relevant) {
     const payload = mutation.payload && typeof mutation.payload === 'object'
@@ -78,6 +92,19 @@ export function applyParkedCattleMutations(
         && (!group.currentSince || movedOn >= group.currentSince)
         ? { ...group, currentFieldId: typeof rpc.args.p_field_id === 'string' ? rpc.args.p_field_id : undefined, currentSince: movedOn }
         : group);
+      continue;
+    }
+
+    if (rpc?.rpc === 'log_cattle_treatment') {
+      nextTreatments = overlayTreatment(nextTreatments, payload);
+      continue;
+    }
+
+    if (rpc?.rpc === 'delete_cattle_treatment') {
+      const rowId = String(rpc.args.p_treatment_id ?? payload.id ?? '');
+      nextTreatments = nextTreatments.map(item => item.id === rowId
+        ? { ...item, deleted_at: item.deleted_at ?? deletedAt }
+        : item);
       continue;
     }
 
@@ -132,6 +159,7 @@ export function applyParkedCattleMutations(
         nextGroups = nextGroups.map(item => item.id === rowId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
         nextMoves = nextMoves.map(item => item.groupId === rowId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
         nextEvents = nextEvents.map(item => item.groupId === rowId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
+        nextTreatments = nextTreatments.map(item => item.groupId === rowId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
       } else if (rowType === 'move') {
         const move = nextMoves.find(item => item.id === rowId);
         nextMoves = nextMoves.map(item => item.id === rowId ? { ...item, deleted_at: item.deleted_at ?? deletedAt } : item);
@@ -163,7 +191,7 @@ export function applyParkedCattleMutations(
 
     if (mutation.table_name === 'cattle_groups') nextGroups = overlayGroup(nextGroups, payload);
   }
-  return { groups: nextGroups, moves: nextMoves, events: nextEvents };
+  return { groups: nextGroups, moves: nextMoves, events: nextEvents, treatments: nextTreatments };
 }
 
 /**

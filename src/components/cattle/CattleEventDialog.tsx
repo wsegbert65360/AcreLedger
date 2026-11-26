@@ -13,7 +13,9 @@ import {
   CALF_SEX_LABELS, CATTLE_EVENT_HEAD_RULE, CATTLE_EVENT_LABELS, CATTLE_EVENT_TYPES, CATTLE_REMOVAL_LABELS,
   isFutureDate, parseHeadCount,
 } from '@/lib/cattle/ui';
+import { withdrawalConflicts } from '@/lib/cattle/health';
 import { localTodayIso } from '@/lib/equipment';
+import { formatIsoDate } from '@/utils/dates';
 import { useFarm } from '@/store/farmStore';
 import type { CalfSex, CattleEventType, CattleGroup, CattleRemovalReason, CountClass } from '@/types/cattle';
 
@@ -28,7 +30,7 @@ const MIXED_SEX = 'mixed';
 
 /** Log one event for a herd. Moving head to another herd is one queued transfer, not two writes. */
 export default function CattleEventDialog({ group, onClose }: { group: CattleGroup; onClose: () => void }) {
-  const { cattleGroups, logCattleEvent, transferCattleHead } = useFarm();
+  const { cattleGroups, cattleTreatments, logCattleEvent, transferCattleHead } = useFarm();
   const today = localTodayIso();
   const counts = groupCounts(group);
   const ownClass = herdTypeClass(group.class);
@@ -42,6 +44,12 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
   const [reason, setReason] = useState<CattleRemovalReason | ''>('');
   const [toGroupId, setToGroupId] = useState('');
   const [weanHead, setWeanHead] = useState('');
+  const females = counts.cows + counts.heifers;
+  const [bred, setBred] = useState('');
+  const [open, setOpen] = useState('');
+  const [exposed, setExposed] = useState(females > 0 ? String(females) : '');
+  const [headWeaned, setHeadWeaned] = useState('');
+  const [avgWeight, setAvgWeight] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -86,6 +94,56 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
       weanCount = parsed;
     }
 
+    // Preg check: results are optional, but blanks count as zero once either is filled in.
+    let pregResult: { bred: number; open: number; notChecked: number } | undefined;
+    if (type === 'preg_check' && (bred.trim() || open.trim())) {
+      const bredCount = bred.trim() ? parseHeadCount(bred) : 0;
+      const openCount = open.trim() ? parseHeadCount(open) : 0;
+      if (bredCount === null || openCount === null) return fail('Bred and open must be whole numbers.');
+      if (bredCount + openCount < 1) return fail('Enter how many were bred or open.');
+      if (females > 0 && bredCount + openCount > females) {
+        return fail(`${group.name} only has ${females} cows and heifers.`);
+      }
+      pregResult = { bred: bredCount, open: openCount, notChecked: Math.max(0, females - bredCount - openCount) };
+    }
+
+    let exposedCount: number | undefined;
+    if (type === 'bull_in') {
+      const parsed = parseHeadCount(exposed);
+      if (parsed === null || parsed < 1) return fail('Enter how many cows and heifers are with the bulls.');
+      exposedCount = parsed;
+    }
+
+    let weanedCount: number | undefined;
+    let weanedWeight: number | undefined;
+    if (type === 'weaning') {
+      if (headWeaned.trim()) {
+        const parsed = parseHeadCount(headWeaned);
+        if (parsed === null || parsed < 1) return fail('Calves weaned must be a whole number, at least 1.');
+        weanedCount = parsed;
+      }
+      if (avgWeight.trim()) {
+        if (!weanedCount) return fail('Enter how many calves were weaned to record a weight.');
+        const weight = Number(avgWeight.trim());
+        if (!/^\d+(\.\d)?$/.test(avgWeight.trim()) || !(weight > 0) || weight > 9999) {
+          return fail('Average weight must be a number, like 540 or 540.5.');
+        }
+        weanedWeight = weight;
+      }
+    }
+
+    // Shipping cattle that are still in a withdrawal period needs a second look.
+    if (type === 'head_removed' && reason === 'shipped') {
+      const held = withdrawalConflicts(cattleTreatments, group.id, date, cattleClass);
+      if (held.length > 0) {
+        const worst = held[0];
+        const proceed = window.confirm(
+          `${worst.product} is still in withdrawal until ${formatIsoDate(worst.withdrawalUntil)}. Ship these head anyway?`,
+        );
+        if (!proceed) return undefined;
+      }
+    }
+
     setError(null);
     setSaving(true);
     // Set when the server refuses the save for plan reasons, so the message says so.
@@ -106,6 +164,9 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
           toClass: isReclass ? toClass : undefined,
           classHead: isReclass ? count : undefined,
           calfSex: type === 'calving' && calfSex !== MIXED_SEX ? calfSex : undefined,
+          bredCount: pregResult?.bred, openCount: pregResult?.open, notCheckedCount: pregResult?.notChecked,
+          exposedCount,
+          headWeaned: weanedCount, avgWeight: weanedWeight,
           notes: cleanNotes,
         }, saveOptions);
         if (!ok) return void toast.error(premiumRequired ? ENTITLEMENT_COPY.cattleEventsLockedTitle : 'Could not save the event.');
@@ -212,8 +273,45 @@ export default function CattleEventDialog({ group, onClose }: { group: CattleGro
             </div>
           )}
           {isTransfer && destinationPicker}
+          {type === 'preg_check' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="event-bred">Bred</Label>
+                  <Input id="event-bred" value={bred} onChange={event => setBred(event.target.value)} className="h-11" inputMode="numeric" placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="event-open">Open</Label>
+                  <Input id="event-open" value={open} onChange={event => setOpen(event.target.value)} className="h-11" inputMode="numeric" placeholder="0" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground" data-testid="preg-not-checked">
+                {females > 0
+                  ? `${Math.max(0, females - (Number(bred) || 0) - (Number(open) || 0))} of ${females} cows and heifers not checked. `
+                  : ''}
+                Leave both blank to just record that a preg check was done.
+              </p>
+            </>
+          )}
+          {type === 'bull_in' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="event-exposed">Cows and heifers with the bulls</Label>
+              <Input id="event-exposed" value={exposed} onChange={event => setExposed(event.target.value)} className="h-11" inputMode="numeric" placeholder="0" />
+              <p className="text-xs text-muted-foreground">Calving and weaning percentages divide by this number.</p>
+            </div>
+          )}
           {type === 'weaning' && (
             <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="event-head-weaned">Calves weaned (optional)</Label>
+                  <Input id="event-head-weaned" value={headWeaned} onChange={event => setHeadWeaned(event.target.value)} className="h-11" inputMode="numeric" placeholder={counts.calves > 0 ? String(counts.calves) : '0'} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="event-avg-weight">Average weight, lb (optional)</Label>
+                  <Input id="event-avg-weight" value={avgWeight} onChange={event => setAvgWeight(event.target.value)} className="h-11" inputMode="decimal" placeholder="540" />
+                </div>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="event-wean-head">Move weaned calves to another herd (optional)</Label>
                 <Input id="event-wean-head" value={weanHead} onChange={event => setWeanHead(event.target.value)} className="h-11" inputMode="numeric" placeholder="How many calves" />

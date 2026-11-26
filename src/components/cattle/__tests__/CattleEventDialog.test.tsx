@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 
 const farm = vi.hoisted(() => ({
   cattleGroups: [] as unknown[],
+  cattleTreatments: [] as unknown[],
   logCattleEvent: vi.fn(async () => true),
   transferCattleHead: vi.fn(async () => true),
 }));

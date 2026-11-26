@@ -3,8 +3,9 @@ import { toast } from 'sonner';
 import { isPremiumRequiredError } from '@/lib/entitlements';
 import { isUnknownMutationOutcome } from '@/lib/mutationOutcome';
 import {
-  mapCattleEventToDb, mapCattleGroupToDb, mapCattleGroupUpdateToDb, mapCattleMoveToDb,
+  mapCattleEventToDb, mapCattleGroupToDb, mapCattleGroupUpdateToDb, mapCattleMoveToDb, mapCattleTreatmentToDb,
 } from '@/lib/mappers';
+import { treatmentWithdrawalUntil } from '@/lib/cattle/health';
 import { CATTLE_RPC_KEY, type CattleRpcName, cattleEnvelopeGroupIds, syncQueue } from '@/lib/syncQueue';
 import { supabase } from '@/lib/supabase';
 import {
@@ -12,8 +13,12 @@ import {
   groupCounts, herdTypeClass, normalizeCattleGroup, resolveEventClass, sameCounts, withClassDelta,
 } from '@/lib/cattle/counts';
 import type {
-  CattleCounts, CattleEvent, CattleGroup, CattleGroupEdit, CattleMove, CountClass,
+  CattleCounts, CattleEvent, CattleGroup, CattleGroupEdit, CattleMove, CattleTreatment, CountClass,
 } from '@/types/cattle';
+
+/** What the treatment form hands over; the id, dates and withdrawal date are filled in here. */
+export type NewCattleTreatment = Omit<CattleTreatment,
+  'id' | 'farm_id' | 'createdAt' | 'updatedAt' | 'deleted_at' | 'withdrawalUntil'>;
 
 /** A new herd: its counts per class; the total is their sum. */
 export type NewCattleGroup = Pick<CattleGroup, 'name' | 'class' | 'counts' | 'notes'>;
@@ -34,14 +39,16 @@ interface UseCattleArgs {
   cattleGroups: CattleGroup[];
   cattleMoves: CattleMove[];
   cattleEvents: CattleEvent[];
+  cattleTreatments: CattleTreatment[];
   setCattleGroups: React.Dispatch<React.SetStateAction<CattleGroup[]>>;
   setCattleMoves: React.Dispatch<React.SetStateAction<CattleMove[]>>;
   setCattleEvents: React.Dispatch<React.SetStateAction<CattleEvent[]>>;
+  setCattleTreatments: React.Dispatch<React.SetStateAction<CattleTreatment[]>>;
   isOnline: boolean;
   onMutation?: () => void | Promise<void>;
 }
 
-type CattleTable = 'cattle_groups' | 'cattle_moves' | 'cattle_events';
+type CattleTable = 'cattle_groups' | 'cattle_moves' | 'cattle_events' | 'cattle_treatments';
 type Operation = 'insert' | 'update' | 'soft_delete';
 
 /** Lets a form show the Pro wording when the server refuses a save for plan reasons. */
@@ -61,8 +68,8 @@ function newestMove(groupId: string, moves: CattleMove[]): CattleMove | undefine
 }
 
 export function useCattle({
-  farm_id, cattleGroups, cattleMoves, cattleEvents,
-  setCattleGroups, setCattleMoves, setCattleEvents, isOnline, onMutation,
+  farm_id, cattleGroups, cattleMoves, cattleEvents, cattleTreatments,
+  setCattleGroups, setCattleMoves, setCattleEvents, setCattleTreatments, isOnline, onMutation,
 }: UseCattleArgs) {
   const enqueue = useCallback(async (
     table: CattleTable,
@@ -267,6 +274,15 @@ export function useCattle({
       toClass: input.eventType === 'reclass' ? input.toClass : undefined,
       classHead: input.eventType === 'reclass' ? input.classHead : undefined,
       calfSex: input.eventType === 'calving' ? input.calfSex : undefined,
+      ...(input.eventType === 'preg_check'
+        ? {
+          // Partial entries count the blanks as zero, the same as the server.
+          bredCount: input.bredCount ?? 0, openCount: input.openCount ?? 0, notCheckedCount: input.notCheckedCount ?? 0,
+        }
+        : { bredCount: undefined, openCount: undefined, notCheckedCount: undefined }),
+      exposedCount: input.eventType === 'bull_in' ? input.exposedCount : undefined,
+      headWeaned: input.eventType === 'weaning' ? input.headWeaned : undefined,
+      avgWeight: input.eventType === 'weaning' && input.headWeaned ? input.avgWeight : undefined,
       id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
     };
     let mapped: Record<string, unknown>;
@@ -281,6 +297,9 @@ export function useCattle({
       p_reason: event.reason ?? null, p_notes: event.notes ?? null,
       p_class: event.cattleClass ?? null, p_to_class: event.toClass ?? null,
       p_class_head: event.classHead ?? null, p_calf_sex: event.calfSex ?? null,
+      p_bred: event.bredCount ?? null, p_open: event.openCount ?? null,
+      p_not_checked: event.notCheckedCount ?? null, p_exposed: event.exposedCount ?? null,
+      p_head_weaned: event.headWeaned ?? null, p_avg_weight: event.avgWeight ?? null,
     }, 'cattle_events', 'insert', mapped);
     if (!result.ok) {
       if (result.premiumRequired) options?.onPremiumRequired?.();
@@ -358,10 +377,12 @@ export function useCattle({
     if (!previousGroup) return false;
     const previousMoves = cattleMoves.filter(item => item.groupId === id);
     const previousEvents = cattleEvents.filter(item => item.groupId === id);
+    const previousTreatments = cattleTreatments.filter(item => item.groupId === id);
     const deletedAt = new Date().toISOString();
     setCattleGroups(current => current.map(item => item.id === id ? { ...item, deleted_at: deletedAt } : item));
     setCattleMoves(current => current.map(item => item.groupId === id ? { ...item, deleted_at: deletedAt } : item));
     setCattleEvents(current => current.map(item => item.groupId === id ? { ...item, deleted_at: deletedAt } : item));
+    setCattleTreatments(current => current.map(item => item.groupId === id ? { ...item, deleted_at: deletedAt } : item));
     const { ok } = await persistRpc('soft_delete_cattle_row', {
       p_row_type: 'group', p_row_id: id,
     }, 'cattle_groups', 'soft_delete', { id, farm_id, deleted_at: deletedAt });
@@ -372,9 +393,65 @@ export function useCattle({
       const eventsById = new Map(previousEvents.map(item => [item.id, item.deleted_at]));
       setCattleMoves(current => current.map(item => movesById.has(item.id) ? { ...item, deleted_at: movesById.get(item.id) ?? null } : item));
       setCattleEvents(current => current.map(item => eventsById.has(item.id) ? { ...item, deleted_at: eventsById.get(item.id) ?? null } : item));
+      const treatmentsById = new Map(previousTreatments.map(item => [item.id, item.deleted_at]));
+      setCattleTreatments(current => current.map(item => treatmentsById.has(item.id) ? { ...item, deleted_at: treatmentsById.get(item.id) ?? null } : item));
     }
     return ok;
-  }, [cattleEvents, cattleGroups, cattleMoves, farm_id, persistRpc, setCattleEvents, setCattleGroups, setCattleMoves]);
+  }, [cattleEvents, cattleGroups, cattleMoves, cattleTreatments, farm_id, persistRpc, setCattleEvents, setCattleGroups, setCattleMoves, setCattleTreatments]);
+
+  const logCattleTreatment = useCallback(async (
+    input: NewCattleTreatment,
+    options?: CattleSaveOptions,
+  ): Promise<boolean> => {
+    if (!farm_id) { toast.error('No farm selected.'); return false; }
+    const found = cattleGroups.find(item => item.id === input.groupId && !item.deleted_at);
+    if (!found) return false;
+    const product = input.product.trim();
+    if (!product || !Number.isInteger(input.headTreated) || input.headTreated <= 0) return false;
+    if (!(input.dose > 0)) return false;
+    if (!Number.isInteger(input.withdrawalDays) || input.withdrawalDays < 0 || input.withdrawalDays > 365) return false;
+    const now = new Date().toISOString();
+    const treatment: CattleTreatment = {
+      ...input,
+      product,
+      lotNumber: input.lotNumber?.trim() || undefined,
+      givenBy: input.givenBy?.trim() || undefined,
+      notes: input.notes?.trim() || undefined,
+      withdrawalUntil: treatmentWithdrawalUntil(input.treatedOn, input.withdrawalDays),
+      id: crypto.randomUUID(), farm_id, createdAt: now, updatedAt: now, deleted_at: null,
+    };
+    let mapped: Record<string, unknown>;
+    try { mapped = mapCattleTreatmentToDb(treatment); } catch (error) { console.error(error); return false; }
+    setCattleTreatments(current => [...current, treatment]);
+    const result = await persistRpc('log_cattle_treatment', {
+      p_treatment_id: treatment.id, p_group_id: treatment.groupId, p_treated_on: treatment.treatedOn,
+      p_product: treatment.product, p_kind: treatment.kind, p_head_treated: treatment.headTreated,
+      p_dose: treatment.dose, p_dose_unit: treatment.doseUnit, p_route: treatment.route,
+      p_withdrawal_days: treatment.withdrawalDays, p_class: treatment.cattleClass ?? null,
+      p_dose_basis: treatment.doseBasis, p_lot_number: treatment.lotNumber ?? null,
+      p_given_by: treatment.givenBy ?? null, p_notes: treatment.notes ?? null,
+    }, 'cattle_treatments', 'insert', mapped);
+    if (!result.ok) {
+      if (result.premiumRequired) options?.onPremiumRequired?.();
+      setCattleTreatments(current => current.filter(item => item.id !== treatment.id));
+    }
+    return result.ok;
+  }, [cattleGroups, farm_id, persistRpc, setCattleTreatments]);
+
+  const deleteCattleTreatment = useCallback(async (id: string): Promise<boolean> => {
+    if (!farm_id) { toast.error('No farm selected.'); return false; }
+    const previous = cattleTreatments.find(item => item.id === id);
+    if (!previous || previous.deleted_at) return false;
+    const deletedAt = new Date().toISOString();
+    setCattleTreatments(current => current.map(item => item.id === id ? { ...item, deleted_at: deletedAt } : item));
+    const { ok } = await persistRpc('delete_cattle_treatment', {
+      p_treatment_id: id,
+    }, 'cattle_treatments', 'soft_delete', { id, farm_id, group_id: previous.groupId, deleted_at: deletedAt });
+    if (!ok) {
+      setCattleTreatments(current => current.map(item => item.id === id ? { ...item, deleted_at: null } : item));
+    }
+    return ok;
+  }, [cattleTreatments, farm_id, persistRpc, setCattleTreatments]);
 
   const deleteCattleMove = useCallback(async (id: string): Promise<boolean> => {
     if (!farm_id) { toast.error('No farm selected.'); return false; }
@@ -454,6 +531,6 @@ export function useCattle({
 
   return {
     addCattleGroup, updateCattleGroup, moveCattleGroup, logCattleEvent, transferCattleHead,
-    deleteCattleGroup, deleteCattleMove, deleteCattleEvent,
+    deleteCattleGroup, deleteCattleMove, deleteCattleEvent, logCattleTreatment, deleteCattleTreatment,
   };
 }

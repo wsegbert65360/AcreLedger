@@ -58,6 +58,7 @@ export const BACKUP_KEY_TO_TABLE = {
   cattleGroups: 'cattle_groups',
   cattleMoves: 'cattle_moves',
   cattleEvents: 'cattle_events',
+  cattleTreatments: 'cattle_treatments',
 } as const;
 
 export type BackupTableName = (typeof BACKUP_KEY_TO_TABLE)[keyof typeof BACKUP_KEY_TO_TABLE];

@@ -883,7 +883,8 @@ describe('syncQueue web queue management', () => {
 
   it('registers every cattle RPC the app queues, including transfers and the farm setting', () => {
     expect([...CATTLE_RPCS].sort()).toEqual([
-      'log_cattle_event', 'move_cattle_group', 'set_runs_cattle', 'soft_delete_cattle_row', 'transfer_cattle_head',
+      'delete_cattle_treatment', 'log_cattle_event', 'log_cattle_treatment', 'move_cattle_group', 'set_runs_cattle',
+      'soft_delete_cattle_row', 'transfer_cattle_head',
     ]);
   });
 

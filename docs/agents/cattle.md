@@ -1,6 +1,6 @@
-# Cattle
+﻿# Cattle
 
-Agent rules for the optional cattle book. Architecture detail is [BLUEPRINT → Cattle](../../BLUEPRINT.md#cattle).
+Agent rules for the optional cattle book. Architecture detail is [BLUEPRINT â†’ Cattle](../../BLUEPRINT.md#cattle).
 
 > **Verified against code:** 2026-11-15, `679be07`. Files opened: `supabase/migrations/20261114120000_cattle_schema_and_rpcs.sql`, `supabase/migrations/20261115120000_cattle_events_pro_gate.sql`, `src/store/useCattle.ts`, `src/pages/Cattle.tsx`, `src/components/cattle/CattleEventsSection.tsx`, `src/lib/entitlements.ts`, `src/copy/entitlements.ts`, `src/test/aiAssistantTools.test.ts`. This is not a line-by-line audit.
 
@@ -9,6 +9,7 @@ Agent rules for the optional cattle book. Architecture detail is [BLUEPRINT → 
 - [Free and Pro](#free-and-pro)
 - [Writes](#writes)
 - [Mixed herds](#mixed-herds)
+- [Herd health and breeding](#herd-health-and-breeding)
 <!-- contents:end -->
 
 ## Switch
@@ -38,11 +39,22 @@ Agent rules for the optional cattle book. Architecture detail is [BLUEPRINT → 
 Added 2026-11-25 (`20261126032045_cattle_mixed_herds.sql`). A herd (`cattle_groups` row) holds cows, heifers, bulls, calves, steers and stockers together.
 
 - `cattle_groups` has six count columns: `cows`, `heifers`, `bulls`, `calves`, `steers`, `stockers`. `head_count` is always their sum; the `sync_cattle_class_counts` trigger enforces it. Never write `head_count` alone from new code.
-- A write that changes only `head_count` (an older client, a backup without counts) puts the difference on the herd type's class (`_cattle_count_column(class)`; `mixed` → cows). A decrease that class cannot cover comes off the others in a fixed order. `src/lib/cattle/counts.ts` mirrors this (`herdTypeClass`, `countsFromRow`, `normalizeCattleGroup`).
+- A write that changes only `head_count` (an older client, a backup without counts) puts the difference on the herd type's class (`_cattle_count_column(class)`; `mixed` â†’ cows). A decrease that class cannot cover comes off the others in a fixed order. `src/lib/cattle/counts.ts` mirrors this (`herdTypeClass`, `countsFromRow`, `normalizeCattleGroup`).
 - `class` is now the herd type. `mixed` is labeled "Cow-calf herd". The stored enum did not change, so older app builds still read it.
 - `updateCattleGroup` sends the six counts and `head_count` only when a count changed (`mapCattleGroupUpdateToDb(..., { countsChanged })`). Editing one class never clears the others.
 - `cattle_events` gains `cattle_class` (the class a head change hit; the from-class for a reclass), `to_class` + `class_head` (reclass only) and `calf_sex` (calving only). Event type `reclass` moves N head between classes inside one herd with `head_delta = 0`.
 - `log_cattle_event(..., p_class, p_to_class, p_class_head, p_calf_sex)` and `transfer_cattle_head(..., p_class)` take the new arguments with `DEFAULT NULL`, so the older argument lists still resolve. Calving always hits calves. A class may not go below zero even if the herd total could cover it. Both RPCs return `counts` (`from_counts` / `to_counts` for a transfer); the client takes those over its optimistic counts.
 - `soft_delete_cattle_row` reverses an event on its own class (floored at zero); a reclass is moved back. Old events without a class fall back to the herd type's class.
 - Backup: `cattleGroupSchema.counts` is optional so older backups load; `restoreMappers.ts` aliases the six columns to `counts`, so an older backup sends only `head_count` and the trigger assigns it.
-- The herd detail shows per-class counts, cow-calf pairs (calves paired with cows + heifers), females per bull, and this year's calves born / lost / calving % (calves born ÷ cows + heifers now in the herd — not cows exposed, which is not recorded).
+- The herd detail shows per-class counts, cow-calf pairs (calves paired with cows + heifers), females per bull, and this year's calves born / lost / calving % (calves born Ã· cows + heifers now in the herd â€” not cows exposed, which is not recorded).
+
+## Herd health and breeding
+
+Added 2026-11-25 (`20261126040807_cattle_herd_health_breeding.sql`; the `sync_cattle_class_counts` SECURITY DEFINER hotfix is `20261126035847_cattle_counts_trigger_definer.sql`). All of it is Pro through the same `assert_premium(farm, 'cattle_events')` gate; deleting stays free.
+
+- `cattle_treatments`: one row per treatment or vaccine for a herd (product, kind, optional class, head, dose + unit + per head / per 100 lb, route, withdrawal days, generated `withdrawal_until`, lot, given by). RLS select only; writes go through `log_cattle_treatment` / `delete_cattle_treatment` (`__cattle_rpc` envelope, `CATTLE_RPCS` and `ALLOWED_TABLES` include them). Deleting a herd tombstones its treatments. Backup, restore, the tenant registry and account deletion include the table.
+- `cattle_events` gains `bred_count` / `open_count` / `not_checked_count` (preg check), `exposed_count` (`bull_in` only), `head_weaned` / `avg_weight` (weaning) and event types `bull_in` / `bull_out`. `log_cattle_event` takes `p_bred, p_open, p_not_checked, p_exposed, p_head_weaned, p_avg_weight`; older argument lists still resolve by name.
+- Withdrawal: the product's days are typed once and remembered per product (`productMemory`). Shipping a herd or class during an active withdrawal asks for confirmation; it never blocks. A withdrawal badge shows on the herd card and detail.
+- Stats (`src/lib/cattle/health.ts` `herdYearStats`): pregnancy %, calving %, weaning %, and weight weaned per cow exposed. Exposed comes from bulls-in records when there are any, otherwise the cows and heifers on hand (labeled).
+- Exports: the cattle CSV has treatment rows and the new columns. The Pro treatment record PDF (`src/lib/cattle/treatmentRecordPdf.ts`, report type `cattle-treatment-record`) is server-authorized like the other Pro reports.
+- No dollars, no animal IDs, no feeding records.

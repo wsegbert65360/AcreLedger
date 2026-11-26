@@ -4,7 +4,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, useStatefulArray } from '@/test/hookTestHarness';
 import { createSupabaseMock } from '@/test/supabaseMock';
-import type { CattleEvent, CattleGroup, CattleMove } from '@/types/cattle';
+import type { CattleEvent, CattleGroup, CattleMove, CattleTreatment } from '@/types/cattle';
 
 const supabaseMock = createSupabaseMock();
 const enqueueMutation = vi.fn();
@@ -35,19 +35,22 @@ function renderCattle(options: {
   groups?: CattleGroup[];
   moves?: CattleMove[];
   events?: CattleEvent[];
+  treatments?: CattleTreatment[];
   online?: boolean;
 } = {}) {
   return renderHook(() => {
     const groups = useStatefulArray(options.groups ?? []);
     const moves = useStatefulArray(options.moves ?? []);
     const events = useStatefulArray(options.events ?? []);
+    const treatments = useStatefulArray<CattleTreatment>(options.treatments ?? []);
     const ops = useCattle({
       farm_id: 'farm-1', cattleGroups: groups.value, cattleMoves: moves.value,
-      cattleEvents: events.value, setCattleGroups: groups.setValue,
+      cattleEvents: events.value, cattleTreatments: treatments.value, setCattleGroups: groups.setValue,
       setCattleMoves: moves.setValue, setCattleEvents: events.setValue,
+      setCattleTreatments: treatments.setValue,
       isOnline: options.online ?? false,
     });
-    return { groups, moves, events, ops };
+    return { groups, moves, events, treatments, ops };
   });
 }
 

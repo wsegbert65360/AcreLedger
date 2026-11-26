@@ -13,6 +13,8 @@ const farm = vi.hoisted(() => ({
   cattleGroups: [] as unknown[],
   cattleMoves: [] as unknown[],
   cattleEvents: [] as unknown[],
+  cattleTreatments: [] as unknown[],
+  farmName: 'Test Farm' as string | null,
   fields: [] as unknown[],
   deleteCattleGroup: vi.fn(async () => true),
   deleteCattleMove: vi.fn(async () => true),

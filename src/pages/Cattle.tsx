@@ -7,6 +7,7 @@ import BottomNav from '@/components/BottomNav';
 import CattleGroupDialog from '@/components/cattle/CattleGroupDialog';
 import CattleEventsSection from '@/components/cattle/CattleEventsSection';
 import CattleMoveDialog from '@/components/cattle/CattleMoveDialog';
+import CattleTreatmentsSection, { WithdrawalBadge } from '@/components/cattle/CattleTreatmentsSection';
 import { PlanUpgradeLink } from '@/components/settings/PlanUpgradeLink';
 import SyncStatusIndicator from '@/components/SyncStatusIndicator';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,9 @@ import {
   calvingStats, COUNT_CLASSES, COUNT_TITLES, countsSummary, femalesPerBull, groupCounts, pairCount,
 } from '@/lib/cattle/counts';
 import { daysOnCurrentPasture } from '@/lib/cattle/derived';
+import { breedingSeasons, herdYearStats } from '@/lib/cattle/health';
 import { buildCattleCsv, exportCattleCsv } from '@/lib/cattle/report';
+import { exportTreatmentRecordPdf, treatmentYears } from '@/lib/cattle/treatmentRecordPdf';
 import {
   CATTLE_CLASS_LABELS, PASTURE_REMOVED_LABEL, pastureLabel,
 } from '@/lib/cattle/ui';
@@ -46,6 +49,7 @@ function GroupCard({ group, pasture, days }: { group: CattleGroup; pasture: stri
         <span className={removed ? 'block truncate text-xs font-semibold text-amber-700 dark:text-amber-300' : 'block truncate text-xs text-muted-foreground'}>
           {group.currentFieldId ? `${pasture}${removed ? '' : ` · ${dayText(days)}`}` : 'Not on a pasture'}
         </span>
+        <WithdrawalBadge groupId={group.id} className="mt-1" />
       </span>
     </Link>
   );
@@ -85,12 +89,50 @@ function HerdBreakdown({ group }: { group: CattleGroup }) {
           {stats.calvingPercent !== null ? ` · ${stats.calvingPercent}% of cows and heifers calved` : ''}
         </p>
       )}
+      <BreedingSummary group={group} year={year} />
     </div>
   );
 }
 
+/** Bull seasons, the latest preg check and weaning results, with the percentages they give. */
+function BreedingSummary({ group, year }: { group: CattleGroup; year: string }) {
+  const { cattleEvents } = useFarm();
+  const seasons = breedingSeasons(cattleEvents, group.id).slice(-2).reverse();
+  const stats = herdYearStats(group, cattleEvents, year);
+  const { preg } = stats;
+  const basis = stats.exposedBasis === 'turnout'
+    ? `${stats.exposed} exposed`
+    : stats.exposedBasis === 'on_hand' ? `${stats.exposed} cows and heifers on hand` : '';
+  const lines: string[] = [];
+  for (const season of seasons) {
+    const when = season.end
+      ? `${formatIsoDate(season.start)} – ${formatIsoDate(season.end)}`
+      : `since ${formatIsoDate(season.start)}`;
+    lines.push(`Bulls in ${when}${season.exposed ? ` · ${season.exposed} exposed` : ''}`);
+  }
+  if (preg) {
+    lines.push(preg.percent !== null
+      ? `Preg check ${formatIsoDate(preg.date)}: ${preg.percent}% bred (${preg.bred} of ${preg.checked} checked${preg.notChecked ? `, ${preg.notChecked} not checked` : ''})`
+      : `Preg check ${formatIsoDate(preg.date)}`);
+  }
+  if (stats.headWeaned > 0) {
+    const weight = stats.avgWeaningWeight !== null ? ` · avg ${stats.avgWeaningWeight} lb` : '';
+    const pct = stats.weaningPercent !== null ? ` · ${stats.weaningPercent}% weaned (of ${basis})` : '';
+    lines.push(`${year}: ${stats.headWeaned} weaned${weight}${pct}`);
+  }
+  if (stats.weanedWeightPerExposed !== null) {
+    lines.push(`${stats.weanedWeightPerExposed} lb weaned per cow exposed (of ${basis})`);
+  }
+  if (lines.length === 0) return null;
+  return (
+    <ul className="space-y-0.5 text-sm text-muted-foreground" data-testid="breeding-summary">
+      {lines.map(line => <li key={line}>{line}</li>)}
+    </ul>
+  );
+}
+
 function CattleList() {
-  const { cattleGroups, cattleMoves, cattleEvents, fields, farm_id } = useFarm();
+  const { cattleGroups, cattleMoves, cattleEvents, cattleTreatments, fields, farm_id, farmName } = useFarm();
   const [adding, setAdding] = useState(false);
   // The cattle CSV is a Pro export: hidden for a free farm, and the server
   // confirms Pro (assert_premium) before the file is built, like the other reports.
@@ -107,10 +149,30 @@ function CattleList() {
     if (exportLocked) return;
     try {
       await withAuthorizedReportExport(supabase, farm_id, 'cattle-csv', () =>
-        exportCattleCsv(buildCattleCsv(cattleGroups, cattleMoves, cattleEvents, fields), `AcreLedger-cattle-${today}.csv`));
+        exportCattleCsv(buildCattleCsv(cattleGroups, cattleMoves, cattleEvents, fields, cattleTreatments), `AcreLedger-cattle-${today}.csv`));
     } catch (error) {
       console.error('Cattle CSV export failed:', error);
       toast.error('Could not export the cattle CSV.');
+    }
+  };
+
+  const recordYears = useMemo(() => treatmentYears(cattleTreatments), [cattleTreatments]);
+  const exportTreatmentPdf = async () => {
+    if (exportLocked || recordYears.length === 0) return;
+    const year = recordYears[0];
+    try {
+      await withAuthorizedReportExport(supabase, farm_id, 'cattle-treatment-record', async () =>
+        exportTreatmentRecordPdf({
+          treatments: cattleTreatments,
+          groups: cattleGroups,
+          farmName: farmName ?? '',
+          year,
+          reportDate: formatIsoDate(today),
+          fileName: `AcreLedger-cattle-treatments-${year}.pdf`,
+        }));
+    } catch (error) {
+      console.error('Treatment record export failed:', error);
+      toast.error('Could not export the treatment record.');
     }
   };
 
@@ -139,6 +201,11 @@ function CattleList() {
           <Download className="mr-2 h-4 w-4" />Export cattle CSV
         </Button>
       )}
+      {hasRecords && !exportLocked && recordYears.length > 0 && (
+        <Button variant="outline" className="h-11 w-full" onClick={() => void exportTreatmentPdf()}>
+          <Download className="mr-2 h-4 w-4" />Treatment record PDF ({recordYears[0]})
+        </Button>
+      )}
       {hasRecords && exportLocked && (
         <div className="space-y-1 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm" data-testid="cattle-csv-locked">
           <p className="font-semibold">{ENTITLEMENT_COPY.cattleCsvLocked}</p>
@@ -162,7 +229,7 @@ function GroupDetail({ group }: { group: CattleGroup }) {
   const pasture = pastureLabel(group.currentFieldId, fields);
 
   const remove = async () => {
-    if (!window.confirm(`Delete ${group.name} and its move and event history?`)) return;
+    if (!window.confirm(`Delete ${group.name} and its move, event and treatment history?`)) return;
     if (await deleteCattleGroup(group.id)) navigate('/cattle', { replace: true });
     else toast.error('Could not delete the herd.');
   };
@@ -178,6 +245,7 @@ function GroupDetail({ group }: { group: CattleGroup }) {
           <Button variant="outline" className="h-11 shrink-0" onClick={() => setEditing(true)}><Pencil className="mr-2 h-4 w-4" />Edit</Button>
         </div>
         <HerdBreakdown group={group} />
+        <WithdrawalBadge groupId={group.id} />
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-4 w-4 shrink-0" />
           <span className="min-w-0 truncate">
@@ -210,6 +278,8 @@ function GroupDetail({ group }: { group: CattleGroup }) {
           </div>
         ))}
       </section>
+
+      <CattleTreatmentsSection group={group} />
 
       <CattleEventsSection group={group} />
 

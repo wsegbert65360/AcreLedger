@@ -200,7 +200,7 @@ describe('executeNamedTool validation', () => {
 describe('full farm read catalog', () => {
   it('intentionally excludes cattle from Ask the Book', () => {
     // Deliberate product rule: no AI / Ask the Book access to any cattle table.
-    for (const table of ['cattle_groups', 'cattle_moves', 'cattle_events']) {
+    for (const table of ['cattle_groups', 'cattle_moves', 'cattle_events', 'cattle_treatments']) {
       expect(FARM_ENTITY_NAMES).not.toContain(table);
     }
     expect(FARM_ENTITY_NAMES.some(name => /cattle/i.test(name))).toBe(false);

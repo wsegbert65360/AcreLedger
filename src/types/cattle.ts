@@ -19,7 +19,9 @@ export type CattleEventType =
   | 'death'
   | 'head_added'
   | 'head_removed'
-  | 'reclass';
+  | 'reclass'
+  | 'bull_in'
+  | 'bull_out';
 
 /** A death is logged with the death event, not as a removal reason. */
 export type CattleRemovalReason = 'shipped' | 'moved_to_another_group';
@@ -79,6 +81,15 @@ export interface CattleEvent extends CattleRowBase {
   classHead?: number;
   /** Calving only, when every calf born was one sex. */
   calfSex?: CalfSex;
+  /** Preg check: how many were found bred, open, or not checked. */
+  bredCount?: number;
+  openCount?: number;
+  notCheckedCount?: number;
+  /** Bulls in: the cows and heifers exposed to the bulls. */
+  exposedCount?: number;
+  /** Weaning: calves weaned and their average weight (lb, or kg on a metric farm). */
+  headWeaned?: number;
+  avgWeight?: number;
   notes?: string;
 }
 
@@ -128,6 +139,61 @@ export interface CattleEventRow {
   to_class?: CountClass | null;
   class_head?: number | null;
   calf_sex?: CalfSex | null;
+  bred_count?: number | null;
+  open_count?: number | null;
+  not_checked_count?: number | null;
+  exposed_count?: number | null;
+  head_weaned?: number | null;
+  avg_weight?: number | string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export type TreatmentKind = 'vaccine' | 'dewormer' | 'antibiotic' | 'other';
+export type DoseUnit = 'mL' | 'cc' | 'mg' | 'g' | 'oz' | 'tablet' | 'bolus';
+export type DoseBasis = 'per_head' | 'per_100_lb';
+export type TreatmentRoute = 'SQ' | 'IM' | 'IV' | 'oral' | 'pour_on' | 'intranasal' | 'topical' | 'implant';
+
+/** A treatment or vaccine given to a herd, or to one class in it. */
+export interface CattleTreatment extends CattleRowBase {
+  groupId: string;
+  treatedOn: string;
+  product: string;
+  kind: TreatmentKind;
+  /** Left out when the whole herd was treated. */
+  cattleClass?: CountClass;
+  headTreated: number;
+  dose: number;
+  doseUnit: DoseUnit;
+  doseBasis: DoseBasis;
+  route: TreatmentRoute;
+  withdrawalDays: number;
+  /** treatedOn plus withdrawalDays (the database keeps the same value). */
+  withdrawalUntil: string;
+  lotNumber?: string;
+  givenBy?: string;
+  notes?: string;
+}
+
+export interface CattleTreatmentRow {
+  id: string;
+  farm_id: string;
+  group_id: string;
+  treated_on: string;
+  product: string;
+  kind: TreatmentKind;
+  cattle_class?: CountClass | null;
+  head_treated: number;
+  dose: number | string;
+  dose_unit: DoseUnit;
+  dose_basis?: DoseBasis | null;
+  route: TreatmentRoute;
+  withdrawal_days?: number | null;
+  withdrawal_until?: string | null;
+  lot_number?: string | null;
+  given_by?: string | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;

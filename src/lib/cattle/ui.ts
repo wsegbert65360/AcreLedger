@@ -23,6 +23,8 @@ export const CATTLE_EVENT_LABELS: Record<CattleEventType, string> = {
   head_added: 'Head added',
   head_removed: 'Head removed',
   reclass: 'Change class',
+  bull_in: 'Bulls in',
+  bull_out: 'Bulls out',
 };
 
 export const CALF_SEX_LABELS: Record<CalfSex, string> = {
@@ -100,6 +102,8 @@ export const CATTLE_EVENT_HEAD_RULE: Record<CattleEventType, EventHeadRule> = {
   working: 'none',
   preg_check: 'none',
   reclass: 'none',
+  bull_in: 'none',
+  bull_out: 'none',
 };
 
 export const CATTLE_EVENT_TYPES = Object.keys(CATTLE_EVENT_LABELS) as CattleEventType[];
@@ -107,7 +111,8 @@ export const CATTLE_EVENT_TYPES = Object.keys(CATTLE_EVENT_LABELS) as CattleEven
 /** Timeline wording; a head transfer names the group on the other side. */
 export function describeEvent(
   event: Pick<CattleEvent, 'id' | 'eventType' | 'headDelta' | 'transferId' | 'reason'>
-    & Partial<Pick<CattleEvent, 'cattleClass' | 'toClass' | 'classHead' | 'calfSex'>>,
+    & Partial<Pick<CattleEvent, 'cattleClass' | 'toClass' | 'classHead' | 'calfSex' | 'bredCount' | 'openCount'
+      | 'notCheckedCount' | 'exposedCount' | 'headWeaned' | 'avgWeight'>>,
   allEvents: Pick<CattleEvent, 'id' | 'groupId' | 'transferId' | 'deleted_at'>[],
   groups: Pick<CattleGroup, 'id' | 'name'>[],
 ): string {
@@ -125,6 +130,18 @@ export function describeEvent(
     return `${what(event.classHead)} now ${COUNT_LABELS[event.toClass].many}`;
   }
   const label = CATTLE_EVENT_LABELS[event.eventType];
+  if (event.eventType === 'preg_check' && event.bredCount !== undefined && event.openCount !== undefined) {
+    const parts = [`${event.bredCount} bred`, `${event.openCount} open`];
+    if (event.notCheckedCount) parts.push(`${event.notCheckedCount} not checked`);
+    return `${label} (${parts.join(', ')})`;
+  }
+  if (event.eventType === 'bull_in' && event.exposedCount) {
+    return `${label} (${event.exposedCount} exposed)`;
+  }
+  if (event.eventType === 'weaning' && event.headWeaned) {
+    const weight = event.avgWeight ? `, avg ${Number(event.avgWeight.toFixed(1))} lb` : '';
+    return `${label} (${event.headWeaned} weaned${weight})`;
+  }
   if (event.headDelta === 0) return label;
   const sign = event.headDelta > 0 ? '+' : '-';
   const sex = event.eventType === 'calving' && event.calfSex ? `, ${CALF_SEX_LABELS[event.calfSex].toLowerCase()}` : '';
